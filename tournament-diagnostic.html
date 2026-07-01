@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Tournament Diagnostic Tool</title>
+		<style>
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+					'Helvetica Neue', Arial, sans-serif;
+				background: #f5f5f5;
+				margin: 0;
+				padding: 20px;
+			}
+			.container {
+				max-width: 1200px;
+				margin: 0 auto;
+				background: white;
+				border-radius: 8px;
+				padding: 20px;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+			}
+			h1 {
+				color: #1f2937;
+				margin-top: 0;
+			}
+			h2 {
+				color: #374151;
+				border-bottom: 2px solid #e5e7eb;
+				padding-bottom: 10px;
+				margin-top: 30px;
+			}
+			.section {
+				margin: 20px 0;
+				padding: 15px;
+				background: #f9fafb;
+				border-left: 4px solid #4285f4;
+			}
+			.diagnostic-item {
+				margin: 10px 0;
+				padding: 10px;
+				background: white;
+				border-radius: 4px;
+				font-family: monospace;
+				font-size: 13px;
+				line-height: 1.5;
+				word-break: break-all;
+			}
+			.success {
+				background: #d4edda;
+				border-left: 4px solid #28a745;
+				color: #155724;
+			}
+			.warning {
+				background: #fff3cd;
+				border-left: 4px solid #ffc107;
+				color: #856404;
+			}
+			.error {
+				background: #f8d7da;
+				border-left: 4px solid #dc3545;
+				color: #721c24;
+			}
+			.info {
+				background: #d1ecf1;
+				border-left: 4px solid #17a2b8;
+				color: #0c5460;
+			}
+			button {
+				background: #4285f4;
+				color: white;
+				border: none;
+				padding: 10px 20px;
+				border-radius: 4px;
+				cursor: pointer;
+				margin: 5px 5px 5px 0;
+			}
+			button:hover {
+				background: #3367d6;
+			}
+			pre {
+				background: #f4f4f4;
+				padding: 10px;
+				border-radius: 4px;
+				overflow-x: auto;
+				font-size: 12px;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 20px;
+			}
+			@media (max-width: 768px) {
+				.grid {
+					grid-template-columns: 1fr;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>🔍 Tournament System Diagnostic</h1>
+			<p>
+				This tool helps diagnose issues with the tournament system setup and
+				configuration.
+			</p>
+
+			<h2>System Status</h2>
+			<div class="section">
+				<p id="systemStatus" style="margin: 0">Checking system status...</p>
+			</div>
+
+			<h2>Data Inventory</h2>
+			<div class="grid">
+				<div>
+					<h3>Games in localStorage</h3>
+					<div id="gamesStatus" class="diagnostic-item">Loading...</div>
+					<div id="gamesList"></div>
+				</div>
+				<div>
+					<h3>Tournament Config</h3>
+					<div id="tournamentStatus" class="diagnostic-item">Loading...</div>
+					<div id="tournamentDetails"></div>
+				</div>
+			</div>
+
+			<h2>Test Functions</h2>
+			<div class="section">
+				<button onclick="testGameCoreFunction()">
+					Test GameCore.getQuizGames()
+				</button>
+				<button onclick="testTournamentRendering()">
+					Test Tournament Rendering
+				</button>
+				<button onclick="createTestGames()">Create Test Games</button>
+				<button onclick="clearAllData()">Clear All Data (Reset)</button>
+				<button onclick="refreshDiagnostics()">Refresh Diagnostics</button>
+			</div>
+
+			<h2>Console Output</h2>
+			<div class="section" id="consoleOutput">
+				<p style="margin: 0; color: #666">Console logs will appear here...</p>
+			</div>
+
+			<h2>Navigation</h2>
+			<div class="section">
+				<p>
+					<a href="admin.html" style="color: #4285f4; text-decoration: none"
+						>← Back to Admin Panel</a
+					>
+				</p>
+			</div>
+		</div>
+
+		<script src="games-core.js"></script>
+		<script>
+			// Capture console
+			const consoleLogs = [];
+			const originalLog = console.log;
+			const originalError = console.error;
+			const originalWarn = console.warn;
+
+			function addConsoleLog(type, ...args) {
+				const message = args
+					.map((arg) =>
+						typeof arg === 'object'
+							? JSON.stringify(arg, null, 2)
+							: String(arg),
+					)
+					.join(' ');
+				consoleLogs.push({ type, message });
+				updateConsoleOutput();
+			}
+
+			console.log = (...args) => {
+				originalLog(...args);
+				addConsoleLog('log', ...args);
+			};
+			console.error = (...args) => {
+				originalError(...args);
+				addConsoleLog('error', ...args);
+			};
+			console.warn = (...args) => {
+				originalWarn(...args);
+				addConsoleLog('warn', ...args);
+			};
+
+			function updateConsoleOutput() {
+				const output = document.getElementById('consoleOutput');
+				output.innerHTML = consoleLogs
+					.map((log) => {
+						const className =
+							log.type === 'error'
+								? 'error'
+								: log.type === 'warn'
+									? 'warning'
+									: 'info';
+						return `<div class="diagnostic-item ${className}"><strong>[${log.type.toUpperCase()}]</strong> ${escapeHtml(log.message)}</div>`;
+					})
+					.join('');
+			}
+
+			function escapeHtml(text) {
+				const map = {
+					'&': '&amp;',
+					'<': '&lt;',
+					'>': '&gt;',
+					'"': '&quot;',
+					"'": '&#039;',
+				};
+				return String(text).replace(/[&<>"']/g, (m) => map[m]);
+			}
+
+			function getDiagnosticElement(label, content, status = 'info') {
+				return `<div class="diagnostic-item ${status}"><strong>${label}:</strong> ${escapeHtml(String(content))}</div>`;
+			}
+
+			function runDiagnostics() {
+				console.log('=== TOURNAMENT DIAGNOSTIC START ===');
+
+				// Check games
+				const gamesRaw = localStorage.getItem('quizGames');
+				const games = gamesRaw ? JSON.parse(gamesRaw) : [];
+				console.log('Games in localStorage:', games.length, 'games');
+				console.log('Games array:', games);
+
+				document.getElementById('gamesStatus').innerHTML = getDiagnosticElement(
+					'Total Games',
+					games.length,
+					games.length > 0 ? 'success' : 'warning',
+				);
+
+				if (games.length > 0) {
+					const gamesList = document.getElementById('gamesList');
+					gamesList.innerHTML =
+						'<div style="margin-top: 10px;"><strong>Game Summary:</strong></div>' +
+						games
+							.map(
+								(g, i) => `
+						<div class="diagnostic-item" style="margin-top: 5px;">
+							<strong>${i + 1}.</strong> ${escapeHtml(g.name || 'Untitled')} 
+							(Type: ${escapeHtml(g.type || 'unknown')}, 
+							Status: ${escapeHtml(g.status || 'unknown')})
+						</div>
+					`,
+							)
+							.join('');
+				}
+
+				// Check tournament config
+				const tournamentRaw = localStorage.getItem('quizTournamentActive');
+				const tournament = tournamentRaw ? JSON.parse(tournamentRaw) : null;
+				console.log('Active Tournament:', tournament);
+
+				document.getElementById('tournamentStatus').innerHTML =
+					getDiagnosticElement(
+						'Status',
+						tournament ? `Active: ${tournament.name}` : 'No active tournament',
+						tournament ? 'success' : 'info',
+					);
+
+				if (tournament) {
+					const details = document.getElementById('tournamentDetails');
+					details.innerHTML = `
+					<div class="diagnostic-item">
+						<strong>Tournament Details:</strong><br/>
+						Name: ${escapeHtml(tournament.name)}<br/>
+						Mode: ${escapeHtml(tournament.targetMode)}<br/>
+						Rounds: ${tournament.rounds}<br/>
+						Round Assignments: ${tournament.roundAssignments ? tournament.roundAssignments.length : 0}<br/>
+						<button onclick="showTournamentData()" style="margin-top: 10px;">View Full JSON</button>
+					</div>
+				`;
+				}
+
+				// Check GameCore
+				try {
+					if (typeof GameCore === 'undefined') {
+						console.error('GameCore is not defined!');
+						document.getElementById('systemStatus').innerHTML =
+							getDiagnosticElement('GameCore Library', 'NOT LOADED', 'error');
+					} else if (typeof GameCore.getQuizGames !== 'function') {
+						console.error('GameCore.getQuizGames is not a function!');
+						document.getElementById('systemStatus').innerHTML =
+							getDiagnosticElement(
+								'GameCore.getQuizGames',
+								'NOT A FUNCTION',
+								'error',
+							);
+					} else {
+						const coreGames = GameCore.getQuizGames();
+						console.log(
+							'GameCore.getQuizGames() returned:',
+							coreGames.length,
+							'games',
+						);
+						document.getElementById('systemStatus').innerHTML =
+							getDiagnosticElement(
+								'GameCore Status',
+								'OK - ' + coreGames.length + ' games loaded',
+								'success',
+							);
+					}
+				} catch (e) {
+					console.error('Error testing GameCore:', e);
+					document.getElementById('systemStatus').innerHTML =
+						getDiagnosticElement(
+							'GameCore Error',
+							escapeHtml(e.message),
+							'error',
+						);
+				}
+
+				console.log('=== DIAGNOSTIC COMPLETE ===');
+			}
+
+			function testGameCoreFunction() {
+				console.log('\n=== Testing GameCore.getQuizGames() ===');
+				try {
+					if (typeof GameCore === 'undefined') {
+						throw new Error('GameCore is not defined');
+					}
+					if (typeof GameCore.getQuizGames !== 'function') {
+						throw new Error('GameCore.getQuizGames is not a function');
+					}
+
+					const games = GameCore.getQuizGames();
+					console.log('GameCore.getQuizGames() returned:', games);
+					console.log('Total games:', games.length);
+
+					if (games.length > 0) {
+						console.log('First game:', games[0]);
+					}
+
+					return games;
+				} catch (e) {
+					console.error('Error:', e.message);
+					throw e;
+				}
+			}
+
+			function testTournamentRendering() {
+				console.log('\n=== Testing Tournament Rendering ===');
+				try {
+					// Check if form elements exist
+					const formElements = [
+						'tournamentTargetMode',
+						'tournamentRounds',
+						'tournamentRoundGameAssignments',
+					];
+
+					formElements.forEach((id) => {
+						const el = document.getElementById(id);
+						console.log(`Element #${id}:`, el ? 'FOUND' : 'NOT FOUND');
+					});
+
+					// Try to render round assignments
+					if (typeof renderTournamentRoundAssignments === 'function') {
+						console.log('renderTournamentRoundAssignments function exists');
+					} else {
+						console.warn(
+							'renderTournamentRoundAssignments function not found - need to run from admin.html',
+						);
+					}
+
+					console.log(
+						'Note: Full tournament rendering test requires admin.html context',
+					);
+				} catch (e) {
+					console.error('Error:', e.message);
+				}
+			}
+
+			function createTestGames() {
+				console.log('\n=== Creating Test Games ===');
+				const testGames = [
+					{
+						id: 'test-cards-1',
+						name: 'Test Card Battle 1',
+						type: 'cards',
+						mode: '1v1',
+						status: 'open',
+						description: 'Test game for cards mode',
+					},
+					{
+						id: 'test-race-1',
+						name: 'Test Sprint Race 1',
+						type: 'sprint-race',
+						mode: '1v1',
+						status: 'open',
+						description: 'Test game for sprint-race mode',
+					},
+					{
+						id: 'test-race-2',
+						name: 'Test Lightning Race 1',
+						type: 'race',
+						mode: 'team',
+						status: 'open',
+						description: 'Test game for race mode',
+					},
+					{
+						id: 'test-hot-potato-1',
+						name: 'Test Hot Potato 1',
+						type: 'hot-potato',
+						mode: '1v1',
+						status: 'draft',
+						description: 'Test game for hot-potato mode',
+					},
+				];
+
+				localStorage.setItem('quizGames', JSON.stringify(testGames));
+				console.log('Created 4 test games in localStorage');
+				console.log('Games:', testGames);
+
+				// Refresh diagnostics
+				runDiagnostics();
+				alert(
+					'✓ Test games created!\n\nGo to Admin Panel to see them in the Tournament Planner',
+				);
+			}
+
+			function clearAllData() {
+				if (
+					!confirm(
+						'This will clear all quiz games, tournaments, and related data. Are you sure?',
+					)
+				) {
+					return;
+				}
+
+				const keysToDelete = [
+					'quizGames',
+					'quizTournamentActive',
+					'quizTournamentHistory',
+					'quizGamification',
+				];
+
+				keysToDelete.forEach((key) => {
+					localStorage.removeItem(key);
+				});
+
+				console.log('Cleared:', keysToDelete.join(', '));
+				runDiagnostics();
+				alert('✓ All tournament and game data cleared');
+			}
+
+			function refreshDiagnostics() {
+				consoleLogs.length = 0;
+				document.getElementById('consoleOutput').innerHTML = '';
+				runDiagnostics();
+			}
+
+			function showTournamentData() {
+				const tournament = JSON.parse(
+					localStorage.getItem('quizTournamentActive') || 'null',
+				);
+				alert('Tournament Data:\n\n' + JSON.stringify(tournament, null, 2));
+			}
+
+			// Run on load
+			window.addEventListener('DOMContentLoaded', runDiagnostics);
+		</script>
+	</body>
+</html>

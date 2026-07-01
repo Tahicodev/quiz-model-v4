@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Student Workspace</title>
+		<link rel="stylesheet" href="styles.css" />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+		/>
+		<script src="utils.js" defer></script>
+		<script src="auth.js" defer></script>
+		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
+		<script src="realtime-client.js" defer></script>
+		<script src="games-core.js" defer></script>
+		<script src="student-workspace.js" defer></script>
+	</head>
+	<body class="student-workspace">
+		<div class="workspace-shell">
+			<header class="workspace-header">
+				<div class="workspace-brand">
+					<div class="workspace-logo">S</div>
+					<div>
+						<h1>Student Workspace</h1>
+						<p id="workspaceSubtitle">Track exams, progress, and feedback</p>
+					</div>
+				</div>
+				<div class="workspace-actions">
+					<button class="workspace-btn ghost" id="workspaceLoginButton">
+						Sign In
+					</button>
+					<div
+						class="workspace-dropdown workspace-profile-dropdown"
+						id="studentWorkspaceDropdown"
+					>
+						<button
+							class="workspace-profile-btn"
+							id="workspaceProfileButton"
+							type="button"
+						>
+							<div class="workspace-avatar" id="workspaceAvatar">S</div>
+							<div class="workspace-profile-info">
+								<span class="workspace-profile-name" id="workspaceUserChip"
+									>Student</span
+								>
+								<span class="workspace-profile-class" id="workspaceClassChip"
+									>Class</span
+								>
+							</div>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								class="dropdown-arrow"
+							>
+								<polyline points="6 9 12 15 18 9"></polyline>
+							</svg>
+						</button>
+						<div class="workspace-dropdown-menu" id="studentWorkspaceMenu">
+							<div class="menu-header">
+								<span class="user-email" id="workspaceMenuName">Student</span>
+								<span class="menu-meta" id="workspaceMenuMeta">Class</span>
+							</div>
+							<div class="menu-divider"></div>
+							<button
+								type="button"
+								class="menu-item"
+								id="studentDropdownSettings"
+							>
+								Account Settings
+							</button>
+							<button
+								type="button"
+								class="menu-item logout-item"
+								id="studentDropdownLogout"
+							>
+								Logout
+							</button>
+						</div>
+					</div>
+				</div>
+			</header>
+
+			<main class="workspace-main">
+				<section class="workspace-tabs" id="studentWorkspaceTabs">
+					<button
+						type="button"
+						class="workspace-tab-btn active"
+						data-workspace-tab="overview"
+					>
+						Overview
+					</button>
+					<button
+						type="button"
+						class="workspace-tab-btn"
+						data-workspace-tab="exams"
+					>
+						Exams
+					</button>
+					<button
+						type="button"
+						class="workspace-tab-btn"
+						data-workspace-tab="training"
+					>
+						Training
+					</button>
+					<button
+						type="button"
+						class="workspace-tab-btn"
+						data-workspace-tab="games"
+					>
+						Games
+					</button>
+					<button
+						type="button"
+						class="workspace-tab-btn"
+						data-workspace-tab="tournament"
+					>
+						Tournament
+					</button>
+					<button
+						type="button"
+						class="workspace-tab-btn"
+						data-workspace-tab="results"
+					>
+						Results
+					</button>
+					<div
+						class="workspace-tabs-profile-dock"
+						id="workspaceTabsProfileDock"
+					></div>
+				</section>
+
+				<section class="workspace-hero" data-workspace-section="overview">
+					<div class="hero-card">
+						<div class="hero-label">Total Exams</div>
+						<div class="hero-value" id="heroTotalExams">0</div>
+						<div class="hero-footnote">Assigned to your class</div>
+					</div>
+					<div class="hero-card accent">
+						<div class="hero-label">Completed</div>
+						<div class="hero-value" id="heroCompletedExams">0</div>
+						<div class="hero-footnote">Exams finished</div>
+					</div>
+					<div class="hero-card">
+						<div class="hero-label">Average Score</div>
+						<div class="hero-value" id="heroAverageScore">0%</div>
+						<div class="hero-footnote">Across completed exams</div>
+					</div>
+					<div class="hero-card">
+						<div class="hero-label">Next Exam</div>
+						<div class="hero-value" id="heroNextExam">-</div>
+						<div class="hero-footnote">Upcoming assessment</div>
+					</div>
+					<div class="hero-card">
+						<div class="hero-label">Live Games</div>
+						<div class="hero-value" id="heroLiveGames">0</div>
+						<div class="hero-footnote">Lobbies currently running</div>
+					</div>
+					<div class="hero-card">
+						<div class="hero-label">Lobbies Played</div>
+						<div class="hero-value" id="heroLobbiesPlayed">0</div>
+						<div class="hero-footnote">Completed game sessions</div>
+					</div>
+					<div class="hero-card">
+						<div class="hero-label">Tournament Points</div>
+						<div class="hero-value" id="heroTournamentPoints">0</div>
+						<div class="hero-footnote">
+							Total points from tournament sessions
+						</div>
+					</div>
+					<div class="hero-card">
+						<div class="hero-label">Active Rank</div>
+						<div class="hero-value" id="heroTournamentRank">-</div>
+						<div class="hero-footnote">
+							Your current tournament leaderboard rank
+						</div>
+					</div>
+				</section>
+
+				<section class="workspace-grid">
+					<div class="workspace-column">
+						<div class="workspace-panel" data-workspace-section="exams">
+							<div class="panel-header">
+								<div>
+									<h2>My Exams</h2>
+									<p>Access every exam assigned by your teachers</p>
+								</div>
+								<div class="panel-filters">
+									<button class="filter-chip active" data-filter="all">
+										All
+									</button>
+									<button class="filter-chip" data-filter="available">
+										Available
+									</button>
+									<button class="filter-chip" data-filter="completed">
+										Completed
+									</button>
+								</div>
+							</div>
+							<div class="exam-card-grid" id="studentExamGrid"></div>
+						</div>
+
+						<div class="workspace-panel" data-workspace-section="overview">
+							<div class="panel-header">
+								<div>
+									<h2>Performance Snapshot</h2>
+									<p>See how you performed in each exam</p>
+								</div>
+							</div>
+							<div id="studentPerformanceList" class="performance-list"></div>
+						</div>
+
+						<div class="workspace-panel" data-workspace-section="overview">
+							<div class="panel-header">
+								<div>
+									<h2>Badges & Progression</h2>
+									<p>Your earned achievements and current EXP level</p>
+								</div>
+								<div
+									class="panel-filters"
+									style="font-weight: 600; color: var(--primary-color)"
+								>
+									Level <span id="studentLevelDisplay">1</span> (<span
+										id="studentExpDisplay"
+										>0</span
+									>
+									EXP)
+								</div>
+							</div>
+							<div id="studentBadgesList" class="student-badges-grid">
+								<!-- Badges will render here -->
+							</div>
+						</div>
+
+						<div class="workspace-panel" data-workspace-section="training">
+							<div class="panel-header">
+								<div>
+									<h2>My Training</h2>
+									<p>Review your practice sessions and keep improving</p>
+								</div>
+								<div class="panel-filters">
+									<button class="filter-chip active" data-training-filter="all">
+										All Attempts
+									</button>
+									<button class="filter-chip" data-training-filter="recent">
+										Recent
+									</button>
+								</div>
+							</div>
+							<div class="exam-card-grid" id="studentTrainingGrid"></div>
+						</div>
+
+						<div class="workspace-panel" data-workspace-section="training">
+							<div class="panel-header">
+								<div>
+									<h2>Training Progress</h2>
+									<p>Track trends across your training attempts</p>
+								</div>
+							</div>
+							<div
+								id="studentTrainingPerformanceList"
+								class="performance-list"
+							></div>
+						</div>
+						<div
+							class="workspace-panel games-panel"
+							data-workspace-section="tournament"
+							style="margin-bottom: 2rem"
+						>
+							<div class="panel-header">
+								<div>
+									<h2>Tournament Arena</h2>
+									<p id="studentActiveTournamentDesc">
+										No active tournaments running.
+									</p>
+								</div>
+								<span
+									id="studentTournamentBadge"
+									class="student-tournament-status inactive"
+									>Inactive</span
+								>
+							</div>
+							<div class="student-tournament-grid">
+								<div class="student-tournament-stat">
+									<div class="label">My Score</div>
+									<div class="value" id="studentTournamentScore">0</div>
+								</div>
+								<div class="student-tournament-stat">
+									<div class="label">My Rank</div>
+									<div class="value" id="studentTournamentRank">-</div>
+								</div>
+								<div class="student-tournament-stat">
+									<div class="label">Participants</div>
+									<div class="value" id="studentTournamentPlayers">0</div>
+								</div>
+								<div class="student-tournament-stat">
+									<div class="label">Round Progress</div>
+									<div class="value" id="studentTournamentRoundProgress">-</div>
+								</div>
+							</div>
+							<div id="studentTournamentMeta" class="student-tournament-meta">
+								<span class="tournament-meta-chip muted"
+									>No active tournament setup</span
+								>
+							</div>
+							<div
+								id="studentTournamentActions"
+								class="student-tournament-actions"
+							></div>
+							<div
+								id="studentTournamentJourney"
+								class="student-tournament-journey"
+							></div>
+							<div class="student-tournament-layout">
+								<div
+									id="studentTournamentGames"
+									class="student-tournament-games-section"
+								></div>
+								<div class="student-tournament-sidebar">
+									<div class="student-tournament-panel">
+										<div class="student-tournament-panel-title">
+											Participants Status
+										</div>
+										<div
+											id="studentTournamentParticipants"
+											class="student-tournament-participants"
+										>
+											<div class="empty-state-small">
+												Participants status will appear here.
+											</div>
+										</div>
+									</div>
+									<div class="student-tournament-panel">
+										<div class="student-tournament-panel-title">
+											Leaderboard
+										</div>
+										<div
+											id="studentTournamentLeaderboard"
+											class="student-tournament-leaderboard"
+										>
+											<div class="empty-state-small">
+												No leaderboard data yet.
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+							<div
+								id="studentTournamentHowItWorks"
+								class="student-tournament-benefits"
+							></div>
+						</div>
+						<div
+							class="workspace-panel games-panel"
+							data-workspace-section="games"
+						>
+							<div class="panel-header">
+								<div>
+									<h2>My Games</h2>
+									<p>Track live games and recent results</p>
+								</div>
+								<div class="panel-filters">
+									<button class="filter-chip active" data-game-filter="open">
+										Open
+									</button>
+									<button class="filter-chip" data-game-filter="live">
+										Live
+									</button>
+									<button class="filter-chip" data-game-filter="completed">
+										Results
+									</button>
+									<button
+										type="button"
+										class="filter-chip games-refresh-btn"
+										id="studentGamesRefreshBtn"
+										title="Sync latest games from admin panel"
+									>
+										Refresh
+									</button>
+								</div>
+							</div>
+							<div id="studentGameStatsMain" class="game-arena-stats"></div>
+							<div id="studentGameListMain" class="game-card-list"></div>
+							<div id="studentGameResultsMain" class="game-results-list"></div>
+						</div>
+					</div>
+
+					<aside class="workspace-sidebar">
+						<div class="workspace-panel" data-workspace-section="results">
+							<div class="panel-header">
+								<div>
+									<h2>Recent Results</h2>
+									<p>Your latest scores and attempts</p>
+								</div>
+							</div>
+							<div id="studentResults" class="results-list"></div>
+						</div>
+					</aside>
+				</section>
+			</main>
+		</div>
+
+		<div id="studentAuthModal" class="modal auth-modal">
+			<div class="modal-content small-modal auth-modal-content student-auth">
+				<div class="modal-header auth-modal-header">
+					<div class="auth-modal-brand">
+						<div class="auth-modal-mark" aria-hidden="true">S</div>
+						<div class="auth-modal-brand-text">
+							<h2>Student Sign In</h2>
+							<p>
+								Access your exams, training sessions, games, and tournaments.
+							</p>
+						</div>
+					</div>
+					<span class="close" onclick="handleStudentAuthClose()">&times;</span>
+				</div>
+				<div class="modal-body auth-modal-body">
+					<div id="studentAuthSignInSection" class="auth-section">
+						<form id="studentLoginForm" class="auth-form">
+							<p class="auth-form-intro">
+								Use your student credentials to continue.
+							</p>
+							<div class="form-group auth-field">
+								<label for="student-auth-username">Username</label>
+								<input
+									type="text"
+									id="student-auth-username"
+									data-auth="username"
+									class="form-control auth-input"
+									placeholder="Enter your username"
+									autocomplete="username"
+									required
+								/>
+							</div>
+							<div class="form-group auth-field">
+								<label for="student-auth-password">Password</label>
+								<div class="auth-password-wrap">
+									<input
+										type="password"
+										id="student-auth-password"
+										data-auth="password"
+										class="form-control auth-input"
+										placeholder="Enter your password"
+										autocomplete="current-password"
+										required
+									/>
+									<button
+										type="button"
+										class="auth-toggle-password"
+										data-target="student-auth-password"
+										aria-label="Show password"
+										aria-pressed="false"
+									>
+										Show
+									</button>
+								</div>
+							</div>
+							<div class="auth-meta-row">
+								<label class="auth-remember" for="student-auth-remember">
+									<input
+										type="checkbox"
+										id="student-auth-remember"
+										data-auth="remember"
+									/>
+									<span>Remember me</span>
+								</label>
+							</div>
+							<button type="submit" class="workspace-btn auth-submit-btn">
+								Sign In
+							</button>
+							<p class="auth-footnote">
+								Only student accounts can sign in here.
+							</p>
+						</form>
+						<div class="auth-switch-row">
+							<button
+								type="button"
+								id="studentAuthShowRequestBtn"
+								class="auth-section-toggle"
+							>
+								Need an account?
+							</button>
+						</div>
+					</div>
+					<div
+						id="studentAuthRequestSection"
+						class="auth-section"
+						style="display: none"
+					>
+						<div class="auth-request-divider">
+							<span>Create Account Request</span>
+						</div>
+						<form
+							id="studentAccountRequestForm"
+							class="auth-form auth-request-form"
+						>
+							<p class="auth-form-intro">
+								Send an account request to your teacher or admin.
+							</p>
+							<div class="form-group auth-field">
+								<label for="student-request-full-name">Full Name</label>
+								<input
+									type="text"
+									id="student-request-full-name"
+									class="form-control auth-input"
+									placeholder="Enter your full name"
+									required
+								/>
+							</div>
+							<div class="form-group auth-field">
+								<label for="student-request-username">Username</label>
+								<input
+									type="text"
+									id="student-request-username"
+									class="form-control auth-input"
+									placeholder="Choose a username"
+									required
+								/>
+							</div>
+							<div class="form-group auth-field">
+								<label for="student-request-password">Password</label>
+								<input
+									type="password"
+									id="student-request-password"
+									class="form-control auth-input"
+									placeholder="Create a password"
+									required
+								/>
+							</div>
+							<div class="form-group auth-field">
+								<label for="student-request-number">Student Number</label>
+								<input
+									type="text"
+									id="student-request-number"
+									class="form-control auth-input"
+									placeholder="Enter your student number"
+									required
+								/>
+							</div>
+							<div class="form-group auth-field">
+								<label for="student-request-class">Class</label>
+								<select
+									id="student-request-class"
+									class="form-control auth-input"
+									required
+								>
+									<option value="">Select your class</option>
+								</select>
+							</div>
+							<div class="form-group auth-field">
+								<label for="student-request-note">Note (optional)</label>
+								<textarea
+									id="student-request-note"
+									class="form-control auth-input"
+									rows="2"
+									placeholder="Any context for your request"
+								></textarea>
+							</div>
+							<button type="submit" class="workspace-btn auth-submit-btn">
+								Request Account
+							</button>
+							<div
+								id="studentAccountRequestStatus"
+								class="auth-request-status"
+							></div>
+						</form>
+						<div class="auth-switch-row">
+							<button
+								type="button"
+								id="studentAuthShowSignInBtn"
+								class="auth-section-toggle"
+							>
+								Back to sign in
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="studentProfileModal" class="modal">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h2>Student Account</h2>
+					<span class="close" onclick="closeStudentProfileModal()"
+						>&times;</span
+					>
+				</div>
+				<div class="modal-body">
+					<div class="profile-tabs">
+						<button
+							type="button"
+							class="profile-tab-btn active"
+							data-profile-tab="profile"
+						>
+							My Profile
+						</button>
+						<button
+							type="button"
+							class="profile-tab-btn"
+							data-profile-tab="security"
+						>
+							Security
+						</button>
+					</div>
+					<div id="profile-tab" class="profile-section">
+						<div class="profile-card profile-card--hero">
+							<div class="profile-avatar">
+								<div class="avatar-frame">
+									<img id="studentProfileAvatarImage" src="" alt="Profile" />
+									<span id="studentProfileAvatarFallback">S</span>
+								</div>
+								<label class="avatar-upload">
+									<input
+										type="file"
+										id="studentProfileAvatarInput"
+										accept="image/*"
+									/>
+									<span>Upload Photo</span>
+								</label>
+							</div>
+							<div class="profile-meta">
+								<div class="profile-meta-top">
+									<h3 id="studentProfileName">Student</h3>
+									<p id="studentProfileClass">Class</p>
+								</div>
+								<div class="profile-chip-row">
+									<span class="profile-chip" id="studentProfileNumber"
+										>#--</span
+									>
+									<span
+										class="profile-chip profile-chip-points"
+										id="studentProfilePointsChip"
+										>Points: 0</span
+									>
+									<span
+										class="profile-chip profile-chip-badges"
+										id="studentProfileBadgesChip"
+										>Badges: 0</span
+									>
+								</div>
+							</div>
+							<div class="profile-hero-stats">
+								<article class="profile-stat-tile">
+									<span>Level</span>
+									<strong id="studentProfileLevelValue">1</strong>
+									<small>Progression driven by live play.</small>
+								</article>
+								<article class="profile-stat-tile">
+									<span>Experience</span>
+									<strong id="studentProfileExpValue">0</strong>
+									<small>Total points earned across sessions.</small>
+								</article>
+								<article class="profile-stat-tile">
+									<span>Tournament Points</span>
+									<strong id="studentProfileTournamentPointsValue">0</strong>
+									<small>Competitive points collected in arena play.</small>
+								</article>
+								<article class="profile-stat-tile">
+									<span>Rewards</span>
+									<strong id="studentProfileRewardsValue">0</strong>
+									<small>Badges and seasonal rewards unlocked.</small>
+								</article>
+							</div>
+						</div>
+						<div class="profile-insight-grid">
+							<article class="profile-insight-card accent-blue">
+								<div class="profile-insight-kicker">Level Progress</div>
+								<div class="profile-insight-value" id="studentProfileProgressValue">
+									0 / 200 XP to next level
+								</div>
+								<div class="profile-progress-bar">
+									<div
+										class="profile-progress-fill"
+										id="studentProfileProgressFill"
+									></div>
+								</div>
+								<div class="profile-progress-copy" id="studentProfileSeasonSummary">
+									Play a live game to unlock your performance summary
+								</div>
+							</article>
+							<article class="profile-insight-card accent-gold">
+								<div class="profile-insight-kicker">Session Record</div>
+								<div class="profile-insight-value">
+									<span id="studentProfileSessionsValue">0</span> sessions
+								</div>
+								<div class="profile-insight-copy">
+									<span id="studentProfileWinsValue">0</span> wins •
+									<span id="studentProfileWinRateValue">0%</span> win rate
+								</div>
+							</article>
+							<article class="profile-insight-card accent-emerald">
+								<div class="profile-insight-kicker">Performance Snapshot</div>
+								<div class="profile-insight-value">
+									<span id="studentProfileAverageScoreValue">0</span> avg score
+								</div>
+								<div class="profile-insight-copy">
+									Latest reward:
+									<strong id="studentProfileLatestRewardValue">No reward yet</strong>
+								</div>
+							</article>
+						</div>
+						<form id="studentProfileForm" class="profile-form">
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="studentProfileFullName">Full Name</label>
+									<input
+										type="text"
+										id="studentProfileFullName"
+										class="form-control"
+										required
+									/>
+								</div>
+								<div class="form-group half">
+									<label for="studentProfileUsername">Username</label>
+									<input
+										type="text"
+										id="studentProfileUsername"
+										class="form-control"
+										required
+									/>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="studentProfileEmail">Email (optional)</label>
+									<input
+										type="email"
+										id="studentProfileEmail"
+										class="form-control"
+										placeholder="student@example.com"
+									/>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="studentProfileNumberInput">Student Number</label>
+									<input
+										type="text"
+										id="studentProfileNumberInput"
+										class="form-control"
+										required
+									/>
+								</div>
+								<div class="form-group half">
+									<label for="studentProfileClassSelect">Class</label>
+									<select
+										id="studentProfileClassSelect"
+										class="form-control"
+									></select>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="studentProfileNote">Request Note (optional)</label>
+								<textarea
+									id="studentProfileNote"
+									class="form-control"
+									rows="2"
+									placeholder="Explain what you need to update..."
+								></textarea>
+							</div>
+							<div class="profile-actions">
+								<button type="submit" class="workspace-btn">
+									Send Update Request
+								</button>
+								<button
+									type="button"
+									class="workspace-btn ghost"
+									id="studentProfileReset"
+								>
+									Reset
+								</button>
+							</div>
+						</form>
+						<div
+							id="studentProfileRequestStatus"
+							class="profile-request-status"
+						></div>
+					</div>
+					<div id="security-tab" class="profile-section hidden">
+						<form id="studentPasswordForm" class="profile-form">
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="studentPasswordCurrent">Current Password</label>
+									<input
+										type="password"
+										id="studentPasswordCurrent"
+										class="form-control"
+										required
+									/>
+								</div>
+								<div class="form-group half">
+									<label for="studentPasswordNew">New Password</label>
+									<input
+										type="password"
+										id="studentPasswordNew"
+										class="form-control"
+										required
+									/>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="studentPasswordConfirm">Confirm New Password</label>
+								<input
+									type="password"
+									id="studentPasswordConfirm"
+									class="form-control"
+									required
+								/>
+							</div>
+							<div class="profile-actions">
+								<button type="submit" class="workspace-btn">
+									Update Password
+								</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="studentGameModal" class="modal game-modal">
+			<div class="modal-content">
+				<div class="modal-body">
+					<div id="studentGameStage" class="game-stage"></div>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>
