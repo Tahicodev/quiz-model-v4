@@ -1,59 +1,83 @@
+/**
+ * prisma/seed.js
+ *
+ * Idempotent seed: creates the default School (local mode) + an admin user +
+ * default settings across all visibility tiers. Safe to run on every deploy —
+ * `upsert` + the existence check make it a no-op once seeded.
+ */
+
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('Seeding database...');
+const SCHOOL_ID = process.env.DEFAULT_SCHOOL_ID || 'local';
 
-  // Create default super admin
-  const password_hash = await bcrypt.hash('admin123', 10);
-  
-  const admin = await prisma.user.upsert({
-    where: { username: 'admin' },
+async function main() {
+  // ── Default school (the tenant root for local mode) ────────────────────────
+  const school = await prisma.school.upsert({
+    where: { slug: SCHOOL_ID },
     update: {},
     create: {
+      id: SCHOOL_ID,
+      name: 'My School',
+      slug: SCHOOL_ID,
+    },
+  });
+  console.log(`✓ School ensured: ${school.name} (id: ${school.id})`);
+
+  // ── Admin user ─────────────────────────────────────────────────────────────
+  const adminHash = await bcrypt.hash('admin123', 12);
+  await prisma.user.upsert({
+    where: { school_id_username: { school_id: school.id, username: 'admin' } },
+    update: {},
+    create: {
+      school_id: school.id,
       username: 'admin',
-      password_hash,
-      name: 'Super Admin',
-      role: 'super_admin',
-      school_id: 'local',
+      password_hash: adminHash,
+      role: 'admin',
+      name: 'School Administrator',
       status: 'active',
     },
   });
-  
-  console.log(`Ensured admin user exists (username: admin, password: admin123)`);
+  console.log('✓ Admin user ensured: admin / admin123');
 
-  // Create default public settings if missing
+  // ── Default settings by visibility tier ────────────────────────────────────
   const settings = [
-    { key: 'app.name', value: 'Quiz App v4', visibility: 'public' },
-    { key: 'app.theme', value: 'light', visibility: 'public' },
+    // Public — safe for any visitor to read (login page, branding)
+    { key: 'app.name', value: 'Quiz App', visibility: 'public' },
     { key: 'app.language', value: 'en', visibility: 'public' },
-    { key: 'features.ai_enabled', value: 'true', visibility: 'admin' },
+    { key: 'app.logo_url', value: '', visibility: 'public' },
+
+    // Teacher — visible to admin/teacher after login
+    { key: 'exam.default_duration', value: '60', visibility: 'teacher' },
+    { key: 'exam.default_passing_score', value: '50', visibility: 'teacher' },
+    { key: 'game.max_players', value: '30', visibility: 'teacher' },
+
+    // Admin — visible to admin only
+    { key: 'auth.allow_student_register', value: 'false', visibility: 'admin' },
+    { key: 'auth.registration_code', value: '', visibility: 'admin' },
+
+    // System — NEVER sent to any client
+    { key: 'system.backup_key', value: '', visibility: 'system' },
   ];
 
   for (const s of settings) {
     await prisma.setting.upsert({
-      where: {
-        school_id_key: { school_id: 'local', key: s.key }
-      },
+      where: { school_id_key: { school_id: school.id, key: s.key } },
       update: {},
-      create: {
-        school_id: 'local',
-        key: s.key,
-        value: s.value,
-        visibility: s.visibility,
-      },
+      create: { school_id: school.id, ...s },
     });
   }
-  
-  console.log('Ensured default settings exist');
-  console.log('Seeding complete.');
+  console.log(`✓ ${settings.length} default settings ensured`);
+
+  console.log('');
+  console.log('⚠  Change the admin password immediately after first login!');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('Seed failed:', e);
     process.exit(1);
   })
   .finally(async () => {

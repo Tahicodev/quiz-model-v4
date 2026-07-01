@@ -18,3 +18,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Prisma — keep schema + migrations, ignore the local SQLite DB
+prisma/dev.db
+prisma/*.db-journal
+prisma/migrations/dev\Migration.lock

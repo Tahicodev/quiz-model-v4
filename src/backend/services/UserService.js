@@ -1,81 +1,155 @@
+/**
+ * src/backend/services/UserService.js
+ *
+ * User CRUD. Admin-only mutations (enforced by route middleware, re-checked here).
+ * Hashes passwords with bcrypt (rounds from config) and never returns password_hash.
+ */
+
 import bcrypt from 'bcrypt';
-import { prisma } from '../prisma.js';
-import { AppError } from '../../shared/errors.js';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+import { NotFoundError, ForbiddenError, ValidationError, ConflictError } from '../../shared/errors.js';
+import { UserCreateSchema, UserUpdateSchema, UserFilterSchema } from '../../shared/schemas/user.schema.js';
+import { ROLES } from '../../shared/constants.js';
 
 export class UserService {
-  static async list(tenantId) {
-    return prisma.user.findMany({
-      where: { school_id: tenantId },
-      select: {
-        id: true,
-        username: true,
-        name: true,
-        role: true,
-        numero: true,
-        status: true,
-        class_id: true,
-        last_login: true,
-        created_at: true,
-      },
-      orderBy: { name: 'asc' },
-    });
+  #repo;
+  #logger;
+
+  /**
+   * @param {import('../../frontend/infrastructure/IStorageRepository.js').IStorageRepository} repo
+   * @param {object} logger
+   */
+  constructor(repo, logger) {
+    this.#repo = repo;
+    this.#logger = logger;
   }
 
-  static async getById(tenantId, id) {
-    const user = await prisma.user.findFirst({
-      where: { id, school_id: tenantId },
-      include: { class: true },
-    });
-    if (!user) throw new AppError('User not found', 404, 'NOT_FOUND');
-    const { password_hash, ...rest } = user;
-    return rest;
+  async list(filters = {}, pagination = {}) {
+    const parsed = UserFilterSchema.safeParse({ ...filters, ...pagination });
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+    const result = await this.#repo.getAll('users', { filters: rest, limit, offset, orderBy, direction, search });
+    return { data: result.data.map(this.#stripPassword), total: result.total };
   }
 
-  static async create(tenantId, data) {
-    const existing = await prisma.user.findUnique({ where: { username: data.username } });
-    if (existing) {
-      throw new AppError('Username already taken', 400, 'USERNAME_TAKEN');
+  async getById(id) {
+    const user = await this.#repo.getById('users', id);
+    if (!user) throw new NotFoundError('User');
+    return this.#stripPassword(user);
+  }
+
+  async create(data, currentUser) {
+    this.#requireAdmin(currentUser);
+    const parsed = UserCreateSchema.safeParse(data);
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+
+    // Uniqueness check (scoped to tenant by the route's filters)
+    const { data: existing } = await this.#repo.getAll('users', {
+      filters: { school_id: currentUser.school_id, username: parsed.data.username },
+    });
+    if (existing.length > 0) {
+      throw new ConflictError(`Username "${parsed.data.username}" is already taken`);
     }
 
-    const password_hash = await bcrypt.hash(data.password, 10);
-    
-    const user = await prisma.user.create({
-      data: {
-        school_id: tenantId,
-        username: data.username,
-        name: data.name,
-        password_hash,
-        role: data.role || 'student',
-        numero: data.numero,
-        class_id: data.class_id,
-        status: data.status || 'active',
-      },
+    const passwordHash = await bcrypt.hash(parsed.data.password, config.bcryptRounds);
+    const user = await this.#repo.create('users', {
+      school_id: currentUser.school_id,
+      username: parsed.data.username,
+      name: parsed.data.name,
+      password_hash: passwordHash,
+      role: parsed.data.role,
+      numero: parsed.data.numero,
+      class_id: parsed.data.class_id,
+      status: parsed.data.status,
     });
 
-    const { password_hash: _, ...rest } = user;
-    return rest;
+    this.#logger.info({ userId: user.id, actorId: currentUser.id }, 'User created');
+    return this.#stripPassword(user);
   }
 
-  static async update(tenantId, id, data) {
-    const user = await this.getById(tenantId, id); // validates exists and tenant
+  async update(id, data, currentUser) {
+    this.#requireAdmin(currentUser);
+    const existing = await this.#repo.getById('users', id);
+    if (!existing) throw new NotFoundError('User');
 
-    const updateData = { ...data };
-    if (updateData.password) {
-      updateData.password_hash = await bcrypt.hash(updateData.password, 10);
-      delete updateData.password;
+    const parsed = UserUpdateSchema.safeParse(data);
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+
+    const updated = await this.#repo.update('users', id, parsed.data);
+    return this.#stripPassword(updated);
+  }
+
+  async delete(id, currentUser) {
+    this.#requireAdmin(currentUser);
+    if (id === currentUser.id) {
+      throw new ValidationError({ id: ['Cannot delete your own account'] });
     }
 
-    const updated = await prisma.user.update({
-      where: { id },
-      data: updateData,
-    });
+    const existing = await this.#repo.getById('users', id);
+    if (!existing) throw new NotFoundError('User');
 
-    const { password_hash: _, ...rest } = updated;
-    return rest;
+    // Protect the last admin in the tenant
+    if (existing.role === ROLES.ADMIN) {
+      const { data: admins } = await this.#repo.getAll('users', {
+        filters: { school_id: currentUser.school_id, role: ROLES.ADMIN },
+      });
+      if (admins.length <= 1) {
+        throw new ValidationError({ id: ['Cannot delete the only admin account'] });
+      }
+    }
+
+    await this.#repo.delete('users', id);
+    this.#logger.info({ userId: id, actorId: currentUser.id }, 'User deleted');
   }
 
-  static async delete(tenantId, id) {
-    await this.getById(tenantId, id); // validate
-    await prisma.user.delete({ where: { id } });
+  async changeStatus(id, status, currentUser) {
+    this.#requireAdmin(currentUser);
+    if (id === currentUser.id) {
+      throw new ValidationError({ id: ['Cannot change your own status'] });
+    }
+    const existing = await this.#repo.getById('users', id);
+    if (!existing) throw new NotFoundError('User');
+    const updated = await this.#repo.update('users', id, { status });
+    return this.#stripPassword(updated);
+  }
+
+  async assignToClass(userId, classId, currentUser) {
+    this.#requireAdmin(currentUser);
+    const user = await this.#repo.getById('users', userId);
+    if (!user) throw new NotFoundError('User');
+    const cls = await this.#repo.getById('classes', classId);
+    if (!cls) throw new NotFoundError('Class');
+    const updated = await this.#repo.update('users', userId, { class_id: classId });
+    return this.#stripPassword(updated);
+  }
+
+  /**
+   * Admin-initiated password reset.
+   */
+  async resetPassword(userId, newPassword, currentUser) {
+    this.#requireAdmin(currentUser);
+    if (newPassword.length < 6) {
+      throw new ValidationError({ password: ['Minimum 6 characters'] });
+    }
+    const user = await this.#repo.getById('users', userId);
+    if (!user) throw new NotFoundError('User');
+
+    const passwordHash = await bcrypt.hash(newPassword, config.bcryptRounds);
+    await this.#repo.update('users', userId, { password_hash: passwordHash });
+    this.#logger.info({ userId, actorId: currentUser.id }, 'User password reset by admin');
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  #requireAdmin(user) {
+    if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+      throw new ForbiddenError();
+    }
+  }
+
+  #stripPassword(user) {
+    const { password_hash, password, ...safe } = user;
+    return safe;
   }
 }
