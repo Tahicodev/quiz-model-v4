@@ -8,13 +8,23 @@
 		"start": "node server.js"
 	},
 	"dependencies": {
-		"express": "^4.18.2",
+		"@prisma/client": "^5.22.0",
+		"bcrypt": "^6.0.0",
+		"cors": "^2.8.6",
+		"dotenv": "^17.4.2",
+		"express": "^4.22.2",
+		"jsonwebtoken": "^9.0.3",
 		"socket.io": "^4.7.2",
 		"socket.io-client": "^4.8.3",
+		"winston": "^3.19.0",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"esbuild": "^0.28.1",
+		"prisma": "^5.22.0",
 		"vitest": "^4.1.9"
+	},
+	"prisma": {
+		"seed": "node prisma/seed.js"
 	}
 }

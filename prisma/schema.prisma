@@ -1,0 +1,254 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  school_id     String   @default("local") // Multitenancy boundary
+  username      String   @unique
+  password_hash String
+  name          String
+  role          String   @default("student")
+  numero        String?
+  status        String   @default("active")
+  class_id      String?
+  last_login    DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  class         Class?   @relation(fields: [class_id], references: [id])
+  results       Result[]
+  sessions      ExamSession[]
+  gameSessions  GameSession[]
+  tournaments   TournamentEntry[]
+}
+
+model Class {
+  id          String   @id @default(uuid())
+  school_id   String   @default("local")
+  name        String
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  users       User[]
+  exams       ExamClass[]
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  school_id   String   @default("local")
+  name        String
+  parent_id   String?
+  icon        String?
+  color       String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  parent      Category?  @relation("CategoryHierarchy", fields: [parent_id], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  questions   Question[]
+}
+
+model Question {
+  id           String   @id @default(uuid())
+  school_id    String   @default("local")
+  category_id  String?
+  type         String
+  text         String
+  options_json String?
+  answer       String
+  explanation  String?
+  points       Int      @default(1)
+  difficulty   String   @default("medium")
+  tags         String?
+  media_url    String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  category     Category? @relation(fields: [category_id], references: [id])
+  exams        ExamQuestion[]
+}
+
+model Exam {
+  id            String   @id @default(uuid())
+  school_id     String   @default("local")
+  creator_id    String
+  name          String
+  description   String?
+  duration      Int?     // minutes
+  passing_score Int      @default(50)
+  status        String   @default("draft")
+  is_training   Boolean  @default(false)
+  randomize     Boolean  @default(false)
+  max_attempts  Int?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  questions     ExamQuestion[]
+  classes       ExamClass[]
+  results       Result[]
+  sessions      ExamSession[]
+}
+
+model ExamQuestion {
+  id              String   @id @default(uuid())
+  exam_id         String
+  question_id     String
+  order_index     Int      @default(0)
+  points_override Int?
+
+  exam            Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  question        Question @relation(fields: [question_id], references: [id], onDelete: Restrict)
+
+  @@unique([exam_id, question_id])
+}
+
+model ExamClass {
+  id          String   @id @default(uuid())
+  exam_id     String
+  class_id    String
+  assigned_at DateTime @default(now())
+
+  exam        Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  class       Class    @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  @@unique([exam_id, class_id])
+}
+
+model Result {
+  id             String   @id @default(uuid())
+  school_id      String   @default("local")
+  exam_id        String
+  user_id        String
+  score          Float
+  total_points   Int
+  earned_points  Int
+  time_spent     Int?
+  answers_json   String
+  mode           String   @default("exam")
+  passed         Boolean
+  attempt_number Int      @default(1)
+  date_taken     DateTime @default(now())
+
+  exam           Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model ExamSession {
+  id                     String   @id @default(uuid())
+  exam_id                String
+  user_id                String
+  status                 String   @default("active")
+  answers_json           String   @default("{}")
+  current_question_index Int      @default(0)
+  started_at             DateTime @default(now())
+  last_heartbeat         DateTime @default(now())
+  expires_at             DateTime
+  completed_at           DateTime?
+
+  exam                   Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  user                   User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model Game {
+  id            String   @id @default(uuid())
+  school_id     String   @default("local")
+  creator_id    String
+  name          String
+  type          String   @default("quiz")
+  status        String   @default("waiting")
+  join_code     String   @unique
+  settings_json String?
+  question_ids  String   // JSON array of ids for order preservation
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+  started_at    DateTime?
+  ended_at      DateTime?
+
+  sessions      GameSession[]
+}
+
+model GameSession {
+  id           String   @id @default(uuid())
+  game_id      String
+  user_id      String
+  school_id    String   @default("local")
+  score        Int      @default(0)
+  rank         Int?
+  answers_json String   @default("{}")
+  connected    Boolean  @default(true)
+  completed    Boolean  @default(false)
+  joined_at    DateTime @default(now())
+  completed_at DateTime?
+
+  game         Game     @relation(fields: [game_id], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([game_id, user_id])
+}
+
+model Tournament {
+  id            String   @id @default(uuid())
+  school_id     String   @default("local")
+  creator_id    String
+  name          String
+  description   String?
+  status        String   @default("draft")
+  settings_json String?
+  starts_at     DateTime?
+  ends_at       DateTime?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  entries       TournamentEntry[]
+}
+
+model TournamentEntry {
+  id            String   @id @default(uuid())
+  tournament_id String
+  user_id       String
+  school_id     String   @default("local")
+  score         Int      @default(0)
+  rank          Int?
+  completed     Boolean  @default(false)
+  registered_at DateTime @default(now())
+  completed_at  DateTime?
+
+  tournament    Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user          User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tournament_id, user_id])
+}
+
+model Setting {
+  id         String   @id @default(uuid())
+  school_id  String   @default("local")
+  key        String
+  value      String
+  visibility String   @default("admin") // public | teacher | admin | system
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([school_id, key])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  school_id  String   @default("local")
+  user_id    String?
+  action     String
+  entity     String
+  entity_id  String?
+  metadata   String?  // JSON
+  ip_address String?
+  created_at DateTime @default(now())
+}
