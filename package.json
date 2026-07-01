@@ -1,6 +1,7 @@
 {
 	"name": "quiz-model-v3-server",
 	"version": "1.0.0",
+	"type": "module",
 	"description": "LAN realtime server for Quiz App (Express + Socket.IO)",
 	"main": "server.js",
 	"scripts": {

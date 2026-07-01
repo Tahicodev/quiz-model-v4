@@ -105,12 +105,7 @@
 				realtimeSocket.disconnect();
 			}
 
-			realtimeSocket = io(serverHost, {
-				reconnection: true,
-				reconnectionDelay: 1000,
-				reconnectionDelayMax: 5000,
-				reconnectionAttempts: 5,
-			});
+			realtimeSocket = window.getSocket();
 
 			// Connection events
 			realtimeSocket.on('connect', () => {
@@ -167,7 +162,7 @@
 
 			realtimeSocket.on('admin:syncUsers', (payload = {}) => {
 				if (!Array.isArray(payload.quizUsers)) return;
-				localStorage.setItem('quizUsers', JSON.stringify(payload.quizUsers));
+				window.__DI_CONTAINER__.repo.setAll_sync('users', payload.quizUsers);
 				if (payload.syncedAt) {
 					localStorage.setItem('quizUsersSyncedAt', payload.syncedAt);
 				}
@@ -176,7 +171,7 @@
 
 			realtimeSocket.on('admin:syncGames', (payload = {}) => {
 				if (!Array.isArray(payload.quizGames)) return;
-				localStorage.setItem('quizGames', JSON.stringify(payload.quizGames));
+				window.__DI_CONTAINER__.repo.setAll_sync('games', payload.quizGames);
 				if (payload.syncedAt) {
 					localStorage.setItem('quizGamesSyncedAt', payload.syncedAt);
 				}
@@ -446,9 +441,7 @@
 			return;
 		}
 
-		const testSocket = io(serverHost, {
-			reconnection: false,
-		});
+		const testSocket = window.getSocket();
 
 		const timeoutId = setTimeout(() => {
 			testSocket.disconnect();
@@ -644,7 +637,7 @@
 		// Update localStorage with merged data
 		if (allDeviceData.data.quizResults) {
 			const existingResults = JSON.parse(
-				localStorage.getItem('quizResults') || '[]',
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
 			);
 			const mergedResults = [
 				...existingResults,
@@ -654,7 +647,7 @@
 					arr.findIndex((x) => x.id === r.id && x.dateTaken === r.dateTaken) ===
 					i,
 			);
-			localStorage.setItem('quizResults', JSON.stringify(mergedResults));
+			window.__DI_CONTAINER__.repo.setAll_sync('results', mergedResults);
 		}
 
 		// Save merged data backup
@@ -688,7 +681,7 @@
 		const deviceIp = device?.ip || '';
 
 		const existingResults = JSON.parse(
-			localStorage.getItem('quizResults') || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
 		);
 		let resultsChanged = false;
 		let totalAdded = 0;
@@ -839,7 +832,7 @@
 		}
 
 		if (resultsChanged) {
-			localStorage.setItem('quizResults', JSON.stringify(existingResults));
+			window.__DI_CONTAINER__.repo.setAll_sync('results', existingResults);
 			if (!silent) showRealtimeStatus(`Loaded ${totalAdded} results from ${deviceName}`, 'success');
 			// Update UI if on results tab
 			if (window.loadResults) window.loadResults();
@@ -848,7 +841,7 @@
 		// 4. Merge quizActivity from device
 		if (data && data.quizActivity && Array.isArray(data.quizActivity)) {
 			try {
-				const existingActivity = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+				const existingActivity = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 				let activityAdded = 0;
 				
 				data.quizActivity.forEach(activity => {
@@ -886,7 +879,7 @@
 					
 					// Limit to 1000 entries
 					const finalActivity = existingActivity.slice(0, 1000);
-					localStorage.setItem('quizActivity', JSON.stringify(finalActivity));
+					window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', finalActivity);
 					console.log(`Merged ${activityAdded} activities from ${deviceName}`);
 					
 					// Refresh activity UI if available
@@ -904,7 +897,7 @@
 	 */
 	function logDeviceActivity(action, name, details, deviceName = null, meta = {}) {
 		try {
-			const activities = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+			const activities = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 			const nameText = typeof name === 'string' ? name.trim() : '';
 			const detailsText = typeof details === 'string' ? details.trim() : '';
 			const deviceLabel = typeof deviceName === 'string' ? deviceName.trim() : '';
@@ -956,7 +949,7 @@
 				color: 'icon-cyan'
 			};
 			activities.unshift(activity);
-			localStorage.setItem('quizActivity', JSON.stringify(activities));
+			window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', activities);
 		} catch (e) {
 			console.warn('Could not log device activity:', e);
 		}
@@ -1030,7 +1023,7 @@
 
 		// Get uncategorized questions for training mode
 		const allQuestions = JSON.parse(
-			localStorage.getItem('quizQuestions') || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 		);
 
 		// Filter for uncategorized questions (use 'category' field, not 'categoryId')
@@ -1081,7 +1074,7 @@
 
 		let users = [];
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			users = Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			users = [];
@@ -1160,7 +1153,7 @@
 		}
 
 		showRealtimeStatus('Connecting to sync users...', 'info');
-		const tempSocket = io(serverHost, { reconnection: false });
+		const tempSocket = window.getSocket();
 		let done = false;
 		userSyncInProgress = true;
 
@@ -1268,7 +1261,7 @@
 
 		const localGames = window.GameCore?.getQuizGames
 			? window.GameCore.getQuizGames()
-			: JSON.parse(localStorage.getItem('quizGames') || '[]');
+			: window.__DI_CONTAINER__.repo.getAll_sync('games');
 
 		const syncWithAuthoritativeList = (socketInstance, isTemp = false) => {
 			if (typeof window.requestAuthoritativeGameList === 'function') {
@@ -1298,7 +1291,7 @@
 		}
 
 		showRealtimeStatus('Connecting to sync games...', 'info');
-		const tempSocket = io(serverHost, { reconnection: false });
+		const tempSocket = window.getSocket();
 		let done = false;
 
 		tempSocket.on('connect', () => {
@@ -1419,7 +1412,7 @@
 		}
 
 		showRealtimeStatus('Connecting to sync gamification settings...', 'info');
-		const tempSocket = io(serverHost, { reconnection: false });
+		const tempSocket = window.getSocket();
 		let done = false;
 
 		tempSocket.on('connect', () => {
@@ -1485,8 +1478,8 @@
 			console.log('Running Refined Broadcast Updates...');
 
 			// 1. TRAINING SYNC: Settings + ONLY Uncategorized Questions
-			const settings = window.getAppSettings ? window.getAppSettings() : JSON.parse(localStorage.getItem('quizSettings') || '{}');
-			const allQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+			const settings = window.getAppSettings ? window.getAppSettings() : (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
+			const allQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 			const trainingQuestions = allQuestions.filter(
 				(q) => !q.category && !q.categoryId
 			);

@@ -620,7 +620,7 @@ function getExamMode() {
 		'Training mode: loading from quizQuestions (default/uncategorized questions)',
 	);
 	const trainingSettings = JSON.parse(
-		localStorage.getItem('quizSettings') || '{}',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')) || '{}',
 	);
 
 	return {
@@ -642,7 +642,7 @@ function loadQuizMode() {
 		console.log('Setting up EXAM mode with exam:', examActiveSession.examName);
 
 		const questionBank = JSON.parse(
-			localStorage.getItem('quizQuestions') || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 		);
 		let resolvedExamQuestions = resolveQuestionReferences(
 			examActiveSession.questions || [],
@@ -650,7 +650,7 @@ function loadQuizMode() {
 		);
 
 		if (!resolvedExamQuestions.length && examActiveSession.examId) {
-			const savedExams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+			const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 			const sourceExam = savedExams.find(
 				(exam) => String(exam.id) === String(examActiveSession.examId),
 			);
@@ -738,7 +738,7 @@ function loadQuizMode() {
 
 	// Load questions from training storage
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	questions = savedQuestions;
 
@@ -863,7 +863,7 @@ function logActivity(type, details = {}) {
 		// Get existing activity or initialize empty array
 		let quizActivity = [];
 		try {
-			quizActivity = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+			quizActivity = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 		} catch (e) {
 			console.error('Error parsing quizActivity:', e);
 			quizActivity = [];
@@ -889,7 +889,7 @@ function logActivity(type, details = {}) {
 			}
 		}
 
-		localStorage.setItem('quizActivity', JSON.stringify(dedup));
+		window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', dedup);
 		console.log(`Logged activity: ${type}`, activityEntry);
 
 		// Try to refresh dashboard/activity UI if available
@@ -905,7 +905,7 @@ function hasStudentTakenExam(examId, studentNumber, studentClass) {
 	if (!examId || !studentNumber) return false;
 
 	try {
-		const quizResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
+		const quizResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
 
 		// Check if student has already taken this specific exam
 		return quizResults.some((result) => {
@@ -1052,7 +1052,7 @@ function initQuiz() {
 	if (currentMode === quizModes.exam && currentExam && currentExam.questions) {
 		console.log('EXAM MODE: Using questions from examActiveSession');
 		const questionBank = JSON.parse(
-			localStorage.getItem('quizQuestions') || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 		);
 		questions = resolveQuestionReferences(currentExam.questions, questionBank);
 
@@ -1068,7 +1068,7 @@ function initQuiz() {
 		// TRAINING MODE: Load from quizQuestions storage
 		console.log('TRAINING MODE: Using questions from quizQuestions storage');
 		const savedQuestions = JSON.parse(
-			localStorage.getItem('quizQuestions') || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 		);
 
 		questions = savedQuestions.length > 0 ? [...savedQuestions] : [];
@@ -1095,7 +1095,7 @@ function initQuiz() {
 		if (currentMode === quizModes.exam && currentExam) {
 			console.log('Trying to load default questions for exam...');
 			const savedQuestions = JSON.parse(
-				localStorage.getItem('quizQuestions') || '[]',
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 			);
 			if (savedQuestions && savedQuestions.length > 0) {
 				// Use the first 5 questions as a fallback and shuffle them
@@ -1570,7 +1570,7 @@ function showQuestion(index) {
 		// but keep the structure we set up above
 		const questionTextEl = questionEl.querySelector('.question-text');
 		if (questionTextEl) {
-			questionTextEl.innerHTML = questionWithInputs;
+			window.safeSetHTML ? window.safeSetHTML(questionTextEl, questionWithInputs, true) : (questionTextEl.innerHTML = questionWithInputs);
 			questionTextEl.classList.add('fill-blank-question');
 		}
 
@@ -2243,8 +2243,8 @@ function validateFillBlankAnswer() {
 }
 
 function initializeDefaultQuestions() {
-	const existingQuestions = localStorage.getItem('quizQuestions');
-	const existingSettings = localStorage.getItem('quizSettings');
+	const existingQuestions = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions'));
+	const existingSettings = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings'));
 
 	// Initialize quizSettings if it doesn't exist
 	if (!existingSettings) {
@@ -2261,7 +2261,7 @@ function initializeDefaultQuestions() {
 			welcomeTitle: 'Welcome to the Quiz',
 			welcomeMessage: 'Test your knowledge with our interactive quiz!',
 		};
-		localStorage.setItem('quizSettings', JSON.stringify(defaultSettings));
+		window.__DI_CONTAINER__.repo.setAll_sync('settings', defaultSettings);
 		console.log('Initialized default quizSettings');
 	}
 
@@ -2278,7 +2278,7 @@ function initializeDefaultQuestions() {
 			difficulty: q.difficulty || 'medium', // Add difficulty field with default value
 			allowMultipleAnswers: Boolean(q.allowMultipleAnswers),
 		}));
-		localStorage.setItem('quizQuestions', JSON.stringify(defaultQuestions));
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', defaultQuestions);
 		console.log(
 			'Initialized default quizQuestions with',
 			defaultQuestions.length,
@@ -2288,7 +2288,7 @@ function initializeDefaultQuestions() {
 
 	// Always load the latest questions
 	const currentQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	if (currentQuestions && Array.isArray(currentQuestions)) {
 		questions = [...currentQuestions];
@@ -2302,7 +2302,7 @@ function initializeDefaultQuestions() {
 }
 
 function ensureQuizSettings() {
-	const settings = JSON.parse(localStorage.getItem('quizSettings') || '{}');
+	const settings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
 
 	// If settings is empty or invalid, recreate it
 	if (!settings || Object.keys(settings).length === 0) {
@@ -2320,7 +2320,7 @@ function ensureQuizSettings() {
 			welcomeTitle: 'Welcome to the Quiz',
 			welcomeMessage: 'Test your knowledge with our interactive quiz!',
 		};
-		localStorage.setItem('quizSettings', JSON.stringify(defaultSettings));
+		window.__DI_CONTAINER__.repo.setAll_sync('settings', defaultSettings);
 		console.log('Recreated default quizSettings');
 		return defaultSettings;
 	}
@@ -2330,7 +2330,7 @@ function ensureQuizSettings() {
 
 function verifySettings() {
 	const settings = ensureQuizSettings(); // Use the new function to ensure settings exist
-	const questions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+	const questions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	console.log('Current settings:', settings);
 	console.log('Current questions:', questions);
 	console.log('Current questions count:', questions?.length || 0);
@@ -2389,7 +2389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		window.examId = examId;
 
 		// Check if we have this exam in our database
-		const savedExams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+		const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 		const exam = savedExams.find((e) => e.id === examId);
 		if (exam) {
 			console.log('Found exam in database:', exam.name);
@@ -2418,7 +2418,7 @@ document.addEventListener('DOMContentLoaded', () => {
 							// Set up the exam mode
 							currentMode = quizModes.exam;
 							const questionBank = JSON.parse(
-								localStorage.getItem('quizQuestions') || '[]',
+								JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 							);
 							const activeSession = JSON.parse(
 								localStorage.getItem('examActiveSession') || 'null',
@@ -2675,7 +2675,7 @@ function startTrainingMode() {
 	// If completion screen replaced the quiz container, restore base quiz markup.
 	const hasQuizContent = Boolean(document.querySelector('.quiz-content'));
 	if (!hasQuizContent && quizContainer && initialQuizContainerMarkup) {
-		quizContainer.innerHTML = initialQuizContainerMarkup;
+		window.safeSetHTML ? window.safeSetHTML(quizContainer, initialQuizContainerMarkup, true) : (quizContainer.innerHTML = initialQuizContainerMarkup);
 		questionEl = null;
 		optionsEl = null;
 		timerEl = null;
@@ -2697,7 +2697,7 @@ function startTrainingMode() {
 
 	// Load all default questions from quizQuestions (not just exam questions)
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	const defaultQuestions = savedQuestions || [];
 
@@ -2886,7 +2886,7 @@ function endQuiz() {
 		// Get existing quiz results or initialize empty array
 		let quizResults = [];
 		try {
-			quizResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
+			quizResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
 		} catch (e) {
 			console.error('Error parsing quizResults:', e);
 			quizResults = [];
@@ -2896,7 +2896,7 @@ function endQuiz() {
 		quizResults.push(trainingResult);
 
 		// Save back to localStorage
-		localStorage.setItem('quizResults', JSON.stringify(quizResults));
+		window.__DI_CONTAINER__.repo.setAll_sync('results', quizResults);
 	}
 
 	// Display completion screen
@@ -2974,7 +2974,7 @@ function endQuiz() {
 	// Verify storage after saving
 	if (currentMode === quizModes.exam) {
 		const savedResults = JSON.parse(
-			localStorage.getItem('quizResults') || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
 		);
 		console.log('Verified quizResults in localStorage:', savedResults); // Debug log
 
@@ -3132,7 +3132,7 @@ function showCorrection() {
 }
 
 function showPreviousResults() {
-	const results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+	const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const container = document.getElementById('previous-results');
 
 	// Remove the code that creates a new toggle button
@@ -3178,7 +3178,7 @@ function showPreviousResults() {
     </table>
   `;
 
-	container.innerHTML = resultsHtml;
+	window.safeSetHTML ? window.safeSetHTML(container, resultsHtml, true) : (container.innerHTML = resultsHtml);
 }
 
 function saveQuizResult() {
@@ -3210,7 +3210,7 @@ function saveQuizResult() {
 		// Get existing quiz results or initialize empty array
 		let quizResults = [];
 		try {
-			quizResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
+			quizResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
 		} catch (e) {
 			console.error('Error parsing quizResults:', e);
 			quizResults = [];
@@ -3220,7 +3220,7 @@ function saveQuizResult() {
 		quizResults.push(examResult);
 
 		// Save back to localStorage
-		localStorage.setItem('quizResults', JSON.stringify(quizResults));
+		window.__DI_CONTAINER__.repo.setAll_sync('results', quizResults);
 
 		console.log('Exam result saved:', examResult);
 		return true;
@@ -3231,7 +3231,7 @@ function saveQuizResult() {
 function applyWelcomeSettings() {
 	const savedSettings = ensureQuizSettings();
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	const welcomePage = document.getElementById('welcome-page');
 
@@ -3263,7 +3263,7 @@ document.addEventListener('DOMContentLoaded', applyWelcomeSettings);
 function applyAllSettings() {
 	const savedSettings = ensureQuizSettings();
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 
 	let settingsToUse = savedSettings;
@@ -3554,7 +3554,7 @@ function togglePreviousResults() {
             `;
 		} else {
 			// Show training results
-			let results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+			let results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 			if (identity) {
 				results = results.filter(
 					(r) =>
@@ -3650,7 +3650,7 @@ function showStudentResults() {
 	}
 
 	const trainingResults = JSON.parse(
-		localStorage.getItem('quizResults') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
 	).filter(
 		(r) =>
 			String(r.numero) === String(identity.numero) &&
@@ -3998,10 +3998,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	window.exportAllSettings = function () {
 		const settings = {
-			quizSettings: JSON.parse(localStorage.getItem('quizSettings') || '{}'),
-			quizQuestions: JSON.parse(localStorage.getItem('quizQuestions') || '[]'),
-			quizExams: JSON.parse(localStorage.getItem('quizExams') || '[]'),
-			quizClasses: JSON.parse(localStorage.getItem('quizClasses') || '[]'),
+			quizSettings: (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {}),
+			quizQuestions: window.__DI_CONTAINER__.repo.getAll_sync('questions'),
+			quizExams: window.__DI_CONTAINER__.repo.getAll_sync('exams'),
+			quizClasses: window.__DI_CONTAINER__.repo.getAll_sync('classes'),
 			version: '1.0',
 		};
 
@@ -4059,7 +4059,7 @@ document.addEventListener('DOMContentLoaded', function () {
 						'quizQuestions',
 						JSON.stringify(settings.quizQuestions),
 					);
-					localStorage.setItem('quizExams', JSON.stringify(settings.quizExams));
+					window.__DI_CONTAINER__.repo.setAll_sync('exams', settings.quizExams);
 					localStorage.setItem(
 						'quizClasses',
 						JSON.stringify(settings.quizClasses),
@@ -4148,10 +4148,10 @@ document.addEventListener('DOMContentLoaded', function () {
 function refreshAllUIComponents() {
 	// Refresh quiz settings
 	const savedSettings = JSON.parse(
-		localStorage.getItem('quizSettings') || '{}',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')) || '{}',
 	);
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 
 	// Update colors and styles
@@ -4253,7 +4253,7 @@ function verifyExamAccess() {
 	console.log('Verifying access for student:', studentInfo);
 
 	// Check if student belongs to a class that has this exam assigned
-	const savedClasses = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const savedClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	console.log('Available classes:', savedClasses);
 
 	// First try to find by class name
@@ -4313,7 +4313,7 @@ function verifyExamAccess() {
 
 	console.log('Student found in class:', studentClass);
 
-	const savedExams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	console.log('Available exams:', savedExams);
 
 	const requestedExam = savedExams.find((e) => e.id === examId);
@@ -4841,10 +4841,10 @@ function startExam(examId) {
 	if (currentExamId === examId) {
 		console.log('Already on the correct exam page, starting exam...');
 		// We're already on the correct exam page, just start the exam
-		const savedExams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+		const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 		const matchedExam = savedExams.find((exam) => exam.id === examId);
 		const questionBank = JSON.parse(
-			localStorage.getItem('quizQuestions') || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 		);
 		const activeSession = JSON.parse(
 			localStorage.getItem('examActiveSession') || 'null',
@@ -7390,7 +7390,7 @@ if (!document.getElementById('matching-success-animation')) {
     // Render question content function for modals
     window.renderQuestionContent = function(questionText, question, questionType, options, image, showTypeBadge = false, showPointsBadge = true) {
         // Create category badge
-        const savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+        const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
         const categoryId = question.category || 'uncategorized';
         const category = savedCategories.find(cat => cat.id === categoryId || cat.name === categoryId) ||
                         { name: 'Uncategorized', color: '#9ca3af' };
@@ -7454,7 +7454,7 @@ window.addEventListener('resize', function () {
 // Ensure all questions have difficulty field
 function ensureQuestionsHaveDifficulty() {
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	const questions = savedQuestions || [];
 
@@ -7471,7 +7471,7 @@ function ensureQuestionsHaveDifficulty() {
 	});
 
 	if (updated) {
-		localStorage.setItem('quizQuestions', JSON.stringify(updatedQuestions));
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', updatedQuestions);
 		console.log(
 			'Updated',
 			updatedQuestions.length - questions.length,
@@ -7497,14 +7497,14 @@ function testLocalStorageStructure() {
 	console.log('=== Testing localStorage structure ===');
 
 	// Test quizSettings
-	const settings = JSON.parse(localStorage.getItem('quizSettings') || '{}');
+	const settings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
 	console.log('quizSettings:', settings);
 	console.log('quizSettings keys:', Object.keys(settings));
 	console.log('quizSettings has penalty:', settings.penalty !== undefined);
 	console.log('quizSettings has timeLimit:', settings.timeLimit !== undefined);
 
 	// Test quizQuestions
-	const questions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+	const questions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	console.log('quizQuestions array length:', questions.length);
 	console.log('quizQuestions is array:', Array.isArray(questions));
 	console.log(

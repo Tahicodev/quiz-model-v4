@@ -142,6 +142,10 @@ export class LocalStorageRepository extends IStorageRepository {
     return this.#readTable(table);
   }
 
+  setAll_sync(table, data) {
+    this.#writeTable(table, data);
+  }
+
   // ── IStorageRepository implementation ────────────────────────────────────────
 
   async getAll(table, {

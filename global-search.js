@@ -89,9 +89,7 @@ function performGlobalSearch(searchTerm) {
  * @param {string} searchTerm - The search term
  */
 function searchQuestions(searchTerm) {
-	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]'
-	);
+	const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	const term = searchTerm.toLowerCase();
 
 	savedQuestions.forEach((question, index) => {
@@ -128,9 +126,7 @@ function searchQuestions(searchTerm) {
  * @param {string} searchTerm - The search term
  */
 function searchCategories(searchTerm) {
-	const savedCategories = JSON.parse(
-		localStorage.getItem('quizCategories') || '[]'
-	);
+	const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 	const term = searchTerm.toLowerCase();
 
 	savedCategories.forEach((category) => {
@@ -155,7 +151,7 @@ function searchCategories(searchTerm) {
  * @param {string} searchTerm - The search term
  */
 function searchExams(searchTerm) {
-	const savedExams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const term = searchTerm.toLowerCase();
 
 	savedExams.forEach((exam) => {
@@ -185,7 +181,7 @@ function searchExams(searchTerm) {
  * @param {string} searchTerm - The search term
  */
 function searchClasses(searchTerm) {
-	const savedClasses = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const savedClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	const term = searchTerm.toLowerCase();
 
 	savedClasses.forEach((classItem) => {
@@ -210,7 +206,7 @@ function searchClasses(searchTerm) {
  * @param {string} searchTerm - The search term
  */
 function searchResults(searchTerm) {
-	const savedResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
+	const savedResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const term = searchTerm.toLowerCase();
 
 	savedResults.forEach((result) => {
@@ -296,7 +292,7 @@ function displayGlobalSearchResults(results) {
 		html = '<div class="search-no-results">No results found</div>';
 	}
 
-	resultsDropdown.innerHTML = html;
+	window.safeSetHTML ? window.safeSetHTML(resultsDropdown, html, true) : (resultsDropdown.innerHTML = html);
 	resultsDropdown.style.display = 'block';
 
 	// Close dropdown when clicking outside

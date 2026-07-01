@@ -147,9 +147,7 @@ function getCategoryName(categoryId) {
 
 	// Fallback to localStorage
 	if (!category) {
-		const savedCategories = JSON.parse(
-			localStorage.getItem('quizCategories') || '[]'
-		);
+		const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 		category = savedCategories.find((c) => c.id === categoryId);
 	}
 
@@ -654,9 +652,7 @@ function closeCategoryAssignmentModal() {
 
 function loadCategoriesForAssignment() {
 	const select = document.getElementById('assignmentCategorySelect');
-	const savedCategories = JSON.parse(
-		localStorage.getItem('quizCategories') || '[]'
-	);
+	const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 
 	select.innerHTML = '<option value="">-- Select a category --</option>';
 
@@ -669,9 +665,7 @@ function loadCategoriesForAssignment() {
 }
 
 function updateSelectedQuestionsList() {
-	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]'
-	);
+	const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	const questions = savedQuestions || [];
 	const container = document.getElementById('selectedQuestionsList');
 	const countElement = document.getElementById('selectedQuestionsCount');
@@ -711,9 +705,7 @@ function saveCategoryAssignment() {
 	}
 
 	// Update selected questions with the category
-	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]'
-	);
+	const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	const questions = savedQuestions || [];
 
 	let updatedCount = 0;
@@ -725,7 +717,7 @@ function saveCategoryAssignment() {
 	});
 
 	// Save updated questions
-	localStorage.setItem('quizQuestions', JSON.stringify(questions));
+	window.__DI_CONTAINER__.repo.setAll_sync('questions', questions);
 
 	// Update the question list to reflect changes
 	updateQuestionList();
@@ -1406,11 +1398,9 @@ function addOrUpdateQuestion() {
 			questionObj.ownerId = window.Auth?.getCurrentUser?.()?.id || '';
 
 			// Save new question to localStorage
-			const savedQuestions = JSON.parse(
-				localStorage.getItem('quizQuestions') || '[]'
-			);
+			const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 			savedQuestions.push(questionObj);
-			localStorage.setItem('quizQuestions', JSON.stringify(savedQuestions));
+			window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
 
 			// Log the activity
 			if (typeof logActivity === 'function') {
@@ -1502,9 +1492,7 @@ function renderQuestionContent(
 	showPointsBadge = true
 ) {
 	// Get category information
-	const savedCategories = JSON.parse(
-		localStorage.getItem('quizCategories') || '[]'
-	);
+	const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 	const categoryId = questionObj.category || 'uncategorized';
 	const category = savedCategories.find(
 		(cat) => cat.id === categoryId || cat.name === categoryId
@@ -1812,9 +1800,7 @@ function updateQuestionInTable(index, questionObj) {
 		}
 
 		// Update the questions array in localStorage
-		const savedQuestions = JSON.parse(
-			localStorage.getItem('quizQuestions') || '[]'
-		);
+		const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 		if (savedQuestions[index]) {
 			const existing = savedQuestions[index];
 			savedQuestions[index] = {
@@ -1835,7 +1821,7 @@ function updateQuestionInTable(index, questionObj) {
 				id: existing.id || questionObj.id || generateUUID(),
 				ownerId: existing.ownerId || questionObj.ownerId || window.Auth?.getCurrentUser?.()?.id || '',
 			};
-			localStorage.setItem('quizQuestions', JSON.stringify(savedQuestions));
+			window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
 			console.log('Updated question in localStorage:', savedQuestions[index]);
 		}
 	}
@@ -1856,9 +1842,7 @@ function editQuestionByRow(button) {
 	editIndex = Array.from(row.parentNode.children).indexOf(row);
 
 	// Get the question data from localStorage for complete information including option images
-	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]'
-	);
+	const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	const questions = savedQuestions || [];
 	const questionIndex = Array.from(row.parentNode.children).indexOf(row);
 
@@ -2704,7 +2688,7 @@ function deleteBulkSelectedQuestions() {
 	indicesToDelete.sort((a, b) => b - a);
 
 	// Get current questions
-	let questions = JSON.parse(localStorage.getItem('quizQuestions')) || [];
+	let questions = JSON.parse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions'))) || [];
 
 	// Delete questions
 	indicesToDelete.forEach((index) => {
@@ -2712,7 +2696,7 @@ function deleteBulkSelectedQuestions() {
 	});
 
 	// Save updated questions
-	localStorage.setItem('quizQuestions', JSON.stringify(questions));
+	window.__DI_CONTAINER__.repo.setAll_sync('questions', questions);
 
 	// Update Dashboard if available
 	if (window.initDashboard) {
@@ -3473,7 +3457,7 @@ function addOptionToDraggableContainer(option) {
             `;
 		}
 
-		item.innerHTML = contentHtml;
+		window.safeSetHTML ? window.safeSetHTML(item, contentHtml, true) : (item.innerHTML = contentHtml);
 
 		// Add drag event listeners
 		item.addEventListener('dragstart', handleDragStart);
@@ -3703,7 +3687,7 @@ function updateQuestionList() {
 	if (!questionList) return;
 
 	// Normalize questions: ensure all have unique IDs
-	const questions = JSON.parse(localStorage.getItem('quizQuestions')) || [];
+	const questions = JSON.parse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions'))) || [];
 	let updated = false;
 	questions.forEach((q, idx) => {
 		if (!q.id) {
@@ -3726,7 +3710,7 @@ function updateQuestionList() {
 		}
 	});
 	if (updated) {
-		localStorage.setItem('quizQuestions', JSON.stringify(questions));
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', questions);
 	}
 
 	questionList.innerHTML = '';
@@ -5409,7 +5393,7 @@ function renderFillBlankPreview(questionText) {
 	});
 
 	console.log('Created', blankIndex, 'blank drop zones');
-	previewContent.innerHTML = html;
+	window.safeSetHTML ? window.safeSetHTML(previewContent, html, true) : (previewContent.innerHTML = html);
 
 	// Refresh word bank to update assigned status
 	populateFillBlankWordBank();
@@ -6116,7 +6100,7 @@ function populateAICategorySelect() {
 		select.innerHTML = `<option value="">${firstOptionText}</option>`;
 		
 		try {
-			const categories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+			const categories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 			categories.forEach(cat => {
 				const option = document.createElement('option');
 				option.value = cat.id || cat.name;
@@ -6757,7 +6741,7 @@ window.importSelectedAIQuestions = function() {
 	
 	try {
 		// Get existing questions
-		let existingQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+		let existingQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 		
 		// Get selected questions to import
 		const questionsToImport = [];
@@ -6782,7 +6766,7 @@ window.importSelectedAIQuestions = function() {
 		existingQuestions = [...existingQuestions, ...questionsToImport];
 		
 		// Save to localStorage
-		localStorage.setItem('quizQuestions', JSON.stringify(existingQuestions));
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', existingQuestions);
 		
 		// Log activity
 		if (typeof logActivity === 'function') {
