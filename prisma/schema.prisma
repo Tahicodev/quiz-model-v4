@@ -176,20 +176,25 @@ model Exam {
   @@index([creator_id])
 }
 
+// Join tables use a surrogate `id` so they satisfy the generic IStorageRepository
+// contract (getById/update/delete by id). @@unique preserves idempotency.
 model ExamQuestion {
+  id              String   @id @default(uuid())
   exam_id         String
   question_id     String
-  order_index     Int    @default(0)
+  order_index     Int      @default(0)
   points_override Int? // override question's default points for this exam
 
   exam     Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
   question Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
 
-  @@id([exam_id, question_id])
+  @@unique([exam_id, question_id])
   @@index([exam_id])
+  @@index([question_id])
 }
 
 model ExamClass {
+  id          String   @id @default(uuid())
   exam_id     String
   class_id    String
   assigned_at DateTime @default(now())
@@ -197,7 +202,9 @@ model ExamClass {
   exam  Exam  @relation(fields: [exam_id], references: [id], onDelete: Cascade)
   class Class @relation(fields: [class_id], references: [id], onDelete: Cascade)
 
-  @@id([exam_id, class_id])
+  @@unique([exam_id, class_id])
+  @@index([exam_id])
+  @@index([class_id])
 }
 
 // ─── Active Exam Sessions ────────────────────────────────────────────────────
