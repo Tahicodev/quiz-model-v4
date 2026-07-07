@@ -1,25 +1,31 @@
 /**
- * tenant.js
- * Multi-tenancy isolation middleware.
- * Ensures the user's school_id is automatically appended to Prisma queries 
- * to prevent cross-tenant data leakage.
+ * src/backend/middleware/tenant.js
+ *
+ * Extracts school_id from the JWT payload (req.user) and attaches it as
+ * req.schoolId for routes to use in queries. CRITICAL: every Prisma query
+ * MUST use req.schoolId — never accept school_id from req.body.
  */
 
+import { UnauthorizedError } from '../../shared/errors.js';
+
 export const enforceTenant = (req, res, next) => {
-  if (req.user) {
-    // We attach the tenant ID so services can safely query
-    req.tenantId = req.user.school_id;
+  if (!req.user?.school_id) {
+    return next(new UnauthorizedError('No tenant context in token'));
   }
+  // Attach as req.schoolId (spec naming) so routes use it consistently.
+  req.schoolId = req.user.school_id;
   next();
 };
 
 /**
- * Helper to wrap Prisma where clauses with the tenant ID
+ * Convenience helper for building tenant-scoped where clauses.
+ * Services/routes should prefer explicit { school_id: req.schoolId } for clarity,
+ * but this helper reduces boilerplate in simple cases.
  */
 export const withTenant = (req, whereClause = {}) => {
-  // Super admins might cross tenant boundaries
+  // Super admins may cross tenant boundaries (SaaS platform admin).
   if (req.user?.role === 'super_admin') {
     return whereClause;
   }
-  return { ...whereClause, school_id: req.tenantId };
+  return { ...whereClause, school_id: req.schoolId };
 };

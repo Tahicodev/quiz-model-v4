@@ -1,41 +1,49 @@
+/**
+ * src/backend/middleware/auth.js
+ *
+ * JWT verification middleware. Stores the decoded TOKEN PAYLOAD on req.user
+ * (not the full database row). Routes use req.user.school_id for tenant scoping.
+ */
+
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
-import { AppError } from '../../shared/errors.js';
-import { prisma } from '../prisma.js';
+import { UnauthorizedError, ForbiddenError } from '../../shared/errors.js';
 
-export const requireAuth = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError('No token provided', 401, 'UNAUTHORIZED');
-    }
-
-    const token = authHeader.split(' ')[1];
-    
-    try {
-      const decoded = jwt.verify(token, config.jwtSecret);
-      
-      // We look up the user to ensure they still exist and are active
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.id },
-      });
-
-      if (!user) {
-        throw new AppError('User no longer exists', 401, 'UNAUTHORIZED');
-      }
-      if (user.status !== 'active') {
-        throw new AppError('User account is inactive', 403, 'FORBIDDEN');
-      }
-
-      req.user = user;
-      next();
-    } catch (err) {
-      if (err instanceof jwt.TokenExpiredError) {
-        throw new AppError('Token expired', 401, 'TOKEN_EXPIRED');
-      }
-      throw new AppError('Invalid token', 401, 'UNAUTHORIZED');
-    }
-  } catch (error) {
-    next(error);
+export const requireAuth = (req, res, next) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    return next(new UnauthorizedError('Missing token'));
   }
+
+  const token = header.slice(7);
+
+  try {
+    const payload = jwt.verify(token, config.jwtSecret);
+    // Payload shape: { id, username, role, school_id, iat, exp }
+    req.user = payload;
+    next();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return next(new UnauthorizedError('Token expired'));
+    }
+    return next(new UnauthorizedError('Invalid token'));
+  }
+};
+
+/**
+ * Optional: verify the user is still active in the database.
+ * Use sparingly (e.g., on sensitive operations) since it adds a DB round-trip.
+ */
+export const requireActiveUser = (prisma) => async (req, res, next) => {
+  if (!req.user?.id) return next(new UnauthorizedError());
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { id: true, status: true },
+  });
+
+  if (!user) return next(new UnauthorizedError('User no longer exists'));
+  if (user.status !== 'active') return next(new ForbiddenError('Account is inactive'));
+
+  next();
 };
