@@ -1,0 +1,86 @@
+/**
+ * tests/integration/PrismaRepository.contract.test.js
+ *
+ * Runs the repository contract suite against the PrismaRepository on an
+ * isolated throwaway SQLite test DB (prisma/test.db, gitignored).
+ *
+ * Why `settings`, not `questions`: the contract needs a table where we can
+ * freely bulk-insert without FK seeding beyond the single `schools` root
+ * parent, and where there's a unique natural key to exercise filtering.
+ * `Setting` has `@@unique([school_id, key])` and only a `school` FK — so we
+ * seed ONE school row before the suite and use unique `key`s per variant.
+ *
+ * Per-case isolation: `beforeEachCleanup` deletes all `settings` rows for the
+ * test school between assertions, so cases sharing the same DB don't leak.
+ *
+ * Idempotency IS enabled here — PrismaRepository.createMany uses
+ * `skipDuplicates: true`, so re-inserting the same PKs inserts zero rows.
+ */
+
+import { describe, beforeAll, afterAll } from 'vitest';
+import { PrismaClient } from '@prisma/client';
+import { execFileSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
+import path from 'node:path';
+import { PrismaRepository } from '../../src/backend/infrastructure/PrismaRepository.js';
+import { runRepositoryContractTests } from './repository.contract.js';
+
+const ROOT = process.cwd(); // vitest runs with cwd at the project root
+const TEST_DB_PATH = path.join(ROOT, 'prisma', 'test.db');
+const TEST_DB_URL  = `file:${TEST_DB_PATH.replace(/\\/g, '/')}`;
+
+let prisma;
+
+beforeAll(async () => {
+  // Point this process at the throwaway test DB. A dedicated PrismaClient is
+  // constructed below with the test URL as its datasource, so we never touch
+  // the dev DB regardless of what .env currently says.
+  process.env.DATABASE_URL = TEST_DB_URL;
+
+  // Apply existing migrations to the fresh test DB. migrate deploy is the
+  // non-dev command (spec §25 Operations line 3069 mandates deploy not dev).
+  // We invoke the LOCAL prisma directly via `node node_modules/prisma/build/
+  // index.js` to avoid `npx` pulling a different prisma version from npm
+  // (which would not see this project's schema). `--schema` is passed
+  // explicitly so cwd ambiguity can't bite us.
+  const schemaPath = path.join(ROOT, 'prisma', 'schema.prisma');
+  const prismaBin  = path.join(ROOT, 'node_modules', 'prisma', 'build', 'index.js');
+  execFileSync(process.execPath, [prismaBin, 'migrate', 'deploy', '--schema', schemaPath], {
+    cwd: ROOT,
+    env: { ...process.env, DATABASE_URL: TEST_DB_URL },
+    stdio: 'pipe',
+  });
+
+  prisma = new PrismaClient({ datasources: { db: { url: TEST_DB_URL } } });
+
+  // Seed the single root school the Setting FK requires.
+  await prisma.school.upsert({
+    where: { id: 'school-test' },
+    update: { name: 'Test School', slug: 'test-school' },
+    create: { id: 'school-test', name: 'Test School', slug: 'test-school' },
+  });
+});
+
+afterAll(async () => {
+  if (prisma) await prisma.$disconnect();
+  // Remove the throwaway test DB and its journal so the next run starts clean.
+  for (const p of [TEST_DB_PATH, `${TEST_DB_PATH}-journal`]) {
+    try { rmSync(p); } catch { /* already gone */ }
+  }
+});
+
+runRepositoryContractTests({
+  repoFactory:  () => Promise.resolve(new PrismaRepository(prisma)),
+  beforeEachCleanup: async (repo) => {
+    // Clear this school's settings between cases; done directly on the prisma
+    // client (the repo doesn't expose a bulk-delete-by-filter).
+    await prisma.setting.deleteMany({ where: { school_id: 'school-test' } });
+  },
+  cleanup: async () => {}, // DB teardown handled in afterAll above
+  label:  'PrismaRepository',
+  table:  'settings',
+  sample: { school_id: 'school-test', key: 'contract.key', value: 'v', visibility: 'admin' },
+  // Unique `key` per variant → exercises filtering + respects the unique constraint.
+  mutator: (i) => ({ school_id: 'school-test', key: `contract-${i}`, value: `v-${i}`, visibility: 'admin' }),
+  supportsIdempotentCreateMany: true,
+});

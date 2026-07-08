@@ -102,6 +102,49 @@ export class TournamentService {
     return this.#repo.query('tournament.leaderboard', { tournamentId, limit });
   }
 
+  /**
+   * Score a single tournament answer (used by the realtime tournament handler).
+   * Mirrors GameService.recordAnswer's scoring logic but accumulates the
+   * tournament entry's aggregate `score` (entries don't store per-question
+   * answers — only a running total).
+   *
+   * @returns {Promise<{ correct: boolean, points: number, score: number, showAnswer: boolean, correctAnswer: string|null }>}
+   */
+  async recordAnswer({ tournamentId, userId, questionId, answer }) {
+    const t = await this.#repo.getById('tournaments', tournamentId);
+    if (!t) throw new NotFoundError('Tournament');
+    if (t.status !== TOURNAMENT_STATUS.ACTIVE) {
+      throw new ValidationError({ status: ['Tournament is not active'] });
+    }
+
+    const { data: entries } = await this.#repo.getAll('tournament_entries', {
+      filters: { tournament_id: tournamentId, user_id: userId },
+    });
+    const entry = entries[0];
+    if (!entry) throw new NotFoundError('TournamentEntry (not registered)');
+
+    const question = await this.#repo.getById('questions', questionId);
+    if (!question) throw new NotFoundError('Question');
+
+    const isCorrect = String(answer).trim().toLowerCase() === String(question.answer).trim().toLowerCase();
+    const points    = isCorrect ? (question.points ?? 1) : 0;
+
+    await this.#repo.update('tournament_entries', entry.id, {
+      score: entry.score + points,
+    });
+
+    const settings = JSON.parse(t.settings_json || '{}');
+    const showAnswer = settings.show_answers_immediately ?? false;
+
+    return {
+      correct:      isCorrect,
+      points,
+      score:        entry.score + points,
+      showAnswer,
+      correctAnswer: showAnswer ? question.answer : null,
+    };
+  }
+
   async finish(id, currentUser) {
     this.#requireAdmin(currentUser);
     const t = await this.#repo.getById('tournaments', id);

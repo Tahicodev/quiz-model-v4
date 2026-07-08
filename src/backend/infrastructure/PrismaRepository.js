@@ -129,9 +129,33 @@ export class PrismaRepository extends IStorageRepository {
   }
 
   async createMany(table, dataArray) {
-    const result = await this.#model(table).createMany({ data: dataArray, skipDuplicates: true });
-    // createMany does not return records in SQLite; return the count for callers.
-    return result;
+    if (dataArray.length === 0) return { count: 0 };
+
+    const model = this.#model(table);
+
+    // Idempotent bulk insert. Prisma's `skipDuplicates` is NOT supported on
+    // SQLite (only PostgreSQL/MySQL) and silently errors there, so we cannot
+    // rely on it across providers. Instead we pre-filter rows whose `id` is
+    // already present and insert only the new ones — idempotent everywhere,
+    // and the count returned reflects the rows actually inserted.
+    const withId       = dataArray.filter((d) => d?.id != null);
+    const withoutId    = dataArray.filter((d) => d?.id == null);
+    let existingIds = new Set();
+    if (withId.length > 0) {
+      const ids = withId.map((d) => d.id);
+      const rows = await model.findMany({
+        where: { id: { in: ids } },
+        select: { id: true },
+      });
+      existingIds = new Set(rows.map((r) => r.id));
+    }
+    const toInsert = [...withoutId, ...withId.filter((d) => !existingIds.has(d.id))];
+    if (toInsert.length === 0) return { count: 0 };
+
+    const result = await model.createMany({ data: toInsert });
+    // Prisma createMany returns { count } on all providers; pass it through so
+    // callers (notably the migration route) get the inserted-row count.
+    return { count: result.count ?? toInsert.length };
   }
 
   /**

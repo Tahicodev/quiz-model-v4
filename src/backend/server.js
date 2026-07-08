@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -5,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { errorHandler } from './middleware/error.js';
+import { initSocketServer } from './realtime/socket.server.js';
 
 const app = express();
 
@@ -62,6 +64,27 @@ import gamesRoutes from './routes/games.routes.js';
 import tournamentsRoutes from './routes/tournaments.routes.js';
 import sessionsRoutes from './routes/sessions.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import migrateRoutes from './routes/migrate.routes.js';
+
+// ── Inject APP_CONFIG into the served HTML ──────────────────────────────────
+// The APP_MODE switch (spec Phase 7) is delivered here: the frontend reads
+// window.APP_CONFIG.mode to select its repository (LocalStorage vs Api).
+app.get('/', (req, res) => {
+  res.send(`<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Quiz App</title></head>
+<body>
+<script>
+window.APP_CONFIG = ${JSON.stringify({
+    mode: config.isSaaS ? 'saas' : 'local',
+    apiUrl: '/api/v1',
+    socketUrl: '/',
+  })};
+</script>
+<script src="/bundle.js"></script>
+</body>
+</html>`);
+});
 
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', usersRoutes);
@@ -74,6 +97,10 @@ app.use('/api/v1/games', gamesRoutes);
 app.use('/api/v1/tournaments', tournamentsRoutes);
 app.use('/api/v1/sessions', sessionsRoutes);
 app.use('/api/v1/settings', settingsRoutes);
+app.use('/api/v1/migrate', migrateRoutes);
+
+// ── Static Files (built frontend bundle) ─────────────────────────────────────
+app.use(express.static('public'));
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -83,13 +110,14 @@ app.use((req, res) => {
 // ── Global Error Handler ─────────────────────────────────────────────────────
 app.use(errorHandler);
 
-// ── Cleanup Jobs ─────────────────────────────────────────────────────────────
+// ── Cleanup + socket jobs ─────────────────────────────────────────────────────
 import { prisma } from './prisma.js';
 import { createContainer } from './container.js';
 
-// Initialize container to instantiate services
-createContainer();
-const { sessionSvc } = createContainer();
+// Initialize the DI container once. Services are pulled from this container
+// for both the socket handlers and the periodic cleanup jobs.
+const container = createContainer();
+const { sessionSvc, gameSvc, tournamentSvc } = container;
 
 // Expired session cleanup (every 5 minutes)
 setInterval(async () => {
@@ -113,16 +141,35 @@ setInterval(async () => {
   }
 }, 60 * 60 * 1000);
 
-// ── Server startup ───────────────────────────────────────────────────────────
-const server = app.listen(config.port, () => {
-  logger.info({ port: config.port, mode: config.mode }, 'Backend server started');
-});
+// ── HTTP + Socket.io Server ───────────────────────────────────────────────────
+const httpServer = http.createServer(app);
+
+// Boot: attach Socket.io to the httpServer with the container's services.
+// Uses an async IIFE so a failure here fails fast with a logged error rather
+// than starting a half-initialized server.
+(async () => {
+  try {
+    await initSocketServer(httpServer, {
+      gameService:       gameSvc,
+      tournamentService:  tournamentSvc,
+      sessionService:     sessionSvc,
+    });
+    httpServer.listen(config.port, () => {
+      logger.info({ port: config.port, mode: config.mode }, 'Backend server started');
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to initialize socket server');
+    process.exit(1);
+  }
+})();
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 async function shutdown(signal) {
   logger.info({ signal }, 'Shutdown signal received');
   await prisma.$disconnect();
-  server.close(() => {
+  // httpServer.close stops accepting connections AND drains existing ones;
+  // this also disconnects the attached Socket.io server cleanly.
+  httpServer.close(() => {
     logger.info('Server closed');
     process.exit(0);
   });
