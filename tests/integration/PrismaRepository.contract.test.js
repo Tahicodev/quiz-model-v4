@@ -72,15 +72,16 @@ afterAll(async () => {
 runRepositoryContractTests({
   repoFactory:  () => Promise.resolve(new PrismaRepository(prisma)),
   beforeEachCleanup: async (repo) => {
-    // Clear this school's settings between cases; done directly on the prisma
+    // Clear this school's questions between cases; done directly on the prisma
     // client (the repo doesn't expose a bulk-delete-by-filter).
-    await prisma.setting.deleteMany({ where: { school_id: 'school-test' } });
+    await prisma.question.deleteMany({ where: { school_id: 'school-test' } });
   },
   cleanup: async () => {}, // DB teardown handled in afterAll above
   label:  'PrismaRepository',
-  table:  'settings',
-  sample: { school_id: 'school-test', key: 'contract.key', value: 'v', visibility: 'admin' },
-  // Unique `key` per variant → exercises filtering + respects the unique constraint.
-  mutator: (i) => ({ school_id: 'school-test', key: `contract-${i}`, value: `v-${i}`, visibility: 'admin' }),
+  table:  'questions',
+  sample: { school_id: 'school-test', text: 'Test question?', type: 'mcq', answer: 'A' },
+  // Unique `text` per variant → exercises filtering + pagination without
+  // collisions. `type` is kept constant so the filter-by-field case is stable.
+  mutator: (i) => ({ school_id: 'school-test', text: `Q${i}`, type: 'mcq', answer: 'A' }),
   supportsIdempotentCreateMany: true,
 });

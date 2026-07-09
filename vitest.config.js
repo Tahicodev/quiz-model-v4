@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.js'],
+    setupFiles: ['tests/setup.js'],
     // The Prisma contract test needs a moment to bring up its throwaway sqlite
     // DB; give the whole suite a generous timeout rather than tuning per-test.
     testTimeout: 20_000,
