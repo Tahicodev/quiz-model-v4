@@ -27,3 +27,5 @@ prisma/migrations/dev\Migration.lock
 # Test DB (created by tests/integration/PrismaRepository.contract.test.js)
 prisma/test.db
 prisma/test.db-journal
+prisma/test-*.db
+prisma/test-*.db-journal

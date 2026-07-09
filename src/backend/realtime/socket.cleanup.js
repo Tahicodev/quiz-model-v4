@@ -10,7 +10,7 @@
  * Non-fatal: a disconnecting player may not have been in a game at all.
  */
 
-import { SOCKET_EVENTS } from '../../../shared/constants.js';
+import { SOCKET_EVENTS } from '../../shared/constants.js';
 import { ROOM } from './socket.rooms.js';
 import { logger } from '../logger.js';
 
