@@ -50,7 +50,7 @@ function getCategoryNameFromId(categoryId) {
 	if (!categoryId || categoryId === 'uncategorized') {
 		return 'uncategorized';
 	}
-	const categories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+	const categories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 	const category = categories.find((c) => c.id === categoryId);
 	return category ? category.name : categoryId;
 }
@@ -67,19 +67,19 @@ window.scrollKpi = function(containerId, amount) {
 
 function updateDashboardStats() {
 	// 1. Total Questions
-	const questions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+	const questions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	animateValue('kpi-questions', 0, questions.length, 1000);
 
 	// 2. Total Categories
-	const categories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+	const categories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 	animateValue('kpi-categories', 0, categories.length, 1000);
 
 	// 3. Total Exams
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	animateValue('kpi-exams', 0, exams.length, 1000);
 
 	// 4. Total Classes
-	const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	animateValue('kpi-classes', 0, classes.length, 1000);
 
 	// Populate Class Filter if it exists and is empty
@@ -103,7 +103,7 @@ function updateDashboardStats() {
 	}
 
 	// 5. Games KPIs
-	const games = JSON.parse(localStorage.getItem('quizGames') || '[]');
+	const games = window.__DI_CONTAINER__.repo.getAll_sync('games');
 	const liveGames = games.filter(
 		(game) => String(game?.status || '').toLowerCase() === 'live',
 	).length;
@@ -134,7 +134,7 @@ function updateDashboardStats() {
 	animateValue('kpi-tournaments-active', 0, hasActiveTournament ? 1 : 0, 1000);
 
 	// 7. Total Unique Students
-	const results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+	const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const uniqueStudents = new Set(results.map(r => r.numero || r.studentName || 'Unknown'));
 	animateValue('kpi-students-total', 0, uniqueStudents.size, 1000);
 
@@ -151,7 +151,7 @@ function updateDashboardStats() {
 // `mode`, and `score` are present for rendering.
 function normalizeActivityLog() {
 	try {
-		const raw = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+		const raw = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 		const normalized = raw.map((item) => {
 			if (!item || !item.type) return item;
 
@@ -250,7 +250,7 @@ function normalizeActivityLog() {
 
 		// Save back pruned and deduplicated log
 		out.sort((a, b) => new Date(b.date) - new Date(a.date));
-		localStorage.setItem('quizActivity', JSON.stringify(out));
+		window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', out);
 	} catch (e) {
 		console.warn('normalizeActivityLog failed:', e);
 	}
@@ -259,8 +259,8 @@ function normalizeActivityLog() {
 function generateAndSaveReports() {
 	// 1. Get raw data
 	// We'll allow independent mode filters for Score Distribution and Class Performance
-	const allResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
-	const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const allResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 
 	// Mode selectors (may not exist in older templates)
 	const scoreModeEl = document.getElementById('scoreDistributionMode');
@@ -438,7 +438,7 @@ function renderScoreDistribution(data, total) {
         </div>
     `;
 
-	container.innerHTML = html;
+	window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
 }
 
 function renderClassPerformance(data) {
@@ -453,8 +453,8 @@ function renderClassPerformance(data) {
 	}
 
 	// Get the raw results to calculate score distribution per class
-	const allResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
-	const classesList = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const allResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
+	const classesList = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 
 	// Sort by average score descending, then limit to top 8
 	classes.sort((a, b) => {
@@ -565,12 +565,12 @@ function renderClassPerformance(data) {
         `;
 	});
 
-	container.innerHTML = html;
+	window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
 }
 
 function renderAdvancedKPIs() {
-	const results = JSON.parse(localStorage.getItem('quizResults') || '[]');
-	const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 
 	// 1. Average Score Trend
 	// Compare current average with previous period (e.g., last 7 days vs previous 7 days)
@@ -641,7 +641,7 @@ function renderAdvancedKPIs() {
 	}
 
 	// 4. Top Performing Class (resolve class names properly)
-	const classesList = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const classesList = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	const resultsByClass = {};
 	results.forEach((r) => {
 		// Determine a stable class name for the result
@@ -768,12 +768,12 @@ function parseScore(score, totalPoints = null) {
  * Eliminates redundancy by treating quizResults as the primary source for completions.
  */
 function getAllActivities() {
-	const questions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
-	const results = JSON.parse(localStorage.getItem('quizResults') || '[]');
-	const persisted = JSON.parse(localStorage.getItem('quizActivity') || '[]');
-	const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
-	const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const questions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
+	const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
+	const persisted = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
+	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 
 	const isMissingLabel = (value) => {
 		if (value === undefined || value === null) return true;
@@ -1281,7 +1281,7 @@ function renderRecentActivity() {
                 </div>
             `;
 		});
-		list.innerHTML = html;
+		window.safeSetHTML ? window.safeSetHTML(list, html, true) : (list.innerHTML = html);
 
 		// Ensure any other panel-body activity-list containers (same Recent Activity panel) show the same last-5 list
 		const activityLists = document.querySelectorAll(
@@ -1289,7 +1289,7 @@ function renderRecentActivity() {
 		);
 		activityLists.forEach((el) => {
 			// Avoid unnecessary DOM write if it's the same element
-			if (el !== list) el.innerHTML = html;
+			if (el !== list) window.safeSetHTML ? window.safeSetHTML(el, html, true) : (el.innerHTML = html);
 		});
 	}
 
@@ -1313,7 +1313,7 @@ function saveFullActivityLog(activities) {
 	});
 
 	// Preserve any existing import/export entries and merge with generated activities
-	const existing = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+	const existing = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 	const preserved = existing.filter(
 		(e) => e && (e.type === 'import' || e.type === 'export')
 	);
@@ -1331,7 +1331,7 @@ function saveFullActivityLog(activities) {
 
 	// Ensure full activity log is sorted by date (newest first) before saving
 	finalActivities.sort((a, b) => new Date(b.date) - new Date(a.date));
-	localStorage.setItem('quizActivity', JSON.stringify(finalActivities));
+	window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', finalActivities);
 
 	// If we are on the activity tab, render the table with merged activities
 	const activityTab = document.getElementById('activity');
@@ -1575,7 +1575,7 @@ function renderActivityTable(activities) {
         `;
 	});
 
-	tbody.innerHTML = html;
+	window.safeSetHTML ? window.safeSetHTML(tbody, html, true) : (tbody.innerHTML = html);
 }
 
 function loadActivityLog() {
@@ -1610,7 +1610,7 @@ function filterActivityTable() {
 }
 
 function exportActivityLog() {
-	const activities = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+	const activities = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 	if (activities.length === 0) {
 		alert('No activity data to export');
 		return;

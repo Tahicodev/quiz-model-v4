@@ -117,7 +117,7 @@ if (!document.getElementById('toast-animations')) {
  * @param {object} metadata - Optional additional data
  */
 function logActivity(type, name, action = 'created', metadata = {}) {
-    const activityLog = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+    const activityLog = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
     
     // Create new activity entry
     const newActivity = {
@@ -138,7 +138,7 @@ function logActivity(type, name, action = 'created', metadata = {}) {
         activityLog.length = 500;
     }
     
-    localStorage.setItem('quizActivity', JSON.stringify(activityLog));
+    window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', activityLog);
     
     // Refresh dashboard if available
     if (typeof initDashboard === 'function' && document.getElementById('overview') && document.getElementById('overview').classList.contains('active')) {
@@ -183,7 +183,7 @@ function getAdminNotificationCount() {
         unique.add(key);
     });
 
-    const activity = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+    const activity = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
     activity.forEach((a) => {
         const date = a.date || a.timestamp || a.createdAt || '';
         const ts = new Date(date).getTime();
@@ -310,7 +310,7 @@ window.QuizTypes = {
 
 function getStoredAdminSecret() {
     try {
-        const settings = JSON.parse(localStorage.getItem('quizSettings') || '{}');
+        const settings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
         return String(settings.adminSecret || localStorage.getItem('quizAdminSecret') || '').trim();
     } catch (e) {
         return String(localStorage.getItem('quizAdminSecret') || '').trim();

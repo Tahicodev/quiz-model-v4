@@ -131,7 +131,7 @@ function initCategoryManagement() {
 }
 
 function loadCategories() {
-    const savedCategories = localStorage.getItem('quizCategories');
+    const savedCategories = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories'));
     categories = savedCategories ? JSON.parse(savedCategories) : [];
     
     // If no categories exist, create a default uncategorized category
@@ -162,7 +162,7 @@ function loadCategories() {
             categories[uncategorizedIndex].isSystem = true;
             
             // Update all questions using the old ID to use 'uncategorized'
-            const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+            const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
             let questionsUpdated = false;
             savedQuestions.forEach(question => {
                 if (question.category === oldId) {
@@ -172,7 +172,7 @@ function loadCategories() {
             });
             
             if (questionsUpdated) {
-                localStorage.setItem('quizQuestions', JSON.stringify(savedQuestions));
+                window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
             }
             
             saveCategories();
@@ -197,7 +197,7 @@ function createDefaultCategories() {
 }
 
 function saveCategories() {
-    localStorage.setItem('quizCategories', JSON.stringify(categories));
+    window.__DI_CONTAINER__.repo.setAll_sync('categories', categories);
     
     // Update Dashboard if available
     if (window.initDashboard) {
@@ -207,7 +207,7 @@ function saveCategories() {
 }
 
 function updateQuestionCategoryCounts() {
-    const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     const questions = savedQuestions || [];
     
     // Reset all category counts
@@ -225,7 +225,7 @@ function updateQuestionCategoryCounts() {
     });
     
     // Save updated categories
-    localStorage.setItem('quizCategories', JSON.stringify(categories));
+    window.__DI_CONTAINER__.repo.setAll_sync('categories', categories);
 }
 
 // Populate category filter in category modal
@@ -240,7 +240,7 @@ function populateCategoryFilter() {
     // Always fetch fresh from localStorage to match loadAvailableQuestionsForCategory
     let savedCategories = [];
     try {
-        savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+        savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
     } catch (e) {
         console.error('Error loading categories:', e);
         savedCategories = [];
@@ -346,7 +346,7 @@ function deleteCategory(categoryId) {
     
     if (confirm(`Are you sure you want to delete "${category.name}"? All questions in this category will become uncategorized.`)) {
         // Remove category from questions
-        const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+        const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
         const questions = savedQuestions || [];
         
         questions.forEach(question => {
@@ -355,7 +355,7 @@ function deleteCategory(categoryId) {
             }
         });
         
-        localStorage.setItem('quizQuestions', JSON.stringify(savedQuestions));
+        window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
         
         // Remove category
         categories = categories.filter(c => c.id !== categoryId);
@@ -416,7 +416,7 @@ function saveCategoryForm() {
     }
     
     // Update questions with category assignment FIRST
-    const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     
     // First, remove this category from all questions
     savedQuestions.forEach(question => {
@@ -433,7 +433,7 @@ function saveCategoryForm() {
     });
     
     // Save updated questions
-    localStorage.setItem('quizQuestions', JSON.stringify(savedQuestions));
+    window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
     
     // NOW save categories and update UI (counts will be correct now)
     saveCategories();
@@ -635,7 +635,7 @@ function loadCategoryQuestions() {
 
 // Update category question counts in UI
 function updateCategoryQuestionCountsUI() {
-    const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     
     // Calculate total available questions across ALL category folders (sum)
     let totalAvailable = 0;
@@ -927,7 +927,7 @@ function selectAllQuestionsInCategory(categoryId) {
 
 // Function to update category counts in the UI
 function updateCategoryCounts() {
-    const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     
     // Update counts for each category
     categories.forEach(category => {
@@ -948,7 +948,7 @@ function updateCategoryCounts() {
 
 // Function to update premium questions count specifically
 function updatePremiumQuestionsCount() {
-    const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     const premiumCount = savedQuestions.filter(q => q.categoryId === 'premium').length;
     const premiumElement = document.getElementById('count-premium');
     if (premiumElement) {
@@ -1078,7 +1078,7 @@ function updateBulkActionButtonsForCategory() {
 
 // Preview question for category modal
 function previewQuestionForCategory(questionId) {
-    const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     const question = savedQuestions[questionId];
     
     if (!question) return;
@@ -1186,7 +1186,7 @@ function createQuestionElementForCategory(question, questionId, questionType, is
     questionElement.dataset.questionType = questionType;
     
     // Get category information
-    const savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+    const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
     const categoryId = question.category || 'uncategorized';
     const category = savedCategories.find(cat => cat.id === categoryId || cat.name === categoryId) ||
                     { name: 'Uncategorized', color: '#9ca3af' };
@@ -1354,7 +1354,7 @@ function updateCategoryList(categoriesList = categories) {
 	if (!tbody) return;
     
 	// Get all questions from localStorage
-	let savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+	let savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	if (window.Auth?.canAccessItem) {
 		savedQuestions = savedQuestions.filter((q) =>
 			window.Auth.canAccessItem('question', q),
@@ -1593,7 +1593,7 @@ function importCategories() {
                 const existingCategories = [...categories];
                 const mergedCategories = mergeCategories(existingCategories, newCategories);
                 
-                localStorage.setItem('quizCategories', JSON.stringify(mergedCategories));
+                window.__DI_CONTAINER__.repo.setAll_sync('categories', mergedCategories);
                 categories = mergedCategories;
                 updateCategoryList();
                 updateQuestionCategoryCounts();
@@ -1713,7 +1713,7 @@ function toggleCategoryFolderWithSelectAll(categoryId) {
 // ============================================
 
 function loadAvailableQuestionsForCategory(keepSelection = true) {
-    const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     const questions = savedQuestions || [];
     const container = document.getElementById('availableQuestionsCategory');
     const selectedContainer = document.getElementById('selectedQuestionsListCategory');
@@ -1734,14 +1734,14 @@ function loadAvailableQuestionsForCategory(keepSelection = true) {
     }
     
     // Get categories for display
-    const savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+    const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
     const categoryMap = new Map();
     savedCategories.forEach((cat) => {
         if (!cat) return;
         if (cat.id) categoryMap.set(cat.id, cat);
         if (cat.name) categoryMap.set(cat.name, cat);
     });
-    const quizResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
+    const quizResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
     
     // FIRST: Preserve currently selected questions before reloading
     // Get selected question IDs from DOM BEFORE clearing anything
@@ -2015,7 +2015,7 @@ function loadAvailableQuestionsForCategory(keepSelection = true) {
             if (isSearchActive) filters.push(`search: "${searchInput.value}"`);
             if (isTypeFilterActive) filters.push(`type: ${typeFilter.value}`);
             if (isCategoryFilterActive) {
-                const savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+                const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
                 const categoryName = savedCategories.find(c => c.id === categoryFilter.value)?.name || categoryFilter.value;
                 filters.push(`category: ${categoryName}`);
             }
@@ -2055,7 +2055,7 @@ function loadAvailableQuestionsForCategory(keepSelection = true) {
         }
     }
     
-    container.innerHTML = html;
+    window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
     
     // Update counts
     updateCategoryQuestionCountsUI();
@@ -2344,7 +2344,7 @@ function showCategoryFilterResultsMessage(filteredCount, originalCount, searchTe
         if (searchTerm) filters.push(`search: "${searchTerm}"`);
         if (typeFilter && typeFilter !== 'all') filters.push(`type: ${typeFilter}`);
         if (categoryFilter) {
-            const savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+            const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
             const categoryName =
                 savedCategories.find(c => c.id === categoryFilter)?.name || categoryFilter;
             filters.push(`category: ${categoryName}`);
@@ -2417,7 +2417,7 @@ function renderAvailableQuestionsForCategory() {
     container.innerHTML = '';
     
     // Get all categories for display
-    const savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+    const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
     
     // Group questions by category
     const questionsByCategory = {};
@@ -2511,7 +2511,7 @@ function renderAvailableQuestionsForCategory() {
         `;
     }
     
-    container.innerHTML = html;
+    window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
 }
 
 // Render selected questions for category modal
@@ -2806,7 +2806,7 @@ function showFilterResultsMessageForCategory(visibleQuestionCount, searchTerm, f
         if (searchTerm) filters.push(`search: "${searchTerm}"`);
         if (filterType && filterType !== 'all') filters.push(`type: ${filterType}`);
         if (categoryFilter && categoryFilter !== '') {
-            const savedCategories = JSON.parse(localStorage.getItem('quizCategories') || '[]');
+            const savedCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
             const categoryName = savedCategories.find(c => c.id === categoryFilter)?.name || categoryFilter;
             filters.push(`category: ${categoryName}`);
         }

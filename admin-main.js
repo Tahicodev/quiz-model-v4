@@ -835,7 +835,7 @@ function deleteSelectedQuestions() {
     // Sort in descending order
     indices.sort((a, b) => b - a);
     
-    let questions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+    let questions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     
     // Log the activity
     if (typeof logActivity === 'function') {
@@ -862,7 +862,7 @@ function deleteSelectedQuestions() {
         questions.splice(index, 1);
     });
     
-    localStorage.setItem('quizQuestions', JSON.stringify(questions));
+    window.__DI_CONTAINER__.repo.setAll_sync('questions', questions);
     
     // Refresh list
     if (typeof updateQuestionList === 'function') {
@@ -941,11 +941,11 @@ function syncProfileRequestNotifications() {
         : JSON.parse(localStorage.getItem('quizAccountRequests') || '[]');
     if (!profileRequests.length && !accountRequests.length) return;
 
-    const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
-    const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+    const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
+    const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
     const classMap = new Map(classes.map((c) => [c.id, c.name]));
 
-    const activity = JSON.parse(localStorage.getItem('quizActivity') || '[]');
+    const activity = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
     const notificationList = JSON.parse(localStorage.getItem('adminNotifications') || '[]');
 
     const hasActivityForRequest = (requestType, requestId) =>
@@ -1127,7 +1127,7 @@ const MobileActionSheet = {
             
             // Add icon if provided
             if (action.icon) {
-                btn.innerHTML = action.icon;
+                window.safeSetHTML ? window.safeSetHTML(btn, action.icon, true) : (btn.innerHTML = action.icon);
             }
             
             const label = document.createElement('span');
@@ -1256,8 +1256,8 @@ function renderProfileRequests() {
     const listContainer = document.getElementById('profileRequestsList');
     if (!listContainer) return;
 
-    const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
-    const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+    const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
+    const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
     const classMap = new Map(classes.map((c) => [c.id, c.name]));
     let requests = getUnifiedProfileRequests();
 
@@ -1448,8 +1448,8 @@ function renderProfileRequests() {
     const listContainer = document.getElementById('profileRequestsList');
     if (!listContainer) return;
 
-    const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
-    const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+    const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
+    const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
     const classMap = new Map(classes.map((c) => [c.id, c.name]));
     let profileRequests = getUnifiedProfileRequests();
     let accountRequests = Array.isArray(window.Auth?.getAccountRequests?.())
