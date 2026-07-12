@@ -1,6 +1,7 @@
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
@@ -24,6 +25,7 @@ app.use(helmet({
 }));
 
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 
 // ── Request logging ─────────────────────────────────────────────────────────
