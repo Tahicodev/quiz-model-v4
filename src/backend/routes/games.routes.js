@@ -51,8 +51,7 @@ router.patch('/:id', requireRole(ROLES.ADMIN), validate(GameUpdateSchema), async
 router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { gameSvc, auditSvc } = getContainer();
-    await gameSvc.getById(req.params.id); // validate exists
-    await gameSvc.repo.delete('games', req.params.id);
+    await gameSvc.delete(req.params.id, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'game', entityId: req.params.id, action: 'delete', ip: req.ip });
     res.status(204).send();
   } catch (err) { next(err); }

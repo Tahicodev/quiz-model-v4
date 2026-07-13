@@ -40,8 +40,10 @@ export function createContainer() {
     baseRepo = new LocalStorageRepository();
   }
 
-  // 2. Wrap repo with caching (optional, but good for performance)
-  const repo = new CacheDecorator(baseRepo, 30_000);
+  // 2. Wrap repo with caching only in local mode (SaaS uses fresh API calls)
+  const repo = config.mode !== 'saas'
+    ? new CacheDecorator(baseRepo, 30_000)
+    : baseRepo;
 
   // 3. Instantiate Services
   const authSvc       = new AuthService(repo);

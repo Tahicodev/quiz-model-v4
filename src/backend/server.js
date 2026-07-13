@@ -49,6 +49,15 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
+// Stricter rate limit for auth endpoints (login, register, refresh)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { code: 'RATE_LIMITED', message: 'Too many authentication attempts. Try again later.' },
+});
+
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), mode: config.mode });
@@ -67,6 +76,7 @@ import tournamentsRoutes from './routes/tournaments.routes.js';
 import sessionsRoutes from './routes/sessions.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import migrateRoutes from './routes/migrate.routes.js';
+import aiRoutes from './routes/ai.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML ──────────────────────────────────
 // The APP_MODE switch (spec Phase 7) is delivered here: the frontend reads
@@ -88,7 +98,7 @@ window.APP_CONFIG = ${JSON.stringify({
 </html>`);
 });
 
-app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/classes', classesRoutes);
 app.use('/api/v1/categories', categoriesRoutes);
@@ -100,6 +110,7 @@ app.use('/api/v1/tournaments', tournamentsRoutes);
 app.use('/api/v1/sessions', sessionsRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/migrate', migrateRoutes);
+app.use('/api/v1/ai', aiRoutes);
 
 // ── Static Files (built frontend bundle) ─────────────────────────────────────
 app.use(express.static('public'));

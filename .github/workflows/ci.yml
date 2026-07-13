@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feature/rewrite-v4]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: quiz
+          POSTGRES_PASSWORD: quiz
+          POSTGRES_DB: quiz_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: "postgresql://quiz:quiz@localhost:5432/quiz_test"
+
+      - name: Run Prisma migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: "postgresql://quiz:quiz@localhost:5432/quiz_test"
+
+      - name: Seed database
+        run: npx prisma db seed
+        env:
+          DATABASE_URL: "postgresql://quiz:quiz@localhost:5432/quiz_test"
+          JWT_SECRET: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+
+      - name: Run tests
+        run: npm test
+        env:
+          DATABASE_URL: "postgresql://quiz:quiz@localhost:5432/quiz_test"
+          JWT_SECRET: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+          APP_MODE: "local"

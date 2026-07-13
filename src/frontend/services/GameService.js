@@ -217,6 +217,27 @@ export class GameService {
     }
   }
 
+  async delete(id, currentUser) {
+    this.#requireAdmin(currentUser);
+    const existing = await this.#repo.getById('games', id);
+    if (!existing) throw new NotFoundError('Game');
+
+    // Prevent deletion of active games
+    if (existing.status === GAME_STATUS.ACTIVE) {
+      throw new ValidationError({ status: ['Cannot delete an active game'] });
+    }
+
+    // Cascade: delete all game sessions first
+    const { data: sessions } = await this.#repo.getAll('game_sessions', {
+      filters: { game_id: id },
+    });
+    for (const s of sessions) {
+      await this.#repo.delete('game_sessions', s.id);
+    }
+
+    await this.#repo.delete('games', id);
+  }
+
   #requireAdmin(user) {
     if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
       throw new ForbiddenError();

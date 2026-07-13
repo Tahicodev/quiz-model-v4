@@ -162,6 +162,27 @@ export class TournamentService {
     return this.#repo.update('tournaments', id, { status: TOURNAMENT_STATUS.FINISHED });
   }
 
+  async delete(id, currentUser) {
+    this.#requireAdmin(currentUser);
+    const existing = await this.#repo.getById('tournaments', id);
+    if (!existing) throw new NotFoundError('Tournament');
+
+    // Prevent deletion of active tournaments
+    if (existing.status === TOURNAMENT_STATUS.ACTIVE) {
+      throw new ValidationError({ status: ['Cannot delete an active tournament'] });
+    }
+
+    // Cascade: delete all entries first
+    const { data: entries } = await this.#repo.getAll('tournament_entries', {
+      filters: { tournament_id: id },
+    });
+    for (const e of entries) {
+      await this.#repo.delete('tournament_entries', e.id);
+    }
+
+    await this.#repo.delete('tournaments', id);
+  }
+
   #requireAdmin(user) {
     if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
       throw new ForbiddenError();

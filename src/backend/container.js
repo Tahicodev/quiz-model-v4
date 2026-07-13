@@ -17,6 +17,8 @@ import { PrismaRepository } from './infrastructure/PrismaRepository.js';
 import { AuthService } from './services/AuthService.js';
 import { UserService } from './services/UserService.js';
 import { AuditService } from './services/AuditService.js';
+import { AIService } from './services/AIService.js';
+import { RAGService } from './services/RAGService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
 import { QuestionService } from '../frontend/services/QuestionService.js';
@@ -48,7 +50,9 @@ export function createContainer() {
     userSvc: new UserService(repo, logger),
     auditSvc: new AuditService(repo),
 
-    // Reused from frontend (same repo injected)
+    // AI
+    aiSvc:  new AIService(repo, logger),
+    ragSvc: new RAGService(repo, logger),
     questionSvc: new QuestionService(repo),
     examSvc: new ExamService(repo),
     resultSvc: new ResultService(repo),
