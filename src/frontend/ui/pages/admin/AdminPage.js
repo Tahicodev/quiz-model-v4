@@ -44,7 +44,7 @@ export function initAdminPage() {
   const { authSvc } = getContainer();
   if (!authSvc.isAuthenticated() || !authSvc.isAdmin()) {
     logger.warn('Non-admin attempted to load admin page; redirecting to login');
-    window.location.href = '/login.html';
+    window.location.href = '/';
     return;
   }
 

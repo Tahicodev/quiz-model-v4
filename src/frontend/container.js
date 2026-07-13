@@ -34,7 +34,7 @@ export function createContainer() {
     baseRepo = new ApiRepository({
       baseUrl: config.apiUrl,
       getToken: () => authSvcReference?.getToken(),
-      onUnauthorized: () => { window.location.href = '/login.html'; },
+      onUnauthorized: () => { window.location.href = '/'; },
     });
   } else {
     baseRepo = new LocalStorageRepository();

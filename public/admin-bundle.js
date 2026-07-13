@@ -17382,7 +17382,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         baseUrl: config.apiUrl,
         getToken: () => authSvcReference?.getToken(),
         onUnauthorized: () => {
-          window.location.href = "/login.html";
+          window.location.href = "/";
         }
       });
     } else {
@@ -19792,7 +19792,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       withError(async () => {
         await authSvc.logout();
         logger.info("Admin logged out");
-        Router.navigate("/login.html");
+        Router.navigate("/");
       });
     });
     actions.append(userChip, logoutBtn);
@@ -19880,7 +19880,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const { authSvc } = getContainer();
     if (!authSvc.isAuthenticated() || !authSvc.isAdmin()) {
       logger.warn("Non-admin attempted to load admin page; redirecting to login");
-      window.location.href = "/login.html";
+      window.location.href = "/";
       return;
     }
     const root = document.getElementById("app") || document.body;

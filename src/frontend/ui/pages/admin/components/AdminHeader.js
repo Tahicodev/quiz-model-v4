@@ -54,7 +54,7 @@ export function renderHeader(container, title = 'Dashboard') {
     withError(async () => {
       await authSvc.logout();
       logger.info('Admin logged out');
-      Router.navigate('/login.html');
+      Router.navigate('/');
     });
   });
 
