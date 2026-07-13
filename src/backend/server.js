@@ -114,15 +114,8 @@ app.use('/api/v1/ai', aiRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
 app.use(express.static('public'));
-// Serve root-level dev files (admin.html, admin.css, styles.css, src/ modules)
-app.use(express.static('./', {
-  setHeaders(res, path) {
-    // Serve .js files in src/ with correct MIME type for ES modules
-    if (path.endsWith('.js') && path.includes('/src/')) {
-      res.set('Content-Type', 'application/javascript; charset=utf-8');
-    }
-  },
-}));
+// Serve root-level dev files (admin.html, admin.css, styles.css)
+app.use(express.static('./'));
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {

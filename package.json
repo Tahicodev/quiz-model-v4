@@ -7,6 +7,9 @@
 	"scripts": {
 		"start": "node src/backend/server.js",
 		"dev": "node --watch src/backend/server.js",
+		"build": "npm run build:admin",
+		"build:admin": "esbuild src/frontend/admin-main.js --bundle --outfile=public/admin-bundle.js --format=iife --global-name=QuizAdmin",
+		"postinstall": "npm run build",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"db:migrate": "prisma migrate dev",

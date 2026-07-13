@@ -9,8 +9,7 @@
     <link rel="stylesheet" href="admin.css" />
 
     <!-- Admin SPA configuration. The backend overrides window.APP_CONFIG for
-         SaaS mode by injecting its own config before this script runs, or by
-         serving a built bundle. Defaults to local mode for LAN/dev. -->
+         SaaS mode by injecting its own config before this script runs. -->
     <script>
       window.APP_CONFIG = window.APP_CONFIG || {
         mode: 'local',   // 'local' (LocalStorage) | 'saas' (REST API)
@@ -20,12 +19,16 @@
       };
     </script>
 
-    <!-- DOMPurify is used by safeSetHTML() for rich content (question text).
-         Without it, safeSetHTML falls back to safe textContent. -->
+    <!-- DOMPurify is used by safeSetHTML() for rich content (question text). -->
     <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" defer></script>
+
+    <!-- Socket.IO client (provides window.io) -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
+
+    <!-- Built admin bundle — includes all dependencies (zod, services, schemas) -->
+    <script src="admin-bundle.js" defer></script>
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="src/frontend/admin-main.js"></script>
   </body>
 </html>
