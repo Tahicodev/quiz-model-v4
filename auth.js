@@ -179,7 +179,7 @@
 		const entered = String(code || '').trim();
 		if (!entered) return false;
 		const enteredHash = await hashPassword(entered);
-		const settings = safeJsonParse(localStorage.getItem('quizSettings'), {});
+		const settings = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')), {});
 		const savedHash = String(settings.recoveryCodeHash || '').trim();
 		const defaultHash = await hashPassword(DEFAULT_RECOVERY_CODE);
 		if (savedHash && enteredHash === savedHash) return true;
@@ -467,7 +467,7 @@
 	}
 
 	function getAccessibleClasses() {
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		if (isTeacher()) {
 			const teacherClassIds = getTeacherClassIds();
 			return classes.filter((cls) => teacherClassIds.includes(cls.id));
@@ -521,7 +521,7 @@
 
 		let className = user.className;
 		if (!className && user.classId) {
-			const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 			const match = classes.find((c) => c.id === user.classId);
 			if (match) className = match.name;
 		}
@@ -558,7 +558,7 @@
 	};
 
 	function getTeacherAccessSettings() {
-		const settings = safeJsonParse(localStorage.getItem('quizSettings'), {});
+		const settings = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')), {});
 		const stored = settings.teacherAccess || {};
 		return {
 			tabs: { ...DEFAULT_TEACHER_ACCESS.tabs, ...(stored.tabs || {}) },
@@ -596,7 +596,7 @@
 
 				const className = item.class || item.className || '';
 				if (!className) return false;
-				const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+				const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 				const match = classes.find((c) => c.name === className);
 				return Boolean(match && classIds.includes(match.id));
 			}
@@ -910,7 +910,7 @@
 	function populateStudentAccountRequestClassSelect() {
 		const classSelect = document.getElementById('student-request-class');
 		if (!classSelect) return;
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		const options = classes
 			.filter((cls) => cls && cls.id && cls.name)
 			.map(
@@ -1031,7 +1031,7 @@
 
 	function syncStudentToClasses(user, previousUser) {
 		if (!isStudentLikeUser(user)) return;
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		let changed = false;
 
 		if (
@@ -1069,7 +1069,7 @@
 		}
 
 		if (changed) {
-			localStorage.setItem('quizClasses', JSON.stringify(classes));
+			window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
 		}
 	}
 
@@ -1371,7 +1371,7 @@
 			return;
 		}
 		const scope = getSelectedUserClassScope();
-		const allClasses = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const allClasses = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		const accessibleClasses = isTeacher() ? getAccessibleClasses() : allClasses;
 		const classMap = buildClassNameMap(allClasses);
 		const filteredUsers = getFilteredUsers(getUsers()).filter((u) => {
@@ -1478,7 +1478,7 @@
 			return;
 		}
 		const scope = getSelectedUserClassScope();
-		const allClasses = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const allClasses = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		const classMap = buildClassNameMap(allClasses);
 		const filteredUsers = getFilteredUsers(getUsers()).filter(
 			(u) => u.role !== ROLE_ADMIN,
@@ -1630,7 +1630,7 @@
 			return;
 		}
 		const scope = getSelectedUserClassScope();
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		const classMap = buildClassNameMap(classes);
 		let teachers = getFilteredUsers(getUsers()).filter(
 			(u) => u.role === ROLE_TEACHER,
@@ -1828,7 +1828,7 @@
 					}
 
 					const existingClasses = safeJsonParse(
-						localStorage.getItem('quizClasses'),
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
 						[],
 					);
 					const ownerId = currentUser?.id || '';
@@ -1872,7 +1872,7 @@
 							name: student.name,
 						}));
 
-						localStorage.setItem('quizClasses', JSON.stringify(classes));
+						window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
 						await syncClassStudentsFromClassData(targetClass, mergedRoster, {
 							removeMissing: false,
 						});
@@ -1931,7 +1931,7 @@
 						}));
 					});
 
-					localStorage.setItem('quizClasses', JSON.stringify(mergedClasses));
+					window.__DI_CONTAINER__.repo.setAll_sync('classes', mergedClasses);
 
 					for (const cls of mergedClasses) {
 						const roster = studentsByClass.get(cls.id) || [];
@@ -1989,7 +1989,7 @@
 					}
 
 					const classes = safeJsonParse(
-						localStorage.getItem('quizClasses'),
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
 						[],
 					);
 					const users = getUsers();
@@ -2130,7 +2130,7 @@
 		if (!tableBody) return;
 		refreshUserClassFilter();
 
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		const classMap = buildClassNameMap(classes);
 		const rosterNameMap = new Map();
 		classes.forEach((cls) => {
@@ -2370,7 +2370,7 @@
 		}
 
 		let adminCount = users.filter((u) => u.role === ROLE_ADMIN).length;
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		let classesChanged = false;
 		let deleted = 0;
 		let skipped = 0;
@@ -2410,7 +2410,7 @@
 		if (deleted) {
 			saveUsers(remaining);
 			if (classesChanged) {
-				localStorage.setItem('quizClasses', JSON.stringify(classes));
+				window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
 			}
 			if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
 				window.syncUsersToClients();
@@ -2460,7 +2460,7 @@
 
 		if (studentClassSelect) {
 			const classes = safeJsonParse(
-				localStorage.getItem('quizClasses'),
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
 				[],
 			).filter((cls) => {
 				if (!isTeacherUser) return true;
@@ -2483,7 +2483,7 @@
 
 		const teacherClassList = document.getElementById('teacherClassList');
 		if (teacherClassList) {
-			const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 			teacherClassList.innerHTML = classes
 				.map((c) => {
 					const checked = user?.classIds?.includes(c.id) ? 'checked' : '';
@@ -2630,7 +2630,7 @@
 			updatedUser.studentNumber = studentNumber;
 			updatedUser.classId = classId;
 
-			const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 			const classMatch = classes.find((c) => c.id === classId);
 			updatedUser.className = classMatch ? classMatch.name : '';
 		} else {
@@ -2715,7 +2715,7 @@
 				window.syncUsersToClients();
 			}
 			if (user.role === ROLE_STUDENT && user.classId) {
-				const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+				const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 				let changed = false;
 				const target = classes.find((c) => c.id === user.classId);
 				if (target && Array.isArray(target.students)) {
@@ -2726,7 +2726,7 @@
 					if (before !== target.students.length) changed = true;
 				}
 				if (changed) {
-					localStorage.setItem('quizClasses', JSON.stringify(classes));
+					window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
 				}
 			}
 			renderUsersTable();
@@ -2752,7 +2752,7 @@
 
 	function resolveClassNameById(classId) {
 		if (!classId) return '';
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		const match = classes.find((cls) => String(cls.id) === String(classId));
 		return match ? String(match.name || '') : '';
 	}
@@ -3035,7 +3035,7 @@
 			payload.currentSnapshot?.name || payload.changes?.name || 'Student';
 		let className = payload.currentSnapshot?.className || '';
 		if (!className && payload.currentSnapshot?.classId) {
-			const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 			const match = classes.find(
 				(c) => c.id === payload.currentSnapshot.classId,
 			);
@@ -3183,7 +3183,7 @@
 		if (request.avatar) user.avatar = request.avatar;
 
 		if (user.classId) {
-			const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 			const match = classes.find((c) => c.id === user.classId);
 			user.className = match ? match.name : user.className;
 		}
@@ -3223,7 +3223,7 @@
 		if (!container) return;
 		const requests = getProfileRequests();
 		const users = getUsers();
-		const classes = safeJsonParse(localStorage.getItem('quizClasses'), []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 		const classMap = new Map(classes.map((c) => [c.id, c.name]));
 		let scopedRequests = requests;
 		if (isTeacher()) {

@@ -306,7 +306,7 @@
 	function getGamesStore() {
 		if (window.GameCore) return window.GameCore.getQuizGames();
 		try {
-			return JSON.parse(localStorage.getItem('quizGames') || '[]');
+			return window.__DI_CONTAINER__.repo.getAll_sync('games');
 		} catch (e) {
 			return [];
 		}
@@ -320,7 +320,7 @@
 			queueGameSync(games, syncedAt, options);
 			return;
 		}
-		localStorage.setItem('quizGames', JSON.stringify(games));
+		window.__DI_CONTAINER__.repo.setAll_sync('games', games);
 		localStorage.setItem('quizGamesSyncedAt', syncedAt);
 		queueGameSync(games, syncedAt, options);
 	}
@@ -427,7 +427,7 @@
 			: null;
 		if (!identity) return null;
 
-		const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+		const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 		let classRecord = null;
 		if (identity.classId) {
 			classRecord = classes.find((c) => c.id === identity.classId) || null;
@@ -682,7 +682,7 @@
 
 	function getAssignedExams(classRecord) {
 		if (!classRecord) return [];
-		const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+		const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 		return exams.filter(
 			(exam) =>
 				Array.isArray(exam.classes) && exam.classes.includes(classRecord.id),
@@ -692,7 +692,7 @@
 	function getTrainingResults(identity) {
 		let results = [];
 		try {
-			results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+			results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 		} catch (e) {
 			results = [];
 		}
@@ -928,7 +928,7 @@
 		const userId = String(context?.user?.id || '').trim();
 		const results = (() => {
 			try {
-				const parsed = JSON.parse(localStorage.getItem('quizResults') || '[]');
+				const parsed = window.__DI_CONTAINER__.repo.getAll_sync('results');
 				return Array.isArray(parsed) ? parsed : [];
 			} catch (e) {
 				return [];
@@ -1037,7 +1037,7 @@
 
 	function populateProfileForm(context) {
 		const user = context.user;
-		const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+		const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 
 		const nameInput = byId('studentProfileFullName');
 		const usernameInput = byId('studentProfileUsername');
@@ -1581,7 +1581,7 @@
 			})
 			.join('');
 
-		container.innerHTML = summaryRows + attemptsRows;
+		window.safeSetHTML ? window.safeSetHTML(container, summaryRows + attemptsRows, true) : (container.innerHTML = summaryRows + attemptsRows);
 	}
 
 	function renderMessages(context) {
@@ -1677,7 +1677,7 @@
 	function getGameResults(context) {
 		let results = [];
 		try {
-			results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+			results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 		} catch (e) {
 			results = [];
 		}
@@ -1953,7 +1953,7 @@
 
 	function getCategoriesStore() {
 		try {
-			return JSON.parse(localStorage.getItem('quizCategories') || '[]');
+			return window.__DI_CONTAINER__.repo.getAll_sync('categories');
 		} catch (e) {
 			return [];
 		}
@@ -5401,7 +5401,7 @@
 		});
 
 		if (pairContainer) {
-			pairContainer.innerHTML = rows.join('');
+			window.safeSetHTML ? window.safeSetHTML(pairContainer, rows.join(''), true) : (pairContainer.innerHTML = rows.join(''));
 		}
 		if (countEl) {
 			countEl.textContent = String((pairs || []).length);
@@ -5812,7 +5812,7 @@
 			if (!el) return;
 			const previous = htmlByElementCache.get(id);
 			if (previous === html) return;
-			el.innerHTML = html;
+			window.safeSetHTML ? window.safeSetHTML(el, html, true) : (el.innerHTML = html);
 			htmlByElementCache.set(id, html);
 		});
 	}
@@ -9528,7 +9528,7 @@
 		if (!context?.user?.id) return;
 		let users = [];
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			users = Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			users = [];
@@ -9570,7 +9570,7 @@
 			});
 		}
 		users[index] = user;
-		localStorage.setItem('quizUsers', JSON.stringify(users));
+		window.__DI_CONTAINER__.repo.setAll_sync('users', users);
 		context.user.badges = user.badges;
 	}
 
@@ -9761,7 +9761,7 @@
 			options && options.includeJoinedWithoutPoints === true;
 		let users = [];
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			users = Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			users = [];
@@ -11970,7 +11970,7 @@
 			changes.classId = classId;
 		if (email !== String(user.email || '').trim()) changes.email = email;
 
-		const classList = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+		const classList = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 		const className =
 			classList.find((cls) => String(cls.id) === classId)?.name ||
 			context.identity?.class ||
@@ -12438,7 +12438,7 @@
 			const outcome = getGameOutcome(game, context);
 			if (!outcome) return;
 
-			const results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+			const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 			// Check if result already exists for this game ID to avoid duplicates
 			const existingIndex = results.findIndex(
 				(r) => `${r.gameId || ''}::${r.lobbyId || ''}` === resultKey,
@@ -12546,13 +12546,13 @@
 				// For now, only update if the new score differs (which shouldn't happen for completed games)
 				if (results[existingIndex].score !== resultEntry.score) {
 					results[existingIndex] = resultEntry;
-					localStorage.setItem('quizResults', JSON.stringify(results));
+					window.__DI_CONTAINER__.repo.setAll_sync('results', results);
 					window.dispatchEvent(new Event('storage'));
 				}
 			} else {
 				savedGameResultIds.add(resultKey);
 				results.unshift(resultEntry);
-				localStorage.setItem('quizResults', JSON.stringify(results));
+				window.__DI_CONTAINER__.repo.setAll_sync('results', results);
 
 				awardGamification(resultEntry, context);
 
@@ -12623,7 +12623,7 @@
 	function awardGamificationV2(resultEntry, context) {
 		if (!context?.user?.id || !resultEntry) return;
 		try {
-			const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			const userIndex = users.findIndex((u) => u.id === context.user.id);
 			if (userIndex === -1) return;
 
@@ -12768,7 +12768,7 @@
 
 			user.lastGamificationSyncAt = new Date().toISOString();
 			users[userIndex] = user;
-			localStorage.setItem('quizUsers', JSON.stringify(users));
+			window.__DI_CONTAINER__.repo.setAll_sync('users', users);
 
 			context.user.exp = user.exp;
 			context.user.badges = user.badges;
@@ -12807,7 +12807,7 @@
 		return;
 		if (!context?.user?.id) return;
 		try {
-			const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			const userIndex = users.findIndex((u) => u.id === context.user.id);
 			if (userIndex === -1) return;
 
@@ -12875,7 +12875,7 @@
 			}
 
 			users[userIndex] = user;
-			localStorage.setItem('quizUsers', JSON.stringify(users));
+			window.__DI_CONTAINER__.repo.setAll_sync('users', users);
 
 			context.user.exp = user.exp;
 			context.user.badges = user.badges;

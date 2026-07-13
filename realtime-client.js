@@ -12,7 +12,7 @@
 		window.REALTIME_CLIENT_BUILD = REALTIME_CLIENT_BUILD;
 		return;
 	}
-	const socket = existingRuntime?.socket || (window.io ? io(SERVER) : null);
+	const socket = existingRuntime?.socket || (window.io ? window.getSocket() : null);
 	if (!socket) return;
 	window[REALTIME_RUNTIME_KEY] = {
 		initialized: true,
@@ -208,7 +208,7 @@
 
 	function readStoredGamesSnapshot() {
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizGames') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('games');
 			return Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			return [];
@@ -999,7 +999,7 @@
 				if (identity?.class) {
 					try {
 						const classes = JSON.parse(
-							localStorage.getItem('quizClasses') || '[]',
+							JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')) || '[]',
 						);
 						const match = classes.find((c) => c.name === identity.class);
 						if (match?.id) return match.id;
@@ -1077,7 +1077,7 @@
 				if (scope?.type === 'game') {
 					try {
 						const existingGames = JSON.parse(
-							localStorage.getItem('quizGames') || '[]',
+							JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
 						);
 						const statusRank = {
 							draft: 0,
@@ -1156,7 +1156,7 @@
 				let mergedGames = payload.quizGames;
 				try {
 					const existingGames = JSON.parse(
-						localStorage.getItem('quizGames') || '[]',
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
 					);
 					const existingMap = new Map(
 						existingGames.map((game) => [String(game?.id || ''), game]),
@@ -1197,7 +1197,7 @@
 				let mergedGames = payload.quizGames;
 				try {
 					const existingGames = JSON.parse(
-						localStorage.getItem('quizGames') || '[]',
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
 					);
 					const existingMap = new Map(
 						existingGames.map((game) => [String(game?.id || ''), game]),
@@ -1284,7 +1284,7 @@
 			// Fallback: Always sync to localStorage to maintain consistency
 			try {
 				const existingGames = JSON.parse(
-					localStorage.getItem('quizGames') || '[]',
+					JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
 				);
 				const index = existingGames.findIndex(
 					(g) => String(g?.id || '') === gameId,
@@ -1304,7 +1304,7 @@
 					seenGameIds.add(id);
 					dedupedGames.push(entry);
 				});
-				localStorage.setItem('quizGames', JSON.stringify(dedupedGames));
+				window.__DI_CONTAINER__.repo.setAll_sync('games', dedupedGames);
 
 				// If GameCore update failed, also update GameCore from localStorage
 				if (!updateSuccess && window.GameCore?.saveQuizGames) {
@@ -1448,13 +1448,13 @@
 
 		// Get completed quiz results
 		try {
-			const results = localStorage.getItem('quizResults');
+			const results = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results'));
 			if (results) out.quizResults = JSON.parse(results);
 		} catch (e) {}
 
 		// Get quiz activity
 		try {
-			const activity = localStorage.getItem('quizActivity');
+			const activity = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('audit_logs'));
 			if (activity) out.quizActivity = JSON.parse(activity);
 		} catch (e) {}
 
@@ -1466,7 +1466,7 @@
 			const incoming = Array.isArray(users) ? users : [];
 			let existing = [];
 			try {
-				const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+				const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 				existing = Array.isArray(parsed) ? parsed : [];
 			} catch (e) {
 				existing = [];
@@ -1485,7 +1485,7 @@
 				merged.push(user);
 			});
 
-			localStorage.setItem('quizUsers', JSON.stringify(merged));
+			window.__DI_CONTAINER__.repo.setAll_sync('users', merged);
 			if (typeof window.checkStudentAuthState === 'function') {
 				window.checkStudentAuthState();
 			}
