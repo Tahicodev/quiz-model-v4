@@ -822,7 +822,7 @@
 			return;
 		}
 
-		if (allowedRole && user.role !== allowedRole) {
+		if (allowedRole && user.role !== allowedRole && user.role !== ROLE_ADMIN) {
 			showToast('This account cannot access this portal', 'error');
 			return;
 		}
