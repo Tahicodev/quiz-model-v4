@@ -24,9 +24,9 @@
 
 	function getAssignedExams(identity) {
 		if (!identity) return [];
-		const exams = safeJsonParse(localStorage.getItem('quizExams') || '[]', []);
+		const exams = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('exams')) || '[]', []);
 		if (!Array.isArray(exams) || !exams.length) return [];
-		const classes = safeJsonParse(localStorage.getItem('quizClasses') || '[]', []);
+		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')) || '[]', []);
 		let classId = identity.classId || '';
 		if (!classId && identity.class) {
 			const match = classes.find((c) => c.name === identity.class);

@@ -12,7 +12,7 @@ function loadResultsFilters() {
 	const classFilter = document.getElementById('resultFilterClass');
 
 	if (examFilter) {
-		const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+		const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 		const visibleExams = exams.filter((exam) =>
 			window.Auth?.canAccessItem ? window.Auth.canAccessItem('exam', exam) : true,
 		);
@@ -25,13 +25,11 @@ function loadResultsFilters() {
 
 	if (classFilter) {
 		// Collect all unique classes from results (both saved and virtual classes used in quizzes)
-		let results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+		let results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 		if (window.Auth?.filterItemsByRole) {
 			results = window.Auth.filterItemsByRole('result', results);
 		}
-		let savedClasses = JSON.parse(
-			localStorage.getItem('quizClasses') || '[]'
-		);
+		let savedClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 		if (window.Auth?.filterItemsByRole) {
 			savedClasses = window.Auth.filterItemsByRole('class', savedClasses);
 		}
@@ -205,7 +203,7 @@ function resolveWinnerName(result) {
 
 function loadResults() {
 	// Load training results from quizResults
-	let results = JSON.parse(localStorage.getItem('quizResults') || '[]').map(
+	let results = window.__DI_CONTAINER__.repo.getAll_sync('results').map(
 		normalizeResultEntry,
 	);
 
@@ -262,7 +260,7 @@ function filterResults() {
 		.value.toLowerCase();
 
 	// Load all results (both training and exam results are now stored in quizResults)
-	let results = JSON.parse(localStorage.getItem('quizResults') || '[]').map(
+	let results = window.__DI_CONTAINER__.repo.getAll_sync('results').map(
 		normalizeResultEntry,
 	);
 	if (window.Auth?.filterItemsByRole) {
@@ -278,9 +276,7 @@ function filterResults() {
 
 	if (classFilter) {
 		// Get saved classes to help with filtering
-		const savedClasses = JSON.parse(
-			localStorage.getItem('quizClasses') || '[]'
-		);
+		const savedClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 		const selectedClassRecord = savedClasses.find((c) => c.id === classFilter);
 		const selectedClassName = selectedClassRecord
 			? selectedClassRecord.name
@@ -373,8 +369,8 @@ function displayResults(results) {
 	}
 
 	// Get exams and classes for display names
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
-	const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	const participantIndex = buildGameParticipantIndex(results);
 
 	tbody.innerHTML = results
@@ -583,7 +579,7 @@ function clearAllResultFilters() {
 
 function viewResultDetails(resultId) {
 	// Load all results (both training and exam results are now stored in quizResults)
-	const results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+	const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const participantIndex = buildGameParticipantIndex(results);
 
 	const result = results.find(
@@ -597,8 +593,8 @@ function viewResultDetails(resultId) {
 		return;
 	}
 
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
-	const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 
 	// Find exam
 	let exam = null;
@@ -755,7 +751,7 @@ function viewResultDetails(resultId) {
 function deleteResult(resultId) {
 	if (!confirm('Are you sure you want to delete this result?')) return;
 
-	let results = JSON.parse(localStorage.getItem('quizResults') || '[]');
+	let results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const initialLength = results.length;
 
 	// Delete by id or by numero+date combination
@@ -769,7 +765,7 @@ function deleteResult(resultId) {
 		return;
 	}
 
-	localStorage.setItem('quizResults', JSON.stringify(results));
+	window.__DI_CONTAINER__.repo.setAll_sync('results', results);
 
 	loadResults();
 	showToast('Result deleted successfully');

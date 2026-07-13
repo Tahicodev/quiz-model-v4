@@ -17,17 +17,17 @@ function initClassManagement() {
 }
 
 function loadClasses() {
-	const savedClasses = localStorage.getItem('quizClasses');
+	const savedClasses = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes'));
 	classes = savedClasses ? JSON.parse(savedClasses) : [];
 }
 
 function saveClasses() {
 	// Save classes to localStorage
-	localStorage.setItem('quizClasses', JSON.stringify(classes));
+	window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
 
 	// Make sure exams have the classes array initialized
 	// This doesn't actually update the exam assignments - that's done in saveClassForm
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	let updated = false;
 
 	exams.forEach((exam) => {
@@ -39,7 +39,7 @@ function saveClasses() {
 
 	// Only save if we made changes
 	if (updated) {
-		localStorage.setItem('quizExams', JSON.stringify(exams));
+		window.__DI_CONTAINER__.repo.setAll_sync('exams', exams);
 	}
 
 	// Update Dashboard if available
@@ -127,16 +127,14 @@ function promoteClassModal(modal) {
 }
 
 function loadAvailableExams() {
-	const savedExams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const visibleExams = savedExams.filter((exam) =>
 		window.Auth?.canAccessItem ? window.Auth.canAccessItem('exam', exam) : true,
 	);
 	const container = document.getElementById('availableExams');
 
 	// Get all questions from localStorage
-	const allQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]'
-	);
+	const allQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 
 	container.innerHTML = visibleExams
 		.map((exam) => {
@@ -290,7 +288,7 @@ function getStudentUsersForPicker() {
 }
 
 function getClassLookupMap() {
-	const allClasses = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const allClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	return new Map(
 		(Array.isArray(allClasses) ? allClasses : []).map((cls) => [
 			String(cls.id),
@@ -379,7 +377,7 @@ function populateStudentClassFilterOptions(users = getStudentUsersForPicker()) {
 		)
 		.join('');
 
-	filterSelect.innerHTML = optionsHtml;
+	window.safeSetHTML ? window.safeSetHTML(filterSelect, optionsHtml, true) : (filterSelect.innerHTML = optionsHtml);
 
 	const hasCurrentValue = Array.from(filterSelect.options).some(
 		(option) => String(option.value) === currentValue,
@@ -618,7 +616,7 @@ async function saveClassForm() {
 	}
 
 	// Update exam assignments
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	console.log('Updating exam assignments for class:', classData.name);
 	console.log('Selected exams:', selectedExams);
 
@@ -646,7 +644,7 @@ async function saveClassForm() {
 	});
 
 	// Save updated exams to localStorage
-	localStorage.setItem('quizExams', JSON.stringify(exams));
+	window.__DI_CONTAINER__.repo.setAll_sync('exams', exams);
 	console.log('Updated exams saved to localStorage');
 
 	// Log activity
@@ -733,7 +731,7 @@ function editClass(classId) {
 
 	// Load and mark selected exams
 	loadAvailableExams();
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const assignedExams = exams.filter((exam) => exam.classes?.includes(classId));
 
 	// Mark assigned exams as selected
@@ -755,13 +753,13 @@ function editClass(classId) {
 function deleteClass(classId) {
 	if (confirm('Are you sure you want to delete this class?')) {
 		// Remove class from exams
-		const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+		const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 		exams.forEach((exam) => {
 			if (exam.classes) {
 				exam.classes = exam.classes.filter((id) => id !== classId);
 			}
 		});
-		localStorage.setItem('quizExams', JSON.stringify(exams));
+		window.__DI_CONTAINER__.repo.setAll_sync('exams', exams);
 
 		// Remove class
 		classes = classes.filter((c) => c.id !== classId);
@@ -862,7 +860,7 @@ function sortClasses() {
 
 function updateClassList(classesList = classes) {
 	const tbody = document.querySelector('#classList tbody');
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 
 	// Clear existing table rows
 	tbody.innerHTML = '';
@@ -985,9 +983,7 @@ function renderExamItem(exam) {
 	const questionCount = exam.questions ? exam.questions.length : 0;
 
 	// Get all questions from localStorage
-	const allQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]'
-	);
+	const allQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 
 	// Check if the exam has valid questions
 	const validQuestions = exam.questions
@@ -1044,7 +1040,7 @@ function updateSelectedExamsCount(count) {
 }
 
 function exportClasses() {
-	const classes = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	const dataStr = JSON.stringify(classes, null, 2);
 	const dataUri =
 		'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
@@ -1077,12 +1073,10 @@ function importClasses() {
 				}
 
 				// Merge with existing classes, avoiding duplicates
-				const existingClasses = JSON.parse(
-					localStorage.getItem('quizClasses') || '[]'
-				);
+				const existingClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 				const mergedClasses = mergeClasses(existingClasses, newClasses);
 
-				localStorage.setItem('quizClasses', JSON.stringify(mergedClasses));
+				window.__DI_CONTAINER__.repo.setAll_sync('classes', mergedClasses);
 				updateClassList(mergedClasses);
 				showToast('Classes imported successfully!');
 			} catch (error) {

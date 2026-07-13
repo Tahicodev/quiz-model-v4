@@ -1,0 +1,382 @@
+// This is the Prisma schema — the single source of truth for the data model.
+// Provider switches between SQLite (local) and PostgreSQL (SaaS) via DB_PROVIDER.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Prisma requires a literal provider (env() is not supported here — only in `url`).
+  // For SaaS/PostgreSQL: change this to `postgresql`, update DATABASE_URL, and re-migrate.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── SaaS root: the tenant boundary ──────────────────────────────────────────
+// In local mode a single School row (id = config.defaultSchoolId) is seeded and
+// every other row references it. In SaaS each School is a customer.
+model School {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique // myschool.yourdomain.com
+  plan         String   @default("free") // free | pro | enterprise
+  max_students Int      @default(100)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  users       User[]
+  classes     Class[]
+  categories  Category[]
+  questions   Question[]
+  exams       Exam[]
+  results     Result[]
+  games       Game[]
+  tournaments Tournament[]
+  settings    Setting[]
+  auditLogs   AuditLog[]
+  sessions    ExamSession[]
+}
+
+// ─── Users & Auth ────────────────────────────────────────────────────────────
+model User {
+  id            String    @id @default(uuid())
+  school_id     String
+  class_id      String?
+  username      String
+  password_hash String
+  role          String    @default("student") // ROLES constant
+  name          String
+  numero        String? // student registration number
+  status        String    @default("active") // active | inactive | suspended
+  last_login    DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  school            School            @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  class             Class?            @relation(fields: [class_id], references: [id])
+  results           Result[]
+  createdExams      Exam[]            @relation("ExamCreator")
+  gameSessions      GameSession[]
+  tournamentEntries TournamentEntry[]
+  examSessions      ExamSession[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]        @relation("AuditActor")
+
+  @@unique([school_id, username])
+  @@index([school_id])
+  @@index([class_id])
+  @@index([status])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token_hash String   @unique // SHA-256 of the raw token — NEVER store raw
+  expires_at DateTime
+  revoked    Boolean  @default(false)
+  user_agent String?
+  ip_address String?
+  created_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([expires_at])
+}
+
+// ─── Organization ────────────────────────────────────────────────────────────
+model Class {
+  id          String   @id @default(uuid())
+  school_id   String
+  name        String
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  school      School      @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  users       User[]
+  examClasses ExamClass[]
+
+  @@unique([school_id, name])
+  @@index([school_id])
+}
+
+// ─── Question Bank ───────────────────────────────────────────────────────────
+model Category {
+  id         String   @id @default(uuid())
+  school_id  String
+  name       String
+  parent_id  String?
+  icon       String?
+  color      String? // hex color for UI
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  school    School     @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  parent    Category?  @relation("CategoryTree", fields: [parent_id], references: [id])
+  children  Category[] @relation("CategoryTree")
+  questions Question[]
+
+  @@unique([school_id, name])
+  @@index([school_id])
+  @@index([parent_id])
+}
+
+model Question {
+  id           String   @id @default(uuid())
+  school_id    String
+  category_id  String?
+  type         String // QUESTION_TYPES constant
+  text         String
+  options_json String? // JSON: string[] — only for MCQ, MATCHING, ORDER types
+  answer       String // correct answer (serialized as string always)
+  explanation  String? // shown to student after answering
+  points       Int      @default(1)
+  difficulty   String   @default("medium")
+  tags         String? // comma-separated tags for filtering
+  media_url    String? // optional image/audio attachment
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  school        School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  category      Category?      @relation(fields: [category_id], references: [id])
+  examQuestions ExamQuestion[]
+
+  @@index([school_id])
+  @@index([category_id])
+  @@index([type])
+  @@index([difficulty])
+}
+
+// ─── Exams ───────────────────────────────────────────────────────────────────
+model Exam {
+  id            String   @id @default(uuid())
+  school_id     String
+  creator_id    String
+  name          String
+  description   String?
+  duration      Int? // minutes — null means no time limit
+  passing_score Int      @default(50) // percentage 0-100
+  status        String   @default("draft") // EXAM_STATUS constant
+  is_training   Boolean  @default(false) // show answers immediately after each question
+  randomize     Boolean  @default(false) // shuffle questions per session
+  max_attempts  Int? // null = unlimited
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  school        School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  creator       User           @relation("ExamCreator", fields: [creator_id], references: [id])
+  examQuestions ExamQuestion[]
+  examClasses   ExamClass[]
+  results       Result[]
+  sessions      ExamSession[]
+
+  @@index([school_id])
+  @@index([status])
+  @@index([creator_id])
+}
+
+// Join tables use a surrogate `id` so they satisfy the generic IStorageRepository
+// contract (getById/update/delete by id). @@unique preserves idempotency.
+model ExamQuestion {
+  id              String   @id @default(uuid())
+  exam_id         String
+  question_id     String
+  order_index     Int      @default(0)
+  points_override Int? // override question's default points for this exam
+
+  exam     Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@unique([exam_id, question_id])
+  @@index([exam_id])
+  @@index([question_id])
+}
+
+model ExamClass {
+  id          String   @id @default(uuid())
+  exam_id     String
+  class_id    String
+  assigned_at DateTime @default(now())
+
+  exam  Exam  @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+  class Class @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  @@unique([exam_id, class_id])
+  @@index([exam_id])
+  @@index([class_id])
+}
+
+// ─── Active Exam Sessions ────────────────────────────────────────────────────
+// Tracks in-progress exam attempts. Distinct from Result (a completed attempt).
+model ExamSession {
+  id                     String    @id @default(uuid())
+  school_id              String
+  exam_id                String
+  user_id                String
+  status                 String    @default("active") // SESSION_STATUS constant
+  answers_json           String    @default("{}") // work-in-progress answers
+  current_question_index Int       @default(0)
+  started_at             DateTime  @default(now())
+  expires_at             DateTime // exam start + duration
+  last_heartbeat         DateTime  @default(now())
+  completed_at           DateTime?
+
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  exam   Exam   @relation(fields: [exam_id], references: [id])
+  user   User   @relation(fields: [user_id], references: [id])
+
+  @@unique([exam_id, user_id]) // one active session per user per exam
+  @@index([school_id])
+  @@index([status])
+  @@index([expires_at]) // for cleanup queries
+}
+
+// ─── Results ─────────────────────────────────────────────────────────────────
+model Result {
+  id             String   @id @default(uuid())
+  school_id      String
+  exam_id        String
+  user_id        String
+  score          Float // percentage 0–100
+  total_points   Int
+  earned_points  Int
+  time_spent     Int? // seconds
+  answers_json   String // { questionId: userAnswer } — immutable record
+  mode           String   @default("exam") // RESULT_MODE constant
+  passed         Boolean
+  attempt_number Int      @default(1)
+  date_taken     DateTime @default(now())
+
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  exam   Exam   @relation(fields: [exam_id], references: [id])
+  user   User   @relation(fields: [user_id], references: [id])
+
+  @@index([school_id])
+  @@index([user_id])
+  @@index([exam_id])
+  @@index([date_taken])
+}
+
+// ─── Games ───────────────────────────────────────────────────────────────────
+model Game {
+  id            String    @id @default(uuid())
+  school_id     String
+  creator_id    String
+  name          String
+  type          String // GAME_TYPES constant
+  status        String    @default("waiting") // GAME_STATUS constant
+  settings_json String? // game-type-specific config
+  join_code     String?   @unique // 6-char alphanumeric, shown to students
+  question_ids  String    @default("[]") // JSON: string[] — ordered question IDs
+  started_at    DateTime?
+  ended_at      DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  school   School        @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  sessions GameSession[]
+
+  @@index([school_id])
+  @@index([status])
+  @@index([join_code])
+}
+
+model GameSession {
+  id           String    @id @default(uuid())
+  game_id      String
+  user_id      String
+  school_id    String
+  score        Float     @default(0)
+  answers_json String    @default("{}")
+  rank         Int? // final rank — set when game finishes
+  completed    Boolean   @default(false)
+  connected    Boolean   @default(true) // socket connection status
+  joined_at    DateTime  @default(now())
+  completed_at DateTime?
+
+  game Game @relation(fields: [game_id], references: [id], onDelete: Cascade)
+  user User @relation(fields: [user_id], references: [id])
+
+  @@unique([game_id, user_id])
+  @@index([game_id])
+  @@index([user_id])
+}
+
+// ─── Tournaments ─────────────────────────────────────────────────────────────
+model Tournament {
+  id            String    @id @default(uuid())
+  school_id     String
+  creator_id    String
+  name          String
+  description   String?
+  status        String    @default("draft") // TOURNAMENT_STATUS constant
+  settings_json String?
+  starts_at     DateTime?
+  ends_at       DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  school  School            @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  entries TournamentEntry[]
+
+  @@index([school_id])
+  @@index([status])
+}
+
+model TournamentEntry {
+  id            String    @id @default(uuid())
+  tournament_id String
+  user_id       String
+  school_id     String
+  score         Float     @default(0)
+  rank          Int?
+  completed     Boolean   @default(false)
+  registered_at DateTime  @default(now())
+  completed_at  DateTime?
+
+  tournament Tournament @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [user_id], references: [id])
+
+  @@unique([tournament_id, user_id])
+  @@index([tournament_id])
+  @@index([user_id])
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+// Replaces all scattered settings. Every setting has a visibility level.
+model Setting {
+  id         String   @id @default(uuid())
+  school_id  String
+  key        String // e.g. "app.name", "game.max_players", "auth.allow_student_register"
+  value      String // always stored as string — parse on read
+  visibility String   @default("admin") // SETTINGS_VISIBILITY constant
+  updated_at DateTime @updatedAt
+
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+
+  @@unique([school_id, key])
+  @@index([school_id, visibility])
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+model AuditLog {
+  id          String   @id @default(uuid())
+  school_id   String
+  actor_id    String? // null = system action
+  entity_type String // "question" | "exam" | "user" | "game" | "setting" | "auth"
+  entity_id   String
+  action      String // "create" | "update" | "delete" | "login" | "logout" | "export" | "migrate"
+  diff_json   String? // { before: {}, after: {} } for updates
+  ip_address  String?
+  user_agent  String?
+  occurred_at DateTime @default(now())
+
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  actor  User?  @relation("AuditActor", fields: [actor_id], references: [id])
+
+  @@index([school_id])
+  @@index([actor_id])
+  @@index([entity_type, entity_id])
+  @@index([occurred_at])
+}

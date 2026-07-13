@@ -1,0 +1,75 @@
+# Quiz Application — SaaS deployment stack
+# Docker Compose for production-like multi-service environment.
+# Uses PostgreSQL for persistence and Redis for Socket.io multi-instance adapter.
+#
+# For local development with SQLite and single-instance, use `npm start` instead
+# (no Docker required).
+
+services:
+
+  # ── PostgreSQL Database ─────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     quizapp
+      POSTGRES_PASSWORD: quizapp_secret
+      POSTGRES_DB:       quizapp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quizapp -d quizapp"]
+      interval:     10s
+      timeout:       5s
+      retries:       5
+      start_period: 30s
+
+  # ── Redis (Socket.io adapter — multi-instance) ──────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval:     10s
+      timeout:       3s
+      retries:       3
+      start_period: 10s
+
+  # ── Quiz App Backend ────────────────────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Mode
+      APP_MODE:          saas
+      NODE_ENV:          production
+
+      # Database (PostgreSQL)
+      DB_PROVIDER:       postgresql
+      DATABASE_URL:      postgresql://quizapp:quizapp_secret@db:5432/quizapp
+
+      # Redis
+      REDIS_URL:         redis://redis:6379
+
+      # Auth — CHANGE THIS in production (64+ hex chars)
+      JWT_SECRET:        change_me_to_a_64_char_hex_string_in_production
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+
+      # Server
+      PORT:              3000
+      CORS_ORIGIN:       http://localhost:3000
+      LOG_LEVEL:         info
+    # Healthcheck is in the Dockerfile
+
+volumes:
+  pgdata:

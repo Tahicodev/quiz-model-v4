@@ -48,13 +48,13 @@ function openExamModalOnFirstLoad() {
 }
 
 function loadExams() {
-	const savedExams = localStorage.getItem('quizExams');
+	const savedExams = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('exams'));
 	exams = savedExams ? JSON.parse(savedExams) : [];
 	console.log('Loaded exams from localStorage:', exams);
 }
 
 function saveExams() {
-	localStorage.setItem('quizExams', JSON.stringify(exams));
+	window.__DI_CONTAINER__.repo.setAll_sync('exams', exams);
 	console.log('Saved exams to localStorage:', exams);
 }
 
@@ -169,7 +169,7 @@ function populateCategoryFilter() {
 	if (!categoryFilter) return;
 
 	const savedCategories = JSON.parse(
-		localStorage.getItem('quizCategories') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) || '[]',
 	);
 	const visibleCategories = savedCategories.filter((category) =>
 		window.Auth?.canAccessItem ? window.Auth.canAccessItem('category', category) : true,
@@ -193,14 +193,14 @@ function populateCategoryFilter() {
 
 function loadAvailableQuestions() {
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	const questions = savedQuestions || [];
 	const container = document.getElementById('availableQuestions');
 
 	// Get categories for display
 	const savedCategories = JSON.parse(
-		localStorage.getItem('quizCategories') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) || '[]',
 	);
 	const visibleCategories = savedCategories.filter((category) =>
 		window.Auth?.canAccessItem ? window.Auth.canAccessItem('category', category) : true,
@@ -316,7 +316,7 @@ function loadAvailableQuestions() {
         `;
 	}
 
-	container.innerHTML = html;
+	window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
 
 	// Update all counters after loading questions
 	updateSelectedCount();
@@ -436,7 +436,7 @@ function updateSelectedCount() {
 	const selectedPointsElement = document.getElementById('selectedQuestionPoints');
 	const selectedPointsBadgeElement = document.getElementById('selectedQuestionPointsBadge');
 	if (selectedPointsElement || selectedPointsBadgeElement) {
-		const savedQuestions = JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+		const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 		const totalPoints = Array.from(
 			document.querySelectorAll('#selectedQuestionsList .question-item'),
 		).reduce((sum, questionEl) => {
@@ -935,9 +935,9 @@ function filterExamQuestionsEnhanced() {
 
 	// Get all questions data for filtering
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
-	const quizResults = JSON.parse(localStorage.getItem('quizResults') || '[]');
+	const quizResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
 
 	questions.forEach((question) => {
 		const questionIndex = parseInt(question.dataset.index);
@@ -1112,7 +1112,7 @@ function showFilterResultsMessage(
 		if (filterType && filterType !== 'all') filters.push(`type: ${filterType}`);
 		if (categoryFilter && categoryFilter !== '') {
 			const savedCategories = JSON.parse(
-				localStorage.getItem('quizCategories') || '[]',
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) || '[]',
 			);
 			const categoryName =
 				savedCategories.find((c) => c.id === categoryFilter)?.name ||
@@ -1393,7 +1393,7 @@ function toggleExamSortDirection() {
 function examHasValidQuestions(exam) {
 	// Get all questions from settings
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	const allQuestions = savedQuestions || [];
 
@@ -1759,7 +1759,7 @@ function launchExam(examId) {
 }
 
 function exportExams() {
-	const exams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const dataStr = JSON.stringify(exams, null, 2);
 	const dataUri =
 		'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
@@ -1789,11 +1789,11 @@ function importExams() {
 
 				// Merge with existing exams, avoiding duplicates
 				const existingExams = JSON.parse(
-					localStorage.getItem('quizExams') || '[]',
+					JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('exams')) || '[]',
 				);
 				const mergedExams = mergeExams(existingExams, newExams);
 
-				localStorage.setItem('quizExams', JSON.stringify(mergedExams));
+				window.__DI_CONTAINER__.repo.setAll_sync('exams', mergedExams);
 				updateExamList(mergedExams);
 				showToast('Exams imported successfully!');
 			} catch (error) {
@@ -2062,7 +2062,7 @@ function loadExamQuestions(exam) {
 
 	// Get all questions from settings
 	const savedQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 	const allQuestions = savedQuestions || [];
 
@@ -2250,7 +2250,7 @@ function loadExamQuestions(exam) {
 		}
 	}
 
-	container.innerHTML = questionsHtml;
+	window.safeSetHTML ? window.safeSetHTML(container, questionsHtml, true) : (container.innerHTML = questionsHtml);
 }
 
 function closeTestModeModal() {
@@ -2419,7 +2419,7 @@ document.addEventListener('DOMContentLoaded', function () {
 function createExamPackage(examId) {
 	// Always resolve from latest storage first, because class assignments can be
 	// updated in class-management without mutating this module's in-memory `exams`.
-	const persistedExams = JSON.parse(localStorage.getItem('quizExams') || '[]');
+	const persistedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const sourceExams =
 		Array.isArray(persistedExams) && persistedExams.length ? persistedExams : exams;
 	if (Array.isArray(persistedExams) && persistedExams.length) {
@@ -2433,7 +2433,7 @@ function createExamPackage(examId) {
 
 	// Get all questions from localStorage
 	const allQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
 
 	// Get only the questions for this exam (supports index, id, or object entries)
@@ -2529,11 +2529,11 @@ function createExamPackage(examId) {
 	}
 
 	// Get current app settings as fallback
-	const appSettings = JSON.parse(localStorage.getItem('quizSettings') || '{}');
+	const appSettings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
 
 	// Get allowed students from class rosters (quizClasses.students)
 	let allowedStudents = [];
-	const allClasses = JSON.parse(localStorage.getItem('quizClasses') || '[]');
+	const allClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	const rawClassRefs =
 		Array.isArray(exam.classes) && exam.classes.length
 			? exam.classes
@@ -2718,9 +2718,9 @@ function createExamPackage(examId) {
  */
 function createTrainingPackage() {
 	const allQuestions = JSON.parse(
-		localStorage.getItem('quizQuestions') || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
 	);
-	const appSettings = JSON.parse(localStorage.getItem('quizSettings') || '{}');
+	const appSettings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
 
 	// Get training preset if configured
 	const trainingPresetId = appSettings.trainingPresetId || '';
@@ -2822,7 +2822,7 @@ function pushExamToDevices(examId) {
 				location.origin
 			).replace(/\/$/, '');
 
-			socket = io(SERVER);
+			socket = window.getSocket();
 			// Wait for connection, then identify as admin, then emit the session
 			socket.on('connect', () => {
 				console.log('New admin socket connected, identifying...');
@@ -2927,7 +2927,7 @@ function stopExamOnDevices(examId) {
 			window.QUIZ_SERVER_HOST ||
 			location.origin
 		).replace(/\/$/, '');
-		const socket = io(SERVER);
+		const socket = window.getSocket();
 		socket.on('connect', () => {
 			socket.emit('identify', { role: 'admin' });
 			setTimeout(() => {
@@ -2966,7 +2966,7 @@ function pushTrainingToDevices() {
 				location.origin
 			).replace(/\/$/, '');
 
-			socket = io(SERVER);
+			socket = window.getSocket();
 			// Wait for connection, then identify as admin, then emit the session
 			socket.on('connect', () => {
 				console.log('New admin socket connected, identifying...');

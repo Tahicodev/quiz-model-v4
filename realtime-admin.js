@@ -25,7 +25,7 @@
 		window.clientSocket = existingRuntime.socket;
 		return;
 	}
-	const socket = existingRuntime?.socket || (window.io ? io(SERVER) : null);
+	const socket = existingRuntime?.socket || (window.io ? window.getSocket() : null);
 	if (!socket) return;
 	window[REALTIME_ADMIN_RUNTIME_KEY] = {
 		initialized: true,
@@ -180,7 +180,7 @@
 			});
 		}
 		const safeGames = Array.isArray(games) ? games : [];
-		localStorage.setItem('quizGames', JSON.stringify(safeGames));
+		window.__DI_CONTAINER__.repo.setAll_sync('games', safeGames);
 		localStorage.setItem(
 			'quizGamesSyncedAt',
 			String(syncedAt || new Date().toISOString()),
@@ -196,7 +196,7 @@
 	function upsertAdminGame(game) {
 		let existingGames = [];
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizGames') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('games');
 			existingGames = Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			existingGames = [];
@@ -228,7 +228,7 @@
 
 			let existingGames = [];
 			try {
-				const parsed = JSON.parse(localStorage.getItem('quizGames') || '[]');
+				const parsed = window.__DI_CONTAINER__.repo.getAll_sync('games');
 				existingGames = Array.isArray(parsed) ? parsed : [];
 			} catch (e) {
 				existingGames = [];
@@ -271,7 +271,7 @@
 		try {
 			let existingUsers = [];
 			try {
-				const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+				const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 				existingUsers = Array.isArray(parsed) ? parsed : [];
 			} catch (e) {
 				existingUsers = [];
@@ -289,7 +289,7 @@
 				merged.push(user);
 			});
 
-			localStorage.setItem('quizUsers', JSON.stringify(merged));
+			window.__DI_CONTAINER__.repo.setAll_sync('users', merged);
 			if (payload.syncedAt) {
 				localStorage.setItem('quizUsersSyncedAt', payload.syncedAt);
 			}
@@ -692,7 +692,7 @@
 				if (scope?.type === 'game') {
 					try {
 						const existingGames = JSON.parse(
-							localStorage.getItem('quizGames') || '[]',
+							JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
 						);
 						const shouldAccept = payload.quizGames.some((incoming) => {
 							const current = existingGames.find((g) => g.id === incoming.id);
@@ -736,7 +736,7 @@
 				let mergedGames = payload.quizGames;
 				try {
 					const existingGames = JSON.parse(
-						localStorage.getItem('quizGames') || '[]',
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
 					);
 					const existingMap = new Map(
 						existingGames.map((game) => [game.id, game]),

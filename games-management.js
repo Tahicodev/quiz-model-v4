@@ -592,7 +592,7 @@
 
 	function getClasses() {
 		try {
-			return JSON.parse(localStorage.getItem('quizClasses') || '[]');
+			return window.__DI_CONTAINER__.repo.getAll_sync('classes');
 		} catch (e) {
 			return [];
 		}
@@ -600,7 +600,7 @@
 
 	function getCategories() {
 		try {
-			return JSON.parse(localStorage.getItem('quizCategories') || '[]');
+			return window.__DI_CONTAINER__.repo.getAll_sync('categories');
 		} catch (e) {
 			return [];
 		}
@@ -608,7 +608,7 @@
 
 	function getQuestions() {
 		try {
-			return JSON.parse(localStorage.getItem('quizQuestions') || '[]');
+			return window.__DI_CONTAINER__.repo.getAll_sync('questions');
 		} catch (e) {
 			return [];
 		}
@@ -2101,7 +2101,7 @@
 		const socket = window.clientSocket;
 		if (socket && socket.connected) {
 			// Get game data from localStorage to help server hydrate if needed
-			const games = JSON.parse(localStorage.getItem('quizGames') || '[]');
+			const games = window.__DI_CONTAINER__.repo.getAll_sync('games');
 			const gameData = games.find((g) => g.id === gameId);
 			socket.emit('game:openLobby', { gameId, gameData }, (response) => {
 				if (response && response.error) {
@@ -2154,7 +2154,7 @@
 		if (socket && socket.connected) {
 			const gameData =
 				(GameCore.getGameById ? GameCore.getGameById(gameId) : null) ||
-				JSON.parse(localStorage.getItem('quizGames') || '[]').find(
+				window.__DI_CONTAINER__.repo.getAll_sync('games').find(
 					(g) => g.id === gameId,
 				);
 			socket.emit('game:start', { gameId, gameData }, (response) => {
@@ -2335,7 +2335,7 @@
 						const gameResults = buildResults(game);
 						if (gameResults) {
 							const quizResults = JSON.parse(
-								localStorage.getItem('quizResults') || '[]',
+								JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
 							);
 							const lobbyId = session.lobbyId || `${game.id}-lobby-1`;
 							const lobbyLabel = session.lobbyLabel || 'Lobby #1';
@@ -2382,7 +2382,7 @@
 							};
 
 							quizResults.push(resultEntry);
-							localStorage.setItem('quizResults', JSON.stringify(quizResults));
+							window.__DI_CONTAINER__.repo.setAll_sync('results', quizResults);
 						}
 						// Apply tournament score updates if this is a tournament game
 						applyTournamentScoresAfterGameEnd(game);
@@ -2404,7 +2404,7 @@
 				const gameResults = buildResults(game);
 				if (gameResults) {
 					const quizResults = JSON.parse(
-						localStorage.getItem('quizResults') || '[]',
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
 					);
 					ensureLobbyIdentity(game, session);
 					const lobbyId = session.lobbyId || `${game.id}-lobby-1`;
@@ -2449,7 +2449,7 @@
 					};
 
 					quizResults.push(resultEntry);
-					localStorage.setItem('quizResults', JSON.stringify(quizResults));
+					window.__DI_CONTAINER__.repo.setAll_sync('results', quizResults);
 				}
 
 				// Apply tournament score updates if this is a tournament game
@@ -2512,7 +2512,7 @@
 		// Update user profiles with tournament scores and EXP
 		let users = [];
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			users = Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			users = [];
@@ -2554,7 +2554,7 @@
 		});
 
 		if (usersChanged) {
-			localStorage.setItem('quizUsers', JSON.stringify(users));
+			window.__DI_CONTAINER__.repo.setAll_sync('users', users);
 			if (typeof window.syncUsersToClients === 'function') {
 				window.syncUsersToClients();
 			}
@@ -6766,7 +6766,7 @@
 			return;
 		}
 
-		container.innerHTML = html;
+		window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
 		container
 			.querySelectorAll('.tournament-missing-games-panel')
 			.forEach((panel) => {
@@ -7325,7 +7325,7 @@
 		const includeZero = Boolean(options.includeZero);
 		let users = [];
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			users = Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			users = [];
@@ -8608,7 +8608,7 @@
 		if (!tournament || !winnerEntry?.id) return null;
 		let users = [];
 		try {
-			const parsed = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const parsed = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			users = Array.isArray(parsed) ? parsed : [];
 		} catch (e) {
 			users = [];
@@ -8650,7 +8650,7 @@
 			}
 		}
 		users[index] = winnerUser;
-		localStorage.setItem('quizUsers', JSON.stringify(users));
+		window.__DI_CONTAINER__.repo.setAll_sync('users', users);
 		if (typeof window.syncUsersToClients === 'function') {
 			window.syncUsersToClients();
 		}
