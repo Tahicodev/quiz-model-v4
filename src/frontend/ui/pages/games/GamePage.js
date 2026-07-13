@@ -1,17 +1,7 @@
 /**
  * src/frontend/ui/pages/games/GamePage.js
- *
- * Reference implementation of the MANDATORY socket page pattern (spec §11,
- * "Mandatory pattern for every page that uses sockets"). Every page that
- * registers socket listeners MUST follow this shape:
- *
- *   1. Declare ONE `PAGE_EVENTS` array listing every event this page listens to.
- *   2. Get the singleton socket via `getSocket(token)`.
- *   3. Connect, register handlers, and emit the join event.
- *   4. Register a cleanup that emits the LEAVE event and removes ALL listeners
- *      for `PAGE_EVENTS` (prevents handler accumulation on re-navigation).
- *
- * Tournament/Exam pages should copy this structure when they get sockets wired.
+ * @description Orchestrates game components: Lobby, Question, Scoreboard, Results.
+ * Follows mandatory socket page pattern (spec §11).
  */
 
 import { getSocket, cleanupSocketListeners } from '../../../infrastructure/socket.client.js';
@@ -19,8 +9,13 @@ import { SOCKET_EVENTS }                   from '../../../../shared/constants.js
 import { getContainer }                     from '../../../container.js';
 import { Router }                           from '../../router.js';
 import { logger }                           from '../../../utils/logger.js';
+import { safeSetHTML }                      from '../../../utils/sanitize.js';
 
-// ── 1. Declare every event this page listens to ──────────────────────────────
+import { initGameLobby, teardownGameLobby } from './components/GameLobby.js';
+import { initGameQuestion, teardownGameQuestion } from './components/GameQuestion.js';
+import { initGameScoreboard, teardownGameScoreboard } from './components/GameScoreboard.js';
+import { initGameResults, teardownGameResults } from './components/GameResults.js';
+
 const PAGE_EVENTS = [
   SOCKET_EVENTS.GAME_STATE_UPDATE,
   SOCKET_EVENTS.GAME_QUESTION,
@@ -32,13 +27,12 @@ const PAGE_EVENTS = [
   SOCKET_EVENTS.ANSWER_RESULT,
 ];
 
-/** @type {import('socket.io-client').Socket|null} */
 let socket = null;
 let activeGameId = null;
 
 /**
- * Initialize the game page for a given game id.
- * @param {string} gameId
+ * Initialize the game page.
+ * If gameId is provided, renders the full game UI; otherwise shows the lobby.
  */
 export function initGamePage(gameId) {
   const { authSvc } = getContainer();
@@ -47,48 +41,49 @@ export function initGamePage(gameId) {
 
   if (!socket.connected) socket.connect();
 
-  // ── 3. Register handlers (one per declared event) ─────────────────────────
-  socket.on(SOCKET_EVENTS.GAME_STATE_UPDATE, renderGameState);
-  socket.on(SOCKET_EVENTS.GAME_QUESTION,     renderQuestion);
-  socket.on(SOCKET_EVENTS.GAME_SCORES,       renderScoreboard);
-  socket.on(SOCKET_EVENTS.GAME_FINISHED,     renderFinished);
-  socket.on(SOCKET_EVENTS.PLAYER_JOINED,     handlePlayerJoined);
-  socket.on(SOCKET_EVENTS.PLAYER_LEFT,      handlePlayerLeft);
-  socket.on(SOCKET_EVENTS.ANSWER_RESULT,    handleAnswerResult);
-  socket.on(SOCKET_EVENTS.SESSION_EXPIRED,  handleExpired);
+  // Render the game page shell
+  const app = document.getElementById('app') || document.body;
+  safeSetHTML(app, `
+    <div id="game-lobby"></div>
+    <div id="game-question"></div>
+    <div id="game-scoreboard"></div>
+    <div id="game-results"></div>
+  `);
 
-  // Join the game room — server scopes all subsequent broadcasts to game:{id}.
+  if (!gameId) {
+    initGameLobby();
+    return;
+  }
+
+  // Register socket handlers
+  socket.on(SOCKET_EVENTS.GAME_STATE_UPDATE, (s) => logger.debug('Game state', s));
+  socket.on(SOCKET_EVENTS.GAME_QUESTION,     initGameQuestion);
+  socket.on(SOCKET_EVENTS.GAME_SCORES,       initGameScoreboard);
+  socket.on(SOCKET_EVENTS.GAME_FINISHED,     initGameResults);
+  socket.on(SOCKET_EVENTS.PLAYER_JOINED,     (p) => logger.debug('Player joined', p));
+  socket.on(SOCKET_EVENTS.PLAYER_LEFT,       (p) => logger.debug('Player left', p));
+  socket.on(SOCKET_EVENTS.ANSWER_RESULT,     (r) => logger.debug('Answer result', r));
+  socket.on(SOCKET_EVENTS.SESSION_EXPIRED,   () => logger.warn('Session expired'));
+
+  // Join game room
   socket.emit(SOCKET_EVENTS.GAME_JOIN, { gameId });
 
-  // ── 4. Register cleanup so a navigation/unload doesn't leak handlers ───────
   Router.registerCleanup(PAGE_EVENTS);
-  // Also emit GAME_LEAVE on unload so the server removes us from the room and
-  // notifies other players. (beforeunload fires before the socket disconnects.)
   window.addEventListener('beforeunload', leaveGame);
 }
 
-/** Explicit teardown when navigating away without a full unload. */
 export function teardownGamePage() {
   leaveGame();
   cleanupSocketListeners(PAGE_EVENTS);
+  teardownGameLobby();
+  teardownGameQuestion();
+  teardownGameScoreboard();
+  teardownGameResults();
 }
 
 function leaveGame() {
   if (socket && activeGameId) {
-    try {
-      socket.emit(SOCKET_EVENTS.GAME_LEAVE, { gameId: activeGameId });
-    } catch (err) {
-      logger.warn('Failed to emit GAME_LEAVE on teardown', err);
-    }
+    try { socket.emit(SOCKET_EVENTS.GAME_LEAVE, { gameId: activeGameId }); }
+    catch (err) { logger.warn('Failed to emit GAME_LEAVE', err); }
   }
 }
-
-// ── Render handlers (UI shell — wire to real DOM/components per feature work) ─
-function renderGameState(state)        { logger.debug('game:state_update', state); }
-function renderQuestion(question)      { logger.debug('game:question', question); }
-function renderScoreboard(scores)      { logger.debug('game:scores', scores); }
-function renderFinished()              { logger.info('game:finished'); }
-function handlePlayerJoined(payload)   { logger.debug('player:joined', payload); }
-function handlePlayerLeft(payload)     { logger.debug('player:left', payload); }
-function handleAnswerResult(result)    { logger.debug('answer:result', result); }
-function handleExpired()                { logger.warn('session:expired'); }

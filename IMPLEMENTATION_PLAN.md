@@ -118,8 +118,7 @@ quiz-app/
 
 | Area | Missing | Priority |
 |------|---------|----------|
-| Admin dashboard | Full admin UI consuming backend API | **Critical** |
-| Frontend realtime pages | Game UI, tournament UI, exam session UI | High |
+| AI features | Question generation, RAG | Medium |
 | AI features | Question generation, RAG | Medium |
 | Merge + integration | All branches → `feature/rewrite-v4` → `main` | High |
 | Security hardening | OWASP checklist | High |
@@ -761,18 +760,22 @@ jobs:
 ### `feature/realtime` — New Files to Create
 
 ```
-☐ src/frontend/ui/pages/games/components/GameLobby.js
-☐ src/frontend/ui/pages/games/components/GameQuestion.js
-☐ src/frontend/ui/pages/games/components/GameScoreboard.js
-☐ src/frontend/ui/pages/games/components/GameResults.js
-☐ src/frontend/ui/pages/tournaments/TournamentPage.js
-☐ src/frontend/ui/pages/tournaments/TournamentRegister.js
-☐ src/frontend/ui/pages/tournaments/TournamentQuestion.js
-☐ src/frontend/ui/pages/tournaments/TournamentLeaderboard.js
-☐ src/frontend/ui/pages/sessions/SessionPage.js
-☐ src/frontend/ui/pages/sessions/SessionQuestion.js
-☐ src/frontend/ui/pages/sessions/SessionResults.js
+✅ src/frontend/ui/pages/games/components/GameLobby.js
+✅ src/frontend/ui/pages/games/components/GameQuestion.js
+✅ src/frontend/ui/pages/games/components/GameScoreboard.js
+✅ src/frontend/ui/pages/games/components/GameResults.js
+✅ src/frontend/ui/pages/tournaments/TournamentPage.js
+✅ src/frontend/ui/pages/tournaments/TournamentRegister.js
+✅ src/frontend/ui/pages/tournaments/TournamentQuestion.js
+✅ src/frontend/ui/pages/tournaments/TournamentLeaderboard.js
+✅ src/frontend/ui/pages/sessions/SessionPage.js
+✅ src/frontend/ui/pages/sessions/SessionQuestion.js
+✅ src/frontend/ui/pages/sessions/SessionResults.js
 ```
+
+> Phase 2 (Frontend Realtime UI) is **complete** on `feature/realtime`.
+> Container integration: `main.js` updated with hash routing for all realtime pages.
+> Tests baseline preserved: 77 passing / 1 skipped.
 
 ### `feature/ai` — New Files to Create
 
@@ -840,20 +843,20 @@ The master prompt (`quiz_app_master_implementation_prompt.md`) defines these pha
 
 | Feature | Status | Branch |
 |---------|--------|--------|
-| Admin Dashboard | ⏳ **Next** | `feature/admin` |
-| Frontend Realtime UI | ⏳ Pending | `feature/realtime` |
-| AI Question Generation | ⏳ Pending | `feature/ai` |
+| Admin Dashboard | ✅ **Done** | `feature/admin` |
+| Frontend Realtime UI | ✅ **Done** | `feature/realtime` |
+| AI Question Generation | ⏳ **Next** | `feature/ai` |
 
 ---
 
 ## Summary: Recommended Order
 
 ```
-1.  feature/admin     → Admin dashboard (CRITICAL — needed immediately)
-2.  feature/rewrite-v4 → Merge backend + frontend + admin
-3.  Security fixes    → Fix C2, C3, C4, M5/A4 (from AUDIT_REPORT.md)
-4.  feature/realtime  → Frontend realtime UI
-5.  feature/ai        → AI question generation
+1.  feature/admin     → Admin dashboard ✅ **Done**
+2.  feature/realtime  → Frontend realtime UI ✅ **Done**
+3.  feature/ai        → AI question generation ⏳ **In progress**
+4.  feature/rewrite-v4 → Merge backend + frontend + admin + realtime
+5.  Security fixes    → Fix C2, C3, C4, M5/A4 (from AUDIT_REPORT.md)
 6.  Merge all         → feature/rewrite-v4 → main
 7.  Tests             → 7 missing service tests + CI
 8.  PostgreSQL        → Verify on real PG
