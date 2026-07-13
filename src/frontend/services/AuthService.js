@@ -159,14 +159,45 @@ export class AuthService {
 
   #restoreSession() {
     try {
+      // Try new session format first
       const raw = sessionStorage.getItem('__quiz_session__');
-      if (!raw) return;
-      const { user, ts } = JSON.parse(raw);
-      // Expire after 8 hours of inactivity
-      if (Date.now() - ts > 8 * 60 * 60 * 1000) { this.#clearSession(); return; }
-      this.#user  = user;
-      this.#token = this.#encodeToken(user);
-      window.__AUTH_REFRESH_CALLBACK__ = (newToken) => { this.#token = newToken; };
+      if (raw) {
+        const { user, ts } = JSON.parse(raw);
+        if (Date.now() - ts > 8 * 60 * 60 * 1000) { this.#clearSession(); return; }
+        this.#user  = user;
+        this.#token = this.#encodeToken(user);
+        window.__AUTH_REFRESH_CALLBACK__ = (newToken) => { this.#token = newToken; };
+        return;
+      }
+
+      // Fallback: detect legacy session from auth.js (quizSession key)
+      const legacySession = sessionStorage.getItem('quizSession');
+      if (legacySession) {
+        const parsed = JSON.parse(legacySession);
+        if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+          sessionStorage.removeItem('quizSession');
+          return;
+        }
+        // Load user from localStorage via repo (synchronous for LocalStorageRepository)
+        // In local mode, the repo can read directly from storage keys.
+        if (this.#repo?.getAll) {
+          // The repo needs async, but we can read localStorage directly for the fallback
+          try {
+            const usersJson = localStorage.getItem('quizUsers');
+            if (usersJson) {
+              const users = JSON.parse(usersJson);
+              const user = users.find(u => u.id === parsed.userId);
+              if (user) {
+                this.#user  = user;
+                this.#token = this.#encodeToken(user);
+                // Migrate to new session format
+                this.#persistSession(user);
+                return;
+              }
+            }
+          } catch { /* localStorage read failed */ }
+        }
+      }
     } catch {
       this.#clearSession();
     }
