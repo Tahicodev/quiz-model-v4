@@ -11,7 +11,6 @@
 import { getContainer }   from '../../../container.js';
 import { withError }       from '../../../utils/eventBus.js';
 import { logger }          from '../../../utils/logger.js';
-import { escapeHTML }     from '../../../utils/sanitize.js';
 import { confirmDialog }   from './components/ConfirmDialog.js';
 import { formModal, textField, selectField } from './components/FormModal.js';
 import { SETTINGS_VISIBILITY } from '../../../../shared/constants.js';

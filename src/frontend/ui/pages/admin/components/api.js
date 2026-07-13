@@ -10,7 +10,7 @@
 
 import { getContainer } from '../../../../container.js';
 import { config }        from '../../../../config.js';
-import { AppError }       from '../../../../shared/errors.js';
+import { AppError }       from '../../../../../shared/errors.js';
 
 /**
  * @param {string} method

@@ -4,8 +4,6 @@
  * Emits a `tab:change` event on the provided callback whenever the active tab changes.
  */
 
-import { escapeHTML } from '../../../../utils/sanitize.js';
-
 /**
  * Tab definitions. Each `id` maps to a page init function in AdminPage.
  * Order here is the display order in the sidebar.

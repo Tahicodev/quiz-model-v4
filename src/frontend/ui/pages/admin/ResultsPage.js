@@ -9,7 +9,6 @@
  */
 
 import { getContainer }  from '../../../container.js';
-import { withError }    from '../../../utils/eventBus.js';
 import { logger }       from '../../../utils/logger.js';
 import { formatDate }    from '../../../utils/format.js';
 import { api }           from './components/api.js';

@@ -64,12 +64,8 @@ export async function initDashboardPage(host) {
     const listExams   = await c.examSvc.list({}, { limit: 5, orderBy: 'created_at', direction: 'desc' });
     const listUsers   = await c.userSvc.list({}, { limit: 5, orderBy: 'created_at', direction: 'desc' });
     const listQ       = await c.questionSvc.list({}, { limit: 1, orderBy: 'created_at', direction: 'desc' });
-    // Results total: fetch via recent exams' results aggregate is expensive;
-    // use a single listing of results to get the total count cheaply.
-    const listResults = await c.resultSvc.getByUser(getContainer().authSvc.getCurrentUser()?.id ?? '__none__', { limit: 1 });
-    // Better: count all through a query if available; otherwise use the most
-    // recent exam's result count as a proxy is not accurate. We rely on resultSvc
-    // having no global `list`; so we issue a direct raw count via the repository.
+    // Total results: ResultService has no global `list`, so read the count
+    // straight through the repository (cheap: limit=1, only total is used).
     let resultTotal = 0;
     try {
       const { total } = await c.repo.getAll('results', { limit: 1 });
