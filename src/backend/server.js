@@ -78,24 +78,31 @@ import settingsRoutes from './routes/settings.routes.js';
 import migrateRoutes from './routes/migrate.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 
-// ── Inject APP_CONFIG into the served HTML ──────────────────────────────────
-// The APP_MODE switch (spec Phase 7) is delivered here: the frontend reads
-// window.APP_CONFIG.mode to select its repository (LocalStorage vs Api).
+// ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
+// The APP_MODE switch is delivered via an inline <script> prepended to the
+// served index.html. The legacy MPA reads window.APP_CONFIG.mode to select
+// its repository (LocalStorage vs Api).
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const indexHtml = readFileSync(resolve(__dirname, '../../index.html'), 'utf8');
+
 app.get('/', (req, res) => {
-  res.send(`<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>Quiz App</title></head>
-<body>
-<script>
+  // Inject APP_CONFIG into the legacy index.html before serving
+  const injected = indexHtml.replace(
+    '</head>',
+    `<script>
 window.APP_CONFIG = ${JSON.stringify({
     mode: config.isSaaS ? 'saas' : 'local',
     apiUrl: '/api/v1',
     socketUrl: '/',
   })};
 </script>
-<script src="/bundle.js"></script>
-</body>
-</html>`);
+</head>`
+  );
+  res.type('html').send(injected);
 });
 
 app.use('/api/v1/auth', authLimiter, authRoutes);
