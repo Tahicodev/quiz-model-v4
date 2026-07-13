@@ -162,15 +162,20 @@
 		renderExamSelection([]);
 	}
 
-	function redirectIfLoggedIn() {
-		if (isExamFlowActive()) return false;
-		const user = window.Auth?.getCurrentUser ? window.Auth.getCurrentUser() : null;
-		if (user && user.role === 'student') {
-			window.location.href = 'student-workspace.html';
-			return true;
+		function redirectIfLoggedIn() {
+			if (isExamFlowActive()) return false;
+			const user = window.Auth?.getCurrentUser ? window.Auth.getCurrentUser() : null;
+			if (!user) return false;
+			if (user.role === 'student') {
+				window.location.href = 'student-workspace.html';
+				return true;
+			}
+			if (user.role === 'admin' || user.role === 'super_admin') {
+				window.location.href = 'admin.html';
+				return true;
+			}
+			return false;
 		}
-		return false;
-	}
 
 	function openStudentAuthModal() {
 		const modal = byId('studentAuthModal');
@@ -310,19 +315,25 @@
 		updateExamEntryAvailability();
 	});
 
-	window.addEventListener('auth:changed', (event) => {
-		const user = event?.detail?.user;
-		if (user && user.role === 'student') {
-			if (isExamFlowActive()) {
-				showExamEntry();
+		window.addEventListener('auth:changed', (event) => {
+			const user = event?.detail?.user;
+			if (!user) {
 				updateExamEntryAvailability();
 				return;
 			}
-			window.location.href = 'student-workspace.html';
-		} else {
-			updateExamEntryAvailability();
-		}
-	});
+			if (user.role === 'student') {
+				if (isExamFlowActive()) {
+					showExamEntry();
+					updateExamEntryAvailability();
+					return;
+				}
+				window.location.href = 'student-workspace.html';
+			} else if (user.role === 'admin' || user.role === 'super_admin') {
+				window.location.href = 'admin.html';
+			} else {
+				updateExamEntryAvailability();
+			}
+		});
 
 	window.addEventListener('storage', (event) => {
 		if (event.key === 'examActiveSession' || event.key === 'quizExams') {
