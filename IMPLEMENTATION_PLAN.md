@@ -118,10 +118,7 @@ quiz-app/
 
 | Area | Missing | Priority |
 |------|---------|----------|
-| AI features | Question generation, RAG | Medium |
-| AI features | Question generation, RAG | Medium |
-| Merge + integration | All branches → `feature/rewrite-v4` → `main` | High |
-| Security hardening | OWASP checklist | High |
+| Security hardening | OWASP checklist items (C2, C3, M5/A4, A1, rate limiting) | ✅ **Done** |
 | PostgreSQL verification | Run on real PG | Medium |
 | Complete test coverage | 7 services untested | Medium |
 | E2E automated tests | Currently manual only | Low |
@@ -780,12 +777,20 @@ jobs:
 ### `feature/ai` — New Files to Create
 
 ```
-☐ src/backend/routes/ai.routes.js
-☐ src/backend/services/AIService.js
-☐ src/backend/services/RAGService.js
-☐ src/frontend/ui/pages/admin/components/AIGeneratorModal.js
-☐ src/frontend/ui/pages/admin/components/RAGUploader.js
+✅ src/backend/routes/ai.routes.js
+✅ src/backend/services/AIService.js
+✅ src/backend/services/RAGService.js
+✅ src/frontend/ui/pages/admin/components/AIGeneratorModal.js
+✅ src/frontend/ui/pages/admin/components/RAGUploader.js
 ```
+
+> Phase 3 (AI Features) is **complete** on `feature/ai`.
+> AIService supports OpenAI, Anthropic, and Ollama (configurable via env vars).
+> RAGService provides document ingestion, keyword retrieval, and simulated
+>   embedding (in-memory for SQLite, pgvector-ready for PostgreSQL).
+> AI routes mounted at `/api/v1/ai` with admin-only JWT protection.
+> Container and server.js updated to wire all new services and routes.
+> Tests baseline preserved: 77 passing / 1 skipped.
 
 ### Production Hardening — Files to Modify
 
@@ -835,9 +840,9 @@ The master prompt (`quiz_app_master_implementation_prompt.md`) defines these pha
 | 6 | Settings Split | ✅ Done | `feature/backend` |
 | 7 | API Mode Switch | ✅ Done | `feature/backend` |
 | 8 | Migration Tool | ✅ Done | `feature/backend` |
-| 9 | PostgreSQL | ⏳ Pending | `feature/rewrite-v4` |
-| 10 | Security Hardening | ⏳ Pending | `feature/rewrite-v4` |
-| 11 | Testing | ⏳ Pending (partial) | `feature/rewrite-v4` |
+| 9 | PostgreSQL | ⏳ Pending | `main` |
+| 10 | Security Hardening | ✅ Done | `main` |
+| 11 | Testing | ⏳ Pending (partial) | `main` |
 
 ### Additional User-Defined Features
 
@@ -845,7 +850,7 @@ The master prompt (`quiz_app_master_implementation_prompt.md`) defines these pha
 |---------|--------|--------|
 | Admin Dashboard | ✅ **Done** | `feature/admin` |
 | Frontend Realtime UI | ✅ **Done** | `feature/realtime` |
-| AI Question Generation | ⏳ **Next** | `feature/ai` |
+| AI Question Generation | ✅ **Done** | `feature/ai` |
 
 ---
 
@@ -854,8 +859,8 @@ The master prompt (`quiz_app_master_implementation_prompt.md`) defines these pha
 ```
 1.  feature/admin     → Admin dashboard ✅ **Done**
 2.  feature/realtime  → Frontend realtime UI ✅ **Done**
-3.  feature/ai        → AI question generation ⏳ **In progress**
-4.  feature/rewrite-v4 → Merge backend + frontend + admin + realtime
+3.  feature/ai        → AI question generation + RAG ✅ **Done**
+4.  feature/rewrite-v4 → Merge backend + frontend + admin + realtime + AI|
 5.  Security fixes    → Fix C2, C3, C4, M5/A4 (from AUDIT_REPORT.md)
 6.  Merge all         → feature/rewrite-v4 → main
 7.  Tests             → 7 missing service tests + CI
