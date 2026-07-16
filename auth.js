@@ -870,13 +870,13 @@
 		document.body.classList.add('auth-locked');
 	}
 
-	function hideAuthModal() {
-		const modal = document.getElementById('authModal');
-		if (!modal) return;
-		modal.style.display = 'none';
-		modal.classList.remove('active');
-		document.body.classList.remove('auth-locked');
-	}
+		function hideAuthModal() {
+			const modal = document.getElementById('authModal');
+			if (!modal) return;
+			modal.style.display = 'none';
+			modal.classList.remove('active');
+			document.body.classList.remove('auth-locked');
+		}
 
 	function showStudentAuthModal() {
 		const modal = document.getElementById('studentAuthModal');

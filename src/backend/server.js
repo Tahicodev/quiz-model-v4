@@ -1,4 +1,5 @@
 import http from 'http';
+import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -11,15 +12,41 @@ import { initSocketServer } from './realtime/socket.server.js';
 
 const app = express();
 
+// ── Admin Secret (for realtime settings pairing) ──────────────────────────────
+const configuredAdminSecret = String(process.env.QUIZ_ADMIN_SECRET || '').trim();
+const adminSecret = configuredAdminSecret || crypto.randomBytes(24).toString('base64url');
+if (!configuredAdminSecret) {
+  logger.info({ adminSecret }, 'QUIZ_ADMIN_SECRET not set — temporary secret for this run');
+}
+// Expose on app so routes/socket handlers can read it
+app.set('adminSecret', adminSecret);
+
 // ── Security headers ────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'", 'ws:', 'wss:'],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        'https://cdn.socket.io',
+        'https://cdn.jsdelivr.net',
+        'https://cdnjs.cloudflare.com',
+        'https://cdn.sheetjs.com',
+      ],
+      scriptSrcAttr: ["'unsafe-inline'"],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        'https://cdnjs.cloudflare.com',
+        'https://fonts.googleapis.com',
+        'https://cdn.jsdelivr.net',
+      ],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'", 'ws:', 'wss:', 'https://cdn.socket.io', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com', 'https://cdn.sheetjs.com', 'https://generativelanguage.googleapis.com', 'https://api.openai.com', 'https://api.anthropic.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      workerSrc: ["'self'", 'blob:'],
     },
   },
 }));
@@ -37,6 +64,11 @@ app.use((req, res, next) => {
     logger[level]({ method: req.method, path: req.path, status: res.statusCode, ms, userId: req.user?.id });
   });
   next();
+});
+
+// ── Expose the admin secret for the realtime settings panel ──────────────────
+app.get('/api/v1/admin-secret', (req, res) => {
+  res.json({ secret: adminSecret });
 });
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
@@ -77,6 +109,8 @@ import sessionsRoutes from './routes/sessions.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import migrateRoutes from './routes/migrate.routes.js';
 import aiRoutes from './routes/ai.routes.js';
+import queryRoutes from './routes/query.routes.js';
+import bulkRoutes from './routes/bulk.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // The APP_MODE switch is delivered via an inline <script> prepended to the
@@ -88,10 +122,10 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtml = readFileSync(resolve(__dirname, '../../index.html'), 'utf8');
+const studentWorkspaceHtml = readFileSync(resolve(__dirname, '../../student-workspace.html'), 'utf8');
 
-app.get('/', (req, res) => {
-  // Inject APP_CONFIG into the legacy index.html before serving
-  const injected = indexHtml.replace(
+function injectAppConfig(html) {
+  return html.replace(
     '</head>',
     `<script>
 window.APP_CONFIG = ${JSON.stringify({
@@ -102,7 +136,14 @@ window.APP_CONFIG = ${JSON.stringify({
 </script>
 </head>`
   );
-  res.type('html').send(injected);
+}
+
+app.get('/', (req, res) => {
+  res.type('html').send(injectAppConfig(indexHtml));
+});
+
+app.get('/student-workspace.html', (req, res) => {
+  res.type('html').send(injectAppConfig(studentWorkspaceHtml));
 });
 
 app.use('/api/v1/auth', authLimiter, authRoutes);
@@ -118,6 +159,8 @@ app.use('/api/v1/sessions', sessionsRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/migrate', migrateRoutes);
 app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/query', queryRoutes);
+app.use('/api/v1/bulk', bulkRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
 app.use(express.static('public'));

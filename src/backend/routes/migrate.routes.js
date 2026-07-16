@@ -132,4 +132,26 @@ router.get('/status', async (req, res, next) => {
   }
 });
 
+// ── GET /api/v1/migrate/export ──────────────────────────────────────────────
+// Returns ALL data for the current school, keyed by table name.
+// Used by the legacy bridge in SaaS mode to pre-populate localStorage.
+router.get('/export', async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const data = {};
+    for (const table of MIGRATE_ORDER) {
+      if (BLACKLIST.has(table)) continue;
+      try {
+        const { data: rows } = await repo.getAll(table, { filters: { school_id: req.schoolId }, limit: 100000 });
+        data[table] = rows;
+      } catch (err) {
+        data[table] = [];
+      }
+    }
+    res.json({ school_id: req.schoolId, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

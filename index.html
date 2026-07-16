@@ -10,7 +10,25 @@
 			href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 		/>
 		<link rel="stylesheet" href="styles.css" />
-		<!-- Load shared utilities first -->
+			<!-- APP_CONFIG for SaaS mode detection -->
+			<script>
+				window.APP_CONFIG = window.APP_CONFIG || {
+					mode: 'local',
+					apiUrl: '/api/v1',
+					socketUrl: '/',
+				};
+			</script>
+			<!-- Legacy Bridge — must load synchronously -->
+				<script src="legacy-bridge.js"></script>
+				<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
+				<script>
+					window.getSocket = window.getSocket || function(url, opts) {
+						if (!window.io) { console.warn('getSocket called before Socket.IO loaded'); return null; }
+						var token = window.__authToken || (function(){ try{ var s=JSON.parse(localStorage.getItem('quizSession')||'null'); return s&&s.token; }catch(e){} })() || localStorage.getItem('quizAuthToken') || '';
+						return window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
+					};
+				</script>
+				<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
 		<script src="auth.js" defer></script>
 		<script src="script.js" defer></script>
@@ -18,9 +36,10 @@
 		<!-- Socket.IO for realtime communication -->
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
 		<!-- Register this device with realtime server -->
-		<script src="realtime-client.js" defer></script>
-		
-		<!-- Syntax Highlighting -->
+			<script src="realtime-client.js" defer></script>
+			<script src="legacy-auth-bridge.js" defer></script>
+			
+			<!-- Syntax Highlighting -->
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 	</head>
