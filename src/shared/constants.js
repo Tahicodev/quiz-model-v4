@@ -118,4 +118,19 @@ export const STORAGE_KEYS = Object.freeze({
   audit_logs:    'quizAuditLogs',
   currentUser:   'quizCurrentUser',
   authToken:     'quizAuthToken',
+  // ── Operational keys (real data, route through the repository layer) ──
+  // Added during the localStorage → repository migration so these stores
+  // stop bypassing the cache/bridge. Values unchanged → existing data survives.
+  activity:              'quizActivity',
+  gamification:          'quizGamification',
+  tournament_history:    'quizTournamentsHistory',
+  game_presets:           'gamePresets',
+  profile_requests:       'quizProfileRequests',
+  account_requests:      'quizAccountRequests',
+  notifications:          'adminNotifications',
+  teacher_messages:       'teacherMessages',
+  teacher_assignments:    'teacherAssignments',
+  // Legacy merge-source map used once by admin-main.js (cleared after merge);
+  // repo-backed only so the read goes through the bridge like everything else.
+  profile_requests_legacy: 'adminProfileRequests',
 });

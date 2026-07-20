@@ -154,28 +154,30 @@ window.logActivity = logActivity;
 const ADMIN_NOTIFICATIONS_KEY = 'adminNotifications';
 const ADMIN_NOTIFICATIONS_SEEN_KEY = 'adminNotificationsSeenAt';
 
-function addAdminNotification(payload = {}) {
-    const notifications = JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
-    const entry = {
-        id: typeof generateUUID === 'function' ? generateUUID() : `${Date.now()}`,
-        type: payload.type || 'activity',
-        message: payload.message || 'New activity',
-        data: payload.data || {},
-        createdAt: new Date().toISOString()
-    };
-    notifications.unshift(entry);
-    if (notifications.length > 200) notifications.length = 200;
-    localStorage.setItem(ADMIN_NOTIFICATIONS_KEY, JSON.stringify(notifications));
-    window.dispatchEvent(new CustomEvent('admin:notifications-updated'));
-    return entry;
-}
+	function addAdminNotification(payload = {}) {
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+	    var notifications = r ? r.getValue_sync('notifications', []) : JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
+	    var entry = {
+	        id: typeof generateUUID === 'function' ? generateUUID() : '' + Date.now(),
+	        type: payload.type || 'activity',
+	        message: payload.message || 'New activity',
+	        data: payload.data || {},
+	        createdAt: new Date().toISOString()
+	    };
+	    notifications.unshift(entry);
+	    if (notifications.length > 200) notifications.length = 200;
+	    if (r) { r.setAll_sync('notifications', notifications); } else { localStorage.setItem(ADMIN_NOTIFICATIONS_KEY, JSON.stringify(notifications)); }
+	    window.dispatchEvent(new CustomEvent('admin:notifications-updated'));
+	    return entry;
+	}
 
-function getAdminNotificationCount() {
-    const seenAt = localStorage.getItem(ADMIN_NOTIFICATIONS_SEEN_KEY);
-    const seenTime = seenAt ? new Date(seenAt).getTime() : 0;
-    const unique = new Set();
+	function getAdminNotificationCount() {
+	    var seenAt = localStorage.getItem(ADMIN_NOTIFICATIONS_SEEN_KEY);
+	    var seenTime = seenAt ? new Date(seenAt).getTime() : 0;
+	    var unique = new Set();
 
-    const notifications = JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
+	    var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+	    var notifications = r ? r.getValue_sync('notifications', []) : JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
     notifications.forEach((n) => {
         const ts = new Date(n.createdAt || '').getTime();
         if (!Number.isFinite(ts) || ts <= seenTime) return;
@@ -200,9 +202,10 @@ function markAdminNotificationsSeen() {
     window.dispatchEvent(new CustomEvent('admin:notifications-updated'));
 }
 
-function getAdminNotifications() {
-    return JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
-}
+	function getAdminNotifications() {
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		return r ? r.getValue_sync('notifications', []) : JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
+	}
 
 window.addAdminNotification = addAdminNotification;
 window.getAdminNotificationCount = getAdminNotificationCount;

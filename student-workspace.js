@@ -881,10 +881,10 @@
 		}
 	}
 
-	function getProfileRequestsForUser(userId) {
-		const requests = window.Auth?.getProfileRequests
-			? window.Auth.getProfileRequests()
-			: JSON.parse(localStorage.getItem('quizProfileRequests') || '[]');
+		function getProfileRequestsForUser(userId) {
+			const requests = window.Auth?.getProfileRequests
+				? window.Auth.getProfileRequests()
+				: (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('profile_requests', []) : JSON.parse(localStorage.getItem('quizProfileRequests') || '[]'); })();
 		return requests
 			.filter((req) => req.userId === userId)
 			.sort((a, b) => {
@@ -1587,9 +1587,7 @@
 	function renderMessages(context) {
 		const container = byId('studentMessages');
 		if (!container) return;
-		const messages = JSON.parse(
-			localStorage.getItem('teacherMessages') || '[]',
-		);
+			const messages = (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('teacher_messages', []) : JSON.parse(localStorage.getItem('teacherMessages') || '[]'); })();
 		const filtered = messages.filter((message) => {
 			if (!message) return false;
 			if (!context.classRecord) return false;
@@ -1627,9 +1625,7 @@
 		const container = byId('studentAssignments');
 		if (!container) return;
 
-		const assignments = JSON.parse(
-			localStorage.getItem('teacherAssignments') || '[]',
-		);
+			const assignments = (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('teacher_assignments', []) : JSON.parse(localStorage.getItem('teacherAssignments') || '[]'); })();
 
 		if (assignments.length > 0) {
 			container.innerHTML = assignments
@@ -12634,9 +12630,8 @@
 				autoAwardBadges: true,
 			};
 			try {
-				const parsed = JSON.parse(
-					localStorage.getItem('quizGamification') || '{}',
-				);
+				var _r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+				var parsed = _r ? _r.getValue_sync('gamification', {}) : JSON.parse(localStorage.getItem('quizGamification') || '{}');
 				gConfig = {
 					expPerCorrect: Number(parsed.expPerCorrect) || 10,
 					expPerWin: Number(parsed.expPerWin) || 100,
@@ -12812,10 +12807,7 @@
 			if (userIndex === -1) return;
 
 			const user = users[userIndex];
-			const gConfig = JSON.parse(
-				localStorage.getItem('quizGamification') ||
-					'{"expPerCorrect":10,"expPerWin":100,"autoAwardBadges":true}',
-			);
+			const gConfig = (function() { var _r2 = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return _r2 ? _r2.getValue_sync('gamification', {}) : JSON.parse(localStorage.getItem('quizGamification') || '{"expPerCorrect":10,"expPerWin":100,"autoAwardBadges":true}'); })();
 
 			// Init arrays
 			user.exp = user.exp || 0;

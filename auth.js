@@ -2734,21 +2734,25 @@
 		}
 	}
 
-	function getProfileRequests() {
-		return safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
-	}
+		function getProfileRequests() {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			return r ? r.getValue_sync('profile_requests', []) : safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
+		}
 
-	function saveProfileRequests(requests) {
-		localStorage.setItem(PROFILE_REQUESTS_KEY, JSON.stringify(requests));
-	}
+		function saveProfileRequests(requests) {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			if (r) { r.setAll_sync('profile_requests', requests); } else { localStorage.setItem(PROFILE_REQUESTS_KEY, JSON.stringify(requests)); }
+		}
 
-	function getAccountRequests() {
-		return safeJsonParse(localStorage.getItem(ACCOUNT_REQUESTS_KEY), []);
-	}
+		function getAccountRequests() {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			return r ? r.getValue_sync('account_requests', []) : safeJsonParse(localStorage.getItem(ACCOUNT_REQUESTS_KEY), []);
+		}
 
-	function saveAccountRequests(requests) {
-		localStorage.setItem(ACCOUNT_REQUESTS_KEY, JSON.stringify(requests));
-	}
+		function saveAccountRequests(requests) {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			if (r) { r.setAll_sync('account_requests', requests); } else { localStorage.setItem(ACCOUNT_REQUESTS_KEY, JSON.stringify(requests)); }
+		}
 
 	function resolveClassNameById(classId) {
 		if (!classId) return '';

@@ -796,6 +796,24 @@ window.switchPresetSettingsTab = switchPresetSettingsTab;
 window.resetSettings = resetSettings;
 window.getAppSettings = () => currentSettings; // Helper for other files
 
+// ── Storage repo shim for export/import/activity flows ─────────────────────
+// Routes localStorage calls through the synchronous bridge so they traverse
+// the repository layer (cache + API sync) rather than raw localStorage.
+function __repo()   { return (window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo) || null; }
+function __get(entity, fallback) {
+  var r = __repo(); var fb = arguments.length >= 2 ? fallback : (entity === 'settings' || entity === 'gamification' ? {} : []);
+  if (!r) { try { return JSON.parse(localStorage.getItem(entity) || JSON.stringify(fb)); } catch(e) { return fb; } }
+  if (entity === 'settings' || entity === 'gamification') { return r.getValue_sync ? r.getValue_sync(entity, fb) : r.getAll_sync(entity); }
+  return r.getAll_sync(entity);
+}
+function __set(entity, data) {
+  var r = __repo();
+  if (!r) { try { localStorage.setItem(entity, JSON.stringify(data)); } catch(e) {} return; }
+  if (entity === 'settings' || entity === 'gamification') { if (r.setValue_sync) r.setValue_sync(entity, data); else r.setAll_sync(entity, data); }
+  else { r.setAll_sync(entity, data); }
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 // ==========================================
 // IMPORT / EXPORT DATA FUNCTIONALITY
 // ==========================================
@@ -811,14 +829,14 @@ function exportAllData() {
 			timestamp: timestamp,
 			type: 'quiz-app-backup',
 			data: {
-				settings: JSON.parse(localStorage.getItem('quizSettings') || '{}'),
-				questions: JSON.parse(localStorage.getItem('quizQuestions') || '[]'),
-				categories: JSON.parse(localStorage.getItem('quizCategories') || '[]'),
-				exams: JSON.parse(localStorage.getItem('quizExams') || '[]'),
-				classes: JSON.parse(localStorage.getItem('quizClasses') || '[]'),
-				results: JSON.parse(localStorage.getItem('quizResults') || '[]'),
-				activityLog: JSON.parse(localStorage.getItem('activityLog') || '[]'),
-			},
+					settings: __get('settings', {}),
+					questions: __get('questions', []),
+					categories: __get('categories', []),
+					exams: __get('exams', []),
+					classes: __get('classes', []),
+					results: __get('results', []),
+					activityLog: __get('activity', []),
+				},
 		};
 
 		const dataStr = JSON.stringify(exportData, null, 2);
@@ -847,13 +865,11 @@ function exportAllData() {
 				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
 				color: 'icon-rose',
 			};
-			const activities = JSON.parse(
-				localStorage.getItem('quizActivity') || '[]',
-			);
-			activities.unshift(activity);
-			localStorage.setItem('quizActivity', JSON.stringify(activities));
-		} catch (e) {
-			console.warn('Could not record export activity:', e);
+				const activities = __get('activity', []);
+				activities.unshift(activity);
+				__set('activity', activities);
+			} catch (e) {
+				console.warn('Could not record export activity:', e);
 		}
 	} catch (error) {
 		console.error('Export failed:', error);
@@ -900,60 +916,57 @@ function importAllData(inputElement) {
 
 			const data = parsedData.data || parsedData; // Handle both wrapped and unwrapped data
 
-			// Update LocalStorage with imported data
-			if (data.settings)
-				localStorage.setItem('quizSettings', JSON.stringify(data.settings));
+				// Update LocalStorage with imported data
+				if (data.settings)
+					__set('settings', data.settings);
 
-			// Ensure imported questions have a dateCreated field so activity shows proper dates
-			if (data.questions) {
-				try {
-					const processedQuestions = data.questions.map((q) => {
-						const dateFrom =
-							q.dateCreated || q.createdAt || q.date || q.created || null;
-						return {
-							...q,
-							dateCreated: dateFrom || new Date().toISOString(),
-						};
-					});
-					localStorage.setItem(
-						'quizQuestions',
-						JSON.stringify(processedQuestions),
-					);
-				} catch (e) {
-					// Fallback to raw data if something goes wrong
-					localStorage.setItem('quizQuestions', JSON.stringify(data.questions));
+				// Ensure imported questions have a dateCreated field so activity shows proper dates
+				if (data.questions) {
+					try {
+						const processedQuestions = data.questions.map((q) => {
+							const dateFrom =
+								q.dateCreated || q.createdAt || q.date || q.created || null;
+							return {
+								...q,
+								dateCreated: dateFrom || new Date().toISOString(),
+							};
+						});
+						__set('questions', processedQuestions);
+					} catch (e) {
+						// Fallback to raw data if something goes wrong
+						__set('questions', data.questions);
+					}
 				}
-			}
 
-			if (data.categories)
-				localStorage.setItem('quizCategories', JSON.stringify(data.categories));
-			if (data.exams)
-				localStorage.setItem('quizExams', JSON.stringify(data.exams));
-			if (data.classes)
-				localStorage.setItem('quizClasses', JSON.stringify(data.classes));
-			if (data.results) {
-				try {
-					const processedResults = data.results.map((r) => {
-						const dateFrom =
-							r.dateTaken ||
-							r.takenAt ||
-							r.date ||
-							r.createdAt ||
-							r.created ||
-							null;
-						return {
-							...r,
-							dateTaken: dateFrom || new Date().toISOString(),
-						};
-					});
-					localStorage.setItem('quizResults', JSON.stringify(processedResults));
-				} catch (e) {
-					// Fallback to raw data if processing fails
-					localStorage.setItem('quizResults', JSON.stringify(data.results));
+				if (data.categories)
+					__set('categories', data.categories);
+				if (data.exams)
+					__set('exams', data.exams);
+				if (data.classes)
+					__set('classes', data.classes);
+				if (data.results) {
+					try {
+						const processedResults = data.results.map((r) => {
+							const dateFrom =
+								r.dateTaken ||
+								r.takenAt ||
+								r.date ||
+								r.createdAt ||
+								r.created ||
+								null;
+							return {
+								...r,
+								dateTaken: dateFrom || new Date().toISOString(),
+							};
+						});
+						__set('results', processedResults);
+					} catch (e) {
+						// Fallback to raw data if processing fails
+						__set('results', data.results);
+					}
 				}
-			}
-			if (data.activityLog)
-				localStorage.setItem('activityLog', JSON.stringify(data.activityLog));
+				if (data.activityLog)
+					__set('activity', data.activityLog);
 
 			showToast('Data imported successfully! Reloading...');
 
@@ -987,11 +1000,9 @@ function importAllData(inputElement) {
 					color: 'icon-indigo',
 				};
 
-				const activities = JSON.parse(
-					localStorage.getItem('quizActivity') || '[]',
-				);
+				const activities = __get('activity', []);
 				activities.unshift(activity);
-				localStorage.setItem('quizActivity', JSON.stringify(activities));
+				__set('activity', activities);
 			} catch (e) {
 				console.warn('Could not record import activity:', e);
 			}
@@ -1045,143 +1056,130 @@ function importDeviceData(inputElement) {
 			const examSession =
 				deviceData.examActiveSession || fileData.data?.examActiveSession;
 
-			// Handle examActiveSession results
-			if (examSession?.results) {
-				const existingResults = JSON.parse(
-					localStorage.getItem('quizResults') || '[]',
-				);
+				// Handle examActiveSession results
+				if (examSession?.results) {
+					const existingResults = __get('results', []);
 
-				const newResult = {
-					id:
-						examSession.examId +
-						'-' +
-						(fileData.deviceId || 'imported-' + Date.now()),
-					examId: examSession.examId,
-					examName: examSession.examName,
-					mode: examSession.mode || 'exam',
-					studentName: examSession.studentInfo?.name || 'Unknown',
-					studentNumber: examSession.studentInfo?.numero || '',
-					className: examSession.studentInfo?.class || '',
-					score: examSession.results.score || 0,
-					totalQuestions: examSession.results.totalQuestions || 0,
-					answers: examSession.results.answers || [],
-					timeSpent: examSession.results.timeSpent || 0,
-					dateTaken: examSession.completedAt || new Date().toISOString(),
-					deviceId: fileData.deviceId || 'imported',
-					deviceName: fileData.deviceName || 'Unknown Device',
-				};
+					const newResult = {
+						id:
+							examSession.examId +
+							'-' +
+							(fileData.deviceId || 'imported-' + Date.now()),
+						examId: examSession.examId,
+						examName: examSession.examName,
+						mode: examSession.mode || 'exam',
+						studentName: examSession.studentInfo?.name || 'Unknown',
+						studentNumber: examSession.studentInfo?.numero || '',
+						className: examSession.studentInfo?.class || '',
+						score: examSession.results.score || 0,
+						totalQuestions: examSession.results.totalQuestions || 0,
+						answers: examSession.results.answers || [],
+						timeSpent: examSession.results.timeSpent || 0,
+						dateTaken: examSession.completedAt || new Date().toISOString(),
+						deviceId: fileData.deviceId || 'imported',
+						deviceName: fileData.deviceName || 'Unknown Device',
+					};
 
-				if (!existingResults.some((r) => r.id === newResult.id)) {
-					existingResults.push(newResult);
-					localStorage.setItem('quizResults', JSON.stringify(existingResults));
-					importedCount++;
-				}
-			}
-
-			// Handle quizResults array
-			if (deviceData.quizResults && Array.isArray(deviceData.quizResults)) {
-				const existingResults = JSON.parse(
-					localStorage.getItem('quizResults') || '[]',
-				);
-				deviceData.quizResults.forEach((result) => {
-					if (
-						!existingResults.some(
-							(r) => r.id === result.id && r.dateTaken === result.dateTaken,
-						)
-					) {
-						existingResults.push(result);
+					if (!existingResults.some((r) => r.id === newResult.id)) {
+						existingResults.push(newResult);
+						__set('results', existingResults);
 						importedCount++;
 					}
-				});
-				localStorage.setItem('quizResults', JSON.stringify(existingResults));
-			}
-
-			// Handle quizExams
-			if (deviceData.quizExams && Array.isArray(deviceData.quizExams)) {
-				const existingExams = JSON.parse(
-					localStorage.getItem('quizExams') || '[]',
-				);
-				deviceData.quizExams.forEach((exam) => {
-					if (!existingExams.some((e) => e.id === exam.id)) {
-						existingExams.push(exam);
-						importedCount++;
-					}
-				});
-				if (importedCount > 0) {
-					localStorage.setItem('quizExams', JSON.stringify(existingExams));
 				}
-			}
 
-			// Handle quizQuestions
-			if (deviceData.quizQuestions && Array.isArray(deviceData.quizQuestions)) {
-				const existingQuestions = JSON.parse(
-					localStorage.getItem('quizQuestions') || '[]',
-				);
-				deviceData.quizQuestions.forEach((q, idx) => {
-					if (!existingQuestions.some((eq) => eq.id === q.id)) {
-						existingQuestions.push(q);
-						importedCount++;
-					}
-				});
-				if (importedCount > 0) {
-					localStorage.setItem(
-						'quizQuestions',
-						JSON.stringify(existingQuestions),
-					);
-				}
-			}
-
-			// Handle quizClasses
-			if (deviceData.quizClasses && Array.isArray(deviceData.quizClasses)) {
-				const existingClasses = JSON.parse(
-					localStorage.getItem('quizClasses') || '[]',
-				);
-				deviceData.quizClasses.forEach((cls) => {
-					if (!existingClasses.some((ec) => ec.id === cls.id)) {
-						existingClasses.push(cls);
-						importedStudents += cls.students?.length || 0;
-					}
-				});
-				if (importedCount > 0) {
-					localStorage.setItem('quizClasses', JSON.stringify(existingClasses));
-				}
-			}
-
-			// Handle quizActivity
-			let activityImported = 0;
-			if (deviceData.quizActivity && Array.isArray(deviceData.quizActivity)) {
-				const existingActivity = JSON.parse(localStorage.getItem('quizActivity') || '[]');
-				
-				deviceData.quizActivity.forEach(activity => {
-					// Filter out 'noisy' or redundant activities
-					if (activity.type === 'quiz_started' || activity.type === 'answer_submitted' || activity.type === 'result') return;
-
-					const activityDate = activity.date || activity.timestamp || '';
-					const isDuplicate = existingActivity.some(a => 
-						a.type === activity.type && 
-						(a.date || a.timestamp || '') === activityDate &&
-						a.studentNumber === activity.studentNumber &&
-						a.name === activity.name
-					);
-
-					if (!isDuplicate) {
-						// Add device context if missing from the import source if available
-						if (!activity.deviceName && fileData.deviceName) activity.deviceName = fileData.deviceName;
-						if (!activity.deviceIp && fileData.ip) activity.deviceIp = fileData.ip;
-						existingActivity.unshift(activity);
-						activityImported++;
-					}
-				});
-
-				if (activityImported > 0) {
-					existingActivity.sort((a, b) => {
-						const dateA = new Date(a.date || a.timestamp || 0);
-						const dateB = new Date(b.date || b.timestamp || 0);
-						return dateB - dateA;
+				// Handle quizResults array
+				if (deviceData.quizResults && Array.isArray(deviceData.quizResults)) {
+					const existingResults = __get('results', []);
+					deviceData.quizResults.forEach((result) => {
+						if (
+							!existingResults.some(
+								(r) => r.id === result.id && r.dateTaken === result.dateTaken,
+							)
+						) {
+							existingResults.push(result);
+							importedCount++;
+						}
 					});
-					localStorage.setItem('quizActivity', JSON.stringify(existingActivity.slice(0, 1000)));
+					__set('results', existingResults);
 				}
-			}
+
+				// Handle quizExams
+				if (deviceData.quizExams && Array.isArray(deviceData.quizExams)) {
+					const existingExams = __get('exams', []);
+					deviceData.quizExams.forEach((exam) => {
+						if (!existingExams.some((e) => e.id === exam.id)) {
+							existingExams.push(exam);
+							importedCount++;
+						}
+					});
+					if (importedCount > 0) {
+						__set('exams', existingExams);
+					}
+				}
+
+				// Handle quizQuestions
+				if (deviceData.quizQuestions && Array.isArray(deviceData.quizQuestions)) {
+					const existingQuestions = __get('questions', []);
+					deviceData.quizQuestions.forEach((q) => {
+						if (!existingQuestions.some((eq) => eq.id === q.id)) {
+							existingQuestions.push(q);
+							importedCount++;
+						}
+					});
+					if (importedCount > 0) {
+						__set('questions', existingQuestions);
+					}
+				}
+
+				// Handle quizClasses
+				if (deviceData.quizClasses && Array.isArray(deviceData.quizClasses)) {
+					const existingClasses = __get('classes', []);
+					deviceData.quizClasses.forEach((cls) => {
+						if (!existingClasses.some((ec) => ec.id === cls.id)) {
+							existingClasses.push(cls);
+							importedStudents += cls.students?.length || 0;
+						}
+					});
+					if (importedCount > 0) {
+						__set('classes', existingClasses);
+					}
+				}
+
+				// Handle quizActivity
+				let activityImported = 0;
+				if (deviceData.quizActivity && Array.isArray(deviceData.quizActivity)) {
+					const existingActivity = __get('activity', []);
+					
+					deviceData.quizActivity.forEach(activity => {
+						// Filter out 'noisy' or redundant activities
+						if (activity.type === 'quiz_started' || activity.type === 'answer_submitted' || activity.type === 'result') return;
+
+						const activityDate = activity.date || activity.timestamp || '';
+						const isDuplicate = existingActivity.some(a => 
+							a.type === activity.type && 
+							(a.date || a.timestamp || '') === activityDate &&
+							a.studentNumber === activity.studentNumber &&
+							a.name === activity.name
+						);
+
+						if (!isDuplicate) {
+							// Add device context if missing from the import source if available
+							if (!activity.deviceName && fileData.deviceName) activity.deviceName = fileData.deviceName;
+							if (!activity.deviceIp && fileData.ip) activity.deviceIp = fileData.ip;
+							existingActivity.unshift(activity);
+							activityImported++;
+						}
+					});
+
+					if (activityImported > 0) {
+						existingActivity.sort((a, b) => {
+							const dateA = new Date(a.date || a.timestamp || 0);
+							const dateB = new Date(b.date || b.timestamp || 0);
+							return dateB - dateA;
+						});
+						__set('activity', existingActivity.slice(0, 1000));
+					}
+				}
 
 			// Summary
 			if (importedCount > 0 || importedStudents > 0 || activityImported > 0) {

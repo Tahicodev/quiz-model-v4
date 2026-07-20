@@ -34,6 +34,20 @@ const TABLE_KEYS = {
   game_sessions:  'quizGameSessions',
   tournament_entries: 'quizTournamentEntries',
   refresh_tokens: 'quizRefreshTokens',
+  // ── Operational keys (mirror src/shared/constants.js STORAGE_KEYS) ──
+  // Real-data stores that previously bypassed the repository layer. Mapped
+  // here so the async repo path (SPA / services) stays consistent with the
+  // legacy synchronous bridge. Values unchanged → existing data survives.
+  activity:              'quizActivity',
+  gamification:          'quizGamification',
+  tournament_history:    'quizTournamentsHistory',
+  game_presets:          'gamePresets',
+  profile_requests:      'quizProfileRequests',
+  account_requests:      'quizAccountRequests',
+  notifications:         'adminNotifications',
+  teacher_messages:      'teacherMessages',
+  teacher_assignments:   'teacherAssignments',
+  profile_requests_legacy: 'adminProfileRequests',
 };
 
 // ─── Custom queries ────────────────────────────────────────────────────────────
@@ -140,6 +154,22 @@ export class LocalStorageRepository extends IStorageRepository {
 
   getAll_sync(table) {
     return this.#readTable(table);
+  }
+
+  /**
+   * Object-tolerant getter — returns the raw parsed JSON (array OR object).
+   * Use this for stores that hold a single object (e.g. `gamification` config)
+   * rather than an array table. Returns `fallback` when missing/invalid.
+   * Array-typed stores keep using `getAll_sync`; this never coerces arrays.
+   */
+  getValue_sync(table, fallback = null) {
+    try {
+      const raw = localStorage.getItem(this.#key(table));
+      if (raw === null) return fallback;
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
   }
 
   setAll_sync(table, data) {

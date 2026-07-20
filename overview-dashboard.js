@@ -112,18 +112,19 @@ function updateDashboardStats() {
 
 	// 6. Tournament KPIs
 	let activeTournament = null;
-	let tournamentsHistory = [];
-	try {
-		activeTournament = JSON.parse(localStorage.getItem('quizTournamentActive') || 'null');
-	} catch (e) {
-		activeTournament = null;
-	}
-	try {
-		const parsed = JSON.parse(localStorage.getItem('quizTournamentsHistory') || '[]');
-		tournamentsHistory = Array.isArray(parsed) ? parsed : [];
-	} catch (e) {
-		tournamentsHistory = [];
-	}
+		let tournamentsHistory = [];
+		try {
+			activeTournament = JSON.parse(localStorage.getItem('quizTournamentActive') || 'null');
+		} catch (e) {
+			activeTournament = null;
+		}
+		try {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			const parsed = r ? r.getValue_sync('tournament_history', []) : JSON.parse(localStorage.getItem('quizTournamentsHistory') || '[]');
+			tournamentsHistory = Array.isArray(parsed) ? parsed : [];
+		} catch (e) {
+			tournamentsHistory = [];
+		}
 	const hasActiveTournament = Boolean(activeTournament && activeTournament.id);
 	const activeTournamentInHistory = hasActiveTournament
 		? tournamentsHistory.some((entry) => entry && entry.id === activeTournament.id)

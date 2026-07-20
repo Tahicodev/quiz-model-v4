@@ -935,10 +935,10 @@ function goToActivityFromNotification(event) {
 }
 
 function syncProfileRequestNotifications() {
-    const profileRequests = JSON.parse(localStorage.getItem('quizProfileRequests') || '[]');
+    const profileRequests = (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('profile_requests', []) : JSON.parse(localStorage.getItem('quizProfileRequests') || '[]'); })();
     const accountRequests = Array.isArray(window.Auth?.getAccountRequests?.())
         ? window.Auth.getAccountRequests()
-        : JSON.parse(localStorage.getItem('quizAccountRequests') || '[]');
+        : (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('account_requests', []) : JSON.parse(localStorage.getItem('quizAccountRequests') || '[]'); })();
     if (!profileRequests.length && !accountRequests.length) return;
 
     const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
@@ -946,7 +946,7 @@ function syncProfileRequestNotifications() {
     const classMap = new Map(classes.map((c) => [c.id, c.name]));
 
     const activity = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
-    const notificationList = JSON.parse(localStorage.getItem('adminNotifications') || '[]');
+    const notificationList = (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('notifications', []) : JSON.parse(localStorage.getItem('adminNotifications') || '[]'); })();
 
     const hasActivityForRequest = (requestType, requestId) =>
         activity.some((a) => {
@@ -1228,9 +1228,9 @@ function normalizeLegacyProfileRequest(request) {
 function getUnifiedProfileRequests() {
     const authRequests = Array.isArray(window.Auth?.getProfileRequests?.())
         ? window.Auth.getProfileRequests()
-        : JSON.parse(localStorage.getItem('quizProfileRequests') || '[]');
+        : (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('profile_requests', []) : JSON.parse(localStorage.getItem('quizProfileRequests') || '[]'); })();
 
-    const legacyMap = JSON.parse(localStorage.getItem('adminProfileRequests') || '{}');
+    const legacyMap = (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('profile_requests_legacy', {}) : JSON.parse(localStorage.getItem('adminProfileRequests') || '{}'); })();
     const legacyRequests = Object.values(legacyMap)
         .map(normalizeLegacyProfileRequest)
         .filter(Boolean);
@@ -1247,8 +1247,7 @@ function getUnifiedProfileRequests() {
         }
     });
 
-    localStorage.setItem('quizProfileRequests', JSON.stringify(merged));
-    localStorage.removeItem('adminProfileRequests');
+    (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; if (r) { r.setAll_sync('profile_requests', merged); r.remove_sync('profile_requests_legacy'); } else { localStorage.setItem('quizProfileRequests', JSON.stringify(merged)); localStorage.removeItem('adminProfileRequests'); } })();
     return merged;
 }
 
@@ -1454,7 +1453,7 @@ function renderProfileRequests() {
     let profileRequests = getUnifiedProfileRequests();
     let accountRequests = Array.isArray(window.Auth?.getAccountRequests?.())
         ? window.Auth.getAccountRequests()
-        : JSON.parse(localStorage.getItem('quizAccountRequests') || '[]');
+        : (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('account_requests', []) : JSON.parse(localStorage.getItem('quizAccountRequests') || '[]'); })();
 
     if (window.Auth?.isTeacher?.()) {
         const teacherClassIds = window.Auth.getTeacherClassIds

@@ -4667,39 +4667,37 @@
 		return sortGamePresetsForDisplay([...defaults, ...normalizedCustomPresets]);
 	}
 
-	function getGamePresets() {
-		try {
-			const rawPresets = JSON.parse(
-				localStorage.getItem(GAME_PRESETS_KEY) || '[]',
-			);
-			const initialized = localStorage.getItem(GAME_PRESETS_INIT_KEY);
-			const normalizedPresets = ensureDefaultGamePresets(rawPresets);
-			const rawComparable = Array.isArray(rawPresets) ? rawPresets : [];
-			if (
-				!initialized ||
-				JSON.stringify(rawComparable) !== JSON.stringify(normalizedPresets)
-			) {
-				localStorage.setItem(
-					GAME_PRESETS_KEY,
-					JSON.stringify(normalizedPresets),
-				);
+		function getGamePresets() {
+			try {
+				const r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+				const rawPresets = r ? r.getValue_sync('game_presets', []) : JSON.parse(localStorage.getItem(GAME_PRESETS_KEY) || '[]');
+				const initialized = localStorage.getItem(GAME_PRESETS_INIT_KEY);
+				const normalizedPresets = ensureDefaultGamePresets(rawPresets);
+				const rawComparable = Array.isArray(rawPresets) ? rawPresets : [];
+				if (
+					!initialized ||
+					JSON.stringify(rawComparable) !== JSON.stringify(normalizedPresets)
+				) {
+					if (r) { r.setAll_sync('game_presets', normalizedPresets); } else { localStorage.setItem(GAME_PRESETS_KEY, JSON.stringify(normalizedPresets)); }
+					localStorage.setItem(GAME_PRESETS_INIT_KEY, 'true');
+				}
+				return normalizedPresets;
+			} catch (e) {
+				console.error('Error loading game presets:', e);
+				const defaults = ensureDefaultGamePresets([]);
+				const r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+				if (r) { r.setAll_sync('game_presets', defaults); } else { localStorage.setItem(GAME_PRESETS_KEY, JSON.stringify(defaults)); }
 				localStorage.setItem(GAME_PRESETS_INIT_KEY, 'true');
+				return defaults;
 			}
-			return normalizedPresets;
-		} catch (e) {
-			console.error('Error loading game presets:', e);
-			const defaults = ensureDefaultGamePresets([]);
-			localStorage.setItem(GAME_PRESETS_KEY, JSON.stringify(defaults));
-			localStorage.setItem(GAME_PRESETS_INIT_KEY, 'true');
-			return defaults;
 		}
-	}
 
-	function saveGamePresets(presets) {
-		const normalizedPresets = ensureDefaultGamePresets(presets);
-		localStorage.setItem(GAME_PRESETS_KEY, JSON.stringify(normalizedPresets));
-		localStorage.setItem(GAME_PRESETS_INIT_KEY, 'true');
-	}
+		function saveGamePresets(presets) {
+			const normalizedPresets = ensureDefaultGamePresets(presets);
+			const r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			if (r) { r.setAll_sync('game_presets', normalizedPresets); } else { localStorage.setItem(GAME_PRESETS_KEY, JSON.stringify(normalizedPresets)); }
+			localStorage.setItem(GAME_PRESETS_INIT_KEY, 'true');
+		}
 
 	function loadGamePresets() {
 		const typeSelect = byId('gameType');
@@ -5380,11 +5378,10 @@
 	}
 
 	// --- Gamification Controls ---
-	function getGamificationConfig() {
-		try {
-			const config = JSON.parse(
-				localStorage.getItem('quizGamification') || '{}',
-			);
+		function getGamificationConfig() {
+			try {
+				const r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+				const config = r ? r.getValue_sync('gamification', {}) : JSON.parse(localStorage.getItem('quizGamification') || '{}');
 			return {
 				expPerCorrect: Number(config.expPerCorrect) || 10,
 				expPerWin: Number(config.expPerWin) || 100,
@@ -5395,16 +5392,15 @@
 		}
 	}
 
-	function getTournamentHistory() {
-		try {
-			const history = JSON.parse(
-				localStorage.getItem('quizTournamentsHistory') || '[]',
-			);
-			return normalizeTournamentHistoryEntries(history);
-		} catch (e) {
-			return [];
+		function getTournamentHistory() {
+			try {
+				const r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+				const history = r ? r.getValue_sync('tournament_history', []) : JSON.parse(localStorage.getItem('quizTournamentsHistory') || '[]');
+				return normalizeTournamentHistoryEntries(history);
+			} catch (e) {
+				return [];
+			}
 		}
-	}
 
 	function normalizeTournamentHistoryEntries(history) {
 		const entries = Array.isArray(history) ? history : [];
@@ -5423,12 +5419,11 @@
 		return deduped;
 	}
 
-	function saveTournamentHistory(history) {
-		localStorage.setItem(
-			'quizTournamentsHistory',
-			JSON.stringify(normalizeTournamentHistoryEntries(history)),
-		);
-	}
+		function saveTournamentHistory(history) {
+			const r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			const data = normalizeTournamentHistoryEntries(history);
+			if (r) { r.setAll_sync('tournament_history', data); } else { localStorage.setItem('quizTournamentsHistory', JSON.stringify(data)); }
+		}
 
 	function getTournamentPlannerDraft() {
 		try {
