@@ -214,11 +214,12 @@ const httpServer = http.createServer(app);
 // than starting a half-initialized server.
 (async () => {
   try {
-    await initSocketServer(httpServer, {
-      gameService:       gameSvc,
-      tournamentService:  tournamentSvc,
-      sessionService:     sessionSvc,
-    });
+	    await initSocketServer(httpServer, {
+	      gameService:       gameSvc,
+	      tournamentService:  tournamentSvc,
+	      sessionService:     sessionSvc,
+	      adminSecret,        // for legacy admin panel socket auth
+	    });
     httpServer.listen(config.port, () => {
       logger.info({ port: config.port, mode: config.mode }, 'Backend server started');
     });

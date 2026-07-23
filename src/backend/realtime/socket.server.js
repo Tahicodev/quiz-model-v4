@@ -17,7 +17,7 @@
 import { Server } from 'socket.io';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { socketAuthMiddleware } from './socket.auth.js';
+import { setAdminSecret, socketAuthMiddleware } from './socket.auth.js';
 import { registerGameHandlers } from './handlers/game.handler.js';
 import { registerTournamentHandlers } from './handlers/tournament.handler.js';
 import { registerSessionHandlers } from './handlers/session.handler.js';
@@ -37,7 +37,11 @@ let _io = null;
  * @returns {Promise<import('socket.io').Server>}
  */
 export async function initSocketServer(httpServer, services) {
-  if (_io) throw new Error('Socket.io already initialized — do not call initSocketServer twice');
+
+  if (_io) throw new Error('Socket.io already initialized M-bM-^@M-^T do not call initSocketServer twice');
+  if (services.adminSecret) {
+    setAdminSecret(services.adminSecret);
+  }
 
   _io = new Server(httpServer, {
     cors: { origin: config.corsOrigin, credentials: true },

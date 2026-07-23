@@ -89,6 +89,8 @@
 	/**
 	 * Connect to realtime server
 	 */
+	let _reconnectBlockedUntil = 0;
+
 	function connectToRealtimeServer() {
 		const serverHost = getServerHost();
 
@@ -96,6 +98,12 @@
 		if (typeof io === 'undefined') {
 			console.warn('Socket.IO library not loaded');
 			showRealtimeStatus('Socket.IO not loaded', 'error');
+			return;
+		}
+
+		// Back off from reconnecting after repeated auth failures
+		if (_reconnectBlockedUntil > Date.now()) {
+			console.warn(`[Realtime] Skipping reconnect — blocked until ${new Date(_reconnectBlockedUntil).toLocaleTimeString()}`);
 			return;
 		}
 
@@ -147,15 +155,22 @@
 			});
 
 			realtimeSocket.on('connect_error', (error) => {
-				console.error('Connection error:', error);
-				updateRealtimeStatus('error', error.message);
+				const msg = (error && error.message) || 'Unknown error';
+				// Auth failures are expected when the server is unreachable or token expired — log once, then back off
+				if (/unauthorized|invalid.*token|expired.*token/i.test(msg)) {
+					console.warn('[Realtime] Connection auth error (server may be offline):', msg);
+					_reconnectBlockedUntil = Date.now() + 30_000; // back off 30s
+				} else {
+					console.warn('[Realtime] Connection error:', msg);
+				}
+				updateRealtimeStatus('error', msg);
 			});
 
 			realtimeSocket.on('admin:auth:error', (payload = {}) => {
 				const message =
 					payload.message ||
 					'Admin Secret rejected. Check Settings > LAN Realtime.';
-				console.warn('Admin realtime auth failed:', payload);
+				console.warn('[Realtime] Admin auth failed:', message);
 				updateRealtimeStatus('error', message);
 				showRealtimeStatus(message, 'error');
 			});
@@ -1171,8 +1186,7 @@
 
 		tempSocket.on('connect_error', (error) => {
 			if (done) return;
-			console.error('Temp sync connection error:', error);
-			showRealtimeStatus('Sync failed: Not connected', 'error');
+			console.warn('[Realtime] Temp sync connection failed (server may be offline):', error && error.message);
 			finishTempSync();
 		});
 
@@ -1181,13 +1195,13 @@
 				userSyncInProgress = false;
 			}
 		});
-	};
+		};
 
-	/**
-	 * Sync games to all connected clients
-	 */
-	window.syncGamesToClients = function () {
-		const isAdmin =
+		/**
+		 * Sync games to all connected clients
+		 */
+		window.syncGamesToClients = function () {
+			const isAdmin =
 			typeof window.Auth?.isAdmin === 'function' && window.Auth.isAdmin();
 		const isTeacher =
 			typeof window.Auth?.isTeacher === 'function' && window.Auth.isTeacher();
@@ -1305,8 +1319,7 @@
 
 		tempSocket.on('connect_error', (error) => {
 			if (done) return;
-			console.error('Temp sync games connection error:', error);
-			showRealtimeStatus('Sync failed: Not connected', 'error');
+			console.warn('[Realtime] Temp sync games connection failed (server may be offline):', error && error.message);
 			tempSocket.disconnect();
 		});
 	};
@@ -1424,8 +1437,7 @@
 
 		tempSocket.on('connect_error', (error) => {
 			if (done) return;
-			console.error('Temp sync gamification connection error:', error);
-			showRealtimeStatus('Sync failed: Not connected', 'error');
+			console.warn('[Realtime] Temp sync gamification connection failed (server may be offline):', error && error.message);
 			tempSocket.disconnect();
 		});
 	};
@@ -1451,25 +1463,28 @@
 		logDeviceActivity('clear_session', 'Cleared all remote device data', 'Removed quizSettings, quizQuestions, and examActiveSession');
 	};
 
-	// Sync Debounce Timer
-	let syncDebounceTimer = null;
+		// Sync Debounce Timer
+		let syncDebounceTimer = null;
 
-	/**
-	 * Sync training questions and active exam to all connected clients
-	 */
-	window.syncQuestionsToClients = function () {
-		// Check if Realtime is actually enabled
-		const realtimeEnabled = document.getElementById('setting-realtimeEnabled')?.checked;
-		
-		// Basic Connection check
-		if (!realtimeSocket || !realtimeSocket.connected) {
-			// Only warn if user expects it to be working
-			if (realtimeEnabled) {
-				console.warn('Cannot sync: Realtime enabled but not connected to server');
-				showRealtimeStatus('Sync failed: Not connected', 'error');
+		/**
+		 * Sync training questions and active exam to all connected clients
+		 */
+		let _lastSyncWarningAt = 0;
+		window.syncQuestionsToClients = function () {
+			// Check if Realtime is actually enabled
+			const realtimeEnabled = document.getElementById('setting-realtimeEnabled')?.checked;
+			
+			// Basic Connection check
+			if (!realtimeSocket || !realtimeSocket.connected) {
+				// Throttle warning to once per 30s to avoid spam on every settings change
+				const now = Date.now();
+				if (realtimeEnabled && (now - _lastSyncWarningAt > 30_000)) {
+					_lastSyncWarningAt = now;
+					console.warn('Cannot sync: Realtime enabled but not connected to server');
+					showRealtimeStatus('Sync failed: Not connected', 'error');
+				}
+				return;
 			}
-			return;
-		}
 
 		// Use debounce to prevent spamming during bulk updates
 		if (syncDebounceTimer) clearTimeout(syncDebounceTimer);

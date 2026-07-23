@@ -4401,6 +4401,36 @@ function updateMultipleAnswerCheckboxes() {
 	});
 }
 
+function populateMultipleAnswersCheckboxes(options, answers) {
+	const container = document.getElementById('multiple-answers-list');
+	if (!container) return;
+	container.innerHTML = '';
+
+	if (!options || !Array.isArray(options)) {
+		console.warn('populateMultipleAnswersCheckboxes: invalid options', options);
+		return;
+	}
+
+	const answerSet = new Set(
+		(answers || []).map((a) => String(a).trim().toLowerCase())
+	);
+
+	options.forEach((opt) => {
+		if (!opt) return;
+		const optText = typeof opt === 'object' ? opt.text : String(opt);
+		if (!optText.trim()) return;
+
+		const label = document.createElement('label');
+		label.className = 'checkbox-item';
+		const isChecked = answerSet.has(optText.trim().toLowerCase());
+		label.innerHTML = `
+            <input type="checkbox" value="${escapeHtml(optText)}" name="correct_answers"${isChecked ? ' checked' : ''}>
+            <span>${escapeHtml(optText)}</span>
+        `;
+		container.appendChild(label);
+	});
+}
+
 function handleOptionImages(input) {
 	if (!input.files || input.files.length === 0) return;
 
