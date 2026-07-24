@@ -87,7 +87,7 @@ async function handleQuery() {
 
   const answerEl = document.getElementById('rag-answer');
   const sourcesEl = document.getElementById('rag-sources');
-  if (answerEl) answerEl.innerHTML = '<p class="ai-loading">Searching documents…</p>';
+  if (answerEl) safeSetHTML(answerEl, '<p class="ai-loading">Searching documents…</p>');
 
   await withError(async () => {
     const result = await api('POST', '/api/v1/ai/rag/query', { question });
@@ -100,7 +100,7 @@ async function handleQuery() {
     if (sourcesEl) {
       const sources = result.sources || [];
       if (sources.length === 0) {
-        sourcesEl.innerHTML = '<p class="ai-empty">No relevant documents found.</p>';
+        safeSetHTML(sourcesEl, '<p class="ai-empty">No relevant documents found.</p>');
       } else {
         safeSetHTML(sourcesEl, `
           <h4>Sources (${sources.length})</h4>
@@ -119,7 +119,7 @@ async function refreshDocList() {
     const result = await api('GET', '/api/v1/ai/rag/documents');
     const docs = result?.data || [];
     if (docs.length === 0) {
-      listEl.innerHTML = '<p class="ai-empty">No documents ingested yet.</p>';
+      safeSetHTML(listEl, '<p class="ai-empty">No documents ingested yet.</p>');
       return;
     }
     safeSetHTML(listEl, `
@@ -142,7 +142,7 @@ async function refreshDocList() {
     }
   } catch (err) {
     logger.error('Failed to load doc list', err);
-    listEl.innerHTML = '<p class="ai-empty">Error loading documents.</p>';
+    safeSetHTML(listEl, '<p class="ai-empty">Error loading documents.</p>');
   }
 }
 

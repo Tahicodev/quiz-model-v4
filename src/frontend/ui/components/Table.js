@@ -10,7 +10,7 @@ export function renderTable(containerId, columns, data, onRowClick = null) {
   if (!container) return;
 
   if (data.length === 0) {
-    container.innerHTML = '<div class="empty-state">No records found.</div>';
+    safeSetHTML(container, '<div class="empty-state">No records found.</div>');
     return;
   }
 
@@ -58,6 +58,6 @@ export function renderTable(containerId, columns, data, onRowClick = null) {
   }
   table.appendChild(tbody);
 
-  container.innerHTML = '';
+  container.replaceChildren();
   container.appendChild(table);
 }

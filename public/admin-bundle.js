@@ -284,8 +284,8 @@ var QuizAdmin = (() => {
           if (!exam) return null;
           const examQuestions = store.getAll_sync("exam_questions").filter((eq) => eq.exam_id === examId).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
           const questionIds = examQuestions.map((eq) => eq.question_id);
-          const questions = store.getAll_sync("questions").filter((q) => questionIds.includes(q.id)).sort((a, b) => questionIds.indexOf(a.id) - questionIds.indexOf(b.id));
-          return { ...exam, questions };
+          const questions2 = store.getAll_sync("questions").filter((q) => questionIds.includes(q.id)).sort((a, b) => questionIds.indexOf(a.id) - questionIds.indexOf(b.id));
+          return { ...exam, questions: questions2 };
         },
         "result.byUserAndExam": (store, { userId, examId }) => store.getAll_sync("results").filter((r) => r.user_id === userId && r.exam_id === examId).sort((a, b) => new Date(b.date_taken) - new Date(a.date_taken)),
         "game.activeSessions": (store, { gameId }) => {
@@ -16610,10 +16610,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           const exam = await this.#repo.query("exam.withQuestions", { examId: session.exam_id });
           if (!exam) throw new NotFoundError("Exam");
           const answers = JSON.parse(session.answers_json || "{}");
-          const questions = exam.questions ?? [];
+          const questions2 = exam.questions ?? [];
           let earnedPoints = 0;
           let totalPoints = 0;
-          for (const q of questions) {
+          for (const q of questions2) {
             const pts = q.points_override ?? q.points ?? 1;
             totalPoints += pts;
             const userAns = answers[q.id];
@@ -18170,6 +18170,281 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   });
 
+  // src/frontend/ui/pages/admin/components/api.js
+  async function api(method, path, body = null) {
+    const { authSvc } = getContainer();
+    const baseUrl = config.apiUrl || "";
+    const headers = { "Content-Type": "application/json" };
+    const token = authSvc.getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers,
+      credentials: "include",
+      body: body !== null ? JSON.stringify(body) : void 0
+    });
+    if (res.status === 204) return null;
+    const json2 = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new AppError(json2.code ?? "API_ERROR", json2.message ?? res.statusText, res.status);
+    }
+    return json2;
+  }
+  var init_api2 = __esm({
+    "src/frontend/ui/pages/admin/components/api.js"() {
+      init_container();
+      init_config();
+      init_errors();
+    }
+  });
+
+  // src/frontend/ui/pages/admin/components/AIGeneratorModal.js
+  function openAIGeneratorModal(onImport) {
+    let questions2 = [];
+    const fieldsHTML = `
+    <div class="ai-generator">
+      <div class="form-field">
+        <label for="ai-topic">Topic <span class="req">*</span></label>
+        <input id="ai-topic" type="text" placeholder="e.g. World War II, Photosynthesis, Python lists" />
+      </div>
+      <div class="form-field">
+        <label for="ai-count">Number of questions</label>
+        <input id="ai-count" type="number" min="1" max="20" value="3" />
+      </div>
+      <div class="form-field">
+        <label for="ai-type">Type</label>
+        <select id="ai-type">${Object.entries(QUESTION_TYPES).map(([k, v]) => `<option value="${v}">${k}</option>`).join("")}</select>
+      </div>
+      <div class="form-field">
+        <label for="ai-difficulty">Difficulty</label>
+        <select id="ai-difficulty">${Object.entries(DIFFICULTY).map(([k, v]) => `<option value="${v}">${k}</option>`).join("")}</select>
+      </div>
+      <hr/>
+      <div class="form-field">
+        <label for="ai-source-text">Or: provide source text to extract questions from</label>
+        <textarea id="ai-source-text" rows="4" placeholder="Paste text here to extract questions from content..."></textarea>
+      </div>
+      <button type="button" class="btn btn-primary" id="ai-generate-btn">Generate</button>
+      <div id="ai-results" class="ai-results"></div>
+    </div>
+  `;
+    const modal = new Modal({
+      title: "AI Question Generator",
+      contentHTML: fieldsHTML,
+      confirmText: "Import selected",
+      cancelText: "Cancel",
+      isDangerous: false,
+      onConfirm: async () => {
+        const checked = document.querySelectorAll(".ai-q-checkbox:checked");
+        const selected = [];
+        for (const cb of checked) {
+          const idx = parseInt(cb.value, 10);
+          if (!isNaN(idx) && questions2[idx]) selected.push(questions2[idx]);
+        }
+        if (selected.length === 0) {
+          EventBus.emit("app:warning", { message: "Select at least one question to import." });
+          return false;
+        }
+        if (onImport) await onImport(selected);
+        return true;
+      },
+      onCancel: () => {
+      }
+    });
+    modal.show();
+    setTimeout(() => {
+      const btn = document.getElementById("ai-generate-btn");
+      if (!btn) return;
+      btn.addEventListener("click", () => handleGenerate(modal, onImport));
+    }, 50);
+  }
+  async function handleGenerate(modal, onImport) {
+    const topic = document.getElementById("ai-topic")?.value.trim();
+    const count = parseInt(document.getElementById("ai-count")?.value || "3", 10);
+    const type = document.getElementById("ai-type")?.value || "mcq";
+    const difficulty = document.getElementById("ai-difficulty")?.value || "medium";
+    const sourceText = document.getElementById("ai-source-text")?.value.trim();
+    const resultsEl = document.getElementById("ai-results");
+    if (!resultsEl) return;
+    safeSetHTML(resultsEl, '<p class="ai-loading">Generating questions\u2026</p>');
+    await withError(async () => {
+      let data;
+      if (sourceText) {
+        data = await api("POST", "/api/v1/ai/generate/text", { text: sourceText, count, type });
+      } else if (topic) {
+        data = await api("POST", "/api/v1/ai/generate", { topic, count, type, difficulty });
+      } else {
+        EventBus.emit("app:warning", { message: "Enter a topic or source text." });
+        resultsEl.replaceChildren();
+        return;
+      }
+      questions = data?.data || [];
+      renderResults(resultsEl, questions);
+    }, `Generated ${questions.length} question(s)`);
+  }
+  function renderResults(container, questions2) {
+    if (!questions2 || questions2.length === 0) {
+      safeSetHTML(container, '<p class="ai-empty">No questions generated. Try a different topic.</p>');
+      return;
+    }
+    const html = `
+    <p class="ai-count">${questions2.length} question(s) generated</p>
+    <div class="ai-question-list">
+      ${questions2.map((q, i) => `
+        <div class="ai-question-item">
+          <label class="ai-q-label">
+            <input type="checkbox" class="ai-q-checkbox" value="${i}" checked />
+            <strong>Q${i + 1}:</strong> ${escapeHTML(q.text || "")}
+            <span class="badge badge--${q.type}">${q.type}</span>
+            <span class="badge badge--${q.difficulty || "medium"}">${q.difficulty || "medium"}</span>
+          </label>
+        </div>
+      `).join("")}
+    </div>
+  `;
+    safeSetHTML(container, html);
+  }
+  var init_AIGeneratorModal = __esm({
+    "src/frontend/ui/pages/admin/components/AIGeneratorModal.js"() {
+      init_Modal();
+      init_api2();
+      init_sanitize();
+      init_eventBus();
+      init_logger();
+      init_container();
+      init_constants();
+    }
+  });
+
+  // src/frontend/ui/pages/admin/components/RAGUploader.js
+  async function initRAGUploader(host) {
+    if (!host) return;
+    host.replaceChildren();
+    safeSetHTML(host, `
+    <div class="rag-panel">
+      <h2>RAG Document Store</h2>
+
+      <div class="rag-section">
+        <h3>Upload Document</h3>
+        <textarea id="rag-content" rows="5" placeholder="Paste document text here..."></textarea>
+        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+          <input id="rag-filename" type="text" placeholder="filename.txt" style="flex:1;" />
+          <button id="rag-upload-btn" class="btn btn-primary">Upload</button>
+        </div>
+      </div>
+
+      <div class="rag-section">
+        <h3>Ingested Documents</h3>
+        <div id="rag-doc-list"><p class="ai-empty">Loading...</p></div>
+      </div>
+
+      <hr/>
+
+      <div class="rag-section">
+        <h3>Query Documents</h3>
+        <div style="display:flex;gap:0.5rem;">
+          <input id="rag-query-input" type="text" placeholder="Ask a question about your documents..." style="flex:1;" />
+          <button id="rag-query-btn" class="btn btn-primary">Ask</button>
+        </div>
+        <div id="rag-answer" class="rag-answer"></div>
+        <div id="rag-sources" class="rag-sources"></div>
+      </div>
+    </div>
+  `);
+    document.getElementById("rag-upload-btn")?.addEventListener("click", () => handleUpload());
+    document.getElementById("rag-query-btn")?.addEventListener("click", () => handleQuery());
+    await refreshDocList();
+  }
+  async function handleUpload() {
+    const content = document.getElementById("rag-content")?.value.trim();
+    const filename = document.getElementById("rag-filename")?.value.trim() || "document.txt";
+    if (!content) {
+      EventBus.emit("app:warning", { message: "Paste document text first." });
+      return;
+    }
+    await withError(async () => {
+      const result = await api("POST", "/api/v1/ai/rag/ingest", { content, filename });
+      document.getElementById("rag-content").value = "";
+      await refreshDocList();
+    }, `Document ingested (${filename})`);
+  }
+  async function handleQuery() {
+    const question = document.getElementById("rag-query-input")?.value.trim();
+    if (!question) {
+      EventBus.emit("app:warning", { message: "Enter a question." });
+      return;
+    }
+    const answerEl = document.getElementById("rag-answer");
+    const sourcesEl = document.getElementById("rag-sources");
+    if (answerEl) safeSetHTML(answerEl, '<p class="ai-loading">Searching documents\u2026</p>');
+    await withError(async () => {
+      const result = await api("POST", "/api/v1/ai/rag/query", { question });
+      if (answerEl) {
+        safeSetHTML(answerEl, `
+        <h4>Answer</h4>
+        <p>${result.answer ? escapeHTML(result.answer) : "No answer generated (AI_API_KEY may be missing)."}</p>
+      `);
+      }
+      if (sourcesEl) {
+        const sources = result.sources || [];
+        if (sources.length === 0) {
+          safeSetHTML(sourcesEl, '<p class="ai-empty">No relevant documents found.</p>');
+        } else {
+          safeSetHTML(sourcesEl, `
+          <h4>Sources (${sources.length})</h4>
+          <ul>${sources.map((s) => `<li><strong>${escapeHTML(s.filename)}</strong> (score: ${s.score})<br/><em>${escapeHTML(s.text.slice(0, 200))}...</em></li>`).join("")}</ul>
+        `);
+        }
+      }
+    });
+  }
+  async function refreshDocList() {
+    const listEl = document.getElementById("rag-doc-list");
+    if (!listEl) return;
+    try {
+      const result = await api("GET", "/api/v1/ai/rag/documents");
+      const docs = result?.data || [];
+      if (docs.length === 0) {
+        safeSetHTML(listEl, '<p class="ai-empty">No documents ingested yet.</p>');
+        return;
+      }
+      safeSetHTML(listEl, `
+      <table class="data-table">
+        <thead><tr><th>Filename</th><th>Chunks</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${docs.map((d) => `
+            <tr>
+              <td>${escapeHTML(d.filename)}</td>
+              <td>${d.chunkCount}</td>
+              <td><button class="btn btn-danger btn-sm rag-delete-btn" data-id="${d.documentId}">Delete</button></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `);
+      for (const btn of listEl.querySelectorAll(".rag-delete-btn")) {
+        btn.addEventListener("click", () => handleDelete(btn.getAttribute("data-id")));
+      }
+    } catch (err) {
+      logger.error("Failed to load doc list", err);
+      safeSetHTML(listEl, '<p class="ai-empty">Error loading documents.</p>');
+    }
+  }
+  async function handleDelete(documentId) {
+    await withError(async () => {
+      await api("DELETE", `/api/v1/ai/rag/documents/${documentId}`);
+      await refreshDocList();
+    }, "Document deleted");
+  }
+  var init_RAGUploader = __esm({
+    "src/frontend/ui/pages/admin/components/RAGUploader.js"() {
+      init_api2();
+      init_sanitize();
+      init_eventBus();
+      init_logger();
+    }
+  });
+
   // src/frontend/ui/pages/admin/QuestionsPage.js
   var QuestionsPage_exports = {};
   __export(QuestionsPage_exports, {
@@ -18190,6 +18465,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       categoryFilter(),
       buildSpacer(),
       buildNewButton(),
+      buildAIGeneratorButton(),
+      buildRAGUploaderButton(),
       buildBulkDeleteButton()
     );
     const tableHost = document.createElement("div");
@@ -18284,6 +18561,56 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     btn.className = "btn btn-primary";
     btn.textContent = "+ New Question";
     btn.addEventListener("click", () => openQuestionForm(null));
+    return btn;
+  }
+  function buildAIGeneratorButton() {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary";
+    btn.textContent = "\u2728 AI Generate";
+    btn.addEventListener("click", () => {
+      openAIGeneratorModal(async (generatedQuestions) => {
+        const c = getContainer();
+        const me = c.authSvc.getCurrentUser();
+        let okCount = 0;
+        for (const q of generatedQuestions) {
+          try {
+            await c.questionSvc.create(q, me);
+            okCount++;
+          } catch (err) {
+            logger.warn("Failed to import AI question", err);
+          }
+        }
+        if (okCount > 0) {
+          await tableCtl.resetAndRefresh();
+          withError(async () => {
+          }, `Imported ${okCount} question(s)`);
+        }
+      });
+    });
+    return btn;
+  }
+  function buildRAGUploaderButton() {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-secondary";
+    btn.textContent = "\u{1F4DA} RAG Store";
+    btn.addEventListener("click", () => {
+      const modal = new Modal({
+        title: "RAG Document Store",
+        contentHTML: '<div id="rag-modal-host"></div>',
+        cancelText: "Close",
+        confirmText: "Done",
+        onConfirm: () => {
+        },
+        onCancel: () => {
+        }
+      });
+      modal.show();
+      setTimeout(() => {
+        initRAGUploader(document.getElementById("rag-modal-host"));
+      }, 50);
+    });
     return btn;
   }
   function buildBulkDeleteButton() {
@@ -18464,6 +18791,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_DataTable();
       init_ConfirmDialog();
       init_FormModal();
+      init_AIGeneratorModal();
+      init_RAGUploader();
+      init_Modal();
       init_constants();
       tableCtl = null;
       selectedIds = /* @__PURE__ */ new Set();
@@ -19400,34 +19730,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   });
 
-  // src/frontend/ui/pages/admin/components/api.js
-  async function api(method, path, body = null) {
-    const { authSvc } = getContainer();
-    const baseUrl = config.apiUrl || "";
-    const headers = { "Content-Type": "application/json" };
-    const token = authSvc.getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${baseUrl}${path}`, {
-      method,
-      headers,
-      credentials: "include",
-      body: body !== null ? JSON.stringify(body) : void 0
-    });
-    if (res.status === 204) return null;
-    const json2 = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new AppError(json2.code ?? "API_ERROR", json2.message ?? res.statusText, res.status);
-    }
-    return json2;
-  }
-  var init_api2 = __esm({
-    "src/frontend/ui/pages/admin/components/api.js"() {
-      init_container();
-      init_config();
-      init_errors();
-    }
-  });
-
   // src/frontend/ui/pages/admin/ResultsPage.js
   var ResultsPage_exports = {};
   __export(ResultsPage_exports, {
@@ -19587,7 +19889,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const table = document.createElement("table");
     table.className = "data-table";
     const thead = document.createElement("thead");
-    thead.innerHTML = "<tr><th>Date</th><th>Score</th><th>Passed</th><th>Time</th><th>Attempt</th></tr>";
+    safeSetHTML(thead, "<tr><th>Date</th><th>Score</th><th>Passed</th><th>Time</th><th>Attempt</th></tr>");
     table.appendChild(thead);
     const tbody = document.createElement("tbody");
     for (const r of entries) {
@@ -19630,8 +19932,154 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_container();
       init_logger();
       init_format();
+      init_sanitize();
       init_api2();
       hostRef4 = null;
+    }
+  });
+
+  // src/frontend/ui/pages/admin/GamesPage.js
+  var GamesPage_exports = {};
+  __export(GamesPage_exports, {
+    initGamesPage: () => initGamesPage
+  });
+  async function initGamesPage(host) {
+    host.replaceChildren();
+    const title = document.createElement("h1");
+    title.className = "page-title";
+    title.textContent = "Live Games & Tournaments";
+    const gamesHeader = document.createElement("div");
+    gamesHeader.className = "admin-toolbar";
+    const gamesTitle = document.createElement("h2");
+    gamesTitle.textContent = "Live Games";
+    gamesTitle.style.margin = "0";
+    const newGameBtn = document.createElement("button");
+    newGameBtn.className = "btn btn-primary";
+    newGameBtn.textContent = "+ Create Lobby";
+    newGameBtn.onclick = () => openGameForm();
+    const gamesSpacer = document.createElement("div");
+    gamesSpacer.style.flex = "1";
+    gamesHeader.append(gamesTitle, gamesSpacer, newGameBtn);
+    const gamesTableHost = document.createElement("div");
+    gamesTableHost.id = "admin-games-table";
+    const tournamentsHeader = document.createElement("div");
+    tournamentsHeader.className = "admin-toolbar";
+    tournamentsHeader.style.marginTop = "2rem";
+    const tourneyTitle = document.createElement("h2");
+    tourneyTitle.textContent = "Tournaments";
+    tourneyTitle.style.margin = "0";
+    const newTourneyBtn = document.createElement("button");
+    newTourneyBtn.className = "btn btn-primary";
+    newTourneyBtn.textContent = "+ Create Tournament";
+    newTourneyBtn.onclick = () => openTournamentForm();
+    const tourneySpacer = document.createElement("div");
+    tourneySpacer.style.flex = "1";
+    tournamentsHeader.append(tourneyTitle, tourneySpacer, newTourneyBtn);
+    const tournamentsTableHost = document.createElement("div");
+    tournamentsTableHost.id = "admin-tournaments-table";
+    host.append(title, gamesHeader, gamesTableHost, tournamentsHeader, tournamentsTableHost);
+    gamesTableCtl = createDataTable({
+      containerId: "admin-games-table",
+      columns: [
+        { key: "join_code", label: "Code", sortable: false },
+        { key: "status", label: "Status", sortable: true },
+        { key: "mode", label: "Mode", sortable: true },
+        { key: "created_at", label: "Created", sortable: true },
+        { key: "actions", label: "Actions", sortable: false, render: (_v, r) => gameActions(r) }
+      ],
+      fetch: async (p) => getContainer().gameSvc.list({}, p),
+      initialOrderBy: "created_at",
+      initialDirection: "desc"
+    });
+    tournamentsTableCtl = createDataTable({
+      containerId: "admin-tournaments-table",
+      columns: [
+        { key: "name", label: "Name", sortable: true },
+        { key: "status", label: "Status", sortable: true },
+        { key: "start_time", label: "Starts", sortable: true },
+        { key: "end_time", label: "Ends", sortable: true },
+        { key: "actions", label: "Actions", sortable: false, render: (_v, r) => tourneyActions(r) }
+      ],
+      fetch: async (p) => getContainer().tournamentSvc.list({}, p),
+      initialOrderBy: "created_at",
+      initialDirection: "desc"
+    });
+    await Promise.all([gamesTableCtl.render(), tournamentsTableCtl.render()]);
+    return async () => {
+      await gamesTableCtl.refresh();
+      await tournamentsTableCtl.refresh();
+    };
+  }
+  function gameActions(row) {
+    const wrap = document.createElement("div");
+    wrap.className = "admin-row-actions";
+    const del = document.createElement("button");
+    del.className = "btn btn-danger btn-sm";
+    del.textContent = "End & Delete";
+    del.onclick = async () => {
+      if (await confirmDialog({ title: "Delete Game?", message: "This will kick all players." })) {
+        await withError(async () => {
+          const c = getContainer();
+          await c.gameSvc.delete(row.id, c.authSvc.getCurrentUser());
+          await gamesTableCtl.refresh();
+        }, "Game deleted");
+      }
+    };
+    wrap.appendChild(del);
+    return wrap;
+  }
+  function tourneyActions(row) {
+    const wrap = document.createElement("div");
+    wrap.className = "admin-row-actions";
+    const del = document.createElement("button");
+    del.className = "btn btn-danger btn-sm";
+    del.textContent = "Delete";
+    del.onclick = async () => {
+      if (await confirmDialog({ title: "Delete Tournament?", message: "Are you sure?" })) {
+        await withError(async () => {
+          const c = getContainer();
+          await c.tournamentSvc.delete(row.id, c.authSvc.getCurrentUser());
+          await tournamentsTableCtl.refresh();
+        }, "Tournament deleted");
+      }
+    };
+    wrap.appendChild(del);
+    return wrap;
+  }
+  async function openGameForm() {
+    formModal({
+      title: "Create Game Lobby",
+      fieldsHTML: selectField("mode", "Mode", { "classic": "Classic", "blitz": "Blitz" }, { value: "classic" }),
+      confirmText: "Create",
+      onSubmit: async (values) => {
+        const c = getContainer();
+        await c.gameSvc.create({ ...values, preset_id: null }, c.authSvc.getCurrentUser());
+        await gamesTableCtl.refresh();
+      }
+    });
+  }
+  async function openTournamentForm() {
+    formModal({
+      title: "Create Tournament",
+      fieldsHTML: textField("name", "Tournament Name", { required: true }),
+      confirmText: "Create",
+      onSubmit: async (values) => {
+        const c = getContainer();
+        await c.tournamentSvc.create(values, c.authSvc.getCurrentUser());
+        await tournamentsTableCtl.refresh();
+      }
+    });
+  }
+  var gamesTableCtl, tournamentsTableCtl;
+  var init_GamesPage = __esm({
+    "src/frontend/ui/pages/admin/GamesPage.js"() {
+      init_container();
+      init_eventBus();
+      init_DataTable();
+      init_FormModal();
+      init_ConfirmDialog();
+      gamesTableCtl = null;
+      tournamentsTableCtl = null;
     }
   });
 
@@ -19884,6 +20332,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     { id: "categories", label: "Categories", icon: "\u{1F3F7}\uFE0F" },
     { id: "users", label: "Users", icon: "\u{1F465}" },
     { id: "results", label: "Results", icon: "\u{1F4C8}" },
+    { id: "games", label: "Live Games", icon: "\u{1F3AE}" },
     { id: "settings", label: "Settings", icon: "\u2699\uFE0F" }
   ]);
   function renderSidebar(container, onTabChange, initialTab = "dashboard") {
@@ -19939,6 +20388,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     categories: () => Promise.resolve().then(() => (init_CategoriesPage(), CategoriesPage_exports)).then((m) => m.initCategoriesPage),
     users: () => Promise.resolve().then(() => (init_UsersPage(), UsersPage_exports)).then((m) => m.initUsersPage),
     results: () => Promise.resolve().then(() => (init_ResultsPage(), ResultsPage_exports)).then((m) => m.initResultsPage),
+    games: () => Promise.resolve().then(() => (init_GamesPage(), GamesPage_exports)).then((m) => m.initGamesPage),
     settings: () => Promise.resolve().then(() => (init_SettingsPage(), SettingsPage_exports)).then((m) => m.initSettingsPage)
   };
   var activeTab = null;

@@ -13,6 +13,9 @@ import { logger }          from '../../../utils/logger.js';
 import { createDataTable } from './components/DataTable.js';
 import { confirmDialog }   from './components/ConfirmDialog.js';
 import { formModal, textField, textareaField, selectField } from './components/FormModal.js';
+import { openAIGeneratorModal } from './components/AIGeneratorModal.js';
+import { initRAGUploader } from './components/RAGUploader.js';
+import { Modal } from '../../components/Modal.js';
 import { QUESTION_TYPES, DIFFICULTY } from '../../../../shared/constants.js';
 
 let tableCtl = null;
@@ -40,6 +43,8 @@ export async function initQuestionsPage(host) {
     categoryFilter(),
     buildSpacer(),
     buildNewButton(),
+    buildAIGeneratorButton(),
+    buildRAGUploaderButton(),
     buildBulkDeleteButton(),
   );
 
@@ -132,6 +137,54 @@ function buildNewButton() {
   btn.className = 'btn btn-primary';
   btn.textContent = '+ New Question';
   btn.addEventListener('click', () => openQuestionForm(null));
+  return btn;
+}
+
+function buildAIGeneratorButton() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-secondary';
+  btn.textContent = '✨ AI Generate';
+  btn.addEventListener('click', () => {
+    openAIGeneratorModal(async (generatedQuestions) => {
+      const c = getContainer();
+      const me = c.authSvc.getCurrentUser();
+      let okCount = 0;
+      for (const q of generatedQuestions) {
+        try {
+          // AI returns raw question objects matching our schema
+          await c.questionSvc.create(q, me);
+          okCount++;
+        } catch (err) { logger.warn('Failed to import AI question', err); }
+      }
+      if (okCount > 0) {
+        await tableCtl.resetAndRefresh();
+        withError(async () => {}, `Imported ${okCount} question(s)`);
+      }
+    });
+  });
+  return btn;
+}
+
+function buildRAGUploaderButton() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-secondary';
+  btn.textContent = '📚 RAG Store';
+  btn.addEventListener('click', () => {
+    const modal = new Modal({
+      title: 'RAG Document Store',
+      contentHTML: '<div id="rag-modal-host"></div>',
+      cancelText: 'Close',
+      confirmText: 'Done',
+      onConfirm: () => {},
+      onCancel: () => {}
+    });
+    modal.show();
+    setTimeout(() => {
+      initRAGUploader(document.getElementById('rag-modal-host'));
+    }, 50);
+  });
   return btn;
 }
 

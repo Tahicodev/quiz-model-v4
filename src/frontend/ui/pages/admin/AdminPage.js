@@ -22,6 +22,7 @@ const PAGE_LOADERS = {
   categories: () => import('./CategoriesPage.js').then(m => m.initCategoriesPage),
   users:      () => import('./UsersPage.js').then(m => m.initUsersPage),
   results:    () => import('./ResultsPage.js').then(m => m.initResultsPage),
+  games:      () => import('./GamesPage.js').then(m => m.initGamesPage),
   settings:   () => import('./SettingsPage.js').then(m => m.initSettingsPage),
 };
 

@@ -11,6 +11,7 @@
 import { getContainer }  from '../../../container.js';
 import { logger }       from '../../../utils/logger.js';
 import { formatDate }    from '../../../utils/format.js';
+import { safeSetHTML }   from '../../../utils/sanitize.js';
 import { api }           from './components/api.js';
 
 let hostRef = null;
@@ -175,7 +176,7 @@ function renderResultsTable(host, entries) {
   const table = document.createElement('table');
   table.className = 'data-table';
   const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Date</th><th>Score</th><th>Passed</th><th>Time</th><th>Attempt</th></tr>';
+  safeSetHTML(thead, '<tr><th>Date</th><th>Score</th><th>Passed</th><th>Time</th><th>Attempt</th></tr>');
   table.appendChild(thead);
   const tbody = document.createElement('tbody');
   for (const r of entries) {

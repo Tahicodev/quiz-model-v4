@@ -16,6 +16,7 @@ export const ADMIN_TABS = Object.freeze([
   { id: 'categories',   label: 'Categories', icon: '🏷️' },
   { id: 'users',        label: 'Users',       icon: '👥' },
   { id: 'results',      label: 'Results',     icon: '📈' },
+  { id: 'games',        label: 'Live Games',  icon: '🎮' },
   { id: 'settings',     label: 'Settings',    icon: '⚙️' },
 ]);
 

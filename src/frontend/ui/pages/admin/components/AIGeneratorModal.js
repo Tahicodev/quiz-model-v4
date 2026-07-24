@@ -95,7 +95,7 @@ async function handleGenerate(modal, onImport) {
 
   if (!resultsEl) return;
 
-  resultsEl.innerHTML = '<p class="ai-loading">Generating questions…</p>';
+  safeSetHTML(resultsEl, '<p class="ai-loading">Generating questions…</p>');
 
   await withError(async () => {
     let data;
@@ -116,7 +116,7 @@ async function handleGenerate(modal, onImport) {
 
 function renderResults(container, questions) {
   if (!questions || questions.length === 0) {
-    container.innerHTML = '<p class="ai-empty">No questions generated. Try a different topic.</p>';
+    safeSetHTML(container, '<p class="ai-empty">No questions generated. Try a different topic.</p>');
     return;
   }
 
@@ -135,5 +135,5 @@ function renderResults(container, questions) {
       `).join('')}
     </div>
   `;
-  container.innerHTML = html;
+  safeSetHTML(container, html);
 }
