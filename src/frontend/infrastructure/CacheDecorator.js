@@ -89,6 +89,27 @@ export class CacheDecorator extends IStorageRepository {
     return this.#inner.query(queryName, params);
   }
 
+  // ── Synchronous pass-throughs for legacy code ─────────────────────────────
+  // Legacy code (script.js, landing.js, auth.js, legacy-bridge.js) calls
+  // window.__DI_CONTAINER__.repo.getAll_sync('exams') etc. These are defined
+  // on LocalStorageRepository and must be forwarded through the decorator.
+
+  getAll_sync(table) {
+    return this.#inner.getAll_sync(table);
+  }
+
+  getById_sync(table, id) {
+    return this.#inner.getById_sync(table, id);
+  }
+
+  getValue_sync(table, fallback = null) {
+    return this.#inner.getValue_sync(table, fallback);
+  }
+
+  setAll_sync(table, data) {
+    return this.#inner.setAll_sync(table, data);
+  }
+
   /** Manually clear all cached entries (e.g. on logout). */
   clearAll() {
     this.#cache.clear();

@@ -29,3 +29,6 @@ prisma/test.db
 prisma/test.db-journal
 prisma/test-*.db
 prisma/test-*.db-journal
+
+# Student bundle temp build entry
+src/frontend/.student-build-entry.js
