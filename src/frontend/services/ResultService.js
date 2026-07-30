@@ -62,7 +62,10 @@ export class ResultService {
 
   async getByUser(userId, pagination = {}) {
     return this.#repo.getAll('results', {
-      filters:   { user_id: userId },
+      filters:   {
+        user_id: userId,
+        ...(pagination.schoolId ? { school_id: pagination.schoolId } : {}),
+      },
       limit:     pagination.limit   ?? 50,
       offset:    pagination.offset  ?? 0,
       orderBy:   'date_taken',
@@ -72,7 +75,10 @@ export class ResultService {
 
   async getByExam(examId, pagination = {}) {
     return this.#repo.getAll('results', {
-      filters:   { exam_id: examId },
+      filters:   {
+        exam_id: examId,
+        ...(pagination.schoolId ? { school_id: pagination.schoolId } : {}),
+      },
       limit:     pagination.limit   ?? 50,
       offset:    pagination.offset  ?? 0,
       orderBy:   'date_taken',
@@ -86,9 +92,9 @@ export class ResultService {
     return result;
   }
 
-  async getStatsByExam(examId) {
+  async getStatsByExam(examId, schoolId = null) {
     const { data } = await this.#repo.getAll('results', {
-      filters: { exam_id: examId },
+      filters: { exam_id: examId, ...(schoolId ? { school_id: schoolId } : {}) },
       limit: 9999,
     });
     if (data.length === 0) return { avg: 0, min: 0, max: 0, passRate: 0, total: 0 };
@@ -102,9 +108,9 @@ export class ResultService {
     };
   }
 
-  async getStatsByUser(userId) {
+  async getStatsByUser(userId, schoolId = null) {
     const { data } = await this.#repo.getAll('results', {
-      filters: { user_id: userId },
+      filters: { user_id: userId, ...(schoolId ? { school_id: schoolId } : {}) },
       limit: 9999,
     });
     if (data.length === 0) return { avg: 0, totalExams: 0, passRate: 0 };

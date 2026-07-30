@@ -46,6 +46,7 @@ export async function initSettingsPage(host) {
   sectionsHost.id = 'settings-sections';
   host.appendChild(sectionsHost);
 
+  await load();
   return load;
 }
 
@@ -148,7 +149,8 @@ async function deleteSetting(setting) {
   // No dedicated delete service method exposed; delete via repo (admin-gated by virtue of being on this page).
   await withError(async () => {
     const c = getContainer();
-    await c.repo.delete('settings', setting.id);
+    const schoolId = c.authSvc.getCurrentUser()?.school_id ?? 'local';
+    await c.settingsSvc.deleteSetting(schoolId, setting.key);
     await load();
   }, 'Setting deleted');
 }

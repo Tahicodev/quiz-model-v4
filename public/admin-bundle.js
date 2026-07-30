@@ -80,6 +80,21 @@ var QuizAdmin = (() => {
   });
 
   // src/frontend/config.js
+  function apiUrl(path = "") {
+    const base = String(config.apiUrl || "").replace(/\/$/, "");
+    const target = String(path || "");
+    if (!target) return base;
+    if (!base) return target.startsWith("/") ? target : `/${target}`;
+    if (target === base || target.startsWith(`${base}/`)) return target;
+    if (/^[a-z][a-z\d+.-]*:\/\//i.test(base)) {
+      const root = new URL(base);
+      const basePath = root.pathname.replace(/\/$/, "");
+      const targetUrl = new URL(target.startsWith("/") ? target : `/${target}`, root.origin);
+      targetUrl.pathname = `${basePath}${targetUrl.pathname}`.replace(/\/+/g, "/");
+      return targetUrl.toString();
+    }
+    return `${base}${target.startsWith("/") ? target : `/${target}`}`;
+  }
   var config;
   var init_config = __esm({
     "src/frontend/config.js"() {
@@ -238,6 +253,10 @@ var QuizAdmin = (() => {
   });
 
   // src/frontend/infrastructure/LocalStorageRepository.js
+  var LocalStorageRepository_exports = {};
+  __export(LocalStorageRepository_exports, {
+    LocalStorageRepository: () => LocalStorageRepository
+  });
   var TABLE_KEYS, CUSTOM_QUERIES, LocalStorageRepository;
   var init_LocalStorageRepository = __esm({
     "src/frontend/infrastructure/LocalStorageRepository.js"() {
@@ -472,6 +491,19 @@ var QuizAdmin = (() => {
             window.location.href = "/login";
           });
         }
+        #url(path) {
+          const target = String(path || "");
+          if (!this.#baseUrl) return target.startsWith("/") ? target : `/${target}`;
+          if (target === this.#baseUrl || target.startsWith(`${this.#baseUrl}/`)) return target;
+          if (/^[a-z][a-z\d+.-]*:\/\//i.test(this.#baseUrl)) {
+            const root = new URL(this.#baseUrl);
+            const basePath = root.pathname.replace(/\/$/, "");
+            const targetUrl = new URL(target.startsWith("/") ? target : `/${target}`, root.origin);
+            targetUrl.pathname = `${basePath}${targetUrl.pathname}`.replace(/\/+/g, "/");
+            return targetUrl.toString();
+          }
+          return `${this.#baseUrl}${target.startsWith("/") ? target : `/${target}`}`;
+        }
         // ── Core fetch wrapper ───────────────────────────────────────────────────────
         async #fetch(method, path, body = null) {
           const headers = { "Content-Type": "application/json" };
@@ -484,13 +516,13 @@ var QuizAdmin = (() => {
             // sends httpOnly refresh token cookie
             ...body !== null ? { body: JSON.stringify(body) } : {}
           };
-          let res = await fetch(`${this.#baseUrl}${path}`, init);
+          let res = await fetch(this.#url(path), init);
           if (res.status === 401) {
             const refreshed = await this.#tryRefresh();
             if (refreshed) {
               const newToken = this.#getToken?.();
               if (newToken) headers["Authorization"] = `Bearer ${newToken}`;
-              res = await fetch(`${this.#baseUrl}${path}`, { ...init, headers });
+              res = await fetch(this.#url(path), { ...init, headers });
             } else {
               this.#onUnauthorized();
               throw new UnauthorizedError("Session expired \u2014 please log in again");
@@ -505,7 +537,7 @@ var QuizAdmin = (() => {
         }
         async #tryRefresh() {
           try {
-            const res = await fetch(`${this.#baseUrl}/api/v1/auth/refresh`, {
+            const res = await fetch(this.#url("/auth/refresh"), {
               method: "POST",
               credentials: "include"
             });
@@ -526,30 +558,75 @@ var QuizAdmin = (() => {
           direction = "desc",
           search = null
         } = {}) {
+          let endpoint = `/${table}`;
+          if (table === "results" && filters.exam_id) {
+            endpoint = `/results/exam/${encodeURIComponent(filters.exam_id)}`;
+          }
           const params = new URLSearchParams({ limit, offset, orderBy, direction });
           for (const [k, v] of Object.entries(filters)) {
-            if (v !== void 0 && v !== null) params.set(k, v);
+            if (v !== void 0 && v !== null && !(table === "results" && k === "exam_id")) params.set(k, v);
           }
           if (search) params.set("search", search);
-          return this.#fetch("GET", `/api/v1/${table}?${params}`);
+          return this.#fetch("GET", `${endpoint}?${params}`);
         }
         async getById(table, id) {
-          return this.#fetch("GET", `/api/v1/${table}/${id}`);
+          return this.#fetch("GET", `/${table}/${id}`);
         }
         async create(table, data) {
-          return this.#fetch("POST", `/api/v1/${table}`, data);
+          if (table === "settings") {
+            return this.updateSetting(data.key, data);
+          }
+          return this.#fetch("POST", `/${table}`, data);
         }
         async update(table, id, data) {
-          return this.#fetch("PATCH", `/api/v1/${table}/${id}`, data);
+          if (table === "users" && data?.password) {
+            return this.#fetch("POST", `/users/${id}/reset-password`, { newPassword: data.password });
+          }
+          if (table === "settings") {
+            return this.updateSetting(data?.key ?? id, data);
+          }
+          return this.#fetch("PATCH", `/${table}/${id}`, data);
         }
         async delete(table, id) {
-          return this.#fetch("DELETE", `/api/v1/${table}/${id}`);
+          if (table === "settings") return this.deleteSetting(id);
+          return this.#fetch("DELETE", `/${table}/${id}`);
         }
         async createMany(table, dataArray) {
-          return this.#fetch("POST", `/api/v1/${table}/bulk`, { items: dataArray });
+          return this.#fetch("POST", `/bulk/${table}`, { items: dataArray });
         }
         async query(queryName, params) {
-          return this.#fetch("POST", `/api/v1/query/${queryName}`, params ?? {});
+          return this.#fetch("POST", `/query/${queryName}`, params ?? {});
+        }
+        // Nested admin resources have explicit backend routes rather than generic
+        // CRUD endpoints. These methods keep the service layer portable: local mode
+        // continues to use the repository's join tables, while SaaS uses the API.
+        async addExamQuestion(examId, data) {
+          return this.#fetch("POST", `/exams/${examId}/questions`, data);
+        }
+        async removeExamQuestion(examId, questionId) {
+          return this.#fetch("DELETE", `/exams/${examId}/questions/${questionId}`);
+        }
+        async reorderExamQuestions(examId, questionIds) {
+          return this.#fetch("PUT", `/exams/${examId}/questions/order`, { question_ids: questionIds });
+        }
+        async getExamClasses(examId) {
+          return this.#fetch("GET", `/exams/${examId}/classes`);
+        }
+        async assignExamClass(examId, classId) {
+          return this.#fetch("POST", `/exams/${examId}/classes`, { class_id: classId });
+        }
+        async removeExamClass(examId, classId) {
+          return this.#fetch("DELETE", `/exams/${examId}/classes/${classId}`);
+        }
+        async updateSetting(key, data) {
+          return this.#fetch("PATCH", `/settings/${encodeURIComponent(key)}`, {
+            key,
+            value: data?.value ?? "",
+            ...data?.visibility ? { visibility: data.visibility } : {}
+          });
+        }
+        async deleteSetting(key) {
+          return this.#fetch("DELETE", `/settings/${encodeURIComponent(key)}`);
         }
       };
     }
@@ -15940,6 +16017,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_user_schema();
       init_constants();
       init_socket_client();
+      init_config();
       AuthService = class {
         #repo;
         /** @type {string|null} Access token stored in memory — never in storage */
@@ -15963,6 +16041,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           const parsed = LoginSchema.safeParse({ username, password });
           if (!parsed.success) {
             throw new ValidationError(parsed.error.flatten().fieldErrors);
+          }
+          if (config.mode === "saas") {
+            const response = await fetch(apiUrl("/auth/login"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify(parsed.data)
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              if (body.fields) throw new ValidationError(body.fields);
+              throw new UnauthorizedError(body.message || body.error?.message || "Invalid username or password");
+            }
+            this.#token = body.accessToken || body.token || null;
+            this.#user = this.#stripSensitive(body.user || body);
+            this.#persistSession(this.#user);
+            window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+              this.#token = newToken;
+            };
+            return { user: this.#user, token: this.#token };
           }
           const { data: users } = await this.#repo.getAll("users", {
             filters: { username: username.trim() }
@@ -15989,6 +16087,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
          * Logout: clear session state, disconnect socket.
          */
         async logout() {
+          if (config.mode === "saas" && this.#token) {
+            try {
+              await fetch(apiUrl("/auth/logout"), {
+                method: "POST",
+                headers: { Authorization: `Bearer ${this.#token}` },
+                credentials: "include"
+              });
+            } catch {
+            }
+          }
           this.#token = null;
           this.#user = null;
           this.#clearSession();
@@ -16079,32 +16187,62 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
               };
               return;
             }
-            const legacySession = sessionStorage.getItem("quizSession");
+            const legacyRaw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSession");
+            const legacySession = legacyRaw ? JSON.parse(legacyRaw) : null;
             if (legacySession) {
-              const parsed = JSON.parse(legacySession);
-              if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+              if (legacySession.expiresAt && Date.now() > new Date(legacySession.expiresAt).getTime()) {
                 sessionStorage.removeItem("quizSession");
+                localStorage.removeItem("quizSession");
                 return;
               }
-              if (this.#repo?.getAll) {
-                try {
-                  const usersJson = localStorage.getItem("quizUsers");
-                  if (usersJson) {
-                    const users = JSON.parse(usersJson);
-                    const user = users.find((u) => u.id === parsed.userId);
-                    if (user) {
-                      this.#user = user;
-                      this.#token = this.#encodeToken(user);
-                      this.#persistSession(user);
-                      return;
-                    }
-                  }
-                } catch {
+              try {
+                const usersJson = localStorage.getItem("quizUsers");
+                const localUser = usersJson ? JSON.parse(usersJson).find((u) => u.id === legacySession.userId) : null;
+                const tokenUser = this.#decodeToken(legacySession.token);
+                const user = localUser || {
+                  id: legacySession.userId,
+                  username: legacySession.username,
+                  name: legacySession.name,
+                  role: legacySession.role,
+                  school_id: tokenUser?.school_id
+                };
+                if (user?.id && user?.role) {
+                  this.#user = this.#stripSensitive(user);
+                  this.#token = legacySession.token || this.#encodeToken(this.#user);
+                  this.#persistSession(this.#user);
+                  window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+                    this.#token = newToken;
+                  };
+                  return;
+                }
+              } catch {
+              }
+            }
+            try {
+              const rawUser = localStorage.getItem("quizCurrentUser");
+              if (rawUser) {
+                const user = this.#stripSensitive(JSON.parse(rawUser));
+                if (user?.id && user?.role) {
+                  this.#user = user;
+                  this.#token = this.#encodeToken(user);
+                  this.#persistSession(user);
                 }
               }
+            } catch {
             }
           } catch {
             this.#clearSession();
+          }
+        }
+        #decodeToken(token) {
+          if (!token || typeof token !== "string") return null;
+          try {
+            const payload = token.split(".")[1];
+            if (!payload) return null;
+            const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+            return JSON.parse(atob(normalized));
+          } catch {
+            return null;
           }
         }
       };
@@ -16409,8 +16547,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!exam) throw new NotFoundError("Exam");
           return exam;
         }
-        async getWithQuestions(id) {
-          const exam = await this.#repo.query("exam.withQuestions", { examId: id });
+        async getWithQuestions(id, schoolId = null) {
+          const exam = await this.#repo.query("exam.withQuestions", {
+            examId: id,
+            ...schoolId ? { schoolId } : {}
+          });
           if (!exam) throw new NotFoundError("Exam");
           return exam;
         }
@@ -16449,6 +16590,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         async addQuestion(examId, questionId, orderIndex, currentUser) {
           this.#requireAdmin(currentUser);
+          if (typeof this.#repo.addExamQuestion === "function") {
+            return this.#repo.addExamQuestion(examId, {
+              question_id: questionId,
+              order_index: orderIndex ?? 0
+            });
+          }
           const exam = await this.#repo.getById("exams", examId);
           if (!exam) throw new NotFoundError("Exam");
           const question = await this.#repo.getById("questions", questionId);
@@ -16465,6 +16612,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         async removeQuestion(examId, questionId, currentUser) {
           this.#requireAdmin(currentUser);
+          if (typeof this.#repo.removeExamQuestion === "function") {
+            return this.#repo.removeExamQuestion(examId, questionId);
+          }
           const { data } = await this.#repo.getAll("exam_questions", {
             filters: { exam_id: examId, question_id: questionId }
           });
@@ -16475,6 +16625,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           this.#requireAdmin(currentUser);
           const parsed = ExamReorderSchema.safeParse({ question_ids: orderedQuestionIds });
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+          if (typeof this.#repo.reorderExamQuestions === "function") {
+            return this.#repo.reorderExamQuestions(examId, orderedQuestionIds);
+          }
           const { data: links } = await this.#repo.getAll("exam_questions", { filters: { exam_id: examId } });
           for (const link of links) {
             const newIndex = orderedQuestionIds.indexOf(link.question_id);
@@ -16504,6 +16657,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         async assignToClass(examId, classId, currentUser) {
           this.#requireAdmin(currentUser);
+          if (typeof this.#repo.assignExamClass === "function") {
+            return this.#repo.assignExamClass(examId, classId);
+          }
           const { data: existing } = await this.#repo.getAll("exam_classes", {
             filters: { exam_id: examId, class_id: classId }
           });
@@ -16516,11 +16672,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         async removeFromClass(examId, classId, currentUser) {
           this.#requireAdmin(currentUser);
+          if (typeof this.#repo.removeExamClass === "function") {
+            return this.#repo.removeExamClass(examId, classId);
+          }
           const { data } = await this.#repo.getAll("exam_classes", {
             filters: { exam_id: examId, class_id: classId }
           });
           if (data.length === 0) return;
           await this.#repo.delete("exam_classes", data[0].id);
+        }
+        async getAssignedClasses(examId) {
+          if (typeof this.#repo.getExamClasses === "function") {
+            const result = await this.#repo.getExamClasses(examId);
+            return result?.data ?? result ?? [];
+          }
+          const { data } = await this.#repo.getAll("exam_classes", {
+            filters: { exam_id: examId },
+            limit: 200
+          });
+          return data;
         }
         async getAvailableForStudent(userId) {
           return this.#repo.query("exam.availableForStudent", { userId });
@@ -16661,7 +16831,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         async getByUser(userId, pagination = {}) {
           return this.#repo.getAll("results", {
-            filters: { user_id: userId },
+            filters: {
+              user_id: userId,
+              ...pagination.schoolId ? { school_id: pagination.schoolId } : {}
+            },
             limit: pagination.limit ?? 50,
             offset: pagination.offset ?? 0,
             orderBy: "date_taken",
@@ -16670,7 +16843,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         async getByExam(examId, pagination = {}) {
           return this.#repo.getAll("results", {
-            filters: { exam_id: examId },
+            filters: {
+              exam_id: examId,
+              ...pagination.schoolId ? { school_id: pagination.schoolId } : {}
+            },
             limit: pagination.limit ?? 50,
             offset: pagination.offset ?? 0,
             orderBy: "date_taken",
@@ -16682,9 +16858,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!result) throw new NotFoundError("Result");
           return result;
         }
-        async getStatsByExam(examId) {
+        async getStatsByExam(examId, schoolId = null) {
           const { data } = await this.#repo.getAll("results", {
-            filters: { exam_id: examId },
+            filters: { exam_id: examId, ...schoolId ? { school_id: schoolId } : {} },
             limit: 9999
           });
           if (data.length === 0) return { avg: 0, min: 0, max: 0, passRate: 0, total: 0 };
@@ -16697,9 +16873,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             passRate: Math.round(data.filter((r) => r.passed).length / data.length * 100)
           };
         }
-        async getStatsByUser(userId) {
+        async getStatsByUser(userId, schoolId = null) {
           const { data } = await this.#repo.getAll("results", {
-            filters: { user_id: userId },
+            filters: { user_id: userId, ...schoolId ? { school_id: schoolId } : {} },
             limit: 9999
           });
           if (data.length === 0) return { avg: 0, totalExams: 0, passRate: 0 };
@@ -17424,6 +17600,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         async updateSetting(schoolId, key, value, visibility) {
           const parsed = SettingUpdateSchema.safeParse({ key, value, visibility });
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+          if (typeof this.#repo.updateSetting === "function") {
+            return this.#repo.updateSetting(parsed.data.key, parsed.data);
+          }
           const { data: existing } = await this.#repo.getAll("settings", {
             filters: { school_id: schoolId, key: parsed.data.key }
           });
@@ -17439,6 +17618,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             value: parsed.data.value,
             visibility: parsed.data.visibility ?? SETTINGS_VISIBILITY.ADMIN
           });
+        }
+        async deleteSetting(schoolId, key) {
+          let setting;
+          if (typeof this.#repo.deleteSetting === "function") {
+            return this.#repo.deleteSetting(key);
+          }
+          const { data } = await this.#repo.getAll("settings", {
+            filters: { school_id: schoolId, key },
+            limit: 1
+          });
+          setting = data[0];
+          if (!setting) return;
+          return this.#repo.delete("settings", setting.id);
         }
         /**
          * Bulk update multiple settings at once.
@@ -17676,7 +17868,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       quickAction("New Question", "#questions", "\u2753"),
       quickAction("New Exam", "#exams", "\u{1F4DD}"),
       quickAction("New User", "#users", "\u{1F464}"),
-      quickAction("Migrate Data", "/migrate.html", "\u{1F4E6}")
+      quickAction("Migrate Data", "#migration", "\u{1F4E6}")
     );
     host.appendChild(actions);
     const activity = document.createElement("div");
@@ -18189,11 +18381,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   // src/frontend/ui/pages/admin/components/api.js
   async function api(method, path, body = null) {
     const { authSvc } = getContainer();
-    const baseUrl = config.apiUrl || "";
     const headers = { "Content-Type": "application/json" };
     const token = authSvc.getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`${baseUrl}${path}`, {
+    const res = await fetch(apiUrl(path), {
       method,
       headers,
       credentials: "include",
@@ -18250,24 +18441,29 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       confirmText: "Import selected",
       cancelText: "Cancel",
       isDangerous: false,
-      onConfirm: async () => {
-        const checked = document.querySelectorAll(".ai-q-checkbox:checked");
-        const selected = [];
-        for (const cb of checked) {
-          const idx = parseInt(cb.value, 10);
-          if (!isNaN(idx) && questions2[idx]) selected.push(questions2[idx]);
-        }
-        if (selected.length === 0) {
-          EventBus.emit("app:warning", { message: "Select at least one question to import." });
-          return false;
-        }
-        if (onImport) await onImport(selected);
-        return true;
+      onConfirm: () => {
       },
       onCancel: () => {
       }
     });
     modal.show();
+    const confirmBtn = modal.element.querySelector(".confirm-btn");
+    confirmBtn.type = "button";
+    confirmBtn.onclick = async () => {
+      const selected = [...modal.element.querySelectorAll(".ai-q-checkbox:checked")].map((cb) => questions2[Number.parseInt(cb.value, 10)]).filter(Boolean);
+      if (selected.length === 0) {
+        EventBus.emit("app:warning", { message: "Select at least one question to import." });
+        return;
+      }
+      confirmBtn.disabled = true;
+      try {
+        await onImport?.(selected);
+        modal.close(true);
+      } catch (err) {
+        confirmBtn.disabled = false;
+        throw err;
+      }
+    };
     setTimeout(() => {
       const btn = document.getElementById("ai-generate-btn");
       if (!btn) return;
@@ -18282,7 +18478,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const sourceText = document.getElementById("ai-source-text")?.value.trim();
     const resultsEl = document.getElementById("ai-results");
     if (!resultsEl) return;
-    safeSetHTML(resultsEl, '<p class="ai-loading">Generating questions\u2026</p>');
+    safeSetHTML(resultsEl, '<p class="ai-loading">Generating questions\u2026</p>', true);
     await withError(async () => {
       let data;
       if (sourceText) {
@@ -18300,7 +18496,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   function renderResults(container, questions2) {
     if (!questions2 || questions2.length === 0) {
-      safeSetHTML(container, '<p class="ai-empty">No questions generated. Try a different topic.</p>');
+      safeSetHTML(container, '<p class="ai-empty">No questions generated. Try a different topic.</p>', true);
       return;
     }
     const html = `
@@ -18318,7 +18514,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       `).join("")}
     </div>
   `;
-    safeSetHTML(container, html);
+    safeSetHTML(container, html, true);
   }
   var init_AIGeneratorModal = __esm({
     "src/frontend/ui/pages/admin/components/AIGeneratorModal.js"() {
@@ -18366,7 +18562,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         <div id="rag-sources" class="rag-sources"></div>
       </div>
     </div>
-  `);
+  `, true);
     document.getElementById("rag-upload-btn")?.addEventListener("click", () => handleUpload());
     document.getElementById("rag-query-btn")?.addEventListener("click", () => handleQuery());
     await refreshDocList();
@@ -18392,24 +18588,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     const answerEl = document.getElementById("rag-answer");
     const sourcesEl = document.getElementById("rag-sources");
-    if (answerEl) safeSetHTML(answerEl, '<p class="ai-loading">Searching documents\u2026</p>');
+    if (answerEl) safeSetHTML(answerEl, '<p class="ai-loading">Searching documents\u2026</p>', true);
     await withError(async () => {
       const result = await api("POST", "/api/v1/ai/rag/query", { question });
       if (answerEl) {
         safeSetHTML(answerEl, `
         <h4>Answer</h4>
         <p>${result.answer ? escapeHTML(result.answer) : "No answer generated (AI_API_KEY may be missing)."}</p>
-      `);
+      `, true);
       }
       if (sourcesEl) {
         const sources = result.sources || [];
         if (sources.length === 0) {
-          safeSetHTML(sourcesEl, '<p class="ai-empty">No relevant documents found.</p>');
+          safeSetHTML(sourcesEl, '<p class="ai-empty">No relevant documents found.</p>', true);
         } else {
           safeSetHTML(sourcesEl, `
           <h4>Sources (${sources.length})</h4>
           <ul>${sources.map((s) => `<li><strong>${escapeHTML(s.filename)}</strong> (score: ${s.score})<br/><em>${escapeHTML(s.text.slice(0, 200))}...</em></li>`).join("")}</ul>
-        `);
+        `, true);
         }
       }
     });
@@ -18421,7 +18617,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const result = await api("GET", "/api/v1/ai/rag/documents");
       const docs = result?.data || [];
       if (docs.length === 0) {
-        safeSetHTML(listEl, '<p class="ai-empty">No documents ingested yet.</p>');
+        safeSetHTML(listEl, '<p class="ai-empty">No documents ingested yet.</p>', true);
         return;
       }
       safeSetHTML(listEl, `
@@ -18432,18 +18628,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             <tr>
               <td>${escapeHTML(d.filename)}</td>
               <td>${d.chunkCount}</td>
-              <td><button class="btn btn-danger btn-sm rag-delete-btn" data-id="${d.documentId}">Delete</button></td>
+              <td><button class="btn btn-danger btn-sm rag-delete-btn" data-id="${escapeHTML(d.documentId)}">Delete</button></td>
             </tr>
           `).join("")}
         </tbody>
       </table>
-    `);
+    `, true);
       for (const btn of listEl.querySelectorAll(".rag-delete-btn")) {
         btn.addEventListener("click", () => handleDelete(btn.getAttribute("data-id")));
       }
     } catch (err) {
       logger.error("Failed to load doc list", err);
-      safeSetHTML(listEl, '<p class="ai-empty">Error loading documents.</p>');
+      safeSetHTML(listEl, '<p class="ai-empty">Error loading documents.</p>', true);
     }
   }
   async function handleDelete(documentId) {
@@ -18475,10 +18671,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     title.textContent = "Questions";
     const toolbar = document.createElement("div");
     toolbar.className = "admin-toolbar";
+    const categoryControl = await categoryFilter();
     toolbar.append(
       typeFilter(),
       difficultyFilter(),
-      categoryFilter(),
+      categoryControl,
       buildSpacer(),
       buildNewButton(),
       buildAIGeneratorButton(),
@@ -18540,7 +18737,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const sel = labeledSelect("Category", "q-filter-category", { "": "All categories" });
     try {
       const c = getContainer();
-      const { data } = await c.categorySvc.list({}, { limit: 200, orderBy: "name", direction: "asc" });
+      const { data = [] } = await c.categorySvc.list({}, { limit: 200, orderBy: "name", direction: "asc" });
+      categoryCache = new Map(data.map((x) => [x.id, x.name]));
       for (const cat of data) {
         const opt = document.createElement("option");
         opt.value = cat.id;
@@ -18677,17 +18875,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     span.textContent = v || "medium";
     return span;
   }
-  async function categoryName(id) {
+  function categoryName(id) {
     if (!id) return "\u2014";
-    if (!categoryCache) {
-      try {
-        const c = getContainer();
-        const { data } = await c.categorySvc.list({}, { limit: 200, orderBy: "name" });
-        categoryCache = new Map(data.map((x) => [x.id, x.name]));
-      } catch {
-        categoryCache = /* @__PURE__ */ new Map();
-      }
-    }
     return categoryCache.get(id) ?? "\u2014";
   }
   function truncate(s, n) {
@@ -19128,8 +19317,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     let assigned = /* @__PURE__ */ new Set();
     let allClasses = [];
     try {
-      const { data } = await c.repo.getAll("exam_classes", { filters: { exam_id: exam.id }, limit: 200 });
-      assigned = new Set(data.map((x) => x.class_id));
+      const links = await c.examSvc.getAssignedClasses(exam.id);
+      assigned = new Set(links.map((x) => x.class_id));
     } catch (err) {
       logger.warn("Could not load exam classes", err);
     }
@@ -19310,10 +19499,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   function escapeText(s) {
     return String(s ?? "").replace(/[&<>"']/g, (ch) => ({
-      "&": "&",
-      "<": "<",
-      ">": ">",
-      '"': '"',
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
       "'": "&#039;"
     })[ch]);
   }
@@ -19845,7 +20034,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const res = await c.resultSvc.getByExam(examId, { limit: 100 });
         entries = res?.data ?? [];
         try {
-          stats = await api("GET", `/api/v1/results/exam/${examId}/stats`);
+          stats = await c.resultSvc.getStatsByExam(examId);
         } catch (e) {
           logger.warn("No stats", e);
         }
@@ -19853,7 +20042,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const res = await c.resultSvc.getByUser(userId, { limit: 100 });
         entries = res?.data ?? [];
         try {
-          stats = await api("GET", `/api/v1/results/user/${userId}/stats`);
+          stats = await c.resultSvc.getStatsByUser(userId);
         } catch (e) {
           logger.warn("No stats", e);
         }
@@ -19949,7 +20138,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_logger();
       init_format();
       init_sanitize();
-      init_api2();
       hostRef4 = null;
     }
   });
@@ -20029,6 +20217,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   function gameActions(row) {
     const wrap = document.createElement("div");
     wrap.className = "admin-row-actions";
+    if (row.status === GAME_STATUS.WAITING) {
+      const start = document.createElement("button");
+      start.className = "btn btn-primary btn-sm";
+      start.textContent = "Start";
+      start.onclick = () => withError(async () => {
+        const c = getContainer();
+        await c.gameSvc.start(row.id, c.authSvc.getCurrentUser());
+        await gamesTableCtl.refresh();
+      }, "Game started");
+      wrap.appendChild(start);
+    }
+    if (row.status === GAME_STATUS.ACTIVE) {
+      const finish = document.createElement("button");
+      finish.className = "btn btn-secondary btn-sm";
+      finish.textContent = "Finish";
+      finish.onclick = () => withError(async () => {
+        const c = getContainer();
+        await c.gameSvc.finish(row.id, c.authSvc.getCurrentUser());
+        await gamesTableCtl.refresh();
+      }, "Game finished");
+      wrap.appendChild(finish);
+    }
     const del = document.createElement("button");
     del.className = "btn btn-danger btn-sm";
     del.textContent = "End & Delete";
@@ -20047,6 +20257,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   function tourneyActions(row) {
     const wrap = document.createElement("div");
     wrap.className = "admin-row-actions";
+    if (row.status === TOURNAMENT_STATUS.DRAFT) {
+      const open = document.createElement("button");
+      open.className = "btn btn-primary btn-sm";
+      open.textContent = "Open";
+      open.onclick = () => withError(async () => {
+        const c = getContainer();
+        await c.tournamentSvc.open(row.id, c.authSvc.getCurrentUser());
+        await tournamentsTableCtl.refresh();
+      }, "Tournament opened");
+      wrap.appendChild(open);
+    }
+    if (row.status === TOURNAMENT_STATUS.OPEN) {
+      const close = document.createElement("button");
+      close.className = "btn btn-secondary btn-sm";
+      close.textContent = "Start";
+      close.onclick = () => withError(async () => {
+        const c = getContainer();
+        await c.tournamentSvc.close(row.id, c.authSvc.getCurrentUser());
+        await tournamentsTableCtl.refresh();
+      }, "Tournament started");
+      wrap.appendChild(close);
+    }
     const del = document.createElement("button");
     del.className = "btn btn-danger btn-sm";
     del.textContent = "Delete";
@@ -20063,13 +20295,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     return wrap;
   }
   async function openGameForm() {
+    const c = getContainer();
+    let questions2 = [];
+    try {
+      const result = await c.questionSvc.list({}, { limit: 200, orderBy: "created_at", direction: "desc" });
+      questions2 = result?.data ?? [];
+    } catch (err) {
+      await withError(async () => {
+        throw err;
+      });
+      return;
+    }
+    const questionFields = questions2.length === 0 ? '<p class="admin-empty-inline">Create at least one question before creating a game.</p>' : `<div class="form-field"><span class="form-field__label">Questions</span><div class="admin-checklist">${questions2.map((q) => `
+        <label class="admin-checklist__item">
+          <span><input type="checkbox" name="question_${escapeHTML(q.id)}" /> <span class="admin-checklist__label">${escapeHTML(q.text)}</span></span>
+        </label>`).join("")}</div></div>`;
     formModal({
       title: "Create Game Lobby",
-      fieldsHTML: selectField("mode", "Mode", { "classic": "Classic", "blitz": "Blitz" }, { value: "classic" }),
+      fieldsHTML: [
+        textField("name", "Game name", { required: true, placeholder: "Friday quiz" }),
+        selectField("type", "Game type", GAME_TYPES, { value: GAME_TYPES.QUIZ, required: true }),
+        questionFields
+      ].join(""),
       confirmText: "Create",
       onSubmit: async (values) => {
-        const c = getContainer();
-        await c.gameSvc.create({ ...values, preset_id: null }, c.authSvc.getCurrentUser());
+        const question_ids = questions2.filter((q) => values[`question_${q.id}`]).map((q) => q.id);
+        if (question_ids.length === 0) {
+          const error51 = new Error("Select at least one question");
+          error51.fields = { questions: ["Select at least one question"] };
+          throw error51;
+        }
+        await c.gameSvc.create({ ...values, question_ids }, c.authSvc.getCurrentUser());
         await gamesTableCtl.refresh();
       }
     });
@@ -20094,6 +20350,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_DataTable();
       init_FormModal();
       init_ConfirmDialog();
+      init_sanitize();
+      init_constants();
       gamesTableCtl = null;
       tournamentsTableCtl = null;
     }
@@ -20129,6 +20387,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const sectionsHost = document.createElement("div");
     sectionsHost.id = "settings-sections";
     host.appendChild(sectionsHost);
+    await load();
     return load;
   }
   async function load() {
@@ -20244,7 +20503,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (!ok) return;
     await withError(async () => {
       const c = getContainer();
-      await c.repo.delete("settings", setting.id);
+      const schoolId = c.authSvc.getCurrentUser()?.school_id ?? "local";
+      await c.settingsSvc.deleteSetting(schoolId, setting.key);
       await load();
     }, "Setting deleted");
   }
@@ -20258,6 +20518,178 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_FormModal();
       init_constants();
       hostRef5 = null;
+    }
+  });
+
+  // src/frontend/ui/pages/migrate/MigratePage.js
+  async function buildPayload() {
+    const { LocalStorageRepository: LocalStorageRepository2 } = await Promise.resolve().then(() => (init_LocalStorageRepository(), LocalStorageRepository_exports));
+    const localRepo = new LocalStorageRepository2();
+    const data = {};
+    for (const table of MIGRATE_ORDER) {
+      const rows = localRepo.getAll_sync(table);
+      if (rows.length > 0) data[table] = rows;
+    }
+    return { data };
+  }
+  async function migrateDataToBackend() {
+    const container = getContainer();
+    const token = container.authSvc.getToken();
+    const log = [];
+    const payload = await buildPayload();
+    const tables = Object.keys(payload.data);
+    if (tables.length === 0) {
+      log.push("No LocalStorage data found to migrate.");
+      return log;
+    }
+    await withError(async () => {
+      const res = await fetch(apiUrl("/migrate"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...token && { Authorization: `Bearer ${token}` }
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(`Migration failed (${res.status}): ${body.message || res.statusText}`);
+      }
+      const { results, totalInserted } = await res.json();
+      for (const r of results) {
+        log.push(`Migrated ${r.inserted}/${r.total} records for ${r.table}` + (r.skipped ? ` (${r.skipped} skipped as duplicates)` : "") + (r.error ? ` \u2014 ERROR: ${r.error}` : ""));
+      }
+      log.push(`Total inserted: ${totalInserted}. Re-run to confirm idempotency (expect 0 inserted).`);
+    }, "Migration to backend complete");
+    return log;
+  }
+  async function getMigrationStatus() {
+    const container = getContainer();
+    const token = container.authSvc.getToken();
+    const res = await fetch(apiUrl("/migrate/status"), {
+      headers: { ...token && { Authorization: `Bearer ${token}` } }
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(`Status fetch failed (${res.status}): ${body.message || res.statusText}`);
+    }
+    return res.json();
+  }
+  var MIGRATE_ORDER;
+  var init_MigratePage = __esm({
+    "src/frontend/ui/pages/migrate/MigratePage.js"() {
+      init_container();
+      init_config();
+      init_eventBus();
+      MIGRATE_ORDER = [
+        "classes",
+        "categories",
+        "users",
+        "questions",
+        "exams",
+        "exam_questions",
+        "exam_classes",
+        "results",
+        "games",
+        "game_sessions",
+        "tournaments",
+        "tournament_entries",
+        "exam_sessions",
+        "settings"
+      ];
+    }
+  });
+
+  // src/frontend/ui/pages/admin/MigrationPage.js
+  var MigrationPage_exports = {};
+  __export(MigrationPage_exports, {
+    initMigrationPage: () => initMigrationPage
+  });
+  async function initMigrationPage(host) {
+    host.replaceChildren();
+    const title = document.createElement("h1");
+    title.className = "page-title";
+    title.textContent = "Data migration";
+    const intro = document.createElement("p");
+    intro.className = "page-subtitle";
+    intro.textContent = "Import legacy LocalStorage data into the backend. The operation is tenant-scoped and safe to run more than once.";
+    const warning = document.createElement("p");
+    warning.className = "admin-modal__hint";
+    warning.textContent = config.mode === "saas" ? "Run this after signing in to the target school. Existing records are skipped." : "Migration is available when the app is connected to the backend in SaaS mode.";
+    const toolbar = document.createElement("div");
+    toolbar.className = "admin-toolbar";
+    const migrateBtn = document.createElement("button");
+    migrateBtn.type = "button";
+    migrateBtn.className = "btn btn-primary";
+    migrateBtn.textContent = "Start migration";
+    migrateBtn.disabled = config.mode !== "saas";
+    const statusBtn = document.createElement("button");
+    statusBtn.type = "button";
+    statusBtn.className = "btn btn-secondary";
+    statusBtn.textContent = "Refresh backend status";
+    statusBtn.disabled = config.mode !== "saas";
+    toolbar.append(migrateBtn, statusBtn);
+    const output = document.createElement("pre");
+    output.className = "admin-migration-output";
+    output.setAttribute("aria-live", "polite");
+    output.textContent = "No migration run in this session.";
+    const statusHost = document.createElement("div");
+    statusHost.className = "admin-migration-status";
+    host.append(title, intro, warning, toolbar, output, statusHost);
+    migrateBtn.addEventListener("click", async () => {
+      migrateBtn.disabled = true;
+      output.textContent = "Migrating\u2026";
+      try {
+        output.textContent = (await migrateDataToBackend()).join("\n");
+        await renderStatus(statusHost);
+      } catch (err) {
+        output.textContent = `Migration failed: ${err.message}`;
+      } finally {
+        migrateBtn.disabled = false;
+      }
+    });
+    statusBtn.addEventListener("click", () => renderStatus(statusHost));
+    if (config.mode === "saas") await renderStatus(statusHost);
+    return () => renderStatus(statusHost);
+  }
+  async function renderStatus(host) {
+    host.replaceChildren();
+    try {
+      const { counts = {} } = await getMigrationStatus();
+      const table = document.createElement("table");
+      table.className = "data-table";
+      const head = document.createElement("thead");
+      const row = document.createElement("tr");
+      for (const label of ["Table", "Backend records"]) {
+        const cell = document.createElement("th");
+        cell.textContent = label;
+        row.appendChild(cell);
+      }
+      head.appendChild(row);
+      table.appendChild(head);
+      const body = document.createElement("tbody");
+      for (const [tableName, count] of Object.entries(counts)) {
+        const tr = document.createElement("tr");
+        const name = document.createElement("td");
+        name.textContent = tableName;
+        const total = document.createElement("td");
+        total.textContent = count == null ? "Unavailable" : String(count);
+        tr.append(name, total);
+        body.appendChild(tr);
+      }
+      table.appendChild(body);
+      host.appendChild(table);
+    } catch (err) {
+      const message = document.createElement("p");
+      message.className = "admin-error";
+      message.textContent = `Could not load backend status: ${err.message}`;
+      host.appendChild(message);
+    }
+  }
+  var init_MigrationPage = __esm({
+    "src/frontend/ui/pages/admin/MigrationPage.js"() {
+      init_config();
+      init_MigratePage();
     }
   });
 
@@ -20349,7 +20781,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     { id: "users", label: "Users", icon: "\u{1F465}" },
     { id: "results", label: "Results", icon: "\u{1F4C8}" },
     { id: "games", label: "Live Games", icon: "\u{1F3AE}" },
-    { id: "settings", label: "Settings", icon: "\u2699\uFE0F" }
+    { id: "settings", label: "Settings", icon: "\u2699\uFE0F" },
+    { id: "migration", label: "Migration", icon: "\u{1F4E6}" }
   ]);
   function renderSidebar(container, onTabChange, initialTab = "dashboard") {
     if (!container) return { setActive() {
@@ -20405,7 +20838,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     users: () => Promise.resolve().then(() => (init_UsersPage(), UsersPage_exports)).then((m) => m.initUsersPage),
     results: () => Promise.resolve().then(() => (init_ResultsPage(), ResultsPage_exports)).then((m) => m.initResultsPage),
     games: () => Promise.resolve().then(() => (init_GamesPage(), GamesPage_exports)).then((m) => m.initGamesPage),
-    settings: () => Promise.resolve().then(() => (init_SettingsPage(), SettingsPage_exports)).then((m) => m.initSettingsPage)
+    settings: () => Promise.resolve().then(() => (init_SettingsPage(), SettingsPage_exports)).then((m) => m.initSettingsPage),
+    migration: () => Promise.resolve().then(() => (init_MigrationPage(), MigrationPage_exports)).then((m) => m.initMigrationPage)
   };
   var activeTab = null;
   var sidebarCtl = null;

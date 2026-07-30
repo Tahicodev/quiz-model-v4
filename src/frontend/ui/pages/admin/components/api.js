@@ -9,7 +9,7 @@
  */
 
 import { getContainer } from '../../../../container.js';
-import { config }        from '../../../../config.js';
+import { apiUrl }        from '../../../../config.js';
 import { AppError }       from '../../../../../shared/errors.js';
 
 /**
@@ -20,12 +20,11 @@ import { AppError }       from '../../../../../shared/errors.js';
  */
 export async function api(method, path, body = null) {
   const { authSvc } = getContainer();
-  const baseUrl = config.apiUrl || ''; // '' → same-origin in SaaS mode
   const headers = { 'Content-Type': 'application/json' };
   const token = authSvc.getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${baseUrl}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers,
     credentials: 'include',

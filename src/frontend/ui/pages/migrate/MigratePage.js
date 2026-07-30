@@ -9,7 +9,7 @@
  */
 
 import { getContainer } from '../../../container.js';
-import { config }        from '../../../config.js';
+import { apiUrl }        from '../../../config.js';
 import { withError }    from '../../../utils/eventBus.js';
 
 /** FK-safe order — parents before children. Must match the backend's MIGRATE_ORDER. */
@@ -53,7 +53,6 @@ async function buildPayload() {
 export async function migrateDataToBackend() {
   const container = getContainer();
   const token     = container.authSvc.getToken();
-  const baseUrl   = config.apiUrl || ''; // '' → same-origin in SaaS mode
   const log       = [];
 
   const payload = await buildPayload();
@@ -64,7 +63,7 @@ export async function migrateDataToBackend() {
   }
 
   await withError(async () => {
-    const res = await fetch(`${baseUrl}/api/v1/migrate`, {
+    const res = await fetch(apiUrl('/migrate'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -97,9 +96,7 @@ export async function migrateDataToBackend() {
 export async function getMigrationStatus() {
   const container = getContainer();
   const token     = container.authSvc.getToken();
-  const baseUrl   = config.apiUrl || '';
-
-  const res = await fetch(`${baseUrl}/api/v1/migrate/status`, {
+  const res = await fetch(apiUrl('/migrate/status'), {
     headers: { ...(token && { Authorization: `Bearer ${token}` }) },
   });
   if (!res.ok) {

@@ -58,24 +58,34 @@ export function openAIGeneratorModal(onImport) {
     confirmText: 'Import selected',
     cancelText: 'Cancel',
     isDangerous: false,
-    onConfirm: async () => {
-      const checked = document.querySelectorAll('.ai-q-checkbox:checked');
-      const selected = [];
-      for (const cb of checked) {
-        const idx = parseInt(cb.value, 10);
-        if (!isNaN(idx) && questions[idx]) selected.push(questions[idx]);
-      }
-      if (selected.length === 0) {
-        EventBus.emit('app:warning', { message: 'Select at least one question to import.' });
-        return false; // Keep modal open
-      }
-      if (onImport) await onImport(selected);
-      return true;
-    },
+    onConfirm: () => {},
     onCancel: () => {},
   });
 
   modal.show();
+
+  // Modal invokes its lifecycle callback after removing the DOM. Read the
+  // selected checkboxes before closing so generated questions can actually
+  // be imported.
+  const confirmBtn = modal.element.querySelector('.confirm-btn');
+  confirmBtn.type = 'button';
+  confirmBtn.onclick = async () => {
+    const selected = [...modal.element.querySelectorAll('.ai-q-checkbox:checked')]
+      .map(cb => questions[Number.parseInt(cb.value, 10)])
+      .filter(Boolean);
+    if (selected.length === 0) {
+      EventBus.emit('app:warning', { message: 'Select at least one question to import.' });
+      return;
+    }
+    confirmBtn.disabled = true;
+    try {
+      await onImport?.(selected);
+      modal.close(true);
+    } catch (err) {
+      confirmBtn.disabled = false;
+      throw err;
+    }
+  };
 
   // Wire the generate button after the modal renders
   setTimeout(() => {
@@ -95,7 +105,7 @@ async function handleGenerate(modal, onImport) {
 
   if (!resultsEl) return;
 
-  safeSetHTML(resultsEl, '<p class="ai-loading">Generating questions…</p>');
+  safeSetHTML(resultsEl, '<p class="ai-loading">Generating questions…</p>', true);
 
   await withError(async () => {
     let data;
@@ -116,7 +126,7 @@ async function handleGenerate(modal, onImport) {
 
 function renderResults(container, questions) {
   if (!questions || questions.length === 0) {
-    safeSetHTML(container, '<p class="ai-empty">No questions generated. Try a different topic.</p>');
+    safeSetHTML(container, '<p class="ai-empty">No questions generated. Try a different topic.</p>', true);
     return;
   }
 
@@ -135,5 +145,5 @@ function renderResults(container, questions) {
       `).join('')}
     </div>
   `;
-  safeSetHTML(container, html);
+    safeSetHTML(container, html, true);
 }

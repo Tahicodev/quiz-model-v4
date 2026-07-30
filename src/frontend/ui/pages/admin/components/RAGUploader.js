@@ -53,7 +53,7 @@ export async function initRAGUploader(host) {
         <div id="rag-sources" class="rag-sources"></div>
       </div>
     </div>
-  `);
+  `, true);
 
   // Wire upload
   document.getElementById('rag-upload-btn')?.addEventListener('click', () => handleUpload());
@@ -87,7 +87,7 @@ async function handleQuery() {
 
   const answerEl = document.getElementById('rag-answer');
   const sourcesEl = document.getElementById('rag-sources');
-  if (answerEl) safeSetHTML(answerEl, '<p class="ai-loading">Searching documents…</p>');
+  if (answerEl) safeSetHTML(answerEl, '<p class="ai-loading">Searching documents…</p>', true);
 
   await withError(async () => {
     const result = await api('POST', '/api/v1/ai/rag/query', { question });
@@ -95,17 +95,17 @@ async function handleQuery() {
       safeSetHTML(answerEl, `
         <h4>Answer</h4>
         <p>${result.answer ? escapeHTML(result.answer) : 'No answer generated (AI_API_KEY may be missing).'}</p>
-      `);
+      `, true);
     }
     if (sourcesEl) {
       const sources = result.sources || [];
       if (sources.length === 0) {
-        safeSetHTML(sourcesEl, '<p class="ai-empty">No relevant documents found.</p>');
+        safeSetHTML(sourcesEl, '<p class="ai-empty">No relevant documents found.</p>', true);
       } else {
         safeSetHTML(sourcesEl, `
           <h4>Sources (${sources.length})</h4>
           <ul>${sources.map(s => `<li><strong>${escapeHTML(s.filename)}</strong> (score: ${s.score})<br/><em>${escapeHTML(s.text.slice(0, 200))}...</em></li>`).join('')}</ul>
-        `);
+        `, true);
       }
     }
   });
@@ -119,7 +119,7 @@ async function refreshDocList() {
     const result = await api('GET', '/api/v1/ai/rag/documents');
     const docs = result?.data || [];
     if (docs.length === 0) {
-      safeSetHTML(listEl, '<p class="ai-empty">No documents ingested yet.</p>');
+      safeSetHTML(listEl, '<p class="ai-empty">No documents ingested yet.</p>', true);
       return;
     }
     safeSetHTML(listEl, `
@@ -130,19 +130,19 @@ async function refreshDocList() {
             <tr>
               <td>${escapeHTML(d.filename)}</td>
               <td>${d.chunkCount}</td>
-              <td><button class="btn btn-danger btn-sm rag-delete-btn" data-id="${d.documentId}">Delete</button></td>
+              <td><button class="btn btn-danger btn-sm rag-delete-btn" data-id="${escapeHTML(d.documentId)}">Delete</button></td>
             </tr>
           `).join('')}
         </tbody>
       </table>
-    `);
+    `, true);
     // Wire delete buttons
     for (const btn of listEl.querySelectorAll('.rag-delete-btn')) {
       btn.addEventListener('click', () => handleDelete(btn.getAttribute('data-id')));
     }
   } catch (err) {
     logger.error('Failed to load doc list', err);
-    safeSetHTML(listEl, '<p class="ai-empty">Error loading documents.</p>');
+    safeSetHTML(listEl, '<p class="ai-empty">Error loading documents.</p>', true);
   }
 }
 

@@ -127,6 +127,6 @@ async function deleteClass(cls) {
 
 function escapeText(s) {
   return String(s ?? '').replace(/[&<>"']/g, (ch) => ({
-    '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#039;',
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
   }[ch]));
 }

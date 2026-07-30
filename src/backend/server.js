@@ -122,6 +122,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtml = readFileSync(resolve(__dirname, '../../index.html'), 'utf8');
+const adminHtml = readFileSync(resolve(__dirname, '../../admin.html'), 'utf8');
 const studentWorkspaceHtml = readFileSync(resolve(__dirname, '../../student-workspace.html'), 'utf8');
 
 function injectAppConfig(html) {
@@ -140,6 +141,10 @@ window.APP_CONFIG = ${JSON.stringify({
 
 app.get('/', (req, res) => {
   res.type('html').send(injectAppConfig(indexHtml));
+});
+
+app.get('/admin.html', (req, res) => {
+  res.type('html').send(injectAppConfig(adminHtml));
 });
 
 app.get('/student-workspace.html', (req, res) => {

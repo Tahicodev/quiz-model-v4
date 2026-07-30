@@ -12,7 +12,6 @@ import { getContainer }  from '../../../container.js';
 import { logger }       from '../../../utils/logger.js';
 import { formatDate }    from '../../../utils/format.js';
 import { safeSetHTML }   from '../../../utils/sanitize.js';
-import { api }           from './components/api.js';
 
 let hostRef = null;
 
@@ -118,11 +117,11 @@ async function loadResults() {
     if (examId) {
       const res = await c.resultSvc.getByExam(examId, { limit: 100 });
       entries = res?.data ?? [];
-      try { stats = await api('GET', `/api/v1/results/exam/${examId}/stats`); } catch (e) { logger.warn('No stats', e); }
+      try { stats = await c.resultSvc.getStatsByExam(examId); } catch (e) { logger.warn('No stats', e); }
     } else if (userId) {
       const res = await c.resultSvc.getByUser(userId, { limit: 100 });
       entries = res?.data ?? [];
-      try { stats = await api('GET', `/api/v1/results/user/${userId}/stats`); } catch (e) { logger.warn('No stats', e); }
+      try { stats = await c.resultSvc.getStatsByUser(userId); } catch (e) { logger.warn('No stats', e); }
     }
 
     if (stats) statsHost.appendChild(renderStats(stats, examId ? 'exam' : 'user'));

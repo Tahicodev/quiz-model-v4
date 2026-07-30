@@ -37,10 +37,14 @@ export async function initQuestionsPage(host) {
 
   const toolbar = document.createElement('div');
   toolbar.className = 'admin-toolbar';
+  // Category options are loaded asynchronously before the toolbar is
+  // appended. Passing the Promise directly to append() crashes the entire
+  // Questions tab during initialization.
+  const categoryControl = await categoryFilter();
   toolbar.append(
     typeFilter(),
     difficultyFilter(),
-    categoryFilter(),
+    categoryControl,
     buildSpacer(),
     buildNewButton(),
     buildAIGeneratorButton(),
@@ -102,7 +106,8 @@ async function categoryFilter() {
   const sel = labeledSelect('Category', 'q-filter-category', { '': 'All categories' });
   try {
     const c = getContainer();
-    const { data } = await c.categorySvc.list({}, { limit: 200, orderBy: 'name', direction: 'asc' });
+    const { data = [] } = await c.categorySvc.list({}, { limit: 200, orderBy: 'name', direction: 'asc' });
+    categoryCache = new Map(data.map(x => [x.id, x.name]));
     for (const cat of data) {
       const opt = document.createElement('option');
       opt.value = cat.id; opt.textContent = cat.name;
@@ -238,15 +243,10 @@ function difficultyBadge(v) {
 }
 
 let categoryCache = null;
-async function categoryName(id) {
+function categoryName(id) {
   if (!id) return '—';
-  if (!categoryCache) {
-    try {
-      const c = getContainer();
-      const { data } = await c.categorySvc.list({}, { limit: 200, orderBy: 'name' });
-      categoryCache = new Map(data.map(x => [x.id, x.name]));
-    } catch { categoryCache = new Map(); }
-  }
+  // The table renderer is synchronous. The cache is populated while the
+  // toolbar is built, so a cell must return text rather than a Promise.
   return categoryCache.get(id) ?? '—';
 }
 

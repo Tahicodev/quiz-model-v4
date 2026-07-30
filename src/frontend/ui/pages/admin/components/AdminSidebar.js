@@ -18,6 +18,7 @@ export const ADMIN_TABS = Object.freeze([
   { id: 'results',      label: 'Results',     icon: '📈' },
   { id: 'games',        label: 'Live Games',  icon: '🎮' },
   { id: 'settings',     label: 'Settings',    icon: '⚙️' },
+  { id: 'migration',    label: 'Migration',   icon: '📦' },
 ]);
 
 /**

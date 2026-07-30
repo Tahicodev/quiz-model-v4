@@ -340,9 +340,8 @@ async function openExamClasses(exam) {
   let assigned = new Set();
   let allClasses = [];
   try {
-    // No service method for "get assigned classes"; pull exam_classes via repo query
-    const { data } = await c.repo.getAll('exam_classes', { filters: { exam_id: exam.id }, limit: 200 });
-    assigned = new Set(data.map(x => x.class_id));
+    const links = await c.examSvc.getAssignedClasses(exam.id);
+    assigned = new Set(links.map(x => x.class_id));
   } catch (err) { logger.warn('Could not load exam classes', err); }
   try {
     const res = await c.classSvc.list({}, { limit: 200, orderBy: 'name' });

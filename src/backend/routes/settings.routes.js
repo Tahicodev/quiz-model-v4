@@ -57,6 +57,19 @@ router.patch('/:key', requireRole(ROLES.ADMIN), validate(SettingUpdateSchema), a
   } catch (err) { next(err); }
 });
 
+router.delete('/:key', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const { data } = await repo.getAll('settings', {
+      filters: { school_id: req.schoolId, key: req.params.key },
+      limit: 1,
+    });
+    if (data.length === 0) return res.status(404).json({ code: 'NOT_FOUND', message: 'Setting not found' });
+    await repo.delete('settings', data[0].id);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 router.post('/bulk', requireRole(ROLES.ADMIN), validate(SettingsBulkUpdateSchema), async (req, res, next) => {
   try {
     const { settingsSvc } = getContainer();

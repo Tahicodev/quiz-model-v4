@@ -46,6 +46,10 @@ export class SettingsService {
     const parsed = SettingUpdateSchema.safeParse({ key, value, visibility });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
+    if (typeof this.#repo.updateSetting === 'function') {
+      return this.#repo.updateSetting(parsed.data.key, parsed.data);
+    }
+
     const { data: existing } = await this.#repo.getAll('settings', {
       filters: { school_id: schoolId, key: parsed.data.key },
     });
@@ -63,6 +67,20 @@ export class SettingsService {
       value:     parsed.data.value,
       visibility: parsed.data.visibility ?? SETTINGS_VISIBILITY.ADMIN,
     });
+  }
+
+  async deleteSetting(schoolId, key) {
+    let setting;
+    if (typeof this.#repo.deleteSetting === 'function') {
+      return this.#repo.deleteSetting(key);
+    }
+    const { data } = await this.#repo.getAll('settings', {
+      filters: { school_id: schoolId, key },
+      limit: 1,
+    });
+    setting = data[0];
+    if (!setting) return;
+    return this.#repo.delete('settings', setting.id);
   }
 
   /**

@@ -39,6 +39,20 @@ router.get('/:id/questions', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/:id/classes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const { examSvc, repo } = getContainer();
+    await examSvc.getById(req.params.id);
+    const result = await repo.getAll('exam_classes', {
+      filters: { exam_id: req.params.id },
+      limit: 200,
+      orderBy: 'assigned_at',
+      direction: 'desc',
+    });
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 router.post('/', requireRole(ROLES.ADMIN), validate(ExamCreateSchema), async (req, res, next) => {
   try {
     const { examSvc, auditSvc } = getContainer();
@@ -70,7 +84,7 @@ router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
 router.post('/:id/questions', requireRole(ROLES.ADMIN), validate(ExamAddQuestionSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
-    const link = await examSvc.addQuestion(req.params.id, req.body, req.user);
+    const link = await examSvc.addQuestion(req.params.id, req.body.question_id, req.body.order_index, req.user);
     res.status(201).json(link);
   } catch (err) { next(err); }
 });
@@ -112,7 +126,7 @@ router.post('/:id/archive', requireRole(ROLES.ADMIN), async (req, res, next) => 
 router.post('/:id/classes', requireRole(ROLES.ADMIN), validate(ExamAssignClassSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
-    const link = await examSvc.assignToClass(req.params.id, req.body, req.user);
+    const link = await examSvc.assignToClass(req.params.id, req.body.class_id, req.user);
     res.status(201).json(link);
   } catch (err) { next(err); }
 });

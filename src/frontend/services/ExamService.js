@@ -24,8 +24,11 @@ export class ExamService {
     return exam;
   }
 
-  async getWithQuestions(id) {
-    const exam = await this.#repo.query('exam.withQuestions', { examId: id });
+  async getWithQuestions(id, schoolId = null) {
+    const exam = await this.#repo.query('exam.withQuestions', {
+      examId: id,
+      ...(schoolId ? { schoolId } : {}),
+    });
     if (!exam) throw new NotFoundError('Exam');
     return exam;
   }
@@ -72,6 +75,12 @@ export class ExamService {
 
   async addQuestion(examId, questionId, orderIndex, currentUser) {
     this.#requireAdmin(currentUser);
+    if (typeof this.#repo.addExamQuestion === 'function') {
+      return this.#repo.addExamQuestion(examId, {
+        question_id: questionId,
+        order_index: orderIndex ?? 0,
+      });
+    }
     const exam     = await this.#repo.getById('exams', examId);
     if (!exam) throw new NotFoundError('Exam');
     const question = await this.#repo.getById('questions', questionId);
@@ -92,6 +101,9 @@ export class ExamService {
 
   async removeQuestion(examId, questionId, currentUser) {
     this.#requireAdmin(currentUser);
+    if (typeof this.#repo.removeExamQuestion === 'function') {
+      return this.#repo.removeExamQuestion(examId, questionId);
+    }
     const { data } = await this.#repo.getAll('exam_questions', {
       filters: { exam_id: examId, question_id: questionId },
     });
@@ -103,6 +115,10 @@ export class ExamService {
     this.#requireAdmin(currentUser);
     const parsed = ExamReorderSchema.safeParse({ question_ids: orderedQuestionIds });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+
+    if (typeof this.#repo.reorderExamQuestions === 'function') {
+      return this.#repo.reorderExamQuestions(examId, orderedQuestionIds);
+    }
 
     const { data: links } = await this.#repo.getAll('exam_questions', { filters: { exam_id: examId } });
     for (const link of links) {
@@ -138,6 +154,9 @@ export class ExamService {
 
   async assignToClass(examId, classId, currentUser) {
     this.#requireAdmin(currentUser);
+    if (typeof this.#repo.assignExamClass === 'function') {
+      return this.#repo.assignExamClass(examId, classId);
+    }
     const { data: existing } = await this.#repo.getAll('exam_classes', {
       filters: { exam_id: examId, class_id: classId },
     });
@@ -151,11 +170,26 @@ export class ExamService {
 
   async removeFromClass(examId, classId, currentUser) {
     this.#requireAdmin(currentUser);
+    if (typeof this.#repo.removeExamClass === 'function') {
+      return this.#repo.removeExamClass(examId, classId);
+    }
     const { data } = await this.#repo.getAll('exam_classes', {
       filters: { exam_id: examId, class_id: classId },
     });
     if (data.length === 0) return;
     await this.#repo.delete('exam_classes', data[0].id);
+  }
+
+  async getAssignedClasses(examId) {
+    if (typeof this.#repo.getExamClasses === 'function') {
+      const result = await this.#repo.getExamClasses(examId);
+      return result?.data ?? result ?? [];
+    }
+    const { data } = await this.#repo.getAll('exam_classes', {
+      filters: { exam_id: examId },
+      limit: 200,
+    });
+    return data;
   }
 
   async getAvailableForStudent(userId) {

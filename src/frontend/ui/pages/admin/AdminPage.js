@@ -24,6 +24,7 @@ const PAGE_LOADERS = {
   results:    () => import('./ResultsPage.js').then(m => m.initResultsPage),
   games:      () => import('./GamesPage.js').then(m => m.initGamesPage),
   settings:   () => import('./SettingsPage.js').then(m => m.initSettingsPage),
+  migration:  () => import('./MigrationPage.js').then(m => m.initMigrationPage),
 };
 
 /** @type {string|null} the currently active tab id */

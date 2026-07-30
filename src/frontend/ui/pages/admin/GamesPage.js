@@ -8,6 +8,8 @@ import { withError }       from '../../../utils/eventBus.js';
 import { createDataTable } from './components/DataTable.js';
 import { formModal, textField, selectField } from './components/FormModal.js';
 import { confirmDialog }   from './components/ConfirmDialog.js';
+import { escapeHTML }      from '../../../utils/sanitize.js';
+import { GAME_TYPES, GAME_STATUS, TOURNAMENT_STATUS } from '../../../../shared/constants.js';
 
 let gamesTableCtl = null;
 let tournamentsTableCtl = null;
@@ -98,6 +100,28 @@ export async function initGamesPage(host) {
 function gameActions(row) {
   const wrap = document.createElement('div');
   wrap.className = 'admin-row-actions';
+  if (row.status === GAME_STATUS.WAITING) {
+    const start = document.createElement('button');
+    start.className = 'btn btn-primary btn-sm';
+    start.textContent = 'Start';
+    start.onclick = () => withError(async () => {
+      const c = getContainer();
+      await c.gameSvc.start(row.id, c.authSvc.getCurrentUser());
+      await gamesTableCtl.refresh();
+    }, 'Game started');
+    wrap.appendChild(start);
+  }
+  if (row.status === GAME_STATUS.ACTIVE) {
+    const finish = document.createElement('button');
+    finish.className = 'btn btn-secondary btn-sm';
+    finish.textContent = 'Finish';
+    finish.onclick = () => withError(async () => {
+      const c = getContainer();
+      await c.gameSvc.finish(row.id, c.authSvc.getCurrentUser());
+      await gamesTableCtl.refresh();
+    }, 'Game finished');
+    wrap.appendChild(finish);
+  }
   const del = document.createElement('button');
   del.className = 'btn btn-danger btn-sm';
   del.textContent = 'End & Delete';
@@ -117,6 +141,28 @@ function gameActions(row) {
 function tourneyActions(row) {
   const wrap = document.createElement('div');
   wrap.className = 'admin-row-actions';
+  if (row.status === TOURNAMENT_STATUS.DRAFT) {
+    const open = document.createElement('button');
+    open.className = 'btn btn-primary btn-sm';
+    open.textContent = 'Open';
+    open.onclick = () => withError(async () => {
+      const c = getContainer();
+      await c.tournamentSvc.open(row.id, c.authSvc.getCurrentUser());
+      await tournamentsTableCtl.refresh();
+    }, 'Tournament opened');
+    wrap.appendChild(open);
+  }
+  if (row.status === TOURNAMENT_STATUS.OPEN) {
+    const close = document.createElement('button');
+    close.className = 'btn btn-secondary btn-sm';
+    close.textContent = 'Start';
+    close.onclick = () => withError(async () => {
+      const c = getContainer();
+      await c.tournamentSvc.close(row.id, c.authSvc.getCurrentUser());
+      await tournamentsTableCtl.refresh();
+    }, 'Tournament started');
+    wrap.appendChild(close);
+  }
   const del = document.createElement('button');
   del.className = 'btn btn-danger btn-sm';
   del.textContent = 'Delete';
@@ -134,13 +180,41 @@ function tourneyActions(row) {
 }
 
 async function openGameForm() {
+  const c = getContainer();
+  let questions = [];
+  try {
+    const result = await c.questionSvc.list({}, { limit: 200, orderBy: 'created_at', direction: 'desc' });
+    questions = result?.data ?? [];
+  } catch (err) {
+    await withError(async () => { throw err; });
+    return;
+  }
+
+  const questionFields = questions.length === 0
+    ? '<p class="admin-empty-inline">Create at least one question before creating a game.</p>'
+    : `<div class="form-field"><span class="form-field__label">Questions</span><div class="admin-checklist">${questions.map((q) => `
+        <label class="admin-checklist__item">
+          <span><input type="checkbox" name="question_${escapeHTML(q.id)}" /> <span class="admin-checklist__label">${escapeHTML(q.text)}</span></span>
+        </label>`).join('')}</div></div>`;
+
   formModal({
     title: 'Create Game Lobby',
-    fieldsHTML: selectField('mode', 'Mode', { 'classic': 'Classic', 'blitz': 'Blitz' }, { value: 'classic' }),
+    fieldsHTML: [
+      textField('name', 'Game name', { required: true, placeholder: 'Friday quiz' }),
+      selectField('type', 'Game type', GAME_TYPES, { value: GAME_TYPES.QUIZ, required: true }),
+      questionFields,
+    ].join(''),
     confirmText: 'Create',
     onSubmit: async (values) => {
-      const c = getContainer();
-      await c.gameSvc.create({ ...values, preset_id: null }, c.authSvc.getCurrentUser());
+      const question_ids = questions
+        .filter(q => values[`question_${q.id}`])
+        .map(q => q.id);
+      if (question_ids.length === 0) {
+        const error = new Error('Select at least one question');
+        error.fields = { questions: ['Select at least one question'] };
+        throw error;
+      }
+      await c.gameSvc.create({ ...values, question_ids }, c.authSvc.getCurrentUser());
       await gamesTableCtl.refresh();
     }
   });

@@ -10,6 +10,7 @@ import { UnauthorizedError, ValidationError, NotFoundError } from '../../shared/
 import { LoginSchema, ChangePasswordSchema }                  from '../../shared/schemas/user.schema.js';
 import { ROLES }                                              from '../../shared/constants.js';
 import { disconnectSocket }                                   from '../infrastructure/socket.client.js';
+import { config, apiUrl }                                     from '../config.js';
 
 export class AuthService {
   #repo;
@@ -36,6 +37,29 @@ export class AuthService {
     const parsed = LoginSchema.safeParse({ username, password });
     if (!parsed.success) {
       throw new ValidationError(parsed.error.flatten().fieldErrors);
+    }
+
+    // SaaS authentication is handled by the backend so bcrypt/JWT and the
+    // httpOnly refresh-token cookie remain server-side. The local repository
+    // path below is retained for the offline/local deployment mode.
+    if (config.mode === 'saas') {
+      const response = await fetch(apiUrl('/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(parsed.data),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (body.fields) throw new ValidationError(body.fields);
+        throw new UnauthorizedError(body.message || body.error?.message || 'Invalid username or password');
+      }
+
+      this.#token = body.accessToken || body.token || null;
+      this.#user = this.#stripSensitive(body.user || body);
+      this.#persistSession(this.#user);
+      window.__AUTH_REFRESH_CALLBACK__ = (newToken) => { this.#token = newToken; };
+      return { user: this.#user, token: this.#token };
     }
 
     // In local mode: find user in LocalStorage and do simple password check
@@ -77,6 +101,15 @@ export class AuthService {
    * Logout: clear session state, disconnect socket.
    */
   async logout() {
+    if (config.mode === 'saas' && this.#token) {
+      try {
+        await fetch(apiUrl('/auth/logout'), {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.#token}` },
+          credentials: 'include',
+        });
+      } catch { /* logout must still clear the local session */ }
+    }
     this.#token = null;
     this.#user  = null;
     this.#clearSession();
@@ -170,36 +203,65 @@ export class AuthService {
         return;
       }
 
-      // Fallback: detect legacy session from auth.js (quizSession key)
-      const legacySession = sessionStorage.getItem('quizSession');
+      // Fallback: detect the legacy session used by auth.js. The legacy
+      // browser flow stores this in localStorage; older local builds used
+      // sessionStorage, so support both during the migration window.
+      const legacyRaw = sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession');
+      const legacySession = legacyRaw ? JSON.parse(legacyRaw) : null;
       if (legacySession) {
-        const parsed = JSON.parse(legacySession);
-        if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+        if (legacySession.expiresAt && Date.now() > new Date(legacySession.expiresAt).getTime()) {
           sessionStorage.removeItem('quizSession');
+          localStorage.removeItem('quizSession');
           return;
         }
-        // Load user from localStorage via repo (synchronous for LocalStorageRepository)
-        // In local mode, the repo can read directly from storage keys.
-        if (this.#repo?.getAll) {
-          // The repo needs async, but we can read localStorage directly for the fallback
-          try {
-            const usersJson = localStorage.getItem('quizUsers');
-            if (usersJson) {
-              const users = JSON.parse(usersJson);
-              const user = users.find(u => u.id === parsed.userId);
-              if (user) {
-                this.#user  = user;
-                this.#token = this.#encodeToken(user);
-                // Migrate to new session format
-                this.#persistSession(user);
-                return;
-              }
-            }
-          } catch { /* localStorage read failed */ }
-        }
+        try {
+          const usersJson = localStorage.getItem('quizUsers');
+          const localUser = usersJson
+            ? JSON.parse(usersJson).find(u => u.id === legacySession.userId)
+            : null;
+          const tokenUser = this.#decodeToken(legacySession.token);
+          const user = localUser || {
+            id: legacySession.userId,
+            username: legacySession.username,
+            name: legacySession.name,
+            role: legacySession.role,
+            school_id: tokenUser?.school_id,
+          };
+          if (user?.id && user?.role) {
+            this.#user = this.#stripSensitive(user);
+            this.#token = legacySession.token || this.#encodeToken(this.#user);
+            this.#persistSession(this.#user);
+            window.__AUTH_REFRESH_CALLBACK__ = (newToken) => { this.#token = newToken; };
+            return;
+          }
+        } catch { /* legacy session could be malformed */ }
       }
+
+      // Last-resort legacy current-user marker (some local builds persisted
+      // this without a full quizSession record).
+      try {
+        const rawUser = localStorage.getItem('quizCurrentUser');
+        if (rawUser) {
+          const user = this.#stripSensitive(JSON.parse(rawUser));
+          if (user?.id && user?.role) {
+            this.#user = user;
+            this.#token = this.#encodeToken(user);
+            this.#persistSession(user);
+          }
+        }
+      } catch { /* ignore malformed legacy state */ }
     } catch {
       this.#clearSession();
     }
+  }
+
+  #decodeToken(token) {
+    if (!token || typeof token !== 'string') return null;
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) return null;
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(atob(normalized));
+    } catch { return null; }
   }
 }

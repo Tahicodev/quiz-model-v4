@@ -46,7 +46,7 @@ export async function initDashboardPage(host) {
     quickAction('New Question', '#questions', '❓'),
     quickAction('New Exam',     '#exams',     '📝'),
     quickAction('New User',     '#users',     '👤'),
-    quickAction('Migrate Data',  '/migrate.html', '📦'),
+    quickAction('Migrate Data',  '#migration', '📦'),
   );
   host.appendChild(actions);
 
