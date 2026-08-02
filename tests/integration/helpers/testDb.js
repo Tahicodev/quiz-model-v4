@@ -19,9 +19,8 @@
 
 import { PrismaClient } from '@prisma/client';
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import bcrypt from 'bcrypt';
 
 import crypto from 'node:crypto';
@@ -42,6 +41,11 @@ let prisma = null;
  */
 export async function setupTestDb() {
   process.env.DATABASE_URL = TEST_DB_URL;
+
+  // Prisma's SQLite migrate engine does not create a missing absolute-path
+  // database file on this platform. Create the empty file first so the
+  // migration runner can initialize it normally.
+  writeFileSync(TEST_DB_PATH, '');
 
   // Apply migrations to the fresh test DB
   execFileSync(process.execPath, [PRISMA_BIN, 'migrate', 'deploy', '--schema', SCHEMA_PATH], {

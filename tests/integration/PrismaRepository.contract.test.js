@@ -20,7 +20,7 @@
 import { describe, beforeAll, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { PrismaRepository } from '../../src/backend/infrastructure/PrismaRepository.js';
 import { runRepositoryContractTests } from './repository.contract.js';
@@ -36,6 +36,11 @@ beforeAll(async () => {
   // constructed below with the test URL as its datasource, so we never touch
   // the dev DB regardless of what .env currently says.
   process.env.DATABASE_URL = TEST_DB_URL;
+
+  // Prisma's SQLite migrate engine does not create a missing absolute-path
+  // database file on this platform. Create the empty file first so the
+  // migration runner can initialize it normally.
+  writeFileSync(TEST_DB_PATH, '');
 
   // Apply existing migrations to the fresh test DB. migrate deploy is the
   // non-dev command (spec §25 Operations line 3069 mandates deploy not dev).

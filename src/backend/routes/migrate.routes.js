@@ -43,20 +43,63 @@ const MIGRATE_ORDER = [
   'settings',
 ];
 
+// Tables with a direct school_id column. Join tables are scoped through their
+// parent records instead, while schools are scoped by their primary key.
+const DIRECT_SCHOOL_TABLES = new Set([
+  'classes',
+  'categories',
+  'users',
+  'questions',
+  'exams',
+  'results',
+  'games',
+  'game_sessions',
+  'tournaments',
+  'tournament_entries',
+  'exam_sessions',
+  'settings',
+]);
+
+const STATUS_QUERY = {
+  schools:        (schoolId) => ({ filters: { id: schoolId }, orderBy: 'created_at' }),
+  results:        (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'date_taken' }),
+  exam_questions: (schoolId) => ({ filters: { exam: { school_id: schoolId } }, orderBy: 'order_index' }),
+  exam_classes:   (schoolId) => ({ filters: { exam: { school_id: schoolId } }, orderBy: 'assigned_at' }),
+  game_sessions:  (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'joined_at' }),
+  tournament_entries: (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'registered_at' }),
+  exam_sessions:  (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'started_at' }),
+  settings:       (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'updated_at' }),
+};
+
+function queryForTable(table, schoolId) {
+  return STATUS_QUERY[table]?.(schoolId) || {
+    filters: DIRECT_SCHOOL_TABLES.has(table) ? { school_id: schoolId } : {},
+    orderBy: 'created_at',
+  };
+}
+
 // Remove read-only / server-owned tables the client should never import.
 const BLACKLIST = new Set(['audit_logs', 'refresh_tokens']);
 
 /** Force tenant scoping on every row and drop non-importable fields. */
-function sanitizeRows(rows, schoolId) {
+function sanitizeRows(rows, schoolId, table) {
   return rows.map((row) => {
-    const { id, created_at, updated_at, ...rest } = row;
-    return {
+    const { id, created_at, updated_at, school_id: _sourceSchoolId, ...rest } = row;
+    const sanitized = {
       ...(id !== undefined && { id }),
       ...(created_at !== undefined && { created_at }),
       ...(updated_at !== undefined && { updated_at }),
       ...rest,
-      school_id: schoolId, // never trust the payload's school_id
     };
+
+    if (table === 'schools') {
+      // A migration cannot create or overwrite another tenant.
+      sanitized.id = schoolId;
+    } else if (DIRECT_SCHOOL_TABLES.has(table)) {
+      sanitized.school_id = schoolId;
+    }
+
+    return sanitized;
   });
 }
 
@@ -78,7 +121,7 @@ router.post('/', async (req, res, next) => {
       const rows = payload[table];
       if (!Array.isArray(rows) || rows.length === 0) continue;
 
-      const sanitized = sanitizeRows(rows, req.schoolId);
+      const sanitized = sanitizeRows(rows, req.schoolId, table);
       try {
         const result = await repo.createMany(table, sanitized);
         // PrismaRepository returns { count }; LocalStorage returns records[].
@@ -119,7 +162,8 @@ router.get('/status', async (req, res, next) => {
     for (const table of MIGRATE_ORDER) {
       if (BLACKLIST.has(table)) continue;
       try {
-        const { total } = await repo.getAll(table, { filters: { school_id: req.schoolId }, limit: 1 });
+        const query = queryForTable(table, req.schoolId);
+        const { total } = await repo.getAll(table, { ...query, limit: 1 });
         counts[table] = total;
       } catch (err) {
         // Some tables may not exist on every install — record null rather than crash.
@@ -142,7 +186,8 @@ router.get('/export', async (req, res, next) => {
     for (const table of MIGRATE_ORDER) {
       if (BLACKLIST.has(table)) continue;
       try {
-        const { data: rows } = await repo.getAll(table, { filters: { school_id: req.schoolId }, limit: 100000 });
+        const query = queryForTable(table, req.schoolId);
+        const { data: rows } = await repo.getAll(table, { ...query, limit: 100000 });
         data[table] = rows;
       } catch (err) {
         data[table] = [];
