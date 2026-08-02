@@ -966,7 +966,7 @@ function normalizeQuestionOptionStructure(question = {}) {
 }
 
 // Validation function
-function validateQuestionForm() {
+function validateQuestionFormLegacy() {
 	// 1. Validate Question Text
 	const questionText = document.getElementById('question').value.trim();
 	if (!questionText) {
@@ -2432,7 +2432,7 @@ function populateEditForm(question) {
 	}, 100);
 }
 
-function cancelEdit() {
+function cancelEditLegacy() {
 	editIndex = -1;
 	document.getElementById('question-action-text').textContent = 'Add Question';
 	document.getElementById('add-update-question-btn').textContent =
@@ -2731,7 +2731,7 @@ window.updateBulkDeleteButtons = updateBulkDeleteButtons;
 // let currentOptionImageData = '';
 
 // Function to switch between text and image option tabs
-function switchOptionTab(tabName) {
+function switchOptionTabLegacy(tabName) {
 	// Update tab buttons
 	document.querySelectorAll('.option-tab').forEach((tab) => {
 		tab.classList.toggle('active', tab.dataset.tab === tabName);

@@ -61,9 +61,13 @@
   // ── Persist session in the format auth.js expects ───────────────────────────
   function persistSession(session, remember) {
     try {
+      // auth.js reads the active session from sessionStorage and the
+      // remembered session from localStorage. Keep both stores in the shape
+      // expected by the legacy UI while retaining the API token.
+      sessionStorage.setItem('quizSession', JSON.stringify(session));
       localStorage.setItem('quizSession', JSON.stringify(session));
       if (remember) {
-        localStorage.setItem('quizSessionRemember', 'true');
+        localStorage.setItem('quizSessionRemember', JSON.stringify(session));
       } else {
         localStorage.removeItem('quizSessionRemember');
       }
@@ -72,12 +76,31 @@
         localStorage.setItem('quizAuthToken', session.token);
       }
       if (session.userId) {
-        localStorage.setItem('quizCurrentUser', JSON.stringify({
+        var currentUser = {
           id: session.userId,
           username: session.username,
           name: session.name || session.username,
           role: session.role,
-        }));
+          status: 'active',
+        };
+        localStorage.setItem('quizCurrentUser', JSON.stringify(currentUser));
+
+        // Seed the local auth view immediately. The SaaS preload is
+        // asynchronous, while auth.js validates a session synchronously on
+        // the next page load.
+        var users = [];
+        try { users = JSON.parse(localStorage.getItem('quizUsers') || '[]'); } catch (_) {}
+        if (!Array.isArray(users)) users = [];
+        var found = false;
+        users = users.map(function (user) {
+          if (user && user.id === currentUser.id) {
+            found = true;
+            return Object.assign({}, user, currentUser);
+          }
+          return user;
+        });
+        if (!found) users.push(currentUser);
+        localStorage.setItem('quizUsers', JSON.stringify(users));
       }
       // Store token for the API repo
       window.__authToken = session.token;
@@ -206,6 +229,7 @@
         // Clear legacy tokens
         try {
           localStorage.removeItem('quizSession');
+          sessionStorage.removeItem('quizSession');
           localStorage.removeItem('quizSessionRemember');
           localStorage.removeItem('quizAuthToken');
           localStorage.removeItem('quizCurrentUser');

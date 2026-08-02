@@ -207,6 +207,10 @@
       return (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
     }
 
+    function getToken() {
+      return window.__authToken || '';
+    }
+
     // ── Fetch all data from the backend and populate cache + localStorage ──────
     function fetchAll() {
       if (syncPromise) return syncPromise;
@@ -214,7 +218,7 @@
       syncInProgress = true;
       syncPromise = fetch(getBaseUrl() + '/migrate/export', {
         credentials: 'include',
-        headers: { 'Authorization': 'Bearer ' + (window.__authToken || '') },
+        headers: { 'Authorization': 'Bearer ' + getToken() },
       })
         .then(function (r) {
           if (!r.ok) throw new Error('Preload failed: ' + r.status);
@@ -253,7 +257,7 @@
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + (window.__authToken || ''),
+          'Authorization': 'Bearer ' + getToken(),
         },
       };
 
@@ -276,7 +280,9 @@
           ? { items: payload }
           : { value: payload }; // object store (e.g. gamification config)
         init.body = JSON.stringify(body);
-        fire(base + '/bulk', init, table);
+        // Bulk routes are mounted at /api/v1/bulk/:table, not beneath the
+        // entity route. This is used by the legacy admin's setAll_sync().
+        fire(getBaseUrl() + '/bulk/' + encodeURIComponent(table), init, table);
       }
     }
 
@@ -362,6 +368,18 @@
   }
 
   // ── Select implementation based on mode ──────────────────────────────────────
+  // Restore the access token before the SaaS preload starts. The legacy page
+  // stores it in localStorage so a reload can authenticate /migrate/export.
+  if (!window.__authToken) {
+    try {
+      var savedSession = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
+      window.__authToken = savedSession && savedSession.token;
+    } catch (_) { /* ignore malformed legacy sessions */ }
+    if (!window.__authToken) {
+      window.__authToken = _origGetItem.call(localStorage, 'quizAuthToken') || '';
+    }
+  }
+
   var mode = (window.APP_CONFIG && window.APP_CONFIG.mode) || 'local';
   var repo = mode === 'saas' ? createSaaSRepo() : createLocalRepo();
 

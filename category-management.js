@@ -1064,7 +1064,7 @@ function removePremiumQuestionFromCategoryAssignment(element) {
 }
 
 // Update bulk action buttons for category modal
-function updateBulkActionButtonsForCategory() {
+function updateBulkActionButtonsForCategoryLegacy() {
     const selectedCount = document.querySelectorAll('#selectedQuestionsListCategory .premium-question-item').length;
     const availableCount = document.querySelectorAll('#availableQuestionsCategory .premium-question-item').length;
     
@@ -2129,7 +2129,7 @@ function deselectAllSelectedForCategory() {
 }
 
 // Remove selected for category
-function removeSelectedForCategory() {
+function removeSelectedForCategoryLegacy() {
     deselectAllSelectedForCategory();
 }
 
@@ -2173,7 +2173,7 @@ function undoCategorySelections() {
 }
 
 // Debounce filter for category questions
-function debounceFilterCategoryQuestions() {
+function debounceFilterCategoryQuestionsLegacy() {
     clearTimeout(categoryDebounceTimer);
     categoryDebounceTimer = setTimeout(() => {
         filterCategoryQuestions();
@@ -2181,13 +2181,13 @@ function debounceFilterCategoryQuestions() {
 }
 
 // Filter category questions - updated to use enhanced filtering
-function filterCategoryQuestions() {
+function filterCategoryQuestionsLegacy() {
     // Apply the enhanced filtering which handles all filtering logic
     filterCategoryQuestionsEnhanced();
 }
 
 // Clear all filters for category modal
-function clearAllCategoryFilters() {
+function clearAllCategoryFiltersLegacy() {
     // Clear all filter inputs
     const searchInput = document.getElementById('questionSearchCategory');
     const typeFilter = document.getElementById('questionFilterCategory');
@@ -2231,7 +2231,7 @@ function clearAllCategoryFilters() {
 }
 
 // Keep the original clearCategoryFilters function for backward compatibility
-function clearCategoryFilters() {
+function clearCategoryFiltersLegacy() {
     clearAllCategoryFilters();
 }
 
@@ -2633,7 +2633,7 @@ function deselectQuestionForCategory(index) {
 }
 
 // Update bulk action buttons for category
-function updateBulkActionButtonsForCategory() {
+function updateBulkActionButtonsForCategoryLegacy2() {
     const selectAllBtn = document.getElementById('selectAllBtn');
     const deselectAllBtn = document.getElementById('deselectAllBtn');
     const removeSelectedBtn = document.getElementById('removeSelectedBtn');
@@ -2652,7 +2652,7 @@ function updateBulkActionButtonsForCategory() {
 }
 
 // Remove selected questions for category
-function removeSelectedForCategory() {
+function removeSelectedForCategoryLegacy2() {
     availableQuestionsForCategory = [...availableQuestionsForCategory, ...selectedQuestionsForCategory];
     selectedQuestionsForCategory = [];
     
@@ -2703,7 +2703,7 @@ function setQuickFilterForCategory(filterType) {
 }
 
 // Function to handle category question filtering
-function filterCategoryQuestions() {
+function filterCategoryQuestionsLegacy2() {
     // Update active class on quick filter buttons
     const categoryFilter = document.getElementById('categoryFilterCategory');
     const difficultyFilter = document.getElementById('difficultyFilterCategory');
@@ -2729,7 +2729,7 @@ function filterCategoryQuestions() {
 }
 
 // Debounce filter for category questions - updated to use enhanced filtering
-function debounceFilterCategoryQuestions() {
+function debounceFilterCategoryQuestionsLegacy2() {
     clearTimeout(categoryDebounceTimer);
     categoryDebounceTimer = setTimeout(() => {
         filterCategoryQuestionsEnhanced();

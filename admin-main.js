@@ -1251,7 +1251,7 @@ function getUnifiedProfileRequests() {
     return merged;
 }
 
-function renderProfileRequests() {
+function renderLegacyProfileRequests() {
     const listContainer = document.getElementById('profileRequestsList');
     if (!listContainer) return;
 

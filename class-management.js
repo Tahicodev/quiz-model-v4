@@ -1112,7 +1112,7 @@ function mergeClasses(existing, imported) {
 	return Array.from(classMap.values());
 }
 
-function exportStudents() {
+function exportStudentsLegacy() {
 	// Get students from the selected students list in the modal
 	const students = Array.from(
 		document.querySelectorAll('#selectedStudentsList .selected-student-item')
@@ -1140,7 +1140,7 @@ function exportStudents() {
 	linkElement.click();
 }
 
-function importStudents() {
+function importStudentsLegacy() {
 	const input = document.createElement('input');
 	input.type = 'file';
 	input.accept = '.json';

@@ -868,7 +868,7 @@ function applyQuickFilter(filterType) {
 }
 
 // Update the clearAllFiltersAndSelections function to handle array filters
-function clearAllFiltersAndSelections() {
+function clearAllFiltersAndSelectionsLegacy() {
 	// Clear all filter inputs
 	document.getElementById('categoryFilterExam').value = '';
 	document.getElementById('typeFilterExam').value = '';
@@ -898,7 +898,7 @@ function clearAllFiltersAndSelections() {
 }
 
 // Update the clearQuickFilters function to handle array filters
-function clearQuickFilters() {
+function clearQuickFiltersLegacy() {
 	quickFilterActive = [];
 
 	// Remove active class from all quick filter buttons
@@ -1203,7 +1203,7 @@ function updateActiveFilterUI() {
 }
 
 // Debounce function for search
-function debounceFilterExamQuestions() {
+function debounceFilterExamQuestionsLegacy() {
 	clearTimeout(debounceTimer);
 	debounceTimer = setTimeout(() => {
 		filterExamQuestions();
