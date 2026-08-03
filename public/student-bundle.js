@@ -61,6 +61,21 @@ var QuizStudent = (() => {
     // Optional production error logging endpoint
   };
   var config = window.APP_CONFIG;
+  function apiUrl(path = "") {
+    const base = String(config.apiUrl || "").replace(/\/$/, "");
+    const target = String(path || "");
+    if (!target) return base;
+    if (!base) return target.startsWith("/") ? target : `/${target}`;
+    if (target === base || target.startsWith(`${base}/`)) return target;
+    if (/^[a-z][a-z\d+.-]*:\/\//i.test(base)) {
+      const root = new URL(base);
+      const basePath = root.pathname.replace(/\/$/, "");
+      const targetUrl = new URL(target.startsWith("/") ? target : `/${target}`, root.origin);
+      targetUrl.pathname = `${basePath}${targetUrl.pathname}`.replace(/\/+/g, "/");
+      return targetUrl.toString();
+    }
+    return `${base}${target.startsWith("/") ? target : `/${target}`}`;
+  }
 
   // src/frontend/infrastructure/IStorageRepository.js
   var IStorageRepository = class {
@@ -409,6 +424,19 @@ var QuizStudent = (() => {
         window.location.href = "/login";
       });
     }
+    #url(path) {
+      const target = String(path || "");
+      if (!this.#baseUrl) return target.startsWith("/") ? target : `/${target}`;
+      if (target === this.#baseUrl || target.startsWith(`${this.#baseUrl}/`)) return target;
+      if (/^[a-z][a-z\d+.-]*:\/\//i.test(this.#baseUrl)) {
+        const root = new URL(this.#baseUrl);
+        const basePath = root.pathname.replace(/\/$/, "");
+        const targetUrl = new URL(target.startsWith("/") ? target : `/${target}`, root.origin);
+        targetUrl.pathname = `${basePath}${targetUrl.pathname}`.replace(/\/+/g, "/");
+        return targetUrl.toString();
+      }
+      return `${this.#baseUrl}${target.startsWith("/") ? target : `/${target}`}`;
+    }
     // ── Core fetch wrapper ───────────────────────────────────────────────────────
     async #fetch(method, path, body = null) {
       const headers = { "Content-Type": "application/json" };
@@ -421,13 +449,13 @@ var QuizStudent = (() => {
         // sends httpOnly refresh token cookie
         ...body !== null ? { body: JSON.stringify(body) } : {}
       };
-      let res = await fetch(`${this.#baseUrl}${path}`, init);
+      let res = await fetch(this.#url(path), init);
       if (res.status === 401) {
         const refreshed = await this.#tryRefresh();
         if (refreshed) {
           const newToken = this.#getToken?.();
           if (newToken) headers["Authorization"] = `Bearer ${newToken}`;
-          res = await fetch(`${this.#baseUrl}${path}`, { ...init, headers });
+          res = await fetch(this.#url(path), { ...init, headers });
         } else {
           this.#onUnauthorized();
           throw new UnauthorizedError("Session expired \u2014 please log in again");
@@ -442,7 +470,7 @@ var QuizStudent = (() => {
     }
     async #tryRefresh() {
       try {
-        const res = await fetch(`${this.#baseUrl}/api/v1/auth/refresh`, {
+        const res = await fetch(this.#url("/auth/refresh"), {
           method: "POST",
           credentials: "include"
         });
@@ -463,30 +491,75 @@ var QuizStudent = (() => {
       direction = "desc",
       search = null
     } = {}) {
+      let endpoint = `/${table}`;
+      if (table === "results" && filters.exam_id) {
+        endpoint = `/results/exam/${encodeURIComponent(filters.exam_id)}`;
+      }
       const params = new URLSearchParams({ limit, offset, orderBy, direction });
       for (const [k, v] of Object.entries(filters)) {
-        if (v !== void 0 && v !== null) params.set(k, v);
+        if (v !== void 0 && v !== null && !(table === "results" && k === "exam_id")) params.set(k, v);
       }
       if (search) params.set("search", search);
-      return this.#fetch("GET", `/api/v1/${table}?${params}`);
+      return this.#fetch("GET", `${endpoint}?${params}`);
     }
     async getById(table, id) {
-      return this.#fetch("GET", `/api/v1/${table}/${id}`);
+      return this.#fetch("GET", `/${table}/${id}`);
     }
     async create(table, data) {
-      return this.#fetch("POST", `/api/v1/${table}`, data);
+      if (table === "settings") {
+        return this.updateSetting(data.key, data);
+      }
+      return this.#fetch("POST", `/${table}`, data);
     }
     async update(table, id, data) {
-      return this.#fetch("PATCH", `/api/v1/${table}/${id}`, data);
+      if (table === "users" && data?.password) {
+        return this.#fetch("POST", `/users/${id}/reset-password`, { newPassword: data.password });
+      }
+      if (table === "settings") {
+        return this.updateSetting(data?.key ?? id, data);
+      }
+      return this.#fetch("PATCH", `/${table}/${id}`, data);
     }
     async delete(table, id) {
-      return this.#fetch("DELETE", `/api/v1/${table}/${id}`);
+      if (table === "settings") return this.deleteSetting(id);
+      return this.#fetch("DELETE", `/${table}/${id}`);
     }
     async createMany(table, dataArray) {
-      return this.#fetch("POST", `/api/v1/${table}/bulk`, { items: dataArray });
+      return this.#fetch("POST", `/bulk/${table}`, { items: dataArray });
     }
     async query(queryName, params) {
-      return this.#fetch("POST", `/api/v1/query/${queryName}`, params ?? {});
+      return this.#fetch("POST", `/query/${queryName}`, params ?? {});
+    }
+    // Nested admin resources have explicit backend routes rather than generic
+    // CRUD endpoints. These methods keep the service layer portable: local mode
+    // continues to use the repository's join tables, while SaaS uses the API.
+    async addExamQuestion(examId, data) {
+      return this.#fetch("POST", `/exams/${examId}/questions`, data);
+    }
+    async removeExamQuestion(examId, questionId) {
+      return this.#fetch("DELETE", `/exams/${examId}/questions/${questionId}`);
+    }
+    async reorderExamQuestions(examId, questionIds) {
+      return this.#fetch("PUT", `/exams/${examId}/questions/order`, { question_ids: questionIds });
+    }
+    async getExamClasses(examId) {
+      return this.#fetch("GET", `/exams/${examId}/classes`);
+    }
+    async assignExamClass(examId, classId) {
+      return this.#fetch("POST", `/exams/${examId}/classes`, { class_id: classId });
+    }
+    async removeExamClass(examId, classId) {
+      return this.#fetch("DELETE", `/exams/${examId}/classes/${classId}`);
+    }
+    async updateSetting(key, data) {
+      return this.#fetch("PATCH", `/settings/${encodeURIComponent(key)}`, {
+        key,
+        value: data?.value ?? "",
+        ...data?.visibility ? { visibility: data.visibility } : {}
+      });
+    }
+    async deleteSetting(key) {
+      return this.#fetch("DELETE", `/settings/${encodeURIComponent(key)}`);
     }
   };
 
@@ -15230,14 +15303,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     password: external_exports.string().min(6).max(100),
     name: external_exports.string().min(1).max(100),
     role: external_exports.enum(roleValues).default("student"),
-    class_id: external_exports.string().uuid().optional().nullable(),
+    class_id: external_exports.string().min(1).max(100).optional().nullable(),
     numero: external_exports.string().max(50).optional().nullable(),
     status: external_exports.enum(["active", "inactive", "suspended"]).default("active")
   });
   var UserUpdateSchema = external_exports.object({
     name: external_exports.string().min(1).max(100).optional(),
     role: external_exports.enum(roleValues).optional(),
-    class_id: external_exports.string().uuid().optional().nullable(),
+    class_id: external_exports.string().min(1).max(100).optional().nullable(),
     numero: external_exports.string().max(50).optional().nullable(),
     status: external_exports.enum(["active", "inactive", "suspended"]).optional()
   });
@@ -15296,6 +15369,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!parsed.success) {
         throw new ValidationError(parsed.error.flatten().fieldErrors);
       }
+      if (config.mode === "saas") {
+        const response = await fetch(apiUrl("/auth/login"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(parsed.data)
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (body.fields) throw new ValidationError(body.fields);
+          throw new UnauthorizedError(body.message || body.error?.message || "Invalid username or password");
+        }
+        this.#token = body.accessToken || body.token || null;
+        this.#user = this.#stripSensitive(body.user || body);
+        this.#persistSession(this.#user);
+        window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+          this.#token = newToken;
+        };
+        return { user: this.#user, token: this.#token };
+      }
       const { data: users } = await this.#repo.getAll("users", {
         filters: { username: username.trim() }
       });
@@ -15321,6 +15414,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
      * Logout: clear session state, disconnect socket.
      */
     async logout() {
+      if (config.mode === "saas" && this.#token) {
+        try {
+          await fetch(apiUrl("/auth/logout"), {
+            method: "POST",
+            headers: { Authorization: `Bearer ${this.#token}` },
+            credentials: "include"
+          });
+        } catch {
+        }
+      }
       this.#token = null;
       this.#user = null;
       this.#clearSession();
@@ -15411,32 +15514,62 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           };
           return;
         }
-        const legacySession = sessionStorage.getItem("quizSession");
+        const legacyRaw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSession");
+        const legacySession = legacyRaw ? JSON.parse(legacyRaw) : null;
         if (legacySession) {
-          const parsed = JSON.parse(legacySession);
-          if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+          if (legacySession.expiresAt && Date.now() > new Date(legacySession.expiresAt).getTime()) {
             sessionStorage.removeItem("quizSession");
+            localStorage.removeItem("quizSession");
             return;
           }
-          if (this.#repo?.getAll) {
-            try {
-              const usersJson = localStorage.getItem("quizUsers");
-              if (usersJson) {
-                const users = JSON.parse(usersJson);
-                const user = users.find((u) => u.id === parsed.userId);
-                if (user) {
-                  this.#user = user;
-                  this.#token = this.#encodeToken(user);
-                  this.#persistSession(user);
-                  return;
-                }
-              }
-            } catch {
+          try {
+            const usersJson = localStorage.getItem("quizUsers");
+            const localUser = usersJson ? JSON.parse(usersJson).find((u) => u.id === legacySession.userId) : null;
+            const tokenUser = this.#decodeToken(legacySession.token);
+            const user = localUser || {
+              id: legacySession.userId,
+              username: legacySession.username,
+              name: legacySession.name,
+              role: legacySession.role,
+              school_id: tokenUser?.school_id
+            };
+            if (user?.id && user?.role) {
+              this.#user = this.#stripSensitive(user);
+              this.#token = legacySession.token || this.#encodeToken(this.#user);
+              this.#persistSession(this.#user);
+              window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+                this.#token = newToken;
+              };
+              return;
+            }
+          } catch {
+          }
+        }
+        try {
+          const rawUser = localStorage.getItem("quizCurrentUser");
+          if (rawUser) {
+            const user = this.#stripSensitive(JSON.parse(rawUser));
+            if (user?.id && user?.role) {
+              this.#user = user;
+              this.#token = this.#encodeToken(user);
+              this.#persistSession(user);
             }
           }
+        } catch {
         }
       } catch {
         this.#clearSession();
+      }
+    }
+    #decodeToken(token) {
+      if (!token || typeof token !== "string") return null;
+      try {
+        const payload = token.split(".")[1];
+        if (!payload) return null;
+        const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+        return JSON.parse(atob(normalized));
+      } catch {
+        return null;
       }
     }
   };
@@ -15449,9 +15582,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async list(filters = {}, pagination = {}) {
       const parsed = UserFilterSchema.safeParse({ ...filters, ...pagination });
-      if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      if (!parsed.success)
+        throw new ValidationError(parsed.error.flatten().fieldErrors);
       const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
-      return this.#repo.getAll("users", { filters: rest, limit, offset, orderBy, direction, search });
+      return this.#repo.getAll("users", {
+        filters: rest,
+        limit,
+        offset,
+        orderBy,
+        direction,
+        search
+      });
     }
     async getById(id) {
       const user = await this.#repo.getById("users", id);
@@ -15461,15 +15602,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     async create(data, currentUser) {
       this.#requireAdmin(currentUser);
       const parsed = UserCreateSchema.safeParse(data);
-      if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      if (!parsed.success)
+        throw new ValidationError(parsed.error.flatten().fieldErrors);
       const { data: existing } = await this.#repo.getAll("users", {
         filters: { username: parsed.data.username }
       });
-      if (existing.length > 0) throw new ConflictError(`Username "${parsed.data.username}" is already taken`);
-      const user = await this.#repo.create("users", {
+      if (existing.length > 0)
+        throw new ConflictError(
+          `Username "${parsed.data.username}" is already taken`
+        );
+      const passwordHash = await this.#hashPassword(parsed.data.password);
+      const legacyPayload = {
         ...parsed.data,
+        classId: parsed.data.class_id ?? null,
+        studentNumber: parsed.data.numero ?? "",
+        password: parsed.data.password,
+        password_hash: passwordHash,
+        passwordHash,
         school_id: currentUser.school_id ?? "local"
-      });
+      };
+      const user = await this.#repo.create("users", legacyPayload);
       return this.#stripPassword(user);
     }
     async update(id, data, currentUser) {
@@ -15477,26 +15629,38 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const existing = await this.#repo.getById("users", id);
       if (!existing) throw new NotFoundError("User");
       const parsed = UserUpdateSchema.safeParse(data);
-      if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      const updated = await this.#repo.update("users", id, parsed.data);
+      if (!parsed.success)
+        throw new ValidationError(parsed.error.flatten().fieldErrors);
+      const updatePayload = {
+        ...parsed.data,
+        ...parsed.data.class_id !== void 0 ? { classId: parsed.data.class_id } : {},
+        ...parsed.data.numero !== void 0 ? { studentNumber: parsed.data.numero } : {}
+      };
+      const updated = await this.#repo.update("users", id, updatePayload);
       return this.#stripPassword(updated);
     }
     async delete(id, currentUser) {
       this.#requireAdmin(currentUser);
-      if (id === currentUser.id) throw new ValidationError({ id: ["Cannot delete your own account"] });
+      if (id === currentUser.id)
+        throw new ValidationError({ id: ["Cannot delete your own account"] });
       const existing = await this.#repo.getById("users", id);
       if (!existing) throw new NotFoundError("User");
       if (existing.role === ROLES.ADMIN) {
-        const { data: admins } = await this.#repo.getAll("users", { filters: { role: ROLES.ADMIN } });
+        const { data: admins } = await this.#repo.getAll("users", {
+          filters: { role: ROLES.ADMIN }
+        });
         if (admins.length <= 1) {
-          throw new ValidationError({ id: ["Cannot delete the only admin account"] });
+          throw new ValidationError({
+            id: ["Cannot delete the only admin account"]
+          });
         }
       }
       await this.#repo.delete("users", id);
     }
     async changeStatus(id, status, currentUser) {
       this.#requireAdmin(currentUser);
-      if (id === currentUser.id) throw new ValidationError({ id: ["Cannot change your own status"] });
+      if (id === currentUser.id)
+        throw new ValidationError({ id: ["Cannot change your own status"] });
       const existing = await this.#repo.getById("users", id);
       if (!existing) throw new NotFoundError("User");
       const updated = await this.#repo.update("users", id, { status });
@@ -15508,15 +15672,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!user) throw new NotFoundError("User");
       const cls = await this.#repo.getById("classes", classId);
       if (!cls) throw new NotFoundError("Class");
-      const updated = await this.#repo.update("users", userId, { class_id: classId });
+      const updated = await this.#repo.update("users", userId, {
+        class_id: classId
+      });
       return this.#stripPassword(updated);
     }
     async resetPassword(userId, newPassword, currentUser) {
       this.#requireAdmin(currentUser);
       const user = await this.#repo.getById("users", userId);
       if (!user) throw new NotFoundError("User");
-      if (newPassword.length < 6) throw new ValidationError({ password: ["Minimum 6 characters"] });
-      await this.#repo.update("users", userId, { password: newPassword, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+      if (newPassword.length < 6)
+        throw new ValidationError({ password: ["Minimum 6 characters"] });
+      const passwordHash = await this.#hashPassword(newPassword);
+      await this.#repo.update("users", userId, {
+        password: newPassword,
+        password_hash: passwordHash,
+        passwordHash,
+        updated_at: (/* @__PURE__ */ new Date()).toISOString()
+      });
     }
     // ── Helpers ──────────────────────────────────────────────────────────────────
     #requireAdmin(user) {
@@ -15524,8 +15697,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         throw new ForbiddenError();
       }
     }
+    async #hashPassword(input) {
+      const text = String(input || "");
+      if (!text) return "";
+      if (typeof globalThis !== "undefined" && globalThis.crypto?.subtle) {
+        const bytes = new TextEncoder().encode(text);
+        const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+        return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+      }
+      let hash2 = 0;
+      for (let i = 0; i < text.length; i += 1) {
+        hash2 = (hash2 << 5) - hash2 + text.charCodeAt(i);
+        hash2 |= 0;
+      }
+      return `simple-${hash2}`;
+    }
     #stripPassword(user) {
-      const { password, password_hash, ...safe } = user;
+      const { password, password_hash, passwordHash, ...safe } = user;
       return safe;
     }
   };
@@ -15703,8 +15891,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!exam) throw new NotFoundError("Exam");
       return exam;
     }
-    async getWithQuestions(id) {
-      const exam = await this.#repo.query("exam.withQuestions", { examId: id });
+    async getWithQuestions(id, schoolId = null) {
+      const exam = await this.#repo.query("exam.withQuestions", {
+        examId: id,
+        ...schoolId ? { schoolId } : {}
+      });
       if (!exam) throw new NotFoundError("Exam");
       return exam;
     }
@@ -15743,6 +15934,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async addQuestion(examId, questionId, orderIndex, currentUser) {
       this.#requireAdmin(currentUser);
+      if (typeof this.#repo.addExamQuestion === "function") {
+        return this.#repo.addExamQuestion(examId, {
+          question_id: questionId,
+          order_index: orderIndex ?? 0
+        });
+      }
       const exam = await this.#repo.getById("exams", examId);
       if (!exam) throw new NotFoundError("Exam");
       const question = await this.#repo.getById("questions", questionId);
@@ -15759,6 +15956,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async removeQuestion(examId, questionId, currentUser) {
       this.#requireAdmin(currentUser);
+      if (typeof this.#repo.removeExamQuestion === "function") {
+        return this.#repo.removeExamQuestion(examId, questionId);
+      }
       const { data } = await this.#repo.getAll("exam_questions", {
         filters: { exam_id: examId, question_id: questionId }
       });
@@ -15769,6 +15969,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const parsed = ExamReorderSchema.safeParse({ question_ids: orderedQuestionIds });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      if (typeof this.#repo.reorderExamQuestions === "function") {
+        return this.#repo.reorderExamQuestions(examId, orderedQuestionIds);
+      }
       const { data: links } = await this.#repo.getAll("exam_questions", { filters: { exam_id: examId } });
       for (const link of links) {
         const newIndex = orderedQuestionIds.indexOf(link.question_id);
@@ -15798,6 +16001,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async assignToClass(examId, classId, currentUser) {
       this.#requireAdmin(currentUser);
+      if (typeof this.#repo.assignExamClass === "function") {
+        return this.#repo.assignExamClass(examId, classId);
+      }
       const { data: existing } = await this.#repo.getAll("exam_classes", {
         filters: { exam_id: examId, class_id: classId }
       });
@@ -15810,11 +16016,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async removeFromClass(examId, classId, currentUser) {
       this.#requireAdmin(currentUser);
+      if (typeof this.#repo.removeExamClass === "function") {
+        return this.#repo.removeExamClass(examId, classId);
+      }
       const { data } = await this.#repo.getAll("exam_classes", {
         filters: { exam_id: examId, class_id: classId }
       });
       if (data.length === 0) return;
       await this.#repo.delete("exam_classes", data[0].id);
+    }
+    async getAssignedClasses(examId) {
+      if (typeof this.#repo.getExamClasses === "function") {
+        const result = await this.#repo.getExamClasses(examId);
+        return result?.data ?? result ?? [];
+      }
+      const { data } = await this.#repo.getAll("exam_classes", {
+        filters: { exam_id: examId },
+        limit: 200
+      });
+      return data;
     }
     async getAvailableForStudent(userId) {
       return this.#repo.query("exam.availableForStudent", { userId });
@@ -15941,7 +16161,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async getByUser(userId, pagination = {}) {
       return this.#repo.getAll("results", {
-        filters: { user_id: userId },
+        filters: {
+          user_id: userId,
+          ...pagination.schoolId ? { school_id: pagination.schoolId } : {}
+        },
         limit: pagination.limit ?? 50,
         offset: pagination.offset ?? 0,
         orderBy: "date_taken",
@@ -15950,7 +16173,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async getByExam(examId, pagination = {}) {
       return this.#repo.getAll("results", {
-        filters: { exam_id: examId },
+        filters: {
+          exam_id: examId,
+          ...pagination.schoolId ? { school_id: pagination.schoolId } : {}
+        },
         limit: pagination.limit ?? 50,
         offset: pagination.offset ?? 0,
         orderBy: "date_taken",
@@ -15962,9 +16188,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!result) throw new NotFoundError("Result");
       return result;
     }
-    async getStatsByExam(examId) {
+    async getStatsByExam(examId, schoolId = null) {
       const { data } = await this.#repo.getAll("results", {
-        filters: { exam_id: examId },
+        filters: { exam_id: examId, ...schoolId ? { school_id: schoolId } : {} },
         limit: 9999
       });
       if (data.length === 0) return { avg: 0, min: 0, max: 0, passRate: 0, total: 0 };
@@ -15977,9 +16203,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         passRate: Math.round(data.filter((r) => r.passed).length / data.length * 100)
       };
     }
-    async getStatsByUser(userId) {
+    async getStatsByUser(userId, schoolId = null) {
       const { data } = await this.#repo.getAll("results", {
-        filters: { user_id: userId },
+        filters: { user_id: userId, ...schoolId ? { school_id: schoolId } : {} },
         limit: 9999
       });
       if (data.length === 0) return { avg: 0, totalExams: 0, passRate: 0 };
@@ -16631,6 +16857,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     async updateSetting(schoolId, key, value, visibility) {
       const parsed = SettingUpdateSchema.safeParse({ key, value, visibility });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      if (typeof this.#repo.updateSetting === "function") {
+        return this.#repo.updateSetting(parsed.data.key, parsed.data);
+      }
       const { data: existing } = await this.#repo.getAll("settings", {
         filters: { school_id: schoolId, key: parsed.data.key }
       });
@@ -16646,6 +16875,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         value: parsed.data.value,
         visibility: parsed.data.visibility ?? SETTINGS_VISIBILITY.ADMIN
       });
+    }
+    async deleteSetting(schoolId, key) {
+      let setting;
+      if (typeof this.#repo.deleteSetting === "function") {
+        return this.#repo.deleteSetting(key);
+      }
+      const { data } = await this.#repo.getAll("settings", {
+        filters: { school_id: schoolId, key },
+        limit: 1
+      });
+      setting = data[0];
+      if (!setting) return;
+      return this.#repo.delete("settings", setting.id);
     }
     /**
      * Bulk update multiple settings at once.
@@ -26095,9 +26337,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     function persistSession(session, remember) {
       try {
+        sessionStorage.setItem("quizSession", JSON.stringify(session));
         localStorage.setItem("quizSession", JSON.stringify(session));
         if (remember) {
-          localStorage.setItem("quizSessionRemember", "true");
+          localStorage.setItem("quizSessionRemember", JSON.stringify(session));
         } else {
           localStorage.removeItem("quizSessionRemember");
         }
@@ -26105,12 +26348,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           localStorage.setItem("quizAuthToken", session.token);
         }
         if (session.userId) {
-          localStorage.setItem("quizCurrentUser", JSON.stringify({
+          var currentUser = {
             id: session.userId,
             username: session.username,
             name: session.name || session.username,
-            role: session.role
-          }));
+            role: session.role,
+            status: "active"
+          };
+          localStorage.setItem("quizCurrentUser", JSON.stringify(currentUser));
+          var users = [];
+          try {
+            users = JSON.parse(localStorage.getItem("quizUsers") || "[]");
+          } catch (_) {
+          }
+          if (!Array.isArray(users)) users = [];
+          var found = false;
+          users = users.map(function(user) {
+            if (user && user.id === currentUser.id) {
+              found = true;
+              return Object.assign({}, user, currentUser);
+            }
+            return user;
+          });
+          if (!found) users.push(currentUser);
+          localStorage.setItem("quizUsers", JSON.stringify(users));
         }
         window.__authToken = session.token;
       } catch (e) {
@@ -26220,6 +26481,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           });
           try {
             localStorage.removeItem("quizSession");
+            sessionStorage.removeItem("quizSession");
             localStorage.removeItem("quizSessionRemember");
             localStorage.removeItem("quizAuthToken");
             localStorage.removeItem("quizCurrentUser");
@@ -26249,24 +26511,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       logger.info("Student SPA initialized", { mode: window.APP_CONFIG?.mode });
       window.__DI_CONTAINER__ = container;
       try {
-        const legacySessionRaw = sessionStorage.getItem("quizSession");
-        if (legacySessionRaw) {
-          const legacySession = JSON.parse(legacySessionRaw);
-          if (legacySession.role === "admin" || legacySession.role === "super_admin") {
-            if (!sessionStorage.getItem("__quiz_session__")) {
-              const usersJson = localStorage.getItem("quizUsers");
-              if (usersJson) {
-                const users = JSON.parse(usersJson);
-                const user = users.find((u) => u.id === legacySession.userId);
-                if (user) {
-                  const { password, password_hash, ...safeUser } = user;
-                  sessionStorage.setItem("__quiz_session__", JSON.stringify({
-                    user: safeUser,
-                    ts: Date.now()
-                  }));
-                }
-              }
-            }
+        const legacyUser = window.Auth?.getCurrentUser?.();
+        if (legacyUser && (legacyUser.role === "admin" || legacyUser.role === "super_admin")) {
+          if (!sessionStorage.getItem("__quiz_session__")) {
+            const safeUser = (({ password, password_hash, ...rest }) => rest)(legacyUser);
+            sessionStorage.setItem("__quiz_session__", JSON.stringify({
+              user: safeUser,
+              ts: Date.now()
+            }));
           }
         }
       } catch {

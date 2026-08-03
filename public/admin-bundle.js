@@ -15955,14 +15955,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         password: external_exports.string().min(6).max(100),
         name: external_exports.string().min(1).max(100),
         role: external_exports.enum(roleValues).default("student"),
-        class_id: external_exports.string().uuid().optional().nullable(),
+        class_id: external_exports.string().min(1).max(100).optional().nullable(),
         numero: external_exports.string().max(50).optional().nullable(),
         status: external_exports.enum(["active", "inactive", "suspended"]).default("active")
       });
       UserUpdateSchema = external_exports.object({
         name: external_exports.string().min(1).max(100).optional(),
         role: external_exports.enum(roleValues).optional(),
-        class_id: external_exports.string().uuid().optional().nullable(),
+        class_id: external_exports.string().min(1).max(100).optional().nullable(),
         numero: external_exports.string().max(50).optional().nullable(),
         status: external_exports.enum(["active", "inactive", "suspended"]).optional()
       });
@@ -16263,9 +16263,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         async list(filters = {}, pagination = {}) {
           const parsed = UserFilterSchema.safeParse({ ...filters, ...pagination });
-          if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+          if (!parsed.success)
+            throw new ValidationError(parsed.error.flatten().fieldErrors);
           const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
-          return this.#repo.getAll("users", { filters: rest, limit, offset, orderBy, direction, search });
+          return this.#repo.getAll("users", {
+            filters: rest,
+            limit,
+            offset,
+            orderBy,
+            direction,
+            search
+          });
         }
         async getById(id) {
           const user = await this.#repo.getById("users", id);
@@ -16275,15 +16283,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         async create(data, currentUser) {
           this.#requireAdmin(currentUser);
           const parsed = UserCreateSchema.safeParse(data);
-          if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+          if (!parsed.success)
+            throw new ValidationError(parsed.error.flatten().fieldErrors);
           const { data: existing } = await this.#repo.getAll("users", {
             filters: { username: parsed.data.username }
           });
-          if (existing.length > 0) throw new ConflictError(`Username "${parsed.data.username}" is already taken`);
-          const user = await this.#repo.create("users", {
+          if (existing.length > 0)
+            throw new ConflictError(
+              `Username "${parsed.data.username}" is already taken`
+            );
+          const passwordHash = await this.#hashPassword(parsed.data.password);
+          const legacyPayload = {
             ...parsed.data,
+            classId: parsed.data.class_id ?? null,
+            studentNumber: parsed.data.numero ?? "",
+            password: parsed.data.password,
+            password_hash: passwordHash,
+            passwordHash,
             school_id: currentUser.school_id ?? "local"
-          });
+          };
+          const user = await this.#repo.create("users", legacyPayload);
           return this.#stripPassword(user);
         }
         async update(id, data, currentUser) {
@@ -16291,26 +16310,38 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           const existing = await this.#repo.getById("users", id);
           if (!existing) throw new NotFoundError("User");
           const parsed = UserUpdateSchema.safeParse(data);
-          if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-          const updated = await this.#repo.update("users", id, parsed.data);
+          if (!parsed.success)
+            throw new ValidationError(parsed.error.flatten().fieldErrors);
+          const updatePayload = {
+            ...parsed.data,
+            ...parsed.data.class_id !== void 0 ? { classId: parsed.data.class_id } : {},
+            ...parsed.data.numero !== void 0 ? { studentNumber: parsed.data.numero } : {}
+          };
+          const updated = await this.#repo.update("users", id, updatePayload);
           return this.#stripPassword(updated);
         }
         async delete(id, currentUser) {
           this.#requireAdmin(currentUser);
-          if (id === currentUser.id) throw new ValidationError({ id: ["Cannot delete your own account"] });
+          if (id === currentUser.id)
+            throw new ValidationError({ id: ["Cannot delete your own account"] });
           const existing = await this.#repo.getById("users", id);
           if (!existing) throw new NotFoundError("User");
           if (existing.role === ROLES.ADMIN) {
-            const { data: admins } = await this.#repo.getAll("users", { filters: { role: ROLES.ADMIN } });
+            const { data: admins } = await this.#repo.getAll("users", {
+              filters: { role: ROLES.ADMIN }
+            });
             if (admins.length <= 1) {
-              throw new ValidationError({ id: ["Cannot delete the only admin account"] });
+              throw new ValidationError({
+                id: ["Cannot delete the only admin account"]
+              });
             }
           }
           await this.#repo.delete("users", id);
         }
         async changeStatus(id, status, currentUser) {
           this.#requireAdmin(currentUser);
-          if (id === currentUser.id) throw new ValidationError({ id: ["Cannot change your own status"] });
+          if (id === currentUser.id)
+            throw new ValidationError({ id: ["Cannot change your own status"] });
           const existing = await this.#repo.getById("users", id);
           if (!existing) throw new NotFoundError("User");
           const updated = await this.#repo.update("users", id, { status });
@@ -16322,15 +16353,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!user) throw new NotFoundError("User");
           const cls = await this.#repo.getById("classes", classId);
           if (!cls) throw new NotFoundError("Class");
-          const updated = await this.#repo.update("users", userId, { class_id: classId });
+          const updated = await this.#repo.update("users", userId, {
+            class_id: classId
+          });
           return this.#stripPassword(updated);
         }
         async resetPassword(userId, newPassword, currentUser) {
           this.#requireAdmin(currentUser);
           const user = await this.#repo.getById("users", userId);
           if (!user) throw new NotFoundError("User");
-          if (newPassword.length < 6) throw new ValidationError({ password: ["Minimum 6 characters"] });
-          await this.#repo.update("users", userId, { password: newPassword, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+          if (newPassword.length < 6)
+            throw new ValidationError({ password: ["Minimum 6 characters"] });
+          const passwordHash = await this.#hashPassword(newPassword);
+          await this.#repo.update("users", userId, {
+            password: newPassword,
+            password_hash: passwordHash,
+            passwordHash,
+            updated_at: (/* @__PURE__ */ new Date()).toISOString()
+          });
         }
         // ── Helpers ──────────────────────────────────────────────────────────────────
         #requireAdmin(user) {
@@ -16338,8 +16378,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             throw new ForbiddenError();
           }
         }
+        async #hashPassword(input) {
+          const text = String(input || "");
+          if (!text) return "";
+          if (typeof globalThis !== "undefined" && globalThis.crypto?.subtle) {
+            const bytes = new TextEncoder().encode(text);
+            const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+            return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+          }
+          let hash2 = 0;
+          for (let i = 0; i < text.length; i += 1) {
+            hash2 = (hash2 << 5) - hash2 + text.charCodeAt(i);
+            hash2 |= 0;
+          }
+          return `simple-${hash2}`;
+        }
         #stripPassword(user) {
-          const { password, password_hash, ...safe } = user;
+          const { password, password_hash, passwordHash, ...safe } = user;
           return safe;
         }
       };
@@ -20922,11 +20977,80 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     titleEl.className = "admin-header__title";
     titleEl.textContent = title;
     brand.append(appName, titleEl);
+    const searchWrap = document.createElement("div");
+    searchWrap.className = "admin-header__search-wrap";
+    const searchInput = document.createElement("input");
+    searchInput.id = "globalSearchInput";
+    searchInput.type = "text";
+    searchInput.className = "admin-header__search";
+    searchInput.placeholder = "Search anything... (Cmd+K)";
+    searchInput.setAttribute("aria-label", "Global search");
+    searchInput.addEventListener("input", () => {
+      if (!searchInput.value.trim()) {
+        searchInput.dataset.hasQuery = "false";
+      } else {
+        searchInput.dataset.hasQuery = "true";
+      }
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInput.focus();
+      }
+      if (e.key === "Escape") {
+        searchInput.value = "";
+        searchInput.dataset.hasQuery = "false";
+      }
+    });
+    searchWrap.appendChild(searchInput);
     const actions = document.createElement("div");
     actions.className = "admin-header__actions";
-    const userChip = document.createElement("span");
-    userChip.className = "admin-header__user";
-    userChip.textContent = user?.name ? `${user.name} (${user.role})` : user?.username ?? "Admin";
+    const userChip = document.createElement("button");
+    userChip.type = "button";
+    userChip.className = "admin-header__user-btn";
+    userChip.setAttribute("aria-haspopup", "menu");
+    userChip.setAttribute("aria-expanded", "false");
+    userChip.innerHTML = `
+    <span class="admin-header__avatar">${(user?.name || user?.username || "A").charAt(0).toUpperCase()}</span>
+    <span class="admin-header__user-name">${user?.name ? `${user.name} (${user.role})` : user?.username ?? "Admin"}</span>
+  `;
+    const profileMenu = document.createElement("div");
+    profileMenu.id = "profileMenu";
+    profileMenu.className = "admin-header__profile-menu";
+    profileMenu.innerHTML = `
+    <div class="admin-header__profile-mail">${escapeHTML(user?.email || user?.username || "admin@example.com")}</div>
+    <button type="button" class="admin-header__menu-item" data-action="settings">Settings</button>
+    <button type="button" class="admin-header__menu-item admin-header__menu-item--danger" data-action="logout">Logout</button>
+  `;
+    profileMenu.querySelector('[data-action="settings"]').addEventListener("click", () => {
+      window.openSettingsModal?.();
+      profileMenu.classList.remove("is-open");
+      userChip.setAttribute("aria-expanded", "false");
+    });
+    profileMenu.querySelector('[data-action="logout"]').addEventListener("click", () => {
+      withError(async () => {
+        await authSvc.logout();
+        logger.info("Admin logged out");
+        Router.navigate("/");
+      });
+    });
+    userChip.addEventListener("click", () => {
+      const willOpen = !profileMenu.classList.contains("is-open");
+      profileMenu.classList.toggle("is-open", willOpen);
+      userChip.setAttribute("aria-expanded", String(willOpen));
+    });
+    document.addEventListener("click", (event) => {
+      if (!actions.contains(event.target)) {
+        profileMenu.classList.remove("is-open");
+        userChip.setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        profileMenu.classList.remove("is-open");
+        userChip.setAttribute("aria-expanded", "false");
+      }
+    });
     const logoutBtn = document.createElement("button");
     logoutBtn.type = "button";
     logoutBtn.className = "btn btn-secondary admin-header__logout";
@@ -20938,9 +21062,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         Router.navigate("/");
       });
     });
-    actions.append(userChip, logoutBtn);
-    header.append(brand, actions);
+    actions.append(userChip, profileMenu, logoutBtn);
+    header.append(brand, searchWrap, actions);
     container.replaceChildren(header);
+    window.toggleProfileMenu = () => {
+      const nextState = !profileMenu.classList.contains("is-open");
+      profileMenu.classList.toggle("is-open", nextState);
+      userChip.setAttribute("aria-expanded", String(nextState));
+    };
+    window.openSettingsModal = () => {
+      if (location.hash.replace("#", "") !== "settings") {
+        history.replaceState(null, "", "#settings");
+      }
+      window.dispatchEvent(new Event("hashchange"));
+    };
     return {
       setTitle(newTitle) {
         titleEl.textContent = newTitle;

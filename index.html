@@ -1,40 +1,72 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Modern Quiz App</title>
-  <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" />
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Modern Quiz App</title>
+		<link
+			rel="icon"
+			type="image/x-icon"
+			href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+		/>
+		<link rel="stylesheet" href="styles.css" />
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
+		/>
 
-  <script>
-    window.APP_CONFIG = window.APP_CONFIG || {
-      mode: 'local',
-      apiUrl: '/api/v1',
-      socketUrl: '/',
-    };
-  </script>
+		<script>
+			window.APP_CONFIG = window.APP_CONFIG || {
+				mode: 'local',
+				apiUrl: '/api/v1',
+				socketUrl: '/',
+			};
+		</script>
 
-  <!-- Legacy Bridge — must load synchronously (defines globals used by getSocket) -->
-  <script src="legacy-bridge.js"></script>
-  <!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
-  <script>
-    window.getSocket = window.getSocket || function(url, opts) {
-      if (!window.io) { console.warn('getSocket called before Socket.IO loaded'); return null; }
-      var token = window.__authToken || (function(){ try{ var s=JSON.parse(localStorage.getItem('quizSession')||'null'); return s&&s.token; }catch(e){} })() || localStorage.getItem('quizAuthToken') || '';
-      return window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
-    };
-  </script>
+		<!-- Legacy Bridge — must load synchronously (defines globals used by getSocket) -->
+		<script src="legacy-bridge.js"></script>
+		<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
+		<script>
+			window.getSocket =
+				window.getSocket ||
+				function (url, opts) {
+					if (!window.io) {
+						console.warn('getSocket called before Socket.IO loaded');
+						return null;
+					}
+					var token =
+						window.__authToken ||
+						(function () {
+							try {
+								var s = JSON.parse(
+									localStorage.getItem('quizSession') || 'null',
+								);
+								return s && s.token;
+							} catch (e) {}
+						})() ||
+						localStorage.getItem('quizAuthToken') ||
+						'';
+					return window.io(
+						url || '/',
+						Object.assign(
+							{ auth: { token: token }, transports: ['polling', 'websocket'] },
+							opts || {},
+						),
+					);
+				};
+		</script>
 
-  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" defer></script>
+		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
+		<script
+			src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"
+			defer
+		></script>
 
-  <!-- Student Bundle -->
-  <script src="public/student-bundle.js" defer></script>
-</head>
-<body>
-  <!-- The single root container that StudentLanding.js mounts into -->
-  <main id="app"></main>
-</body>
+		<!-- Student SPA shell -->
+		<script src="public/student-bundle.js" defer></script>
+	</head>
+	<body>
+		<!-- The single root container that the new student SPA mounts into -->
+		<main id="app"></main>
+	</body>
 </html>
