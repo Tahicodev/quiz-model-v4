@@ -2565,6 +2565,14 @@
 			return;
 		}
 
+		if (!existingUser && !password) {
+			showToast(
+				'Password is required for a new account (blank is only allowed when editing)',
+				'error',
+			);
+			return;
+		}
+
 		const duplicate = users.find(
 			(u) =>
 				u.username?.toLowerCase() === username.toLowerCase() &&
@@ -2615,7 +2623,12 @@
 			const classId = studentClassSelect ? studentClassSelect.value : '';
 
 			if (!studentNumber || !classId) {
-				showToast('Student number and class are required', 'error');
+				showToast(
+					!studentNumber
+						? 'Student number is required for a student account'
+						: 'A class is required for a student account',
+					'error',
+				);
 				return;
 			}
 

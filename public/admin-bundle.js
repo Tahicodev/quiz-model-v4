@@ -20985,13 +20985,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     searchInput.className = "admin-header__search";
     searchInput.placeholder = "Search anything... (Cmd+K)";
     searchInput.setAttribute("aria-label", "Global search");
-    searchInput.addEventListener("input", () => {
-      if (!searchInput.value.trim()) {
-        searchInput.dataset.hasQuery = "false";
-      } else {
-        searchInput.dataset.hasQuery = "true";
-      }
-    });
     searchInput.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
@@ -20999,7 +20992,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       if (e.key === "Escape") {
         searchInput.value = "";
-        searchInput.dataset.hasQuery = "false";
       }
     });
     searchWrap.appendChild(searchInput);
@@ -21039,18 +21031,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       profileMenu.classList.toggle("is-open", willOpen);
       userChip.setAttribute("aria-expanded", String(willOpen));
     });
-    document.addEventListener("click", (event) => {
-      if (!actions.contains(event.target)) {
-        profileMenu.classList.remove("is-open");
-        userChip.setAttribute("aria-expanded", "false");
-      }
-    });
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        profileMenu.classList.remove("is-open");
-        userChip.setAttribute("aria-expanded", "false");
-      }
-    });
     const logoutBtn = document.createElement("button");
     logoutBtn.type = "button";
     logoutBtn.className = "btn btn-secondary admin-header__logout";
@@ -21071,10 +21051,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       userChip.setAttribute("aria-expanded", String(nextState));
     };
     window.openSettingsModal = () => {
-      if (location.hash.replace("#", "") !== "settings") {
+      const hash2 = location.hash.replace("#", "");
+      if (hash2 !== "settings") {
         history.replaceState(null, "", "#settings");
       }
-      window.dispatchEvent(new Event("hashchange"));
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
     };
     return {
       setTitle(newTitle) {

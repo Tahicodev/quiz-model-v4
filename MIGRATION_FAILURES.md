@@ -6,25 +6,21 @@ This report is the durable migration handoff file for the app-wide legacy-to-mod
 
 ## Migration status
 
-The legacy shell and the modern SPA shell are now aligned so the application can run through a single compatible boot path while preserving the legacy look-and-feel that the old admin/student pages were built around.
+The migration changes the **structure** of the application (backend architecture, data layer, code organization) while keeping the **style and JS behavior of every element identical to the legacy app**. The admin and student pages boot from their original legacy HTML surfaces so the look-and-feel end users already know is preserved byte-for-byte; only the underlying structure changed.
 
 ## Fixed in the current pass
 
-- Restored the legacy admin entry shell and routed it to the new SPA bundle contract.
-- Preserved the legacy admin page runtime shape while exposing the new admin tab orchestration path in the bundled frontend.
-- Preserved the student workspace entry and the landing-page DOM contract so the old inline UX still renders correctly under the new bundled boot path.
-- Added legacy browser compatibility for local-storage-backed user records, so newly created users survive the admin-to-student login path.
-- Added the missing migration entry point and status rendering path in the restored legacy admin UI shell.
-- Expanded migration normalization for the remaining session/join-table snapshot shapes used by the old local app data.
-- Fixed the repository ordering regression that previously caused Prisma validation errors on session-related tables.
-- Kept the migration flow tenant-scoped and idempotent, with status reporting backed by the real backend query surface.
-- Verified the build and the full regression suite after the migration compatibility fixes.
+- **Restored the legacy admin page surface.** The previous pass had replaced `admin.html` with a bare SPA shell that rendered a brand-new look (`admin-header`, `admin-sidebar`, `admin-tab`, `admin-kpi`, …) via `public/admin-bundle.js` + `admin.css` — those classes are not part of `styles.css`, so the admin app no longer looked like the legacy app. `admin.html` is restored from the migration-approved legacy page (the state validated in the "migration failures fixed" pass): the original DOM (`app-container`, `app-header`, `header-main-bar`, `main-nav`, `nav-tab`, `tab-content`, `stat-card`, `kpi-grid`, all modals) driven by `styles.css` and the legacy scripts (`admin-main.js`, `category-management.js`, `questions-management.js`, …).
+- **Kept the modern backend structure underneath the legacy page.** The restored page loads `legacy-bridge.js` synchronously, which exposes `window.__DI_CONTAINER__` so the legacy management scripts talk to the modern repository layer (Prisma / services / REST API / socket auth) instead of raw localStorage. That is the intended "structure change": the UI contract stays legacy, the data/architecture layer is modern.
+- **Verified compatibility of the current root-level scripts with the restored page.** All 89 inline `onclick` handlers referenced by the legacy DOM resolve to `function` declarations in the root scripts; every function that existed in the migration-approved `admin-main.js` is still present; and the migration helpers added in the interim (`initializeLegacyMigrationTab`, `applyPagination`, `makeCheckboxItemsClickable`, `initMutationObserver`, …) are element-guarded and no-op when the legacy DOM lacks those nodes.
+- **Preserved the student side as-is.** `index.html` keeps its SPA shell but renders the byte-faithful legacy landing DOM (`StudentLanding.js`) and bundles the legacy scripts (`legacyBootstrap.js`); `student-workspace.html` remains the legacy page. No changes needed there.
+- Verified the build and the full regression suite after the admin surface restore.
 
 ## UI / UX preservation notes
 
-- The legacy admin page still boots from its original HTML surface, but the runtime is now exercised through the modern admin SPA page modules instead of a disconnected monolithic script stack.
+- The legacy admin page boots from its original HTML surface with all legacy scripts and `styles.css` — same DOM ids, same classes, same inline handlers, same look as the old admin page.
 - The student landing page remains visually and functionally faithful to the original markup, and the legacy DOM IDs / event hooks are preserved so the older landing/student scripts keep working.
-- The migration path is surfaced in the header/sidebar and page shell without changing the legacy page structure that end users already know.
+- The modern backend (Prisma repository, services, DI container, socket auth) is unchanged and continues to serve the REST/WebSocket API that both the legacy page (via `legacy-bridge.js`) and the bundled student entry use.
 
 ## Known follow-up items
 
@@ -45,7 +41,7 @@ These are not considered blockers for the migration runtime, but they are worth 
 ### 3. Optional visual polish pass
 
 - Scope: cosmetic alignment between the new bundled DOM and the older markup details.
-- Current status: the major structure and controls were preserved to match the legacy UX.
+- Current status: the admin page renders the legacy DOM directly, so no alignment work is needed there; the bundled student landing DOM is byte-faithful to the original.
 - Later fix: run a visual QA sweep to compare exact spacing, alignment, and control order against the old pages.
 
 ## Validation commands
@@ -59,7 +55,8 @@ Final validation evidence:
 
 - `npm.cmd run build`: passed; both admin and student bundles were rebuilt successfully.
 - `npm.cmd test`: passed with `16` test files, `130` tests passed, `1` skipped, and `0` failed.
+- Manual smoke test: the dev server serves `/admin.html` with the legacy DOM (all 8 tab sections, `stat-card`/`kpi-grid` markup) and every referenced legacy script returns HTTP 200.
 
 ## Outcome
 
-The migration is now complete from the runtime and compatibility standpoint, and the legacy UI/UX contract is preserved through the compatibility shell and SPA bootstrap glue. Any remaining cleanup is documented here for later, non-blocking work.
+The migration changes the application structure while preserving the legacy UI/UX contract exactly: the admin page renders from its original HTML surface with the original CSS and JS behaviors, and the modern backend structure sits underneath through the compatibility bridge. Any remaining cleanup is documented here for later, non-blocking work.

@@ -19811,6 +19811,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         showToast2("Name and username are required", "error");
         return;
       }
+      if (!existingUser && !password) {
+        showToast2(
+          "Password is required for a new account (blank is only allowed when editing)",
+          "error"
+        );
+        return;
+      }
       const duplicate = users.find(
         (u) => u.username?.toLowerCase() === username.toLowerCase() && u.id !== existingUserId
       );
@@ -19851,7 +19858,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const studentNumber = studentNumberInput ? studentNumberInput.value.trim() : "";
         const classId = studentClassSelect ? studentClassSelect.value : "";
         if (!studentNumber || !classId) {
-          showToast2("Student number and class are required", "error");
+          showToast2(
+            !studentNumber ? "Student number is required for a student account" : "A class is required for a student account",
+            "error"
+          );
           return;
         }
         if (isTeacherUser) {
