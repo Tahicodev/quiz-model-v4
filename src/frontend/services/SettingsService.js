@@ -16,7 +16,7 @@ export class SettingsService {
    * Safe to call from anywhere (even unauthenticated).
    * Returns only PUBLIC settings (e.g., app name, language, public logo).
    */
-  async getPublicSettings(schoolId = 'local') {
+  async getPublicSettings(schoolId = null) {
     return this.#repo.query('settings.byVisibility', { schoolId, visibility: SETTINGS_VISIBILITY.PUBLIC });
   }
 
@@ -24,7 +24,7 @@ export class SettingsService {
    * Requires Teacher/Admin role on the backend (in SaaS mode).
    * In local mode, returns public + teacher settings.
    */
-  async getTeacherSettings(schoolId = 'local') {
+  async getTeacherSettings(schoolId = null) {
     return this.#repo.query('settings.byVisibility', { schoolId, visibility: SETTINGS_VISIBILITY.TEACHER });
   }
 
@@ -32,7 +32,7 @@ export class SettingsService {
    * Requires Admin role on the backend (in SaaS mode).
    * Returns public + teacher + admin settings.
    */
-  async getAdminSettings(schoolId = 'local') {
+  async getAdminSettings(schoolId = null) {
     return this.#repo.query('settings.byVisibility', { schoolId, visibility: SETTINGS_VISIBILITY.ADMIN });
   }
 

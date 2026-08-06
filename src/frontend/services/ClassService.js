@@ -30,7 +30,7 @@ export class ClassService {
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     return this.#repo.create('classes', {
       ...parsed.data,
-      school_id: currentUser?.school_id ?? 'local',
+      school_id: currentUser?.school_id,
     });
   }
 

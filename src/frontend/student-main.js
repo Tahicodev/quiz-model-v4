@@ -34,7 +34,13 @@ import { initStudentLanding } from './ui/pages/student/StudentLanding.js';
 
     // Expose container for legacy interop during transition (legacy scripts
     // already read window.__DI_CONTAINER__.repo.getAll_sync('exams') etc.).
-    window.__DI_CONTAINER__ = container;
+    // Never clobber the legacy-bridge repo — legacy student scripts rely on
+    // its synchronous getAll_sync / setAll_sync contract.
+    if (!window.__DI_CONTAINER__ || typeof window.__DI_CONTAINER__.repo?.getAll_sync !== 'function') {
+      window.__DI_CONTAINER__ = container;
+    } else {
+      Object.assign(window.__DI_CONTAINER__, container, { repo: window.__DI_CONTAINER__.repo });
+    }
 
     // Bridge: if the user is logged in as admin via the legacy auth system,
     // persist the new session format so admin.html (which uses the modern

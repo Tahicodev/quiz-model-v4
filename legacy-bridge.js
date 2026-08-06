@@ -1,17 +1,17 @@
 /**
- * legacy-bridge.js
+ * legacy-bridge.js — SaaS-only compatibility shim
  *
- * Bridge that initializes `window.__DI_CONTAINER__` — the synchronous
- * repository interface that the refactored legacy management files use
- * instead of raw localStorage calls.
+ * Initializes `window.__DI_CONTAINER__` with a cache-backed repository that
+ * the legacy management scripts (admin-main.js, category-management.js, …)
+ * use in place of raw localStorage. In this build:
  *
- * Two modes (controlled by window.APP_CONFIG.mode):
- *
- *   local  — wraps native localStorage (default, no network needed)
- *   saas   — uses the REST API; data is cached in both memory + localStorage
- *            for synchronous access. An async preloader fetches from the
- *            backend so that by the time UI sections initialize the data is
- *            available locally.
+ *   - All persistence ultimately goes through the SaaS REST API
+ *     (`/api/v1/<table>`, `/api/v1/bulk/<table>`).
+ *   - On startup, a one-shot bootstrap GET `/api/v1/bootstrap` downloads the
+ *     caller's tenant data into an in-memory cache + localStorage so the
+ *     legacy synchronous reads stay correct.
+ *   - localStorage is a read-through/write-through cache only — never the
+ *     source of truth. The backend is.
  *
  * Load this script SYNCHRONOUSLY (without `defer`) before any management
  * script so that __DI_CONTAINER__ is defined when they execute.
@@ -22,7 +22,8 @@
 
   if (window.__DI_CONTAINER__) return; // already initialised
 
-  // ── Entity → localStorage key mapping (identical to LocalStorageRepository) ──
+  // ── Entity → localStorage key mapping ─────────────────────────────────────
+  // Kept stable because legacy code reads these keys directly elsewhere.
   var STORE_KEYS = {
     users:              'quizUsers',
     classes:            'quizClasses',
@@ -40,10 +41,6 @@
     game_sessions:      'quizGameSessions',
     tournament_entries: 'quizTournamentEntries',
     refresh_tokens:     'quizRefreshTokens',
-    // ── Operational keys added during the localStorage → repository migration ──
-    // Real-data stores that previously bypassed the bridge. Values unchanged
-    // so existing data is preserved; the monkey-patch below now intercepts
-    // these too, keeping the in-memory cache coherent in SaaS mode.
     activity:               'quizActivity',
     gamification:           'quizGamification',
     tournament_history:     'quizTournamentsHistory',
@@ -53,7 +50,6 @@
     notifications:          'adminNotifications',
     teacher_messages:       'teacherMessages',
     teacher_assignments:    'teacherAssignments',
-    // Legacy merge-source map used once by admin-main.js (cleared after merge).
     profile_requests_legacy: 'adminProfileRequests',
   };
 
@@ -66,8 +62,6 @@
   }
 
   // ── Stores that hold a single object (not an array table) ──────────────────
-  // The monkey-patch below picks the right repo method for these vs. array
-  // tables so reads/writes return the original shape (object, not coerced []).
   var OBJECT_STORES = {
     gamification: true,
   };
@@ -78,7 +72,7 @@
   var _origSetItem = Storage.prototype.setItem;
   var _origRemoveItem = Storage.prototype.removeItem;
 
-  // ── Sync helpers (used by both modes) ────────────────────────────────────────
+  // ── Sync helpers (cache + localStorage mirror) ───────────────────────────────
 
   function readAll(table) {
     var key = STORE_KEYS[table] || table;
@@ -88,8 +82,6 @@
   }
 
   // Object-tolerant read — returns the raw parsed JSON (array OR object).
-  // Used for stores that hold a single object (gamification config, etc.)
-  // rather than an array table. `readAll` always coerces to []; this never does.
   function readValue(table, fallback) {
     var key = STORE_KEYS[table] || table;
     try {
@@ -104,9 +96,6 @@
     _origSetItem.call(localStorage, key, JSON.stringify(data));
   }
 
-  // Remove a key entirely (mirrors localStorage.removeItem semantics) while
-  // keeping the cache coherent when in SaaS mode. Uses the native method
-  // directly to avoid re-entering the patched removeItem (infinite recursion).
   function removeAll(table) {
     var key = STORE_KEYS[table] || table;
     try {
@@ -118,7 +107,6 @@
     return readAll(table).find(function (i) { return i.id === id; }) || null;
   }
 
-  // Simple unique-id generator (crypto when available, fallback to timestamp+rand).
   function genId() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
       return window.crypto.randomUUID();
@@ -127,8 +115,6 @@
   }
 
   // ── Per-record mutations (array-typed tables only) ──────────────────────────
-  // Used by create_sync/update_sync/delete_sync. They mutate the table array,
-  // persist via writeAll, and (in SaaS mode) fire a single endpoint call.
   function createRecord(table, data) {
     var items = readAll(table);
     var now = new Date().toISOString();
@@ -162,41 +148,12 @@
     return true;
   }
 
-  // ── Local-mode repo (pure localStorage) ──────────────────────────────────────
-
-  function createLocalRepo() {
-    return {
-      getAll_sync:  readAll,
-      getById_sync: findById,
-      setAll_sync:  writeAll,
-      // Object-tolerant getter — returns raw parsed JSON or `fallback`.
-      getValue_sync: function (table, fallback) {
-        return readValue(table, fallback);
-      },
-      // Per-record mutations (array-typed tables only). In local mode they
-      // just persist to localStorage — no network involved.
-      create_sync: function (table, data) {
-        return createRecord(table, data);
-      },
-      update_sync: function (table, id, patch) {
-        return updateRecord(table, id, patch);
-      },
-      delete_sync: function (table, id) {
-        return deleteRecord(table, id);
-      },
-      remove_sync: removeAll,
-    };
-  }
-
-  // ── SaaS-mode repo (memory cache + API sync) ─────────────────────────────────
+  // ── SaaS repo (memory cache + API sync) ─────────────────────────────────────
 
   function createSaaSRepo() {
-    // In-memory cache for synchronous reads.
     var cache = {};
-    var syncInProgress = false;
-    var syncPromise = null;
 
-    // Seed from whatever is already in localStorage (e.g., from a previous session).
+    // Seed from whatever is already in localStorage (from a prior preload).
     for (var t in STORE_KEYS) {
       if (STORE_KEYS.hasOwnProperty(t)) {
         cache[t] = readAll(t);
@@ -212,16 +169,21 @@
     }
 
     // ── Fetch all data from the backend and populate cache + localStorage ──────
+    // Skipped silently when no token is present (anonymous landing page) — the
+    // cached data, if any, remains visible; the bootstrap re-runs after login
+    // via window.__legacyBridgeBootstrap().
     function fetchAll() {
-      if (syncPromise) return syncPromise;
-
-      syncInProgress = true;
-      syncPromise = fetch(getBaseUrl() + '/migrate/export', {
+      var token = getToken();
+      if (!token) {
+        // Anonymous — nothing to bootstrap. Leave the cache as-is.
+        return Promise.resolve();
+      }
+      return fetch(getBaseUrl() + '/bootstrap', {
         credentials: 'include',
-        headers: { 'Authorization': 'Bearer ' + getToken() },
+        headers: { 'Authorization': 'Bearer ' + token },
       })
         .then(function (r) {
-          if (!r.ok) throw new Error('Preload failed: ' + r.status);
+          if (!r.ok) throw new Error('Bootstrap failed: ' + r.status);
           return r.json();
         })
         .then(function (payload) {
@@ -233,24 +195,23 @@
               writeAll(table, data[table]);
             }
           }
-          syncInProgress = false;
         })
         .catch(function (err) {
-          syncInProgress = false;
-          console.warn('[legacy-bridge] Preload failed, using localStorage fallback:', err);
-          // If fetch fails, keep whatever was in cache/localStorage.
+          // If the bootstrap fails (e.g. token expired between page load and
+          // fetch), keep whatever was in cache/localStorage. The next login
+          // cycle will re-bootstrap cleanly.
+          console.warn('[legacy-bridge] Bootstrap failed, using cached data:', err.message);
         });
-      return syncPromise;
     }
 
-    // ── Sync a single table back to the API ─────────────────────────────────────
-    // `kind` controls the endpoint shape:
-    //   'bulk'   → POST   /api/v1/<table>/bulk  { items: array }        (setAll_sync)
-    //   'create' → POST   /api/v1/<table>        <record>               (create_sync)
-    //   'update' → PATCH  /api/v1/<table>/<id>   <patch>                (update_sync)
-    //   'delete' → DELETE /api/v1/<table>/<id>                          (delete_sync)
-    // All fire-and-forget; failures are swallowed (the cache/localStorage is
-    // already updated synchronously, so the UI stays correct).
+    // ── Sync a single change back to the API ──────────────────────────────────
+    //   'bulk'   → POST   /api/v1/bulk/<table>      { items | value }
+    //   'create' → POST   /api/v1/<table>           <record>
+    //   'update' → PATCH  /api/v1/<table>/<id>      <patch>
+    //   'delete' → DELETE /api/v1/<table>/<id>
+    // Fire-and-forget: failures are logged but the cache has already been
+    // updated synchronously, so the UI stays correct; a later bootstrap will
+    // reconcile against the server.
     function syncToApi(table, payload, kind) {
       var base = getBaseUrl() + '/' + table;
       var init = {
@@ -273,15 +234,11 @@
         init.method = 'DELETE';
         fire(base + '/' + encodeURIComponent(payload.id), init, table);
       } else {
-        // 'bulk' (default) — used by setAll_sync and setValue_sync.
+        // 'bulk' — used by setAll_sync / setValue_sync.
         if (!payload || (Array.isArray(payload) && payload.length === 0)) return;
         init.method = 'POST';
-        var body = Array.isArray(payload)
-          ? { items: payload }
-          : { value: payload }; // object store (e.g. gamification config)
+        var body = Array.isArray(payload) ? { items: payload } : { value: payload };
         init.body = JSON.stringify(body);
-        // Bulk routes are mounted at /api/v1/bulk/:table, not beneath the
-        // entity route. This is used by the legacy admin's setAll_sync().
         fire(getBaseUrl() + '/bulk/' + encodeURIComponent(table), init, table);
       }
     }
@@ -292,12 +249,15 @@
       });
     }
 
-    // Start preload immediately (fire-and-forget).
+    // Kick off the one-shot bootstrap immediately (no-op if anonymous).
     fetchAll();
+
+    // Expose a re-bootstrap hook so login flows can re-prime the cache once a
+    // token becomes available without forcing a full page reload.
+    window.__legacyBridgeBootstrap = fetchAll;
 
     return {
       getAll_sync: function (table) {
-        // Always prefer cache (populated by fetchAll or local writes).
         if (cache[table] !== undefined) return cache[table];
         return readAll(table);
       },
@@ -307,8 +267,6 @@
         return items.find(function (i) { return i.id === id; }) || null;
       },
 
-      // Object-tolerant getter. Not cache-backed (the cache only holds arrays);
-      // reads fresh so a preceding setValue_sync/setAll_sync is always visible.
       getValue_sync: function (table, fallback) {
         var cached = cache[table];
         if (cached !== undefined && cached !== null) return cached;
@@ -318,13 +276,9 @@
       setAll_sync: function (table, data) {
         cache[table] = data;
         writeAll(table, data);
-        // Fire-and-forget sync to API (array shape).
         syncToApi(table, data, 'bulk');
       },
 
-      // Object-valued store write (e.g. gamification config). Same persistence
-      // path as setAll_sync but flagged so the legacy "clear after merge"
-      // removeItem flows can call this with {} to clear cleanly.
       setValue_sync: function (table, value) {
         cache[table] = value;
         writeAll(table, value);
@@ -332,8 +286,6 @@
       },
 
       create_sync: function (table, data) {
-        // Mutates the table array, persists locally (keeps cache coherent),
-        // then fires a single-record POST.
         var record = createRecord(table, data);
         cache[table] = readAll(table);
         syncToApi(table, record, 'create');
@@ -361,15 +313,13 @@
       remove_sync: function (table) {
         delete cache[table];
         removeAll(table);
-        // No API call — there's no "drop table" endpoint; this just clears
-        // the local copy (used by the legacy "clear after merge" flows).
+        // No remote drop endpoint — legacy "clear after merge" flows are local
+        // only; the next bootstrap refresh reconciles.
       },
     };
   }
 
-  // ── Select implementation based on mode ──────────────────────────────────────
-  // Restore the access token before the SaaS preload starts. The legacy page
-  // stores it in localStorage so a reload can authenticate /migrate/export.
+  // ── Restore any previously-minted access token so the bootstrap can auth ────
   if (!window.__authToken) {
     try {
       var savedSession = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
@@ -380,28 +330,17 @@
     }
   }
 
-  var mode = (window.APP_CONFIG && window.APP_CONFIG.mode) || 'local';
-  var repo = mode === 'saas' ? createSaaSRepo() : createLocalRepo();
-
-  window.__DI_CONTAINER__ = { repo: repo };
-
-  // ── Legacy-auth token shim ────────────────────────────────────────────────────
-  // The new AuthService stores tokens differently. The legacy code reads
-  // localStorage.ensure('quizAuthToken') and localStorage.ensure('quizCurrentUser').
-  // In SaaS mode the bridge can optionally populate these from the preload.
-  // We leave them to be populated by the login flow; the bridge only ensures
-  // the __DI_CONTAINER__ contract is met.
+  window.__DI_CONTAINER__ = { repo: createSaaSRepo() };
 
   // ── Intercept remaining direct localStorage calls for known keys ────────────
-  // Some low-level code may still call localStorage.getItem/setItem directly.
-  // We monkey-patch the Storage prototype so that known quiz keys also flow
-  // through the repo, keeping cache coherent.
+  // Some legacy code still calls localStorage.getItem/setItem directly. We
+  // monkey-patch the Storage prototype so that known quiz keys also flow
+  // through the repo, keeping the cache coherent.
   (function patchLocalStorage() {
     Storage.prototype.getItem = function (key) {
       var entity = KEY_TO_ENTITY[key];
       if (entity && window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo) {
         var repo = window.__DI_CONTAINER__.repo;
-        // Object-typed stores must not be coerced to [] by getAll_sync.
         if (OBJECT_STORES[entity] && typeof repo.getValue_sync === 'function') {
           var val = repo.getValue_sync(entity, null);
           return val === null || val === undefined ? null : JSON.stringify(val);
@@ -423,7 +362,6 @@
             repo.setAll_sync(entity, parsed);
           }
         } catch (_) {
-          // Not JSON — pass through to native
           _origSetItem.call(this, key, value);
         }
         return;

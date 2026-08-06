@@ -29,7 +29,7 @@ export class QuestionService {
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     return this.#repo.create('questions', {
       ...parsed.data,
-      school_id: currentUser?.school_id ?? 'local',
+      school_id: currentUser?.school_id,
     });
   }
 
@@ -75,7 +75,7 @@ export class QuestionService {
       }
       const created = await this.#repo.create('questions', {
         ...parsed.data,
-        school_id: currentUser?.school_id ?? 'local',
+        school_id: currentUser?.school_id,
       });
       imported.push(created);
     }

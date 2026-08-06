@@ -99,12 +99,9 @@ var QuizAdmin = (() => {
   var init_config = __esm({
     "src/frontend/config.js"() {
       window.APP_CONFIG = window.APP_CONFIG || {
-        mode: "local",
-        // 'local' | 'saas'
-        apiUrl: "",
-        // Used if mode === 'saas'
-        socketUrl: "",
-        // Used by realtime client
+        mode: "saas",
+        apiUrl: "/api/v1",
+        socketUrl: "/",
         telemetryUrl: ""
         // Optional production error logging endpoint
       };
@@ -187,22 +184,6 @@ var QuizAdmin = (() => {
     }
   });
 
-  // src/frontend/infrastructure/IdGenerator.js
-  var IdGenerator;
-  var init_IdGenerator = __esm({
-    "src/frontend/infrastructure/IdGenerator.js"() {
-      IdGenerator = {
-        /**
-         * Generate a cryptographically-random UUID v4.
-         * @returns {string}  e.g. "550e8400-e29b-41d4-a716-446655440000"
-         */
-        generate() {
-          return crypto.randomUUID();
-        }
-      };
-    }
-  });
-
   // src/shared/errors.js
   var AppError, NotFoundError, UnauthorizedError, ForbiddenError, ValidationError, ConflictError, SessionError;
   var init_errors = __esm({
@@ -247,227 +228,6 @@ var QuizAdmin = (() => {
       SessionError = class extends AppError {
         constructor(msg) {
           super("SESSION_ERROR", msg, 400);
-        }
-      };
-    }
-  });
-
-  // src/frontend/infrastructure/LocalStorageRepository.js
-  var LocalStorageRepository_exports = {};
-  __export(LocalStorageRepository_exports, {
-    LocalStorageRepository: () => LocalStorageRepository
-  });
-  var TABLE_KEYS, CUSTOM_QUERIES, LocalStorageRepository;
-  var init_LocalStorageRepository = __esm({
-    "src/frontend/infrastructure/LocalStorageRepository.js"() {
-      init_IStorageRepository();
-      init_IdGenerator();
-      init_errors();
-      TABLE_KEYS = {
-        users: "quizUsers",
-        classes: "quizClasses",
-        categories: "quizCategories",
-        questions: "quizQuestions",
-        exams: "quizExams",
-        results: "quizResults",
-        games: "quizGames",
-        tournaments: "quizTournaments",
-        exam_sessions: "quizExamSessions",
-        settings: "quizSettings",
-        audit_logs: "quizAuditLogs",
-        // join tables stored as arrays within their parent objects in legacy code;
-        // here we give them their own namespaced keys to support the new pattern
-        exam_questions: "quizExamQuestions",
-        exam_classes: "quizExamClasses",
-        game_sessions: "quizGameSessions",
-        tournament_entries: "quizTournamentEntries",
-        refresh_tokens: "quizRefreshTokens",
-        // ── Operational keys (mirror src/shared/constants.js STORAGE_KEYS) ──
-        // Real-data stores that previously bypassed the repository layer. Mapped
-        // here so the async repo path (SPA / services) stays consistent with the
-        // legacy synchronous bridge. Values unchanged → existing data survives.
-        activity: "quizActivity",
-        gamification: "quizGamification",
-        tournament_history: "quizTournamentsHistory",
-        game_presets: "gamePresets",
-        profile_requests: "quizProfileRequests",
-        account_requests: "quizAccountRequests",
-        notifications: "adminNotifications",
-        teacher_messages: "teacherMessages",
-        teacher_assignments: "teacherAssignments",
-        profile_requests_legacy: "adminProfileRequests"
-      };
-      CUSTOM_QUERIES = {
-        "exam.withQuestions": (store, { examId }) => {
-          const exam = store.getById_sync("exams", examId);
-          if (!exam) return null;
-          const examQuestions = store.getAll_sync("exam_questions").filter((eq) => eq.exam_id === examId).sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
-          const questionIds = examQuestions.map((eq) => eq.question_id);
-          const questions2 = store.getAll_sync("questions").filter((q) => questionIds.includes(q.id)).sort((a, b) => questionIds.indexOf(a.id) - questionIds.indexOf(b.id));
-          return { ...exam, questions: questions2 };
-        },
-        "result.byUserAndExam": (store, { userId, examId }) => store.getAll_sync("results").filter((r) => r.user_id === userId && r.exam_id === examId).sort((a, b) => new Date(b.date_taken) - new Date(a.date_taken)),
-        "game.activeSessions": (store, { gameId }) => {
-          const sessions = store.getAll_sync("game_sessions").filter((s) => s.game_id === gameId && !s.completed);
-          return sessions.map((s) => ({
-            ...s,
-            user: store.getById_sync("users", s.user_id) ?? null
-          }));
-        },
-        "tournament.leaderboard": (store, { tournamentId, limit = 50 }) => {
-          const entries = store.getAll_sync("tournament_entries").filter((e) => e.tournament_id === tournamentId).sort((a, b) => b.score - a.score).slice(0, limit);
-          return entries.map((e) => ({
-            ...e,
-            user: store.getById_sync("users", e.user_id) ?? null
-          }));
-        },
-        "session.expiredSessions": (store, { before }) => store.getAll_sync("exam_sessions").filter(
-          (s) => s.status === "active" && new Date(s.expires_at) < new Date(before)
-        ),
-        "settings.byVisibility": (store, { visibility }) => {
-          const visOrder = ["public", "teacher", "admin", "system"];
-          const maxLevel = visOrder.indexOf(visibility);
-          return store.getAll_sync("settings").filter((s) => visOrder.indexOf(s.visibility ?? "admin") <= maxLevel);
-        },
-        "user.byClassWithResults": (store, { classId }) => {
-          const users = store.getAll_sync("users").filter((u) => u.class_id === classId);
-          return users.map((u) => ({
-            ...u,
-            results: store.getAll_sync("results").filter((r) => r.user_id === u.id).sort((a, b) => new Date(b.date_taken) - new Date(a.date_taken)).slice(0, 5)
-          }));
-        },
-        "exam.availableForStudent": (store, { userId }) => {
-          const user = store.getById_sync("users", userId);
-          if (!user) return [];
-          const examClasses = store.getAll_sync("exam_classes").filter((ec) => ec.class_id === user.class_id).map((ec) => ec.exam_id);
-          return store.getAll_sync("exams").filter((e) => e.status === "active" && examClasses.includes(e.id));
-        }
-      };
-      LocalStorageRepository = class extends IStorageRepository {
-        // ── Private helpers ─────────────────────────────────────────────────────────
-        #key(table) {
-          return TABLE_KEYS[table] ?? table;
-        }
-        #readTable(table) {
-          try {
-            const raw = localStorage.getItem(this.#key(table));
-            return raw ? JSON.parse(raw) : [];
-          } catch {
-            return [];
-          }
-        }
-        #writeTable(table, data) {
-          localStorage.setItem(this.#key(table), JSON.stringify(data));
-        }
-        // ── Synchronous helpers (for custom queries only) ────────────────────────────
-        getById_sync(table, id) {
-          return this.#readTable(table).find((i) => i.id === id) ?? null;
-        }
-        getAll_sync(table) {
-          return this.#readTable(table);
-        }
-        /**
-         * Object-tolerant getter — returns the raw parsed JSON (array OR object).
-         * Use this for stores that hold a single object (e.g. `gamification` config)
-         * rather than an array table. Returns `fallback` when missing/invalid.
-         * Array-typed stores keep using `getAll_sync`; this never coerces arrays.
-         */
-        getValue_sync(table, fallback = null) {
-          try {
-            const raw = localStorage.getItem(this.#key(table));
-            if (raw === null) return fallback;
-            return JSON.parse(raw);
-          } catch {
-            return fallback;
-          }
-        }
-        setAll_sync(table, data) {
-          this.#writeTable(table, data);
-        }
-        // ── IStorageRepository implementation ────────────────────────────────────────
-        async getAll(table, {
-          filters = {},
-          limit = 50,
-          offset = 0,
-          orderBy = "created_at",
-          direction = "desc",
-          search = null
-        } = {}) {
-          let data = this.#readTable(table);
-          for (const [k, v] of Object.entries(filters)) {
-            if (v !== void 0 && v !== null) {
-              data = data.filter((item) => item[k] === v);
-            }
-          }
-          if (search) {
-            const q = search.toLowerCase();
-            data = data.filter(
-              (item) => Object.values(item).some(
-                (v) => typeof v === "string" && v.toLowerCase().includes(q)
-              )
-            );
-          }
-          const total = data.length;
-          data = [...data].sort((a, b) => {
-            const va = a[orderBy] ?? "";
-            const vb = b[orderBy] ?? "";
-            const cmp = String(va).localeCompare(String(vb), void 0, { numeric: true });
-            return direction === "desc" ? -cmp : cmp;
-          });
-          return { data: data.slice(offset, offset + limit), total };
-        }
-        async getById(table, id) {
-          return this.getById_sync(table, id);
-        }
-        async create(table, data) {
-          const items = this.#readTable(table);
-          const now = (/* @__PURE__ */ new Date()).toISOString();
-          const record2 = {
-            ...data,
-            id: data.id ?? IdGenerator.generate(),
-            created_at: data.created_at ?? now,
-            updated_at: data.updated_at ?? now
-          };
-          items.push(record2);
-          this.#writeTable(table, items);
-          return record2;
-        }
-        async update(table, id, data) {
-          const items = this.#readTable(table);
-          const idx = items.findIndex((i) => i.id === id);
-          if (idx === -1) throw new NotFoundError(`${table}:${id}`);
-          items[idx] = {
-            ...items[idx],
-            ...data,
-            id,
-            updated_at: (/* @__PURE__ */ new Date()).toISOString()
-          };
-          this.#writeTable(table, items);
-          return items[idx];
-        }
-        async delete(table, id) {
-          const items = this.#readTable(table);
-          const filtered = items.filter((i) => i.id !== id);
-          if (filtered.length === items.length) throw new NotFoundError(`${table}:${id}`);
-          this.#writeTable(table, filtered);
-        }
-        async createMany(table, dataArray) {
-          const items = this.#readTable(table);
-          const now = (/* @__PURE__ */ new Date()).toISOString();
-          const records = dataArray.map((data) => ({
-            ...data,
-            id: data.id ?? IdGenerator.generate(),
-            created_at: data.created_at ?? now,
-            updated_at: data.updated_at ?? now
-          }));
-          items.push(...records);
-          this.#writeTable(table, items);
-          return records;
-        }
-        async query(queryName, params = {}) {
-          const fn = CUSTOM_QUERIES[queryName];
-          if (!fn) throw new Error(`LocalStorageRepository: unknown query "${queryName}"`);
-          return fn(this, params);
         }
       };
     }
@@ -598,8 +358,8 @@ var QuizAdmin = (() => {
           return this.#fetch("POST", `/query/${queryName}`, params ?? {});
         }
         // Nested admin resources have explicit backend routes rather than generic
-        // CRUD endpoints. These methods keep the service layer portable: local mode
-        // continues to use the repository's join tables, while SaaS uses the API.
+        // CRUD endpoints. These methods keep the service layer portable across
+        // repository implementations.
         async addExamQuestion(examId, data) {
           return this.#fetch("POST", `/exams/${examId}/questions`, data);
         }
@@ -627,101 +387,6 @@ var QuizAdmin = (() => {
         }
         async deleteSetting(key) {
           return this.#fetch("DELETE", `/settings/${encodeURIComponent(key)}`);
-        }
-      };
-    }
-  });
-
-  // src/frontend/infrastructure/CacheDecorator.js
-  var CacheDecorator;
-  var init_CacheDecorator = __esm({
-    "src/frontend/infrastructure/CacheDecorator.js"() {
-      init_IStorageRepository();
-      CacheDecorator = class extends IStorageRepository {
-        /** @type {IStorageRepository} */
-        #inner;
-        /** @type {Map<string, {data: any, ts: number}>} */
-        #cache = /* @__PURE__ */ new Map();
-        /** @type {number} TTL in milliseconds */
-        #ttl;
-        /**
-         * @param {IStorageRepository} inner   - The wrapped repository
-         * @param {number}             ttlMs   - Cache TTL in milliseconds (default 30 s)
-         */
-        constructor(inner, ttlMs = 3e4) {
-          super();
-          this.#inner = inner;
-          this.#ttl = ttlMs;
-        }
-        // ── Cache key helpers ───────────────────────────────────────────────────────
-        #cacheKey(table, opts) {
-          return `${table}::${JSON.stringify(opts)}`;
-        }
-        /**
-         * Invalidate ALL cached entries for a given table.
-         * Called after every write operation.
-         */
-        #invalidate(table) {
-          const prefix = `${table}::`;
-          for (const key of this.#cache.keys()) {
-            if (key.startsWith(prefix)) this.#cache.delete(key);
-          }
-        }
-        // ── IStorageRepository implementation ────────────────────────────────────────
-        async getAll(table, opts = {}) {
-          const key = this.#cacheKey(table, opts);
-          const cached2 = this.#cache.get(key);
-          if (cached2 && Date.now() - cached2.ts < this.#ttl) {
-            return cached2.data;
-          }
-          const result = await this.#inner.getAll(table, opts);
-          this.#cache.set(key, { data: result, ts: Date.now() });
-          return result;
-        }
-        async getById(table, id) {
-          return this.#inner.getById(table, id);
-        }
-        async create(table, data) {
-          const record2 = await this.#inner.create(table, data);
-          this.#invalidate(table);
-          return record2;
-        }
-        async update(table, id, data) {
-          const record2 = await this.#inner.update(table, id, data);
-          this.#invalidate(table);
-          return record2;
-        }
-        async delete(table, id) {
-          await this.#inner.delete(table, id);
-          this.#invalidate(table);
-        }
-        async createMany(table, dataArray) {
-          const records = await this.#inner.createMany(table, dataArray);
-          this.#invalidate(table);
-          return records;
-        }
-        async query(queryName, params) {
-          return this.#inner.query(queryName, params);
-        }
-        // ── Synchronous pass-throughs for legacy code ─────────────────────────────
-        // Legacy code (script.js, landing.js, auth.js, legacy-bridge.js) calls
-        // window.__DI_CONTAINER__.repo.getAll_sync('exams') etc. These are defined
-        // on LocalStorageRepository and must be forwarded through the decorator.
-        getAll_sync(table) {
-          return this.#inner.getAll_sync(table);
-        }
-        getById_sync(table, id) {
-          return this.#inner.getById_sync(table, id);
-        }
-        getValue_sync(table, fallback = null) {
-          return this.#inner.getValue_sync(table, fallback);
-        }
-        setAll_sync(table, data) {
-          return this.#inner.setAll_sync(table, data);
-        }
-        /** Manually clear all cached entries (e.g. on logout). */
-        clearAll() {
-          this.#cache.clear();
         }
       };
     }
@@ -16019,19 +15684,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_socket_client();
       init_config();
       AuthService = class {
-        #repo;
         /** @type {string|null} Access token stored in memory — never in storage */
         #token = null;
         /** @type {object|null} Decoded user payload */
         #user = null;
-        constructor(repo) {
-          this.#repo = repo;
+        constructor() {
           this.#restoreSession();
         }
         // ── Public API ────────────────────────────────────────────────────────────────
         /**
-         * Attempt login. In local mode, verifies against localStorage users.
-         * In SaaS mode, delegates to API (ApiRepository handles the call).
+         * Attempt login via the backend API.
          *
          * @param {string} username
          * @param {string} password
@@ -16042,52 +15704,30 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!parsed.success) {
             throw new ValidationError(parsed.error.flatten().fieldErrors);
           }
-          if (config.mode === "saas") {
-            const response = await fetch(apiUrl("/auth/login"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify(parsed.data)
-            });
-            const body = await response.json().catch(() => ({}));
-            if (!response.ok) {
-              if (body.fields) throw new ValidationError(body.fields);
-              throw new UnauthorizedError(body.message || body.error?.message || "Invalid username or password");
-            }
-            this.#token = body.accessToken || body.token || null;
-            this.#user = this.#stripSensitive(body.user || body);
-            this.#persistSession(this.#user);
-            window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
-              this.#token = newToken;
-            };
-            return { user: this.#user, token: this.#token };
-          }
-          const { data: users } = await this.#repo.getAll("users", {
-            filters: { username: username.trim() }
+          const response = await fetch(apiUrl("/auth/login"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(parsed.data)
           });
-          const user = users[0];
-          if (!user) throw new UnauthorizedError("Invalid username or password");
-          const passwordMatches = await this.#checkPassword(password, user.password ?? user.password_hash ?? "");
-          if (!passwordMatches) throw new UnauthorizedError("Invalid username or password");
-          if (user.status === "inactive" || user.status === "suspended") {
-            throw new UnauthorizedError("Your account is not active. Contact your administrator.");
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            if (body.fields) throw new ValidationError(body.fields);
+            throw new UnauthorizedError(body.message || body.error?.message || "Invalid username or password");
           }
-          await this.#repo.update("users", user.id, { last_login: (/* @__PURE__ */ new Date()).toISOString() });
-          const safeUser = this.#stripSensitive(user);
-          const token = this.#encodeToken(safeUser);
-          this.#token = token;
-          this.#user = safeUser;
-          this.#persistSession(safeUser);
+          this.#token = body.accessToken || body.token || null;
+          this.#user = this.#stripSensitive(body.user || body);
+          this.#persistSession(this.#user);
           window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
             this.#token = newToken;
           };
-          return { user: safeUser, token };
+          return { user: this.#user, token: this.#token };
         }
         /**
          * Logout: clear session state, disconnect socket.
          */
         async logout() {
-          if (config.mode === "saas" && this.#token) {
+          if (this.#token) {
             try {
               await fetch(apiUrl("/auth/logout"), {
                 method: "POST",
@@ -16128,7 +15768,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return this.hasRole(ROLES.STUDENT);
         }
         /**
-         * Change the current user's password.
+         * Change the current user's password. Delegates to the backend so the new
+         * hash is computed server-side with bcrypt and prior refresh tokens are
+         * revoked atomically.
+         *
          * @param {string} oldPassword
          * @param {string} newPassword
          */
@@ -16136,27 +15779,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!this.#user) throw new UnauthorizedError();
           const parsed = ChangePasswordSchema.safeParse({ oldPassword, newPassword });
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-          const user = await this.#repo.getById("users", this.#user.id);
-          if (!user) throw new NotFoundError("User");
-          const matches = await this.#checkPassword(oldPassword, user.password ?? user.password_hash ?? "");
-          if (!matches) throw new ValidationError({ oldPassword: ["Current password is incorrect"] });
-          await this.#repo.update("users", user.id, { password: newPassword, updated_at: (/* @__PURE__ */ new Date()).toISOString() });
+          const response = await fetch(apiUrl("/auth/change-password"), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${this.#token}`
+            },
+            credentials: "include",
+            body: JSON.stringify(parsed.data)
+          });
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new ValidationError(body.fields || { _: [body.message || "Password change failed"] });
+          }
         }
         // ── Private helpers ────────────────────────────────────────────────────────
-        /** Simple local-mode password check (plain text for legacy data, hash prefix detection) */
-        async #checkPassword(input, stored) {
-          if (!stored.startsWith("$2")) return input === stored;
-          if (typeof window !== "undefined" && window.dcodeIO?.bcrypt) {
-            return window.dcodeIO.bcrypt.compareSync(input, stored);
-          }
-          return input === stored;
-        }
         #stripSensitive(user) {
+          if (!user) return user;
           const { password, password_hash, ...safe } = user;
           return safe;
-        }
-        #encodeToken(user) {
-          return btoa(JSON.stringify({ ...user, iat: Date.now() }));
         }
         /** Persist a lightweight session marker so page refresh restores state */
         #persistSession(user) {
@@ -16174,75 +15815,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         #restoreSession() {
           try {
             const raw = sessionStorage.getItem("__quiz_session__");
-            if (raw) {
-              const { user, ts } = JSON.parse(raw);
-              if (Date.now() - ts > 8 * 60 * 60 * 1e3) {
-                this.#clearSession();
-                return;
-              }
-              this.#user = user;
-              this.#token = this.#encodeToken(user);
-              window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
-                this.#token = newToken;
-              };
+            if (!raw) return;
+            const { user, ts } = JSON.parse(raw);
+            if (Date.now() - ts > 8 * 60 * 60 * 1e3) {
+              this.#clearSession();
               return;
             }
-            const legacyRaw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSession");
-            const legacySession = legacyRaw ? JSON.parse(legacyRaw) : null;
-            if (legacySession) {
-              if (legacySession.expiresAt && Date.now() > new Date(legacySession.expiresAt).getTime()) {
-                sessionStorage.removeItem("quizSession");
-                localStorage.removeItem("quizSession");
-                return;
-              }
-              try {
-                const usersJson = localStorage.getItem("quizUsers");
-                const localUser = usersJson ? JSON.parse(usersJson).find((u) => u.id === legacySession.userId) : null;
-                const tokenUser = this.#decodeToken(legacySession.token);
-                const user = localUser || {
-                  id: legacySession.userId,
-                  username: legacySession.username,
-                  name: legacySession.name,
-                  role: legacySession.role,
-                  school_id: tokenUser?.school_id
-                };
-                if (user?.id && user?.role) {
-                  this.#user = this.#stripSensitive(user);
-                  this.#token = legacySession.token || this.#encodeToken(this.#user);
-                  this.#persistSession(this.#user);
-                  window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
-                    this.#token = newToken;
-                  };
-                  return;
-                }
-              } catch {
-              }
-            }
-            try {
-              const rawUser = localStorage.getItem("quizCurrentUser");
-              if (rawUser) {
-                const user = this.#stripSensitive(JSON.parse(rawUser));
-                if (user?.id && user?.role) {
-                  this.#user = user;
-                  this.#token = this.#encodeToken(user);
-                  this.#persistSession(user);
-                }
-              }
-            } catch {
-            }
+            this.#user = this.#stripSensitive(user);
+            window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+              this.#token = newToken;
+            };
           } catch {
             this.#clearSession();
-          }
-        }
-        #decodeToken(token) {
-          if (!token || typeof token !== "string") return null;
-          try {
-            const payload = token.split(".")[1];
-            if (!payload) return null;
-            const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-            return JSON.parse(atob(normalized));
-          } catch {
-            return null;
           }
         }
       };
@@ -16300,7 +15884,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             password: parsed.data.password,
             password_hash: passwordHash,
             passwordHash,
-            school_id: currentUser.school_id ?? "local"
+            school_id: currentUser.school_id
           };
           const user = await this.#repo.create("users", legacyPayload);
           return this.#stripPassword(user);
@@ -16467,7 +16051,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
           return this.#repo.create("questions", {
             ...parsed.data,
-            school_id: currentUser?.school_id ?? "local"
+            school_id: currentUser?.school_id
           });
         }
         async update(id, data, currentUser) {
@@ -16505,7 +16089,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             }
             const created = await this.#repo.create("questions", {
               ...parsed.data,
-              school_id: currentUser?.school_id ?? "local"
+              school_id: currentUser?.school_id
             });
             imported.push(created);
           }
@@ -16616,7 +16200,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
           return this.#repo.create("exams", {
             ...parsed.data,
-            school_id: currentUser?.school_id ?? "local",
+            school_id: currentUser?.school_id,
             creator_id: currentUser?.id ?? "system"
           });
         }
@@ -16872,7 +16456,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return this.#repo.create("results", {
             exam_id: session.exam_id,
             user_id: session.user_id,
-            school_id: session.school_id ?? "local",
+            school_id: session.school_id,
             score,
             total_points: totalPoints,
             earned_points: earnedPoints,
@@ -16994,7 +16578,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
           return this.#repo.create("classes", {
             ...parsed.data,
-            school_id: currentUser?.school_id ?? "local"
+            school_id: currentUser?.school_id
           });
         }
         async update(id, data, currentUser) {
@@ -17111,7 +16695,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           }
           return this.#repo.create("categories", {
             ...parsed.data,
-            school_id: currentUser?.school_id ?? "local"
+            school_id: currentUser?.school_id
           });
         }
         async update(id, data, currentUser) {
@@ -17240,7 +16824,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
           return this.#repo.create("games", {
             ...parsed.data,
-            school_id: currentUser?.school_id ?? "local",
+            school_id: currentUser?.school_id,
             creator_id: currentUser?.id ?? "system",
             status: GAME_STATUS.WAITING,
             join_code: joinCode,
@@ -17462,7 +17046,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
           return this.#repo.create("tournaments", {
             ...parsed.data,
-            school_id: currentUser?.school_id ?? "local",
+            school_id: currentUser?.school_id,
             creator_id: currentUser?.id ?? "system",
             status: TOURNAMENT_STATUS.DRAFT
           });
@@ -17630,21 +17214,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
          * Safe to call from anywhere (even unauthenticated).
          * Returns only PUBLIC settings (e.g., app name, language, public logo).
          */
-        async getPublicSettings(schoolId = "local") {
+        async getPublicSettings(schoolId = null) {
           return this.#repo.query("settings.byVisibility", { schoolId, visibility: SETTINGS_VISIBILITY.PUBLIC });
         }
         /**
          * Requires Teacher/Admin role on the backend (in SaaS mode).
          * In local mode, returns public + teacher settings.
          */
-        async getTeacherSettings(schoolId = "local") {
+        async getTeacherSettings(schoolId = null) {
           return this.#repo.query("settings.byVisibility", { schoolId, visibility: SETTINGS_VISIBILITY.TEACHER });
         }
         /**
          * Requires Admin role on the backend (in SaaS mode).
          * Returns public + teacher + admin settings.
          */
-        async getAdminSettings(schoolId = "local") {
+        async getAdminSettings(schoolId = null) {
           return this.#repo.query("settings.byVisibility", { schoolId, visibility: SETTINGS_VISIBILITY.ADMIN });
         }
         // NOTE: There is intentionally NO getSystemSettings() method.
@@ -17708,20 +17292,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   // src/frontend/container.js
   function createContainer() {
     if (_container) return _container;
-    let baseRepo;
     let authSvcReference;
-    if (config.mode === "saas") {
-      baseRepo = new ApiRepository({
-        baseUrl: config.apiUrl,
-        getToken: () => authSvcReference?.getToken(),
-        onUnauthorized: () => {
-          window.location.href = "/";
-        }
-      });
-    } else {
-      baseRepo = new LocalStorageRepository();
-    }
-    const repo = config.mode !== "saas" ? new CacheDecorator(baseRepo, 3e4) : baseRepo;
+    const repo = new ApiRepository({
+      baseUrl: config.apiUrl,
+      getToken: () => authSvcReference?.getToken(),
+      onUnauthorized: () => {
+        window.location.href = "/";
+      }
+    });
     const authSvc = new AuthService(repo);
     authSvcReference = authSvc;
     const userSvc = new UserService(repo);
@@ -17736,7 +17314,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const settingsSvc = new SettingsService(repo);
     _container = {
       repo,
-      // export repo for debug/legacy migrations if needed
       authSvc,
       userSvc,
       questionSvc,
@@ -17761,9 +17338,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var init_container = __esm({
     "src/frontend/container.js"() {
       init_config();
-      init_LocalStorageRepository();
       init_ApiRepository();
-      init_CacheDecorator();
       init_AuthService();
       init_UserService();
       init_QuestionService();
@@ -20544,7 +20119,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       confirmText: isEdit ? "Update" : "Create",
       onSubmit: async (values) => {
         const c = getContainer();
-        await c.settingsSvc.updateSetting("local", values.key, values.value, values.visibility);
+        const schoolId = c.authSvc.getCurrentUser()?.school_id;
+        await c.settingsSvc.updateSetting(schoolId, values.key, values.value, values.visibility);
         await load();
       }
     });
@@ -20558,7 +20134,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (!ok) return;
     await withError(async () => {
       const c = getContainer();
-      const schoolId = c.authSvc.getCurrentUser()?.school_id ?? "local";
+      const schoolId = c.authSvc.getCurrentUser()?.school_id;
       await c.settingsSvc.deleteSetting(schoolId, setting.key);
       await load();
     }, "Setting deleted");
@@ -20573,355 +20149,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       init_FormModal();
       init_constants();
       hostRef5 = null;
-    }
-  });
-
-  // src/frontend/ui/pages/migrate/MigratePage.js
-  function normalizeLegacyData(raw, currentUser) {
-    const users = raw.users.map(normalizeUser);
-    const classes = raw.classes.map(normalizeClass);
-    const categories = raw.categories.map(normalizeCategory);
-    const questions2 = raw.questions.map(normalizeQuestion);
-    const currentUserId = asId(currentUser?.id) || users.find((user) => user.role === "admin")?.id;
-    const exams = raw.exams.map((exam) => normalizeExam(exam, currentUserId));
-    const questionIdByIndex = new Map(raw.questions.map((question, index) => [index, asId(question.id)]));
-    const questionIds = new Set(questions2.map((question) => question.id).filter(Boolean));
-    const classIds = new Set(classes.map((item) => item.id).filter(Boolean));
-    const examQuestions = [];
-    const examClasses = [];
-    raw.exams.forEach((legacyExam, examIndex) => {
-      const examId = exams[examIndex]?.id;
-      if (!examId) return;
-      referencesFor(legacyExam.questions).forEach((reference, orderIndex) => {
-        const questionId = typeof reference === "number" ? questionIdByIndex.get(reference) : asId(reference?.id || reference);
-        if (questionId && questionIds.has(questionId)) {
-          examQuestions.push({ exam_id: examId, question_id: questionId, order_index: orderIndex });
-        }
-      });
-      referencesFor(legacyExam.classes || legacyExam.classIds).forEach((reference) => {
-        const classId = asId(reference?.id || reference);
-        if (classId && classIds.has(classId)) examClasses.push({ exam_id: examId, class_id: classId });
-      });
-    });
-    const results = raw.results.map((row) => ({
-      id: asId(row.id),
-      exam_id: asId(row.exam_id || row.examId),
-      user_id: asId(row.user_id || row.userId),
-      score: asNumber(row.score, 0),
-      total_points: asNumber(row.total_points ?? row.totalPoints, 0),
-      earned_points: asNumber(row.earned_points ?? row.earnedPoints, 0),
-      time_spent: asNumber(row.time_spent ?? row.timeSpent, null),
-      answers_json: asJson(row.answers_json ?? row.answers, "{}"),
-      mode: ["exam", "training", "game", "tournament"].includes(row.mode) ? row.mode : "exam",
-      passed: asBoolean(row.passed ?? row.isPassed),
-      attempt_number: asNumber(row.attempt_number ?? row.attemptNumber, 1),
-      date_taken: row.date_taken || row.dateTaken || row.created_at || row.createdAt
-    })).filter((row) => row.exam_id && row.user_id);
-    const games = raw.games.map((row) => {
-      const ids = referencesFor(row.questions || row.questionIds || row.question_ids).map((question) => asId(question?.id || question)).filter(Boolean);
-      return {
-        id: asId(row.id),
-        creator_id: asId(row.creator_id || row.creatorId || row.ownerId) || currentUserId,
-        name: String(row.name || "Migrated game"),
-        type: ["quiz", "flashcard", "memory", "speed", "battle"].includes(row.type) ? row.type : "quiz",
-        status: ["waiting", "active", "paused", "finished"].includes(row.status) ? row.status : "waiting",
-        settings_json: asJson(row.settings_json ?? row.settings, "{}"),
-        join_code: row.join_code || row.joinCode || null,
-        question_ids: JSON.stringify(ids),
-        started_at: row.started_at || row.startedAt,
-        ended_at: row.ended_at || row.endedAt,
-        created_at: row.created_at || row.createdAt,
-        updated_at: row.updated_at || row.updatedAt
-      };
-    }).filter((row) => row.creator_id);
-    const tournaments = raw.tournaments.map((row) => ({
-      id: asId(row.id),
-      creator_id: asId(row.creator_id || row.creatorId || row.ownerId) || currentUserId,
-      name: String(row.name || "Migrated tournament"),
-      description: row.description == null ? null : String(row.description),
-      status: ["draft", "open", "active", "finished"].includes(row.status) ? row.status : "draft",
-      settings_json: asJson(row.settings_json ?? row.settings, "{}"),
-      starts_at: row.starts_at || row.startsAt,
-      ends_at: row.ends_at || row.endsAt,
-      created_at: row.created_at || row.createdAt,
-      updated_at: row.updated_at || row.updatedAt
-    })).filter((row) => row.creator_id);
-    const settings = raw.settings.map((row) => ({
-      id: asId(row.id),
-      key: String(row.key || row.name || "").trim(),
-      value: typeof row.value === "string" ? row.value : JSON.stringify(row.value ?? ""),
-      visibility: ["public", "teacher", "admin", "system"].includes(row.visibility) ? row.visibility : "admin",
-      updated_at: row.updated_at || row.updatedAt
-    })).filter((row) => row.key);
-    return { classes, categories, users, questions: questions2, exams, exam_questions: examQuestions, exam_classes: examClasses, results, games, tournaments, settings };
-  }
-  async function buildPayload(currentUser) {
-    const { LocalStorageRepository: LocalStorageRepository2 } = await Promise.resolve().then(() => (init_LocalStorageRepository(), LocalStorageRepository_exports));
-    const localRepo = new LocalStorageRepository2();
-    const raw = Object.fromEntries(MIGRATE_ORDER.map((table) => [table, localRepo.getAll_sync(table)]));
-    const normalized = normalizeLegacyData(raw, currentUser);
-    const data = Object.fromEntries(
-      MIGRATE_ORDER.map((table) => [table, normalized[table] || []]).filter(([, rows]) => rows.length > 0)
-    );
-    return { data };
-  }
-  async function migrateDataToBackend() {
-    const container = getContainer();
-    const token = container.authSvc.getToken();
-    const log = [];
-    const payload = await buildPayload(container.authSvc.getCurrentUser());
-    const tables = Object.keys(payload.data);
-    if (tables.length === 0) {
-      log.push("No LocalStorage data found to migrate.");
-      return log;
-    }
-    await withError(async () => {
-      const res = await fetch(apiUrl("/migrate"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...token && { Authorization: `Bearer ${token}` }
-        },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(`Migration failed (${res.status}): ${body.message || res.statusText}`);
-      }
-      const { results, totalInserted } = await res.json();
-      for (const r of results) {
-        log.push(`Migrated ${r.inserted}/${r.total} records for ${r.table}` + (r.skipped ? ` (${r.skipped} skipped as duplicates)` : "") + (r.error ? ` \u2014 ERROR: ${r.error}` : ""));
-      }
-      log.push(`Total inserted: ${totalInserted}. Re-run to confirm idempotency (expect 0 inserted).`);
-    }, "Migration to backend complete");
-    return log;
-  }
-  async function getMigrationStatus() {
-    const container = getContainer();
-    const token = container.authSvc.getToken();
-    const res = await fetch(apiUrl("/migrate/status"), {
-      headers: { ...token && { Authorization: `Bearer ${token}` } }
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(`Status fetch failed (${res.status}): ${body.message || res.statusText}`);
-    }
-    return res.json();
-  }
-  var MIGRATE_ORDER, asId, asNumber, asBoolean, asJson, normalizeQuestionType, normalizeQuestion, normalizeUser, normalizeClass, normalizeCategory, normalizeExam, referencesFor;
-  var init_MigratePage = __esm({
-    "src/frontend/ui/pages/migrate/MigratePage.js"() {
-      init_container();
-      init_config();
-      init_eventBus();
-      MIGRATE_ORDER = [
-        "classes",
-        "categories",
-        "users",
-        "questions",
-        "exams",
-        "exam_questions",
-        "exam_classes",
-        "results",
-        "games",
-        "game_sessions",
-        "tournaments",
-        "tournament_entries",
-        "exam_sessions",
-        "settings"
-      ];
-      asId = (value) => {
-        const id = String(value ?? "").trim();
-        return id || void 0;
-      };
-      asNumber = (value, fallback = null) => {
-        const number4 = Number(value);
-        return Number.isFinite(number4) ? number4 : fallback;
-      };
-      asBoolean = (value, fallback = false) => {
-        if (value === void 0 || value === null || value === "") return fallback;
-        if (typeof value === "string") return ["true", "1", "yes", "on"].includes(value.toLowerCase());
-        return Boolean(value);
-      };
-      asJson = (value, fallback) => {
-        if (value === void 0 || value === null) return fallback;
-        if (typeof value === "string") {
-          try {
-            JSON.parse(value);
-            return value;
-          } catch {
-            return JSON.stringify(value);
-          }
-        }
-        try {
-          return JSON.stringify(value);
-        } catch {
-          return fallback;
-        }
-      };
-      normalizeQuestionType = (row) => {
-        const raw = String(row.type || row.questionType || "").toLowerCase();
-        if (raw === "multiple-choice" || raw === "multiple_choice" || raw === "code") return "mcq";
-        if (raw === "draggable" || raw === "ordering" || raw === "order") return "order";
-        if (raw === "matching-pairs" || raw === "matching_pairs") return "matching";
-        if (["mcq", "true-false", "fill-blank", "matching"].includes(raw)) return raw;
-        return "mcq";
-      };
-      normalizeQuestion = (row) => {
-        const options = Array.isArray(row.options) ? row.options.map((option) => typeof option === "object" ? option.text : option).filter(Boolean) : row.options_json;
-        const answer = Array.isArray(row.answer) || typeof row.answer === "object" ? asJson(row.answer, "unknown") : String(row.answer ?? row.correctAnswer ?? "").trim() || "unknown";
-        return {
-          id: asId(row.id),
-          category_id: asId(row.category_id || row.category) || null,
-          type: normalizeQuestionType(row),
-          text: String(row.text || row.question || "").trim() || "Migrated question",
-          options_json: asJson(options, "[]"),
-          answer,
-          explanation: row.explanation == null ? null : String(row.explanation),
-          points: asNumber(row.points, 1),
-          difficulty: ["easy", "medium", "hard"].includes(String(row.difficulty)) ? row.difficulty : "medium",
-          tags: row.tags == null ? null : String(row.tags),
-          media_url: row.media_url || row.image || null,
-          created_at: row.created_at || row.createdAt,
-          updated_at: row.updated_at || row.updatedAt
-        };
-      };
-      normalizeUser = (row) => ({
-        id: asId(row.id),
-        username: String(row.username || row.email || "").trim() || `migrated-${asId(row.id) || "user"}`,
-        password_hash: row.password_hash || row.passwordHash || row.password || "legacy-migrated",
-        role: ["admin", "teacher", "student", "super_admin"].includes(row.role) ? row.role : "student",
-        name: String(row.name || row.username || "Migrated user"),
-        numero: row.numero || row.studentNumber || null,
-        class_id: asId(row.class_id || row.classId) || null,
-        status: row.status === "disabled" ? "inactive" : row.status || "active",
-        created_at: row.created_at || row.createdAt,
-        updated_at: row.updated_at || row.updatedAt
-      });
-      normalizeClass = (row) => ({
-        id: asId(row.id),
-        name: String(row.name || "Migrated class"),
-        description: row.description == null ? null : String(row.description),
-        created_at: row.created_at || row.dateCreated,
-        updated_at: row.updated_at || row.updatedAt
-      });
-      normalizeCategory = (row) => ({
-        id: asId(row.id),
-        name: String(row.name || "Migrated category"),
-        parent_id: asId(row.parent_id || row.parentId) || null,
-        icon: row.icon || null,
-        color: row.color || null,
-        created_at: row.created_at || row.createdAt,
-        updated_at: row.updated_at || row.updatedAt
-      });
-      normalizeExam = (row, currentUserId) => ({
-        id: asId(row.id),
-        creator_id: asId(row.creator_id || row.creatorId || row.ownerId) || currentUserId,
-        name: String(row.name || "Migrated exam"),
-        description: row.description == null ? null : String(row.description),
-        duration: asNumber(row.duration, null),
-        passing_score: asNumber(row.passing_score ?? row.passingScore, 50),
-        status: ["draft", "active", "archived"].includes(row.status) ? row.status : "draft",
-        is_training: asBoolean(row.is_training ?? row.isTraining ?? row.training),
-        randomize: asBoolean(row.randomize),
-        max_attempts: asNumber(row.max_attempts ?? row.maxAttempts, null),
-        created_at: row.created_at || row.dateCreated,
-        updated_at: row.updated_at || row.updatedAt
-      });
-      referencesFor = (value) => Array.isArray(value) ? value : [];
-    }
-  });
-
-  // src/frontend/ui/pages/admin/MigrationPage.js
-  var MigrationPage_exports = {};
-  __export(MigrationPage_exports, {
-    initMigrationPage: () => initMigrationPage
-  });
-  async function initMigrationPage(host) {
-    host.replaceChildren();
-    const title = document.createElement("h1");
-    title.className = "page-title";
-    title.textContent = "Data migration";
-    const intro = document.createElement("p");
-    intro.className = "page-subtitle";
-    intro.textContent = "Import legacy LocalStorage data into the backend. The operation is tenant-scoped and safe to run more than once.";
-    const warning = document.createElement("p");
-    warning.className = "admin-modal__hint";
-    warning.textContent = config.mode === "saas" ? "Run this after signing in to the target school. Existing records are skipped." : "Migration is available when the app is connected to the backend in SaaS mode.";
-    const toolbar = document.createElement("div");
-    toolbar.className = "admin-toolbar";
-    const migrateBtn = document.createElement("button");
-    migrateBtn.type = "button";
-    migrateBtn.className = "btn btn-primary";
-    migrateBtn.textContent = "Start migration";
-    migrateBtn.disabled = config.mode !== "saas";
-    const statusBtn = document.createElement("button");
-    statusBtn.type = "button";
-    statusBtn.className = "btn btn-secondary";
-    statusBtn.textContent = "Refresh backend status";
-    statusBtn.disabled = config.mode !== "saas";
-    toolbar.append(migrateBtn, statusBtn);
-    const output = document.createElement("pre");
-    output.className = "admin-migration-output";
-    output.setAttribute("aria-live", "polite");
-    output.textContent = "No migration run in this session.";
-    const statusHost = document.createElement("div");
-    statusHost.className = "admin-migration-status";
-    host.append(title, intro, warning, toolbar, output, statusHost);
-    migrateBtn.addEventListener("click", async () => {
-      migrateBtn.disabled = true;
-      output.textContent = "Migrating\u2026";
-      try {
-        output.textContent = (await migrateDataToBackend()).join("\n");
-        await renderStatus(statusHost);
-      } catch (err) {
-        output.textContent = `Migration failed: ${err.message}`;
-      } finally {
-        migrateBtn.disabled = false;
-      }
-    });
-    statusBtn.addEventListener("click", () => renderStatus(statusHost));
-    if (config.mode === "saas") await renderStatus(statusHost);
-    return () => renderStatus(statusHost);
-  }
-  async function renderStatus(host) {
-    host.replaceChildren();
-    try {
-      const { counts = {} } = await getMigrationStatus();
-      const table = document.createElement("table");
-      table.className = "data-table";
-      const head = document.createElement("thead");
-      const row = document.createElement("tr");
-      for (const label of ["Table", "Backend records"]) {
-        const cell = document.createElement("th");
-        cell.textContent = label;
-        row.appendChild(cell);
-      }
-      head.appendChild(row);
-      table.appendChild(head);
-      const body = document.createElement("tbody");
-      for (const [tableName, count] of Object.entries(counts)) {
-        const tr = document.createElement("tr");
-        const name = document.createElement("td");
-        name.textContent = tableName;
-        const total = document.createElement("td");
-        total.textContent = count == null ? "Unavailable" : String(count);
-        tr.append(name, total);
-        body.appendChild(tr);
-      }
-      table.appendChild(body);
-      host.appendChild(table);
-    } catch (err) {
-      const message = document.createElement("p");
-      message.className = "admin-error";
-      message.textContent = `Could not load backend status: ${err.message}`;
-      host.appendChild(message);
-    }
-  }
-  var init_MigrationPage = __esm({
-    "src/frontend/ui/pages/admin/MigrationPage.js"() {
-      init_config();
-      init_MigratePage();
     }
   });
 
@@ -21074,8 +20301,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     { id: "users", label: "Users", icon: "\u{1F465}" },
     { id: "results", label: "Results", icon: "\u{1F4C8}" },
     { id: "games", label: "Live Games", icon: "\u{1F3AE}" },
-    { id: "settings", label: "Settings", icon: "\u2699\uFE0F" },
-    { id: "migration", label: "Migration", icon: "\u{1F4E6}" }
+    { id: "settings", label: "Settings", icon: "\u2699\uFE0F" }
   ]);
   function renderSidebar(container, onTabChange, initialTab = "dashboard") {
     if (!container) return { setActive() {
@@ -21131,8 +20357,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     users: () => Promise.resolve().then(() => (init_UsersPage(), UsersPage_exports)).then((m) => m.initUsersPage),
     results: () => Promise.resolve().then(() => (init_ResultsPage(), ResultsPage_exports)).then((m) => m.initResultsPage),
     games: () => Promise.resolve().then(() => (init_GamesPage(), GamesPage_exports)).then((m) => m.initGamesPage),
-    settings: () => Promise.resolve().then(() => (init_SettingsPage(), SettingsPage_exports)).then((m) => m.initSettingsPage),
-    migration: () => Promise.resolve().then(() => (init_MigrationPage(), MigrationPage_exports)).then((m) => m.initMigrationPage)
+    settings: () => Promise.resolve().then(() => (init_SettingsPage(), SettingsPage_exports)).then((m) => m.initSettingsPage)
   };
   var activeTab = null;
   var sidebarCtl = null;
@@ -21216,7 +20441,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       initEventBus();
       const container = createContainer();
       logger.info("Admin SPA initialized", { mode: window.APP_CONFIG?.mode });
-      window.__DI_CONTAINER__ = container;
+      if (!window.__DI_CONTAINER__ || typeof window.__DI_CONTAINER__.repo?.getAll_sync !== "function") {
+        window.__DI_CONTAINER__ = container;
+      } else {
+        Object.assign(window.__DI_CONTAINER__, container, { repo: window.__DI_CONTAINER__.repo });
+      }
       initAdminPage();
     } catch (err) {
       logger.error("Failed to initialize admin app", err);

@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# install.sh — One-command Local School Installer
+# install.sh — One-command SaaS app bootstrap
 #
-# Runs through the setup steps for a single-school local installation:
+# Sets up a local development instance of the SaaS build:
 #   1. Checks Node.js version
 #   2. Installs npm dependencies
-#   3. Applies Prisma migrations (SQLite)
-#   4. Seeds the database (creates default admin + school)
+#   3. Applies Prisma migrations
+#   4. Seeds the database (creates the default admin user)
 #   5. Generates a strong JWT_SECRET
 #   6. Writes a local .env file
 #   7. Starts the server
 #
 # Safe to re-run — idempotent scripts throughout.
-# For SaaS deployment use Docker Compose (docker-compose.yml) instead.
+# For production deployments, use Docker Compose (docker-compose.yml).
 
 set -euo pipefail
 
@@ -22,8 +22,8 @@ YELLOW="\033[0;33m"
 RED="\033[0;31m"
 NC="\033[0m" # No Color
 
-echo -e "${BOLD}Quiz App — Local Installer${NC}"
-echo "=============================="
+echo -e "${BOLD}Quiz App — SaaS Installer${NC}"
+echo "============================="
 echo ""
 
 # ── 1. Check Node.js ─────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ echo -e "${GREEN}  Migrations applied.${NC}"
 echo ""
 
 # ── 5. Seed database ─────────────────────────────────────────────────────────
-echo -e "${BOLD}[5/7]${NC} Seeding database (creates default admin + school)…"
+echo -e "${BOLD}[5/7]${NC} Seeding database (creates the default admin user)…"
 npx prisma db seed
 echo -e "${GREEN}  Database seeded.${NC}"
 echo ""
@@ -64,17 +64,14 @@ echo ""
 echo -e "${BOLD}[6/7]${NC} Ensuring .env file…"
 
 JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+QUIZ_ADMIN_SECRET=$(node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))")
 
 if [ ! -f .env ]; then
   cat > .env <<ENVEOF
-# ── Mode ──────────────────────────────────────────────────────────────────────
-APP_MODE=local
-# "local" → SQLite, single school, no internet required
-# "saas"  → PostgreSQL, multi-tenant, cloud deployment
-
 # ── Database ──────────────────────────────────────────────────────────────────
 DB_PROVIDER=sqlite
 DATABASE_URL="file:./prisma/dev.db"
+# For production: DB_PROVIDER=postgresql, DATABASE_URL=postgresql://...
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 JWT_SECRET=${JWT_SECRET}
@@ -90,16 +87,19 @@ CORS_ORIGIN=http://localhost:3000
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOG_LEVEL=info
 
-# ── Tenant ────────────────────────────────────────────────────────────────────
-DEFAULT_SCHOOL_ID=local
+# ── Realtime admin pairing ────────────────────────────────────────────────────
+# Stable secret used by the legacy realtime settings panel to pair admin sockets.
+# If unset the server generates a fresh random one on every boot — fine for dev,
+# but pin it here so admins don't have to re-pair after restarts.
+QUIZ_ADMIN_SECRET=${QUIZ_ADMIN_SECRET}
 ENVEOF
-  echo -e "${GREEN}  .env file created with random JWT_SECRET.${NC}"
+  echo -e "${GREEN}  .env file created with random JWT_SECRET and QUIZ_ADMIN_SECRET.${NC}"
 else
   echo -e "${YELLOW}  .env already exists — skipping.${NC}"
 fi
 echo ""
 
-# ── 7. Start ──────────────────────────────────────────────────────────────────
+# ── 7. Start ───────────────────────────────────────────────────────────────
 echo -e "${BOLD}[7/7]${NC} Starting the server…"
 echo ""
 echo -e "  ${GREEN}Quiz App is starting!${NC}"

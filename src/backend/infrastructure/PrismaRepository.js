@@ -2,9 +2,8 @@
  * src/backend/infrastructure/PrismaRepository.js
  *
  * Backend storage implementation. Implements the SAME IStorageRepository
- * contract as the frontend LocalStorageRepository (and ApiRepository), so the
- * exact same service layer is portable across both. The `query()` names mirror
- * the CUSTOM_QUERIES in LocalStorageRepository one-for-one.
+ * contract as the frontend ApiRepository, so the exact same service layer is
+ * portable across both. The `query()` names are stable public API.
  *
  * Tenant isolation note: this repository is a thin data-access layer and does
  * NOT enforce school_id — that is the application layer's job (routes pass
@@ -193,8 +192,8 @@ export class PrismaRepository extends IStorageRepository {
 	}
 
 	/**
-	 * Named queries — mirror the LocalStorageRepository CUSTOM_QUERIES exactly,
-	 * so services call identical query names regardless of which repo is injected.
+	 * Named queries — stable public API used by services on both ends.
+	 * e.g. 'exam.withQuestions', 'result.byUserAndExam', 'game.activeSessions'.
 	 */
 	async query(queryName, params = {}) {
 		switch (queryName) {

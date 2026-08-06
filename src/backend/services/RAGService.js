@@ -35,10 +35,10 @@ export class RAGService {
    * @param {object} params
    * @param {string} params.content   - raw text content of the document
    * @param {string} params.filename  - original filename
-   * @param {string} [params.schoolId='local']
+   * @param {string} [params.schoolId=null]
    * @returns {{ chunks: number, status: string, documentId: string }}
    */
-  async ingestDocument({ content, filename, schoolId = 'local' }) {
+  async ingestDocument({ content, filename, schoolId = null }) {
     if (!content || !content.trim()) {
       throw new ValidationError({ content: ['Document content is required'] });
     }
@@ -72,10 +72,10 @@ export class RAGService {
    * Query the store with a question and retrieve relevant chunks.
    * @param {object} params
    * @param {string} params.question
-   * @param {string} [params.schoolId='local']
+   * @param {string} [params.schoolId=null]
    * @returns {{ answer: string|null, sources: Array<{ text: string, filename: string, score: number }> }}
    */
-  async query({ question, schoolId = 'local' }) {
+  async query({ question, schoolId = null }) {
     if (!question || !question.trim()) {
       throw new ValidationError({ question: ['Question is required'] });
     }
@@ -115,7 +115,7 @@ export class RAGService {
    * @param {string} schoolId
    * @returns {Array<{ documentId: string, filename: string, chunkCount: number }>}
    */
-  async listDocuments(schoolId = 'local') {
+  async listDocuments(schoolId = null) {
     const store = memoryStore.get(schoolId);
     return store?.documents ?? [];
   }
@@ -123,9 +123,9 @@ export class RAGService {
   /**
    * Delete a document and its chunks.
    * @param {string} documentId
-   * @param {string} [schoolId='local']
+   * @param {string} [schoolId=null]
    */
-  async deleteDocument(documentId, schoolId = 'local') {
+  async deleteDocument(documentId, schoolId = null) {
     const store = memoryStore.get(schoolId);
     if (!store) throw new NotFoundError('Document');
     const docIdx = store.documents.findIndex(d => d.documentId === documentId);

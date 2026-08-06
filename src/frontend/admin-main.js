@@ -18,8 +18,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = createContainer();
     logger.info('Admin SPA initialized', { mode: window.APP_CONFIG?.mode });
 
-    // Expose container for debugging / legacy interop during transition
-    window.__DI_CONTAINER__ = container;
+    // Expose container for debugging / legacy interop during transition.
+    // Never clobber the legacy-bridge repo — legacy admin scripts rely on its
+    // synchronous getAll_sync / setValue_sync contract.
+    if (!window.__DI_CONTAINER__ || typeof window.__DI_CONTAINER__.repo?.getAll_sync !== 'function') {
+      window.__DI_CONTAINER__ = container;
+    } else {
+      Object.assign(window.__DI_CONTAINER__, container, { repo: window.__DI_CONTAINER__.repo });
+    }
 
     initAdminPage();
   } catch (err) {

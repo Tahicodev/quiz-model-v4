@@ -67,7 +67,7 @@ export class UserService {
 			password: parsed.data.password,
 			password_hash: passwordHash,
 			passwordHash,
-			school_id: currentUser.school_id ?? 'local',
+			school_id: currentUser.school_id,
 		};
 
 		const user = await this.#repo.create('users', legacyPayload);

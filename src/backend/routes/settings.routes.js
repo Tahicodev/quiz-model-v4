@@ -18,10 +18,12 @@ import { getContainer } from '../container.js';
 const router = Router();
 
 // ── Public endpoint (no auth) ────────────────────────────────────────────────
+// Resolves the school's public-facing settings. If `?school_id=` is omitted,
+// falls back to the bootstrap tenant (created by `prisma/seed.js`).
 router.get('/public', async (req, res, next) => {
   try {
     const { settingsSvc } = getContainer();
-    const schoolId = req.query.school_id || 'local';
+    const schoolId = req.query.school_id || process.env.DEFAULT_SCHOOL_ID || 'saas-default';
     const settings = await settingsSvc.getPublicSettings(schoolId);
     res.json(settings);
   } catch (err) { next(err); }

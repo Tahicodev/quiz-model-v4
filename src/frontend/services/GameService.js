@@ -43,7 +43,7 @@ export class GameService {
 
     return this.#repo.create('games', {
       ...parsed.data,
-      school_id:    currentUser?.school_id ?? 'local',
+      school_id:    currentUser?.school_id,
       creator_id:   currentUser?.id        ?? 'system',
       status:       GAME_STATUS.WAITING,
       join_code:    joinCode,

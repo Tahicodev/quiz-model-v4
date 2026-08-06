@@ -21,28 +21,32 @@
 			<script src="legacy-bridge.js"></script>
 
 			<!-- window.getSocket bridges refactored io() calls to the global io() from CDN
-				 and passes the JWT auth token so the server doesn't reject the connection. -->
-			<script>
-				window.getSocket = window.getSocket || function(url, opts) {
-					if (!window.io) {
-						console.warn('getSocket called before Socket.IO loaded');
-						return null;
-					}
-					var token = window.__authToken || null;
-					try {
-						var stored = JSON.parse(localStorage.getItem('quizSession') || 'null');
-						if (stored && stored.token) token = stored.token;
-					} catch(_) {}
-					try {
-						var stored2 = localStorage.getItem('quizAuthToken');
-						if (stored2) token = stored2;
-					} catch(_) {}
-					return window.io(url || '/', Object.assign({
-						auth: { token: token || '' },
-						transports: ['polling', 'websocket'],
-					}, opts || {}));
-				};
-			</script>
+					 and passes the JWT auth token so the server doesn't reject the connection.
+					 SaaS sockets always require auth — returns null when anonymous. -->
+				<script>
+					window.getSocket = window.getSocket || function(url, opts) {
+						if (!window.io) {
+							console.warn('getSocket called before Socket.IO loaded');
+							return null;
+						}
+						var token = window.__authToken || null;
+						try {
+							var stored = JSON.parse(localStorage.getItem('quizSession') || 'null');
+							if (stored && stored.token) token = stored.token;
+						} catch(_) {}
+						try {
+							var stored2 = localStorage.getItem('quizAuthToken');
+							if (stored2) token = stored2;
+						} catch(_) {}
+						// SaaS sockets always require auth — skip the connection when
+						// anonymous so we don't spam the console with WebSocket errors.
+						if (!token) return null;
+						return window.io(url || '/', Object.assign({
+							auth: { token: token },
+							transports: ['polling', 'websocket'],
+						}, opts || {}));
+					};
+				</script>
 
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>

@@ -39,7 +39,7 @@ export class ExamService {
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     return this.#repo.create('exams', {
       ...parsed.data,
-      school_id:  currentUser?.school_id ?? 'local',
+      school_id:  currentUser?.school_id,
       creator_id: currentUser?.id        ?? 'system',
     });
   }

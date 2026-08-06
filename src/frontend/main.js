@@ -31,9 +31,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = createContainer();
     logger.info('Quiz App Initialized', { mode: window.APP_CONFIG?.mode });
 
-    // 3. Legacy support: Expose container so legacy script.js files can use it
-    //    during the MPA → SPA transition.
-    window.__DI_CONTAINER__ = container;
+    // 3. Legacy support: the legacy-bridge.js sibling has already published
+    //    window.__DI_CONTAINER__ with the synchronous cache-backed repo that
+    //    legacy scripts expect (`getAll_sync`, `setAll_sync`, …). Promote the
+    //    SPA services alongside it for hash-routed pages — but never overwrite
+    //    the repo, or the legacy shall break.
+    if (!window.__DI_CONTAINER__ || typeof window.__DI_CONTAINER__.repo?.getAll_sync !== 'function') {
+      window.__DI_CONTAINER__ = container; // legacy-bridge didn't run (SPA-only page)
+    } else {
+      Object.assign(window.__DI_CONTAINER__, container, { repo: window.__DI_CONTAINER__.repo });
+    }
 
     // 4. Client-side hash routing for realtime pages
     const appShell = document.getElementById('app');

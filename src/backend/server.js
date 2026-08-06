@@ -67,9 +67,21 @@ app.use((req, res, next) => {
 });
 
 // ── Expose the admin secret for the realtime settings panel ──────────────────
-app.get('/api/v1/admin-secret', (req, res) => {
-  res.json({ secret: adminSecret });
-});
+// Strictly admin-only. The secret grants admin-level socket privileges, so
+// leaking it would be equivalent to exposing an admin credential.
+// NOTE: SUPER_ADMIN bypasses the role check inside requireRole itself.
+import { requireAuth } from './middleware/auth.js';
+import { requireRole } from './middleware/role.js';
+import { ROLES } from '../shared/constants.js';
+
+app.get(
+  '/api/v1/admin-secret',
+  requireAuth,
+  requireRole([ROLES.ADMIN]),
+  (req, res) => {
+    res.json({ secret: adminSecret });
+  }
+);
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
@@ -92,7 +104,7 @@ const authLimiter = rateLimit({
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), mode: config.mode });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // ── API Routes ───────────────────────────────────────────────────────────────
@@ -107,15 +119,15 @@ import gamesRoutes from './routes/games.routes.js';
 import tournamentsRoutes from './routes/tournaments.routes.js';
 import sessionsRoutes from './routes/sessions.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
-import migrateRoutes from './routes/migrate.routes.js';
+import bootstrapRoutes from './routes/bootstrap.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import queryRoutes from './routes/query.routes.js';
 import bulkRoutes from './routes/bulk.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
-// The APP_MODE switch is delivered via an inline <script> prepended to the
-// served index.html. The legacy MPA reads window.APP_CONFIG.mode to select
-// its repository (LocalStorage vs Api).
+// APP_CONFIG is delivered via an inline <script> prepended to the served
+// index/admin/student HTML. Mode is hard-coded to SaaS — there is no
+// localStorage fallback in this build.
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -130,7 +142,7 @@ function injectAppConfig(html) {
     '</head>',
     `<script>
 window.APP_CONFIG = ${JSON.stringify({
-    mode: config.isSaaS ? 'saas' : 'local',
+    mode: 'saas',
     apiUrl: '/api/v1',
     socketUrl: '/',
   })};
@@ -162,7 +174,7 @@ app.use('/api/v1/games', gamesRoutes);
 app.use('/api/v1/tournaments', tournamentsRoutes);
 app.use('/api/v1/sessions', sessionsRoutes);
 app.use('/api/v1/settings', settingsRoutes);
-app.use('/api/v1/migrate', migrateRoutes);
+app.use('/api/v1/bootstrap', bootstrapRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/query', queryRoutes);
 app.use('/api/v1/bulk', bulkRoutes);
@@ -226,7 +238,7 @@ const httpServer = http.createServer(app);
 	      adminSecret,        // for legacy admin panel socket auth
 	    });
     httpServer.listen(config.port, () => {
-      logger.info({ port: config.port, mode: config.mode }, 'Backend server started');
+      logger.info({ port: config.port }, 'Backend server started (SaaS)');
     });
   } catch (err) {
     logger.error({ err }, 'Failed to initialize socket server');

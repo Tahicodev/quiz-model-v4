@@ -36,7 +36,7 @@ export class TournamentService {
 
     return this.#repo.create('tournaments', {
       ...parsed.data,
-      school_id:  currentUser?.school_id ?? 'local',
+      school_id:  currentUser?.school_id,
       creator_id: currentUser?.id        ?? 'system',
       status:     TOURNAMENT_STATUS.DRAFT,
     });

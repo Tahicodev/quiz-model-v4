@@ -133,7 +133,8 @@ function openSettingForm(setting) {
     confirmText: isEdit ? 'Update' : 'Create',
     onSubmit: async (values) => {
       const c = getContainer();
-      await c.settingsSvc.updateSetting('local', values.key, values.value, values.visibility);
+      const schoolId = c.authSvc.getCurrentUser()?.school_id;
+      await c.settingsSvc.updateSetting(schoolId, values.key, values.value, values.visibility);
       await load();
     },
   });
@@ -149,7 +150,7 @@ async function deleteSetting(setting) {
   // No dedicated delete service method exposed; delete via repo (admin-gated by virtue of being on this page).
   await withError(async () => {
     const c = getContainer();
-    const schoolId = c.authSvc.getCurrentUser()?.school_id ?? 'local';
+    const schoolId = c.authSvc.getCurrentUser()?.school_id;
     await c.settingsSvc.deleteSetting(schoolId, setting.key);
     await load();
   }, 'Setting deleted');

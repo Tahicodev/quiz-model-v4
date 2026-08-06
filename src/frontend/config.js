@@ -1,12 +1,17 @@
 /**
  * src/frontend/config.js
- * Frontend environment configuration injected at build time or via script tag.
+ * Frontend environment configuration injected at boot by the backend
+ * (see src/backend/server.js — APP_CONFIG is rendered into the served HTML).
+ *
+ * SaaS-only build: `mode` is always `'saas'`. The field is kept for backward
+ * compatibility with the legacy bridge scripts that still read it; it is no
+ * longer a branch point.
  */
 
 window.APP_CONFIG = window.APP_CONFIG || {
-  mode:         'local', // 'local' | 'saas'
-  apiUrl:       '',      // Used if mode === 'saas'
-  socketUrl:    '',      // Used by realtime client
+  mode:         'saas',
+  apiUrl:       '/api/v1',
+  socketUrl:    '/',
   telemetryUrl: '',      // Optional production error logging endpoint
 };
 

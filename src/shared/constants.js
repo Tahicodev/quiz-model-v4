@@ -103,7 +103,12 @@ export const SOCKET_EVENTS = Object.freeze({
   SESSION_HEARTBEAT:     'session:heartbeat',
 });
 
-/** Maps localStorage keys used by the existing app — preserves all current data. */
+/**
+ * Maps the localStorage key names historically used by the legacy MPA scripts.
+ * In the SaaS build these keys are read-through/write-through cache entries
+ * only — the backend is the source of truth. The values are kept stable so
+ * existing legacy code continues to find its cache.
+ */
 export const STORAGE_KEYS = Object.freeze({
   users:         'quizUsers',
   classes:       'quizClasses',

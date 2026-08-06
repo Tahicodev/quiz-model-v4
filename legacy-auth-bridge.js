@@ -1,14 +1,13 @@
 /**
- * legacy-auth-bridge.js
+ * legacy-auth-bridge.js — SaaS-only auth wiring for the legacy MPA pages
  *
- * Auth bridge for SaaS mode. Intercepts login form submissions and
- * routes them through the backend API instead of localStorage.
+ * Intercepts the legacy login form submissions and routes them through the
+ * SaaS backend (bcrypt + JWT + httpOnly refresh cookie) instead of any
+ * localStorage-based check.
  *
- * Load this AFTER auth.js so the DOM event listeners are already
- * attached; it will clone-replace the login forms to remove the
- * original listeners before attaching API-aware ones.
- *
- * In local mode this script is a no-op.
+ * Load this AFTER auth.js so the DOM event listeners are already attached;
+ * it will clone-replace the login forms to remove the original listeners
+ * before attaching API-aware ones.
  */
 
 (function () {
@@ -16,9 +15,6 @@
 
   if (window.__AUTH_BRIDGE__) return;
   window.__AUTH_BRIDGE__ = true;
-
-  var mode = (window.APP_CONFIG && window.APP_CONFIG.mode) || 'local';
-  if (mode !== 'saas') return;
 
   var baseUrl = (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
 
@@ -195,6 +191,13 @@
 
         var session = buildSession(user, token, remember);
         persistSession(session, remember);
+
+        // Re-prime the legacy-bridge cache with the now-authenticated user's
+        // tenant data so the student UI has fresh state without waiting for
+        // a page reload. Fire-and-forget — UI hooks below still run.
+        if (typeof window.__legacyBridgeBootstrap === 'function') {
+          window.__legacyBridgeBootstrap().catch(function () { /* best effort */ });
+        }
 
         // Notify auth change (auth.js exposes this)
         if (typeof window.notifyAuthChange === 'function') {

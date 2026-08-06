@@ -19,7 +19,7 @@ const isProduction = config.nodeEnv === 'production';
 
 export const logger = pino({
   level: config.logLevel,
-  base: { service: 'quiz-app', mode: config.mode },
+  base: { service: 'quiz-app' },
   ...(isProduction
     ? // Raw JSON, no transport — fastest, ideal for log aggregators.
       {}

@@ -47,7 +47,7 @@ export class ResultService {
     return this.#repo.create('results', {
       exam_id:        session.exam_id,
       user_id:        session.user_id,
-      school_id:      session.school_id ?? 'local',
+      school_id:      session.school_id,
       score,
       total_points:   totalPoints,
       earned_points:  earnedPoints,

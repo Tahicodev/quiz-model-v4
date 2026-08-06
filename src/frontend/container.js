@@ -1,13 +1,14 @@
 /**
  * src/frontend/container.js
  * Dependency Injection Container for the Frontend.
- * Wires the active repository (Local or API) into all services.
+ *
+ * SaaS-only build: every service is wired against the ApiRepository — there is
+ * no LocalStorage fallback and no CacheDecorator wrap. The repository contract
+ * is identical, so services carry no mode checks.
  */
 
 import { config }                 from './config.js';
-import { LocalStorageRepository } from './infrastructure/LocalStorageRepository.js';
 import { ApiRepository }          from './infrastructure/ApiRepository.js';
-import { CacheDecorator }         from './infrastructure/CacheDecorator.js';
 
 import { AuthService }       from './services/AuthService.js';
 import { UserService }       from './services/UserService.js';
@@ -26,28 +27,17 @@ let _container = null;
 export function createContainer() {
   if (_container) return _container;
 
-  // 1. Instantiate the Repository based on mode
-  let baseRepo;
-  let authSvcReference; // Forward declaration for ApiRepository
+  // Forward-declared so ApiRepository can read tokens off AuthService.
+  let authSvcReference;
 
-  if (config.mode === 'saas') {
-    baseRepo = new ApiRepository({
-      baseUrl: config.apiUrl,
-      getToken: () => authSvcReference?.getToken(),
-      onUnauthorized: () => { window.location.href = '/'; },
-    });
-  } else {
-    baseRepo = new LocalStorageRepository();
-  }
+  const repo = new ApiRepository({
+    baseUrl: config.apiUrl,
+    getToken: () => authSvcReference?.getToken(),
+    onUnauthorized: () => { window.location.href = '/'; },
+  });
 
-  // 2. Wrap repo with caching only in local mode (SaaS uses fresh API calls)
-  const repo = config.mode !== 'saas'
-    ? new CacheDecorator(baseRepo, 30_000)
-    : baseRepo;
-
-  // 3. Instantiate Services
   const authSvc       = new AuthService(repo);
-  authSvcReference    = authSvc; // bind for ApiRepository
+  authSvcReference    = authSvc;
 
   const userSvc       = new UserService(repo);
   const questionSvc   = new QuestionService(repo);
@@ -61,7 +51,7 @@ export function createContainer() {
   const settingsSvc   = new SettingsService(repo);
 
   _container = {
-    repo, // export repo for debug/legacy migrations if needed
+    repo,
     authSvc,
     userSvc,
     questionSvc,

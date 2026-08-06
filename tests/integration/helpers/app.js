@@ -27,7 +27,7 @@ import gamesRoutes from '../../../src/backend/routes/games.routes.js';
 import tournamentsRoutes from '../../../src/backend/routes/tournaments.routes.js';
 import sessionsRoutes from '../../../src/backend/routes/sessions.routes.js';
 import settingsRoutes from '../../../src/backend/routes/settings.routes.js';
-import migrateRoutes from '../../../src/backend/routes/migrate.routes.js';
+import bootstrapRoutes from '../../../src/backend/routes/bootstrap.routes.js';
 
 // Container (needed for route handlers)
 import { createContainer } from '../../../src/backend/container.js';
@@ -43,7 +43,7 @@ app.use(express.json({ limit: '10mb' }));
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), mode: config.mode });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // ── API Routes (identical mounts to server.js) ────────────────────────────────
@@ -58,7 +58,7 @@ app.use('/api/v1/games',       gamesRoutes);
 app.use('/api/v1/tournaments', tournamentsRoutes);
 app.use('/api/v1/sessions',    sessionsRoutes);
 app.use('/api/v1/settings',    settingsRoutes);
-app.use('/api/v1/migrate',     migrateRoutes);
+app.use('/api/v1/bootstrap',   bootstrapRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

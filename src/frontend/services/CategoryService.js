@@ -55,7 +55,7 @@ export class CategoryService {
 
     return this.#repo.create('categories', {
       ...parsed.data,
-      school_id: currentUser?.school_id ?? 'local',
+      school_id: currentUser?.school_id,
     });
   }
 

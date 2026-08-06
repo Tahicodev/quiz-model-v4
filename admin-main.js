@@ -69,7 +69,7 @@ function legacyCurrentUser() {
 				id: session.userId || session.id,
 				username: session.username || 'legacy-user',
 				role: session.role || 'admin',
-				school_id: session.school_id || 'local',
+				school_id: session.school_id || null,
 			};
 		}
 	} catch {}
@@ -380,7 +380,7 @@ function legacyNormalizeLegacyData(raw, currentUser) {
 				id: legacyAsId(row.id),
 				game_id: legacyAsId(row.game_id || row.gameId),
 				user_id: legacyAsId(row.user_id || row.userId),
-				school_id: legacyAsId(row.school_id || row.schoolId) || 'local',
+				school_id: legacyAsId(row.school_id || row.schoolId) || null,
 				score: legacyAsNumber(row.score, 0),
 				answers_json: legacyAsJson(row.answers_json ?? row.answers, '{}'),
 				rank: legacyAsNumber(row.rank, null),
@@ -396,7 +396,7 @@ function legacyNormalizeLegacyData(raw, currentUser) {
 				id: legacyAsId(row.id),
 				tournament_id: legacyAsId(row.tournament_id || row.tournamentId),
 				user_id: legacyAsId(row.user_id || row.userId),
-				school_id: legacyAsId(row.school_id || row.schoolId) || 'local',
+				school_id: legacyAsId(row.school_id || row.schoolId) || null,
 				score: legacyAsNumber(row.score, 0),
 				registered_at: row.registered_at || row.registeredAt,
 			}))
@@ -404,7 +404,7 @@ function legacyNormalizeLegacyData(raw, currentUser) {
 		exam_sessions: (raw.exam_sessions || [])
 			.map((row) => ({
 				id: legacyAsId(row.id),
-				school_id: legacyAsId(row.school_id || row.schoolId) || 'local',
+				school_id: legacyAsId(row.school_id || row.schoolId) || null,
 				exam_id: legacyAsId(row.exam_id || row.examId),
 				user_id: legacyAsId(row.user_id || row.userId),
 				status: ['active', 'completed', 'expired'].includes(row.status)

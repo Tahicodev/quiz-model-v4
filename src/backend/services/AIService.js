@@ -36,10 +36,10 @@ export class AIService {
    * @param {number}  params.count     - how many questions (1-20)
    * @param {string}  params.type      - QUESTION_TYPES value
    * @param {string}  params.difficulty - DIFFICULTY value
-   * @param {string}  [params.schoolId='local']
+   * @param {string}  [params.schoolId=null]
    * @returns {Promise<Array<{ text, type, answer, options_json, difficulty, explanation, points }>>}
    */
-  async generateQuestions({ topic, count, type, difficulty, schoolId = 'local' }) {
+  async generateQuestions({ topic, count, type, difficulty, schoolId = null }) {
     if (!topic || !topic.trim()) throw new ValidationError({ topic: ['Topic is required'] });
     if (!count || count < 1 || count > 20) throw new ValidationError({ count: ['Count must be 1-20'] });
     if (type && !typeValues.includes(type)) throw new ValidationError({ type: [`Invalid type: ${type}`] });

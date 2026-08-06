@@ -37,22 +37,26 @@ function parseIntOrDefault(key, fallback) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-const mode = (process.env.APP_MODE || 'local').toLowerCase();
+// SaaS is the only supported runtime mode.
+const MODE = 'saas';
 const jwtSecret = requireEnv(
   'JWT_SECRET',
   'JWT_SECRET is required. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
 );
 
-// Enforce a strong secret in SaaS mode; warn (but allow) a short one in local mode.
-if (mode === 'saas' && jwtSecret.length < 64) {
-  throw new Error('JWT_SECRET must be at least 64 characters in SaaS mode.');
+// Enforce a strong signing secret — SaaS traffic is multi-tenant, so a weak
+// secret is a cross-tenant forgery risk.
+if (jwtSecret.length < 64) {
+  throw new Error('JWT_SECRET must be at least 64 characters.');
 }
 
 export const config = Object.freeze({
   // ── Mode ──────────────────────────────────────────────────────────────────
-  mode, // 'local' | 'saas'
-  isSaaS: mode === 'saas',
-  isLocal: mode !== 'saas',
+  // Retained as a frozen constant so existing log lines / health checks keep a
+  // stable shape. The application no longer branches on this value.
+  mode: MODE,
+  isSaaS: true,
+  isLocal: false,
 
   // ── Database ──────────────────────────────────────────────────────────────
   // provider is informational (Prisma reads its own env); kept here for logging.
@@ -71,13 +75,9 @@ export const config = Object.freeze({
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
 
   // ── Realtime ──────────────────────────────────────────────────────────────
-  // Redis adapter for SaaS multi-instance; null in local mode.
+  // Optional Redis adapter for multi-instance deployments.
   redisUrl: process.env.REDIS_URL || null,
 
   // ── Logging ───────────────────────────────────────────────────────────────
   logLevel: process.env.LOG_LEVEL || 'info',
-
-  // ── Tenant ────────────────────────────────────────────────────────────────
-  // The single school id used in local mode (seeding + queries).
-  defaultSchoolId: process.env.DEFAULT_SCHOOL_ID || 'local',
 });

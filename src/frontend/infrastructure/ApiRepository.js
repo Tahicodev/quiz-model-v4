@@ -2,7 +2,8 @@
  * src/frontend/infrastructure/ApiRepository.js
  *
  * Repository implementation that talks to the Express REST API via fetch.
- * Used in SaaS mode (APP_MODE=saas). Includes automatic token refresh on 401.
+ * The only repository implementation in this SaaS-only build. Includes
+ * automatic access-token refresh on 401 via the httpOnly refresh cookie.
  *
  * Constructor params:
  *   baseUrl        - API base URL, e.g. "http://localhost:3000"
@@ -158,8 +159,8 @@ export class ApiRepository extends IStorageRepository {
   }
 
   // Nested admin resources have explicit backend routes rather than generic
-  // CRUD endpoints. These methods keep the service layer portable: local mode
-  // continues to use the repository's join tables, while SaaS uses the API.
+  // CRUD endpoints. These methods keep the service layer portable across
+  // repository implementations.
   async addExamQuestion(examId, data) {
     return this.#fetch('POST', `/exams/${examId}/questions`, data);
   }

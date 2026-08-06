@@ -7,9 +7,9 @@
  * Auth strategies (tried in order):
  *   1. JWT — standard token from socket.io-client `auth: { token }`
  *   2. Admin secret — legacy admin panels pass `auth: { adminSecret }`
- *   3. Local-mode compatibility token — legacy local UI stores a lightweight
- *      base64-encoded user payload as its session token. Accept it only if it
- *      decodes to a valid user-shaped object; never accept an anonymous socket.
+ *
+ * Anonymous / unsigned tokens are never accepted: SaaS traffic is multi-tenant
+ * and a forged identity would let a client see another school's rooms.
  */
 
 import jwt from 'jsonwebtoken';
@@ -29,8 +29,7 @@ export function setAdminSecret(secret) {
 
 /**
  * Socket.io handshake middleware.
- * Accepts connections only via JWT, admin secret, or a validated local-mode
- * compatibility token. Any anonymous fallback is explicitly forbidden.
+ * Accepts connections only via JWT or the admin pairing secret.
  */
 export function socketAuthMiddleware(socket, next) {
 	const token = socket.handshake.auth?.token || socket.handshake.query?.token;
@@ -49,36 +48,16 @@ export function socketAuthMiddleware(socket, next) {
 	}
 
 	// ── Strategy 2: Admin secret (legacy admin panels) ───────────────────────
+	// School scope comes from the handshake payload if provided; otherwise the
+	// connection is limited to the default tenant used for the admin console.
 	if (adminSecret && _adminSecret && adminSecret === _adminSecret) {
 		socket.data.user = {
 			id: 'admin-secret-auth',
 			username: 'admin',
 			role: 'admin',
-			school_id: config.defaultSchoolId || 'local',
+			school_id: socket.handshake.auth?.school_id || socket.handshake.query?.school_id || null,
 		};
 		return next();
-	}
-
-	// ── Strategy 3: Local-mode compatibility token ───────────────────────────
-	// Legacy local UI stores a lightweight base64-encoded user payload in the
-	// session token. Accept that shape only in local mode, do not invent an
-	// anonymous identity for every socket.
-	if (config.isLocal && token) {
-		try {
-			const raw = Buffer.from(token, 'base64').toString('utf8');
-			const payload = JSON.parse(raw);
-			if (payload?.id && payload?.username && payload?.role) {
-				socket.data.user = {
-					id: payload.id,
-					username: payload.username,
-					role: payload.role,
-					school_id: payload.school_id ?? (config.defaultSchoolId || 'local'),
-				};
-				return next();
-			}
-		} catch {
-			// Malformed local compatibility token — reject below.
-		}
 	}
 
 	// ── All strategies exhausted — reject ────────────────────────────────────

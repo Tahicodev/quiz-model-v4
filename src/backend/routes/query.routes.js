@@ -5,8 +5,7 @@
  * POST /api/v1/query/:name for operations that don't fit generic
  * CRUD (e.g. exam.withQuestions, game.activeSessions).
  *
- * This router delegates to PrismaRepository.query(), which mirrors
- * the LocalStorageRepository CUSTOM_QUERIES one-for-one.
+ * This router delegates to PrismaRepository.query().
  */
 
 import { Router } from 'express';

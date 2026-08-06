@@ -2,7 +2,7 @@
 	"name": "quiz-model-v4-server",
 	"version": "4.0.0",
 	"type": "module",
-	"description": "Quiz App server (Express + Socket.IO + Prisma) — local LAN and SaaS modes",
+	"description": "Quiz App server (Express + Socket.IO + Prisma) — SaaS deployment",
 	"main": "src/backend/server.js",
 	"scripts": {
 		"start": "node src/backend/server.js",

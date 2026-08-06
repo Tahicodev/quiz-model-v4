@@ -1,9 +1,13 @@
 /**
  * prisma/seed.js
  *
- * Idempotent seed: creates the default School (local mode) + an admin user +
+ * Idempotent seed: creates the bootstrap School tenant + an admin user +
  * default settings across all visibility tiers. Safe to run on every deploy —
  * `upsert` + the existence check make it a no-op once seeded.
+ *
+ * The school id can be overridden via DEFAULT_SCHOOL_ID; otherwise a stable
+ * development id is used. Real tenants created through the admin UI get
+ * cryptographically-random ids and are NOT affected by this seed.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -11,10 +15,12 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-const SCHOOL_ID = process.env.DEFAULT_SCHOOL_ID || 'local';
+// Default tenant used for the bootstrap admin user. Operators can override
+// this for their environment; there is no behaviour change otherwise.
+const SCHOOL_ID = process.env.DEFAULT_SCHOOL_ID || 'saas-default';
 
 async function main() {
-  // ── Default school (the tenant root for local mode) ────────────────────────
+  // ── Default school (the tenant root for the bootstrap admin user) ─────────
   const school = await prisma.school.upsert({
     where: { slug: SCHOOL_ID },
     update: {},
