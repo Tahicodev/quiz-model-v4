@@ -73,6 +73,29 @@
 	overflow: hidden;
 }
 
+/* Hide dashboard chrome while auth state is being resolved so
+   unauthenticated visitors only see the login modal (admin.html) */
+html.auth-pending body {
+	visibility: hidden;
+	overflow: hidden;
+	background: var(--bg, #f4f5f7);
+}
+
+/* Keep the auth modal itself visible so login works while gated */
+html.auth-pending #authModal,
+html.auth-pending #authModal * {
+	visibility: visible;
+}
+
+html.auth-pending .app-container {
+	pointer-events: none;
+}
+
+html.auth-pending.auth-ready body {
+	visibility: visible;
+	overflow: auto;
+}
+
 /* Student auth panel */
 .student-auth-panel {
 	margin: 16px 0;

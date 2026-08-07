@@ -1249,6 +1249,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // Tab Navigation
 function openTab(event, tabName) {
+	// Redirect unauthenticated navigation to the login modal instead of
+	// showing an "Access denied" toast when no session exists yet.
+	const hasStoredSession = (function () {
+		try {
+			return !!(
+				sessionStorage.getItem('quizSession') ||
+				localStorage.getItem('quizSessionRemember')
+			);
+		} catch (e) {
+			return false;
+		}
+	})();
+	if (!window.currentUser && !hasStoredSession) {
+		if (typeof window.checkAuthState === 'function') {
+			window.checkAuthState();
+		}
+		return;
+	}
 	if (window.Auth && typeof window.Auth.canAccessTab === 'function') {
 		if (!window.Auth.canAccessTab(tabName)) {
 			if (typeof showToast === 'function') {

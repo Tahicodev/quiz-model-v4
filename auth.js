@@ -865,6 +865,20 @@
 	function showAuthModal() {
 		const modal = document.getElementById('authModal');
 		if (!modal) return;
+		// Defensive: admin.html has a malformed #settingsModal wrapper that never
+		// closes, which swallows #authModal and keeps it at display:none even when
+		// we request display:flex. Reparent to <body> so it always renders.
+		if (modal.parentElement && modal.parentElement !== document.body) {
+			document.body.appendChild(modal);
+		}
+		// Reveal the modal (but keep the dashboard hidden) while gated.
+		if (document.documentElement.classList.contains('auth-pending')) {
+			document.documentElement.classList.add('auth-ready');
+		} else {
+			// Session existed but was invalid/expired: hide the dashboard chrome
+			// behind the modal as well so content isn't reachable unauthenticated.
+			document.documentElement.classList.add('auth-pending', 'auth-ready');
+		}
 		modal.style.display = 'flex';
 		setTimeout(() => modal.classList.add('active'), 10);
 		document.body.classList.add('auth-locked');
@@ -876,6 +890,7 @@
 			modal.style.display = 'none';
 			modal.classList.remove('active');
 			document.body.classList.remove('auth-locked');
+			document.documentElement.classList.remove('auth-pending', 'auth-ready');
 		}
 
 	function showStudentAuthModal() {
