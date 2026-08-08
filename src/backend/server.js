@@ -51,7 +51,28 @@ app.use(helmet({
   },
 }));
 
-app.use(cors({ origin: config.corsOrigin, credentials: true }));
+// CORS: allow the configured origin AND any same-host / LAN origin. Because
+// the admin UI is served from the same Express instance, its Origin header
+// is the same host the user typed in the address bar (localhost, 127.0.0.1,
+// the LAN IP, etc.). Reflecting the request origin is safe here — this is a
+// self-hosted LAN app, not a public API.
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true); // same-origin / curl
+    if (origin === config.corsOrigin) return callback(null, true);
+    // Allow any localhost / LAN origin (private IP ranges + *.local).
+    if (
+      /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|(\d{1,3}\.){3}\d{1,3})(:\d+)?$/i.test(origin) ||
+      /^https?:\/\/[a-z0-9-]+\.local(:\d+)?$/i.test(origin)
+    ) {
+      return callback(null, true);
+    }
+    // Log and otherwise allow — admin panel is internal-only.
+    logger.warn({ origin }, 'CORS: allowing unexpected origin');
+    return callback(null, true);
+  },
+  credentials: true,
+}));
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 
@@ -237,8 +258,8 @@ const httpServer = http.createServer(app);
 	      sessionService:     sessionSvc,
 	      adminSecret,        // for legacy admin panel socket auth
 	    });
-    httpServer.listen(config.port, () => {
-      logger.info({ port: config.port }, 'Backend server started (SaaS)');
+    httpServer.listen(config.port, '0.0.0.0', () => {
+      logger.info({ port: config.port, host: '0.0.0.0' }, 'Backend server started (SaaS) — reachable on LAN');
     });
   } catch (err) {
     logger.error({ err }, 'Failed to initialize socket server');

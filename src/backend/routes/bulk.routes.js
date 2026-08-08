@@ -109,29 +109,101 @@ const SANITIZERS = {
   // model Question { id, school_id, category_id?, type, text, options_json?,
   //                  answer, explanation?, points, difficulty, tags?,
   //                  media_url?, created_at, updated_at }
+  //
+  // Legacy question shape (questions-management.js):
+  //   { id, question, options | optionData: [{text, image}], answer,
+  //     explanation, image, category (string name OR id), type, difficulty,
+  //     instruction, isDraggable, allowMultipleAnswers, dateCreated,
+  //     ownerId, distractors, codeSnippet, codeLanguage, codeAnswerMode }
+  //
+  // The schema's `type` is a constrained enum (see shared/constants.js
+  // QUESTION_TYPES); legacy types like "multiple-choice" need mapping.
   questions: (row, schoolId) => {
+    // Map legacy question type strings to the backend's QUESTION_TYPES.
+    const TYPE_MAP = {
+      'multiple-choice': 'MCQ',
+      'mcq': 'MCQ',
+      'true-false': 'TRUE_FALSE',
+      'true_false': 'TRUE_FALSE',
+      'short-answer': 'SHORT_ANSWER',
+      'short_answer': 'SHORT_ANSWER',
+      'essay': 'ESSAY',
+      'matching': 'MATCHING',
+      'ordering': 'ORDER',
+      'order': 'ORDER',
+      'fill-blank': 'FILL_BLANK',
+      'fill_blank': 'FILL_BLANK',
+      // Pass-through if the type already matches a backend value.
+      'MCQ': 'MCQ', 'TRUE_FALSE': 'TRUE_FALSE', 'SHORT_ANSWER': 'SHORT_ANSWER',
+      'ESSAY': 'ESSAY', 'MATCHING': 'MATCHING', 'ORDER': 'ORDER',
+      'FILL_BLANK': 'FILL_BLANK',
+    };
+    const rawType = pickStr(row.type) || 'multiple-choice';
+    const mappedType = TYPE_MAP[rawType] || 'MCQ';
+
+    // Options: prefer `optionData` (array of `{text, image}`), fall back to
+    // the plain `options` array. Always serialize as a JSON string array.
+    const rawOptions =
+      Array.isArray(row.optionData) && row.optionData.length > 0
+        ? row.optionData.map((o) =>
+            typeof o === 'string' ? o : (o && o.text) ?? '',
+          )
+        : Array.isArray(row.options)
+          ? row.options
+          : [];
     const optionsJson =
-      row.options_json ??
-      (Array.isArray(row.options) ? JSON.stringify(row.options) : undefined) ??
-      (row.options != null ? pickStr(row.options) : undefined);
+      rawOptions.length > 0 ? JSON.stringify(rawOptions) : undefined;
+
+    // category: legacy row stores either the category id (string) or
+    // "uncategorized" / category name. If it's a non-empty string that
+    // looks like an id (uuid or similar), use it; otherwise drop it so
+    // the FK to `categories.id` doesn't fail.
+    const rawCat = row.category_id ?? row.categoryId ?? row.category;
+    const categoryId =
+      typeof rawCat === 'string' &&
+      rawCat.trim() !== '' &&
+      rawCat !== 'uncategorized' &&
+      rawCat !== 'default'
+        ? String(rawCat)
+        : undefined;
+
+    // answer must always be a string per the schema.
+    const rawAnswer = row.answer;
+    const answer =
+      typeof rawAnswer === 'string'
+        ? rawAnswer
+        : Array.isArray(rawAnswer)
+          ? JSON.stringify(rawAnswer)
+          : rawAnswer == null
+            ? ''
+            : String(rawAnswer);
+
+    const text = pickStr(row.text) ?? pickStr(row.question) ?? pickStr(row.title);
+    if (!text) return null; // required by schema - skip silently
+
     return {
       ...(row.id && { id: String(row.id) }),
       school_id: schoolId,
-      ...(row.category_id && { category_id: String(row.category_id) }),
-      ...(row.categoryId && { category_id: String(row.categoryId) }),
-      ...(row.category && typeof row.category === 'string' && { category_id: row.category }),
-      type: pickStr(row.type) || 'mcq',
-      text: pickStr(row.text) ?? pickStr(row.question) ?? pickStr(row.title) ?? '',
-      ...(optionsJson !== undefined && { options_json: String(optionsJson) }),
-      answer: pickStr(row.answer) ?? '',
+      ...(categoryId && { category_id: categoryId }),
+      type: mappedType,
+      text,
+      ...(optionsJson !== undefined && { options_json: optionsJson }),
+      answer,
       ...(row.explanation != null && { explanation: pickStr(row.explanation) }),
+      ...(row.instruction != null && { explanation: pickStr(row.instruction) }),
       ...(row.points != null && { points: pickInt(row.points) ?? 1 }),
-      ...(row.difficulty != null && { difficulty: pickStr(row.difficulty) }),
+      ...(row.difficulty != null && {
+        difficulty: pickStr(row.difficulty) || 'medium',
+      }),
       ...(row.tags != null && {
         tags: Array.isArray(row.tags) ? row.tags.join(',') : pickStr(row.tags),
       }),
       ...(row.media_url != null && { media_url: pickStr(row.media_url) }),
       ...(row.mediaUrl != null && { media_url: pickStr(row.mediaUrl) }),
+      ...(row.image != null && row.image !== '' && { media_url: pickStr(row.image) }),
+      // legacy extras silently dropped: dateCreated, ownerId, isDraggable,
+      // allowMultipleAnswers, distractors, codeSnippet, codeLanguage,
+      // codeAnswerMode, optionData (already encoded into options_json).
     };
   },
 

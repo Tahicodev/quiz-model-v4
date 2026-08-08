@@ -68,10 +68,54 @@ export class AuthService {
       throw new ForbiddenError('Your account is not active. Contact your administrator.');
     }
 
-    const matches = await bcrypt.compare(password, user.password_hash);
+    // Support three hash generations:
+    //   1. bcrypt ($2a$/$2b$/...)                                  — proper SaaS
+    //   2. legacy "simple-<signed-int>" from auth.js simpleHash    — local-only
+    //   3. legacy SHA-256 hex (64 lower-hex chars)                 — older local
+    // Whenever a non-bcrypt hash matches, immediately re-hash with bcrypt and
+    // persist, so the user's next login goes through the fast path.
+    let matches = false;
+    let shouldMigrate = false;
+    const stored = String(user.password_hash || '');
+
+    if (stored.startsWith('$2a$') || stored.startsWith('$2b$') || stored.startsWith('$2y$')) {
+      matches = await bcrypt.compare(password, stored);
+    } else if (stored.startsWith('simple-')) {
+      // Mirror auth.js simpleHash: djb2-style 32-bit with sign.
+      let h = 0;
+      const s = String(password || '');
+      for (let i = 0; i < s.length; i++) {
+        h = (h << 5) - h + s.charCodeAt(i);
+        h |= 0;
+      }
+      matches = `simple-${h}` === stored;
+      shouldMigrate = matches;
+    } else if (/^[0-9a-f]{64}$/i.test(stored)) {
+      // SHA-256 hex of the plaintext (auth.js hashPassword fallback).
+      const hex = crypto.createHash('sha256').update(String(password || ''), 'utf8').digest('hex');
+      matches = hex === stored.toLowerCase();
+      shouldMigrate = matches;
+    } else {
+      // Unknown scheme — do not authenticate.
+      matches = false;
+    }
+
     if (!matches) {
       securityLog('login_failure', { userId: user.id, reason: 'bad_password', ip });
       throw new UnauthorizedError('Invalid username or password');
+    }
+
+    // Migrate weak hashes to bcrypt transparently so future logins use the
+    // standard verifier and so the DB drifts toward a single hash scheme.
+    if (shouldMigrate) {
+      try {
+        const newHash = await bcrypt.hash(password, config.bcryptRounds);
+        await this.#repo.update('users', user.id, { password_hash: newHash });
+        securityLog('password_hash_migrated', { userId: user.id, from: stored.startsWith('simple-') ? 'simple' : 'sha256' });
+      } catch (migrateErr) {
+        // Migration failure must not block a valid login.
+        logger.warn({ err: migrateErr, userId: user.id }, 'Password hash migration failed — continuing');
+      }
     }
 
     // Update last login
