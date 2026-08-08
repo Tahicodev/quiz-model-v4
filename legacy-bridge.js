@@ -172,16 +172,27 @@
     // Skipped silently when no token is present (anonymous landing page) — the
     // cached data, if any, remains visible; the bootstrap re-runs after login
     // via window.__legacyBridgeBootstrap().
-    function fetchAll() {
-      var token = getToken();
+    function fetchAll(forceToken) {
+      var token = forceToken || getToken();
       if (!token) {
         // Anonymous — nothing to bootstrap. Leave the cache as-is.
         return Promise.resolve();
       }
-      return fetch(getBaseUrl() + '/bootstrap', {
-        credentials: 'include',
-        headers: { 'Authorization': 'Bearer ' + token },
-      })
+      var url = getBaseUrl() + '/bootstrap';
+      function doFetch(t) {
+        return fetch(url, {
+          credentials: 'include',
+          headers: { 'Authorization': 'Bearer ' + t },
+        });
+      }
+      return doFetch(token)
+        .then(function (r) {
+          if (r.status === 401 && !forceToken) {
+            // Try one refresh + retry, in case the saved access token expired.
+            return refreshAccessToken().then(function (newTok) { return doFetch(newTok); });
+          }
+          return r;
+        })
         .then(function (r) {
           if (!r.ok) throw new Error('Bootstrap failed: ' + r.status);
           return r.json();
@@ -212,41 +223,135 @@
     // Fire-and-forget: failures are logged but the cache has already been
     // updated synchronously, so the UI stays correct; a later bootstrap will
     // reconcile against the server.
+
+    // Track in-flight refresh to prevent a thundering herd on 401s.
+    var refreshPromise = null;
+
+    function refreshAccessToken() {
+      if (refreshPromise) return refreshPromise;
+      refreshPromise = fetch(getBaseUrl() + '/auth/refresh', {
+        method: 'POST',
+        credentials: 'include', // sends the refreshToken httpOnly cookie
+      })
+        .then(function (r) {
+          if (!r.ok) {
+            var err = new Error('Refresh failed');
+            err.status = r.status;
+            throw err;
+          }
+          return r.json();
+        })
+        .then(function (data) {
+          var newToken = data && (data.accessToken || data.token);
+          if (!newToken) throw new Error('Refresh returned no token');
+          // Update the in-memory token and all persisted copies so subsequent
+          // syncs and the next page load use the fresh token.
+          window.__authToken = newToken;
+          try {
+            var s = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
+            if (s) {
+              s.token = newToken;
+              _origSetItem.call(localStorage, 'quizSession', JSON.stringify(s));
+              _origSetItem.call(sessionStorage, 'quizSession', JSON.stringify(s));
+              var r = JSON.parse(_origGetItem.call(localStorage, 'quizSessionRemember') || 'null');
+              if (r) {
+                r.token = newToken;
+                _origSetItem.call(localStorage, 'quizSessionRemember', JSON.stringify(r));
+              }
+            }
+            _origSetItem.call(localStorage, 'quizAuthToken', newToken);
+          } catch (_) { /* non-fatal */ }
+          return newToken;
+        })
+        .finally(function () {
+          refreshPromise = null;
+        });
+      return refreshPromise;
+    }
+
+    function notifySyncError(table, message) {
+      var msg = '[Save failed] ' + table + ': ' + message;
+      console.warn(msg);
+      if (typeof window.showToast === 'function') {
+        try { window.showToast(msg, 'error'); } catch (_) { /* ignore */ }
+      }
+    }
+
     function syncToApi(table, payload, kind) {
       var base = getBaseUrl() + '/' + table;
-      var init = {
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + getToken(),
-        },
-      };
+
+      function buildInit(token) {
+        return {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (token || ''),
+          },
+        };
+      }
+
+      var init = buildInit(getToken());
+      var url;
+      var label = kind;
 
       if (kind === 'create') {
         init.method = 'POST';
         init.body = JSON.stringify(payload);
-        fire(base, init, table);
+        url = base;
       } else if (kind === 'update') {
         init.method = 'PATCH';
         init.body = JSON.stringify(payload.patch);
-        fire(base + '/' + encodeURIComponent(payload.id), init, table);
+        url = base + '/' + encodeURIComponent(payload.id);
       } else if (kind === 'delete') {
         init.method = 'DELETE';
-        fire(base + '/' + encodeURIComponent(payload.id), init, table);
+        url = base + '/' + encodeURIComponent(payload.id);
       } else {
         // 'bulk' — used by setAll_sync / setValue_sync.
         if (!payload || (Array.isArray(payload) && payload.length === 0)) return;
         init.method = 'POST';
         var body = Array.isArray(payload) ? { items: payload } : { value: payload };
         init.body = JSON.stringify(body);
-        fire(getBaseUrl() + '/bulk/' + encodeURIComponent(table), init, table);
+        url = getBaseUrl() + '/bulk/' + encodeURIComponent(table);
       }
+
+      fireWithRetry(url, init, table, label);
     }
 
-    function fire(url, init, table) {
-      fetch(url, init).catch(function (err) {
-        console.warn('[legacy-bridge] syncToApi failed for ' + table, err);
-      });
+    function fireWithRetry(url, init, table, label, retried) {
+      fetch(url, init)
+        .then(function (res) {
+          if (res.status === 401 && !retried) {
+            // Access token expired or missing — refresh via the httpOnly cookie
+            // and retry once with the new token.
+            return refreshAccessToken().then(function (newToken) {
+              var retryInit = {
+                method: init.method,
+                credentials: init.credentials,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + newToken,
+                },
+                body: init.body,
+              };
+              return fireWithRetry(url, retryInit, table, label, true);
+            });
+          }
+          if (!res.ok) {
+            return res.text().then(function (body) {
+              var detail = body;
+              try {
+                var parsed = JSON.parse(body);
+                detail = parsed?.error?.message || parsed?.message || body;
+              } catch (_) { /* keep raw */ }
+              notifySyncError(table, 'HTTP ' + res.status + ' — ' + String(detail).slice(0, 200));
+            });
+          }
+          // Success — consume body to avoid dangling promise warnings.
+          return res.text().catch(function () { /* ignore */ });
+        })
+        .catch(function (err) {
+          notifySyncError(table, err && err.message ? err.message : 'network error');
+        });
     }
 
     // Kick off the one-shot bootstrap immediately (no-op if anonymous).

@@ -110,8 +110,16 @@
     var form = replaceForm('authLoginForm');
     if (!form) return;
 
+    // Flag so auth.js (or any legacy handler) can detect the bridge owns this
+    // form and skip its own localStorage-based login. auth.js may still have
+    // attached listeners *before* us if it ran first; the clone above strips
+    // them, but belt-and-braces: also mark the form.
+    form.setAttribute('data-bridge-owned', 'true');
+    window.__AUTH_BRIDGE_OWNS_LOGIN__ = true;
+
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      e.stopImmediatePropagation();
 
       var username = (this.querySelector('[data-auth="username"]') || {}).value;
       var password = (this.querySelector('[data-auth="password"]') || {}).value;
@@ -144,13 +152,17 @@
         var session = buildSession(user, token, remember);
         persistSession(session, remember);
         sessionStorage.setItem('adminLoggedIn', 'true');
+        // Clear the gate classes so hideAuthModal state is clean post-reload.
+        try {
+          document.documentElement.classList.remove('auth-pending', 'auth-ready');
+        } catch (_) {}
 
         showMsg('Login successful', 'success');
         window.location.reload();
       } catch (err) {
         showMsg('Connection error: ' + err.message, 'error');
       }
-    });
+    }, true); // capture=true so this runs before any non-capture listener
   }
 
   // ── Bind student login form ────────────────────────────────────────────────
@@ -158,8 +170,11 @@
     var form = replaceForm('studentLoginForm');
     if (!form) return;
 
+    form.setAttribute('data-bridge-owned', 'true');
+
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
+      e.stopImmediatePropagation();
 
       var username = (this.querySelector('[data-auth="username"]') || {}).value;
       var password = (this.querySelector('[data-auth="password"]') || {}).value;
@@ -214,7 +229,7 @@
       } catch (err) {
         showMsg('Connection error: ' + err.message, 'error');
       }
-    });
+    }, true); // capture=true
   }
 
   // ── Override logout to call API ────────────────────────────────────────────

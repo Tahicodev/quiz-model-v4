@@ -3382,7 +3382,10 @@
 
 	function bindAuthUI() {
 		const authForm = document.getElementById('authLoginForm');
-		if (authForm) {
+		// Skip if legacy-auth-bridge.js has already claimed this form (it routes
+		// the login through the real backend instead of localStorage password
+		// verification).
+		if (authForm && !window.__AUTH_BRIDGE_OWNS_LOGIN__ && authForm.getAttribute('data-bridge-owned') !== 'true') {
 			authForm.addEventListener('submit', (e) => {
 				e.preventDefault();
 				handleLogin(authForm);

@@ -92,6 +92,15 @@ export class PrismaRepository extends IStorageRepository {
 		return delegate;
 	}
 
+	/**
+	 * Public accessor for the Prisma delegate — used by routes that need
+	 * primitives not exposed by the generic repo API (e.g. upsert for the
+	 * legacy bulk-sync flow which sends the entire collection every save).
+	 */
+	modelFor(table) {
+		return this.#model(table);
+	}
+
 	async getAll(
 		table,
 		{
