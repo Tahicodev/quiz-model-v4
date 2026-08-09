@@ -28,6 +28,7 @@ const MODEL_MAP = {
 	games: 'game',
 	game_sessions: 'gameSession',
 	tournaments: 'tournament',
+	tournament_history: 'tournamentHistory',
 	tournament_entries: 'tournamentEntry',
 	exam_sessions: 'examSession',
 	settings: 'setting',

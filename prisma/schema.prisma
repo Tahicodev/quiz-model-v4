@@ -32,6 +32,7 @@ model School {
   results     Result[]
   games       Game[]
   tournaments Tournament[]
+  tournamentHistory TournamentHistory[]
   settings    Setting[]
   auditLogs   AuditLog[]
   sessions    ExamSession[]
@@ -161,6 +162,15 @@ model Exam {
   is_training   Boolean  @default(false) // show answers immediately after each question
   randomize     Boolean  @default(false) // shuffle questions per session
   max_attempts  Int? // null = unlimited
+  // Legacy-UI snapshot blob. The legacy admin UI stores exam.questions as an
+  // array of row *indices* (not question UUIDs) and exam.classes as class
+  // name strings. Neither can be relayed to the exam_questions/exam_classes
+  // junctions without a server-side questions-table snapshot, which would be
+  // order-fragile. We persist the raw arrays here (JSON string) so that an
+  // exam save is durable and no UI data is lost; the normalized junctions
+  // remain the source of truth for any code that touches them via the
+  // restful /api/v1/exams routes.
+  options_json  String?
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
@@ -236,20 +246,26 @@ model ExamSession {
 model Result {
   id             String   @id @default(uuid())
   school_id      String
-  exam_id        String
+  // Hard FK would be ideal, but the legacy UI records training and game
+  // results long before any exam exists (mode "training" / "game"), and those
+  // rows never reference a real Exam.id. Keep the column nullable so the
+  // normalized store can accept legacy rows without fabricating exams; the
+  // restful results API still writes real exam ids.
+  exam_id        String?
   user_id        String
   score          Float // percentage 0–100
   total_points   Int
   earned_points  Int
   time_spent     Int? // seconds
-  answers_json   String // { questionId: userAnswer } — immutable record
+  answers_json   String // legacy context + raw row; immutable record
   mode           String   @default("exam") // RESULT_MODE constant
-  passed         Boolean
+  passed         Boolean  @default(false) // default false; sanitizer computes when possible
   attempt_number Int      @default(1)
   date_taken     DateTime @default(now())
 
   school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  exam   Exam   @relation(fields: [exam_id], references: [id])
+  // Optional relation — null for training/game results.
+  exam   Exam?  @relation(fields: [exam_id], references: [id])
   user   User   @relation(fields: [user_id], references: [id])
 
   @@index([school_id])
@@ -322,6 +338,26 @@ model Tournament {
 
   @@index([school_id])
   @@index([status])
+}
+
+// Completed-tournament archive, written by the legacy UI's
+// quizTournamentsHistory store. Kept as its own model (rather than re-using
+// Tournament) so history rows don't pollute live tournament queries and the
+// legacy payload (planner config, round assignments, winners) is preserved
+// verbatim in `payload_json`.
+model TournamentHistory {
+  id            String    @id @default(uuid())
+  school_id     String
+  name          String
+  ended_at      DateTime?
+  winners_json  String? // JSON array of { userId, score, ... }
+  payload_json  String? // full legacy row, untouched
+  created_at    DateTime  @default(now())
+
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+
+  @@index([school_id])
+  @@index([ended_at])
 }
 
 model TournamentEntry {

@@ -53,6 +53,29 @@ const pickBool = (v) => (v === undefined ? undefined : Boolean(v));
 const pickStr = (v) => (v == null ? undefined : String(v));
 
 /**
+ * Resolve a legacy creator/owner reference to a real User.id.
+ * The legacy UI ships `ownerId`/`createdBy` as a UUID, a username, or a
+ * display name depending on the code path. `legacyCtx.userIdByKey` maps
+ * lowercase username|numero|name -> User.id; `legacyCtx.validUserIds` holds
+ * the set of real ids. Falls back to the JWT actor so the FK is always
+ * satisfied.
+ */
+const resolveCreatorId = (row, actorId, legacyCtx = {}) => {
+  const candidates = [row.creator_id, row.creatorId, row.ownerId, row.createdBy];
+  for (const c of candidates) {
+    const s = pickStr(c);
+    if (!s || !s.trim()) continue;
+    const t = s.trim();
+    if (legacyCtx.validUserIds instanceof Set && legacyCtx.validUserIds.has(t)) return t;
+    if (legacyCtx.userIdByKey instanceof Map) {
+      const found = legacyCtx.userIdByKey.get(t.toLowerCase());
+      if (found) return found;
+    }
+  }
+  return actorId != null ? String(actorId) : undefined;
+};
+
+/**
  * Per-table sanitizers. Each receives the legacy row + the tenant school_id
  * and returns a row whose keys are exactly the columns the Prisma model
  * expects. Unknown fields are returned on `dropped` so we can warn.
@@ -209,26 +232,411 @@ const SANITIZERS = {
 
   // model Exam { id, school_id, creator_id, name, description?, duration?,
   //              passing_score, status, is_training, randomize, max_attempts?,
+  //              options_json?, created_at, updated_at }
+  //
+  // The legacy UI puts `questions: [rowIndex, ...]` and `classes: [nameOrId, ...]`
+  // on the exam row. We can't relay the row indices onto the exam_questions
+  // junction without a snapshot of the questions table (they are positional
+  // indices into the admin UI's in-memory `questions[]`, not UUIDs), and the
+  // classes array mixes ids with free-text names. Rather than dropping the
+  // data, persist the raw arrays as JSON in Exam.options_json so the wire
+  // format is durable and no user input is lost.
+  exams: (row, schoolId, actorId, legacyCtx = {}) => {
+    const optionsPayload = {};
+    if (Array.isArray(row.questions) && row.questions.length > 0) {
+      optionsPayload.questions = row.questions;
+    }
+    if (Array.isArray(row.classes) && row.classes.length > 0) {
+      optionsPayload.classes = row.classes;
+    }
+    if (row.presetId != null) optionsPayload.presetId = row.presetId;
+    if (row.dateCreated != null) optionsPayload.dateCreated = row.dateCreated;
+
+    return {
+      ...(row.id && { id: String(row.id) }),
+      school_id: schoolId,
+      creator_id: resolveCreatorId(row, actorId, legacyCtx),
+      name: pickStr(row.name) ?? pickStr(row.title) ?? 'Untitled exam',
+      ...(row.description != null && { description: pickStr(row.description) }),
+      ...(row.duration != null && { duration: pickInt(row.duration) }),
+      ...(row.durationMinutes != null && { duration: pickInt(row.durationMinutes) }),
+      ...(row.passing_score != null && { passing_score: pickInt(row.passing_score) }),
+      ...(row.passingScore != null && { passing_score: pickInt(row.passingScore) }),
+      ...(row.status != null && { status: pickStr(row.status) }),
+      ...(row.is_training != null && { is_training: pickBool(row.is_training) }),
+      ...(row.isTraining != null && { is_training: pickBool(row.isTraining) }),
+      ...(row.randomize != null && { randomize: pickBool(row.randomize) }),
+      ...(row.max_attempts != null && { max_attempts: pickInt(row.max_attempts) }),
+      ...(row.maxAttempts != null && { max_attempts: pickInt(row.maxAttempts) }),
+      ...(Object.keys(optionsPayload).length > 0 && {
+        options_json: JSON.stringify(optionsPayload),
+      }),
+    };
+  },
+
+  // model Result { id, school_id, exam_id, user_id, score Float, total_points,
+  //                earned_points, time_spent?, answers_json, mode, passed,
+  //                attempt_number, date_taken }
+  //
+  // The legacy UI writes results under three shapes (training / exam / game),
+  // all of them keyed by a *student identifier that is not a User UUID*:
+  // training rows use `numero` (S001), exam rows use `name`, and game rows
+  // use `winnerId` / `participants[].id` which may be either a real user id
+  // or an ad-hoc guest handle. The Prisma `Result.user_id` is a hard FK to
+  // `User.id`, so writing any of these rows with the legacy identifier would
+  // violate the FK and crash the batch.
+  //
+  // Resolve a real user id: lookup by username / numero / name inside the
+  // same school scope, falling back to the actor (the admin recording the
+  // result). The school-scoped user list is provided by the route handler in
+  // `legacyCtx.userIdByKey` — a Map keyed by lowercase username|numero|name.
+  results: (row, schoolId, actorId, legacyCtx = {}) => {
+    const keys = [];
+    const pushKey = (v) => {
+      const s = pickStr(v);
+      if (s && s.trim()) keys.push(s.trim().toLowerCase());
+    };
+    pushKey(row.userId);
+    pushKey(row.user_id);
+    pushKey(row.username);
+    pushKey(row.numero);
+    pushKey(row.studentNumber);
+    pushKey(row.name);
+    pushKey(row.studentName);
+
+    let userId;
+    if (legacyCtx.userIdByKey instanceof Map) {
+      for (const k of keys) {
+        const found = legacyCtx.userIdByKey.get(k);
+        if (found) { userId = found; break; }
+      }
+    }
+    // Also accept a direct UUID-style value without consulting the map —
+    // some paths (game results from logged-in students) already carry it.
+    if (!userId) {
+      for (const k of [row.userId, row.user_id]) {
+        const s = pickStr(k);
+        if (s && legacyCtx.validUserIds instanceof Set && legacyCtx.validUserIds.has(s)) {
+          userId = s;
+          break;
+        }
+      }
+    }
+    if (!userId) userId = pickStr(actorId) || undefined;
+    if (!userId) return null; // schema requires user_id — skip row.
+
+    // exam_id is also a hard FK. Legacy training/game results have no exam;
+    // store the synthetic exam identifier on answers_json and leave the column
+    // null so the write doesn't blow up on the junction FK lookup.
+    const rawExamId = pickStr(row.exam_id ?? row.examId);
+    const examId =
+      rawExamId && legacyCtx.validExamIds instanceof Set && legacyCtx.validExamIds.has(rawExamId)
+        ? rawExamId
+        : undefined;
+
+    const answersPayload = {
+      examId: rawExamId ?? null,
+      examTitle: row.examTitle ?? row.examName ?? null,
+      numero: row.numero ?? null,
+      studentName: row.studentName ?? row.name ?? null,
+      class: row.class ?? row.className ?? null,
+      classId: row.classId ?? null,
+      totalQuestions: row.totalQuestions ?? null,
+      gameId: row.gameId ?? null,
+      gameName: row.gameName ?? null,
+      lobbyId: row.lobbyId ?? null,
+      lobbyLabel: row.lobbyLabel ?? null,
+      gameType: row.gameType ?? null,
+      gameMode: row.gameMode ?? null,
+      winners: Array.isArray(row.winners) ? row.winners : null,
+      leaderboard: Array.isArray(row.leaderboard) ? row.leaderboard : null,
+      participants: Array.isArray(row.participants) ? row.participants : null,
+      participantDetails: Array.isArray(row.participantDetails) ? row.participantDetails : null,
+      winnerId: row.winnerId ?? null,
+      winnerName: row.winnerName ?? null,
+      // Preserve any additional fields the legacy UI serialized onto the row.
+      raw: row,
+    };
+
+    const totalPoints = pickInt(row.totalPoints ?? row.total_points) ?? 0;
+    const scoreNum = Number(row.score);
+    const earnedPointsRaw = row.earnedPoints ?? row.earned_points ?? row.score;
+    const earnedPoints = Number.isFinite(Number(earnedPointsRaw)) ? Number(earnedPointsRaw) : 0;
+    const score = Number.isFinite(scoreNum)
+      ? scoreNum
+      : (totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0);
+
+    const passed =
+      pickBool(row.passed) ??
+      pickBool(row.isPassed) ??
+      (totalPoints > 0 ? earnedPoints >= Math.ceil(totalPoints / 2) : undefined);
+
+    return {
+      ...(row.id && { id: String(row.id) }),
+      school_id: schoolId,
+      ...(examId && { exam_id: examId }),
+      user_id: userId,
+      score,
+      total_points: totalPoints,
+      earned_points: earnedPoints,
+      ...(row.timeSpent != null && { time_spent: pickInt(row.timeSpent) }),
+      ...(row.time_spent != null && { time_spent: pickInt(row.time_spent) }),
+      ...(row.time != null && { time_spent: pickInt(row.time) }),
+      answers_json: JSON.stringify(answersPayload),
+      ...(row.mode != null && { mode: pickStr(row.mode) }),
+      ...(passed !== undefined && { passed }),
+      ...(row.attemptNumber != null && { attempt_number: pickInt(row.attemptNumber) }),
+      ...(row.attempt_number != null && { attempt_number: pickInt(row.attempt_number) }),
+      ...(row.dateTaken && { date_taken: pickDate(row.dateTaken) }),
+      ...(row.date && { date_taken: pickDate(row.date) }),
+      ...(row.completedAt && { date_taken: pickDate(row.completedAt) }),
+    };
+  },
+
+  // model Game { id, school_id, creator_id, name, type, status, settings_json?,
+  //              join_code?, question_ids, started_at?, ended_at?,
   //              created_at, updated_at }
-  exams: (row, schoolId, actorId) => ({
-    ...(row.id && { id: String(row.id) }),
-    school_id: schoolId,
-    creator_id: String(row.creator_id || row.creatorId || row.ownerId || actorId),
-    name: pickStr(row.name) ?? pickStr(row.title) ?? 'Untitled exam',
-    ...(row.description != null && { description: pickStr(row.description) }),
-    ...(row.duration != null && { duration: pickInt(row.duration) }),
-    ...(row.durationMinutes != null && { duration: pickInt(row.durationMinutes) }),
-    ...(row.passing_score != null && { passing_score: pickInt(row.passing_score) }),
-    ...(row.passingScore != null && { passing_score: pickInt(row.passingScore) }),
-    ...(row.status != null && { status: pickStr(row.status) }),
-    ...(row.is_training != null && { is_training: pickBool(row.is_training) }),
-    ...(row.isTraining != null && { is_training: pickBool(row.isTraining) }),
-    ...(row.randomize != null && { randomize: pickBool(row.randomize) }),
-    ...(row.max_attempts != null && { max_attempts: pickInt(row.max_attempts) }),
-    ...(row.maxAttempts != null && { max_attempts: pickInt(row.maxAttempts) }),
-    // legacy `classes: string[]`, `questions: [...]` are junctions —
-    // dropped here; they belong on exam_classes / exam_questions.
-  }),
+  //
+  // The legacy `normalizeGame()` shape carries a giant `settings` object, a
+  // `session` blob, `classIds`, `lobbyHistory`, and the quiz questions
+  // embedded as `questions`/`penaltyQuestions`. We map what fits, and JSON-
+  // pack the rest into `settings_json` so it survives a round trip.
+  games: (row, schoolId, actorId, legacyCtx = {}) => {
+    const questionIds = Array.isArray(row.questions)
+      ? row.questions.map((q) => (q && (q.id || q.question_id || q.uuid)) || q).filter(Boolean)
+      : Array.isArray(row.question_ids)
+        ? row.question_ids
+        : [];
+    const settingsBlob = {
+      ...(typeof row.settings === 'object' && row.settings !== null ? row.settings : {}),
+      classIds: Array.isArray(row.classIds) ? row.classIds : undefined,
+      session: row.session ?? undefined,
+      results: row.results ?? undefined,
+      lobbyCounter: row.lobbyCounter ?? undefined,
+      lobbyHistory: Array.isArray(row.lobbyHistory) ? row.lobbyHistory : undefined,
+      tournamentContext: row.tournamentContext ?? undefined,
+      penaltyQuestions: Array.isArray(row.penaltyQuestions) ? row.penaltyQuestions : undefined,
+    };
+    // Strip undefined keys so the blob stays compact.
+    for (const k of Object.keys(settingsBlob)) {
+      if (settingsBlob[k] === undefined) delete settingsBlob[k];
+    }
+    const status =
+      pickStr(row.status) === 'live' ? 'live'
+      : pickStr(row.status) === 'completed' ? 'completed'
+      : pickStr(row.status) === 'open' ? 'waiting'
+      : 'waiting';
+
+    return {
+      ...(row.id && { id: String(row.id) }),
+      school_id: schoolId,
+      creator_id: resolveCreatorId(row, actorId, legacyCtx),
+      name: pickStr(row.name) || 'Untitled game',
+      type: pickStr(row.type) || pickStr(row.mode) || 'custom',
+      status,
+      ...(Object.keys(settingsBlob).length > 0 && {
+        settings_json: JSON.stringify(settingsBlob),
+      }),
+      ...(row.join_code && { join_code: String(row.join_code) }),
+      ...(row.joinCode && { join_code: String(row.joinCode) }),
+      question_ids: JSON.stringify(questionIds),
+      ...(row.startedAt && { started_at: pickDate(row.startedAt) }),
+      ...(row.started_at && { started_at: pickDate(row.started_at) }),
+      ...(row.endedAt && { ended_at: pickDate(row.endedAt) }),
+      ...(row.ended_at && { ended_at: pickDate(row.ended_at) }),
+    };
+  },
+
+  // model Tournament { id, school_id, creator_id, name, description?, status,
+  //                    settings_json?, starts_at?, ends_at?, created_at, updated_at }
+  //
+  // The legacy UI writes two stores here: `quizTournamentActive` (one object,
+  // no stable schema — status 'active') and `quizTournamentsHistory` (array of
+  // completed tournaments). Both map onto Tournament. Extra legacy fields
+  // (planner config, round assignments, participants, winners, rewards) go
+  // into `settings_json`; the legacy `status` vocabulary ('active', 'open',
+  // 'completed') maps onto the schema's free-form string column.
+  tournaments: (row, schoolId, actorId, legacyCtx = {}) => {
+    const statusMap = { active: 'active', open: 'active', live: 'active', completed: 'completed', draft: 'draft' };
+    const rawStatus = pickStr(row.status) || 'draft';
+    const status = statusMap[rawStatus] || 'draft';
+
+    const settingsBlob = {
+      planner: row.planner ?? undefined,
+      currentRound: row.currentRound ?? undefined,
+      recommendedRounds: row.recommendedRounds ?? undefined,
+      matchMinutes: row.matchMinutes ?? undefined,
+      bestOf: row.bestOf ?? undefined,
+      pointMultiplier: row.pointMultiplier ?? undefined,
+      winnerBonus: row.winnerBonus ?? undefined,
+      rewardExpBonus: row.rewardExpBonus ?? undefined,
+      rewardBadge: row.rewardBadge ?? undefined,
+      notes: row.notes ?? undefined,
+      autoSeeding: row.autoSeeding ?? undefined,
+      allowReentry: row.allowReentry ?? undefined,
+      estimatedMatches: row.estimatedMatches ?? undefined,
+      estimatedDurationHours: row.estimatedDurationHours ?? undefined,
+      roundAssignments: row.roundAssignments ?? undefined,
+      participants: Array.isArray(row.participants) ? row.participants : undefined,
+      winners: Array.isArray(row.winners) ? row.winners : undefined,
+      pausedAt: row.pausedAt ?? undefined,
+      createdBy: row.createdBy ?? undefined,
+    };
+    for (const k of Object.keys(settingsBlob)) {
+      if (settingsBlob[k] === undefined) delete settingsBlob[k];
+    }
+
+    return {
+      ...(row.id && { id: String(row.id) }),
+      school_id: schoolId,
+      creator_id: resolveCreatorId(row, actorId, legacyCtx),
+      name: pickStr(row.name) || 'Tournament',
+      ...(row.description != null && { description: pickStr(row.description) }),
+      status,
+      ...(Object.keys(settingsBlob).length > 0 && {
+        settings_json: JSON.stringify(settingsBlob),
+      }),
+      ...(row.startedAt && { starts_at: pickDate(row.startedAt) }),
+      ...(row.startsAt && { starts_at: pickDate(row.startsAt) }),
+      ...(row.starts_at && { starts_at: pickDate(row.starts_at) }),
+      ...(row.endedAt && { ends_at: pickDate(row.endedAt) }),
+      ...(row.endsAt && { ends_at: pickDate(row.endsAt) }),
+      ...(row.ends_at && { ends_at: pickDate(row.ends_at) }),
+    };
+  },
+
+  // model TournamentHistory { id, school_id, name, ended_at?, winners_json?,
+  //                           payload_json?, created_at }
+  // Completed-tournament archive. Keep the legacy row verbatim in
+  // payload_json so no planner/reward/participant data is lost, and surface
+  // the few columns useful for listing (name, ended_at, winners).
+  tournament_history: (row, schoolId) => {
+    const name = pickStr(row.name) ?? pickStr(row.title);
+    if (!name) return null;
+    return {
+      ...(row.id && { id: String(row.id) }),
+      school_id: schoolId,
+      name,
+      ...(row.endedAt && { ended_at: pickDate(row.endedAt) }),
+      ...(row.ended_at && { ended_at: pickDate(row.ended_at) }),
+      ...(row.completedAt && { ended_at: pickDate(row.completedAt) }),
+      winners_json: JSON.stringify(Array.isArray(row.winners) ? row.winners : []),
+      payload_json: JSON.stringify(row),
+    };
+  },
+
+  // model ExamSession { id, school_id, exam_id, user_id, status,
+  //                     answers_json, current_question_index, started_at,
+  //                     expires_at, last_heartbeat, completed_at? }
+  //
+  // Legacy UI writes these to `examActiveSession` (unmapped key) so we don't
+  // normally see them here, but the bridge does accept table writes for
+  // completeness. exam_id is a hard FK, so unknown exams are dropped.
+  exam_sessions: (row, schoolId, actorId, legacyCtx = {}) => {
+    const rawExamId = pickStr(row.exam_id ?? row.examId);
+    const examId =
+      rawExamId && legacyCtx.validExamIds instanceof Set && legacyCtx.validExamIds.has(rawExamId)
+        ? rawExamId
+        : undefined;
+    if (!examId) return null;
+
+    let userId;
+    if (legacyCtx.userIdByKey instanceof Map) {
+      const keys = [row.userId, row.user_id, row.username, row.numero, row.studentNumber, row.name];
+      for (const k of keys) {
+        const s = pickStr(k);
+        if (!s) continue;
+        const found = legacyCtx.userIdByKey.get(s.trim().toLowerCase());
+        if (found) { userId = found; break; }
+      }
+    }
+    if (!userId && pickStr(row.userId) && legacyCtx.validUserIds instanceof Set && legacyCtx.validUserIds.has(pickStr(row.userId))) {
+      userId = pickStr(row.userId);
+    }
+    if (!userId) userId = pickStr(actorId) || undefined;
+    if (!userId) return null;
+
+    const statusMap = { active: 'active', open: 'active', live: 'active', completed: 'completed', submitted: 'completed' };
+    const rawStatus = pickStr(row.status) || 'active';
+    const status = statusMap[rawStatus] || 'active';
+    // expires_at is required. If the legacy row doesn't carry it, default to
+    // 24h after started_at (or now) so the row satisfies the schema without
+    // inventing timing semantics.
+    const startedAt = pickDate(row.startedAt ?? row.started_at) || new Date();
+    const expiresAt =
+      pickDate(row.expiresAt ?? row.expires_at) ||
+      new Date(startedAt.getTime() + 24 * 60 * 60 * 1000);
+
+    return {
+      ...(row.id && { id: String(row.id) }),
+      school_id: schoolId,
+      exam_id: examId,
+      user_id: userId,
+      status,
+      answers_json:
+        typeof row.answers_json === 'string'
+          ? row.answers_json
+          : JSON.stringify(row.answers ?? row.answersJson ?? {}),
+      ...(row.currentQuestionIndex != null && { current_question_index: pickInt(row.currentQuestionIndex) }),
+      ...(row.current_question_index != null && { current_question_index: pickInt(row.current_question_index) }),
+      started_at: startedAt,
+      expires_at: expiresAt,
+      ...(row.lastHeartbeat && { last_heartbeat: pickDate(row.lastHeartbeat) }),
+      ...(row.last_heartbeat && { last_heartbeat: pickDate(row.last_heartbeat) }),
+      ...(row.completedAt && { completed_at: pickDate(row.completedAt) }),
+      ...(row.completed_at && { completed_at: pickDate(row.completed_at) }),
+    };
+  },
+
+  // model ExamQuestion { id, exam_id, question_id, order_index, points_override? }
+  // The legacy UI never writes this table directly (it embeds question ids on
+  // the exam row), but the route is registered so direct API consumers and
+  // tests can upsert junction rows.
+  exam_questions: (row) => {
+    const examId = pickStr(row.exam_id ?? row.examId);
+    const questionId = pickStr(row.question_id ?? row.questionId);
+    if (!examId || !questionId) return null;
+    return {
+      ...(row.id && { id: String(row.id) }),
+      exam_id: examId,
+      question_id: questionId,
+      ...(row.order_index != null && { order_index: pickInt(row.order_index) }),
+      ...(row.orderIndex != null && { order_index: pickInt(row.orderIndex) }),
+      ...(row.points_override != null && { points_override: pickInt(row.points_override) }),
+      ...(row.pointsOverride != null && { points_override: pickInt(row.pointsOverride) }),
+    };
+  },
+
+  // model ExamClass { id, exam_id, class_id, assigned_at }
+  exam_classes: (row) => {
+    const examId = pickStr(row.exam_id ?? row.examId);
+    const classId = pickStr(row.class_id ?? row.classId);
+    if (!examId || !classId) return null;
+    return {
+      ...(row.id && { id: String(row.id) }),
+      exam_id: examId,
+      class_id: classId,
+      ...(row.assigned_at && { assigned_at: pickDate(row.assigned_at) }),
+      ...(row.assignedAt && { assigned_at: pickDate(row.assignedAt) }),
+    };
+  },
+
+  // ── Stores with no Prisma model ───────────────────────────────────────────
+  // These persist to localStorage only. Returning null makes the row a no-op,
+  // the handler responds { count: 0, skipped: n }, and the bridge keeps the
+  // data locally. If/when a model is added, only this sanitizer needs to
+  // change — the UI keeps working unchanged.
+  game_presets: () => null,
+  activity: () => null,
+  gamification: () => null,
+  profile_requests: () => null,
+  account_requests: () => null,
+  notifications: () => null,
+  teacher_messages: () => null,
+  teacher_assignments: () => null,
+  // refresh_tokens is internal to AuthService and should never be bulk-written
+  // from the UI — the endpoint requires admin but defense-in-depth matters.
+  refresh_tokens: () => null,
 
   // model Setting { id, school_id, key, value, visibility, updated_at }
   // Note when items are given as a `{key:value}` object map, the caller
@@ -246,11 +654,6 @@ const SANITIZERS = {
     // row is already reduced to key/value via routes below
     return null;
   },
-
-  // game_presets does NOT exist in the Prisma schema. Skip silently so we
-  // don't poison other writes; the frontend cache loses durability for
-  // presets only.
-  game_presets: () => null,
 
   // model AuditLog { id, school_id, actor_id?, entity_type, entity_id,
   //                  action, diff_json?, ip_address?, user_agent?, occurred_at }
@@ -301,6 +704,44 @@ function normalizeSettingsBody(body) {
 }
 
 /**
+ * For object-stores (gamification) the bridge POSTs the single object as the
+ * body itself ({value: {...}} is already used by settings). Wrap it so the
+ * rest of the handler can treat it uniformly. We don't upsert anywhere (the
+ * sanitizer returns null) but we ack the write so the bridge doesn't retry.
+ */
+function normalizeObjectStoreBody(body) {
+  if (Array.isArray(body?.items)) return body.items;
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    return [body];
+  }
+  return null;
+}
+
+/**
+ * Fields that must be present (non-null) on the *sanitized* row for the
+ * upsert to succeed. If a sanitizer produces a row missing one of these the
+ * whole batch would blow up on Prisma's FK/required validation, so we drop
+ * just that row. Keep this in sync with the schema's `String` / `Int`
+ * non-optional columns.
+ */
+const REQUIRED_FIELDS = {
+  users: ['username', 'password_hash', 'role', 'name'],
+  classes: ['name'],
+  categories: ['name'],
+  questions: ['type', 'text', 'answer'],
+  exams: ['creator_id', 'name'],
+  results: ['user_id', 'answers_json'],
+  games: ['creator_id', 'name', 'type'],
+  tournaments: ['creator_id', 'name'],
+  exam_sessions: ['exam_id', 'user_id', 'status', 'answers_json', 'started_at', 'expires_at'],
+  exam_questions: ['exam_id', 'question_id'],
+  exam_classes: ['exam_id', 'class_id'],
+  tournament_history: ['name'],
+  settings: ['key', 'value'],
+  audit_logs: ['entity_type', 'entity_id', 'action'],
+};
+
+/**
  * POST /api/v1/bulk/:table
  * Body: { items: object[] } | { value: object } (settings only)
  *
@@ -318,6 +759,10 @@ router.post('/:table', async (req, res, next) => {
     if (table === 'settings' && !Array.isArray(items)) {
       items = normalizeSettingsBody(req.body);
     }
+    // Object-stores (gamification) send the object as the whole body.
+    if (table === 'gamification' && !Array.isArray(items)) {
+      items = normalizeObjectStoreBody(req.body);
+    }
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -326,9 +771,61 @@ router.post('/:table', async (req, res, next) => {
       });
     }
 
+    // Pre-load lookup maps so sanitizers can resolve FK references without
+    // their own DB round-trips. Any table with a creator/owner/user FK needs
+    // the users map; results / exam_sessions additionally needs the exams map.
+    const needsUsers =
+      table === 'results' ||
+      table === 'exam_sessions' ||
+      table === 'games' ||
+      table === 'exams' ||
+      table === 'tournaments';
+    const needsExams = table === 'results' || table === 'exam_sessions';
+    let legacyCtx = {};
+    if (needsUsers || needsExams) {
+      try {
+        if (needsUsers) {
+          const users = await repo.getAll('users', {
+            filters: { school_id: req.schoolId },
+            limit: 1000,
+          });
+          // getAll returns { data, total }.
+          const list = users?.data ?? [];
+          const userIdByKey = new Map();
+          const validUserIds = new Set();
+          for (const u of list) {
+            if (!u?.id) continue;
+            validUserIds.add(String(u.id));
+            for (const k of [u.username, u.numero, u.name]) {
+              if (k) userIdByKey.set(String(k).trim().toLowerCase(), String(u.id));
+            }
+          }
+          legacyCtx.userIdByKey = userIdByKey;
+          legacyCtx.validUserIds = validUserIds;
+        }
+        if (needsExams) {
+          const exams = await repo.getAll('exams', {
+            filters: { school_id: req.schoolId },
+            limit: 1000,
+          });
+          const list = exams?.data ?? [];
+          legacyCtx.validExamIds = new Set(list.map((e) => String(e.id)));
+        }
+      } catch (lookupErr) {
+        // If lookup fails (fresh DB, repo not ready), continue with empty
+        // maps; sanitizers will fall back to actorId / drop the row.
+        logger.warn('bulk.routes: legacy-context lookup failed', {
+          table,
+          error: lookupErr?.message,
+        });
+      }
+    }
+
     const sanitize = SANITIZERS[table];
+    const required = REQUIRED_FIELDS[table] || [];
     const scoped = [];
     const droppedPerRow = [];
+    let missingRequiredCount = 0;
 
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
@@ -341,8 +838,21 @@ router.post('/:table', async (req, res, next) => {
         continue;
       }
 
-      const cleaned = sanitize(item, req.schoolId, req.user?.id);
+      const cleaned = sanitize(item, req.schoolId, req.user?.id, legacyCtx);
       if (!cleaned) continue; // sanitizer chose to skip this row (e.g. game_presets)
+
+      // Pre-flight required-field guard: drop the row (and count it) rather
+      // than letting Prisma reject the entire batch with P2009/P2003.
+      const missing = required.filter((f) => cleaned[f] == null || cleaned[f] === '');
+      if (missing.length > 0) {
+        missingRequiredCount += 1;
+        logger.warn('bulk.routes: dropping row missing required fields', {
+          table,
+          missing,
+          rowId: item?.id ?? null,
+        });
+        continue;
+      }
 
       // Track which legacy keys we discarded so the warning is actionable.
       const kept = new Set(Object.keys(cleaned));
@@ -380,6 +890,33 @@ router.post('/:table', async (req, res, next) => {
         // the primary key on update (some drivers reject that).
         const { id, ...rest } = row;
         if (id) {
+          // For exams the legacy UI sends partial `classes`/`questions`
+          // (e.g. a class reassignment in class-management.js sends only
+          // `classes`), and we persist those in `options_json` as a JSON
+          // blob. Blindly overwriting would drop the untouched slice, so
+          // merge the existing blob with the new one on update.
+          if (
+            table === 'exams' &&
+            typeof rest.options_json === 'string' &&
+            typeof model.findUnique === 'function'
+          ) {
+            try {
+              const existing = await model.findUnique({
+                where: { id: String(id) },
+                select: { options_json: true },
+              });
+              if (existing?.options_json) {
+                const prev = JSON.parse(existing.options_json);
+                const next = JSON.parse(rest.options_json);
+                rest.options_json = JSON.stringify({ ...prev, ...next });
+              }
+            } catch (mergeErr) {
+              logger.warn('bulk.routes: options_json merge failed', {
+                id,
+                error: mergeErr?.message,
+              });
+            }
+          }
           await model.upsert({
             where: { id: String(id) },
             create: row,
@@ -390,14 +927,20 @@ router.post('/:table', async (req, res, next) => {
         }
         upserted += 1;
       }
-      return res.status(201).json({ count: upserted });
+      return res.status(201).json({
+        count: upserted,
+        ...(missingRequiredCount > 0 && { droppedInvalid: missingRequiredCount }),
+      });
     }
 
     // Fallback: if the repo doesn't expose the underlying Prisma model,
     // use createMany (idempotent on ids) — updates to existing rows will be
     // dropped, but at least new rows are persisted.
     const result = await repo.createMany(table, scoped);
-    res.status(201).json(result);
+    res.status(201).json({
+      ...result,
+      ...(missingRequiredCount > 0 && { droppedInvalid: missingRequiredCount }),
+    });
   } catch (err) {
     next(err);
   }
