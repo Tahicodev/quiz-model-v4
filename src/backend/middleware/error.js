@@ -24,6 +24,16 @@ export const errorHandler = (err, req, res, next) => {
     logger.error('Unhandled Exception:', { error: err.message, stack: err.stack, path: req.path });
   }
 
+  // Defense-in-depth: res.status() throws RangeError for non-numeric or
+  // out-of-range codes. If a malformed AppError (e.g. a statusCode that came
+  // through as a string such as "FORBIDDEN") ever reaches here, coerce to a
+  // valid HTTP status so the response is never a spurious 500.
+  if (!Number.isInteger(statusCode) || statusCode < 400 || statusCode > 599) {
+    statusCode = 500;
+    code = typeof code === 'string' && code ? code : 'INTERNAL_ERROR';
+    message = typeof message === 'string' && message ? message : 'An unexpected error occurred';
+  }
+
   res.status(statusCode).json({
     success: false,
     error: {

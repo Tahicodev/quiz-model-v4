@@ -214,15 +214,23 @@
           window.__legacyBridgeBootstrap().catch(function () { /* best effort */ });
         }
 
-        // Notify auth change (auth.js exposes this)
-        if (typeof window.notifyAuthChange === 'function') {
-          window.notifyAuthChange();
+        // Drive the post-login UI. auth.js exposes these both as flat globals
+        // and under window.Auth depending on version — resolve at call time
+        // via either so a stale script on one side never leaves the modal open.
+        // Each call is isolated so a throw in one never skips the rest (a
+        // single failure used to leave the modal open and the workspace blank).
+        var authNS = window.Auth || {};
+        var notifyAuth = window.notifyAuthChange || authNS.notifyAuthChange;
+        var applyAuthUI = window.applyStudentAuthUI || authNS.applyStudentAuthUI;
+        var hideModal = window.hideStudentAuthModal || authNS.hideStudentAuthModal;
+        if (typeof notifyAuth === 'function') {
+          try { notifyAuth(); } catch (e) { console.warn('[legacy-auth] notifyAuthChange failed:', e); }
         }
-        if (typeof window.applyStudentAuthUI === 'function') {
-          window.applyStudentAuthUI(user);
+        if (typeof applyAuthUI === 'function') {
+          try { applyAuthUI(user); } catch (e) { console.warn('[legacy-auth] applyStudentAuthUI failed:', e); }
         }
-        if (typeof window.hideStudentAuthModal === 'function') {
-          window.hideStudentAuthModal();
+        if (typeof hideModal === 'function') {
+          try { hideModal(); } catch (e) { console.warn('[legacy-auth] hideStudentAuthModal failed:', e); }
         }
 
         showMsg('Login successful', 'success');

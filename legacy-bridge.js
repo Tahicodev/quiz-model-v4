@@ -66,6 +66,39 @@
     gamification: true,
   };
 
+  // ── Write authorization ────────────────────────────────────────────────────
+  // The REST API scopes mutations to admins for most tables. A signed-in
+  // student has a valid session — but only for a handful of student-owned
+  // stores. Previously, EVERY local write (setAll_sync, and even a raw
+  // localStorage.setItem through the patch below) fired a POST to
+  // /api/v1/bulk/<table> regardless of role — so logging in as a student
+  // posted the whole `users` array to an admin-only route (403, and before the
+  // role-middleware fix, a 500) over and over during the login flow.
+  //
+  // The local cache is still updated synchronously (the UI stays correct);
+  // unauthorized tables simply skip the network sync for signed-in students.
+  var STUDENT_WRITABLE_TABLES = {
+    results: true,
+    exam_sessions: true,
+    game_sessions: true,
+    tournament_entries: true,
+  };
+
+  function getSessionRole() {
+    try {
+      var s = JSON.parse(_origGetItem.call(sessionStorage, 'quizSession') || _origGetItem.call(localStorage, 'quizSession') || 'null');
+      return (s && s.role) ? String(s.role) : null;
+    } catch (_) { return null; }
+  }
+
+  function canSyncTable(table) {
+    var role = getSessionRole();
+    if (role === null) return true;   // admin (no student session) → sync all
+    if (role === 'student') return !!STUDENT_WRITABLE_TABLES[table];
+    return true;                       // admin / teacher / other → sync all
+  }
+
+
   // ── Save references to native localStorage methods BEFORE patching them ──────
   // so our internal helpers don't trigger the proxy.
   var _origGetItem = Storage.prototype.getItem;
@@ -278,6 +311,11 @@
     }
 
     function syncToApi(table, payload, kind) {
+      // Skip the network call for tables the signed-in role may not write.
+      // The local cache was already updated before this is invoked, so the UI
+      // is unaffected — we just don't hit an endpoint that would 403/500.
+      if (!canSyncTable(table)) return;
+
       var base = getBaseUrl() + '/' + table;
 
       function buildInit(token) {

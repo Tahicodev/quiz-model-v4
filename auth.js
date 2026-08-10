@@ -3555,6 +3555,7 @@
 		filterItemsByRole,
 		canAccessItem,
 		ensureOwnershipDefaults,
+		setCurrentUser,
 		applyRolePermissions,
 		canAccessTab,
 		updateUserById,
@@ -3571,6 +3572,7 @@
 		rejectAccountRequest,
 		showStudentAuthModal,
 		hideStudentAuthModal,
+		applyStudentAuthUI,
 		setStudentAuthMode,
 		syncClassStudentsFromClassData,
 		hashText: hashPassword,
@@ -3579,6 +3581,12 @@
 
 	window.checkAuthState = checkAuthState;
 	window.checkStudentAuthState = checkStudentAuthState;
+	// legacy-auth-bridge.js looks these up as flat window globals after a
+	// successful SaaS login. Expose them there (not just under window.Auth) so
+	// the post-login path can apply the authed UI and close the modal — without
+	// these, the sign-in modal stayed open and the workspace never rendered.
+	window.applyStudentAuthUI = applyStudentAuthUI;
+	window.hideStudentAuthModal = hideStudentAuthModal;
 	window.openUserModal = openUserModal;
 	window.closeUserModal = closeUserModal;
 	window.saveUserForm = saveUserForm;

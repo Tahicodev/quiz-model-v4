@@ -12414,6 +12414,34 @@
 		renderWorkspace();
 	});
 
+	// Safety net: the SaaS login bridge may succeed without firing the
+	// `auth:changed` event this page relies on to render (missing globals on a
+	// stale auth.js, a swallowed error, etc.). When that happens the page would
+	// otherwise stay on the sign-in modal with an unloaded workspace. Detect a
+	// persisted session whose user was never applied and recover by applying it.
+	setInterval(() => {
+		try {
+			if (window.Auth?.getCurrentUser?.()) return; // already applied — stay idle
+			const raw =
+				sessionStorage.getItem('quizSession') ||
+				localStorage.getItem('quizSession');
+			const session = raw ? JSON.parse(raw) : null;
+			if (!session || !session.token || !session.userId) return;
+			// A session exists but currentUser was never set — apply it now.
+			const users = window.__DI_CONTAINER__.repo.getAll_sync('users') || [];
+			const user = users.find(
+				(u) => String(u && u.id) === String(session.userId),
+			);
+			if (!user) return; // bootstrap hasn't delivered users yet — retry next tick
+			if (typeof window.Auth?.setCurrentUser === 'function') {
+				window.Auth.setCurrentUser(user, session);
+			}
+			renderWorkspace();
+		} catch (_) {
+			/* non-fatal */
+		}
+	}, 800);
+
 	function saveGameResult(game, context) {
 		try {
 			if (!game?.id) return;

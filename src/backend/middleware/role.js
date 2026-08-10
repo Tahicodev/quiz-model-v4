@@ -6,14 +6,18 @@
  * @param {string[]} allowedRoles
  */
 
-import { AppError } from '../../shared/errors.js';
+import { AppError, ForbiddenError } from '../../shared/errors.js';
 import { ROLES } from '../../shared/constants.js';
 
 export const requireRole = (allowedRoles) => {
   return (req, res, next) => {
     try {
       if (!req.user) {
-        throw new AppError('Authentication required', 401, 'UNAUTHORIZED');
+        // AppError(code, message, statusCode) — NOT (message, statusCode, code).
+        // Getting this order wrong used to surface as a 500 "Unhandled
+        // Exception" instead of the intended auth error, and masked the real
+        // cause (students writing to the admin-only /bulk/users route).
+        throw new AppError('UNAUTHORIZED', 'Authentication required', 401);
       }
 
       // Super admin bypass — can access anything
@@ -23,7 +27,7 @@ export const requireRole = (allowedRoles) => {
 
       // Regular admin/student must be in the allowed roles list
       if (!allowedRoles.includes(req.user.role)) {
-        throw new AppError(`Requires one of roles: ${allowedRoles.join(', ')}`, 403, 'FORBIDDEN');
+        throw new ForbiddenError();
       }
 
       next();
