@@ -35,6 +35,13 @@ const MODEL_MAP = {
 	audit_logs: 'auditLog',
 	refresh_tokens: 'refreshToken',
 	schools: 'school',
+	profile_requests: 'profileRequest',
+	account_requests: 'accountRequest',
+	game_presets: 'gamePreset',
+	notifications: 'notification',
+	gamification: 'gamificationConfig',
+	teacher_messages: 'teacherMessage',
+	teacher_assignments: 'teacherAssignment',
 };
 
 /**

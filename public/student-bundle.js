@@ -15877,10 +15877,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const existing = await this.#repo.getById("classes", id);
       if (!existing) throw new NotFoundError("Class");
-      const { total: studentCount } = await this.#repo.getAll("users", { filters: { class_id: id } });
-      if (studentCount > 0) {
-        throw new ValidationError({ id: ["Cannot delete a class that still has students assigned"] });
-      }
       const { data: examClasses } = await this.#repo.getAll("exam_classes", { filters: { class_id: id } });
       for (const ec of examClasses) {
         await this.#repo.delete("exam_classes", ec.id);
@@ -16620,167 +16616,122 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   };
   var logger = new Logger();
 
-  // src/frontend/ui/pages/student/StudentLanding.js
-  var LANDING_HTML = `
-<div class="app-container">
-  <main class="app-content">
-    <div class="quiz-container" id="quiz-container">
-      <!-- Welcome Page -->
-      <div class="welcome-page" id="welcome-page">
-        <h1 id="welcome-title">Quiz Portal</h1>
-        <p class="welcome-message" id="welcome-message">
-          Choose how you want to continue today.
-        </p>
-        <div class="landing-actions" id="landing-actions">
-          <button type="button" class="landing-card" id="landingExamButton">
-            <div class="landing-card-header">
-              <span class="landing-icon">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M9 12l2 2 4-4" />
-                  <path d="M12 3l7 4v7c0 5-3 9-7 11-4-2-7-6-7-11V7l7-4z" />
-                </svg>
-              </span>
-              <div>
-                <h2>Take Exam</h2>
-                <p>Start immediately with your student details.</p>
-              </div>
+  // src/frontend/ui/pages/entry/EntryPage.js
+  var ENTRY_HTML = `
+<div class="app-container entry-gate-container">
+  <main class="app-content entry-gate-main">
+    <!--
+      \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+       AUTH GATE \u2014 always-visible, full-screen login. Reuses admin.html's
+       .auth-modal component classes so it inherits the same look exactly.
+      \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+    -->
+    <div
+      id="entryAuthModal"
+      class="modal auth-modal entry-gate-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="entry-auth-title"
+    >
+      <div class="modal-content small-modal auth-modal-content admin-auth">
+        <div class="modal-header auth-modal-header">
+          <div class="auth-modal-brand">
+            <div class="auth-modal-mark" aria-hidden="true" id="entryAuthMark">Q</div>
+            <div class="auth-modal-brand-text">
+              <h2 id="entry-auth-title">Welcome to Quiz Portal</h2>
+              <p>Sign in to continue to your dashboard or workspace.</p>
             </div>
-            <span class="landing-cta">Start Exam</span>
-          </button>
-
-          <button type="button" class="landing-card accent" id="landingWorkspaceButton">
-            <div class="landing-card-header">
-              <span class="landing-icon">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M3 10h18" />
-                  <path d="M7 3h10l4 7v11H3V10l4-7z" />
-                  <path d="M8 21v-8h8v8" />
-                </svg>
-              </span>
-              <div>
-                <h2>Open Workspace</h2>
-                <p>Manage exams, results, and messages in one place.</p>
-              </div>
-            </div>
-            <span class="landing-cta">Go to Workspace</span>
-          </button>
+          </div>
         </div>
-
-        <div class="exam-entry hidden" id="exam-entry">
-          <div class="exam-entry-header">
-            <div>
-              <h2>Start Exam</h2>
-              <p>Enter your details to begin the assessment.</p>
-            </div>
-            <button type="button" class="btn btn-secondary btn-sm" id="landingBackButton">
-              Back
-            </button>
-          </div>
-          <div class="exam-entry-status" id="exam-entry-status">
-            <span class="status-pill" id="examAvailabilityPill">Checking exams</span>
-            <p id="examAvailabilityText">
-              Sign in to see available exams or continue with training.
+        <div class="modal-body auth-modal-body">
+          <form id="entryAuthForm" class="auth-form" novalidate>
+            <p class="auth-form-intro">
+              Enter your credentials. You'll be taken to the admin panel if you
+              sign in as an admin, or to the student workspace if you sign in
+              as a student.
             </p>
-          </div>
-          <div class="student-auth-panel">
-            <div class="auth-status" id="studentAuthStatus">Not signed in</div>
-            <div class="auth-actions">
-              <button type="button" id="studentLoginButton" class="action-btn">
-                Sign In
-              </button>
-              <button type="button" id="studentLogoutButton" class="action-btn hidden">
-                Logout
-              </button>
-              <button type="button" id="studentResultsButton" class="action-btn hidden" onclick="showStudentResults()">
-                My Results
-              </button>
-            </div>
-          </div>
-          <div id="student-results-panel" class="hidden"></div>
-          <div class="exam-selection-panel hidden" id="examSelectionPanel">
-            <div class="exam-selection-header">
-              <h3>Available Exams</h3>
-              <p>Select an exam to begin, or choose training mode.</p>
-            </div>
-            <div class="exam-selection-list" id="examSelectionList"></div>
-            <div class="exam-selection-empty hidden" id="examSelectionEmpty">
-              No exams are assigned to your class yet.
-            </div>
-          </div>
-          <form id="student-info" class="exam-form hidden">
-            <div class="form-group">
-              <input
-                type="number"
-                name="numero"
-                class="form-control"
-                placeholder="Student ID (Num??ro ??tudiant)"
-                required
-              />
-            </div>
-            <div class="form-group">
+            <div class="form-group auth-field">
+              <label for="entry-auth-username">Username</label>
               <input
                 type="text"
-                name="name"
-                class="form-control"
-                placeholder="Full Name (Nom complet)"
+                id="entry-auth-username"
+                data-auth="username"
+                class="form-control auth-input"
+                placeholder="Enter your username"
+                autocomplete="username"
                 required
               />
             </div>
-            <div class="form-group">
-              <input
-                type="text"
-                name="class"
-                class="form-control"
-                placeholder="Class/Group"
-                required
-              />
+            <div class="form-group auth-field">
+              <label for="entry-auth-password">Password</label>
+              <div class="auth-password-wrap">
+                <input
+                  type="password"
+                  id="entry-auth-password"
+                  data-auth="password"
+                  class="form-control auth-input"
+                  placeholder="Enter your password"
+                  autocomplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  class="auth-toggle-password"
+                  data-target="entry-auth-password"
+                  aria-label="Show password"
+                  aria-pressed="false"
+                >
+                  Show
+                </button>
+              </div>
             </div>
+            <div class="auth-meta-row">
+              <label class="auth-remember" for="entry-auth-remember">
+                <input type="checkbox" id="entry-auth-remember" data-auth="remember" />
+                <span>Remember me</span>
+              </label>
+            </div>
+            <button type="submit" class="btn btn-primary auth-submit-btn" id="entryAuthSubmitBtn">
+              Sign In
+            </button>
+            <div
+              id="entryAuthStatus"
+              class="auth-recovery-status"
+              role="status"
+              aria-live="polite"
+            ></div>
+            <p class="auth-footnote">
+              Students sign in with their account credentials.
+            </p>
           </form>
-          <div class="exam-entry-actions" id="exam-entry-actions">
-            <button type="button" id="start-quiz" class="start-btn">
-              Start Exam
-            </button>
-            <button type="button" id="start-training" class="action-btn secondary">
-              Training Mode
-            </button>
-          </div>
         </div>
       </div>
+    </div>
 
-      <!-- Quiz Content (Hidden initially) -->
+    <!--
+      \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+       HIDDEN EXAM-RUNTIME SHELL
+       script.js (the quiz engine) runs on this page and requires the DOM
+       below to handle direct exam links like index.html?examId=... or
+       ?mode=training. Kept invisible until login + URL-param start the exam.
+       Exam start reveals the .quiz-content block and hides this wrapper.
+      \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+    -->
+    <div
+      class="quiz-container"
+      id="quiz-container"
+      style="display: none"
+      aria-hidden="true"
+    >
+      <div class="welcome-page" id="welcome-page" style="display: none"></div>
+
       <div class="quiz-content" id="quiz-content" style="display: none">
         <!-- Quiz Header -->
         <div class="quiz-header-grid">
           <div class="header-card">
             <div class="header-icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div class="header-content">
@@ -16791,18 +16742,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
           <div class="header-card">
             <div class="header-icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
             <div class="header-content">
@@ -16813,18 +16754,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
           <div class="header-card">
             <div class="header-icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
             <div class="header-content">
@@ -16835,18 +16766,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
           <div class="header-card">
             <div class="header-icon">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
             <div class="header-content">
@@ -16862,160 +16783,243 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           <div class="options" id="options"></div>
         </div>
       </div>
-    </div>
-  </main>
-</div>
 
-<!-- Student Auth Modal (Shared) -->
-<div id="studentAuthModal" class="modal auth-modal">
-  <div class="modal-content small-modal auth-modal-content student-auth">
-    <div class="modal-header auth-modal-header">
-      <div class="auth-modal-brand">
-        <div class="auth-modal-mark" aria-hidden="true">S</div>
-        <div class="auth-modal-brand-text">
-          <h2>Student Sign In</h2>
-          <p>Access your exams, training sessions, and game arena.</p>
-        </div>
-      </div>
-      <span
-        class="close"
-        onclick="handleStudentAuthClose()"
-        >&times;</span
-      >
-    </div>
-    <div class="modal-body auth-modal-body">
-      <form id="studentLoginForm" class="auth-form">
-        <p class="auth-form-intro">Use your student credentials to continue.</p>
-        <div class="form-group auth-field">
-          <label for="student-auth-username">Username</label>
-          <input
-            type="text"
-            id="student-auth-username"
-            data-auth="username"
-            class="form-control auth-input"
-            placeholder="Enter your username"
-            autocomplete="username"
-            required
-          />
-        </div>
-        <div class="form-group auth-field">
-          <label for="student-auth-password">Password</label>
-          <div class="auth-password-wrap">
-            <input
-              type="password"
-              id="student-auth-password"
-              data-auth="password"
-              class="form-control auth-input"
-              placeholder="Enter your password"
-              autocomplete="current-password"
-              required
-            />
-            <button
-              type="button"
-              class="auth-toggle-password"
-              data-target="student-auth-password"
-              aria-label="Show password"
-              aria-pressed="false"
-            >
-              Show
-            </button>
-          </div>
-        </div>
-        <div class="auth-meta-row">
-          <label class="auth-remember" for="student-auth-remember">
-            <input type="checkbox" id="student-auth-remember" data-auth="remember" />
-            <span>Remember me</span>
-          </label>
-        </div>
-        <button type="submit" class="start-btn auth-submit-btn">
-          Sign In
-        </button>
-        <p class="auth-footnote">Only student accounts can sign in here.</p>
+      <!--
+        Hidden student-info form \u2014 script.js (validateForm / startTrainingMode /
+        showCustomAlert paths) reads numero/name/class from here. On exam start,
+        these are populated from the signed-in student's identity.
+      -->
+      <form id="student-info" style="display: none" aria-hidden="true" tabindex="-1">
+        <input type="hidden" name="numero" id="entry-si-numero" />
+        <input type="hidden" name="name" id="entry-si-name" />
+        <input type="hidden" name="class" id="entry-si-class" />
       </form>
     </div>
-  </div>
-</div>
 
-<!-- Image Lightbox Modal (Shared) -->
-<div id="image-lightbox-modal" class="lightbox-modal" style="display: none">
-  <div class="lightbox-overlay" onclick="closeLightbox()"></div>
-  <div class="lightbox-content">
-    <button
-      class="lightbox-close"
-      onclick="closeLightbox()"
-      title="Close (ESC)"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path d="M18 6L6 18M6 6l12 12" />
-      </svg>
-    </button>
-    <div class="lightbox-image-container">
-      <img id="lightbox-image" src="" alt="Preview" />
-    </div>
-    <div class="lightbox-controls">
-      <button
-        class="lightbox-nav lightbox-prev"
-        onclick="navigateLightbox(-1)"
-        title="Previous"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M15 18l-6-6 6-6" />
-        </svg>
-      </button>
-      <div class="lightbox-info">
-        <span id="lightbox-counter">1 / 1</span>
-      </div>
-      <button
-        class="lightbox-nav lightbox-next"
-        onclick="navigateLightbox(1)"
-        title="Next"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
-          <path d="M9 18l6-6-6-6" />
-        </svg>
-      </button>
-    </div>
-    <div class="lightbox-zoom-controls">
-      <button onclick="zoomLightboxImage(-0.2)">-</button>
-      <button onclick="resetLightboxZoom()">0</button>
-      <button onclick="zoomLightboxImage(0.2)">+</button>
-    </div>
-  </div>
+    <!-- results panel container \u2014 script.js renders into this when needed -->
+    <div id="student-results-panel" class="hidden"></div>
+  </main>
 </div>
 `;
-  function setInnerHTML(container, html) {
-    const tpl = document.createElement("template");
-    tpl.innerHTML = html;
-    container.replaceChildren(tpl.content.cloneNode(true));
+  function getApiBase() {
+    return window.APP_CONFIG && window.APP_CONFIG.apiUrl || "/api/v1";
   }
-  function initStudentLanding(container) {
+  function setAuthStatus(message, type) {
+    const el = document.getElementById("entryAuthStatus");
+    if (!el) return;
+    el.textContent = message || "";
+    el.className = "auth-recovery-status" + (type ? " " + type : "");
+  }
+  function persistLegacySession(payload, remember) {
+    const user = payload.user || payload;
+    const token = payload.accessToken || payload.token || "";
+    const now = /* @__PURE__ */ new Date();
+    const ttlDays = remember ? 30 : 1;
+    const expires = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1e3);
+    const session = {
+      userId: user.id,
+      username: user.username,
+      name: user.name,
+      role: user.role,
+      token,
+      expiresAt: expires.toISOString(),
+      createdAt: now.toISOString(),
+      lastActivity: now.toISOString()
+    };
+    try {
+      sessionStorage.setItem("quizSession", JSON.stringify(session));
+      localStorage.setItem("quizSession", JSON.stringify(session));
+      if (remember) {
+        localStorage.setItem("quizSessionRemember", JSON.stringify(session));
+      } else {
+        localStorage.removeItem("quizSessionRemember");
+      }
+      if (token) {
+        localStorage.setItem("quizAuthToken", token);
+      }
+      if (user && user.id) {
+        const currentUser = {
+          id: user.id,
+          username: user.username,
+          name: user.name || user.username,
+          role: user.role,
+          status: "active"
+        };
+        localStorage.setItem("quizCurrentUser", JSON.stringify(currentUser));
+        let users = [];
+        try {
+          users = JSON.parse(localStorage.getItem("quizUsers") || "[]");
+        } catch (_) {
+        }
+        if (!Array.isArray(users)) users = [];
+        let found = false;
+        users = users.map((u) => {
+          if (u && u.id === currentUser.id) {
+            found = true;
+            return Object.assign({}, u, currentUser);
+          }
+          return u;
+        });
+        if (!found) users.push(currentUser);
+        localStorage.setItem("quizUsers", JSON.stringify(users));
+      }
+      window.__authToken = token;
+      if (String(user.role || "").toLowerCase() === "student") {
+        try {
+          sessionStorage.setItem(
+            "studentInfo",
+            JSON.stringify({
+              numero: user.studentNumber || "",
+              name: user.name || user.username,
+              class: user.className || "",
+              classId: user.classId || "",
+              avatar: user.avatar || ""
+            })
+          );
+        } catch (_) {
+        }
+      } else {
+        sessionStorage.removeItem("studentInfo");
+      }
+    } catch (err) {
+      console.warn("[entry-auth] session persist failed:", err);
+    }
+    return session;
+  }
+  function redirectAfterLogin(role) {
+    const normalized = String(role || "").toLowerCase();
+    if (normalized === "admin" || normalized === "super_admin" || normalized === "teacher") {
+      window.location.href = "admin.html";
+      return;
+    }
+    window.location.href = "student-workspace.html";
+  }
+  function bindAuthGate() {
+    const form = document.getElementById("entryAuthForm");
+    if (!form || form.dataset.bridgeBound === "true") return;
+    form.dataset.bridgeBound = "true";
+    const toggle = form.querySelector(".auth-toggle-password");
+    if (toggle) {
+      toggle.addEventListener("click", () => {
+        const input = document.getElementById(toggle.dataset.target);
+        if (!input) return;
+        const reveal = input.type === "password";
+        input.type = reveal ? "text" : "password";
+        toggle.textContent = reveal ? "Hide" : "Show";
+        toggle.setAttribute("aria-pressed", reveal ? "true" : "false");
+        toggle.setAttribute("aria-label", reveal ? "Hide password" : "Show password");
+      });
+    }
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const username = (form.querySelector('[data-auth="username"]') || {}).value || "";
+      const password = (form.querySelector('[data-auth="password"]') || {}).value || "";
+      const remember = Boolean(
+        (form.querySelector('[data-auth="remember"]') || {}).checked
+      );
+      if (!username.trim() || !password) {
+        setAuthStatus("Please enter both your username and password.", "error");
+        return;
+      }
+      const submitBtn = document.getElementById("entryAuthSubmitBtn");
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Signing in\u2026";
+      }
+      setAuthStatus("", "");
+      try {
+        const res = await fetch(getApiBase() + "/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: username.trim(), password }),
+          credentials: "include"
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = data && data.error && data.error.message || data && data.message || "Invalid username or password.";
+          setAuthStatus(msg, "error");
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = "Sign In";
+          }
+          return;
+        }
+        const payload = data && (data.user || data.data) ? data : { user: data };
+        const user = payload.user || payload;
+        const token = payload.accessToken || payload.token || "";
+        persistLegacySession({ ...payload, user, accessToken: token }, remember);
+        sessionStorage.setItem(
+          user.role === "student" ? "studentLoggedIn" : "adminLoggedIn",
+          "true"
+        );
+        setAuthStatus("Signed in \u2014 redirecting\u2026", "success");
+        setTimeout(() => redirectAfterLogin(user.role), 300);
+      } catch (err) {
+        console.error("[entry-auth] login request failed:", err);
+        setAuthStatus(
+          "Could not reach the server \u2014 check your connection and try again.",
+          "error"
+        );
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = "Sign In";
+        }
+      }
+    }, { capture: true });
+  }
+  function redirectIfAlreadySignedIn() {
+    try {
+      const raw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSessionRemember");
+      if (!raw) return false;
+      const session = JSON.parse(raw);
+      if (!session || !session.role) return false;
+      if (session.expiresAt && Date.now() > Date.parse(session.expiresAt)) {
+        sessionStorage.removeItem("quizSession");
+        localStorage.removeItem("quizSessionRemember");
+        return false;
+      }
+      redirectAfterLogin(session.role);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  function initEntryPage(container) {
     if (!container) return;
-    container.replaceChildren();
-    setInnerHTML(container, LANDING_HTML.trim());
+    if (redirectIfAlreadySignedIn()) return;
+    const tpl = document.createElement("template");
+    tpl.innerHTML = ENTRY_HTML.trim();
+    container.replaceChildren(tpl.content.cloneNode(true));
+    const bindNow = () => {
+      try {
+        bindAuthGate();
+      } catch (err) {
+        console.error("[entry-auth] failed to bind:", err);
+      }
+    };
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", bindNow, { once: true });
+    } else {
+      bindNow();
+    }
+    try {
+      const raw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSessionRemember");
+      if (raw) {
+        const session = JSON.parse(raw);
+        const users = JSON.parse(localStorage.getItem("quizUsers") || "[]");
+        const user = users.find((u) => u && u.id === session.userId);
+        if (user) {
+          const numero = document.getElementById("entry-si-numero");
+          const name = document.getElementById("entry-si-name");
+          const cls = document.getElementById("entry-si-class");
+          if (numero) numero.value = user.studentNumber || "";
+          if (name) name.value = user.name || user.username || "";
+          if (cls) cls.value = user.className || "";
+        }
+      }
+    } catch (_) {
+    }
   }
 
   // src/frontend/.student-build-entry.js
@@ -17107,6 +17111,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       localStorage.setItem(ADMIN_NOTIFICATIONS_KEY, JSON.stringify(notifications));
     }
     window.dispatchEvent(new CustomEvent("admin:notifications-updated"));
+    if (window.API && typeof window.API.create === "function") {
+      window.API.create("notifications", {
+        type: entry.type,
+        message: entry.message,
+        data: entry.data
+      }).catch(function(err) {
+        console.warn("[notifications] API persist failed:", err);
+      });
+    }
     return entry;
   }
   function getAdminNotificationCount() {
@@ -17390,8 +17403,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     function normalizeUser(user) {
       const now = (/* @__PURE__ */ new Date()).toISOString();
+      const genId = () => {
+        if (typeof generateUUID === "function") return generateUUID();
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = Math.random() * 16 | 0;
+          return (c === "x" ? r : r & 3 | 8).toString(16);
+        });
+      };
       return {
-        id: user.id || (typeof generateUUID === "function" ? generateUUID() : `${Date.now()}`),
+        id: user.id || genId(),
         name: (user.name || "").trim(),
         username: (user.username || user.email || "").trim(),
         role: user.role || ROLE_STUDENT,
@@ -18008,6 +18029,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function showAuthModal() {
       const modal = document.getElementById("authModal");
       if (!modal) return;
+      if (modal.parentElement && modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+      }
+      if (document.documentElement.classList.contains("auth-pending")) {
+        document.documentElement.classList.add("auth-ready");
+      } else {
+        document.documentElement.classList.add("auth-pending", "auth-ready");
+      }
       modal.style.display = "flex";
       setTimeout(() => modal.classList.add("active"), 10);
       document.body.classList.add("auth-locked");
@@ -18018,6 +18047,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       modal.style.display = "none";
       modal.classList.remove("active");
       document.body.classList.remove("auth-locked");
+      document.documentElement.classList.remove("auth-pending", "auth-ready");
     }
     function showStudentAuthModal() {
       const modal = document.getElementById("studentAuthModal");
@@ -19491,16 +19521,53 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       } else {
         users.push(updatedUser);
       }
+      const payload = {
+        username: updatedUser.username,
+        name: updatedUser.name,
+        role: updatedUser.role,
+        status: updatedUser.status || "active"
+      };
+      if (password) payload.password = password;
+      if (updatedUser.classId) payload.class_id = updatedUser.classId;
+      if (updatedUser.studentNumber) payload.numero = updatedUser.studentNumber;
+      let savedToServer = false;
+      if (window.API && typeof window.API.create === "function") {
+        try {
+          let serverUser = null;
+          if (existingUser) {
+            serverUser = await window.API.update("users", existingUserId, payload);
+          } else {
+            serverUser = await window.API.create("users", payload);
+          }
+          if (serverUser && serverUser.id) {
+            updatedUser.id = serverUser.id;
+            updatedUser.classId = serverUser.class_id || updatedUser.classId || "";
+            updatedUser.studentNumber = serverUser.numero || updatedUser.studentNumber || "";
+            updatedUser.createdAt = serverUser.created_at || updatedUser.createdAt;
+            updatedUser.updatedAt = serverUser.updated_at || updatedUser.updatedAt;
+            const i = users.findIndex((u) => u.id === updatedUser.id || u.username === updatedUser.username);
+            if (i !== -1) users[i] = updatedUser;
+            savedToServer = true;
+          }
+        } catch (apiErr) {
+          console.warn("[auth] API save user failed:", apiErr);
+          showToast2(
+            "Failed to save user to server: " + (apiErr?.message || "network error"),
+            "error"
+          );
+          return;
+        }
+      }
       saveUsers(users);
       syncStudentToClasses(updatedUser, existingUser);
-      if (typeof window.syncUsersToClients === "function" && isAdmin()) {
+      if (savedToServer && typeof window.syncUsersToClients === "function" && isAdmin()) {
         window.syncUsersToClients();
       }
       closeUserModal();
       renderUsersTable();
       showToast2("User saved successfully", "success");
     }
-    function toggleUserStatus(userId) {
+    async function toggleUserStatus(userId) {
       if (!userId) return;
       const users = getUsers();
       const user = users.find((u) => u.id === userId);
@@ -19518,6 +19585,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       user.status = user.status === "disabled" ? "active" : "disabled";
       user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      if (window.API && typeof window.API.update === "function") {
+        try {
+          const apiStatus = user.status === "disabled" ? "suspended" : "active";
+          await window.API.update("users", userId, { status: apiStatus });
+        } catch (apiErr) {
+          console.warn("[auth] API toggle status failed:", apiErr);
+          showToast2(
+            "Failed to update status on server: " + (apiErr?.message || "network error"),
+            "error"
+          );
+          return;
+        }
+      }
       saveUsers(users);
       if (typeof window.syncUsersToClients === "function" && isAdmin()) {
         window.syncUsersToClients();
@@ -19528,7 +19608,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         "success"
       );
     }
-    function deleteUser(userId) {
+    async function deleteUser(userId) {
       if (!userId) return;
       const users = getUsers();
       const user = users.find((u) => u.id === userId);
@@ -19545,6 +19625,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
       }
       if (confirm(`Delete user "${user.name || user.username}"?`)) {
+        if (window.API && typeof window.API.remove === "function") {
+          try {
+            await window.API.remove("users", userId);
+          } catch (apiErr) {
+            console.warn("[auth] API delete user failed:", apiErr);
+            showToast2(
+              "Failed to delete user on server: " + (apiErr?.message || "network error"),
+              "error"
+            );
+            return;
+          }
+        }
         const filtered = users.filter((u) => u.id !== userId);
         saveUsers(filtered);
         if (typeof window.syncUsersToClients === "function" && isAdmin()) {
@@ -19659,6 +19751,56 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         };
       }
       const hashedPassword = passwordHash || await hashPassword(plainPassword);
+      if (window.API && typeof window.API.raw === "function") {
+        try {
+          const created = await window.API.raw("POST", "/account-requests", {
+            username,
+            full_name: fullName,
+            student_number: studentNumber,
+            class_id: classId,
+            class_name: className,
+            password: plainPassword || "",
+            note
+          });
+          const requests2 = getAccountRequests();
+          requests2.unshift({
+            id: created.id,
+            type: "account_request",
+            createdAt: created.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+            status: "pending",
+            fullName,
+            username,
+            studentNumber,
+            classId,
+            className,
+            passwordHash: hashedPassword,
+            note,
+            reviewerId: "",
+            reviewedAt: "",
+            reviewNote: "",
+            createdUserId: ""
+          });
+          saveAccountRequests(requests2);
+          if (typeof logActivity === "function") {
+            logActivity(
+              "account_request",
+              `${fullName} account request`,
+              "requested",
+              { requestId: created.id, username, studentNumber, classId, className }
+            );
+          }
+          if (typeof window.addAdminNotification === "function") {
+            window.addAdminNotification({
+              type: "account_request",
+              message: `${fullName} requested a new student account`,
+              data: { requestId: created.id, username, classId }
+            });
+          }
+          return { ok: true, request: created };
+        } catch (err) {
+          return { ok: false, message: err && err.message ? err.message : "Account request failed" };
+        }
+      }
       const request = {
         id: typeof generateUUID === "function" ? generateUUID() : `${Date.now()}`,
         type: "account_request",
@@ -19701,7 +19843,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return { ok: true, request };
     }
-    function approveAccountRequest(requestId, reviewerId, note = "") {
+    async function approveAccountRequest(requestId, reviewerId, note = "") {
       const requests = getAccountRequests();
       const request = requests.find((entry) => entry.id === requestId);
       if (!request || request.status !== "pending") return null;
@@ -19721,6 +19863,61 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (existingByNumber) {
         showToast2("Student number already exists", "error");
         return null;
+      }
+      if (window.API && typeof window.API.raw === "function" && request.id) {
+        try {
+          const result = await window.API.raw("POST", "/account-requests/" + encodeURIComponent(request.id) + "/approve", { note });
+          const newUserId = result && result.userId;
+          request.status = "approved";
+          request.reviewNote = note;
+          request.reviewerId = reviewerId || "";
+          request.reviewedAt = result?.request?.reviewed_at || (/* @__PURE__ */ new Date()).toISOString();
+          request.createdUserId = newUserId || "";
+          saveAccountRequests(requests);
+          if (newUserId) {
+            const classId2 = String(request.classId || "").trim();
+            const className2 = resolveClassNameById(classId2) || String(request.className || "");
+            const newUser2 = normalizeUser({
+              id: newUserId,
+              name: request.fullName,
+              username: request.username,
+              role: ROLE_STUDENT,
+              status: "active",
+              studentNumber: request.studentNumber,
+              classId: classId2,
+              className: className2
+            });
+            newUser2.passwordHash = request.passwordHash || "";
+            newUser2.createdAt = (/* @__PURE__ */ new Date()).toISOString();
+            newUser2.updatedAt = newUser2.createdAt;
+            users.push(newUser2);
+            saveUsers(users);
+            syncStudentToClasses(newUser2, null);
+          }
+          if (typeof logActivity === "function") {
+            logActivity("account_request", `${request.fullName} account request`, "approved", {
+              requestId: request.id,
+              username: request.username,
+              studentNumber: request.studentNumber,
+              classId: request.classId,
+              className: request.className,
+              userId: newUserId || "",
+              reviewerId: reviewerId || "",
+              reviewNote: note
+            });
+          }
+          if (typeof window.addAdminNotification === "function") {
+            window.addAdminNotification({
+              type: "account_request",
+              message: `Account request approved for ${request.fullName}`,
+              data: { requestId: request.id, username: request.username, classId: request.classId, userId: newUserId }
+            });
+          }
+          return request;
+        } catch (err) {
+          showToast2(err && err.message || "Approval failed", "error");
+          return null;
+        }
       }
       const classId = String(request.classId || "").trim();
       const className = resolveClassNameById(classId) || String(request.className || "");
@@ -19780,13 +19977,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return request;
     }
-    function rejectAccountRequest(requestId, reviewerId, note = "") {
+    async function rejectAccountRequest(requestId, reviewerId, note = "") {
       const requests = getAccountRequests();
       const request = requests.find((entry) => entry.id === requestId);
       if (!request || request.status !== "pending") return null;
       if (!canReviewAccountRequest(request)) {
         showToast2("Access denied", "error");
         return null;
+      }
+      if (window.API && typeof window.API.raw === "function" && request.id) {
+        try {
+          await window.API.raw("POST", "/account-requests/" + encodeURIComponent(request.id) + "/reject", { note });
+        } catch (err) {
+          showToast2(err && err.message || "Rejection failed", "error");
+          return null;
+        }
       }
       request.status = "rejected";
       request.reviewNote = note;
@@ -19818,8 +20023,57 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return request;
     }
-    function submitProfileRequest(payload) {
+    async function submitProfileRequest(payload) {
       if (!payload || !payload.userId) return null;
+      const displayName = payload.currentSnapshot?.name || payload.changes?.name || "Student";
+      if (window.API && typeof window.API.create === "function") {
+        try {
+          const created = await window.API.create("profile-requests", {
+            changes: payload.changes || {},
+            avatar: payload.avatar || "",
+            note: payload.note || "",
+            snapshot: payload.currentSnapshot || {}
+          });
+          const requests2 = getProfileRequests();
+          const request2 = {
+            id: created.id,
+            userId: created.user_id || payload.userId,
+            createdAt: created.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+            status: created.status || "pending",
+            changes: payload.changes || {},
+            avatar: created.avatar ?? (payload.avatar || ""),
+            note: created.note ?? (payload.note || ""),
+            currentSnapshot: payload.currentSnapshot || {}
+          };
+          requests2.unshift(request2);
+          saveProfileRequests(requests2);
+          let className2 = payload.currentSnapshot?.className || "";
+          if (!className2 && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
+            const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+            const match = classes.find((c) => c.id === payload.currentSnapshot.classId);
+            if (match) className2 = match.name;
+          }
+          if (typeof logActivity === "function") {
+            logActivity("profile_request", `${displayName} profile update request`, "requested", {
+              requestId: request2.id,
+              userId: payload.userId,
+              studentName: displayName,
+              studentNumber: payload.currentSnapshot?.studentNumber || "",
+              className: className2
+            });
+          }
+          if (typeof window.addAdminNotification === "function") {
+            window.addAdminNotification({
+              type: "profile_request",
+              message: `${displayName} sent a profile update request`,
+              data: { requestId: request2.id, userId: payload.userId }
+            });
+          }
+          return request2;
+        } catch (err) {
+          console.warn("[auth] profile-request API call failed, falling back to local:", err);
+        }
+      }
       const requests = getProfileRequests();
       const request = {
         id: typeof generateUUID === "function" ? generateUUID() : `${Date.now()}`,
@@ -19833,9 +20087,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       };
       requests.unshift(request);
       saveProfileRequests(requests);
-      const displayName = payload.currentSnapshot?.name || payload.changes?.name || "Student";
       let className = payload.currentSnapshot?.className || "";
-      if (!className && payload.currentSnapshot?.classId) {
+      if (!className && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
         const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
         const match = classes.find(
           (c) => c.id === payload.currentSnapshot.classId
@@ -19865,7 +20118,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return request;
     }
-    function updateProfileRequest(requestId, userId, payload = {}) {
+    async function updateProfileRequest(requestId, userId, payload = {}) {
       const targetId = String(requestId || "").trim();
       const actorId = String(userId || "").trim();
       if (!targetId || !actorId) return null;
@@ -19875,6 +20128,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const existing = requests[index];
       if (String(existing.userId || "").trim() !== actorId) return null;
       if (String(existing.status || "").toLowerCase() !== "pending") return null;
+      if (window.API && typeof window.API.update === "function") {
+        try {
+          await window.API.update("profile-requests", targetId, {
+            changes: payload.changes != null ? payload.changes : void 0,
+            avatar: Object.prototype.hasOwnProperty.call(payload, "avatar") ? payload.avatar || "" : void 0,
+            note: Object.prototype.hasOwnProperty.call(payload, "note") ? payload.note || "" : void 0,
+            snapshot: payload.currentSnapshot != null ? payload.currentSnapshot : void 0
+          });
+        } catch (err) {
+          console.warn("[auth] profile-request update failed:", err);
+          return null;
+        }
+      }
       requests[index] = {
         ...existing,
         changes: payload.changes || existing.changes || {},
@@ -19886,7 +20152,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       saveProfileRequests(requests);
       return requests[index];
     }
-    function deleteProfileRequest(requestId, userId) {
+    async function deleteProfileRequest(requestId, userId) {
       const targetId = String(requestId || "").trim();
       const actorId = String(userId || "").trim();
       if (!targetId || !actorId) return null;
@@ -19896,6 +20162,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const existing = requests[index];
       if (String(existing.userId || "").trim() !== actorId) return null;
       if (String(existing.status || "").toLowerCase() !== "pending") return null;
+      if (window.API && typeof window.API.remove === "function") {
+        try {
+          await window.API.remove("profile-requests", targetId);
+        } catch (err) {
+          console.warn("[auth] profile-request delete failed:", err);
+          return null;
+        }
+      }
       const [removed] = requests.splice(index, 1);
       saveProfileRequests(requests);
       return removed || null;
@@ -20094,7 +20368,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     function bindAuthUI() {
       const authForm = document.getElementById("authLoginForm");
-      if (authForm) {
+      if (authForm && !window.__AUTH_BRIDGE_OWNS_LOGIN__ && authForm.getAttribute("data-bridge-owned") !== "true") {
         authForm.addEventListener("submit", (e) => {
           e.preventDefault();
           handleLogin(authForm);
@@ -20244,6 +20518,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       filterItemsByRole,
       canAccessItem,
       ensureOwnershipDefaults,
+      setCurrentUser,
       applyRolePermissions,
       canAccessTab,
       updateUserById,
@@ -20260,6 +20535,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       rejectAccountRequest,
       showStudentAuthModal,
       hideStudentAuthModal,
+      applyStudentAuthUI,
       setStudentAuthMode,
       syncClassStudentsFromClassData,
       hashText: hashPassword,
@@ -20267,6 +20543,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     };
     window.checkAuthState = checkAuthState;
     window.checkStudentAuthState = checkStudentAuthState;
+    window.applyStudentAuthUI = applyStudentAuthUI;
+    window.hideStudentAuthModal = hideStudentAuthModal;
     window.openUserModal = openUserModal;
     window.closeUserModal = closeUserModal;
     window.saveUserForm = saveUserForm;
@@ -22209,8 +22487,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!welcomeMessage) {
         welcomeMessage = document.createElement("p");
         welcomeMessage.className = "welcome-message";
-        const studentForm = document.getElementById("student-info");
-        welcomePage.insertBefore(welcomeMessage, studentForm);
+        const studentForm = welcomePage.querySelector("#student-info");
+        if (studentForm) {
+          welcomePage.insertBefore(welcomeMessage, studentForm);
+        } else {
+          welcomePage.appendChild(welcomeMessage);
+        }
       }
       if (savedSettings.welcomeMessage) {
         welcomeMessage.textContent = savedSettings.welcomeMessage;
@@ -25986,11 +26268,52 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         console.warn("[legacy-auth] persistSession error:", e);
       }
     }
+    function hydrateFullUser(user, token) {
+      if (!user || !user.id || !token) return Promise.resolve(user);
+      var url2 = baseUrl + "/bootstrap";
+      return fetch(url2, {
+        credentials: "include",
+        headers: { Authorization: "Bearer " + token }
+      }).then(function(r) {
+        return r.ok ? r.json() : null;
+      }).then(function(payload) {
+        var data = payload && payload.data;
+        if (!data) return user;
+        var serverUsers = Array.isArray(data.users) ? data.users : [];
+        var full = serverUsers.find(function(u) {
+          return u && u.id === user.id;
+        });
+        if (!full) return user;
+        var merged = Object.assign({}, user, {
+          id: full.id,
+          username: full.username,
+          name: full.name,
+          role: full.role,
+          status: full.status,
+          classId: full.class_id || "",
+          class_id: full.class_id || "",
+          studentNumber: full.numero || "",
+          numero: full.numero || "",
+          lastLogin: full.last_login || ""
+        });
+        var serverClasses = Array.isArray(data.classes) ? data.classes : [];
+        var cls = serverClasses.find(function(c) {
+          return c && c.id === merged.classId;
+        });
+        if (cls) merged.className = cls.name;
+        return merged;
+      }).catch(function() {
+        return user;
+      });
+    }
     function bindAdminLogin() {
       var form = replaceForm("authLoginForm");
       if (!form) return;
+      form.setAttribute("data-bridge-owned", "true");
+      window.__AUTH_BRIDGE_OWNS_LOGIN__ = true;
       form.addEventListener("submit", async function(e) {
         e.preventDefault();
+        e.stopImmediatePropagation();
         var username = (this.querySelector('[data-auth="username"]') || {}).value;
         var password = (this.querySelector('[data-auth="password"]') || {}).value;
         var remember = (this.querySelector('[data-auth="remember"]') || {}).checked;
@@ -26021,18 +26344,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           var session = buildSession(user, token, remember);
           persistSession(session, remember);
           sessionStorage.setItem("adminLoggedIn", "true");
+          try {
+            document.documentElement.classList.remove("auth-pending", "auth-ready");
+          } catch (_) {
+          }
           showMsg("Login successful", "success");
           window.location.reload();
         } catch (err) {
           showMsg("Connection error: " + err.message, "error");
         }
-      });
+      }, true);
     }
     function bindStudentLogin() {
       var form = replaceForm("studentLoginForm");
       if (!form) return;
+      form.setAttribute("data-bridge-owned", "true");
       form.addEventListener("submit", async function(e) {
         e.preventDefault();
+        e.stopImmediatePropagation();
         var username = (this.querySelector('[data-auth="username"]') || {}).value;
         var password = (this.querySelector('[data-auth="password"]') || {}).value;
         var remember = (this.querySelector('[data-auth="remember"]') || {}).checked;
@@ -26060,26 +26389,43 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           var data = await res.json();
           var user = data.user || data;
           var token = data.accessToken || data.token || "";
+          user = await hydrateFullUser(user, token);
           var session = buildSession(user, token, remember);
           persistSession(session, remember);
           if (typeof window.__legacyBridgeBootstrap === "function") {
             window.__legacyBridgeBootstrap().catch(function() {
             });
           }
-          if (typeof window.notifyAuthChange === "function") {
-            window.notifyAuthChange();
+          var authNS = window.Auth || {};
+          var notifyAuth = window.notifyAuthChange || authNS.notifyAuthChange;
+          var applyAuthUI = window.applyStudentAuthUI || authNS.applyStudentAuthUI;
+          var hideModal = window.hideStudentAuthModal || authNS.hideStudentAuthModal;
+          if (typeof notifyAuth === "function") {
+            try {
+              notifyAuth();
+            } catch (e2) {
+              console.warn("[legacy-auth] notifyAuthChange failed:", e2);
+            }
           }
-          if (typeof window.applyStudentAuthUI === "function") {
-            window.applyStudentAuthUI(user);
+          if (typeof applyAuthUI === "function") {
+            try {
+              applyAuthUI(user);
+            } catch (e2) {
+              console.warn("[legacy-auth] applyStudentAuthUI failed:", e2);
+            }
           }
-          if (typeof window.hideStudentAuthModal === "function") {
-            window.hideStudentAuthModal();
+          if (typeof hideModal === "function") {
+            try {
+              hideModal();
+            } catch (e2) {
+              console.warn("[legacy-auth] hideStudentAuthModal failed:", e2);
+            }
           }
           showMsg("Login successful", "success");
         } catch (err) {
           showMsg("Connection error: " + err.message, "error");
         }
-      });
+      }, true);
     }
     function overrideLogout() {
       if (typeof window.authLogout === "function") {
@@ -26139,7 +26485,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
       } catch {
       }
-      initStudentLanding(document.getElementById("app"));
+      initEntryPage(document.getElementById("app"));
     } catch (err) {
       logger.error("Failed to initialize student app", err);
       document.body.innerHTML = `

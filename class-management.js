@@ -615,6 +615,41 @@ async function saveClassForm() {
 		classes.push(classData);
 	}
 
+	// ── Persist to the backend FIRST ─────────────────────────────────────────
+	// Mirror on localStorage happens implicitly via saveClasses() below, but
+	// the server is the source of truth. If this call fails, we abort with an
+	// error so the admin knows the row never made it to the DB.
+	if (window.API && typeof window.API.create === 'function') {
+		try {
+			const payload = {
+				name: classData.name,
+				// Class schema doesn't carry a students array or ownerId — those
+				// live in our local cache only. Just send the persistable fields.
+				description: classData.description || '',
+			};
+			let saved = null;
+			if (currentClassId) {
+				saved = await window.API.update('classes', currentClassId, payload);
+			} else {
+				saved = await window.API.create('classes', payload);
+			}
+			if (saved && saved.id) {
+				// Adopt the server id so subsequent updates/deletes hit the
+				// right row instead of creating orphans.
+				classData.id = saved.id;
+				const i = classes.findIndex((c) => c.id === currentClassId || c.name === classData.name);
+				if (i !== -1) classes[i] = classData;
+			}
+		} catch (apiErr) {
+			console.warn('[classes] API save failed:', apiErr);
+			showToast(
+				'Failed to save class on server: ' + (apiErr?.message || 'network error'),
+				'error',
+			);
+			return; // don't update localStorage either — keep both sides aligned
+		}
+	}
+
 	// Update exam assignments
 	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	console.log('Updating exam assignments for class:', classData.name);
@@ -750,8 +785,24 @@ function editClass(classId) {
 	openClassModal();
 }
 
-function deleteClass(classId) {
+async function deleteClass(classId) {
 	if (confirm('Are you sure you want to delete this class?')) {
+		// Persist the delete to the backend first. Only when the server
+		// confirms the row is gone do we update the local cache and the
+		// dependent exam / teacher records.
+		if (window.API && typeof window.API.remove === 'function') {
+			try {
+				await window.API.remove('classes', classId);
+			} catch (apiErr) {
+				console.warn('[classes] API delete failed:', apiErr);
+				showToast(
+					'Failed to delete class on server: ' + (apiErr?.message || 'network error'),
+					'error',
+				);
+				return;
+			}
+		}
+
 		// Remove class from exams
 		const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 		exams.forEach((exam) => {
@@ -785,14 +836,14 @@ function deleteClass(classId) {
 }
 
 function filterClasses() {
-	const searchTerm = document.getElementById('classSearch').value.toLowerCase();
+	const searchTerm = (document.getElementById('classSearch').value || '').toLowerCase();
 	const filteredClasses = classes.filter(
 		(c) =>
-			c.name.toLowerCase().includes(searchTerm) ||
-			c.students.some(
+			String(c.name || '').toLowerCase().includes(searchTerm) ||
+			(Array.isArray(c.students) ? c.students : []).some(
 				(s) =>
-					s.name.toLowerCase().includes(searchTerm) ||
-					s.number.includes(searchTerm)
+					String(s && s.name || '').toLowerCase().includes(searchTerm) ||
+					String(s && (s.number ?? s.numero) || '').toLowerCase().includes(searchTerm)
 			)
 	);
 	updateClassList(filteredClasses);

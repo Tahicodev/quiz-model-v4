@@ -13,6 +13,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { getContainer } from '../container.js';
 import { logger } from '../logger.js';
+import { ROLES } from '../../shared/constants.js';
 
 const router = Router();
 
@@ -35,6 +36,12 @@ const PRELOAD_TABLES = [
   'tournament_entries',
   'exam_sessions',
   'settings',
+  'profile_requests',
+  'account_requests',
+  'game_presets',
+  'notifications',
+  'teacher_messages',
+  'teacher_assignments',
 ];
 
 // Tables with a direct school_id column. Join tables are scoped through their
@@ -52,6 +59,12 @@ const DIRECT_SCHOOL_TABLES = new Set([
   'tournament_entries',
   'exam_sessions',
   'settings',
+  'profile_requests',
+  'account_requests',
+  'game_presets',
+  'notifications',
+  'teacher_messages',
+  'teacher_assignments',
 ]);
 
 const STATUS_QUERY = {
@@ -63,6 +76,12 @@ const STATUS_QUERY = {
   tournament_entries: (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'registered_at' }),
   exam_sessions:      (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'started_at' }),
   settings:           (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'updated_at' }),
+  profile_requests:   (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'created_at' }),
+  account_requests:   (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'created_at' }),
+  game_presets:       (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'created_at' }),
+  notifications:      (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'created_at' }),
+  teacher_messages:   (schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'date' }),
+  teacher_assignments:(schoolId) => ({ filters: { school_id: schoolId }, orderBy: 'created_at' }),
 };
 
 function queryForTable(table, schoolId) {
@@ -78,10 +97,22 @@ router.use(requireAuth, enforceTenant);
 router.get('/', async (req, res, next) => {
   try {
     const { repo } = getContainer();
+    const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user?.role);
+    const isStudent = req.user?.role === ROLES.STUDENT;
+    // Students must never receive the admin-only queues.
+    const SKIP_FOR_STUDENT = new Set(['account_requests', 'notifications']);
     const data = {};
     for (const table of PRELOAD_TABLES) {
+      if (isStudent && SKIP_FOR_STUDENT.has(table)) { data[table] = []; continue; }
       try {
         const query = queryForTable(table, req.schoolId);
+        // Role-scoped narrowing on top of the school filter.
+        if (isStudent) {
+          if (table === 'profile_requests') query.filters.user_id = req.user.id;
+          if (table === 'teacher_messages' || table === 'teacher_assignments') {
+            query.filters.class_id = req.user.class_id ?? '__none__';
+          }
+        }
         const { data: rows } = await repo.getAll(table, { ...query, limit: 100000 });
         data[table] = rows;
       } catch (err) {

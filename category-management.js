@@ -61,7 +61,7 @@ function saveQuickCategoryForm() {
     }
     
     // Check if category already exists
-    const existingCategory = categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
+    const existingCategory = categories.find(cat => String(cat.name || '').toLowerCase() === categoryName.toLowerCase());
     if (existingCategory) {
         showToast('Category with this name already exists', 'error');
         return;
@@ -140,7 +140,7 @@ function loadCategories() {
     } else {
         // Ensure uncategorized category exists and has correct ID
         let uncategorizedIndex = categories.findIndex(cat =>
-            cat.id === 'uncategorized' || cat.name.toLowerCase() === 'uncategorized'
+            cat.id === 'uncategorized' || String(cat.name || '').toLowerCase() === 'uncategorized'
         );
         
         if (uncategorizedIndex === -1) {
@@ -336,27 +336,43 @@ function editCategory(categoryId) {
     }, 100);
 }
 
-function deleteCategory(categoryId) {
+async function deleteCategory(categoryId) {
     const category = categories.find(c => c.id === categoryId);
-    
+
     if (category.isDefault) {
         showToast('Cannot delete default categories', 'error');
         return;
     }
-    
+
     if (confirm(`Are you sure you want to delete "${category.name}"? All questions in this category will become uncategorized.`)) {
+        // Persist to server first. The legacy "uncategorized" reassignment
+        // happens locally AND is replayed against the DB via the questions
+        // bulk sync — but the category row itself must come from the API.
+        if (window.API && typeof window.API.remove === 'function') {
+            try {
+                await window.API.remove('categories', categoryId);
+            } catch (apiErr) {
+                console.warn('[categories] API delete failed:', apiErr);
+                showToast(
+                    'Failed to delete category on server: ' + (apiErr?.message || 'network error'),
+                    'error',
+                );
+                return;
+            }
+        }
+
         // Remove category from questions
         const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
         const questions = savedQuestions || [];
-        
+
         questions.forEach(question => {
             if (question.category === category.name || question.category === category.id) {
                 question.category = '';
             }
         });
-        
+
         window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
-        
+
         // Remove category
         categories = categories.filter(c => c.id !== categoryId);
         saveCategories();
@@ -366,30 +382,30 @@ function deleteCategory(categoryId) {
     }
 }
 
-function saveCategoryForm() {
+async function saveCategoryForm() {
     const name = document.getElementById('categoryName').value.trim();
     const description = document.getElementById('categoryDescription').value.trim();
     const color = document.getElementById('categoryColor').value;
-    
+
     if (!name) {
         showToast('Please enter a category name', 'error');
         return;
     }
-    
+
     // Check for duplicate names (excluding current category if editing)
     const existingCategory = categories.find(c =>
-        c.name.toLowerCase() === name.toLowerCase() && c.id !== currentCategoryId
+        String(c.name || '').toLowerCase() === name.toLowerCase() && c.id !== currentCategoryId
     );
-    
+
     if (existingCategory) {
         showToast('A category with this name already exists', 'error');
         return;
     }
-    
+
     // Get assigned questions from the selected questions list in the modal
     const selectedQuestionElements = document.querySelectorAll('#selectedQuestionsListCategory .premium-question-item, #selectedQuestionsListCategory .question-item');
     const assignedQuestionIds = Array.from(selectedQuestionElements).map(el => parseInt(el.dataset.questionId || el.dataset.index));
-    
+
     const categoryData = {
         id: currentCategoryId || generateUUID(),
         name: name,
@@ -405,7 +421,35 @@ function saveCategoryForm() {
 			? categories.find(c => c.id === currentCategoryId)?.ownerId || window.Auth?.getCurrentUser?.()?.id || ''
 			: window.Auth?.getCurrentUser?.()?.id || ''
     };
-    
+
+    // ── Persist to the backend FIRST ─────────────────────────────────────────
+    // The server owns the canonical id. We send only the persistable fields
+    // (name/color/icon/parent_id) — description/questionCount/ownerId are
+    // legacy UI-only fields the schema strips anyway.
+    if (window.API && typeof window.API.create === 'function') {
+        try {
+            const payload = { name: categoryData.name };
+            if (categoryData.color) payload.color = categoryData.color;
+            if (categoryData.icon) payload.icon = categoryData.icon;
+            let saved = null;
+            if (currentCategoryId) {
+                saved = await window.API.update('categories', currentCategoryId, payload);
+            } else {
+                saved = await window.API.create('categories', payload);
+            }
+            if (saved && saved.id) {
+                categoryData.id = saved.id;
+            }
+        } catch (apiErr) {
+            console.warn('[categories] API save failed:', apiErr);
+            showToast(
+                'Failed to save category on server: ' + (apiErr?.message || 'network error'),
+                'error',
+            );
+            return;
+        }
+    }
+
     if (currentCategoryId) {
         const index = categories.findIndex(c => c.id === currentCategoryId);
         if (index !== -1) {
@@ -414,7 +458,7 @@ function saveCategoryForm() {
     } else {
         categories.push(categoryData);
     }
-    
+
     // Update questions with category assignment FIRST
     const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
     
@@ -1385,7 +1429,7 @@ function updateCategoryList(categoriesList = categories) {
     });
     
     // Add "Uncategorized" category if it doesn't exist
-	let uncategorizedExists = visibleCategories.some(cat => cat.name.toLowerCase() === 'uncategorized');
+	let uncategorizedExists = visibleCategories.some(cat => String(cat.name || '').toLowerCase() === 'uncategorized');
 	if (!uncategorizedExists) {
 		visibleCategories.unshift({
             id: 'uncategorized',
@@ -1481,10 +1525,13 @@ function updateCategoryList(categoriesList = categories) {
 }
 
 function filterCategories() {
-    const searchTerm = document.getElementById('categorySearch').value.toLowerCase();
+    const searchTerm = (document.getElementById('categorySearch').value || '').toLowerCase();
+    // Coerce to string defensively: categories merged from the API or imported
+    // JSON may lack `description` (and even `name`), which used to crash the
+    // filter with "Cannot read properties of undefined (reading 'toLowerCase')".
     const filteredCategories = categories.filter(category =>
-        category.name.toLowerCase().includes(searchTerm) ||
-        category.description.toLowerCase().includes(searchTerm)
+        (String(category.name || '')).toLowerCase().includes(searchTerm) ||
+        (String(category.description || '')).toLowerCase().includes(searchTerm)
     );
     updateCategoryList(filteredCategories);
 }
@@ -3041,7 +3088,7 @@ function saveInlineCategory() {
     }
     
     // Check duplicates
-    if (categories.some(c => c.name.toLowerCase() === categoryName.toLowerCase())) {
+    if (categories.some(c => String(c.name || '').toLowerCase() === categoryName.toLowerCase())) {
         showToast('Category already exists', 'error');
         return;
     }

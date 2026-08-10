@@ -21371,6 +21371,42 @@ tr[data-id],
 	}
 }
 
+/* =========================================
+   ENTRY GATE — index.html sign-in screen
+   (replaces the legacy student landing page)
+   ========================================= */
+/* Always show the gate modal — it IS the page content, not an overlay. */
+.entry-gate-modal {
+	display: flex !important;
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 2000;
+}
+
+/* The login dialog stays centered and scrolls internally if the viewport is
+   short — the rest of the page is locked away behind the backdrop. */
+body:has(.entry-gate-modal) {
+	overflow: hidden;
+}
+
+/* Ensure the gate's error/status line is visible in the DOM flow. */
+#entryAuthStatus {
+	min-height: 0;
+	margin-top: 4px;
+}
+
+/* The entry page's hidden quiz container must never be shown by accident —
+   script.js toggles it when starting an exam after login. */
+.entry-gate-container .quiz-container {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	z-index: 1; /* sits beneath the gate modal (z-index: 2000) */
+}
+
 /* ============================= */
 /* Scroll to Top Button */
 /* ============================= */

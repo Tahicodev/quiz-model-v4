@@ -97,12 +97,12 @@ function searchQuestions(searchTerm) {
 			return;
 		}
 		const questionMatch =
-			question.question && question.question.toLowerCase().includes(term);
+			String(question.question || '').toLowerCase().includes(term);
 		const optionsMatch =
 			question.options &&
 			JSON.stringify(question.options).toLowerCase().includes(term);
 		const answerMatch =
-			question.answer && question.answer.toLowerCase().includes(term);
+			String(question.answer || '').toLowerCase().includes(term);
 
 		if (questionMatch || optionsMatch || answerMatch) {
 			const categoryName = question.category
@@ -133,7 +133,7 @@ function searchCategories(searchTerm) {
 		if (window.Auth?.canAccessItem && !window.Auth.canAccessItem('category', category)) {
 			return;
 		}
-		if (category.name.toLowerCase().includes(term)) {
+		if (String(category.name || '').toLowerCase().includes(term)) {
 			globalSearchResults.push({
 				type: 'category',
 				id: category.id,
@@ -159,8 +159,8 @@ function searchExams(searchTerm) {
 			return;
 		}
 		if (
-			exam.name.toLowerCase().includes(term) ||
-			(exam.description && exam.description.toLowerCase().includes(term))
+			String(exam.name || '').toLowerCase().includes(term) ||
+			String(exam.description || '').toLowerCase().includes(term)
 		) {
 			const questionCount = exam.questions ? exam.questions.length : 0;
 			globalSearchResults.push({
@@ -188,7 +188,7 @@ function searchClasses(searchTerm) {
 		if (window.Auth?.canAccessItem && !window.Auth.canAccessItem('class', classItem)) {
 			return;
 		}
-		if (classItem.name.toLowerCase().includes(term)) {
+		if (String(classItem.name || '').toLowerCase().includes(term)) {
 			const studentCount = classItem.students ? classItem.students.length : 0;
 			globalSearchResults.push({
 				type: 'class',
@@ -213,9 +213,9 @@ function searchResults(searchTerm) {
 		if (window.Auth?.canAccessItem && !window.Auth.canAccessItem('result', result)) {
 			return;
 		}
-		const nameMatch = result.name && result.name.toLowerCase().includes(term);
+		const nameMatch = String(result.name || '').toLowerCase().includes(term);
 		const studentIdMatch =
-			result.studentId && result.studentId.toString().includes(term);
+			result.studentId != null && String(result.studentId).toLowerCase().includes(term);
 
 		if (nameMatch || studentIdMatch) {
 			globalSearchResults.push({

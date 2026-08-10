@@ -117,8 +117,21 @@ if (!document.getElementById('toast-animations')) {
  * @param {object} metadata - Optional additional data
  */
 function logActivity(type, name, action = 'created', metadata = {}) {
+    // ── Backend-first: persist to Notification table so the bell shows it ──
+    // The /notifications endpoint creates a real DB row (unlike audit_logs
+    // which requires an entity_id we often don't have for pure UI events).
+    if (window.API && typeof window.API.create === 'function') {
+        window.API.create('notifications', {
+            type: type,
+            message: `${name} ${action}`,
+            data: { name: name, action: action, metadata: metadata },
+        }).catch(function (err) {
+            console.warn('[utils] notification persist failed:', err && err.message);
+        });
+    }
+
     const activityLog = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
-    
+
     // Create new activity entry
     const newActivity = {
         type: type,
@@ -129,17 +142,17 @@ function logActivity(type, name, action = 'created', metadata = {}) {
         meta: metadata,
         id: generateUUID() // Use the existing generateUUID function
     };
-    
+
     // Add to beginning of log
     activityLog.unshift(newActivity);
-    
+
     // Limit log size (keep last 500 entries)
     if (activityLog.length > 500) {
         activityLog.length = 500;
     }
-    
+
     window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', activityLog);
-    
+
     // Refresh dashboard if available
     if (typeof initDashboard === 'function' && document.getElementById('overview') && document.getElementById('overview').classList.contains('active')) {
         initDashboard();
@@ -154,22 +167,35 @@ window.logActivity = logActivity;
 const ADMIN_NOTIFICATIONS_KEY = 'adminNotifications';
 const ADMIN_NOTIFICATIONS_SEEN_KEY = 'adminNotificationsSeenAt';
 
-	function addAdminNotification(payload = {}) {
-		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-	    var notifications = r ? r.getValue_sync('notifications', []) : JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
-	    var entry = {
-	        id: typeof generateUUID === 'function' ? generateUUID() : '' + Date.now(),
-	        type: payload.type || 'activity',
-	        message: payload.message || 'New activity',
-	        data: payload.data || {},
-	        createdAt: new Date().toISOString()
-	    };
-	    notifications.unshift(entry);
-	    if (notifications.length > 200) notifications.length = 200;
-	    if (r) { r.setAll_sync('notifications', notifications); } else { localStorage.setItem(ADMIN_NOTIFICATIONS_KEY, JSON.stringify(notifications)); }
-	    window.dispatchEvent(new CustomEvent('admin:notifications-updated'));
-	    return entry;
-	}
+		function addAdminNotification(payload = {}) {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		    var notifications = r ? r.getValue_sync('notifications', []) : JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
+		    var entry = {
+		        id: typeof generateUUID === 'function' ? generateUUID() : '' + Date.now(),
+		        type: payload.type || 'activity',
+		        message: payload.message || 'New activity',
+		        data: payload.data || {},
+		        createdAt: new Date().toISOString()
+		    };
+		    notifications.unshift(entry);
+		    if (notifications.length > 200) notifications.length = 200;
+		    if (r) { r.setAll_sync('notifications', notifications); } else { localStorage.setItem(ADMIN_NOTIFICATIONS_KEY, JSON.stringify(notifications)); }
+		    window.dispatchEvent(new CustomEvent('admin:notifications-updated'));
+
+		    // Persist to the backend so the admin bell is populated from the DB
+		    // (readable from any device). Fire-and-forget — the local mirror keeps
+		    // the UI responsive even if the write fails.
+		    if (window.API && typeof window.API.create === 'function') {
+		        window.API.create('notifications', {
+		            type: entry.type,
+		            message: entry.message,
+		            data: entry.data,
+		        }).catch(function (err) {
+		            console.warn('[notifications] API persist failed:', err);
+		        });
+		    }
+		    return entry;
+		}
 
 	function getAdminNotificationCount() {
 	    var seenAt = localStorage.getItem(ADMIN_NOTIFICATIONS_SEEN_KEY);

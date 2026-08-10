@@ -345,8 +345,8 @@ function filterResults() {
 	if (searchTerm) {
 		results = results.filter(
 			(r) =>
-				(r.name && r.name.toLowerCase().includes(searchTerm)) ||
-				(r.numero && r.numero.toLowerCase().includes(searchTerm))
+				String(r.name || '').toLowerCase().includes(searchTerm) ||
+				String((r.numero ?? r.number) || '').toLowerCase().includes(searchTerm)
 		);
 	}
 

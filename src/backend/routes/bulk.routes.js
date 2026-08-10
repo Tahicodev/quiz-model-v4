@@ -52,6 +52,13 @@ const pickBool = (v) => (v === undefined ? undefined : Boolean(v));
 
 const pickStr = (v) => (v == null ? undefined : String(v));
 
+/** Real v4-UUID test — legacy Date.now() / simpleHash ids must be dropped so Prisma's @default(uuid()) fires. */
+const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const pickUuid = (v) => {
+  const s = pickStr(v);
+  return s && UUID_RX.test(s) ? s : undefined;
+};
+
 /**
  * Resolve a legacy creator/owner reference to a real User.id.
  * The legacy UI ships `ownerId`/`createdBy` as a UUID, a username, or a
@@ -112,11 +119,13 @@ const SANITIZERS = {
     // uses `studentNumber` instead of `numero`.
     const passwordHash =
       row.password_hash || row.passwordHash || row.password || undefined;
+    // class_id is a real FK — drop obviously-bogus legacy ids ("test-class-1")
+    // so the upsert doesn't P2003 against a Class row that doesn't exist.
+    const classId = pickUuid(row.class_id ?? row.classId);
     return {
-      ...(row.id && { id: String(row.id) }),
+      ...(pickUuid(row.id) && { id: pickUuid(row.id) }),
       school_id: schoolId,
-      ...(row.class_id && { class_id: String(row.class_id) }),
-      ...(row.classId && { class_id: String(row.classId) }),
+      ...(classId && { class_id: classId }),
       username: String(row.username ?? row.email ?? '').trim(),
       ...(passwordHash && { password_hash: String(passwordHash) }),
       role: pickStr(row.role) || 'student',
@@ -354,8 +363,9 @@ const SANITIZERS = {
       participantDetails: Array.isArray(row.participantDetails) ? row.participantDetails : null,
       winnerId: row.winnerId ?? null,
       winnerName: row.winnerName ?? null,
-      // Preserve any additional fields the legacy UI serialized onto the row.
-      raw: row,
+      // NOTE: the legacy `raw: row` passthrough was dropped — it double-stored
+      // every field inside answers_json and leaked client-only junk into the
+      // normalized snapshot. The curated fields above are the canonical set.
     };
 
     const totalPoints = pickInt(row.totalPoints ?? row.total_points) ?? 0;
@@ -621,19 +631,160 @@ const SANITIZERS = {
     };
   },
 
-  // ── Stores with no Prisma model ───────────────────────────────────────────
-  // These persist to localStorage only. Returning null makes the row a no-op,
-  // the handler responds { count: 0, skipped: n }, and the bridge keeps the
-  // data locally. If/when a model is added, only this sanitizer needs to
-  // change — the UI keeps working unchanged.
-  game_presets: () => null,
+  // ── Full-persistence stores (Phase 2) ─────────────────────────────────────
+  // Real sanitizers matching the new Prisma models, so any remaining legacy
+  // setAll_sync(...) write is honored instead of silently dropped. Routes still
+  // exist for these tables; prefer them — these are a compatibility floor.
+
+  // model ProfileRequest { id, school_id, user_id, status, changes_json,
+  //                        avatar?, note?, snapshot_json?, reviewer_id?,
+  //                        review_note?, reviewed_at? }
+  profile_requests: (row, schoolId, actorId, legacyCtx = {}) => {
+    let userId = pickUuid(row.user_id ?? row.userId) || null;
+    if (!userId && legacyCtx.userIdByKey instanceof Map) {
+      const key = pickStr(row.username ?? row.userName ?? row.name)?.toLowerCase();
+      if (key) userId = legacyCtx.userIdByKey.get(key) || null;
+    }
+    if (!userId) return null;
+    const changes = row.changes_json ?? row.changes ?? null;
+    if (!changes) return null;
+    return {
+      ...(pickUuid(row.id) && { id: pickUuid(row.id) }),
+      school_id: schoolId,
+      user_id: userId,
+      status: pickStr(row.status) || 'pending',
+      changes_json: typeof changes === 'string' ? changes : JSON.stringify(changes),
+      ...(row.avatar != null && { avatar: pickStr(row.avatar) }),
+      ...(row.note != null && { note: pickStr(row.note) }),
+    };
+  },
+
+  // model AccountRequest { id, school_id, status, full_name, username,
+  //                        student_number, class_id?, class_name?,
+  //                        password_hash, note?, reviewer_id?, created_user_id? }
+  account_requests: (row, schoolId) => {
+    const username = pickStr(row.username);
+    const fullName = pickStr(row.full_name ?? row.fullName ?? row.name);
+    const studentNumber = pickStr(row.student_number ?? row.studentNumber ?? row.numero);
+    const passwordHash = pickStr(row.password_hash ?? row.passwordHash ?? row.password);
+    if (!username || !fullName || !studentNumber || !passwordHash) return null;
+    return {
+      ...(pickUuid(row.id) && { id: pickUuid(row.id) }),
+      school_id: schoolId,
+      status: pickStr(row.status) || 'pending',
+      full_name: fullName,
+      username,
+      student_number: studentNumber,
+      ...(row.class_id && { class_id: pickStr(row.class_id) }),
+      ...(row.classId && { class_id: pickStr(row.classId) }),
+      ...(row.class_name && { class_name: pickStr(row.class_name) }),
+      ...(row.className && { class_name: pickStr(row.className) }),
+      password_hash: passwordHash,
+      ...(row.note != null && { note: pickStr(row.note) }),
+    };
+  },
+
+  // model GamePreset { id, school_id, name, game_type, game_mode, rules_json, is_default }
+  game_presets: (row, schoolId) => {
+    const name = pickStr(row.name);
+    const gameType = pickStr(row.game_type ?? row.gameType ?? row.type);
+    const gameMode = pickStr(row.game_mode ?? row.gameMode ?? row.mode);
+    if (!name || !gameType || !gameMode) return null;
+    const rules = row.rules_json ?? row.rules ?? {};
+    return {
+      ...(pickUuid(row.id) && { id: pickUuid(row.id) }),
+      school_id: schoolId,
+      name,
+      game_type: gameType,
+      game_mode: gameMode,
+      rules_json: typeof rules === 'string' ? rules : JSON.stringify(rules),
+      is_default: pickBool(row.is_default ?? row.isDefault) ?? false,
+    };
+  },
+
+  // model Notification { id, school_id, type, message, data_json?, read_at? }
+  notifications: (row, schoolId) => {
+    const type = pickStr(row.type);
+    const message = pickStr(row.message ?? row.text ?? row.title);
+    if (!type || !message) return null;
+    const data = row.data_json ?? row.data ?? null;
+    return {
+      ...(pickUuid(row.id) && { id: pickUuid(row.id) }),
+      school_id: schoolId,
+      type,
+      message,
+      ...(data != null && { data_json: typeof data === 'string' ? data : JSON.stringify(data) }),
+      ...(row.read_at && { read_at: pickDate(row.read_at) }),
+      ...(row.readAt && { read_at: pickDate(row.readAt) }),
+      ...(row.date && { created_at: pickDate(row.date) }),
+    };
+  },
+
+  // model GamificationConfig { school_id (PK), exp_per_correct, exp_per_win, auto_award_badges }
+  // legacy-bridge wraps the single object; normalizeObjectStoreBody already flattens it.
+  gamification: (row, schoolId) => {
+    const src = row && typeof row === 'object' ? (row.value && typeof row.value === 'object' ? row.value : row) : {};
+    // Only upsert when at least one field is explicitly given.
+    if (src.exp_per_correct == null && src.expPerCorrect == null &&
+        src.exp_per_win == null && src.expPerWin == null &&
+        src.auto_award_badges == null && src.autoAwardBadges == null) return null;
+    return {
+      school_id: schoolId,
+      exp_per_correct: pickInt(src.exp_per_correct ?? src.expPerCorrect) ?? 10,
+      exp_per_win: pickInt(src.exp_per_win ?? src.expPerWin) ?? 100,
+      auto_award_badges: pickBool(src.auto_award_badges ?? src.autoAwardBadges) ?? true,
+    };
+  },
+
+  // model TeacherMessage { id, school_id, class_id?, class_name?, teacher_id?,
+  //                        teacher_name?, title, body, date }
+  teacher_messages: (row, schoolId, actorId) => {
+    const title = pickStr(row.title ?? row.subject);
+    const body = pickStr(row.body ?? row.message ?? row.text);
+    if (!title || !body) return null;
+    return {
+      ...(pickUuid(row.id) && { id: pickUuid(row.id) }),
+      school_id: schoolId,
+      ...(row.class_id && { class_id: pickStr(row.class_id) }),
+      ...(row.classId && { class_id: pickStr(row.classId) }),
+      ...(row.class_name && { class_name: pickStr(row.class_name) }),
+      ...(row.className && { class_name: pickStr(row.className) }),
+      ...(pickUuid(row.teacher_id) && { teacher_id: pickUuid(row.teacher_id) }),
+      ...(pickUuid(row.teacherId) && { teacher_id: pickUuid(row.teacherId) }),
+      ...(row.teacher_name && { teacher_name: pickStr(row.teacher_name) }),
+      ...(row.teacherName && { teacher_name: pickStr(row.teacherName) }),
+      // fall back to the JWT actor as author when the UI sent nothing usable
+      ...(!pickUuid(row.teacher_id) && !pickUuid(row.teacherId) && actorId && { teacher_id: String(actorId) }),
+      title,
+      body,
+      ...(row.date && { date: pickDate(row.date) }),
+      ...(row.createdAt && { date: pickDate(row.createdAt) }),
+    };
+  },
+
+  // model TeacherAssignment { id, school_id, class_id?, teacher_id?, title,
+  //                           description?, due_date? }
+  teacher_assignments: (row, schoolId, actorId) => {
+    const title = pickStr(row.title);
+    if (!title) return null;
+    return {
+      ...(pickUuid(row.id) && { id: pickUuid(row.id) }),
+      school_id: schoolId,
+      ...(row.class_id && { class_id: pickStr(row.class_id) }),
+      ...(row.classId && { class_id: pickStr(row.classId) }),
+      ...(pickUuid(row.teacher_id) && { teacher_id: pickUuid(row.teacher_id) }),
+      ...(pickUuid(row.teacherId) && { teacher_id: pickUuid(row.teacherId) }),
+      ...(!pickUuid(row.teacher_id) && !pickUuid(row.teacherId) && actorId && { teacher_id: String(actorId) }),
+      title,
+      ...(row.description != null && { description: pickStr(row.description) }),
+      ...(row.due_date && { due_date: pickDate(row.due_date) }),
+      ...(row.dueDate && { due_date: pickDate(row.dueDate) }),
+    };
+  },
+
+  // activity / account-activity visual feed stays local-only
   activity: () => null,
-  gamification: () => null,
-  profile_requests: () => null,
-  account_requests: () => null,
-  notifications: () => null,
-  teacher_messages: () => null,
-  teacher_assignments: () => null,
+
   // refresh_tokens is internal to AuthService and should never be bulk-written
   // from the UI — the endpoint requires admin but defense-in-depth matters.
   refresh_tokens: () => null,
@@ -725,7 +876,7 @@ function normalizeObjectStoreBody(body) {
  * non-optional columns.
  */
 const REQUIRED_FIELDS = {
-  users: ['username', 'password_hash', 'role', 'name'],
+  users: ['username', 'role', 'name'],   // password_hash optional — an update via bulk may not carry it
   classes: ['name'],
   categories: ['name'],
   questions: ['type', 'text', 'answer'],
@@ -739,6 +890,12 @@ const REQUIRED_FIELDS = {
   tournament_history: ['name'],
   settings: ['key', 'value'],
   audit_logs: ['entity_type', 'entity_id', 'action'],
+  profile_requests: ['user_id', 'changes_json'],
+  account_requests: ['full_name', 'username', 'student_number', 'password_hash'],
+  game_presets: ['name', 'game_type', 'game_mode', 'rules_json'],
+  notifications: ['type', 'message'],
+  teacher_messages: ['title', 'body'],
+  teacher_assignments: ['title'],
 };
 
 /**
@@ -779,7 +936,8 @@ router.post('/:table', async (req, res, next) => {
       table === 'exam_sessions' ||
       table === 'games' ||
       table === 'exams' ||
-      table === 'tournaments';
+      table === 'tournaments' ||
+      table === 'profile_requests';
     const needsExams = table === 'results' || table === 'exam_sessions';
     let legacyCtx = {};
     if (needsUsers || needsExams) {
@@ -850,6 +1008,8 @@ router.post('/:table', async (req, res, next) => {
           table,
           missing,
           rowId: item?.id ?? null,
+          rowKeys: Object.keys(item || {}),
+          cleanedKeys: Object.keys(cleaned || {}),
         });
         continue;
       }
@@ -886,10 +1046,28 @@ router.post('/:table', async (req, res, next) => {
     let upserted = 0;
     if (model && typeof model.upsert === 'function') {
       for (const row of scoped) {
+        // GamificationConfig is keyed by school_id, not id — handle explicitly.
+        if (table === 'gamification') {
+          const { school_id, ...rest } = row;
+          await model.upsert({
+            where: { school_id },
+            create: row,
+            update: rest,
+          });
+          upserted += 1;
+          continue;
+        }
         // Strip the id from the update payload so Prisma doesn't try to set
         // the primary key on update (some drivers reject that).
         const { id, ...rest } = row;
         if (id) {
+          // Users: never accept a client-supplied password_hash on UPDATE. The
+          // UI's `passwordHash` is a sha256/simpleHash digest of whatever the
+          // user typed — overwriting the bcrypt hash breaks login. Password
+          // changes go through POST /users/:id/reset-password.
+          if (table === 'users' && rest.password_hash !== undefined) {
+            delete rest.password_hash;
+          }
           // For exams the legacy UI sends partial `classes`/`questions`
           // (e.g. a class reassignment in class-management.js sends only
           // `classes`), and we persist those in `options_json` as a JSON
@@ -917,11 +1095,52 @@ router.post('/:table', async (req, res, next) => {
               });
             }
           }
-          await model.upsert({
-            where: { id: String(id) },
-            create: row,
-            update: rest,
+          if (table === 'users' && row.password_hash === undefined) {
+            // Bulk sync from list API / post-delete re-upload has no password —
+            // treat as update-only (the row must already exist to be listed).
+            await model.update({ where: { id: String(id) }, data: rest })
+              .catch((err) => {
+                if (err?.code !== 'P2025') throw err;
+                // Row isn't actually in the DB yet: skip, don't create a
+                // password-less user.
+                missingRequiredCount += 1;
+              });
+          } else {
+            await model.upsert({
+              where: { id: String(id) },
+              create: row,
+              update: rest,
+            });
+          }
+        } else if (table === 'users' && scoped.length > 0) {
+          // Sanitizer dropped a legacy non-UUID id (e.g. "test-user-1",
+          // "Date.now()"). Look the user up by username before creating —
+          // otherwise we P2002 against the (school_id, username) unique
+          // index for accounts that already exist in the DB.
+          const existing = await model.findFirst({
+            where: {
+              school_id: req.schoolId,
+              username: row.username,
+            },
+            select: { id: true },
           });
+          if (existing) {
+            // Never let a bulk sync overwrite the real bcrypt hash
+            const { password_hash, ...rest } = row;
+            await model.update({ where: { id: existing.id }, data: rest });
+          } else {
+            // Schema requires password_hash. If the payload didn't carry one
+            // (the UI stripped it on update), skip this row rather than
+            // creating a user with an un-loginable account.
+            if (!row.password_hash) {
+              missingRequiredCount += 1;
+              logger.warn('bulk.routes: skipping user create without password_hash', {
+                table, username: row.username,
+              });
+              continue;
+            }
+            await model.create({ data: row });
+          }
         } else {
           await model.create({ data: row });
         }

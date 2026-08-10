@@ -109,10 +109,20 @@
 
 	function normalizeUser(user) {
 		const now = new Date().toISOString();
+		// Never fall back to Date.now() — the backend sanitizer drops non-UUID
+		// ids so the row becomes invisible on reload. crypto.randomUUID covers
+		// every modern browser; generateUUID is the project-wide helper.
+		const genId = () => {
+			if (typeof generateUUID === 'function') return generateUUID();
+			if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+			// Ancient-browser fallback: RFC-4122 uuid v4 pattern via Math.random.
+			return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+				const r = (Math.random() * 16) | 0;
+				return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+			});
+		};
 		return {
-			id:
-				user.id ||
-				(typeof generateUUID === 'function' ? generateUUID() : `${Date.now()}`),
+			id: user.id || genId(),
 			name: (user.name || '').trim(),
 			username: (user.username || user.email || '').trim(),
 			role: user.role || ROLE_STUDENT,
@@ -2668,27 +2678,76 @@
 		}
 
 		if (existingUser) {
-			const idx = users.findIndex((u) => u.id === existingUserId);
-			if (idx !== -1 && !canManageUser(users[idx]) && !isAdmin()) {
-				showToast('Access denied', 'error');
-				return;
+				const idx = users.findIndex((u) => u.id === existingUserId);
+				if (idx !== -1 && !canManageUser(users[idx]) && !isAdmin()) {
+					showToast('Access denied', 'error');
+					return;
+				}
+				users[idx] = updatedUser;
+			} else {
+				users.push(updatedUser);
 			}
-			users[idx] = updatedUser;
-		} else {
-			users.push(updatedUser);
+
+			// ── Persist to the backend FIRST, then mirror locally ───────────────
+			// The legacy path used to write only localStorage via saveUsers(); the
+			// DB never saw the new user, so a student login afterwards wouldn't
+			// find the account. We now hit POST/PATCH /api/v1/users directly and
+			// only fall back to localStorage on explicit network failure.
+			const payload = {
+				username: updatedUser.username,
+				name: updatedUser.name,
+				role: updatedUser.role,
+				status: updatedUser.status || 'active',
+			};
+			if (password) payload.password = password;
+			if (updatedUser.classId) payload.class_id = updatedUser.classId;
+			if (updatedUser.studentNumber) payload.numero = updatedUser.studentNumber;
+
+			let savedToServer = false;
+			if (window.API && typeof window.API.create === 'function') {
+				try {
+					let serverUser = null;
+					if (existingUser) {
+						serverUser = await window.API.update('users', existingUserId, payload);
+					} else {
+						serverUser = await window.API.create('users', payload);
+					}
+					if (serverUser && serverUser.id) {
+						// Adopt the server's canonical shape (snake_case) so the
+						// local cache matches what bootstrap will return next time.
+						updatedUser.id = serverUser.id;
+						updatedUser.classId = serverUser.class_id || updatedUser.classId || '';
+						updatedUser.studentNumber = serverUser.numero || updatedUser.studentNumber || '';
+						updatedUser.createdAt = serverUser.created_at || updatedUser.createdAt;
+						updatedUser.updatedAt = serverUser.updated_at || updatedUser.updatedAt;
+						// Replace any local stub with the server-authoritative row.
+						const i = users.findIndex((u) => u.id === updatedUser.id || u.username === updatedUser.username);
+						if (i !== -1) users[i] = updatedUser;
+						savedToServer = true;
+					}
+				} catch (apiErr) {
+					console.warn('[auth] API save user failed:', apiErr);
+					showToast(
+						'Failed to save user to server: ' + (apiErr?.message || 'network error'),
+						'error',
+					);
+					// Do NOT save to localStorage on API failure — that would be a
+					// lie the user only discovers later when the data isn't there.
+					return;
+				}
+			}
+
+			saveUsers(users);
+			syncStudentToClasses(updatedUser, existingUser);
+			if (savedToServer && typeof window.syncUsersToClients === 'function' && isAdmin()) {
+				window.syncUsersToClients();
+			}
+			closeUserModal();
+			renderUsersTable();
+			showToast('User saved successfully', 'success');
 		}
 
-		saveUsers(users);
-		syncStudentToClasses(updatedUser, existingUser);
-		if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
-			window.syncUsersToClients();
-		}
-		closeUserModal();
-		renderUsersTable();
-		showToast('User saved successfully', 'success');
-	}
-
-	function toggleUserStatus(userId) {
+	async function toggleUserStatus(userId) {
 		if (!userId) return;
 		const users = getUsers();
 		const user = users.find((u) => u.id === userId);
@@ -2707,60 +2766,93 @@
 		}
 
 		user.status = user.status === 'disabled' ? 'active' : 'disabled';
-		user.updatedAt = new Date().toISOString();
-		saveUsers(users);
-		if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
-			window.syncUsersToClients();
-		}
-		renderUsersTable();
-		showToast(
-			`User ${user.status === 'disabled' ? 'suspended' : 'activated'}`,
-			'success',
-		);
-	}
+			user.updatedAt = new Date().toISOString();
 
-	function deleteUser(userId) {
-		if (!userId) return;
-		const users = getUsers();
-		const user = users.find((u) => u.id === userId);
-		if (!user) return;
-		if (!canManageUser(user) && !isAdmin()) {
-			showToast('Access denied', 'error');
-			return;
-		}
-		if (user.role === ROLE_ADMIN) {
-			const adminCount = users.filter((u) => u.role === ROLE_ADMIN).length;
-			if (adminCount <= 1) {
-				showToast('At least one admin account is required', 'error');
-				return;
+			// Persist the status flip to the backend. The backend User.status
+			// enum is {active, inactive, suspended}; the legacy UI uses 'disabled',
+			// so translate before sending.
+			if (window.API && typeof window.API.update === 'function') {
+				try {
+					const apiStatus = user.status === 'disabled' ? 'suspended' : 'active';
+					await window.API.update('users', userId, { status: apiStatus });
+				} catch (apiErr) {
+					console.warn('[auth] API toggle status failed:', apiErr);
+					showToast(
+						'Failed to update status on server: ' + (apiErr?.message || 'network error'),
+						'error',
+					);
+					return; // don't touch localStorage either — keep the two in sync
+				}
 			}
-		}
 
-		if (confirm(`Delete user "${user.name || user.username}"?`)) {
-			const filtered = users.filter((u) => u.id !== userId);
-			saveUsers(filtered);
+			saveUsers(users);
 			if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
 				window.syncUsersToClients();
 			}
-			if (user.role === ROLE_STUDENT && user.classId) {
-				const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
-				let changed = false;
-				const target = classes.find((c) => c.id === user.classId);
-				if (target && Array.isArray(target.students)) {
-					const before = target.students.length;
-					target.students = target.students.filter(
-						(s) => String(s.number) !== String(user.studentNumber),
-					);
-					if (before !== target.students.length) changed = true;
-				}
-				if (changed) {
-					window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
+			renderUsersTable();
+			showToast(
+				`User ${user.status === 'disabled' ? 'suspended' : 'activated'}`,
+				'success',
+			);
+		}
+
+		async function deleteUser(userId) {
+			if (!userId) return;
+			const users = getUsers();
+			const user = users.find((u) => u.id === userId);
+			if (!user) return;
+			if (!canManageUser(user) && !isAdmin()) {
+				showToast('Access denied', 'error');
+				return;
+			}
+			if (user.role === ROLE_ADMIN) {
+				const adminCount = users.filter((u) => u.role === ROLE_ADMIN).length;
+				if (adminCount <= 1) {
+					showToast('At least one admin account is required', 'error');
+					return;
 				}
 			}
-			renderUsersTable();
-			showToast('User deleted', 'success');
+
+			if (confirm(`Delete user "${user.name || user.username}"?`)) {
+				// Persist the delete to the backend first; only drop local state
+				// after the server has confirmed the row is gone.
+				if (window.API && typeof window.API.remove === 'function') {
+					try {
+						await window.API.remove('users', userId);
+					} catch (apiErr) {
+						console.warn('[auth] API delete user failed:', apiErr);
+						showToast(
+							'Failed to delete user on server: ' + (apiErr?.message || 'network error'),
+							'error',
+						);
+						return;
+					}
+				}
+
+				const filtered = users.filter((u) => u.id !== userId);
+				saveUsers(filtered);
+				if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
+					window.syncUsersToClients();
+				}
+				if (user.role === ROLE_STUDENT && user.classId) {
+					const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+					let changed = false;
+					const target = classes.find((c) => c.id === user.classId);
+					if (target && Array.isArray(target.students)) {
+						const before = target.students.length;
+						target.students = target.students.filter(
+							(s) => String(s.number) !== String(user.studentNumber),
+						);
+						if (before !== target.students.length) changed = true;
+					}
+					if (changed) {
+						window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
+					}
+				}
+				renderUsersTable();
+				showToast('User deleted', 'success');
+			}
 		}
-	}
 
 		function getProfileRequests() {
 			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
@@ -2865,6 +2957,65 @@
 		}
 
 		const hashedPassword = passwordHash || (await hashPassword(plainPassword));
+
+		// ── Backend-first: submit to the API so the request lands in the DB ──
+		// The account-requests endpoint is public + rate-limited; the server
+		// bcrypts the plaintext password itself (never send our client hash —
+		// it's not a bcrypt hash the server can recognize).
+		if (window.API && typeof window.API.raw === 'function') {
+			try {
+				const created = await window.API.raw('POST', '/account-requests', {
+					username,
+					full_name: fullName,
+					student_number: studentNumber,
+					class_id: classId,
+					class_name: className,
+					password: plainPassword || '',
+					note,
+				});
+				// Local mirror so the admin queue UI refreshes from cache too.
+				const requests = getAccountRequests();
+				requests.unshift({
+					id: created.id,
+					type: 'account_request',
+					createdAt: created.created_at || new Date().toISOString(),
+					status: 'pending',
+					fullName,
+					username,
+					studentNumber,
+					classId,
+					className,
+					passwordHash: hashedPassword,
+					note,
+					reviewerId: '',
+					reviewedAt: '',
+					reviewNote: '',
+					createdUserId: '',
+				});
+				saveAccountRequests(requests);
+
+				if (typeof logActivity === 'function') {
+					logActivity(
+						'account_request',
+						`${fullName} account request`,
+						'requested',
+						{ requestId: created.id, username, studentNumber, classId, className },
+					);
+				}
+				if (typeof window.addAdminNotification === 'function') {
+					window.addAdminNotification({
+						type: 'account_request',
+						message: `${fullName} requested a new student account`,
+						data: { requestId: created.id, username, classId },
+					});
+				}
+				return { ok: true, request: created };
+			} catch (err) {
+				return { ok: false, message: err && err.message ? err.message : 'Account request failed' };
+			}
+		}
+
+		// ── Legacy fallback (API not loaded): localStorage only ─────────────
 		const request = {
 			id: typeof generateUUID === 'function' ? generateUUID() : `${Date.now()}`,
 			type: 'account_request',
@@ -2911,7 +3062,7 @@
 		return { ok: true, request };
 	}
 
-	function approveAccountRequest(requestId, reviewerId, note = '') {
+	async function approveAccountRequest(requestId, reviewerId, note = '') {
 		const requests = getAccountRequests();
 		const request = requests.find((entry) => entry.id === requestId);
 		if (!request || request.status !== 'pending') return null;
@@ -2937,6 +3088,63 @@
 			return null;
 		}
 
+		// ── Backend-first: the server materializes the User + marks approved ──
+		if (window.API && typeof window.API.raw === 'function' && request.id) {
+			try {
+				const result = await window.API.raw('POST', '/account-requests/' + encodeURIComponent(request.id) + '/approve', { note });
+				const newUserId = result && result.userId;
+				request.status = 'approved';
+				request.reviewNote = note;
+				request.reviewerId = reviewerId || '';
+				request.reviewedAt = result?.request?.reviewed_at || new Date().toISOString();
+				request.createdUserId = newUserId || '';
+				saveAccountRequests(requests);
+
+				// Mirror the new user into the local cache so the admin table refreshes.
+				if (newUserId) {
+					const classId = String(request.classId || '').trim();
+					const className = resolveClassNameById(classId) || String(request.className || '');
+					const newUser = normalizeUser({
+						id: newUserId,
+						name: request.fullName,
+						username: request.username,
+						role: ROLE_STUDENT,
+						status: 'active',
+						studentNumber: request.studentNumber,
+						classId,
+						className,
+					});
+					newUser.passwordHash = request.passwordHash || '';
+					newUser.createdAt = new Date().toISOString();
+					newUser.updatedAt = newUser.createdAt;
+					users.push(newUser);
+					saveUsers(users);
+					syncStudentToClasses(newUser, null);
+				}
+
+				if (typeof logActivity === 'function') {
+					logActivity('account_request', `${request.fullName} account request`, 'approved', {
+						requestId: request.id, username: request.username,
+						studentNumber: request.studentNumber, classId: request.classId,
+						className: request.className, userId: newUserId || '',
+						reviewerId: reviewerId || '', reviewNote: note,
+					});
+				}
+				if (typeof window.addAdminNotification === 'function') {
+					window.addAdminNotification({
+						type: 'account_request',
+						message: `Account request approved for ${request.fullName}`,
+						data: { requestId: request.id, username: request.username, classId: request.classId, userId: newUserId },
+					});
+				}
+				return request;
+			} catch (err) {
+				showToast((err && err.message) || 'Approval failed', 'error');
+				return null;
+			}
+		}
+
+		// ── Legacy fallback (API not loaded) ────────────────────────────────
 		const classId = String(request.classId || '').trim();
 		const className =
 			resolveClassNameById(classId) || String(request.className || '');
@@ -3003,13 +3211,23 @@
 		return request;
 	}
 
-	function rejectAccountRequest(requestId, reviewerId, note = '') {
+	async function rejectAccountRequest(requestId, reviewerId, note = '') {
 		const requests = getAccountRequests();
 		const request = requests.find((entry) => entry.id === requestId);
 		if (!request || request.status !== 'pending') return null;
 		if (!canReviewAccountRequest(request)) {
 			showToast('Access denied', 'error');
 			return null;
+		}
+
+		// ── Backend-first ────────────────────────────────────────────────────
+		if (window.API && typeof window.API.raw === 'function' && request.id) {
+			try {
+				await window.API.raw('POST', '/account-requests/' + encodeURIComponent(request.id) + '/reject', { note });
+			} catch (err) {
+				showToast((err && err.message) || 'Rejection failed', 'error');
+				return null;
+			}
 		}
 
 		request.status = 'rejected';
@@ -3048,8 +3266,61 @@
 		return request;
 	}
 
-	function submitProfileRequest(payload) {
+	async function submitProfileRequest(payload) {
 		if (!payload || !payload.userId) return null;
+		const displayName =
+			payload.currentSnapshot?.name || payload.changes?.name || 'Student';
+
+		// ── Backend-first: persist to ProfileRequest table ──────────────────
+		if (window.API && typeof window.API.create === 'function') {
+			try {
+				const created = await window.API.create('profile-requests', {
+					changes: payload.changes || {},
+					avatar: payload.avatar || '',
+					note: payload.note || '',
+					snapshot: payload.currentSnapshot || {},
+				});
+				// Mirror into the local cache so the queue UI refreshes.
+				const requests = getProfileRequests();
+				const request = {
+					id: created.id,
+					userId: created.user_id || payload.userId,
+					createdAt: created.created_at || new Date().toISOString(),
+					status: created.status || 'pending',
+					changes: payload.changes || {},
+					avatar: created.avatar ?? (payload.avatar || ''),
+					note: created.note ?? (payload.note || ''),
+					currentSnapshot: payload.currentSnapshot || {},
+				};
+				requests.unshift(request);
+				saveProfileRequests(requests);
+
+				let className = payload.currentSnapshot?.className || '';
+				if (!className && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
+					const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+					const match = classes.find((c) => c.id === payload.currentSnapshot.classId);
+					if (match) className = match.name;
+				}
+				if (typeof logActivity === 'function') {
+					logActivity('profile_request', `${displayName} profile update request`, 'requested', {
+						requestId: request.id, userId: payload.userId, studentName: displayName,
+						studentNumber: payload.currentSnapshot?.studentNumber || '', className: className,
+					});
+				}
+				if (typeof window.addAdminNotification === 'function') {
+					window.addAdminNotification({
+						type: 'profile_request',
+						message: `${displayName} sent a profile update request`,
+						data: { requestId: request.id, userId: payload.userId },
+					});
+				}
+				return request;
+			} catch (err) {
+				console.warn('[auth] profile-request API call failed, falling back to local:', err);
+			}
+		}
+
+		// ── Legacy fallback (API not loaded or request failed) ──────────────
 		const requests = getProfileRequests();
 		const request = {
 			id: typeof generateUUID === 'function' ? generateUUID() : `${Date.now()}`,
@@ -3063,10 +3334,8 @@
 		};
 		requests.unshift(request);
 		saveProfileRequests(requests);
-		const displayName =
-			payload.currentSnapshot?.name || payload.changes?.name || 'Student';
 		let className = payload.currentSnapshot?.className || '';
-		if (!className && payload.currentSnapshot?.classId) {
+		if (!className && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
 			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
 			const match = classes.find(
 				(c) => c.id === payload.currentSnapshot.classId,
@@ -3097,7 +3366,7 @@
 		return request;
 	}
 
-	function updateProfileRequest(requestId, userId, payload = {}) {
+	async function updateProfileRequest(requestId, userId, payload = {}) {
 		const targetId = String(requestId || '').trim();
 		const actorId = String(userId || '').trim();
 		if (!targetId || !actorId) return null;
@@ -3107,6 +3376,21 @@
 		const existing = requests[index];
 		if (String(existing.userId || '').trim() !== actorId) return null;
 		if (String(existing.status || '').toLowerCase() !== 'pending') return null;
+
+		// ── Backend-first ────────────────────────────────────────────────────
+		if (window.API && typeof window.API.update === 'function') {
+			try {
+				await window.API.update('profile-requests', targetId, {
+					changes: payload.changes != null ? payload.changes : undefined,
+					avatar: Object.prototype.hasOwnProperty.call(payload, 'avatar') ? (payload.avatar || '') : undefined,
+					note: Object.prototype.hasOwnProperty.call(payload, 'note') ? (payload.note || '') : undefined,
+					snapshot: payload.currentSnapshot != null ? payload.currentSnapshot : undefined,
+				});
+			} catch (err) {
+				console.warn('[auth] profile-request update failed:', err);
+				return null;
+			}
+		}
 
 		requests[index] = {
 			...existing,
@@ -3125,7 +3409,7 @@
 		return requests[index];
 	}
 
-	function deleteProfileRequest(requestId, userId) {
+	async function deleteProfileRequest(requestId, userId) {
 		const targetId = String(requestId || '').trim();
 		const actorId = String(userId || '').trim();
 		if (!targetId || !actorId) return null;
@@ -3135,6 +3419,16 @@
 		const existing = requests[index];
 		if (String(existing.userId || '').trim() !== actorId) return null;
 		if (String(existing.status || '').toLowerCase() !== 'pending') return null;
+
+		// ── Backend-first ────────────────────────────────────────────────────
+		if (window.API && typeof window.API.remove === 'function') {
+			try {
+				await window.API.remove('profile-requests', targetId);
+			} catch (err) {
+				console.warn('[auth] profile-request delete failed:', err);
+				return null;
+			}
+		}
 
 		const [removed] = requests.splice(index, 1);
 		saveProfileRequests(requests);

@@ -208,7 +208,15 @@ export class AuthService {
 
   #signAccess(user) {
     return jwt.sign(
-      { id: user.id, username: user.username, role: user.role, school_id: user.school_id },
+      {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        school_id: user.school_id,
+        class_id: user.class_id ?? null,
+        name: user.name ?? null,
+        numero: user.numero ?? null,
+      },
       config.jwtSecret,
       { expiresIn: config.jwtAccessExpires }
     );

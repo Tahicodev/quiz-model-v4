@@ -19,6 +19,13 @@ import { UserService } from './services/UserService.js';
 import { AuditService } from './services/AuditService.js';
 import { AIService } from './services/AIService.js';
 import { RAGService } from './services/RAGService.js';
+import { ProfileRequestService } from './services/ProfileRequestService.js';
+import { AccountRequestService } from './services/AccountRequestService.js';
+import { GamePresetService } from './services/GamePresetService.js';
+import { NotificationService } from './services/NotificationService.js';
+import { GamificationService } from './services/GamificationService.js';
+import { TeacherMessageService } from './services/TeacherMessageService.js';
+import { TeacherAssignmentService } from './services/TeacherAssignmentService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
 import { QuestionService } from '../frontend/services/QuestionService.js';
@@ -62,6 +69,15 @@ export function createContainer() {
     tournamentSvc,
     sessionSvc: new SessionService(repo),
     settingsSvc: new SettingsService(repo),
+
+    // Full-persistence stores (Phase 2)
+    notificationSvc: new NotificationService(repo),
+    gamificationSvc: new GamificationService(repo),
+    profileRequestSvc: new ProfileRequestService(repo),
+    accountRequestSvc: new AccountRequestService(repo, null),
+    gamePresetSvc: new GamePresetService(repo),
+    teacherMessageSvc: new TeacherMessageService(repo),
+    teacherAssignmentSvc: new TeacherAssignmentService(repo),
   });
 
   return _container;

@@ -105,6 +105,47 @@
     }
   }
 
+  // ── Fetch the full user record from bootstrap and merge it into the seed ──
+  // The login response only carries {id, username, name, role, status}; the
+  // student workspace needs studentNumber/classId/className/avatar to render
+  // the profile, so we call /api/v1/bootstrap right after login and merge the
+  // authoritative row into both the returned user and the quizUsers seed.
+  function hydrateFullUser(user, token) {
+    if (!user || !user.id || !token) return Promise.resolve(user);
+    var url = baseUrl + '/bootstrap';
+    return fetch(url, {
+      credentials: 'include',
+      headers: { Authorization: 'Bearer ' + token },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (payload) {
+        var data = payload && payload.data;
+        if (!data) return user;
+        var serverUsers = Array.isArray(data.users) ? data.users : [];
+        var full = serverUsers.find(function (u) { return u && u.id === user.id; });
+        if (!full) return user;
+        // Merge snake_case from server into the camelCase shape auth.js expects.
+        var merged = Object.assign({}, user, {
+          id: full.id,
+          username: full.username,
+          name: full.name,
+          role: full.role,
+          status: full.status,
+          classId: full.class_id || '',
+          class_id: full.class_id || '',
+          studentNumber: full.numero || '',
+          numero: full.numero || '',
+          lastLogin: full.last_login || '',
+        });
+        // Resolve class name from the classes table for display chips.
+        var serverClasses = Array.isArray(data.classes) ? data.classes : [];
+        var cls = serverClasses.find(function (c) { return c && c.id === merged.classId; });
+        if (cls) merged.className = cls.name;
+        return merged;
+      })
+      .catch(function () { return user; }); // best effort — never block login
+  }
+
   // ── Bind admin login form ───────────────────────────────────────────────────
   function bindAdminLogin() {
     var form = replaceForm('authLoginForm');
@@ -203,6 +244,11 @@
         var data = await res.json();
         var user = data.user || data;
         var token = data.accessToken || data.token || '';
+
+        // Fetch the full user record (with classId/studentNumber/className)
+        // before persisting or notifying the UI, so the student workspace
+        // renders the real profile instead of an empty shell.
+        user = await hydrateFullUser(user, token);
 
         var session = buildSession(user, token, remember);
         persistSession(session, remember);

@@ -2733,7 +2733,7 @@
 						<span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
 					</div>
 					<div class="game-list-meta">
-						<span>${game.questions.length} questions</span>
+						<span>${(game.questions?.length) || 0} questions</span>
 						<span>${classCount ? `${classCount} class(es)` : 'All classes'}</span>
 						<span>${expected ? `${sessionCount}/${expected} joined` : `${sessionCount} joined`}</span>
 					</div>
@@ -5113,7 +5113,7 @@
 		toggleGamePresetRulesVisibility();
 	}
 
-	function deleteGamePresetSettings(presetId) {
+	async function deleteGamePresetSettings(presetId) {
 		const targetPreset = getGamePresets().find(
 			(preset) => preset.id === presetId,
 		);
@@ -5122,6 +5122,17 @@
 			return;
 		}
 		if (!confirm('Delete this game preset?')) return;
+
+		// ── Backend-first: remove from GamePreset table ───────────────────────
+		if (window.API && typeof window.API.remove === 'function') {
+			try {
+				await window.API.remove('game-presets', presetId);
+			} catch (err) {
+				showToast((err && err.message) || 'Failed to delete preset on server', 'error');
+				return;
+			}
+		}
+
 		const presets = getGamePresets().filter((preset) => preset.id !== presetId);
 		saveGamePresets(presets);
 		renderGamePresetList();
@@ -5129,7 +5140,7 @@
 		showToast('Game preset deleted', 'success');
 	}
 
-	function saveGamePresetSettings() {
+	async function saveGamePresetSettings() {
 		const name = byId('game-preset-name')?.value?.trim();
 		if (!name) {
 			showToast('Enter a preset name', 'error');
@@ -5142,62 +5153,113 @@
 		}
 		const requestedMode = byId('game-preset-mode')?.value || 'solo';
 		const gameMode = supportsTeamModeForType(gameType) ? requestedMode : 'solo';
-		const preset = {
-			id: Date.now().toString(),
-			name,
-			gameType,
-			gameMode,
-			gameRules: normalizeGameRules({
-				mirrorCard: Boolean(byId('game-preset-rule-mirrorCard')?.checked),
-				timeWarp: Boolean(byId('game-preset-rule-timeWarp')?.checked),
-				doubleOrNothing: Boolean(
-					byId('game-preset-rule-doubleOrNothing')?.checked,
-				),
-				shieldCard: Boolean(byId('game-preset-rule-shieldCard')?.checked),
-				freezeCard: Boolean(byId('game-preset-rule-freezeCard')?.checked),
-				stealCard: Boolean(byId('game-preset-rule-stealCard')?.checked),
-				fogCard: Boolean(byId('game-preset-rule-fogCard')?.checked),
-				comboBreakerCard: Boolean(
-					byId('game-preset-rule-comboBreakerCard')?.checked,
-				),
-				overclockCard: Boolean(byId('game-preset-rule-overclockCard')?.checked),
-				streakMultiplier: false,
-				bountyBonus: false,
-				teamBetting: false,
-				suddenDeath: Boolean(byId('game-preset-rule-suddenDeath')?.checked),
-				hintCost: Boolean(byId('game-preset-rule-hintCost')?.checked),
-				autoPlayTimeoutCard: Boolean(
-					byId('game-preset-rule-autoPlayTimeoutCard')?.checked,
-				),
-				hotPotato: {
-					totalTimer: byId('game-preset-hotPotatoTotalTimer')?.value,
-					turnDuration: byId('game-preset-hotPotatoTurnDuration')?.value,
-					pointsPerCorrect: byId('game-preset-hotPotatoPoints')?.value,
-					autoRotate: byId('game-preset-rule-autoRotate')?.checked,
-					showCountdown: byId('game-preset-rule-showCountdown')?.checked,
-				},
-				sprint: {
-					globalTimer: byId('game-preset-sprintGlobalTimer')?.value,
-				},
-				lastSurvivor: {
-					eliminateOnFirstWrong: byId('game-preset-rule-eliminateOnFirstWrong')
-						?.checked,
-					bonusPoints: byId('game-preset-lastSurvivorBonusPoints')?.value,
-					eliminationTimer: byId('game-preset-lastSurvivorTimer')?.value,
-					showEliminationReason: byId('game-preset-rule-showEliminationReason')
-						?.checked,
-				},
-			}),
-			createdAt: new Date().toISOString(),
-		};
+		const presetRules = normalizeGameRules({
+			mirrorCard: Boolean(byId('game-preset-rule-mirrorCard')?.checked),
+			timeWarp: Boolean(byId('game-preset-rule-timeWarp')?.checked),
+			doubleOrNothing: Boolean(
+				byId('game-preset-rule-doubleOrNothing')?.checked,
+			),
+			shieldCard: Boolean(byId('game-preset-rule-shieldCard')?.checked),
+			freezeCard: Boolean(byId('game-preset-rule-freezeCard')?.checked),
+			stealCard: Boolean(byId('game-preset-rule-stealCard')?.checked),
+			fogCard: Boolean(byId('game-preset-rule-fogCard')?.checked),
+			comboBreakerCard: Boolean(
+				byId('game-preset-rule-comboBreakerCard')?.checked,
+			),
+			overclockCard: Boolean(byId('game-preset-rule-overclockCard')?.checked),
+			streakMultiplier: false,
+			bountyBonus: false,
+			teamBetting: false,
+			suddenDeath: Boolean(byId('game-preset-rule-suddenDeath')?.checked),
+			hintCost: Boolean(byId('game-preset-rule-hintCost')?.checked),
+			autoPlayTimeoutCard: Boolean(
+				byId('game-preset-rule-autoPlayTimeoutCard')?.checked,
+			),
+			hotPotato: {
+				totalTimer: byId('game-preset-hotPotatoTotalTimer')?.value,
+				turnDuration: byId('game-preset-hotPotatoTurnDuration')?.value,
+				pointsPerCorrect: byId('game-preset-hotPotatoPoints')?.value,
+				autoRotate: byId('game-preset-rule-autoRotate')?.checked,
+				showCountdown: byId('game-preset-rule-showCountdown')?.checked,
+			},
+			sprint: {
+				globalTimer: byId('game-preset-sprintGlobalTimer')?.value,
+			},
+			lastSurvivor: {
+				eliminateOnFirstWrong: byId('game-preset-rule-eliminateOnFirstWrong')
+					?.checked,
+				bonusPoints: byId('game-preset-lastSurvivorBonusPoints')?.value,
+				eliminationTimer: byId('game-preset-lastSurvivorTimer')?.value,
+				showEliminationReason: byId('game-preset-rule-showEliminationReason')
+					?.checked,
+			},
+		});
 
 		const presets = getGamePresets();
 		localStorage.setItem(GAME_PRESETS_INIT_KEY, 'true');
 		const editingId = byId('editingGamePresetId')?.value;
+
+		// ── Backend-first: create/update via the API, adopt the server uuid ──
+		if (window.API && typeof window.API.create === 'function') {
+			try {
+				const wirePayload = {
+					name,
+					gameType,
+					gameMode,
+					rules: presetRules,
+				};
+				let serverPreset;
+				if (editingId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(editingId))) {
+					serverPreset = await window.API.update('game-presets', editingId, wirePayload);
+				} else {
+					serverPreset = await window.API.create('game-presets', wirePayload);
+				}
+
+				const preset = {
+					id: serverPreset.id,
+					name: serverPreset.name,
+					gameType: serverPreset.game_type,
+					gameMode: serverPreset.game_mode,
+					gameRules: presetRules,
+					isDefault: !!serverPreset.is_default,
+					createdAt: serverPreset.created_at || new Date().toISOString(),
+				};
+
+				if (editingId) {
+					const index = presets.findIndex((p) => p.id === editingId);
+					if (index >= 0) presets[index] = preset;
+					else presets.push(preset);
+				} else {
+					presets.push(preset);
+				}
+
+				saveGamePresets(presets);
+				renderGamePresetList();
+				loadGamePresets();
+				resetGamePresetForm();
+				showToast('Game preset saved', 'success');
+				return;
+			} catch (err) {
+				showToast((err && err.message) || 'Failed to save preset on server', 'error');
+				return;
+			}
+		}
+
+		// ── Legacy fallback (API not loaded) ──────────────────────────────────
+		// Note: Date.now() ids are rejected by the backend sanitizer, so we
+		// always fall back to a real uuid here (crypto.randomUUID is available
+		// in every modern browser, and generateUUID is a project-wide helper).
+		const preset = {
+			id: editingId || (typeof generateUUID === 'function' ? generateUUID() : (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`)),
+			name,
+			gameType,
+			gameMode,
+			gameRules: presetRules,
+			createdAt: new Date().toISOString(),
+		};
 		if (editingId) {
 			const index = presets.findIndex((p) => p.id === editingId);
 			if (index >= 0) {
-				preset.id = presets[index].id;
 				preset.createdAt = presets[index].createdAt || preset.createdAt;
 				preset.isDefault = presets[index].isDefault || false;
 				presets[index] = preset;
@@ -8392,7 +8454,7 @@
 		});
 	}
 
-	function saveGamificationConfig() {
+	async function saveGamificationConfig() {
 		const expPerCorrect = Math.max(
 			parseInt(byId('expPerCorrect')?.value, 10) || 10,
 			0,
@@ -8404,6 +8466,21 @@
 		const autoAwardBadges = byId('autoAwardBadges')?.checked !== false;
 
 		const config = { expPerCorrect, expPerWin, autoAwardBadges };
+
+		// ── Backend-first: PATCH the tenant's GamificationConfig row ─────────
+		if (window.API && typeof window.API.raw === 'function') {
+			try {
+				await window.API.raw('PATCH', '/gamification', {
+					exp_per_correct: expPerCorrect,
+					exp_per_win: expPerWin,
+					auto_award_badges: autoAwardBadges,
+				});
+			} catch (err) {
+				showToast((err && err.message) || 'Failed to save gamification settings', 'error');
+				return;
+			}
+		}
+
 		localStorage.setItem('quizGamification', JSON.stringify(config));
 		showToast('Gamification settings saved', 'success');
 		syncGamificationState(config);
@@ -8541,7 +8618,14 @@
 		});
 		const user = getCurrentUser();
 		const nowIso = new Date().toISOString();
-		const tournamentId = 'tourney-' + Date.now();
+		// Real uuid — the backend sanitizer rejects prefixed/non-uuid ids, and
+		// Tournament.id is a Prisma @default(uuid()) column.
+		const tournamentId =
+			typeof generateUUID === 'function' ? generateUUID() :
+			(typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+				const r = (Math.random() * 16) | 0;
+				return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+			}));
 		const instanceBundle = buildTournamentInstanceAssignments(
 			roundAssignments,
 			{ id: tournamentId },

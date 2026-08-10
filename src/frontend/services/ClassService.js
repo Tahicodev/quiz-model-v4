@@ -49,11 +49,9 @@ export class ClassService {
     const existing = await this.#repo.getById('classes', id);
     if (!existing) throw new NotFoundError('Class');
 
-    // Rule: Cannot delete a class that has students
-    const { total: studentCount } = await this.#repo.getAll('users', { filters: { class_id: id } });
-    if (studentCount > 0) {
-      throw new ValidationError({ id: ['Cannot delete a class that still has students assigned'] });
-    }
+    // User.class_id FK is onDelete: SetNull — the DB will null out every
+    // student's class pointer when the Class row goes away. No pre-check
+    // gate here; deleting a class is exactly how you "graduate" everyone.
 
     // Clean up exam assignments
     const { data: examClasses } = await this.#repo.getAll('exam_classes', { filters: { class_id: id } });

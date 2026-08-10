@@ -1,0 +1,148 @@
+
+> quiz-model-v4-server@4.0.0 dev
+> node --watch src/backend/server.js
+
+◇ injected env (12) from .env // tip: ⌘ enable debugging { debug: true }
+[17:42:41] [32mINFO[39m: [36mQUIZ_ADMIN_SECRET not set — temporary secret for this run[39m
+    [35mservice[39m: "quiz-app"
+    [35madminSecret[39m: "v7hH_8M2SHoVZRvQUjIqJK_p_916O_9v"
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at node:net:2275:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2045:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v24.18.0
+Failed running 'src/backend/server.js'. Waiting for file changes before restarting...
+Restarting 'src/backend/server.js'
+◇ injected env (12) from .env // tip: ⌘ suppress logs { quiet: true }
+[17:51:09] [32mINFO[39m: [36mQUIZ_ADMIN_SECRET not set — temporary secret for this run[39m
+    [35mservice[39m: "quiz-app"
+    [35madminSecret[39m: "lNasoCLYYBsUIRTY7DQ2efVvCL17hrXq"
+[17:51:09] [32mINFO[39m: [36mBackend server started (SaaS) — reachable on LAN[39m
+    [35mservice[39m: "quiz-app"
+    [35mport[39m: 3000
+    [35mhost[39m: "0.0.0.0"
+Failed running 'src/backend/server.js'. Waiting for file changes before restarting...
+Restarting 'src/backend/server.js'
+◇ injected env (12) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+Restarting 'src/backend/server.js'
+◇ injected env (12) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+[18:28:30] [32mINFO[39m: [36mQUIZ_ADMIN_SECRET not set — temporary secret for this run[39m
+    [35mservice[39m: "quiz-app"
+    [35madminSecret[39m: "xKmPMQHtXH1oRojAK33B3U-SC_HvcdYj"
+[18:28:30] [32mINFO[39m: [36mBackend server started (SaaS) — reachable on LAN[39m
+    [35mservice[39m: "quiz-app"
+    [35mport[39m: 3000
+    [35mhost[39m: "0.0.0.0"
+[18:32:36] [33mWARN[39m: [36m[UNAUTHORIZED] Token expired[39m
+    [35mservice[39m: "quiz-app"
+[18:32:36] [33mWARN[39m:
+    [35mservice[39m: "quiz-app"
+    [35mmethod[39m: "GET"
+    [35mpath[39m: "/api/v1/bootstrap"
+    [35mstatus[39m: 401
+    [35mms[39m: 10
+[18:44:18] [32mINFO[39m: [36mSocket connected[39m
+    [35mservice[39m: "quiz-app"
+    [35muserId[39m: "test-user-1"
+    [35msocketId[39m: "9haYmpBR_ZPLAl8LAAAB"
+[18:50:23] [33mWARN[39m: [36m[UNAUTHORIZED] Token expired[39m
+    [35mservice[39m: "quiz-app"
+[18:50:23] [33mWARN[39m:
+    [35mservice[39m: "quiz-app"
+    [35mmethod[39m: "GET"
+    [35mpath[39m: "/api/v1/bootstrap"
+    [35mstatus[39m: 401
+    [35mms[39m: 2
+Restarting 'src/backend/server.js'
+◇ injected env (12) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+[18:51:34] [32mINFO[39m: [36mQUIZ_ADMIN_SECRET not set — temporary secret for this run[39m
+    [35mservice[39m: "quiz-app"
+    [35madminSecret[39m: "CuDaN_Jztt5QWwQWDmrXfm0GOh_S8j-K"
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at node:net:2275:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2045:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v24.18.0
+Failed running 'src/backend/server.js'. Waiting for file changes before restarting...
+Restarting 'src/backend/server.js'
+◇ injected env (12) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+[19:34:14] [32mINFO[39m: [36mQUIZ_ADMIN_SECRET not set — temporary secret for this run[39m
+    [35mservice[39m: "quiz-app"
+    [35madminSecret[39m: "fFaU9on68bn5bXDGemPwVoGVS-4uFPjd"
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at node:net:2275:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2045:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v24.18.0
+Failed running 'src/backend/server.js'. Waiting for file changes before restarting...
+Restarting 'src/backend/server.js'
+◇ injected env (12) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+[19:34:15] [32mINFO[39m: [36mQUIZ_ADMIN_SECRET not set — temporary secret for this run[39m
+    [35mservice[39m: "quiz-app"
+    [35madminSecret[39m: "1tpWo6yKPxUT_XOmrGElSyJcaWstrWbe"
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3000
+    at Server.setupListenHandle [as _listen2] (node:net:2009:16)
+    at listenInCluster (node:net:2066:12)
+    at node:net:2275:7
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2045:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '0.0.0.0',
+  port: 3000
+}
+
+Node.js v24.18.0
+Failed running 'src/backend/server.js'. Waiting for file changes before restarting...

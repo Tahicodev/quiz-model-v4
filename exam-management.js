@@ -1346,7 +1346,7 @@ function filterExams() {
 	const searchEl = document.getElementById('examSearch');
 	const searchTerm = searchEl ? String(searchEl.value).toLowerCase() : '';
 	const filteredExams = exams.filter((exam) =>
-		exam.name.toLowerCase().includes(searchTerm),
+		String(exam.name || '').toLowerCase().includes(searchTerm),
 	);
 	updateExamList(filteredExams);
 }
@@ -1583,7 +1583,7 @@ function setupEventListeners() {
 	}
 }
 
-function saveExamForm() {
+async function saveExamForm() {
 	// Safely read form values (guard for missing elements)
 	const examNameEl = document.getElementById('examName');
 	const examDurationEl = document.getElementById('examDuration');
@@ -1636,10 +1636,56 @@ function saveExamForm() {
 	if (currentExamId) {
 		const index = exams.findIndex((e) => e.id === currentExamId);
 		exams[index] = examData;
-		showToast('Exam updated successfully!');
 	} else {
 		exams.push(examData);
-		showToast('Exam created successfully!');
+	}
+
+	// ── Persist to the backend FIRST ─────────────────────────────────────────
+	// The server assigns the canonical id and resolves the creator FK. If the
+	// call fails, we abort; otherwise we mirror into localStorage below.
+	if (window.API && typeof window.API.create === 'function') {
+		try {
+			const payload = {
+				name: examData.name,
+				duration: examData.duration,
+				passingScore: examData.passingScore,
+				questions: examData.questions,
+				classes: examData.classes,
+				presetId: examData.presetId,
+			};
+			let saved = null;
+			if (currentExamId) {
+				saved = await window.API.update('exams', currentExamId, payload);
+			} else {
+				saved = await window.API.create('exams', payload);
+			}
+			if (saved && saved.id) {
+				examData.id = saved.id;
+				const i = exams.findIndex((e) => e.id === currentExamId || e.name === examData.name);
+				if (i !== -1) exams[i] = examData;
+			}
+		} catch (apiErr) {
+			console.warn('[exams] API save failed:', apiErr);
+			showToast(
+				'Failed to save exam on server: ' + (apiErr?.message || 'network error'),
+				'error',
+			);
+			return;
+		}
+
+		if (currentExamId) {
+			showToast('Exam updated successfully!');
+		} else {
+			showToast('Exam created successfully!');
+		}
+	} else {
+		// No API client — keep the legacy behaviour so the page still works
+		// when the bridge hasn't loaded yet.
+		if (currentExamId) {
+			showToast('Exam updated successfully!');
+		} else {
+			showToast('Exam created successfully!');
+		}
 	}
 
 	saveExams();
@@ -1718,8 +1764,22 @@ function editExam(examId) {
 	}, 100);
 }
 
-function deleteExam(examId) {
+async function deleteExam(examId) {
 	if (confirm('Are you sure you want to delete this exam?')) {
+		// Persist to server first; only after confirmation do we drop the
+		// local row. This keeps the DB the source of truth.
+		if (window.API && typeof window.API.remove === 'function') {
+			try {
+				await window.API.remove('exams', examId);
+			} catch (apiErr) {
+				console.warn('[exams] API delete failed:', apiErr);
+				showToast(
+					'Failed to delete exam on server: ' + (apiErr?.message || 'network error'),
+					'error',
+				);
+				return;
+			}
+		}
 		exams = exams.filter((e) => e.id !== examId);
 		saveExams();
 		updateExamList();

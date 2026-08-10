@@ -18,7 +18,7 @@ import './ui/pages/student/legacyBootstrap.js';
 import { initEventBus }    from './utils/eventBus.js';
 import { createContainer } from './container.js';
 import { logger }          from './utils/logger.js';
-import { initStudentLanding } from './ui/pages/student/StudentLanding.js';
+import { initEntryPage } from './ui/pages/entry/EntryPage.js';
 
 /**
  * Bootstrap synchronously so the DOM is painted before DOMContentLoaded fires.
@@ -67,7 +67,14 @@ import { initStudentLanding } from './ui/pages/student/StudentLanding.js';
 
     // Paint the DOM synchronously — legacy listeners fire later on
     // DOMContentLoaded and will find the painted elements.
-    initStudentLanding(document.getElementById('app'));
+    // NOTE: StudentLanding has been replaced by the EntryPage auth gate —
+    // the "Take Exam" / "Open Workspace" landing cards and the exam-entry
+    // section are no longer rendered at /. A single sign-in modal gates
+    // access and routes admin → admin.html, student → student-workspace.html.
+    // The quiz runtime DOM script.js needs (welcome-page, student-info,
+    // quiz-content) is still emitted by EntryPage in hidden form so direct
+    // exam links (?examId=... / ?mode=training) continue to work after login.
+    initEntryPage(document.getElementById('app'));
   } catch (err) {
     logger.error('Failed to initialize student app', err);
     document.body.innerHTML = `

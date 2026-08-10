@@ -1076,7 +1076,7 @@ function validateQuestionFormLegacy() {
 	return true;
 }
 
-function addOrUpdateQuestion() {
+async function addOrUpdateQuestion() {
 	try {
 		console.log('Starting addOrUpdateQuestion...');
 		if (!validateQuestionForm()) {
@@ -1397,6 +1397,24 @@ function addOrUpdateQuestion() {
 			questionObj.id = generateUUID(); // Add unique ID for highlighting feature
 			questionObj.ownerId = window.Auth?.getCurrentUser?.()?.id || '';
 
+			// ── Persist to the backend FIRST ────────────────────────────────────
+			// The server assigns the canonical id and resolves the category FK.
+			// If this fails, abort — we don't want the question visible locally
+			// while missing from the DB.
+			if (window.API && typeof window.API.create === 'function') {
+				try {
+					const saved = await window.API.create('questions', questionObj);
+					if (saved && saved.id) questionObj.id = saved.id;
+				} catch (apiErr) {
+					console.warn('[questions] API create failed:', apiErr);
+					showToast(
+						'Failed to save question on server: ' + (apiErr?.message || 'network error'),
+						'error',
+					);
+					return;
+				}
+			}
+
 			// Save new question to localStorage
 			const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 			savedQuestions.push(questionObj);
@@ -1432,6 +1450,19 @@ function addOrUpdateQuestion() {
 
 			closeQuestionFormModal();
 		} else {
+			// ── Persist edit to the backend BEFORE the in-memory patch ─────────
+			if (window.API && typeof window.API.update === 'function' && questionObj.id) {
+				try {
+					await window.API.update('questions', questionObj.id, questionObj);
+				} catch (apiErr) {
+					console.warn('[questions] API update failed:', apiErr);
+					showToast(
+						'Failed to update question on server: ' + (apiErr?.message || 'network error'),
+						'error',
+					);
+					return;
+				}
+			}
 			updateQuestionInTable(editIndex, questionObj);
 
 			// Log the activity
@@ -2442,11 +2473,38 @@ function cancelEditLegacy() {
 	updateQuestionList();
 }
 
-function removeQuestionByRow(button) {
+async function removeQuestionByRow(button) {
 	if (!confirm('Are you sure you want to delete this question?')) return;
 
 	const row = button.closest('tr');
+	// Find the question id from the row before we drop the DOM node. We need
+	// it for the API delete; the position-only index would be useless against
+	// the DB.
+	const rowIndex = Array.from(row.parentNode.children).indexOf(row);
+	const questions = window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
+	const target = questions[rowIndex];
+	const targetId = target && target.id;
+
+	if (targetId && window.API && typeof window.API.remove === 'function') {
+		try {
+			await window.API.remove('questions', targetId);
+		} catch (apiErr) {
+			console.warn('[questions] API delete failed:', apiErr);
+			showToast(
+				'Failed to delete question on server: ' + (apiErr?.message || 'network error'),
+				'error',
+			);
+			return;
+		}
+	}
+
 	row.remove();
+
+	// Also drop the row from localStorage so a page reload doesn't bring it back
+	if (targetId) {
+		const remaining = questions.filter((q) => q && q.id !== targetId);
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', remaining);
+	}
 
 	// Reorder remaining question numbers
 	const questionList = document.getElementById('question-list');

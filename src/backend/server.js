@@ -144,6 +144,13 @@ import bootstrapRoutes from './routes/bootstrap.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import queryRoutes from './routes/query.routes.js';
 import bulkRoutes from './routes/bulk.routes.js';
+import profileRequestRoutes from './routes/profile-requests.routes.js';
+import accountRequestRoutes from './routes/account-requests.routes.js';
+import gamePresetRoutes from './routes/game-presets.routes.js';
+import notificationRoutes from './routes/notifications.routes.js';
+import gamificationRoutes from './routes/gamification.routes.js';
+import teacherMessageRoutes from './routes/teacher-messages.routes.js';
+import teacherAssignmentRoutes from './routes/teacher-assignments.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -199,11 +206,36 @@ app.use('/api/v1/bootstrap', bootstrapRoutes);
 app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/query', queryRoutes);
 app.use('/api/v1/bulk', bulkRoutes);
+app.use('/api/v1/profile-requests', profileRequestRoutes);
+app.use('/api/v1/account-requests', authLimiter, accountRequestRoutes);
+app.use('/api/v1/game-presets', gamePresetRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/gamification', gamificationRoutes);
+app.use('/api/v1/teacher-messages', teacherMessageRoutes);
+app.use('/api/v1/teacher-assignments', teacherAssignmentRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
-app.use(express.static('public'));
+// Disable caching for HTML/JS entry points so dev edits reach the browser
+// immediately — express.static's default ETag/If-None-Match cache was holding
+// onto stale bundles in the dev browser.
+const noCacheOpts = {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, filePath) => {
+    if (/\.(html|js|css)$/i.test(filePath)) {
+      res.setHeader(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate',
+      );
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Surrogate-Control', 'no-store');
+    }
+  },
+};
+app.use(express.static('public', noCacheOpts));
 // Serve root-level dev files (admin.html, admin.css, styles.css)
-app.use(express.static('./'));
+app.use(express.static('./', noCacheOpts));
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {

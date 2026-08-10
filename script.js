@@ -3243,13 +3243,22 @@ function applyWelcomeSettings() {
 		}
 
 		// Update message
-		let welcomeMessage = welcomePage.querySelector('.welcome-message');
-		if (!welcomeMessage) {
-			welcomeMessage = document.createElement('p');
-			welcomeMessage.className = 'welcome-message';
-			const studentForm = document.getElementById('student-info');
-			welcomePage.insertBefore(welcomeMessage, studentForm);
-		}
+			let welcomeMessage = welcomePage.querySelector('.welcome-message');
+			if (!welcomeMessage) {
+				welcomeMessage = document.createElement('p');
+				welcomeMessage.className = 'welcome-message';
+				// insertBefore requires the reference node to be a *child* of
+				// welcomePage. On the legacy exam page #student-info lives inside
+				// #welcome-page, but on the entry/auth-gate page it is a sibling,
+				// so insertBefore would throw NotFoundError there. Only use it as
+				// the anchor when it's actually a descendant; otherwise append.
+				const studentForm = welcomePage.querySelector('#student-info');
+				if (studentForm) {
+					welcomePage.insertBefore(welcomeMessage, studentForm);
+				} else {
+					welcomePage.appendChild(welcomeMessage);
+				}
+			}
 		if (savedSettings.welcomeMessage) {
 			welcomeMessage.textContent = savedSettings.welcomeMessage;
 		}
