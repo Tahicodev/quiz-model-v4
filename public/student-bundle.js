@@ -358,6 +358,12 @@ var QuizStudent = (() => {
     async getGameScores(gameId) {
       return this.#fetch("GET", `/games/${encodeURIComponent(gameId)}/scores`);
     }
+    async startGame(gameId) {
+      return this.#fetch("POST", `/games/${encodeURIComponent(gameId)}/start`);
+    }
+    async finishGame(gameId) {
+      return this.#fetch("POST", `/games/${encodeURIComponent(gameId)}/finish`);
+    }
     async registerTournament(tournamentId) {
       return this.#fetch("POST", `/tournaments/${encodeURIComponent(tournamentId)}/register`);
     }
@@ -382,8 +388,8 @@ var QuizStudent = (() => {
     async removeExamQuestion(examId, questionId) {
       return this.#fetch("DELETE", `/exams/${examId}/questions/${questionId}`);
     }
-    async reorderExamQuestions(examId, questionIds) {
-      return this.#fetch("PUT", `/exams/${examId}/questions/order`, { question_ids: questionIds });
+    async reorderExamQuestions(examId, questionIds2) {
+      return this.#fetch("PUT", `/exams/${examId}/questions/order`, { question_ids: questionIds2 });
     }
     async getExamClasses(examId) {
       return this.#fetch("GET", `/exams/${examId}/classes`);
@@ -15005,6 +15011,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     GAME_QUESTION: "game:question",
     GAME_SCORES: "game:scores",
     GAME_FINISHED: "game:finished",
+    TOURNAMENT_STATE_UPDATE: "tournament:state_update",
+    TOURNAMENT_QUESTION: "tournament:question",
+    TOURNAMENT_SCORES: "tournament:scores",
+    TOURNAMENT_FINISHED: "tournament:finished",
     SESSION_EXPIRED: "session:expired",
     ERROR: "app:error",
     PLAYER_JOINED: "player:joined",
@@ -15017,6 +15027,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     GAME_LEAVE: "game:leave",
     TOURNAMENT_JOIN: "tournament:join",
     TOURNAMENT_ANSWER: "tournament:answer",
+    TOURNAMENT_LEAVE: "tournament:leave",
     SESSION_HEARTBEAT: "session:heartbeat"
   });
   var STORAGE_KEYS = Object.freeze({
@@ -16149,6 +16160,38 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   });
 
   // src/frontend/services/GameService.js
+  var RESERVED_INDEX_KEY = "__currentQuestionIndex";
+  var RESERVED_COMPLETE_KEY = "__completed";
+  function parseJson(value, fallback) {
+    if (value == null || value === "") return fallback;
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  function parseObject(value) {
+    const parsed = parseJson(value, {});
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  }
+  function questionIds(game) {
+    const parsed = parseJson(game?.question_ids, []);
+    return Array.isArray(parsed) ? parsed.map(String).filter(Boolean) : [];
+  }
+  function safeQuestion(question, index, total) {
+    if (!question) return null;
+    const parsedOptions = parseJson(question.options_json, question.options ?? []);
+    return {
+      id: question.id,
+      text: question.text ?? question.question ?? "",
+      type: question.type ?? "mcq",
+      options: Array.isArray(parsedOptions) ? parsedOptions : [],
+      points: Number(question.points) || 1,
+      index,
+      total
+    };
+  }
   var GameService = class {
     #repo;
     constructor(repo) {
@@ -16160,68 +16203,69 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
       return this.#repo.getAll("games", { filters: rest, limit, offset, orderBy, direction, search });
     }
-    async getById(id) {
-      const game = await this.#repo.getById("games", id);
-      if (!game) throw new NotFoundError("Game");
-      return game;
+    async getById(id, schoolId = null) {
+      return this.#getGame(id, schoolId);
     }
-    async findByJoinCode(code) {
+    async findByJoinCode(code, schoolId = null) {
       if (!code) throw new ValidationError({ join_code: ["Required"] });
       const { data } = await this.#repo.getAll("games", {
-        filters: { join_code: code.toUpperCase() }
+        filters: { join_code: String(code).toUpperCase() }
       });
-      if (data.length === 0) throw new NotFoundError("Game");
-      return data[0];
+      const game = data.find((candidate) => !schoolId || candidate.school_id === schoolId);
+      if (!game) throw new NotFoundError("Game");
+      return game;
     }
     async create(data, currentUser) {
       this.#requireAdmin(currentUser);
       const parsed = GameCreateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
+      const joinCode = await this.#generateJoinCode();
       return this.#repo.create("games", {
         ...parsed.data,
         school_id: currentUser?.school_id,
-        creator_id: currentUser?.id ?? "system",
+        creator_id: currentUser?.id ?? null,
         status: GAME_STATUS.WAITING,
-        join_code: joinCode,
-        question_ids: JSON.stringify(parsed.data.question_ids)
+        join_code: joinCode
       });
     }
     async update(id, data, currentUser) {
       this.#requireAdmin(currentUser);
-      const existing = await this.#repo.getById("games", id);
-      if (!existing) throw new NotFoundError("Game");
+      const existing = await this.#getGame(id, currentUser.school_id);
       if (existing.status !== GAME_STATUS.WAITING) {
         throw new ValidationError({ status: ["Cannot modify a game that has already started"] });
       }
       const parsed = GameUpdateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      const updateData = { ...parsed.data };
       if (parsed.data.question_ids) {
-        updateData.question_ids = JSON.stringify(parsed.data.question_ids);
+        await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
       }
-      return this.#repo.update("games", id, updateData);
+      return this.#repo.update("games", id, parsed.data);
     }
-    async joinGame({ gameId, joinCode, userId }) {
+    async joinGame({ gameId, joinCode, userId, schoolId = null }) {
       const parsed = GameJoinSchema.safeParse({ game_id: gameId, join_code: joinCode });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      if (typeof this.#repo.joinGame === "function") {
-        return this.#repo.joinGame({ gameId: gameId || null, joinCode: joinCode || null });
+      const game = gameId ? await this.#getGame(gameId, schoolId) : await this.findByJoinCode(joinCode, schoolId);
+      if (game.status === GAME_STATUS.FINISHED) {
+        throw new ValidationError({ status: ["This game has already finished"] });
       }
-      let game;
-      if (gameId) {
-        game = await this.#repo.getById("games", gameId);
-      } else {
-        const { data } = await this.#repo.getAll("games", { filters: { join_code: joinCode.toUpperCase() } });
-        game = data[0];
+      if (![GAME_STATUS.WAITING, GAME_STATUS.ACTIVE, GAME_STATUS.PAUSED].includes(game.status)) {
+        throw new ValidationError({ status: ["This game is not accepting players"] });
       }
-      if (!game) throw new NotFoundError("Game not found or invalid code");
-      if (game.status === GAME_STATUS.FINISHED) throw new ValidationError({ status: ["This game has already finished"] });
       const { data: existingSessions } = await this.#repo.getAll("game_sessions", {
         filters: { game_id: game.id, user_id: userId }
       });
       if (existingSessions.length > 0) {
         return this.#repo.update("game_sessions", existingSessions[0].id, { connected: true });
+      }
+      const settings = parseObject(game.settings_json);
+      const maxPlayers = Number(settings.max_players ?? settings.maxPlayers ?? 0);
+      const { data: playerSessions } = await this.#repo.getAll("game_sessions", {
+        filters: { game_id: game.id, ...schoolId ? { school_id: schoolId } : {} },
+        limit: 1e5
+      });
+      if (Number.isInteger(maxPlayers) && maxPlayers > 0 && playerSessions.length >= maxPlayers) {
+        throw new ConflictError("This game lobby is full");
       }
       return this.#repo.create("game_sessions", {
         game_id: game.id,
@@ -16236,78 +16280,140 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async start(gameId, currentUser) {
       this.#requireAdmin(currentUser);
-      const game = await this.#repo.getById("games", gameId);
-      if (!game) throw new NotFoundError("Game");
+      const game = await this.#getGame(gameId, currentUser.school_id);
       if (game.status !== GAME_STATUS.WAITING) {
         throw new ValidationError({ status: ["Game has already started"] });
+      }
+      const ids = questionIds(game);
+      if (!ids.length) throw new ValidationError({ question_ids: ["A game must contain at least one question"] });
+      if (typeof this.#repo.startGame === "function") {
+        return this.#repo.startGame(gameId);
       }
       return this.#repo.update("games", gameId, {
         status: GAME_STATUS.ACTIVE,
         started_at: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
-    async recordAnswer({ gameId, userId, questionId, answer }) {
-      if (typeof this.#repo.answerGame === "function") {
-        return this.#repo.answerGame(gameId, questionId, answer);
-      }
-      const game = await this.#repo.getById("games", gameId);
-      if (!game || game.status !== GAME_STATUS.ACTIVE) {
+    async recordAnswer({ gameId, userId, questionId, answer, schoolId = null }) {
+      const game = await this.#getGame(gameId, schoolId);
+      if (game.status !== GAME_STATUS.ACTIVE) {
         throw new ValidationError({ status: ["Game is not active"] });
       }
-      const { data: sessions } = await this.#repo.getAll("game_sessions", {
-        filters: { game_id: gameId, user_id: userId }
-      });
-      const session = sessions[0];
+      const ids = questionIds(game);
+      if (!ids.length || !ids.includes(String(questionId))) {
+        throw new ValidationError({ question_id: ["Question is not part of this game"] });
+      }
+      const session = await this.#getSession(gameId, userId);
       if (!session) throw new NotFoundError("Session");
-      const question = await this.#repo.getById("questions", questionId);
-      if (!question) throw new NotFoundError("Question");
+      if (session.completed) {
+        throw new ValidationError({ status: ["You have completed this game"] });
+      }
+      const answers = parseObject(session.answers_json);
+      const currentIndex = Math.min(
+        Math.max(Number(answers[RESERVED_INDEX_KEY]) || 0, 0),
+        ids.length
+      );
+      if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
+        const previous = answers[questionId];
+        return {
+          correct: Boolean(previous && typeof previous === "object" ? previous.correct : false),
+          points: 0,
+          showAnswer: false,
+          correctAnswer: null,
+          alreadyAnswered: true,
+          completed: Boolean(answers[RESERVED_COMPLETE_KEY]),
+          nextQuestion: await this.#getQuestionForIndex(game, currentIndex, schoolId)
+        };
+      }
+      const expectedQuestionId = ids[currentIndex];
+      if (!expectedQuestionId || String(questionId) !== String(expectedQuestionId)) {
+        throw new ValidationError({ question_id: ["Answer the current question before advancing"] });
+      }
+      const question = await this.#getQuestion(questionId, schoolId);
       const isCorrect = String(answer).trim().toLowerCase() === String(question.answer).trim().toLowerCase();
-      const points = isCorrect ? question.points ?? 1 : 0;
-      const answers = JSON.parse(session.answers_json || "{}");
-      answers[questionId] = answer;
-      await this.#repo.update("game_sessions", session.id, {
-        score: session.score + points,
-        answers_json: JSON.stringify(answers)
-      });
-      const settings = JSON.parse(game.settings_json || "{}");
+      const points = isCorrect ? Number(question.points) || 1 : 0;
+      const nextIndex = currentIndex + 1;
+      const completed = nextIndex >= ids.length;
+      answers[questionId] = { value: String(answer), correct: isCorrect };
+      answers[RESERVED_INDEX_KEY] = nextIndex;
+      answers[RESERVED_COMPLETE_KEY] = completed;
+      const sessionUpdate = {
+        score: (Number(session.score) || 0) + points,
+        answers_json: JSON.stringify(answers),
+        completed
+      };
+      if (completed) sessionUpdate.completed_at = (/* @__PURE__ */ new Date()).toISOString();
+      await this.#repo.update("game_sessions", session.id, sessionUpdate);
+      const settings = parseObject(game.settings_json);
       const showAnswer = settings.show_answers_immediately ?? false;
       return {
         correct: isCorrect,
         points,
         showAnswer,
-        correctAnswer: showAnswer ? question.answer : null
+        correctAnswer: showAnswer ? question.answer : null,
+        completed,
+        nextQuestion: completed ? null : await this.#getQuestionForIndex(game, nextIndex, schoolId)
       };
     }
-    async getScores(gameId) {
+    async getScores(gameId, schoolId = null) {
+      await this.#getGame(gameId, schoolId);
       if (typeof this.#repo.getGameScores === "function") {
         return this.#repo.getGameScores(gameId);
       }
-      const sessions = await this.#repo.query("game.activeSessions", { gameId });
+      const sessions = await this.#repo.query("game.sessions", { gameId, schoolId });
       return sessions.map((s) => ({
-        userId: s.user?.id,
+        userId: s.user?.id ?? s.user_id,
         username: s.user?.username,
-        name: s.user?.name,
-        score: s.score,
-        rank: s.rank
-      })).sort((a, b) => b.score - a.score);
+        playerName: s.user?.name ?? s.user?.username,
+        name: s.user?.name ?? s.user?.username,
+        score: Number(s.score) || 0,
+        rank: s.rank,
+        completed: Boolean(s.completed),
+        connected: Boolean(s.connected)
+      })).sort((a, b) => b.score - a.score || String(a.playerName).localeCompare(String(b.playerName)));
     }
-    async getClientState(gameId) {
-      const game = await this.#repo.getById("games", gameId);
-      if (!game) throw new NotFoundError("Game");
+    async getClientState(gameId, { schoolId = null, userId = null } = {}) {
+      const game = await this.#getGame(gameId, schoolId);
+      const settings = parseObject(game.settings_json);
+      const currentQuestion2 = game.status === GAME_STATUS.ACTIVE || game.status === GAME_STATUS.PAUSED ? userId ? await this.getCurrentQuestion(gameId, { schoolId, userId }) : await this.#getQuestionForIndex(game, 0, schoolId) : null;
+      const session = userId ? await this.#getSession(gameId, userId) : null;
       return {
         id: game.id,
         name: game.name,
         type: game.type,
         status: game.status,
-        settings_json: game.settings_json
+        // Never expose question_ids or reserved server state to clients.
+        settings_json: JSON.stringify(
+          Object.fromEntries(Object.entries(settings).filter(([key]) => !key.startsWith("__")))
+        ),
+        currentQuestion: currentQuestion2,
+        questionCount: questionIds(game).length,
+        completed: Boolean(session?.completed || parseObject(session?.answers_json)[RESERVED_COMPLETE_KEY])
       };
+    }
+    async getCurrentQuestion(gameId, { schoolId = null, userId = null } = {}) {
+      const game = await this.#getGame(gameId, schoolId);
+      const session = userId ? await this.#getSession(gameId, userId) : null;
+      const answers = parseObject(session?.answers_json);
+      const index = Math.max(Number(answers[RESERVED_INDEX_KEY]) || 0, 0);
+      if (session?.completed || answers[RESERVED_COMPLETE_KEY]) return null;
+      return this.#getQuestionForIndex(game, index, schoolId);
     }
     async finish(gameId, currentUser) {
       this.#requireAdmin(currentUser);
-      const game = await this.#repo.getById("games", gameId);
-      if (!game) throw new NotFoundError("Game");
-      const sessions = await this.#repo.query("game.activeSessions", { gameId });
-      sessions.sort((a, b) => b.score - a.score);
+      const game = await this.#getGame(gameId, currentUser.school_id);
+      if (game.status === GAME_STATUS.FINISHED) return game;
+      if (![GAME_STATUS.ACTIVE, GAME_STATUS.PAUSED].includes(game.status)) {
+        throw new ValidationError({ status: ["Only an active game can be finished"] });
+      }
+      if (typeof this.#repo.finishGame === "function") {
+        return this.#repo.finishGame(gameId);
+      }
+      const sessions = await this.#repo.query("game.sessions", {
+        gameId,
+        schoolId: currentUser.school_id
+      });
+      sessions.sort((a, b) => Number(b.score) - Number(a.score));
       for (let i = 0; i < sessions.length; i++) {
         await this.#repo.update("game_sessions", sessions[i].id, {
           rank: i + 1,
@@ -16320,26 +16426,41 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         ended_at: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
-    async markPlayerDisconnected(userId) {
+    async markPlayerDisconnected(userId, schoolId = null, gameId = null) {
       const { data: sessions } = await this.#repo.getAll("game_sessions", {
-        filters: { user_id: userId, connected: true, completed: false }
+        filters: {
+          user_id: userId,
+          ...gameId ? { game_id: gameId } : {},
+          ...schoolId ? { school_id: schoolId } : {},
+          connected: true,
+          completed: false
+        }
       });
-      for (const s of sessions) {
-        await this.#repo.update("game_sessions", s.id, { connected: false });
+      for (const session of sessions) {
+        await this.#repo.update("game_sessions", session.id, { connected: false });
       }
+    }
+    async leaveGame({ gameId, userId, schoolId = null }) {
+      await this.#getGame(gameId, schoolId);
+      const { data: sessions } = await this.#repo.getAll("game_sessions", {
+        filters: { game_id: gameId, user_id: userId, ...schoolId ? { school_id: schoolId } : {} }
+      });
+      if (sessions[0] && !sessions[0].completed) {
+        return this.#repo.update("game_sessions", sessions[0].id, { connected: false });
+      }
+      return sessions[0] ?? null;
     }
     async delete(id, currentUser) {
       this.#requireAdmin(currentUser);
-      const existing = await this.#repo.getById("games", id);
-      if (!existing) throw new NotFoundError("Game");
-      if (existing.status === GAME_STATUS.ACTIVE) {
-        throw new ValidationError({ status: ["Cannot delete an active game"] });
+      const existing = await this.#getGame(id, currentUser.school_id);
+      if ([GAME_STATUS.ACTIVE, GAME_STATUS.PAUSED].includes(existing.status)) {
+        throw new ValidationError({ status: ["Cannot delete an active game; finish it first"] });
       }
       const { data: sessions } = await this.#repo.getAll("game_sessions", {
         filters: { game_id: id }
       });
-      for (const s of sessions) {
-        await this.#repo.delete("game_sessions", s.id);
+      for (const session of sessions) {
+        await this.#repo.delete("game_sessions", session.id);
       }
       await this.#repo.delete("games", id);
     }
@@ -16347,6 +16468,59 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
         throw new ForbiddenError();
       }
+    }
+    async #getGame(id, schoolId = null) {
+      const game = await this.#repo.getById("games", id);
+      if (!game || schoolId && game.school_id !== schoolId) throw new NotFoundError("Game");
+      return game;
+    }
+    async #getQuestion(id, schoolId = null) {
+      const question = await this.#repo.getById("questions", id);
+      if (!question || schoolId && question.school_id !== schoolId) throw new NotFoundError("Question");
+      return question;
+    }
+    async #getSession(gameId, userId) {
+      const { data } = await this.#repo.getAll("game_sessions", {
+        filters: { game_id: gameId, user_id: userId }
+      });
+      return data[0] ?? null;
+    }
+    async #getQuestionForIndex(game, index, schoolId = null) {
+      const ids = questionIds(game);
+      if (index < 0 || index >= ids.length) return null;
+      const question = await this.#getQuestion(ids[index], schoolId);
+      return safeQuestion(question, index, ids.length);
+    }
+    async #assertQuestionSet(ids, schoolId) {
+      const uniqueIds = [...new Set((ids ?? []).map(String))];
+      if (uniqueIds.length !== (ids ?? []).length) {
+        throw new ValidationError({ question_ids: ["Questions must not be duplicated"] });
+      }
+      const missing = [];
+      for (const id of uniqueIds) {
+        try {
+          await this.#getQuestion(id, schoolId);
+        } catch {
+          missing.push(id);
+        }
+      }
+      if (missing.length) {
+        throw new ValidationError({
+          question_ids: ["Unknown or inaccessible question(s): " + missing.join(", ")]
+        });
+      }
+    }
+    async #generateJoinCode() {
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const code = Math.random().toString(36).slice(2, 8).toUpperCase().padEnd(6, "0");
+        const { data } = await this.#repo.getAll("games", {
+          filters: { join_code: code },
+          limit: 1,
+          offset: 0
+        });
+        if (!data?.length) return code;
+      }
+      throw new ConflictError("Could not allocate a unique game code");
     }
   };
 
@@ -17712,7 +17886,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         else if (status === "live") status = "active";
         else if (status === "completed") status = "finished";
         else if (status !== "active" && status !== "paused" && status !== "finished") status = "waiting";
-        var questionIds = Array.isArray(g.questions) ? g.questions.map(function(q) {
+        var questionIds2 = Array.isArray(g.questions) ? g.questions.map(function(q) {
           return q && (q.id || q.question_id) || q;
         }).filter(Boolean) : Array.isArray(g.question_ids) ? g.question_ids : [];
         var settings = Object.assign({}, g.settings || {});
@@ -17726,7 +17900,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           type: g.type || g.mode || "custom",
           status,
           settings_json: JSON.stringify(settings),
-          question_ids: JSON.stringify(questionIds),
+          question_ids: JSON.stringify(questionIds2),
           join_code: g.joinCode || g.join_code || void 0
         };
       },

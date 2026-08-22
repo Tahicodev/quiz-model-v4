@@ -24,9 +24,10 @@ export async function handleDisconnect(socket, io, { gameService, sessionService
   const { user } = socket.data;
 
   // Mark player as disconnected in any active game sessions
+  const activeGameId = socket.data.activeGameId;
   if (gameService && user?.id) {
     try {
-      await gameService.markPlayerDisconnected(user.id);
+      await gameService.markPlayerDisconnected(user.id, user.school_id, activeGameId);
     } catch (err) {
       // Non-fatal — player may not have been in a game, or the session was already cleaned up
       logger.debug({ err, userId: user.id }, 'markPlayerDisconnected skipped (non-fatal)');
@@ -35,7 +36,6 @@ export async function handleDisconnect(socket, io, { gameService, sessionService
 
   // Notify the game room that the player disconnected (others see them as offline).
   // We track the active game id on socket.data in game.handler.js on GAME_JOIN.
-  const activeGameId = socket.data.activeGameId;
   if (activeGameId) {
     io.to(ROOM.game(activeGameId)).emit(SOCKET_EVENTS.PLAYER_DISCONNECTED, { userId: user.id });
   }

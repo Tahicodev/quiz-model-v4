@@ -3,7 +3,7 @@
  *
  * Generic query dispatcher. The frontend ApiRepository calls
  * POST /api/v1/query/:name for operations that don't fit generic
- * CRUD (e.g. exam.withQuestions, game.activeSessions).
+ * CRUD (e.g. exam.withQuestions, game.sessions).
  *
  * This router delegates to PrismaRepository.query().
  */

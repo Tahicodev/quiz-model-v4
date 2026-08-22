@@ -217,6 +217,14 @@ export class ApiRepository extends IStorageRepository {
     return this.#fetch('GET', `/games/${encodeURIComponent(gameId)}/scores`);
   }
 
+  async startGame(gameId) {
+    return this.#fetch('POST', `/games/${encodeURIComponent(gameId)}/start`);
+  }
+
+  async finishGame(gameId) {
+    return this.#fetch('POST', `/games/${encodeURIComponent(gameId)}/finish`);
+  }
+
   async registerTournament(tournamentId) {
     return this.#fetch('POST', `/tournaments/${encodeURIComponent(tournamentId)}/register`);
   }

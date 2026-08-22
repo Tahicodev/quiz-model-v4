@@ -88,6 +88,10 @@ export const SOCKET_EVENTS = Object.freeze({
   GAME_QUESTION:         'game:question',
   GAME_SCORES:           'game:scores',
   GAME_FINISHED:         'game:finished',
+  TOURNAMENT_STATE_UPDATE: 'tournament:state_update',
+  TOURNAMENT_QUESTION:    'tournament:question',
+  TOURNAMENT_SCORES:      'tournament:scores',
+  TOURNAMENT_FINISHED:    'tournament:finished',
   SESSION_EXPIRED:       'session:expired',
   ERROR:                 'app:error',
   PLAYER_JOINED:         'player:joined',
@@ -100,6 +104,7 @@ export const SOCKET_EVENTS = Object.freeze({
   GAME_LEAVE:            'game:leave',
   TOURNAMENT_JOIN:       'tournament:join',
   TOURNAMENT_ANSWER:     'tournament:answer',
+  TOURNAMENT_LEAVE:      'tournament:leave',
   SESSION_HEARTBEAT:     'session:heartbeat',
 });
 

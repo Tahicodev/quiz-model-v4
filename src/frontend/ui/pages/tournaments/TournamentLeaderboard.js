@@ -15,7 +15,7 @@ export function initTournamentLeaderboard() {
   const socket = getSocket(authSvc.getToken());
   if (!socket.connected) socket.connect();
 
-  socket.on(SOCKET_EVENTS.GAME_SCORES, (scores) => {
+  socket.on(SOCKET_EVENTS.TOURNAMENT_SCORES, (scores) => {
     const el = document.getElementById('tournament-leaderboard');
     if (!el) return;
     const rows = (scores || []).map(s => `<tr><td>${s.playerName || s.name}</td><td>${s.score ?? 0}</td></tr>`).join('');
@@ -25,5 +25,5 @@ export function initTournamentLeaderboard() {
     `);
   });
 
-  Router.registerCleanup([SOCKET_EVENTS.GAME_SCORES]);
+  Router.registerCleanup([SOCKET_EVENTS.TOURNAMENT_SCORES]);
 }

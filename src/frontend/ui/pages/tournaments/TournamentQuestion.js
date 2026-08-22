@@ -16,7 +16,7 @@ export function initTournamentQuestion(tournamentId) {
   const socket = getSocket(authSvc.getToken());
   if (!socket.connected) socket.connect();
 
-  socket.on(SOCKET_EVENTS.GAME_QUESTION, (q) => {
+  socket.on(SOCKET_EVENTS.TOURNAMENT_QUESTION, (q) => {
     const el = document.getElementById('tournament-question-host');
     if (!el) return;
     const opts = (q?.options || []).map(o => `<label><input type="radio" name="t-answer" value="${o}" /> ${o}</label>`).join('<br/>');
@@ -35,5 +35,5 @@ export function initTournamentQuestion(tournamentId) {
     }));
   });
 
-  Router.registerCleanup([SOCKET_EVENTS.GAME_QUESTION]);
+  Router.registerCleanup([SOCKET_EVENTS.TOURNAMENT_QUESTION]);
 }

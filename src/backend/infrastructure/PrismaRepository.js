@@ -210,7 +210,7 @@ export class PrismaRepository extends IStorageRepository {
 
 	/**
 	 * Named queries — stable public API used by services on both ends.
-	 * e.g. 'exam.withQuestions', 'result.byUserAndExam', 'game.activeSessions'.
+	 * e.g. 'exam.withQuestions', 'result.byUserAndExam', 'game.sessions'.
 	 */
 	async query(queryName, params = {}) {
 		switch (queryName) {
@@ -244,7 +244,22 @@ export class PrismaRepository extends IStorageRepository {
 
 			case 'game.activeSessions':
 				return this.#prisma.gameSession.findMany({
-					where: { game_id: params.gameId, completed: false },
+					where: {
+						game_id: params.gameId,
+						...(params.schoolId ? { school_id: params.schoolId } : {}),
+						completed: false,
+					},
+					include: {
+						user: { select: { id: true, username: true, name: true } },
+					},
+				});
+
+			case 'game.sessions':
+				return this.#prisma.gameSession.findMany({
+					where: {
+						game_id: params.gameId,
+						...(params.schoolId ? { school_id: params.schoolId } : {}),
+					},
 					include: {
 						user: { select: { id: true, username: true, name: true } },
 					},

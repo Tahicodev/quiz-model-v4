@@ -12,10 +12,10 @@ import { withError } from '../../../utils/eventBus.js';
 import { SOCKET_EVENTS } from '../../../../shared/constants.js';
 
 export const PAGE_EVENTS = [
-  SOCKET_EVENTS.GAME_STATE_UPDATE,
-  SOCKET_EVENTS.GAME_QUESTION,
-  SOCKET_EVENTS.GAME_SCORES,
-  SOCKET_EVENTS.GAME_FINISHED,
+  SOCKET_EVENTS.TOURNAMENT_STATE_UPDATE,
+  SOCKET_EVENTS.TOURNAMENT_QUESTION,
+  SOCKET_EVENTS.TOURNAMENT_SCORES,
+  SOCKET_EVENTS.TOURNAMENT_FINISHED,
   SOCKET_EVENTS.PLAYER_JOINED,
   SOCKET_EVENTS.PLAYER_LEFT,
   SOCKET_EVENTS.ANSWER_RESULT,
@@ -30,10 +30,10 @@ export function initTournamentPage(tournamentId) {
   activeTournamentId = tournamentId;
   if (!socket.connected) socket.connect();
 
-  socket.on(SOCKET_EVENTS.GAME_STATE_UPDATE, renderState);
-  socket.on(SOCKET_EVENTS.GAME_QUESTION, renderQuestion);
-  socket.on(SOCKET_EVENTS.GAME_SCORES, renderLeaderboard);
-  socket.on(SOCKET_EVENTS.GAME_FINISHED, renderFinished);
+  socket.on(SOCKET_EVENTS.TOURNAMENT_STATE_UPDATE, renderState);
+  socket.on(SOCKET_EVENTS.TOURNAMENT_QUESTION, renderQuestion);
+  socket.on(SOCKET_EVENTS.TOURNAMENT_SCORES, renderLeaderboard);
+  socket.on(SOCKET_EVENTS.TOURNAMENT_FINISHED, renderFinished);
   socket.on(SOCKET_EVENTS.PLAYER_JOINED, (p) => logger.debug('Player joined tournament', p));
   socket.on(SOCKET_EVENTS.PLAYER_LEFT, (p) => logger.debug('Player left tournament', p));
   socket.on(SOCKET_EVENTS.ANSWER_RESULT, (r) => logger.debug('Answer result', r));
@@ -52,7 +52,7 @@ export function teardownTournamentPage() {
 
 function leaveTournament() {
   if (socket && activeTournamentId) {
-    try { socket.emit('tournament:leave', { tournamentId: activeTournamentId }); }
+    try { socket.emit(SOCKET_EVENTS.TOURNAMENT_LEAVE, { tournamentId: activeTournamentId }); }
     catch (err) { logger.warn('Failed to leave tournament', err); }
   }
 }

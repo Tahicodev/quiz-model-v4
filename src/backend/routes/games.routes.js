@@ -8,8 +8,10 @@ import { enforceTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/role.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { GameCreateSchema, GameUpdateSchema, GameFilterSchema, GameJoinSchema, GameAnswerSchema } from '../../shared/schemas/game.schema.js';
-import { ROLES } from '../../shared/constants.js';
+import { ROLES, SOCKET_EVENTS } from '../../shared/constants.js';
 import { getContainer } from '../container.js';
+import { getIO } from '../realtime/socket.server.js';
+import { ROOM } from '../realtime/socket.rooms.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -26,7 +28,7 @@ router.get('/', validateQuery(GameFilterSchema), async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
-    const game = await gameSvc.getById(req.params.id);
+    const game = await gameSvc.getById(req.params.id, req.schoolId);
     res.json(game);
   } catch (err) { next(err); }
 });
@@ -74,6 +76,17 @@ router.post('/:id/start', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const game = await gameSvc.start(req.params.id, req.user);
+    try {
+      const io = getIO();
+      const state = await gameSvc.getClientState(req.params.id, { schoolId: req.schoolId });
+      const room = ROOM.game(req.params.id);
+      io.to(room).emit(SOCKET_EVENTS.GAME_STATE_UPDATE, state);
+      if (state.currentQuestion) io.to(room).emit(SOCKET_EVENTS.GAME_QUESTION, state.currentQuestion);
+      io.to(room).emit(SOCKET_EVENTS.GAME_SCORES, await gameSvc.getScores(req.params.id, req.schoolId));
+    } catch {
+      // REST game management also works when Socket.io is not initialized in a
+      // test or a maintenance process; connected clients simply reconnect.
+    }
     res.json(game);
   } catch (err) { next(err); }
 });
@@ -82,7 +95,7 @@ router.post('/:id/answer', validate(GameAnswerSchema), async (req, res, next) =>
   try {
     const { gameSvc } = getContainer();
     const { question_id, answer } = req.body;
-    const result = await gameSvc.recordAnswer({ gameId: req.params.id, userId: req.user.id, questionId: question_id, answer });
+    const result = await gameSvc.recordAnswer({ gameId: req.params.id, schoolId: req.schoolId, userId: req.user.id, questionId: question_id, answer });
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -90,7 +103,7 @@ router.post('/:id/answer', validate(GameAnswerSchema), async (req, res, next) =>
 router.get('/:id/scores', async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
-    const scores = await gameSvc.getScores(req.params.id);
+    const scores = await gameSvc.getScores(req.params.id, req.schoolId);
     res.json(scores);
   } catch (err) { next(err); }
 });
@@ -99,6 +112,18 @@ router.post('/:id/finish', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const game = await gameSvc.finish(req.params.id, req.user);
+    try {
+      const io = getIO();
+      const scores = await gameSvc.getScores(req.params.id, req.schoolId);
+      io.to(ROOM.game(req.params.id)).emit(SOCKET_EVENTS.GAME_FINISHED, {
+        game,
+        scores,
+        results: scores,
+      });
+      io.to(ROOM.game(req.params.id)).emit(SOCKET_EVENTS.GAME_SCORES, scores);
+    } catch {
+      // Keep the REST finish operation independent from the realtime adapter.
+    }
     res.json(game);
   } catch (err) { next(err); }
 });

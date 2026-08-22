@@ -49,6 +49,7 @@ describe('GameService', () => {
     });
 
     it('generates a join_code and assigns the creator + school', async () => {
+      repo.getById.mockResolvedValue({ id: QID1, school_id: 's-1' });
       repo.create.mockImplementation(async (_, data) => ({ id: GID1, ...data }));
       const game = await service.create({ name: 'G', type: 'quiz', question_ids: [QID1] }, ADMIN);
       expect(game.join_code).toMatch(/^[A-Z0-9]{6}$/);
@@ -101,7 +102,7 @@ describe('GameService', () => {
 
     it('scores a correct answer and NEVER reveals the answer when show_answers_immediately is off', async () => {
       repo.getById
-        .mockResolvedValueOnce({ id: GID1, status: GAME_STATUS.ACTIVE, settings_json: '{}' })
+        .mockResolvedValueOnce({ id: GID1, status: GAME_STATUS.ACTIVE, settings_json: '{}', question_ids: JSON.stringify([QID1]) })
         .mockResolvedValueOnce({ id: QID1, answer: 'A', points: 2 });
       repo.getAll.mockResolvedValue({ data: [{ id: 'gs1', score: 5, answers_json: '{}' }], total: 1 });
       repo.update.mockResolvedValue({});
@@ -115,7 +116,7 @@ describe('GameService', () => {
 
     it('reveals the answer only when the game\'s show_answers_immediately setting is on', async () => {
       repo.getById
-        .mockResolvedValueOnce({ id: GID1, status: GAME_STATUS.ACTIVE, settings_json: '{"show_answers_immediately":true}' })
+        .mockResolvedValueOnce({ id: GID1, status: GAME_STATUS.ACTIVE, settings_json: '{"show_answers_immediately":true}', question_ids: JSON.stringify([QID1]) })
         .mockResolvedValueOnce({ id: QID1, answer: 'B', points: 1 });
       repo.getAll.mockResolvedValue({ data: [{ id: 'gs1', score: 0, answers_json: '{}' }], total: 1 });
       repo.update.mockResolvedValue({});
