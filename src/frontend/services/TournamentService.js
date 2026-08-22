@@ -83,6 +83,10 @@ export class TournamentService {
       throw new ValidationError({ status: ['Registration is closed'] });
     }
 
+    if (typeof this.#repo.registerTournament === 'function') {
+      return this.#repo.registerTournament(tournamentId);
+    }
+
     const { data: existing } = await this.#repo.getAll('tournament_entries', {
       filters: { tournament_id: tournamentId, user_id: userId },
     });
@@ -99,6 +103,9 @@ export class TournamentService {
   }
 
   async getLeaderboard(tournamentId, limit = 50) {
+    if (typeof this.#repo.getTournamentLeaderboard === 'function') {
+      return this.#repo.getTournamentLeaderboard(tournamentId, limit);
+    }
     return this.#repo.query('tournament.leaderboard', { tournamentId, limit });
   }
 
@@ -111,6 +118,9 @@ export class TournamentService {
    * @returns {Promise<{ correct: boolean, points: number, score: number, showAnswer: boolean, correctAnswer: string|null }>}
    */
   async recordAnswer({ tournamentId, userId, questionId, answer }) {
+    if (typeof this.#repo.answerTournament === 'function') {
+      return this.#repo.answerTournament(tournamentId, questionId, answer);
+    }
     const t = await this.#repo.getById('tournaments', tournamentId);
     if (!t) throw new NotFoundError('Tournament');
     if (t.status !== TOURNAMENT_STATUS.ACTIVE) {

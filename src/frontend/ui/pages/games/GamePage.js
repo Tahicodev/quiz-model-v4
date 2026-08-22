@@ -36,10 +36,7 @@ let activeGameId = null;
  */
 export function initGamePage(gameId) {
   const { authSvc } = getContainer();
-  socket = getSocket(authSvc.getToken());
   activeGameId = gameId;
-
-  if (!socket.connected) socket.connect();
 
   // Render the game page shell
   const app = document.getElementById('app') || document.body;
@@ -55,11 +52,18 @@ export function initGamePage(gameId) {
     return;
   }
 
+  socket = getSocket(authSvc.getToken());
+  if (!socket.connected) socket.connect();
+
+  // Register component listeners once when the game route is entered. The
+  // previous implementation initialized components only after their first
+  // event, which missed the first question/score broadcast.
+  initGameQuestion(activeGameId);
+  initGameScoreboard();
+  initGameResults();
+
   // Register socket handlers
   socket.on(SOCKET_EVENTS.GAME_STATE_UPDATE, (s) => logger.debug('Game state', s));
-  socket.on(SOCKET_EVENTS.GAME_QUESTION,     initGameQuestion);
-  socket.on(SOCKET_EVENTS.GAME_SCORES,       initGameScoreboard);
-  socket.on(SOCKET_EVENTS.GAME_FINISHED,     initGameResults);
   socket.on(SOCKET_EVENTS.PLAYER_JOINED,     (p) => logger.debug('Player joined', p));
   socket.on(SOCKET_EVENTS.PLAYER_LEFT,       (p) => logger.debug('Player left', p));
   socket.on(SOCKET_EVENTS.ANSWER_RESULT,     (r) => logger.debug('Answer result', r));

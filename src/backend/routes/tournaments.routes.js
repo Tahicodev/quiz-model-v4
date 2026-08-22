@@ -7,7 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/role.js';
 import { validate, validateQuery } from '../middleware/validate.js';
-import { TournamentCreateSchema, TournamentUpdateSchema, TournamentFilterSchema } from '../../shared/schemas/tournament.schema.js';
+import { TournamentCreateSchema, TournamentUpdateSchema, TournamentFilterSchema, TournamentAnswerSchema } from '../../shared/schemas/tournament.schema.js';
 import { ROLES } from '../../shared/constants.js';
 import { getContainer } from '../container.js';
 
@@ -78,6 +78,21 @@ router.post('/:id/register', async (req, res, next) => {
     const { tournamentSvc } = getContainer();
     const entry = await tournamentSvc.register(req.params.id, req.user.id);
     res.status(201).json(entry);
+  } catch (err) { next(err); }
+});
+
+// REST fallback for clients that cannot maintain a realtime socket. The same
+// service method is used by the Socket.IO handler, so scoring stays identical.
+router.post('/:id/answer', validate(TournamentAnswerSchema), async (req, res, next) => {
+  try {
+    const { tournamentSvc } = getContainer();
+    const result = await tournamentSvc.recordAnswer({
+      tournamentId: req.params.id,
+      userId: req.user.id,
+      questionId: req.body.question_id,
+      answer: req.body.answer,
+    });
+    res.json(result);
   } catch (err) { next(err); }
 });
 

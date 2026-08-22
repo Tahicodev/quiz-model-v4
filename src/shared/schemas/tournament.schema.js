@@ -23,3 +23,8 @@ export const TournamentFilterSchema = z.object({
   orderBy:   z.enum(['created_at', 'name', 'starts_at']).default('created_at'),
   direction: z.enum(['asc', 'desc']).default('desc'),
 });
+
+export const TournamentAnswerSchema = z.object({
+  question_id: z.string().uuid(),
+  answer: z.string().min(1),
+});

@@ -18,6 +18,7 @@ export class ApiRepository extends IStorageRepository {
   #baseUrl;
   #getToken;
   #onUnauthorized;
+  #refreshPromise = null;
 
   constructor({ baseUrl, getToken, onUnauthorized }) {
     super();
@@ -83,6 +84,8 @@ export class ApiRepository extends IStorageRepository {
   }
 
   async #tryRefresh() {
+    if (this.#refreshPromise) return this.#refreshPromise;
+    this.#refreshPromise = (async () => {
     try {
       const res = await fetch(this.#url('/auth/refresh'), {
         method: 'POST',
@@ -96,6 +99,10 @@ export class ApiRepository extends IStorageRepository {
     } catch {
       return false;
     }
+    })().finally(() => {
+      this.#refreshPromise = null;
+    });
+    return this.#refreshPromise;
   }
 
   // ── IStorageRepository implementation ────────────────────────────────────────
@@ -125,6 +132,9 @@ export class ApiRepository extends IStorageRepository {
   }
 
   async getById(table, id) {
+    if (table === 'exam_sessions') {
+      return this.#fetch('GET', `/sessions/${encodeURIComponent(id)}`);
+    }
     return this.#fetch('GET', `/${table}/${id}`);
   }
 
@@ -156,6 +166,74 @@ export class ApiRepository extends IStorageRepository {
 
   async query(queryName, params) {
     return this.#fetch('POST', `/query/${queryName}`, params ?? {});
+  }
+
+  // Student attempt lifecycle endpoints. These are deliberately explicit:
+  // sessions are not generic CRUD resources on the API because ownership,
+  // scoring, and expiry are enforced by the route/service layer.
+  async startSession(examId, durationMinutes = null) {
+    return this.#fetch('POST', '/sessions', {
+      exam_id: examId,
+      ...(durationMinutes != null ? { duration_minutes: durationMinutes } : {}),
+    });
+  }
+
+  async getActiveSession(examId) {
+    return this.#fetch('GET', `/sessions/active/${encodeURIComponent(examId)}`);
+  }
+
+  async saveSessionAnswer(sessionId, questionId, answer) {
+    return this.#fetch('POST', `/sessions/${encodeURIComponent(sessionId)}/answer`, {
+      session_id: sessionId,
+      question_id: questionId,
+      answer: String(answer ?? ''),
+    });
+  }
+
+  async heartbeatSession(sessionId) {
+    return this.#fetch('POST', `/sessions/${encodeURIComponent(sessionId)}/heartbeat`);
+  }
+
+  async submitSession(sessionId) {
+    return this.#fetch('POST', `/sessions/${encodeURIComponent(sessionId)}/submit`);
+  }
+
+  async joinGame({ gameId, joinCode } = {}) {
+    return this.#fetch('POST', '/games/join', {
+      ...(gameId ? { game_id: gameId } : {}),
+      ...(joinCode ? { join_code: String(joinCode).trim().toUpperCase() } : {}),
+    });
+  }
+
+  async answerGame(gameId, questionId, answer) {
+    return this.#fetch('POST', `/games/${encodeURIComponent(gameId)}/answer`, {
+      game_id: gameId,
+      question_id: questionId,
+      answer: String(answer ?? ''),
+    });
+  }
+
+  async getGameScores(gameId) {
+    return this.#fetch('GET', `/games/${encodeURIComponent(gameId)}/scores`);
+  }
+
+  async registerTournament(tournamentId) {
+    return this.#fetch('POST', `/tournaments/${encodeURIComponent(tournamentId)}/register`);
+  }
+
+  async getTournamentLeaderboard(tournamentId, limit = 50) {
+    return this.#fetch('GET', `/tournaments/${encodeURIComponent(tournamentId)}/leaderboard?limit=${encodeURIComponent(limit)}`);
+  }
+
+  async answerTournament(tournamentId, questionId, answer) {
+    return this.#fetch('POST', `/tournaments/${encodeURIComponent(tournamentId)}/answer`, {
+      question_id: questionId,
+      answer: String(answer ?? ''),
+    });
+  }
+
+  async getExamWithQuestions(examId) {
+    return this.#fetch('GET', `/exams/${encodeURIComponent(examId)}/questions`);
   }
 
   // Nested admin resources have explicit backend routes rather than generic

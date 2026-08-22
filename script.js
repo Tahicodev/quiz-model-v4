@@ -673,7 +673,7 @@ function loadQuizMode() {
 		const examSettings = examActiveSession.settings || {};
 
 		// Configure quiz with exam settings
-		Object.assign(quizConfig, {
+				Object.assign(quizConfig, {
 			totalQuestions: currentExam.questions.length,
 			timeLimit: examActiveSession.timeLimit || currentExam.duration * 60,
 			penalty: examSettings.penalty ?? examActiveSession.penalty ?? 0,
@@ -2375,9 +2375,20 @@ document.addEventListener('DOMContentLoaded', () => {
 		console.log(
 			'Training mode parameter found in URL, starting training mode...',
 		);
-		// Hide the welcome page and start training mode directly
+		// The legacy bridge bootstraps Prisma data asynchronously. Always wait
+		// for a fresh question snapshot before starting training; otherwise a
+		// stale local cache wins and the student sees old/empty questions after
+		// an admin has added or removed questions.
 		if (document.getElementById('welcome-page')) {
-			startTrainingMode();
+			const bootstrap = window.__legacyBridgeBootstrap;
+			if (typeof bootstrap === 'function' && !window.__trainingBootstrapStarted) {
+				window.__trainingBootstrapStarted = true;
+				Promise.resolve(bootstrap())
+					.catch(() => undefined)
+					.finally(() => startTrainingMode());
+			} else {
+				startTrainingMode();
+			}
 			return; // Exit early as we're starting training mode
 		}
 	}
@@ -2413,7 +2424,7 @@ document.addEventListener('DOMContentLoaded', () => {
 						console.log('Auto-filled student info form');
 
 						// Instead of clicking the button, directly start the exam
-						setTimeout(() => {
+						setTimeout(async () => {
 							console.log('Directly starting exam with ID:', examId);
 							// Set up the exam mode
 							currentMode = quizModes.exam;
@@ -2457,8 +2468,59 @@ document.addEventListener('DOMContentLoaded', () => {
 								timeLimit:
 									(useSessionQuestions ? activeSession.timeLimit : 0) ||
 									currentExam.duration * 60,
-								penalty: sessionSettings.penalty ?? 0,
-							});
+					penalty: sessionSettings.penalty ?? 0,
+				});
+
+				// Create the authoritative Prisma attempt before the first question
+				// is shown. Keep the local snapshot as a resilient offline/cache
+				// fallback, but use its server id whenever the API is available.
+				const runtimeStudentInfo = JSON.parse(
+					sessionStorage.getItem('studentInfo') || 'null',
+				);
+				const signedInStudent = window.Auth?.getCurrentUser?.() || {};
+				const fallbackAllowedStudent = {
+					number:
+						runtimeStudentInfo?.numero ||
+						signedInStudent.studentNumber ||
+						signedInStudent.numero ||
+						'',
+					name: runtimeStudentInfo?.name || signedInStudent.name || signedInStudent.username || '',
+					classId:
+						runtimeStudentInfo?.classId ||
+						signedInStudent.classId ||
+						signedInStudent.class_id ||
+						'',
+					className:
+						runtimeStudentInfo?.class ||
+						signedInStudent.className ||
+						'',
+				};
+				const runtimeSession = {
+					...(activeSession || {}),
+					examId,
+					examName: currentExam.name,
+					duration: currentExam.duration,
+					timeLimit: quizConfig.timeLimit,
+					passingScore: currentExam.passing_score ?? currentExam.passingScore ?? 50,
+					questions: resolvedQuestions,
+					studentInfo: runtimeStudentInfo,
+					allowedStudents:
+						Array.isArray(activeSession?.allowedStudents) && activeSession.allowedStudents.length
+							? activeSession.allowedStudents
+							: [fallbackAllowedStudent],
+				};
+				try {
+					if (window.API?.raw && !runtimeSession.id) {
+						const created = await window.API.raw('POST', '/sessions', {
+							exam_id: examId,
+							duration_minutes: currentExam.duration || 60,
+						});
+						runtimeSession.id = created?.id || '';
+					}
+				} catch (sessionError) {
+					console.warn('Exam API session unavailable; keeping local recovery state:', sessionError);
+				}
+				localStorage.setItem('examActiveSession', JSON.stringify(runtimeSession));
 
 							// Hide welcome page and show quiz content
 							if (document.getElementById('welcome-page')) {
@@ -2477,6 +2539,7 @@ document.addEventListener('DOMContentLoaded', () => {
 				}
 			}
 		} else {
+			window.addEventListener('quiz:bootstrap-ready', () => window.location.reload(), { once: true });
 			console.warn('Exam ID not found in database:', examId);
 		}
 	}
@@ -2762,7 +2825,22 @@ function updateScoreDisplay() {
 	scoreEl.textContent = `${score}/${quizConfig.totalQuestions}`;
 }
 
-function endQuiz() {
+async function syncExamAttemptToApi(activeSession, answers) {
+	if (!activeSession?.id || !window.API?.raw) return null;
+	for (const entry of answers || []) {
+		if (!entry?.questionId || entry.userAnswer == null) continue;
+		await window.API.raw('POST', `/sessions/${encodeURIComponent(activeSession.id)}/answer`, {
+			session_id: activeSession.id,
+			question_id: entry.questionId,
+			answer: typeof entry.userAnswer === 'string'
+				? entry.userAnswer
+				: JSON.stringify(entry.userAnswer),
+		});
+	}
+	return window.API.raw('POST', `/sessions/${encodeURIComponent(activeSession.id)}/submit`, {});
+}
+
+async function endQuiz() {
 	if (timerId) {
 		clearInterval(timerId);
 		timerId = null;
@@ -2831,6 +2909,44 @@ function endQuiz() {
 							(score / totalPoints) * 100 >= (activeSession.passingScore || 60),
 					},
 				};
+
+				let apiResult = null;
+				try {
+					apiResult = await syncExamAttemptToApi(activeSession, answers);
+				} catch (apiError) {
+					console.warn('Could not submit exam attempt to the API:', apiError);
+				}
+
+				// Keep the normalized Prisma result store authoritative as well as
+				// the shared-device session snapshot. The bridge maps this legacy
+				// shape to Result.user_id using the signed-in student's UUID/number.
+				if (!apiResult) {
+					try {
+						const dbResults = window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
+						const canonical = {
+						id: sessionResult.id,
+						examId: activeSession.examId,
+						examTitle: activeSession.examName,
+						userId: window.Auth?.getCurrentUser?.()?.id || '',
+						numero: studentInfo.numero,
+						name: studentInfo.name,
+						studentName: studentInfo.name,
+						class: studentInfo.class,
+						score,
+						totalPoints,
+						totalQuestions: quizConfig.totalQuestions,
+						earnedPoints: score,
+						timeSpent: quizConfig.timeLimit - timeRemaining,
+						date: sessionResult.completedAt,
+						mode: 'exam',
+						passed: sessionResult.results.passed,
+						};
+						const withoutDuplicate = dbResults.filter((item) => String(item.id) !== String(canonical.id));
+						window.__DI_CONTAINER__.repo.setAll_sync('results', [...withoutDuplicate, canonical]);
+					} catch (persistError) {
+						console.warn('Could not persist exam result to the API bridge:', persistError);
+					}
+				}
 
 				// Add to cumulative results list for shared devices
 				if (!activeSession.completedResults) {
@@ -7639,6 +7755,3 @@ window.handleDropZoneClick = handleDropZoneClick;
 		loadQuizMode();
 	}
 })();
-
-
-

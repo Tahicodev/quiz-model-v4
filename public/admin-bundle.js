@@ -243,6 +243,7 @@ var QuizAdmin = (() => {
         #baseUrl;
         #getToken;
         #onUnauthorized;
+        #refreshPromise = null;
         constructor({ baseUrl, getToken, onUnauthorized }) {
           super();
           this.#baseUrl = (baseUrl ?? "").replace(/\/$/, "");
@@ -296,18 +297,24 @@ var QuizAdmin = (() => {
           return json2;
         }
         async #tryRefresh() {
-          try {
-            const res = await fetch(this.#url("/auth/refresh"), {
-              method: "POST",
-              credentials: "include"
-            });
-            if (!res.ok) return false;
-            const { accessToken } = await res.json();
-            window.__AUTH_REFRESH_CALLBACK__?.(accessToken);
-            return true;
-          } catch {
-            return false;
-          }
+          if (this.#refreshPromise) return this.#refreshPromise;
+          this.#refreshPromise = (async () => {
+            try {
+              const res = await fetch(this.#url("/auth/refresh"), {
+                method: "POST",
+                credentials: "include"
+              });
+              if (!res.ok) return false;
+              const { accessToken } = await res.json();
+              window.__AUTH_REFRESH_CALLBACK__?.(accessToken);
+              return true;
+            } catch {
+              return false;
+            }
+          })().finally(() => {
+            this.#refreshPromise = null;
+          });
+          return this.#refreshPromise;
         }
         // ── IStorageRepository implementation ────────────────────────────────────────
         async getAll(table, {
@@ -330,6 +337,9 @@ var QuizAdmin = (() => {
           return this.#fetch("GET", `${endpoint}?${params}`);
         }
         async getById(table, id) {
+          if (table === "exam_sessions") {
+            return this.#fetch("GET", `/sessions/${encodeURIComponent(id)}`);
+          }
           return this.#fetch("GET", `/${table}/${id}`);
         }
         async create(table, data) {
@@ -356,6 +366,62 @@ var QuizAdmin = (() => {
         }
         async query(queryName, params) {
           return this.#fetch("POST", `/query/${queryName}`, params ?? {});
+        }
+        // Student attempt lifecycle endpoints. These are deliberately explicit:
+        // sessions are not generic CRUD resources on the API because ownership,
+        // scoring, and expiry are enforced by the route/service layer.
+        async startSession(examId, durationMinutes = null) {
+          return this.#fetch("POST", "/sessions", {
+            exam_id: examId,
+            ...durationMinutes != null ? { duration_minutes: durationMinutes } : {}
+          });
+        }
+        async getActiveSession(examId) {
+          return this.#fetch("GET", `/sessions/active/${encodeURIComponent(examId)}`);
+        }
+        async saveSessionAnswer(sessionId, questionId, answer) {
+          return this.#fetch("POST", `/sessions/${encodeURIComponent(sessionId)}/answer`, {
+            session_id: sessionId,
+            question_id: questionId,
+            answer: String(answer ?? "")
+          });
+        }
+        async heartbeatSession(sessionId) {
+          return this.#fetch("POST", `/sessions/${encodeURIComponent(sessionId)}/heartbeat`);
+        }
+        async submitSession(sessionId) {
+          return this.#fetch("POST", `/sessions/${encodeURIComponent(sessionId)}/submit`);
+        }
+        async joinGame({ gameId, joinCode } = {}) {
+          return this.#fetch("POST", "/games/join", {
+            ...gameId ? { game_id: gameId } : {},
+            ...joinCode ? { join_code: String(joinCode).trim().toUpperCase() } : {}
+          });
+        }
+        async answerGame(gameId, questionId, answer) {
+          return this.#fetch("POST", `/games/${encodeURIComponent(gameId)}/answer`, {
+            game_id: gameId,
+            question_id: questionId,
+            answer: String(answer ?? "")
+          });
+        }
+        async getGameScores(gameId) {
+          return this.#fetch("GET", `/games/${encodeURIComponent(gameId)}/scores`);
+        }
+        async registerTournament(tournamentId) {
+          return this.#fetch("POST", `/tournaments/${encodeURIComponent(tournamentId)}/register`);
+        }
+        async getTournamentLeaderboard(tournamentId, limit = 50) {
+          return this.#fetch("GET", `/tournaments/${encodeURIComponent(tournamentId)}/leaderboard?limit=${encodeURIComponent(limit)}`);
+        }
+        async answerTournament(tournamentId, questionId, answer) {
+          return this.#fetch("POST", `/tournaments/${encodeURIComponent(tournamentId)}/answer`, {
+            question_id: questionId,
+            answer: String(answer ?? "")
+          });
+        }
+        async getExamWithQuestions(examId) {
+          return this.#fetch("GET", `/exams/${encodeURIComponent(examId)}/questions`);
         }
         // Nested admin resources have explicit backend routes rather than generic
         // CRUD endpoints. These methods keep the service layer portable across
@@ -16223,8 +16289,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (total > 0) {
             throw new ValidationError({ id: ["Cannot delete an exam that has recorded results"] });
           }
-          const { data: examQs } = await this.#repo.getAll("exam_questions", { filters: { exam_id: id } });
-          for (const eq of examQs) await this.#repo.delete("exam_questions", eq.id);
+          if (typeof this.#repo.getExamWithQuestions === "function") {
+          } else {
+            const { data: examQs } = await this.#repo.getAll("exam_questions", { filters: { exam_id: id } });
+            for (const eq of examQs) await this.#repo.delete("exam_questions", eq.id);
+          }
           await this.#repo.delete("exams", id);
         }
         async addQuestion(examId, questionId, orderIndex, currentUser) {
@@ -16282,7 +16351,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (exam.status !== EXAM_STATUS.DRAFT) {
             throw new ValidationError({ status: [`Exam must be in draft status to publish (current: ${exam.status})`] });
           }
-          const { total } = await this.#repo.getAll("exam_questions", { filters: { exam_id: examId } });
+          let total;
+          if (typeof this.#repo.getExamWithQuestions === "function") {
+            const hydrated = await this.#repo.getExamWithQuestions(examId);
+            total = hydrated?.questions?.length ?? 0;
+          } else {
+            ({ total } = await this.#repo.getAll("exam_questions", { filters: { exam_id: examId } }));
+          }
           if (total === 0) {
             throw new ValidationError({ questions: ["An exam must have at least one question before publishing"] });
           }
@@ -16353,6 +16428,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           this.#repo = repo;
         }
         async createSession({ examId, userId, durationMinutes }) {
+          if (typeof this.#repo.startSession === "function") {
+            return this.#repo.startSession(examId, durationMinutes);
+          }
           const { data: existing } = await this.#repo.getAll("exam_sessions", {
             filters: { exam_id: examId, user_id: userId, status: SESSION_STATUS.ACTIVE }
           });
@@ -16370,6 +16448,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           });
         }
         async saveAnswer({ sessionId, questionId, answer }) {
+          if (typeof this.#repo.saveSessionAnswer === "function") {
+            return this.#repo.saveSessionAnswer(sessionId, questionId, answer);
+          }
           const session = await this.#repo.getById("exam_sessions", sessionId);
           if (!session) throw new NotFoundError("ExamSession");
           if (session.status !== SESSION_STATUS.ACTIVE) throw new SessionError("Session is not active");
@@ -16378,10 +16459,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           answers[questionId] = answer;
           return this.#repo.update("exam_sessions", sessionId, {
             answers_json: JSON.stringify(answers),
+            current_question_index: (Number(session.current_question_index) || 0) + 1,
             last_heartbeat: (/* @__PURE__ */ new Date()).toISOString()
           });
         }
         async heartbeat(sessionId) {
+          if (typeof this.#repo.heartbeatSession === "function") {
+            await this.#repo.heartbeatSession(sessionId);
+            return;
+          }
           const session = await this.#repo.getById("exam_sessions", sessionId);
           if (!session || session.status !== SESSION_STATUS.ACTIVE) return;
           await this.#repo.update("exam_sessions", sessionId, {
@@ -16389,8 +16475,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           });
         }
         async completeSession(sessionId, resultService) {
+          if (typeof this.#repo.submitSession === "function") {
+            return this.#repo.submitSession(sessionId);
+          }
           const session = await this.#repo.getById("exam_sessions", sessionId);
           if (!session) throw new NotFoundError("ExamSession");
+          if (session.status !== SESSION_STATUS.ACTIVE) {
+            throw new SessionError("Session is not active");
+          }
           const result = await resultService.createFromSession(session);
           await this.#repo.update("exam_sessions", sessionId, {
             status: SESSION_STATUS.COMPLETED,
@@ -16399,6 +16491,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return result;
         }
         async getActiveSession(examId, userId) {
+          if (typeof this.#repo.getActiveSession === "function") {
+            return this.#repo.getActiveSession(examId);
+          }
           const { data } = await this.#repo.getAll("exam_sessions", {
             filters: { exam_id: examId, user_id: userId, status: SESSION_STATUS.ACTIVE }
           });
@@ -16593,9 +16688,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           this.#requireAdmin(currentUser);
           const existing = await this.#repo.getById("classes", id);
           if (!existing) throw new NotFoundError("Class");
-          const { total: studentCount } = await this.#repo.getAll("users", { filters: { class_id: id } });
+          const { total: studentCount } = await this.#repo.getAll("users", {
+            filters: { class_id: id }
+          });
           if (studentCount > 0) {
-            throw new ValidationError({ id: ["Cannot delete a class that still has students assigned"] });
+            throw new ValidationError({
+              id: ["Cannot delete a class that still has students assigned"]
+            });
           }
           const { data: examClasses } = await this.#repo.getAll("exam_classes", { filters: { class_id: id } });
           for (const ec of examClasses) {
@@ -16779,7 +16878,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         message: "Either join_code or game_id is required"
       });
       GameAnswerSchema = external_exports.object({
-        game_id: external_exports.string().uuid(),
+        // The game id is carried by the URL (`/:id/answer`) and the server derives
+        // the player from the JWT.
+        game_id: external_exports.string().uuid().optional(),
         question_id: external_exports.string().uuid(),
         answer: external_exports.string().min(1)
       });
@@ -16849,6 +16950,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         async joinGame({ gameId, joinCode, userId }) {
           const parsed = GameJoinSchema.safeParse({ game_id: gameId, join_code: joinCode });
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+          if (typeof this.#repo.joinGame === "function") {
+            return this.#repo.joinGame({ gameId: gameId || null, joinCode: joinCode || null });
+          }
           let game;
           if (gameId) {
             game = await this.#repo.getById("games", gameId);
@@ -16888,6 +16992,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           });
         }
         async recordAnswer({ gameId, userId, questionId, answer }) {
+          if (typeof this.#repo.answerGame === "function") {
+            return this.#repo.answerGame(gameId, questionId, answer);
+          }
           const game = await this.#repo.getById("games", gameId);
           if (!game || game.status !== GAME_STATUS.ACTIVE) {
             throw new ValidationError({ status: ["Game is not active"] });
@@ -16917,6 +17024,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           };
         }
         async getScores(gameId) {
+          if (typeof this.#repo.getGameScores === "function") {
+            return this.#repo.getGameScores(gameId);
+          }
           const sessions = await this.#repo.query("game.activeSessions", { gameId });
           return sessions.map((s) => ({
             userId: s.user?.id,
@@ -16988,7 +17098,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   });
 
   // src/shared/schemas/tournament.schema.js
-  var statusValues3, TournamentCreateSchema, TournamentUpdateSchema, TournamentFilterSchema;
+  var statusValues3, TournamentCreateSchema, TournamentUpdateSchema, TournamentFilterSchema, TournamentAnswerSchema;
   var init_tournament_schema = __esm({
     "src/shared/schemas/tournament.schema.js"() {
       init_zod();
@@ -17011,6 +17121,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         offset: external_exports.coerce.number().int().min(0).default(0),
         orderBy: external_exports.enum(["created_at", "name", "starts_at"]).default("created_at"),
         direction: external_exports.enum(["asc", "desc"]).default("desc")
+      });
+      TournamentAnswerSchema = external_exports.object({
+        question_id: external_exports.string().uuid(),
+        answer: external_exports.string().min(1)
       });
     }
   });
@@ -17086,6 +17200,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (t.status !== TOURNAMENT_STATUS.OPEN && t.status !== TOURNAMENT_STATUS.ACTIVE) {
             throw new ValidationError({ status: ["Registration is closed"] });
           }
+          if (typeof this.#repo.registerTournament === "function") {
+            return this.#repo.registerTournament(tournamentId);
+          }
           const { data: existing } = await this.#repo.getAll("tournament_entries", {
             filters: { tournament_id: tournamentId, user_id: userId }
           });
@@ -17100,6 +17217,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           });
         }
         async getLeaderboard(tournamentId, limit = 50) {
+          if (typeof this.#repo.getTournamentLeaderboard === "function") {
+            return this.#repo.getTournamentLeaderboard(tournamentId, limit);
+          }
           return this.#repo.query("tournament.leaderboard", { tournamentId, limit });
         }
         /**
@@ -17111,6 +17231,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
          * @returns {Promise<{ correct: boolean, points: number, score: number, showAnswer: boolean, correctAnswer: string|null }>}
          */
         async recordAnswer({ tournamentId, userId, questionId, answer }) {
+          if (typeof this.#repo.answerTournament === "function") {
+            return this.#repo.answerTournament(tournamentId, questionId, answer);
+          }
           const t = await this.#repo.getById("tournaments", tournamentId);
           if (!t) throw new NotFoundError("Tournament");
           if (t.status !== TOURNAMENT_STATUS.ACTIVE) {

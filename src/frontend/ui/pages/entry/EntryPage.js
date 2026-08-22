@@ -259,6 +259,9 @@ function persistLegacySession(payload, remember) {
     username: user.username,
     name: user.name,
     role: user.role,
+    numero: user.numero || user.studentNumber || '',
+    classId: user.class_id || user.classId || '',
+    className: user.class_name || user.className || '',
     token,
     expiresAt: expires.toISOString(),
     createdAt: now.toISOString(),
@@ -289,6 +292,10 @@ function persistLegacySession(payload, remember) {
         username: user.username,
         name: user.name || user.username,
         role: user.role,
+        numero: user.numero || user.studentNumber || '',
+        studentNumber: user.studentNumber || user.numero || '',
+        classId: user.class_id || user.classId || '',
+        className: user.class_name || user.className || '',
         status: 'active',
       };
       localStorage.setItem('quizCurrentUser', JSON.stringify(currentUser));
@@ -320,10 +327,15 @@ function persistLegacySession(payload, remember) {
         sessionStorage.setItem(
           'studentInfo',
           JSON.stringify({
-            numero: user.studentNumber || '',
+            numero: user.studentNumber || user.numero || '',
             name: user.name || user.username,
-            class: user.className || '',
-            classId: user.classId || '',
+            class:
+              user.className ||
+              user.class_name ||
+              user.classId ||
+              user.class_id ||
+              '',
+            classId: user.classId || user.class_id || '',
             avatar: user.avatar || '',
           }),
         );
@@ -358,7 +370,13 @@ function redirectAfterLogin(role) {
   // Default — students (and anything unrecognized, treated as student) go to
   // the student workspace where the Auth check + student-workspace.js flow
   // takes over.
-  window.location.href = 'student-workspace.html';
+  const params = new URLSearchParams(window.location.search);
+  const runtimeQuery = params.get('examId') || params.get('mode') === 'training'
+    ? window.location.search
+    : '';
+  window.location.href = runtimeQuery
+    ? `index.html${runtimeQuery}`
+    : 'student-workspace.html';
 }
 
 /**
@@ -466,6 +484,11 @@ function bindAuthGate() {
  */
 function redirectIfAlreadySignedIn() {
   try {
+    // Exam/training links are a real authenticated runtime route. Do not
+    // bounce them back to the workspace, otherwise every Start button loops
+    // between index.html and student-workspace.html.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('examId') || params.get('mode') === 'training') return false;
     const raw =
       sessionStorage.getItem('quizSession') ||
       localStorage.getItem('quizSessionRemember');
@@ -504,6 +527,36 @@ export function initEntryPage(container) {
   const tpl = document.createElement('template');
   tpl.innerHTML = ENTRY_HTML.trim();
   container.replaceChildren(tpl.content.cloneNode(true));
+
+  // Direct exam/training links use this page as the runtime host after an
+  // authenticated student arrives. Avoid leaving the quiz container hidden.
+  const runtimeParams = new URLSearchParams(window.location.search);
+  const isRuntimeRoute = Boolean(
+    runtimeParams.get('examId') || runtimeParams.get('mode') === 'training',
+  );
+  if (isRuntimeRoute) {
+    try {
+      const raw =
+        sessionStorage.getItem('quizSession') ||
+        localStorage.getItem('quizSessionRemember') ||
+        localStorage.getItem('quizSession');
+      const session = raw ? JSON.parse(raw) : null;
+      if (String(session?.role || '').toLowerCase() === 'student') {
+        const modal = document.getElementById('entryAuthModal');
+        modal?.classList.add('hidden');
+        // The entry-gate CSS intentionally uses !important so the modal is
+        // visible on the anonymous landing page. Override it explicitly once
+        // a signed-in student returns to a runtime URL.
+        modal?.style.setProperty('display', 'none', 'important');
+        const runtime = document.getElementById('quiz-container');
+        runtime?.style.setProperty('display', 'block', 'important');
+        runtime?.setAttribute('aria-hidden', 'false');
+        container.classList.add('entry-runtime-active');
+      }
+    } catch (_) {
+      /* Keep the visible auth gate when the session cannot be read. */
+    }
+  }
 
   // Apply the legacy gating CSS so the backdrop + gating scroll-lock CSS rules
   // hide any potential flash-of-content. We deliberately do NOT toggle the

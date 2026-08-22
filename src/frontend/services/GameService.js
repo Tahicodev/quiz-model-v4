@@ -74,6 +74,10 @@ export class GameService {
     const parsed = GameJoinSchema.safeParse({ game_id: gameId, join_code: joinCode });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
+    if (typeof this.#repo.joinGame === 'function') {
+      return this.#repo.joinGame({ gameId: gameId || null, joinCode: joinCode || null });
+    }
+
     let game;
     if (gameId) {
       game = await this.#repo.getById('games', gameId);
@@ -121,6 +125,9 @@ export class GameService {
   }
 
   async recordAnswer({ gameId, userId, questionId, answer }) {
+    if (typeof this.#repo.answerGame === 'function') {
+      return this.#repo.answerGame(gameId, questionId, answer);
+    }
     const game = await this.#repo.getById('games', gameId);
     if (!game || game.status !== GAME_STATUS.ACTIVE) {
       throw new ValidationError({ status: ['Game is not active'] });
@@ -158,6 +165,9 @@ export class GameService {
   }
 
   async getScores(gameId) {
+    if (typeof this.#repo.getGameScores === 'function') {
+      return this.#repo.getGameScores(gameId);
+    }
     const sessions = await this.#repo.query('game.activeSessions', { gameId });
     return sessions
       .map(s => ({

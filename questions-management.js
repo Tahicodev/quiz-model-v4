@@ -696,7 +696,7 @@ function updateSelectedQuestionsList() {
 		.join('');
 }
 
-function saveCategoryAssignment() {
+async function saveCategoryAssignment() {
 	const categoryId = document.getElementById('assignmentCategorySelect').value;
 
 	if (!categoryId) {
@@ -709,12 +709,26 @@ function saveCategoryAssignment() {
 	const questions = savedQuestions || [];
 
 	let updatedCount = 0;
-	selectedQuestionsForAssignment.forEach((index) => {
-		if (questions[index]) {
-			questions[index].category = categoryId;
+	try {
+		for (const index of selectedQuestionsForAssignment) {
+			const question = questions[index];
+			if (!question) continue;
+			if (question.id && window.API?.raw) {
+				await window.API.raw(
+					'PATCH',
+					`/questions/${encodeURIComponent(question.id)}`,
+					{ category_id: categoryId },
+				);
+			}
+			question.category = categoryId;
+			question.categoryId = categoryId;
 			updatedCount++;
 		}
-	});
+	} catch (apiErr) {
+		console.error('[questions] category assignment failed:', apiErr);
+		showToast(`Failed to update question category: ${apiErr?.message || 'server error'}`, 'error');
+		return;
+	}
 
 	// Save updated questions
 	window.__DI_CONTAINER__.repo.setAll_sync('questions', questions);
@@ -2720,7 +2734,7 @@ function deselectAllBulkQuestions() {
 	updateBulkDeleteButtons();
 }
 
-function deleteBulkSelectedQuestions() {
+async function deleteBulkSelectedQuestions() {
 	const checkedBoxes = document.querySelectorAll('.question-checkbox:checked');
 	const selectedCount = checkedBoxes.length;
 
@@ -2747,11 +2761,34 @@ function deleteBulkSelectedQuestions() {
 
 	// Get current questions
 	let questions = JSON.parse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions'))) || [];
+	if (!window.API || typeof window.API.remove !== 'function') {
+		showToast('Question API is unavailable. Reload the page and try again.', 'error');
+		return;
+	}
 
-	// Delete questions
-	indicesToDelete.forEach((index) => {
-		questions.splice(index, 1);
-	});
+	const deletedIndexes = [];
+	for (const index of indicesToDelete) {
+		const question = questions[index];
+		if (!question) continue;
+		try {
+			if (question.id) await window.API.remove('questions', question.id);
+			deletedIndexes.push(index);
+		} catch (apiErr) {
+			if (apiErr?.status === 404) {
+				deletedIndexes.push(index);
+				continue;
+			}
+			console.error('[questions] bulk API delete failed:', apiErr);
+			showToast(
+				`Deleted ${deletedIndexes.length} question(s); the rest failed: ${apiErr?.message || 'server error'}`,
+				'error',
+			);
+			break;
+		}
+	}
+
+	if (!deletedIndexes.length) return;
+	deletedIndexes.forEach((index) => questions.splice(index, 1));
 
 	// Save updated questions
 	window.__DI_CONTAINER__.repo.setAll_sync('questions', questions);
@@ -2762,7 +2799,9 @@ function deleteBulkSelectedQuestions() {
 	}
 
 	// Show success message
-	showToast(`Successfully deleted ${selectedCount} question(s)`);
+	if (deletedIndexes.length === selectedCount) {
+		showToast(`Successfully deleted ${deletedIndexes.length} question(s)`);
+	}
 
 	// Refresh the question list
 	updateQuestionList();
@@ -6808,8 +6847,11 @@ function normalizeImportedAIQuestion(question, fallbackCategoryId = '') {
 	}
 
 	q.explanation = String(q.explanation || '').trim();
-	q.difficulty = String(q.difficulty || 'medium').trim() || 'medium';
-	q.points = Number.parseFloat(q.points) || 1;
+	const normalizedDifficulty = String(q.difficulty || 'medium').trim().toLowerCase();
+	q.difficulty = ['easy', 'medium', 'hard'].includes(normalizedDifficulty)
+		? normalizedDifficulty
+		: 'medium';
+	q.points = Math.min(100, Math.max(1, Math.round(Number.parseFloat(q.points) || 1)));
 	q.category = String(q.category || fallbackCategoryId || '').trim();
 	q.categoryId = String(q.categoryId || q.category || fallbackCategoryId || '').trim();
 	q.dateCreated = q.dateCreated || new Date().toISOString();
@@ -6820,16 +6862,22 @@ function normalizeImportedAIQuestion(question, fallbackCategoryId = '') {
 	return normalizeQuestionOptionStructure(q);
 }
 
-// Import selected AI questions
-window.importSelectedAIQuestions = function() {
+// Import selected AI questions. The AI preview is intentionally transient;
+// persistence must go through the real question CRUD API before the legacy
+// cache is updated, otherwise a refresh silently restores the old database
+// rows.
+window.importSelectedAIQuestions = async function() {
 	if (aiSelectedQuestions.size === 0) {
 		showToast('No questions selected', 'warning');
 		return;
 	}
-	
+
+	const importBtn = document.getElementById('ai-import-btn');
+	if (importBtn) importBtn.disabled = true;
+
 	try {
 		// Get existing questions
-		let existingQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
+		let existingQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
 		
 		// Get selected questions to import
 		const questionsToImport = [];
@@ -6849,11 +6897,38 @@ window.importSelectedAIQuestions = function() {
 			showToast('No valid questions to import', 'error');
 			return;
 		}
-		
-		// Add to existing questions
-		existingQuestions = [...existingQuestions, ...questionsToImport];
-		
-		// Save to localStorage
+
+		if (!window.API || typeof window.API.create !== 'function') {
+			throw new Error('Question API is unavailable. Reload the admin page and try again.');
+		}
+
+		const persistedQuestions = [];
+		for (const question of questionsToImport) {
+			try {
+				const saved = await window.API.create('questions', question);
+				if (!saved || !saved.id) {
+					throw new Error('The server did not return a question id');
+				}
+				// Keep the legacy shape for the existing admin/student renderers,
+				// but replace the temporary AI id with Prisma's canonical id.
+				persistedQuestions.push({
+					...question,
+					id: saved.id,
+					category: saved.category_id || question.category || '',
+					categoryId: saved.category_id || question.categoryId || question.category || '',
+				});
+			} catch (error) {
+				console.error('[questions] AI question create failed:', error);
+				throw new Error(
+					`Question ${persistedQuestions.length + 1} was not saved: ${error?.message || 'server error'}`,
+				);
+			}
+		}
+
+		// Update the cache only after every selected question was accepted by
+		// the server. The bridge bulk mirror is now an idempotent reconciliation
+		// step, never the only persistence mechanism.
+		existingQuestions = [...existingQuestions, ...persistedQuestions];
 		window.__DI_CONTAINER__.repo.setAll_sync('questions', existingQuestions);
 		
 		// Log activity
@@ -6861,7 +6936,7 @@ window.importSelectedAIQuestions = function() {
 			logActivity('question', 'AI Generated Questions', 'imported', { count: questionsToImport.length });
 		}
 		
-		showToast(`✅ Imported ${questionsToImport.length} question(s)!`, 'success');
+		showToast(`✅ Imported ${persistedQuestions.length} question(s)!`, 'success');
 		
 		// Close modal
 		closeAIGeneratorModal();
@@ -6880,7 +6955,9 @@ window.importSelectedAIQuestions = function() {
 		
 	} catch (error) {
 		console.error('Error importing questions:', error);
-		showToast('Failed to import questions', 'error');
+		showToast(error?.message || 'Failed to import questions', 'error');
+	} finally {
+		if (importBtn) importBtn.disabled = false;
 	}
 };
 

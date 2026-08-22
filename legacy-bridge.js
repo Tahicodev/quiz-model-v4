@@ -79,23 +79,43 @@
   // unauthorized tables simply skip the network sync for signed-in students.
   var STUDENT_WRITABLE_TABLES = {
     results: true,
-    exam_sessions: true,
-    game_sessions: true,
-    tournament_entries: true,
   };
 
   function getSessionRole() {
     try {
       var s = JSON.parse(_origGetItem.call(sessionStorage, 'quizSession') || _origGetItem.call(localStorage, 'quizSession') || 'null');
-      return (s && s.role) ? String(s.role) : null;
+      return (s && s.role) ? String(s.role).trim().toLowerCase() : null;
+    } catch (_) { return null; }
+  }
+
+  // The cached legacy session and the bearer token can get out of sync when
+  // users switch between the student and admin pages in the same browser.
+  // The API authorizes from the JWT, so use its role when available instead
+  // of allowing a stale local role to trigger admin-only writes.
+  function getTokenRole() {
+    try {
+      var token = window.__authToken || '';
+      if (!token) {
+        var saved = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
+        token = saved && saved.token || '';
+      }
+      var parts = String(token).split('.');
+      if (parts.length < 2 || typeof atob !== 'function') return null;
+      var encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (encoded.length % 4) encoded += '=';
+      var payload = JSON.parse(atob(encoded));
+      return payload && payload.role ? String(payload.role).trim().toLowerCase() : null;
     } catch (_) { return null; }
   }
 
   function canSyncTable(table) {
-    var role = getSessionRole();
-    if (role === null) return true;   // admin (no student session) → sync all
+    var role = getTokenRole() || getSessionRole();
+    // A privileged JWT is required for bulk writes. If the role is unknown,
+    // keep the synchronous local cache but do not emit a request that will
+    // inevitably be rejected by the server.
+    if (role === null) return false;
     if (role === 'student') return !!STUDENT_WRITABLE_TABLES[table];
-    return true;                       // admin / teacher / other → sync all
+    return role === 'admin' || role === 'super_admin';
   }
 
 
@@ -198,7 +218,34 @@
     }
 
     function getToken() {
-      return window.__authToken || '';
+      // A successful in-page login clears the expired-session marker. Reset
+      // the local circuit so the student workspace can bootstrap immediately
+      // without requiring a full reload.
+      if (window.__AUTH_SESSION_EXPIRED__ === false) authUnavailable = false;
+      return authUnavailable ? '' : (window.__authToken || '');
+    }
+
+    var authUnavailable = false;
+
+    function invalidateAuthSession() {
+      authUnavailable = true;
+      window.__authToken = '';
+      window.__AUTH_SESSION_EXPIRED__ = true;
+      try {
+        if (window.__QUIZ_LEGACY_SOCKET__) window.__QUIZ_LEGACY_SOCKET__.disconnect();
+      } catch (_) { /* non-fatal */ }
+      // Use the original Storage methods so cleanup cannot trigger another
+      // legacy bulk-sync request through the patched Storage prototype.
+      try {
+        _origRemoveItem.call(localStorage, 'quizSession');
+        _origRemoveItem.call(localStorage, 'quizSessionRemember');
+        _origRemoveItem.call(localStorage, 'quizAuthToken');
+        _origRemoveItem.call(localStorage, 'quizCurrentUser');
+        _origRemoveItem.call(sessionStorage, 'quizSession');
+      } catch (_) { /* non-fatal */ }
+      try {
+        window.dispatchEvent(new CustomEvent('quiz:auth-expired'));
+      } catch (_) { /* older browsers */ }
     }
 
     // ── Fetch all data from the backend and populate cache + localStorage ──────
@@ -227,7 +274,11 @@
           return r;
         })
         .then(function (r) {
-          if (!r.ok) throw new Error('Bootstrap failed: ' + r.status);
+          if (!r.ok) {
+            var bootstrapError = new Error('Bootstrap failed: ' + r.status);
+            bootstrapError.status = r.status;
+            throw bootstrapError;
+          }
           return r.json();
         })
         .then(function (payload) {
@@ -239,12 +290,23 @@
               writeAll(table, data[table]);
             }
           }
+          try {
+            window.dispatchEvent(new CustomEvent('quiz:bootstrap-ready', {
+              detail: { schoolId: payload && payload.school_id },
+            }));
+          } catch (_) { /* older browsers */ }
         })
         .catch(function (err) {
           // If the bootstrap fails (e.g. token expired between page load and
           // fetch), keep whatever was in cache/localStorage. The next login
           // cycle will re-bootstrap cleanly.
-          console.warn('[legacy-bridge] Bootstrap failed, using cached data:', err.message);
+          if (err && err.status === 401) {
+            invalidateAuthSession();
+            return;
+          }
+          if (!authUnavailable) {
+            console.warn('[legacy-bridge] Bootstrap failed, using cached data:', err.message);
+          }
         });
     }
 
@@ -262,6 +324,11 @@
 
     function refreshAccessToken() {
       if (refreshPromise) return refreshPromise;
+      if (authUnavailable) {
+        var blocked = new Error('Session expired');
+        blocked.status = 401;
+        return Promise.reject(blocked);
+      }
       refreshPromise = fetch(getBaseUrl() + '/auth/refresh', {
         method: 'POST',
         credentials: 'include', // sends the refreshToken httpOnly cookie
@@ -280,6 +347,8 @@
           // Update the in-memory token and all persisted copies so subsequent
           // syncs and the next page load use the fresh token.
           window.__authToken = newToken;
+          authUnavailable = false;
+          window.__AUTH_SESSION_EXPIRED__ = false;
           try {
             var s = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
             if (s) {
@@ -314,7 +383,9 @@
       // Skip the network call for tables the signed-in role may not write.
       // The local cache was already updated before this is invoked, so the UI
       // is unaffected — we just don't hit an endpoint that would 403/500.
-      if (!canSyncTable(table)) return;
+      // Cached localStorage writes are allowed while logged out, but must not
+      // become requests with an empty or stale Bearer header.
+      if (authUnavailable || !getToken() || !canSyncTable(table)) return;
 
       var base = getBaseUrl() + '/' + table;
 
@@ -376,6 +447,10 @@
           }
           if (!res.ok) {
             return res.text().then(function (body) {
+              if (res.status === 401) {
+                invalidateAuthSession();
+                return;
+              }
               var detail = body;
               try {
                 var parsed = JSON.parse(body);
@@ -388,7 +463,13 @@
           return res.text().catch(function () { /* ignore */ });
         })
         .catch(function (err) {
-          notifySyncError(table, err && err.message ? err.message : 'network error');
+          if (err && err.status === 401) {
+            invalidateAuthSession();
+            return;
+          }
+          if (!authUnavailable) {
+            notifySyncError(table, err && err.message ? err.message : 'network error');
+          }
         });
     }
 

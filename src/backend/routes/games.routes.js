@@ -60,8 +60,12 @@ router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
 router.post('/join', validate(GameJoinSchema), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
-    const { gameId, join_code } = req.body;
-    const session = await gameSvc.joinGame({ gameId, joinCode: join_code, userId: req.user.id });
+    const { game_id, gameId, join_code, joinCode } = req.body;
+    const session = await gameSvc.joinGame({
+      gameId: game_id || gameId,
+      joinCode: join_code || joinCode,
+      userId: req.user.id,
+    });
     res.json(session);
   } catch (err) { next(err); }
 });

@@ -11,6 +11,9 @@ export class SessionService {
   constructor(repo) { this.#repo = repo; }
 
   async createSession({ examId, userId, durationMinutes }) {
+    if (typeof this.#repo.startSession === 'function') {
+      return this.#repo.startSession(examId, durationMinutes);
+    }
     // Enforce one active session per user per exam
     const { data: existing } = await this.#repo.getAll('exam_sessions', {
       filters: { exam_id: examId, user_id: userId, status: SESSION_STATUS.ACTIVE },
@@ -34,6 +37,9 @@ export class SessionService {
   }
 
   async saveAnswer({ sessionId, questionId, answer }) {
+    if (typeof this.#repo.saveSessionAnswer === 'function') {
+      return this.#repo.saveSessionAnswer(sessionId, questionId, answer);
+    }
     const session = await this.#repo.getById('exam_sessions', sessionId);
     if (!session) throw new NotFoundError('ExamSession');
     if (session.status !== SESSION_STATUS.ACTIVE) throw new SessionError('Session is not active');
@@ -44,11 +50,16 @@ export class SessionService {
 
     return this.#repo.update('exam_sessions', sessionId, {
       answers_json:   JSON.stringify(answers),
+      current_question_index: (Number(session.current_question_index) || 0) + 1,
       last_heartbeat: new Date().toISOString(),
     });
   }
 
   async heartbeat(sessionId) {
+    if (typeof this.#repo.heartbeatSession === 'function') {
+      await this.#repo.heartbeatSession(sessionId);
+      return;
+    }
     const session = await this.#repo.getById('exam_sessions', sessionId);
     if (!session || session.status !== SESSION_STATUS.ACTIVE) return;
     await this.#repo.update('exam_sessions', sessionId, {
@@ -57,8 +68,14 @@ export class SessionService {
   }
 
   async completeSession(sessionId, resultService) {
+    if (typeof this.#repo.submitSession === 'function') {
+      return this.#repo.submitSession(sessionId);
+    }
     const session = await this.#repo.getById('exam_sessions', sessionId);
     if (!session) throw new NotFoundError('ExamSession');
+    if (session.status !== SESSION_STATUS.ACTIVE) {
+      throw new SessionError('Session is not active');
+    }
 
     const result = await resultService.createFromSession(session);
     await this.#repo.update('exam_sessions', sessionId, {
@@ -69,6 +86,9 @@ export class SessionService {
   }
 
   async getActiveSession(examId, userId) {
+    if (typeof this.#repo.getActiveSession === 'function') {
+      return this.#repo.getActiveSession(examId);
+    }
     const { data } = await this.#repo.getAll('exam_sessions', {
       filters: { exam_id: examId, user_id: userId, status: SESSION_STATUS.ACTIVE },
     });

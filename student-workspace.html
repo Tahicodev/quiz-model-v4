@@ -23,10 +23,14 @@
 					<script>
 						window.getSocket = window.getSocket || function(url, opts) {
 							if (!window.io) { console.warn('getSocket called before Socket.IO loaded'); return null; }
+							if (window.__AUTH_SESSION_EXPIRED__) return null;
+							if (window.__QUIZ_LEGACY_SOCKET__) return window.__QUIZ_LEGACY_SOCKET__;
 							var token = window.__authToken || (function(){ try{ var s=JSON.parse(localStorage.getItem('quizSession')||'null'); return s&&s.token; }catch(e){} })() || localStorage.getItem('quizAuthToken') || '';
 							// SaaS sockets always require auth — skip when anonymous.
 							if (!token) return null;
-							return window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
+							var socket = window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
+							window.__QUIZ_LEGACY_SOCKET__ = socket;
+							return socket;
 						};
 					</script>
 				<script src="utils.js" defer></script>

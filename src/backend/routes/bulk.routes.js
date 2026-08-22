@@ -24,15 +24,20 @@
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { requireRole } from '../middleware/role.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { ROLES } from '../../shared/constants.js';
+import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 import { logger } from '../logger.js';
 
 const router = Router();
 
-router.use(requireAuth, requireRole(ROLES.ADMIN), enforceTenant);
+// Bulk remains an admin API by default. The legacy student workspace needs
+// one compatibility write for locally-computed training results; keep that
+// exception explicit and deny every other table before it reaches Prisma.
+const STUDENT_BULK_TABLES = new Set(['results']);
+
+router.use(requireAuth, enforceTenant);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -153,25 +158,23 @@ const SANITIZERS = {
   questions: (row, schoolId) => {
     // Map legacy question type strings to the backend's QUESTION_TYPES.
     const TYPE_MAP = {
-      'multiple-choice': 'MCQ',
-      'mcq': 'MCQ',
-      'true-false': 'TRUE_FALSE',
-      'true_false': 'TRUE_FALSE',
-      'short-answer': 'SHORT_ANSWER',
-      'short_answer': 'SHORT_ANSWER',
-      'essay': 'ESSAY',
-      'matching': 'MATCHING',
-      'ordering': 'ORDER',
-      'order': 'ORDER',
-      'fill-blank': 'FILL_BLANK',
-      'fill_blank': 'FILL_BLANK',
+      'multiple-choice': 'mcq',
+      'mcq': 'mcq',
+      'true-false': 'true-false',
+      'true_false': 'true-false',
+      'matching-pairs': 'matching',
+      'matching': 'matching',
+      'ordering': 'order',
+      'draggable': 'order',
+      'order': 'order',
+      'fill-blank': 'fill-blank',
+      'fill_blank': 'fill-blank',
       // Pass-through if the type already matches a backend value.
-      'MCQ': 'MCQ', 'TRUE_FALSE': 'TRUE_FALSE', 'SHORT_ANSWER': 'SHORT_ANSWER',
-      'ESSAY': 'ESSAY', 'MATCHING': 'MATCHING', 'ORDER': 'ORDER',
-      'FILL_BLANK': 'FILL_BLANK',
+      'MCQ': 'mcq', 'TRUE_FALSE': 'true-false', 'MATCHING': 'matching',
+      'ORDER': 'order', 'FILL_BLANK': 'fill-blank',
     };
     const rawType = pickStr(row.type) || 'multiple-choice';
-    const mappedType = TYPE_MAP[rawType] || 'MCQ';
+    const mappedType = TYPE_MAP[rawType] || 'mcq';
 
     // Options: prefer `optionData` (array of `{text, image}`), fall back to
     // the plain `options` array. Always serialize as a JSON string array.
@@ -372,9 +375,15 @@ const SANITIZERS = {
     const scoreNum = Number(row.score);
     const earnedPointsRaw = row.earnedPoints ?? row.earned_points ?? row.score;
     const earnedPoints = Number.isFinite(Number(earnedPointsRaw)) ? Number(earnedPointsRaw) : 0;
-    const score = Number.isFinite(scoreNum)
-      ? scoreNum
-      : (totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0);
+    // Legacy screens store `score` as the number of correct answers while
+    // normalized Prisma results store it as a percentage. `totalQuestions`
+    // identifies the legacy shape, so convert it once at the API boundary.
+    const legacyCountScore = row.totalQuestions != null || row.total_questions != null;
+    const score = legacyCountScore && totalPoints > 0
+      ? (earnedPoints / totalPoints) * 100
+      : Number.isFinite(scoreNum)
+        ? scoreNum
+        : (totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0);
 
     const passed =
       pickBool(row.passed) ??
@@ -431,10 +440,12 @@ const SANITIZERS = {
     for (const k of Object.keys(settingsBlob)) {
       if (settingsBlob[k] === undefined) delete settingsBlob[k];
     }
+    const rawStatus = pickStr(row.status);
     const status =
-      pickStr(row.status) === 'live' ? 'live'
-      : pickStr(row.status) === 'completed' ? 'completed'
-      : pickStr(row.status) === 'open' ? 'waiting'
+      rawStatus === 'live' ? 'active'
+      : rawStatus === 'completed' ? 'finished'
+      : rawStatus === 'open' ? 'waiting'
+      : ['waiting', 'active', 'paused', 'finished'].includes(rawStatus) ? rawStatus
       : 'waiting';
 
     return {
@@ -910,6 +921,14 @@ router.post('/:table', async (req, res, next) => {
   try {
     const { repo } = getContainer();
     const { table } = req.params;
+
+    const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user?.role);
+    const isStudentResultWrite =
+      req.user?.role === ROLES.STUDENT && STUDENT_BULK_TABLES.has(table);
+    if (!isAdmin && !isStudentResultWrite) {
+      return next(new ForbiddenError());
+    }
+
     let { items } = req.body;
 
     // Settings accept either {items:[{key,value}]} or {value:{k:v}} shape.
@@ -998,6 +1017,18 @@ router.post('/:table', async (req, res, next) => {
 
       const cleaned = sanitize(item, req.schoolId, req.user?.id, legacyCtx);
       if (!cleaned) continue; // sanitizer chose to skip this row (e.g. game_presets)
+
+      // A student may send the legacy results array, which can contain rows
+      // from other users because the browser cache is shared/preloaded. The
+      // sanitizer resolves every row to a real Prisma user; silently discard
+      // rows outside the JWT owner and persist only this student's result.
+      if (
+        req.user?.role === ROLES.STUDENT &&
+        table === 'results' &&
+        String(cleaned.user_id) !== String(req.user.id)
+      ) {
+        continue;
+      }
 
       // Pre-flight required-field guard: drop the row (and count it) rather
       // than letting Prisma reject the entire batch with P2009/P2003.

@@ -193,6 +193,7 @@ var QuizStudent = (() => {
     #baseUrl;
     #getToken;
     #onUnauthorized;
+    #refreshPromise = null;
     constructor({ baseUrl, getToken, onUnauthorized }) {
       super();
       this.#baseUrl = (baseUrl ?? "").replace(/\/$/, "");
@@ -246,18 +247,24 @@ var QuizStudent = (() => {
       return json2;
     }
     async #tryRefresh() {
-      try {
-        const res = await fetch(this.#url("/auth/refresh"), {
-          method: "POST",
-          credentials: "include"
-        });
-        if (!res.ok) return false;
-        const { accessToken } = await res.json();
-        window.__AUTH_REFRESH_CALLBACK__?.(accessToken);
-        return true;
-      } catch {
-        return false;
-      }
+      if (this.#refreshPromise) return this.#refreshPromise;
+      this.#refreshPromise = (async () => {
+        try {
+          const res = await fetch(this.#url("/auth/refresh"), {
+            method: "POST",
+            credentials: "include"
+          });
+          if (!res.ok) return false;
+          const { accessToken } = await res.json();
+          window.__AUTH_REFRESH_CALLBACK__?.(accessToken);
+          return true;
+        } catch {
+          return false;
+        }
+      })().finally(() => {
+        this.#refreshPromise = null;
+      });
+      return this.#refreshPromise;
     }
     // ── IStorageRepository implementation ────────────────────────────────────────
     async getAll(table, {
@@ -280,6 +287,9 @@ var QuizStudent = (() => {
       return this.#fetch("GET", `${endpoint}?${params}`);
     }
     async getById(table, id) {
+      if (table === "exam_sessions") {
+        return this.#fetch("GET", `/sessions/${encodeURIComponent(id)}`);
+      }
       return this.#fetch("GET", `/${table}/${id}`);
     }
     async create(table, data) {
@@ -306,6 +316,62 @@ var QuizStudent = (() => {
     }
     async query(queryName, params) {
       return this.#fetch("POST", `/query/${queryName}`, params ?? {});
+    }
+    // Student attempt lifecycle endpoints. These are deliberately explicit:
+    // sessions are not generic CRUD resources on the API because ownership,
+    // scoring, and expiry are enforced by the route/service layer.
+    async startSession(examId, durationMinutes = null) {
+      return this.#fetch("POST", "/sessions", {
+        exam_id: examId,
+        ...durationMinutes != null ? { duration_minutes: durationMinutes } : {}
+      });
+    }
+    async getActiveSession(examId) {
+      return this.#fetch("GET", `/sessions/active/${encodeURIComponent(examId)}`);
+    }
+    async saveSessionAnswer(sessionId, questionId, answer) {
+      return this.#fetch("POST", `/sessions/${encodeURIComponent(sessionId)}/answer`, {
+        session_id: sessionId,
+        question_id: questionId,
+        answer: String(answer ?? "")
+      });
+    }
+    async heartbeatSession(sessionId) {
+      return this.#fetch("POST", `/sessions/${encodeURIComponent(sessionId)}/heartbeat`);
+    }
+    async submitSession(sessionId) {
+      return this.#fetch("POST", `/sessions/${encodeURIComponent(sessionId)}/submit`);
+    }
+    async joinGame({ gameId, joinCode } = {}) {
+      return this.#fetch("POST", "/games/join", {
+        ...gameId ? { game_id: gameId } : {},
+        ...joinCode ? { join_code: String(joinCode).trim().toUpperCase() } : {}
+      });
+    }
+    async answerGame(gameId, questionId, answer) {
+      return this.#fetch("POST", `/games/${encodeURIComponent(gameId)}/answer`, {
+        game_id: gameId,
+        question_id: questionId,
+        answer: String(answer ?? "")
+      });
+    }
+    async getGameScores(gameId) {
+      return this.#fetch("GET", `/games/${encodeURIComponent(gameId)}/scores`);
+    }
+    async registerTournament(tournamentId) {
+      return this.#fetch("POST", `/tournaments/${encodeURIComponent(tournamentId)}/register`);
+    }
+    async getTournamentLeaderboard(tournamentId, limit = 50) {
+      return this.#fetch("GET", `/tournaments/${encodeURIComponent(tournamentId)}/leaderboard?limit=${encodeURIComponent(limit)}`);
+    }
+    async answerTournament(tournamentId, questionId, answer) {
+      return this.#fetch("POST", `/tournaments/${encodeURIComponent(tournamentId)}/answer`, {
+        question_id: questionId,
+        answer: String(answer ?? "")
+      });
+    }
+    async getExamWithQuestions(examId) {
+      return this.#fetch("GET", `/exams/${encodeURIComponent(examId)}/questions`);
     }
     // Nested admin resources have explicit backend routes rather than generic
     // CRUD endpoints. These methods keep the service layer portable across
@@ -15535,8 +15601,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (total > 0) {
         throw new ValidationError({ id: ["Cannot delete an exam that has recorded results"] });
       }
-      const { data: examQs } = await this.#repo.getAll("exam_questions", { filters: { exam_id: id } });
-      for (const eq of examQs) await this.#repo.delete("exam_questions", eq.id);
+      if (typeof this.#repo.getExamWithQuestions === "function") {
+      } else {
+        const { data: examQs } = await this.#repo.getAll("exam_questions", { filters: { exam_id: id } });
+        for (const eq of examQs) await this.#repo.delete("exam_questions", eq.id);
+      }
       await this.#repo.delete("exams", id);
     }
     async addQuestion(examId, questionId, orderIndex, currentUser) {
@@ -15594,7 +15663,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (exam.status !== EXAM_STATUS.DRAFT) {
         throw new ValidationError({ status: [`Exam must be in draft status to publish (current: ${exam.status})`] });
       }
-      const { total } = await this.#repo.getAll("exam_questions", { filters: { exam_id: examId } });
+      let total;
+      if (typeof this.#repo.getExamWithQuestions === "function") {
+        const hydrated = await this.#repo.getExamWithQuestions(examId);
+        total = hydrated?.questions?.length ?? 0;
+      } else {
+        ({ total } = await this.#repo.getAll("exam_questions", { filters: { exam_id: examId } }));
+      }
       if (total === 0) {
         throw new ValidationError({ questions: ["An exam must have at least one question before publishing"] });
       }
@@ -15658,6 +15733,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#repo = repo;
     }
     async createSession({ examId, userId, durationMinutes }) {
+      if (typeof this.#repo.startSession === "function") {
+        return this.#repo.startSession(examId, durationMinutes);
+      }
       const { data: existing } = await this.#repo.getAll("exam_sessions", {
         filters: { exam_id: examId, user_id: userId, status: SESSION_STATUS.ACTIVE }
       });
@@ -15675,6 +15753,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     }
     async saveAnswer({ sessionId, questionId, answer }) {
+      if (typeof this.#repo.saveSessionAnswer === "function") {
+        return this.#repo.saveSessionAnswer(sessionId, questionId, answer);
+      }
       const session = await this.#repo.getById("exam_sessions", sessionId);
       if (!session) throw new NotFoundError("ExamSession");
       if (session.status !== SESSION_STATUS.ACTIVE) throw new SessionError("Session is not active");
@@ -15683,10 +15764,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       answers[questionId] = answer;
       return this.#repo.update("exam_sessions", sessionId, {
         answers_json: JSON.stringify(answers),
+        current_question_index: (Number(session.current_question_index) || 0) + 1,
         last_heartbeat: (/* @__PURE__ */ new Date()).toISOString()
       });
     }
     async heartbeat(sessionId) {
+      if (typeof this.#repo.heartbeatSession === "function") {
+        await this.#repo.heartbeatSession(sessionId);
+        return;
+      }
       const session = await this.#repo.getById("exam_sessions", sessionId);
       if (!session || session.status !== SESSION_STATUS.ACTIVE) return;
       await this.#repo.update("exam_sessions", sessionId, {
@@ -15694,8 +15780,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     }
     async completeSession(sessionId, resultService) {
+      if (typeof this.#repo.submitSession === "function") {
+        return this.#repo.submitSession(sessionId);
+      }
       const session = await this.#repo.getById("exam_sessions", sessionId);
       if (!session) throw new NotFoundError("ExamSession");
+      if (session.status !== SESSION_STATUS.ACTIVE) {
+        throw new SessionError("Session is not active");
+      }
       const result = await resultService.createFromSession(session);
       await this.#repo.update("exam_sessions", sessionId, {
         status: SESSION_STATUS.COMPLETED,
@@ -15704,6 +15796,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return result;
     }
     async getActiveSession(examId, userId) {
+      if (typeof this.#repo.getActiveSession === "function") {
+        return this.#repo.getActiveSession(examId);
+      }
       const { data } = await this.#repo.getAll("exam_sessions", {
         filters: { exam_id: examId, user_id: userId, status: SESSION_STATUS.ACTIVE }
       });
@@ -15877,6 +15972,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const existing = await this.#repo.getById("classes", id);
       if (!existing) throw new NotFoundError("Class");
+      const { total: studentCount } = await this.#repo.getAll("users", {
+        filters: { class_id: id }
+      });
+      if (studentCount > 0) {
+        throw new ValidationError({
+          id: ["Cannot delete a class that still has students assigned"]
+        });
+      }
       const { data: examClasses } = await this.#repo.getAll("exam_classes", { filters: { class_id: id } });
       for (const ec of examClasses) {
         await this.#repo.delete("exam_classes", ec.id);
@@ -16038,7 +16141,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     message: "Either join_code or game_id is required"
   });
   var GameAnswerSchema = external_exports.object({
-    game_id: external_exports.string().uuid(),
+    // The game id is carried by the URL (`/:id/answer`) and the server derives
+    // the player from the JWT.
+    game_id: external_exports.string().uuid().optional(),
     question_id: external_exports.string().uuid(),
     answer: external_exports.string().min(1)
   });
@@ -16100,6 +16205,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     async joinGame({ gameId, joinCode, userId }) {
       const parsed = GameJoinSchema.safeParse({ game_id: gameId, join_code: joinCode });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      if (typeof this.#repo.joinGame === "function") {
+        return this.#repo.joinGame({ gameId: gameId || null, joinCode: joinCode || null });
+      }
       let game;
       if (gameId) {
         game = await this.#repo.getById("games", gameId);
@@ -16139,6 +16247,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     }
     async recordAnswer({ gameId, userId, questionId, answer }) {
+      if (typeof this.#repo.answerGame === "function") {
+        return this.#repo.answerGame(gameId, questionId, answer);
+      }
       const game = await this.#repo.getById("games", gameId);
       if (!game || game.status !== GAME_STATUS.ACTIVE) {
         throw new ValidationError({ status: ["Game is not active"] });
@@ -16168,6 +16279,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       };
     }
     async getScores(gameId) {
+      if (typeof this.#repo.getGameScores === "function") {
+        return this.#repo.getGameScores(gameId);
+      }
       const sessions = await this.#repo.query("game.activeSessions", { gameId });
       return sessions.map((s) => ({
         userId: s.user?.id,
@@ -16256,6 +16370,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     orderBy: external_exports.enum(["created_at", "name", "starts_at"]).default("created_at"),
     direction: external_exports.enum(["asc", "desc"]).default("desc")
   });
+  var TournamentAnswerSchema = external_exports.object({
+    question_id: external_exports.string().uuid(),
+    answer: external_exports.string().min(1)
+  });
 
   // src/frontend/services/TournamentService.js
   var TournamentService = class {
@@ -16322,6 +16440,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (t.status !== TOURNAMENT_STATUS.OPEN && t.status !== TOURNAMENT_STATUS.ACTIVE) {
         throw new ValidationError({ status: ["Registration is closed"] });
       }
+      if (typeof this.#repo.registerTournament === "function") {
+        return this.#repo.registerTournament(tournamentId);
+      }
       const { data: existing } = await this.#repo.getAll("tournament_entries", {
         filters: { tournament_id: tournamentId, user_id: userId }
       });
@@ -16336,6 +16457,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     }
     async getLeaderboard(tournamentId, limit = 50) {
+      if (typeof this.#repo.getTournamentLeaderboard === "function") {
+        return this.#repo.getTournamentLeaderboard(tournamentId, limit);
+      }
       return this.#repo.query("tournament.leaderboard", { tournamentId, limit });
     }
     /**
@@ -16347,6 +16471,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
      * @returns {Promise<{ correct: boolean, points: number, score: number, showAnswer: boolean, correctAnswer: string|null }>}
      */
     async recordAnswer({ tournamentId, userId, questionId, answer }) {
+      if (typeof this.#repo.answerTournament === "function") {
+        return this.#repo.answerTournament(tournamentId, questionId, answer);
+      }
       const t = await this.#repo.getById("tournaments", tournamentId);
       if (!t) throw new NotFoundError("Tournament");
       if (t.status !== TOURNAMENT_STATUS.ACTIVE) {
@@ -16821,6 +16948,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       username: user.username,
       name: user.name,
       role: user.role,
+      numero: user.numero || user.studentNumber || "",
+      classId: user.class_id || user.classId || "",
+      className: user.class_name || user.className || "",
       token,
       expiresAt: expires.toISOString(),
       createdAt: now.toISOString(),
@@ -16843,6 +16973,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           username: user.username,
           name: user.name || user.username,
           role: user.role,
+          numero: user.numero || user.studentNumber || "",
+          studentNumber: user.studentNumber || user.numero || "",
+          classId: user.class_id || user.classId || "",
+          className: user.class_name || user.className || "",
           status: "active"
         };
         localStorage.setItem("quizCurrentUser", JSON.stringify(currentUser));
@@ -16869,10 +17003,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           sessionStorage.setItem(
             "studentInfo",
             JSON.stringify({
-              numero: user.studentNumber || "",
+              numero: user.studentNumber || user.numero || "",
               name: user.name || user.username,
-              class: user.className || "",
-              classId: user.classId || "",
+              class: user.className || user.class_name || user.classId || user.class_id || "",
+              classId: user.classId || user.class_id || "",
               avatar: user.avatar || ""
             })
           );
@@ -16892,7 +17026,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       window.location.href = "admin.html";
       return;
     }
-    window.location.href = "student-workspace.html";
+    const params = new URLSearchParams(window.location.search);
+    const runtimeQuery = params.get("examId") || params.get("mode") === "training" ? window.location.search : "";
+    window.location.href = runtimeQuery ? `index.html${runtimeQuery}` : "student-workspace.html";
   }
   function bindAuthGate() {
     const form = document.getElementById("entryAuthForm");
@@ -16970,6 +17106,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   function redirectIfAlreadySignedIn() {
     try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("examId") || params.get("mode") === "training") return false;
       const raw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSessionRemember");
       if (!raw) return false;
       const session = JSON.parse(raw);
@@ -16991,6 +17129,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const tpl = document.createElement("template");
     tpl.innerHTML = ENTRY_HTML.trim();
     container.replaceChildren(tpl.content.cloneNode(true));
+    const runtimeParams = new URLSearchParams(window.location.search);
+    const isRuntimeRoute = Boolean(
+      runtimeParams.get("examId") || runtimeParams.get("mode") === "training"
+    );
+    if (isRuntimeRoute) {
+      try {
+        const raw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSessionRemember") || localStorage.getItem("quizSession");
+        const session = raw ? JSON.parse(raw) : null;
+        if (String(session?.role || "").toLowerCase() === "student") {
+          const modal = document.getElementById("entryAuthModal");
+          modal?.classList.add("hidden");
+          modal?.style.setProperty("display", "none", "important");
+          const runtime = document.getElementById("quiz-container");
+          runtime?.style.setProperty("display", "block", "important");
+          runtime?.setAttribute("aria-hidden", "false");
+          container.classList.add("entry-runtime-active");
+        }
+      } catch (_) {
+      }
+    }
     const bindNow = () => {
       try {
         bindAuthGate();
@@ -17318,6 +17476,384 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   } else {
     initScrollToTop();
   }
+  (function() {
+    "use strict";
+    if (window.API) return;
+    function getBaseUrl() {
+      return window.APP_CONFIG && window.APP_CONFIG.apiUrl || "/api/v1";
+    }
+    function getToken() {
+      if (window.__authToken) return window.__authToken;
+      try {
+        var s = JSON.parse(localStorage.getItem("quizSession") || "null");
+        return s && s.token || localStorage.getItem("quizAuthToken") || "";
+      } catch (_) {
+        return localStorage.getItem("quizAuthToken") || "";
+      }
+    }
+    function setToken(newToken) {
+      if (!newToken) return;
+      window.__authToken = newToken;
+      authUnavailable = false;
+      window.__AUTH_SESSION_EXPIRED__ = false;
+      try {
+        var s = JSON.parse(localStorage.getItem("quizSession") || "null");
+        if (s) {
+          s.token = newToken;
+          localStorage.setItem("quizSession", JSON.stringify(s));
+          sessionStorage.setItem("quizSession", JSON.stringify(s));
+        }
+        localStorage.setItem("quizAuthToken", newToken);
+      } catch (_) {
+      }
+    }
+    var refreshing = null;
+    var authUnavailable = false;
+    function invalidateAuthSession() {
+      authUnavailable = true;
+      window.__authToken = "";
+      window.__AUTH_SESSION_EXPIRED__ = true;
+      try {
+        if (window.__QUIZ_LEGACY_SOCKET__) window.__QUIZ_LEGACY_SOCKET__.disconnect();
+      } catch (_) {
+      }
+      try {
+        localStorage.removeItem("quizSession");
+        localStorage.removeItem("quizSessionRemember");
+        localStorage.removeItem("quizAuthToken");
+        localStorage.removeItem("quizCurrentUser");
+        sessionStorage.removeItem("quizSession");
+      } catch (_) {
+      }
+      try {
+        window.dispatchEvent(new CustomEvent("quiz:auth-expired"));
+      } catch (_) {
+      }
+    }
+    function refreshAccessToken() {
+      if (refreshing) return refreshing;
+      if (authUnavailable) {
+        var blocked = new Error("Session expired");
+        blocked.status = 401;
+        return Promise.reject(blocked);
+      }
+      refreshing = fetch(getBaseUrl() + "/auth/refresh", {
+        method: "POST",
+        credentials: "include"
+      }).then(function(r) {
+        if (!r.ok) {
+          var err = new Error("Refresh failed (" + r.status + ")");
+          err.status = r.status;
+          throw err;
+        }
+        return r.json();
+      }).then(function(data) {
+        var t = data && (data.accessToken || data.token);
+        if (!t) throw new Error("Refresh returned no token");
+        setToken(t);
+        return t;
+      }).finally(function() {
+        refreshing = null;
+      });
+      return refreshing;
+    }
+    function parseError(res, body) {
+      try {
+        var j = JSON.parse(body);
+        return j && j.error && j.error.message || j && j.message || body || "HTTP " + res.status;
+      } catch (_) {
+        return body || "HTTP " + res.status;
+      }
+    }
+    function request(method, path, body, _retried) {
+      var url2 = getBaseUrl() + path;
+      var init = {
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...getToken() ? { Authorization: "Bearer " + getToken() } : {}
+        }
+      };
+      if (body !== void 0 && body !== null) {
+        init.body = JSON.stringify(body);
+      }
+      return fetch(url2, init).then(function(res) {
+        if (res.status === 401 && !_retried) {
+          return refreshAccessToken().then(function() {
+            return request(method, path, body, true);
+          }).catch(function(err) {
+            if (err && err.status === 401) invalidateAuthSession();
+            throw err;
+          });
+        }
+        if (res.status === 204) return null;
+        return res.text().then(function(text) {
+          if (!res.ok) {
+            var err = new Error(parseError(res, text));
+            err.status = res.status;
+            throw err;
+          }
+          if (!text) return null;
+          try {
+            return JSON.parse(text);
+          } catch (_) {
+            return text;
+          }
+        });
+      });
+    }
+    var MAPPERS = {
+      users: function(u) {
+        var out = {
+          username: u.username,
+          name: u.name,
+          role: u.role,
+          status: u.status || "active"
+        };
+        if (u.password) out.password = u.password;
+        if (u.classId) out.class_id = u.classId;
+        if (u.class_id) out.class_id = u.class_id;
+        if (u.studentNumber) out.numero = u.studentNumber;
+        if (u.numero) out.numero = u.numero;
+        return out;
+      },
+      classes: function(c) {
+        return {
+          name: c.name,
+          description: c.description || ""
+        };
+      },
+      categories: function(c) {
+        var out = {
+          name: c.name
+        };
+        if (c.icon != null) out.icon = String(c.icon);
+        if (c.color != null) out.color = String(c.color);
+        var parent = c.parent_id || c.parentId;
+        if (parent) out.parent_id = String(parent);
+        return out;
+      },
+      questions: function(q) {
+        var TYPE_MAP = {
+          "multiple-choice": "mcq",
+          "mcq": "mcq",
+          "true-false": "true-false",
+          "true_false": "true-false",
+          "matching-pairs": "matching",
+          "matching": "matching",
+          "ordering": "order",
+          "draggable": "order",
+          "order": "order",
+          "fill-blank": "fill-blank",
+          "fill_blank": "fill-blank",
+          // The legacy/AI UI supports code questions, while the Prisma schema
+          // stores them as MCQ-compatible records with their answer metadata in
+          // the legacy cache. Never send the unsupported "code" enum to Zod.
+          "code": "mcq"
+        };
+        var type = String(q.type || "multiple-choice");
+        var mappedType = TYPE_MAP[type] || "mcq";
+        var rawOptions = Array.isArray(q.optionData) && q.optionData.length ? q.optionData.map(function(o) {
+          return typeof o === "string" ? o : o && o.text || "";
+        }) : Array.isArray(q.options) ? q.options : [];
+        var optionsJson = rawOptions.length ? JSON.stringify(rawOptions) : void 0;
+        var answer = q.answer;
+        if (typeof answer !== "string") {
+          answer = Array.isArray(answer) ? JSON.stringify(answer) : answer == null ? "" : String(answer);
+        }
+        var out = {
+          type: mappedType,
+          text: q.text || q.question || q.title || "",
+          answer,
+          points: q.points != null ? Number(q.points) : 1,
+          difficulty: q.difficulty || "medium"
+        };
+        if (optionsJson !== void 0) out.options_json = optionsJson;
+        if (q.explanation != null) out.explanation = String(q.explanation);
+        if (q.instruction != null && !out.explanation) out.explanation = String(q.instruction);
+        if (q.media_url) out.media_url = String(q.media_url);
+        if (q.mediaUrl) out.media_url = String(q.mediaUrl);
+        if (q.image && q.image !== "") out.media_url = String(q.image);
+        if (q.tags != null) {
+          out.tags = Array.isArray(q.tags) ? q.tags.join(",") : String(q.tags);
+        }
+        var cat = q.category_id || q.categoryId || q.category;
+        if (cat && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(cat))) {
+          out.category_id = String(cat);
+        }
+        return out;
+      },
+      exams: function(e) {
+        var out = {
+          name: e.name || e.title || "Untitled exam",
+          description: e.description || "",
+          passing_score: e.passing_score != null ? Number(e.passing_score) : e.passingScore != null ? Number(e.passingScore) : 50
+        };
+        if (e.duration != null) out.duration = Number(e.duration);
+        if (e.durationMinutes != null) out.duration = Number(e.durationMinutes);
+        if (e.status != null) out.status = String(e.status);
+        if (e.is_training != null) out.is_training = !!e.is_training;
+        if (e.isTraining != null) out.is_training = !!e.isTraining;
+        if (e.randomize != null) out.randomize = !!e.randomize;
+        if (e.max_attempts != null) out.max_attempts = Number(e.max_attempts);
+        if (e.maxAttempts != null) out.max_attempts = Number(e.maxAttempts);
+        var legacy = {};
+        if (Array.isArray(e.questions)) legacy.questions = e.questions;
+        if (Array.isArray(e.classes)) legacy.classes = e.classes;
+        if (e.presetId != null) legacy.presetId = e.presetId;
+        if (e.dateCreated != null) legacy.dateCreated = e.dateCreated;
+        if (Object.keys(legacy).length > 0) out.options_json = JSON.stringify(legacy);
+        return out;
+      },
+      games: function(g) {
+        var status = String(g.status || "waiting");
+        if (status === "open") status = "waiting";
+        else if (status === "live") status = "active";
+        else if (status === "completed") status = "finished";
+        else if (status !== "active" && status !== "paused" && status !== "finished") status = "waiting";
+        var questionIds = Array.isArray(g.questions) ? g.questions.map(function(q) {
+          return q && (q.id || q.question_id) || q;
+        }).filter(Boolean) : Array.isArray(g.question_ids) ? g.question_ids : [];
+        var settings = Object.assign({}, g.settings || {});
+        if (Array.isArray(g.classIds)) settings.classIds = g.classIds;
+        if (g.session) settings.session = g.session;
+        if (g.results) settings.results = g.results;
+        if (g.lobbyCounter != null) settings.lobbyCounter = g.lobbyCounter;
+        if (Array.isArray(g.lobbyHistory)) settings.lobbyHistory = g.lobbyHistory;
+        return {
+          name: g.name || "Untitled game",
+          type: g.type || g.mode || "custom",
+          status,
+          settings_json: JSON.stringify(settings),
+          question_ids: JSON.stringify(questionIds),
+          join_code: g.joinCode || g.join_code || void 0
+        };
+      },
+      results: function(r) {
+        return {
+          exam_id: r.exam_id || r.examId,
+          score: r.score != null ? Number(r.score) : 0,
+          total_points: r.totalPoints != null ? Number(r.totalPoints) : 0,
+          earned_points: r.earnedPoints != null ? Number(r.earnedPoints) : 0,
+          answers_json: typeof r.answers_json === "string" ? r.answers_json : JSON.stringify(r.answers || {}),
+          mode: r.mode || "exam",
+          passed: r.passed != null ? !!r.passed : void 0
+        };
+      },
+      // ── Full-persistence stores (Phase 3) ────────────────────────────────
+      "profile-requests": function(r) {
+        var changes = r.changes_json != null ? r.changes_json : r.changes || {};
+        return {
+          changes_json: typeof changes === "string" ? changes : JSON.stringify(changes),
+          avatar: r.avatar != null ? String(r.avatar) : void 0,
+          note: r.note != null ? String(r.note) : void 0,
+          snapshot_json: r.snapshot_json != null ? typeof r.snapshot_json === "string" ? r.snapshot_json : JSON.stringify(r.snapshot_json) : r.snapshot != null ? JSON.stringify(r.snapshot) : void 0
+        };
+      },
+      "account-requests": function(r) {
+        return {
+          username: r.username,
+          full_name: r.full_name || r.fullName || r.name,
+          student_number: r.student_number || r.studentNumber || r.numero,
+          password: r.password,
+          class_id: r.class_id || r.classId || void 0,
+          class_name: r.class_name || r.className || void 0,
+          note: r.note != null ? String(r.note) : void 0
+        };
+      },
+      "game-presets": function(p2) {
+        var rules = p2.rules_json != null ? p2.rules_json : p2.rules || {};
+        return {
+          name: p2.name,
+          game_type: p2.game_type || p2.gameType || p2.type,
+          game_mode: p2.game_mode || p2.gameMode || p2.mode,
+          rules_json: typeof rules === "string" ? rules : JSON.stringify(rules),
+          is_default: p2.is_default != null ? !!p2.is_default : p2.isDefault != null ? !!p2.isDefault : false
+        };
+      },
+      notifications: function(n) {
+        return {
+          type: n.type || "admin_notice",
+          message: n.message || n.text || n.title || "",
+          data: n.data != null ? n.data : n.data_json != null ? n.data_json : void 0
+        };
+      },
+      gamification: function(g) {
+        var out = {};
+        if (g.exp_per_correct != null) out.exp_per_correct = Number(g.exp_per_correct);
+        if (g.expPerCorrect != null) out.exp_per_correct = Number(g.expPerCorrect);
+        if (g.exp_per_win != null) out.exp_per_win = Number(g.exp_per_win);
+        if (g.expPerWin != null) out.exp_per_win = Number(g.expPerWin);
+        if (g.auto_award_badges != null) out.auto_award_badges = !!g.auto_award_badges;
+        if (g.autoAwardBadges != null) out.auto_award_badges = !!g.autoAwardBadges;
+        return out;
+      },
+      "teacher-messages": function(m) {
+        return {
+          title: m.title,
+          body: m.body || m.message || m.text,
+          class_id: m.class_id || m.classId || void 0,
+          class_name: m.class_name || m.className || void 0,
+          date: m.date || m.createdAt || void 0
+        };
+      },
+      "teacher-assignments": function(a) {
+        return {
+          title: a.title,
+          description: a.description != null ? String(a.description) : void 0,
+          class_id: a.class_id || a.classId || void 0,
+          due_date: a.due_date || a.dueDate || void 0
+        };
+      }
+    };
+    function mapPayload(entity, data) {
+      var mapper = MAPPERS[entity];
+      return mapper ? mapper(data || {}) : data || {};
+    }
+    window.API = {
+      /** GET /api/v1/<entity>[?query] */
+      list: function(entity, query) {
+        var qs = "";
+        if (query && typeof query === "object") {
+          var parts = [];
+          for (var k in query) {
+            if (query[k] != null && query[k] !== "") {
+              parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(query[k]));
+            }
+          }
+          if (parts.length) qs = "?" + parts.join("&");
+        }
+        return request("GET", "/" + entity + qs);
+      },
+      /** GET /api/v1/<entity>/<id> */
+      get: function(entity, id) {
+        return request("GET", "/" + entity + "/" + encodeURIComponent(id));
+      },
+      /** POST /api/v1/<entity> — payload is mapped through MAPPERS first. */
+      create: function(entity, data) {
+        return request("POST", "/" + entity, mapPayload(entity, data));
+      },
+      /** PATCH /api/v1/<entity>/<id> */
+      update: function(entity, id, patch) {
+        return request("PATCH", "/" + entity + "/" + encodeURIComponent(id), mapPayload(entity, patch));
+      },
+      /** DELETE /api/v1/<entity>/<id> */
+      remove: function(entity, id) {
+        return request("DELETE", "/" + entity + "/" + encodeURIComponent(id));
+      },
+      /** POST /api/v1/auth/login */
+      login: function(username, password) {
+        return request("POST", "/auth/login", { username, password });
+      },
+      /** GET /api/v1/bootstrap */
+      bootstrap: function() {
+        return request("GET", "/bootstrap");
+      },
+      /** Expose a raw request for arbitrary paths (e.g. custom routes). */
+      raw: request
+    };
+  })();
   (function() {
     "use strict";
     const AUTH_STORAGE_KEY = "quizUsers";
@@ -22045,7 +22581,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         "Training mode parameter found in URL, starting training mode..."
       );
       if (document.getElementById("welcome-page")) {
-        startTrainingMode();
+        const bootstrap2 = window.__legacyBridgeBootstrap;
+        if (typeof bootstrap2 === "function" && !window.__trainingBootstrapStarted) {
+          window.__trainingBootstrapStarted = true;
+          Promise.resolve(bootstrap2()).catch(() => void 0).finally(() => startTrainingMode());
+        } else {
+          startTrainingMode();
+        }
         return;
       }
     }
@@ -22070,7 +22612,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
               if (studentInfoForm.class)
                 studentInfoForm.class.value = studentInfo2.class;
               console.log("Auto-filled student info form");
-              setTimeout(() => {
+              setTimeout(async () => {
                 console.log("Directly starting exam with ID:", examId);
                 currentMode = quizModes.exam;
                 const questionBank = JSON.parse(
@@ -22097,6 +22639,39 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                   timeLimit: (useSessionQuestions ? activeSession.timeLimit : 0) || currentExam.duration * 60,
                   penalty: sessionSettings.penalty ?? 0
                 });
+                const runtimeStudentInfo = JSON.parse(
+                  sessionStorage.getItem("studentInfo") || "null"
+                );
+                const signedInStudent = window.Auth?.getCurrentUser?.() || {};
+                const fallbackAllowedStudent = {
+                  number: runtimeStudentInfo?.numero || signedInStudent.studentNumber || signedInStudent.numero || "",
+                  name: runtimeStudentInfo?.name || signedInStudent.name || signedInStudent.username || "",
+                  classId: runtimeStudentInfo?.classId || signedInStudent.classId || signedInStudent.class_id || "",
+                  className: runtimeStudentInfo?.class || signedInStudent.className || ""
+                };
+                const runtimeSession = {
+                  ...activeSession || {},
+                  examId,
+                  examName: currentExam.name,
+                  duration: currentExam.duration,
+                  timeLimit: quizConfig.timeLimit,
+                  passingScore: currentExam.passing_score ?? currentExam.passingScore ?? 50,
+                  questions: resolvedQuestions,
+                  studentInfo: runtimeStudentInfo,
+                  allowedStudents: Array.isArray(activeSession?.allowedStudents) && activeSession.allowedStudents.length ? activeSession.allowedStudents : [fallbackAllowedStudent]
+                };
+                try {
+                  if (window.API?.raw && !runtimeSession.id) {
+                    const created = await window.API.raw("POST", "/sessions", {
+                      exam_id: examId,
+                      duration_minutes: currentExam.duration || 60
+                    });
+                    runtimeSession.id = created?.id || "";
+                  }
+                } catch (sessionError) {
+                  console.warn("Exam API session unavailable; keeping local recovery state:", sessionError);
+                }
+                localStorage.setItem("examActiveSession", JSON.stringify(runtimeSession));
                 if (document.getElementById("welcome-page")) {
                   document.getElementById("welcome-page").style.display = "none";
                 }
@@ -22111,6 +22686,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           }
         }
       } else {
+        window.addEventListener("quiz:bootstrap-ready", () => window.location.reload(), { once: true });
         console.warn("Exam ID not found in database:", examId);
       }
     }
@@ -22298,7 +22874,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (!scoreEl) return;
     scoreEl.textContent = `${score}/${quizConfig.totalQuestions}`;
   }
-  function endQuiz() {
+  async function syncExamAttemptToApi(activeSession, answers) {
+    if (!activeSession?.id || !window.API?.raw) return null;
+    for (const entry of answers || []) {
+      if (!entry?.questionId || entry.userAnswer == null) continue;
+      await window.API.raw("POST", `/sessions/${encodeURIComponent(activeSession.id)}/answer`, {
+        session_id: activeSession.id,
+        question_id: entry.questionId,
+        answer: typeof entry.userAnswer === "string" ? entry.userAnswer : JSON.stringify(entry.userAnswer)
+      });
+    }
+    return window.API.raw("POST", `/sessions/${encodeURIComponent(activeSession.id)}/submit`, {});
+  }
+  async function endQuiz() {
     if (timerId) {
       clearInterval(timerId);
       timerId = null;
@@ -22345,6 +22933,39 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
               passed: score / totalPoints * 100 >= (activeSession.passingScore || 60)
             }
           };
+          let apiResult = null;
+          try {
+            apiResult = await syncExamAttemptToApi(activeSession, answers);
+          } catch (apiError) {
+            console.warn("Could not submit exam attempt to the API:", apiError);
+          }
+          if (!apiResult) {
+            try {
+              const dbResults = window.__DI_CONTAINER__.repo.getAll_sync("results") || [];
+              const canonical = {
+                id: sessionResult.id,
+                examId: activeSession.examId,
+                examTitle: activeSession.examName,
+                userId: window.Auth?.getCurrentUser?.()?.id || "",
+                numero: studentInfo2.numero,
+                name: studentInfo2.name,
+                studentName: studentInfo2.name,
+                class: studentInfo2.class,
+                score,
+                totalPoints,
+                totalQuestions: quizConfig.totalQuestions,
+                earnedPoints: score,
+                timeSpent: quizConfig.timeLimit - timeRemaining,
+                date: sessionResult.completedAt,
+                mode: "exam",
+                passed: sessionResult.results.passed
+              };
+              const withoutDuplicate = dbResults.filter((item) => String(item.id) !== String(canonical.id));
+              window.__DI_CONTAINER__.repo.setAll_sync("results", [...withoutDuplicate, canonical]);
+            } catch (persistError) {
+              console.warn("Could not persist exam result to the API bridge:", persistError);
+            }
+          }
           if (!activeSession.completedResults) {
             activeSession.completedResults = [];
           }
@@ -26264,6 +26885,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           localStorage.setItem("quizUsers", JSON.stringify(users));
         }
         window.__authToken = session.token;
+        window.__AUTH_SESSION_EXPIRED__ = false;
       } catch (e) {
         console.warn("[legacy-auth] persistSession error:", e);
       }

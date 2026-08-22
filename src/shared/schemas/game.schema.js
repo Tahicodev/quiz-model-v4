@@ -36,7 +36,9 @@ export const GameJoinSchema = z.object({
 });
 
 export const GameAnswerSchema = z.object({
-  game_id:     z.string().uuid(),
+  // The game id is carried by the URL (`/:id/answer`) and the server derives
+  // the player from the JWT.
+  game_id:     z.string().uuid().optional(),
   question_id: z.string().uuid(),
   answer:      z.string().min(1),
 });

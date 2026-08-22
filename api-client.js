@@ -43,6 +43,8 @@
   function setToken(newToken) {
     if (!newToken) return;
     window.__authToken = newToken;
+    authUnavailable = false;
+    window.__AUTH_SESSION_EXPIRED__ = false;
     try {
       var s = JSON.parse(localStorage.getItem('quizSession') || 'null');
       if (s) {
@@ -55,15 +57,44 @@
   }
 
   var refreshing = null;
+  var authUnavailable = false;
+
+  function invalidateAuthSession() {
+    authUnavailable = true;
+    window.__authToken = '';
+    window.__AUTH_SESSION_EXPIRED__ = true;
+    try {
+      if (window.__QUIZ_LEGACY_SOCKET__) window.__QUIZ_LEGACY_SOCKET__.disconnect();
+    } catch (_) { /* non-fatal */ }
+    try {
+      localStorage.removeItem('quizSession');
+      localStorage.removeItem('quizSessionRemember');
+      localStorage.removeItem('quizAuthToken');
+      localStorage.removeItem('quizCurrentUser');
+      sessionStorage.removeItem('quizSession');
+    } catch (_) { /* non-fatal */ }
+    try {
+      window.dispatchEvent(new CustomEvent('quiz:auth-expired'));
+    } catch (_) { /* non-fatal */ }
+  }
 
   function refreshAccessToken() {
     if (refreshing) return refreshing;
+    if (authUnavailable) {
+      var blocked = new Error('Session expired');
+      blocked.status = 401;
+      return Promise.reject(blocked);
+    }
     refreshing = fetch(getBaseUrl() + '/auth/refresh', {
       method: 'POST',
       credentials: 'include',
     })
       .then(function (r) {
-        if (!r.ok) throw new Error('Refresh failed (' + r.status + ')');
+        if (!r.ok) {
+          var err = new Error('Refresh failed (' + r.status + ')');
+          err.status = r.status;
+          throw err;
+        }
         return r.json();
       })
       .then(function (data) {
@@ -99,7 +130,7 @@
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + getToken(),
+        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
       },
     };
     if (body !== undefined && body !== null) {
@@ -107,9 +138,12 @@
     }
     return fetch(url, init).then(function (res) {
       if (res.status === 401 && !_retried) {
-        return refreshAccessToken().then(function () {
-          return request(method, path, body, true);
-        });
+        return refreshAccessToken()
+          .then(function () { return request(method, path, body, true); })
+          .catch(function (err) {
+            if (err && err.status === 401) invalidateAuthSession();
+            throw err;
+          });
       }
       if (res.status === 204) return null;
       return res.text().then(function (text) {
@@ -166,15 +200,18 @@
 
     questions: function (q) {
       var TYPE_MAP = {
-        'multiple-choice': 'MCQ', 'mcq': 'MCQ',
-        'true-false': 'TRUE_FALSE', 'true_false': 'TRUE_FALSE',
-        'short-answer': 'SHORT_ANSWER', 'short_answer': 'SHORT_ANSWER',
-        'essay': 'ESSAY', 'matching': 'MATCHING',
-        'ordering': 'ORDER', 'order': 'ORDER',
-        'fill-blank': 'FILL_BLANK', 'fill_blank': 'FILL_BLANK',
+        'multiple-choice': 'mcq', 'mcq': 'mcq',
+        'true-false': 'true-false', 'true_false': 'true-false',
+        'matching-pairs': 'matching', 'matching': 'matching',
+        'ordering': 'order', 'draggable': 'order', 'order': 'order',
+        'fill-blank': 'fill-blank', 'fill_blank': 'fill-blank',
+        // The legacy/AI UI supports code questions, while the Prisma schema
+        // stores them as MCQ-compatible records with their answer metadata in
+        // the legacy cache. Never send the unsupported "code" enum to Zod.
+        'code': 'mcq',
       };
       var type = String(q.type || 'multiple-choice');
-      var mappedType = TYPE_MAP[type] || type;
+      var mappedType = TYPE_MAP[type] || 'mcq';
 
       var rawOptions = Array.isArray(q.optionData) && q.optionData.length
         ? q.optionData.map(function (o) { return typeof o === 'string' ? o : (o && o.text) || ''; })
@@ -204,7 +241,9 @@
         out.tags = Array.isArray(q.tags) ? q.tags.join(',') : String(q.tags);
       }
       var cat = q.category_id || q.categoryId || q.category;
-      if (cat && cat !== 'uncategorized' && cat !== 'default') {
+      // QuestionCreateSchema requires a UUID category FK. Legacy category
+      // names and placeholders are display-only and must not be sent.
+      if (cat && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(cat))) {
         out.category_id = String(cat);
       }
       return out;
@@ -238,7 +277,9 @@
     games: function (g) {
       var status = String(g.status || 'waiting');
       if (status === 'open') status = 'waiting';
-      else if (status !== 'live' && status !== 'completed') status = 'waiting';
+      else if (status === 'live') status = 'active';
+      else if (status === 'completed') status = 'finished';
+      else if (status !== 'active' && status !== 'paused' && status !== 'finished') status = 'waiting';
       var questionIds = Array.isArray(g.questions)
         ? g.questions.map(function (q) { return (q && (q.id || q.question_id)) || q; }).filter(Boolean)
         : (Array.isArray(g.question_ids) ? g.question_ids : []);

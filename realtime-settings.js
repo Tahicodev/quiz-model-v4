@@ -114,6 +114,10 @@
 			}
 
 			realtimeSocket = window.getSocket();
+			if (!realtimeSocket) {
+				updateRealtimeStatus('disconnected');
+				return;
+			}
 
 			// Connection events
 			realtimeSocket.on('connect', () => {
@@ -457,6 +461,10 @@
 		}
 
 		const testSocket = window.getSocket();
+		if (!testSocket) {
+			showRealtimeStatus('Sign in before testing realtime connection', 'error');
+			return;
+		}
 
 		const timeoutId = setTimeout(() => {
 			testSocket.disconnect();
@@ -1169,6 +1177,11 @@
 
 		showRealtimeStatus('Connecting to sync users...', 'info');
 		const tempSocket = window.getSocket();
+		if (!tempSocket) {
+			userSyncInProgress = false;
+			showRealtimeStatus('Sign in before syncing users', 'error');
+			return;
+		}
 		let done = false;
 		userSyncInProgress = true;
 
@@ -1306,6 +1319,10 @@
 
 		showRealtimeStatus('Connecting to sync games...', 'info');
 		const tempSocket = window.getSocket();
+		if (!tempSocket) {
+			showRealtimeStatus('Sign in before syncing games', 'error');
+			return;
+		}
 		let done = false;
 
 		tempSocket.on('connect', () => {
@@ -1426,6 +1443,10 @@
 
 		showRealtimeStatus('Connecting to sync gamification settings...', 'info');
 		const tempSocket = window.getSocket();
+		if (!tempSocket) {
+			showRealtimeStatus('Sign in before syncing gamification settings', 'error');
+			return;
+		}
 		let done = false;
 
 		tempSocket.on('connect', () => {

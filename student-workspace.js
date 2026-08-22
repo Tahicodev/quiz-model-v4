@@ -187,6 +187,35 @@
 		);
 	}
 
+	function hasStudentRestApi() {
+		return typeof window.API?.raw === 'function' && Boolean(window.__authToken);
+	}
+
+	function submitGameAnswerViaApi(gameId, context, answer, questionId) {
+		if (!hasStudentRestApi() || !gameId || !questionId) return false;
+		window.API.raw('POST', `/games/${encodeURIComponent(gameId)}/answer`, {
+			question_id: questionId,
+			answer: String(answer ?? '').trim(),
+		})
+			.then((result) => {
+				const points = Number(result?.points) || 0;
+				if (points > 0) {
+					updateGameStore(
+						gameId,
+						(game) => {
+							const participant = getParticipant(ensureSession(game), context.user.id);
+							if (participant) participant.score = Number(participant.score || 0) + points;
+							return game;
+						},
+						{ scope: 'student-rest-answer' },
+					);
+				}
+				renderGameStage(context);
+			})
+			.catch((error) => showToast(error?.message || 'Could not save your answer.', 'error'));
+		return true;
+	}
+
 	function getServerGame(gameId) {
 		return serverGames.get(gameId) || null;
 	}
@@ -657,6 +686,32 @@
 					});
 				}
 			});
+		}
+
+		// The API/Prisma result is the durable source of truth. Include it in
+		// the workspace summary so a fresh device still shows completed exams;
+		// the legacy local snapshot above remains useful while a write is syncing.
+		try {
+			const currentUserId = String(window.Auth?.getCurrentUser?.()?.id || '').trim();
+			const dbResults = window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
+			dbResults.forEach((entry) => {
+				if (!entry || String(entry.mode || '').toLowerCase() === 'training') return;
+				const examId = entry.examId || entry.exam_id;
+				if (!examId) return;
+				const sameUser = currentUserId && String(entry.userId || entry.user_id || '') === currentUserId;
+				const sameStudent = String(entry.numero || '').trim() === String(identity.numero || '').trim();
+				if (!sameUser && !sameStudent) return;
+				results.push({
+					examId,
+					examName: entry.examName || entry.examTitle || 'Exam',
+					score: Number(entry.earnedPoints ?? entry.earned_points ?? entry.score ?? 0),
+					totalQuestions: Number(entry.totalQuestions ?? entry.total_points ?? 0),
+					timeSpent: Number(entry.timeSpent ?? entry.time_spent ?? 0),
+					date: entry.date || entry.dateTaken || entry.date_taken || '',
+				});
+			});
+		} catch (_) {
+			/* Cached legacy results remain available if the API cache is absent. */
 		}
 
 		return results;
@@ -5659,6 +5714,25 @@
 				);
 				return;
 			}
+			if (hasStudentRestApi()) {
+				window.API.raw('POST', '/games/join', { game_id: gameId })
+					.then((session) => {
+						const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
+						if (game) {
+							updateGameStore(gameId, (localGame) => {
+								ensureParticipantForGame(localGame, context, teamId);
+								return localGame;
+							});
+						}
+						showToast('Joined game lobby.', 'success');
+						resolve({ ok: true, session, game });
+					})
+					.catch((error) => {
+						showToast(error?.message || 'Could not join this game.', 'error');
+						resolve({ error: error?.message || 'Could not join this game.' });
+					});
+				return;
+			}
 			notifyRealtimeDisconnected();
 			resolve({ error: 'Realtime server disconnected' });
 		});
@@ -8802,11 +8876,15 @@
 					}
 					requestGameSync(gameId, context, 0);
 				},
-			);
+				);
+				return;
+			}
+			const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
+		const questionId =
+				game?.session?.round?.questionId || game?.questions?.[Number(questionIndex)]?.id;
+			if (submitGameAnswerViaApi(gameId, context, answer, questionId)) return;
+			notifyRealtimeDisconnected();
 			return;
-		}
-		notifyRealtimeDisconnected();
-		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
 		updateGameStore(
@@ -8901,11 +8979,11 @@
 					}
 					requestGameSync(gameId, context, 0);
 				},
-			);
+				);
+				return;
+			}
+			notifyRealtimeDisconnected();
 			return;
-		}
-		notifyRealtimeDisconnected();
-		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
 		updateGameStore(
@@ -9134,10 +9212,13 @@
 					}
 					requestGameSync(gameId, context, 0);
 				},
-			);
-			return;
-		}
-		notifyRealtimeDisconnected();
+				);
+				return;
+			}
+			const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
+			const questionId = game?.session?.card?.pendingCard?.questionId;
+		if (submitGameAnswerViaApi(gameId, context, answer, questionId)) return;
+			notifyRealtimeDisconnected();
 		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
@@ -9195,7 +9276,10 @@
 			);
 			return;
 		}
-		notifyRealtimeDisconnected();
+		const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
+		const questionId = game?.session?.tieBreak?.questionId;
+		if (submitGameAnswerViaApi(gameId, context, answer, questionId)) return;
+			notifyRealtimeDisconnected();
 		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
@@ -9490,7 +9574,17 @@
 			const parsed = JSON.parse(
 				localStorage.getItem('quizTournamentActive') || 'null',
 			);
-			return parsed && typeof parsed === 'object' ? parsed : null;
+			if (parsed && typeof parsed === 'object') return parsed;
+			const tournaments = window.__DI_CONTAINER__.repo.getAll_sync('tournaments') || [];
+			const serverTournament = tournaments.find((entry) =>
+				['active', 'open'].includes(String(entry?.status || '').toLowerCase()),
+			);
+			if (!serverTournament) return null;
+			return {
+				...serverTournament,
+				...(serverTournament.settings || {}),
+				participants: serverTournament.participants || serverTournament.settings?.participants || [],
+			};
 		} catch (e) {
 			return null;
 		}
@@ -9673,7 +9767,7 @@
 		);
 	}
 
-	function joinActiveTournament(context) {
+	async function joinActiveTournament(context) {
 		const activeTournament = getActiveTournamentRecord();
 		if (
 			!activeTournament ||
@@ -9699,6 +9793,22 @@
 		if (cap && participants.length >= cap) {
 			showToast('Tournament is full', 'warning');
 			return;
+		}
+
+		// The local tournament snapshot is only a compatibility view. Persist the
+		// registration through the Prisma-backed endpoint before updating that
+		// view, so a refresh or a different device sees the same membership.
+		if (hasStudentRestApi()) {
+			try {
+				await window.API.raw(
+					'POST',
+					`/tournaments/${encodeURIComponent(activeTournament.id)}/register`,
+					{},
+				);
+			} catch (error) {
+				showToast(error?.message || 'Could not join this tournament.', 'error');
+				return;
+			}
 		}
 
 		participants.push({
@@ -9764,6 +9874,30 @@
 		}
 
 		const activeTournament = getActiveTournamentRecord();
+		try {
+			const entries = window.__DI_CONTAINER__.repo.getAll_sync('tournament_entries') || [];
+			const usersById = new Map(
+				(window.__DI_CONTAINER__.repo.getAll_sync('users') || []).map((user) => [String(user.id), user]),
+			);
+			const dbEntries = entries
+				.filter((entry) => String(entry?.tournament_id || entry?.tournamentId || '') === String(tournamentId))
+				.map((entry) => {
+					const user = usersById.get(String(entry.user_id || entry.userId || ''));
+					return {
+						id: entry.user_id || entry.userId || '',
+						name: user?.name || user?.username || 'Player',
+						points: Number(entry.score) || 0,
+						score: Number(entry.score) || 0,
+						rank: entry.rank || null,
+					};
+				})
+				.filter((entry) => entry.id);
+			if (dbEntries.length) {
+				return dbEntries.sort((a, b) => b.points - a.points);
+			}
+		} catch (_) {
+			/* Legacy profile scores remain available when the entry cache is absent. */
+		}
 		const participantIds = new Set(
 			normalizeTournamentParticipants(activeTournament).map(
 				(entry) => entry.userId,
@@ -12407,6 +12541,18 @@
 
 		renderWorkspace();
 		queueStickyProfileDockUpdate();
+	});
+
+	// Bootstrap is intentionally asynchronous. Re-render once the normalized
+	// Prisma snapshot has arrived so a fresh student device does not show an
+	// empty Exams/Training/Tournament workspace for the first paint only.
+	window.addEventListener('quiz:bootstrap-ready', () => {
+		try {
+			bindGameSocket();
+			renderWorkspace();
+		} catch (_) {
+			/* Keep the already-rendered cached workspace usable. */
+		}
 	});
 
 	window.addEventListener('auth:changed', () => {

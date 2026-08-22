@@ -18,7 +18,7 @@ export const PAGE_EVENTS = [
 let socket = null;
 let currentQuestion = null;
 
-export function initGameQuestion() {
+export function initGameQuestion(gameId) {
   const { authSvc } = getContainer();
   socket = getSocket(authSvc.getToken());
   if (!socket.connected) socket.connect();
@@ -52,6 +52,6 @@ function handleQuestion(q) {
     e.preventDefault();
     const answer = document.querySelector('input[name=answer]:checked')?.value;
     if (!answer) return;
-    socket.emit(SOCKET_EVENTS.GAME_ANSWER, { questionId: q.id, answer });
+    socket.emit(SOCKET_EVENTS.GAME_ANSWER, { gameId, questionId: q.id, answer });
   }));
 }

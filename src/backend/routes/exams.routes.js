@@ -27,6 +27,9 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     const exam = await examSvc.getById(req.params.id);
+    if (req.user?.role === ROLES.STUDENT && exam.status !== 'active') {
+      return res.status(404).json({ message: 'Exam not found' });
+    }
     res.json(exam);
   } catch (err) { next(err); }
 });
@@ -35,6 +38,9 @@ router.get('/:id/questions', async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     const exam = await examSvc.getWithQuestions(req.params.id, req.schoolId);
+    if (req.user?.role === ROLES.STUDENT && exam.status !== 'active') {
+      return res.status(404).json({ message: 'Exam not found' });
+    }
     res.json(exam);
   } catch (err) { next(err); }
 });

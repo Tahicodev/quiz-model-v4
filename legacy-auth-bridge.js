@@ -100,6 +100,7 @@
       }
       // Store token for the API repo
       window.__authToken = session.token;
+      window.__AUTH_SESSION_EXPIRED__ = false;
     } catch (e) {
       console.warn('[legacy-auth] persistSession error:', e);
     }

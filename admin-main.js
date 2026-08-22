@@ -5,6 +5,17 @@ let adminSectionsInitialized = false;
 function initializeAdminSectionsAfterAuth() {
 	if (adminSectionsInitialized) return;
 	if (sessionStorage.getItem('adminLoggedIn') !== 'true') return;
+	// Do not trust the legacy flag by itself. On a reload it can survive from
+	// an earlier admin session while the current session belongs to a student
+	// (or while checkAuthState() has not finished yet). Initializing the legacy
+	// managers in that window causes them to write cached data through the
+	// admin-only bulk endpoints and produces a burst of 403 responses.
+	const currentRole = String(window.currentUser?.role || '').toLowerCase();
+	const isAdminAreaRole =
+		currentRole === 'admin' ||
+		currentRole === 'super_admin' ||
+		currentRole === 'teacher';
+	if (!isAdminAreaRole) return;
 	adminSectionsInitialized = true;
 	setTimeout(function () {
 		if (typeof showAdminButtons === 'function') {
@@ -1432,8 +1443,9 @@ function toggleSelectAllQuestions(checkbox) {
 	updateBulkDeleteButtons();
 }
 
-// Delete selected questions
-function deleteSelectedQuestions() {
+// Delete selected questions. Keep the database as the source of truth: the
+// legacy cache is changed only after each server delete succeeds.
+async function deleteSelectedQuestions() {
 	const questionList = document.getElementById('question-list');
 	if (!questionList) return;
 
@@ -1466,35 +1478,64 @@ function deleteSelectedQuestions() {
 	indices.sort((a, b) => b - a);
 
 	let questions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
+	const selectedRecords = new Map(
+		indices.map((index) => [index, questions[index]]),
+	);
 
-	// Log the activity
-	if (typeof logActivity === 'function') {
-		const metadata = { count: indices.length };
-		let logName = `${indices.length} Questions`;
-
-		// If only one question is deleted, get its details for a better log entry
-		if (indices.length === 1) {
-			const index = indices[0];
-			const q = questions[index];
-			if (q) {
-				metadata.text =
-					q.question.length > 50
-						? q.question.substring(0, 50) + '...'
-						: q.question;
-				metadata.type =
-					q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
-				metadata.number = index + 1;
-				logName = `Question #${metadata.number}`;
-			}
-		}
-
-		logActivity('question', logName, 'deleted', metadata);
+	if (!window.API || typeof window.API.remove !== 'function') {
+		showToast('Question API is unavailable. Reload the page and try again.', 'error');
+		return;
 	}
 
-	// Delete questions
-	indices.forEach((index) => {
-		questions.splice(index, 1);
-	});
+	const deletedIndexes = [];
+	for (const index of indices) {
+		const question = questions[index];
+		if (!question) continue;
+		try {
+			if (question.id) {
+				await window.API.remove('questions', question.id);
+			}
+			deletedIndexes.push(index);
+		} catch (apiErr) {
+			// A local-only legacy row is already absent from Prisma; removing it
+			// locally is safe. Other failures must leave the row visible so the
+			// user can retry without losing track of it.
+			if (apiErr?.status === 404) {
+				deletedIndexes.push(index);
+				continue;
+			}
+			console.error('[questions] bulk API delete failed:', apiErr);
+			showToast(
+				`Deleted ${deletedIndexes.length} question(s); the rest failed: ${apiErr?.message || 'server error'}`,
+				'error',
+			);
+			break;
+		}
+	}
+
+	if (!deletedIndexes.length) return;
+
+	// Remove only records confirmed absent from the server. Indices are sorted
+	// descending, so splicing cannot shift a later target.
+	deletedIndexes.forEach((index) => questions.splice(index, 1));
+
+	// Log the activity after persistence so the audit trail reflects reality.
+	if (typeof logActivity === 'function') {
+		const metadata = { count: deletedIndexes.length };
+		let logName = `${deletedIndexes.length} Questions`;
+		if (deletedIndexes.length === 1) {
+			const index = deletedIndexes[0];
+			const q = selectedRecords.get(index);
+			metadata.number = index + 1;
+			logName = `Question #${metadata.number}`;
+			if (q) {
+				const text = String(q.question || q.text || '');
+				metadata.text = text.length > 50 ? text.substring(0, 50) + '...' : text;
+				metadata.type = q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
+			}
+		}
+		logActivity('question', logName, 'deleted', metadata);
+	}
 
 	window.__DI_CONTAINER__.repo.setAll_sync('questions', questions);
 
@@ -1503,7 +1544,9 @@ function deleteSelectedQuestions() {
 		updateQuestionList();
 	}
 
-	showToast(`Deleted ${indices.length} question(s)`);
+	if (deletedIndexes.length === indices.length) {
+		showToast(`Deleted ${deletedIndexes.length} question(s)`);
+	}
 }
 
 // Expose to window

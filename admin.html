@@ -12,10 +12,20 @@
 			// will finalize (show modal or restore the content) on DOMContentLoaded.
 			(function () {
 				try {
-					var raw =
-						sessionStorage.getItem('quizSession') ||
-						localStorage.getItem('quizSessionRemember');
-					if (!raw) {
+					var candidates = [
+						sessionStorage.getItem('quizSession'),
+						localStorage.getItem('quizSessionRemember'),
+					];
+					var hasAdminAreaSession = candidates.some(function (value) {
+						try {
+							var session = value ? JSON.parse(value) : null;
+							var role = String(session && session.role || '').toLowerCase();
+							return role === 'admin' || role === 'super_admin' || role === 'teacher';
+						} catch (e) {
+							return false;
+						}
+					});
+					if (!hasAdminAreaSession) {
 						document.documentElement.classList.add('auth-pending');
 					}
 				} catch (e) {
@@ -47,6 +57,8 @@
 							console.warn('getSocket called before Socket.IO loaded');
 							return null;
 						}
+						if (window.__AUTH_SESSION_EXPIRED__) return null;
+						if (window.__QUIZ_LEGACY_SOCKET__) return window.__QUIZ_LEGACY_SOCKET__;
 						var token = window.__authToken || null;
 						try {
 							var stored = JSON.parse(localStorage.getItem('quizSession') || 'null');
@@ -59,10 +71,12 @@
 						// SaaS sockets always require auth — skip the connection when
 						// anonymous so we don't spam the console with WebSocket errors.
 						if (!token) return null;
-						return window.io(url || '/', Object.assign({
+						var socket = window.io(url || '/', Object.assign({
 							auth: { token: token },
 							transports: ['polling', 'websocket'],
 						}, opts || {}));
+						window.__QUIZ_LEGACY_SOCKET__ = socket;
+						return socket;
 					};
 				</script>
 

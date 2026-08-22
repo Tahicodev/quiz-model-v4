@@ -29,6 +29,7 @@ const ROOT = resolve(__dirname, '..');
 
 const LEGACY_FILES = [
   'utils.js',
+  'api-client.js',
   'auth.js',
   'script.js',
   'landing.js',

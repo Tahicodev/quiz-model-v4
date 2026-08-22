@@ -21371,42 +21371,6 @@ tr[data-id],
 	}
 }
 
-/* =========================================
-   ENTRY GATE — index.html sign-in screen
-   (replaces the legacy student landing page)
-   ========================================= */
-/* Always show the gate modal — it IS the page content, not an overlay. */
-.entry-gate-modal {
-	display: flex !important;
-	position: fixed;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-	z-index: 2000;
-}
-
-/* The login dialog stays centered and scrolls internally if the viewport is
-   short — the rest of the page is locked away behind the backdrop. */
-body:has(.entry-gate-modal) {
-	overflow: hidden;
-}
-
-/* Ensure the gate's error/status line is visible in the DOM flow. */
-#entryAuthStatus {
-	min-height: 0;
-	margin-top: 4px;
-}
-
-/* The entry page's hidden quiz container must never be shown by accident —
-   script.js toggles it when starting an exam after login. */
-.entry-gate-container .quiz-container {
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	z-index: 1; /* sits beneath the gate modal (z-index: 2000) */
-}
-
 /* ============================= */
 /* Scroll to Top Button */
 /* ============================= */
@@ -27127,6 +27091,169 @@ body.settings-modal-open {
 @media (max-width: 420px) {
 	#settingsModal .user-settings-tabs {
 		grid-template-columns: 1fr;
+	}
+}
+
+/* Entry gate — index.html sign-in screen. The gate is the page shell itself,
+   while direct exam/training links reuse the hidden runtime below it. */
+.entry-gate-modal {
+	display: flex !important;
+	position: fixed;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 2000;
+}
+
+/* A signed-in student may return to index.html with ?mode=training or
+   ?examId=... . The gate remains in the DOM for the legacy event wiring, but
+   it must not cover the runtime after EntryPage activates that route. */
+.entry-gate-container.entry-runtime-active .entry-gate-modal {
+	display: none !important;
+}
+
+.entry-gate-container.entry-runtime-active .quiz-container {
+	display: block !important;
+	position: relative;
+	top: auto;
+	left: auto;
+}
+
+body:has(.entry-gate-modal) {
+	overflow: hidden;
+}
+
+body:has(.entry-gate-container.entry-runtime-active) {
+	overflow: auto;
+}
+
+#entryAuthStatus {
+	min-height: 0;
+	margin-top: 4px;
+}
+
+.entry-gate-container .quiz-container {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	z-index: 1;
+}
+
+/* Student runtime polish — uses the same surfaces, radius, and accent language
+   as the admin panels while keeping the exam flow calm and distraction-free. */
+.student-runtime-card {
+	width: min(100% - 32px, 920px);
+	margin: 40px auto;
+	padding: clamp(22px, 4vw, 42px);
+	background: var(--surface-color, #fff);
+	border: 1px solid var(--border-color, #e5e7eb);
+	border-radius: 18px;
+	box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+.student-runtime-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+}
+
+.student-runtime-header h1 {
+	margin: 6px 0 0;
+	color: var(--text-color, #111827);
+	font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.student-runtime-progress {
+	padding: 8px 12px;
+	border-radius: 999px;
+	background: var(--primary-light, #eef2ff);
+	color: var(--primary-color, #4f46e5);
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.student-runtime-progress-bar {
+	height: 8px;
+	margin: 24px 0 32px;
+	background: var(--border-color, #e5e7eb);
+	border-radius: 99px;
+	overflow: hidden;
+}
+
+.student-runtime-progress-bar span {
+	display: block;
+	height: 100%;
+	background: var(--primary-color, #4f46e5);
+	border-radius: inherit;
+	transition: width 220ms ease;
+}
+
+.student-runtime-question {
+	margin: 0 0 24px;
+	color: var(--text-color, #111827);
+	font-size: clamp(1.1rem, 2.3vw, 1.45rem);
+	font-weight: 600;
+	line-height: 1.55;
+}
+
+.student-runtime-form {
+	display: grid;
+	gap: 12px;
+}
+
+.student-answer-option {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 14px 16px;
+	border: 1px solid var(--border-color, #e5e7eb);
+	border-radius: 12px;
+	background: var(--background-color, #f8fafc);
+	cursor: pointer;
+	transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.student-answer-option:hover,
+.student-answer-option:has(input:checked) {
+	border-color: var(--primary-color, #4f46e5);
+	background: var(--primary-light, #eef2ff);
+	transform: translateY(-1px);
+}
+
+.student-runtime-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 14px;
+}
+
+.lobby-help {
+	margin: 12px 0 0;
+	color: var(--text-muted, #64748b);
+}
+
+.workspace-tab-btn {
+	transition: color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.workspace-tab-btn:hover {
+	transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+	.student-runtime-card {
+		width: min(100% - 20px, 920px);
+		margin: 20px auto;
+		padding: 20px;
+	}
+
+	.student-runtime-header {
+		flex-direction: column;
+	}
+
+	.student-runtime-progress {
+		align-self: flex-start;
 	}
 }
 

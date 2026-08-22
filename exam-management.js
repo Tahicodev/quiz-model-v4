@@ -2883,6 +2883,10 @@ function pushExamToDevices(examId) {
 			).replace(/\/$/, '');
 
 			socket = window.getSocket();
+			if (!socket) {
+				showToast('Sign in before pushing an exam to devices', 'error');
+				return;
+			}
 			// Wait for connection, then identify as admin, then emit the session
 			socket.on('connect', () => {
 				console.log('New admin socket connected, identifying...');
@@ -2988,6 +2992,10 @@ function stopExamOnDevices(examId) {
 			location.origin
 		).replace(/\/$/, '');
 		const socket = window.getSocket();
+		if (!socket) {
+			showToast('Sign in before stopping exams on devices', 'error');
+			return;
+		}
 		socket.on('connect', () => {
 			socket.emit('identify', { role: 'admin' });
 			setTimeout(() => {
@@ -3027,6 +3035,10 @@ function pushTrainingToDevices() {
 			).replace(/\/$/, '');
 
 			socket = window.getSocket();
+			if (!socket) {
+				showToast('Sign in before pushing training to devices', 'error');
+				return;
+			}
 			// Wait for connection, then identify as admin, then emit the session
 			socket.on('connect', () => {
 				console.log('New admin socket connected, identifying...');

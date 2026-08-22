@@ -127,6 +127,14 @@ async function routeHash() {
     return;
   }
 
+  // #/results/:id → completed result
+  if ((m = hash.match(/^#\/results\/([^/]+)$/))) {
+    const { initSessionResults } = await import('./ui/pages/sessions/SessionResults.js');
+    app.replaceChildren();
+    initSessionResults(m[1]);
+    return;
+  }
+
   // If no hash match and user is authenticated admin, load admin dashboard
   const { getContainer } = await import('./container.js');
   const c = getContainer();

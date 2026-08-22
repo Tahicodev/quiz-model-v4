@@ -67,8 +67,13 @@ export class ExamService {
     }
 
     // Remove question links
-    const { data: examQs } = await this.#repo.getAll('exam_questions', { filters: { exam_id: id } });
-    for (const eq of examQs) await this.#repo.delete('exam_questions', eq.id);
+    if (typeof this.#repo.getExamWithQuestions === 'function') {
+      // The API deletes normalized question links through the exam cascade.
+      // Do not issue unsupported generic CRUD calls for the junction table.
+    } else {
+      const { data: examQs } = await this.#repo.getAll('exam_questions', { filters: { exam_id: id } });
+      for (const eq of examQs) await this.#repo.delete('exam_questions', eq.id);
+    }
 
     await this.#repo.delete('exams', id);
   }
@@ -137,7 +142,13 @@ export class ExamService {
       throw new ValidationError({ status: [`Exam must be in draft status to publish (current: ${exam.status})`] });
     }
 
-    const { total } = await this.#repo.getAll('exam_questions', { filters: { exam_id: examId } });
+    let total;
+    if (typeof this.#repo.getExamWithQuestions === 'function') {
+      const hydrated = await this.#repo.getExamWithQuestions(examId);
+      total = hydrated?.questions?.length ?? 0;
+    } else {
+      ({ total } = await this.#repo.getAll('exam_questions', { filters: { exam_id: examId } }));
+    }
     if (total === 0) {
       throw new ValidationError({ questions: ['An exam must have at least one question before publishing'] });
     }
