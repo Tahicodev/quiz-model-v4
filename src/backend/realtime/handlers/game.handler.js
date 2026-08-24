@@ -23,7 +23,7 @@ function emitError(socket, err) {
  * @param {{ gameService: import('../../../frontend/services/GameService.js').GameService }} services
  */
 export function registerGameHandlers(socket, io, { gameService }) {
-  socket.on(SOCKET_EVENTS.GAME_JOIN, async ({ gameId, joinCode } = {}) => {
+  socket.on(SOCKET_EVENTS.GAME_JOIN, async ({ gameId, joinCode } = {}, acknowledge) => {
     try {
       // A socket represents one active game at a time. Leaving the old room
       // prevents cross-game score/question broadcasts after navigation.
@@ -68,7 +68,18 @@ export function registerGameHandlers(socket, io, { gameService }) {
         SOCKET_EVENTS.GAME_SCORES,
         await gameService.getScores(gid, socket.data.user.school_id),
       );
+
+      if (typeof acknowledge === 'function') {
+        acknowledge({ ok: true, gameId: gid, session });
+      }
     } catch (err) {
+      if (typeof acknowledge === 'function') {
+        acknowledge({
+          ok: false,
+          error: err?.message || 'Unable to join this game lobby',
+          code: err?.code || 'GAME_ERROR',
+        });
+      }
       emitError(socket, err);
     }
   });

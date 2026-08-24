@@ -22532,6 +22532,168 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       quizModeEl.textContent = currentMode === quizModes.training ? "Training" : "Exam";
     }
   }
+  function selectOption(selectedIndex) {
+    console.log("=== selectOption CALLED ===");
+    console.log("selectedIndex:", selectedIndex);
+    console.log("currentQuestion before increment:", currentQuestion);
+    const q = questions[currentQuestion];
+    const questionType = q.type || (q.isDraggable ? "draggable" : "multiple-choice");
+    console.log("Question type detected:", questionType);
+    console.log("Question text:", q.question?.substring(0, 50));
+    if (questionType === "multiple-choice" && isQuestionMultiAnswer(q)) {
+      console.log("Skipping - multi-select question");
+      return;
+    }
+    if (questionType === "matching-pairs") {
+      return;
+    }
+    if (questionType === "fill-blank") {
+      return;
+    }
+    let buttons;
+    if (questionType === "odd-one-out") {
+      buttons = optionsEl.querySelectorAll(".odd-one-option");
+    } else {
+      buttons = optionsEl.getElementsByTagName("button");
+    }
+    Array.from(buttons).forEach((btn) => btn.disabled = true);
+    const optionData = extractQuestionOptionData(q);
+    const selectedOption = optionData[selectedIndex];
+    if (!selectedOption) {
+      console.warn("Invalid selected option index:", selectedIndex, optionData);
+      return;
+    }
+    const selectedText = typeof selectedOption === "string" ? selectedOption : selectedOption.text;
+    const correctAnswer = q.answer;
+    const isMultipleCorrectAnswers = questionType === "multiple-choice" && isQuestionMultiAnswer(q) && /[|,\n;،]/.test(String(correctAnswer || ""));
+    const correctAnswers = isMultipleCorrectAnswers ? splitChoiceAnswerTokens(correctAnswer) : [correctAnswer];
+    console.log("Question type:", q.type);
+    console.log("Allow multiple answers:", isQuestionMultiAnswer(q));
+    console.log("Correct answers:", correctAnswers);
+    console.log("Selected text:", selectedText);
+    const isCorrect = correctAnswers.includes(selectedText);
+    const questionPoints = q.points || 1;
+    saveAnswer(currentQuestion, selectedText, isCorrect, questionPoints);
+    if (currentMode === quizModes.training) {
+      if (isCorrect) {
+        score += questionPoints;
+        buttons[selectedIndex].classList.add("correct");
+        updateScoreDisplay();
+        if (isMultipleCorrectAnswers) {
+          Array.from(buttons).forEach((btn, idx) => {
+            if (idx !== selectedIndex) {
+              const btnOption = optionData[idx];
+              const btnText = typeof btnOption === "string" ? btnOption : btnOption.text;
+              if (correctAnswers.includes(btnText)) {
+                btn.classList.add("correct");
+              }
+            }
+          });
+        }
+      } else {
+        buttons[selectedIndex].classList.add("incorrect");
+        applyTimePenalty();
+      }
+    } else {
+      if (isCorrect) {
+        score += questionPoints;
+        updateScoreDisplay();
+      }
+    }
+    setTimeout(() => {
+      try {
+        console.log("=== selectOption setTimeout triggered ===");
+        console.log("currentQuestion before increment:", currentQuestion);
+        currentQuestion++;
+        console.log("currentQuestion after increment:", currentQuestion);
+        console.log(
+          "Total questions:",
+          Math.min(questions.length, quizConfig.totalQuestions)
+        );
+        if (currentQuestion >= Math.min(questions.length, quizConfig.totalQuestions)) {
+          console.log("Quiz ending - reached max questions");
+          endQuiz();
+        } else {
+          console.log(
+            "Moving to next question - calling showQuestion(" + currentQuestion + ")"
+          );
+          showQuestion(currentQuestion);
+          console.log("showQuestion completed");
+        }
+      } catch (error51) {
+        console.error("ERROR in selectOption setTimeout:", error51);
+        console.error("Error stack:", error51.stack);
+      }
+    }, 100);
+  }
+  function submitMultiSelect(questionIndex) {
+    const q = questions[questionIndex];
+    const questionType = q.type || (q.isDraggable ? "draggable" : "multiple-choice");
+    const selected = [];
+    document.querySelectorAll(`input[name="option-${questionIndex}"]:checked`).forEach((checkbox) => {
+      selected.push(parseInt(checkbox.value));
+    });
+    const optionData = extractQuestionOptionData(q);
+    const selectedOptions = selected.map((idx) => {
+      const selectedOption = optionData[idx];
+      if (!selectedOption) return "";
+      return typeof selectedOption === "string" ? selectedOption : selectedOption.text;
+    }).map((value) => String(value || "").trim()).filter(Boolean);
+    const correctAnswer = q.answer;
+    const isMultipleCorrectAnswers = questionType === "multiple-choice" && isQuestionMultiAnswer(q) && /[|,\n;،]/.test(String(correctAnswer || ""));
+    const correctAnswers = isMultipleCorrectAnswers ? splitChoiceAnswerTokens(correctAnswer) : [correctAnswer];
+    console.log("Multi-select question type:", q.type);
+    console.log("Allow multiple answers:", isQuestionMultiAnswer(q));
+    console.log("Correct answers:", correctAnswers);
+    console.log("Selected options:", selectedOptions);
+    const isCorrect = selectedOptions.length === correctAnswers.length && selectedOptions.every((opt) => correctAnswers.includes(opt));
+    const questionPoints = q.points || 1;
+    saveAnswer(questionIndex, selectedOptions, isCorrect, questionPoints);
+    if (currentMode === quizModes.training) {
+      if (isCorrect) {
+        score += questionPoints;
+        document.querySelectorAll(`input[name="option-${questionIndex}"]:checked`).forEach((checkbox) => {
+          const label = checkbox.closest(".multi-option");
+          if (label) {
+            label.classList.add("correct");
+          }
+        });
+        updateScoreDisplay();
+      } else {
+        document.querySelectorAll(`input[name="option-${questionIndex}"]:checked`).forEach((checkbox) => {
+          const label = checkbox.closest(".multi-option");
+          if (label) {
+            label.classList.add("incorrect");
+          }
+        });
+        applyTimePenalty();
+      }
+    } else {
+      if (isCorrect) {
+        score += questionPoints;
+        updateScoreDisplay();
+      }
+    }
+    setTimeout(() => {
+      console.log("=== submitMultiSelect setTimeout triggered ===");
+      console.log("currentQuestion before increment:", currentQuestion);
+      currentQuestion++;
+      console.log("currentQuestion after increment:", currentQuestion);
+      console.log(
+        "Total questions:",
+        Math.min(questions.length, quizConfig.totalQuestions)
+      );
+      if (currentQuestion >= Math.min(questions.length, quizConfig.totalQuestions)) {
+        console.log("Quiz ending - reached max questions");
+        endQuiz();
+      } else {
+        console.log(
+          "Moving to next question - calling showQuestion(" + currentQuestion + ")"
+        );
+        showQuestion(currentQuestion);
+      }
+    }, 100);
+  }
   function validateFillBlankAnswer() {
     const q = questions[currentQuestion];
     const blankInputs = document.querySelectorAll(".fill-blank-input");
@@ -23431,6 +23593,49 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       { offset: Number.NEGATIVE_INFINITY }
     ).element;
   }
+  function handleDraggableNext() {
+    const q = questions[currentQuestion];
+    const currentOrder = Array.from(
+      document.querySelectorAll(".draggable-option")
+    ).map((option) => option.textContent.trim());
+    const correctOrder = q.answer.split(",").map((opt) => opt.trim());
+    const isCorrect = currentOrder.join(",") === correctOrder.join(",");
+    const questionPoints = q.points || 1;
+    saveAnswer(currentQuestion, currentOrder, isCorrect, questionPoints);
+    if (currentMode === quizModes.training) {
+      if (isCorrect) {
+        score += questionPoints;
+        document.querySelectorAll(".draggable-option").forEach((opt) => {
+          opt.classList.add("correct");
+        });
+      } else {
+        document.querySelectorAll(".draggable-option").forEach((opt) => {
+          opt.classList.add("incorrect");
+        });
+        applyTimePenalty();
+      }
+    } else {
+      if (isCorrect) {
+        score += questionPoints;
+      }
+    }
+    updateScoreDisplay();
+    document.querySelectorAll(".draggable-option").forEach((opt) => {
+      opt.setAttribute("draggable", "false");
+    });
+    const nextButton = document.querySelector(".next-question-btn");
+    if (nextButton) {
+      nextButton.disabled = true;
+    }
+    setTimeout(() => {
+      currentQuestion++;
+      if (currentQuestion >= Math.min(questions.length, quizConfig.totalQuestions)) {
+        endQuiz();
+      } else {
+        showQuestion(currentQuestion);
+      }
+    }, 1e3);
+  }
   function applyStudentAuth(user) {
     const form = document.getElementById("student-info");
     if (!form) return;
@@ -23533,6 +23738,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   window.applyStudentAuth = applyStudentAuth;
   window.showStudentResults = showStudentResults;
+  window.selectOption = selectOption;
+  window.submitMultiSelect = submitMultiSelect;
+  window.handleDraggableNext = handleDraggableNext;
+  window.handleMatchingPairsNext = window.handleMatchingPairsNext || (() => {
+    if (typeof checkAllPairsMatched === "function") checkAllPairsMatched();
+  });
+  window.handleDropZoneClick = handleDropZoneClick;
+  window.handleWordClick = handleWordClick;
+  window.validateFillBlankAnswer = validateFillBlankAnswer;
   var currentLightboxImages = [];
   var currentLightboxIndex = 0;
   var currentZoomLevel = 1;

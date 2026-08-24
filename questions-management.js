@@ -6410,14 +6410,23 @@ window.generateQuestionsWithAI = async function() {
 		if (questions && questions.length > 0) {
 			aiGeneratedQuestions = questions;
 			displayAIPreview(questions);
+			if (aiGenerator.lastGenerationMode === 'offline') {
+				showToast(`Provider unavailable. Added ${questions.length} local starter question(s). You can edit them now and retry AI later.`, 'warning');
+				return;
+			}
 			showToast(`✨ Generated ${questions.length} question(s)!`, 'success');
 		} else {
-			showError('No questions were generated. Please try again.');
+			const emptyMessage = 'No questions were generated. Check the selected types, count, category, and provider settings, then try again.';
+			showError(emptyMessage);
+			showToast(emptyMessage, 'warning');
 		}
 	} catch (error) {
 		console.error('AI Generation error:', error);
 		
 		let errorMsg = error.message || 'Failed to generate questions';
+		if (/failed to fetch|network|err_name_not_resolved|load failed/i.test(String(errorMsg))) {
+			errorMsg = 'The AI provider could not be reached. Check your internet connection, provider API key, and allowed model, then try again.';
+		}
 		
 		// Handle rate limits specific messaging
 		if (errorMsg.includes('Rate limit') || errorMsg.includes('429')) {
@@ -6433,6 +6442,7 @@ window.generateQuestionsWithAI = async function() {
 		}
 		
 		showError(errorMsg);
+		showToast(`AI generation failed: ${errorMsg}`, 'error');
 		
 		// Handle generic cooldown or wait messages
 		if (errorMsg.includes('wait') || errorMsg.includes('Cooldown')) {

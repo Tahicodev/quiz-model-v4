@@ -372,10 +372,20 @@
     }
 
     function notifySyncError(table, message) {
-      var msg = '[Save failed] ' + table + ': ' + message;
+      var labels = {
+        games: 'games',
+        questions: 'questions',
+        tournaments: 'tournaments',
+        users: 'users',
+        classes: 'classes',
+        categories: 'categories',
+      };
+      var label = labels[table] || table || 'data';
+      var detail = String(message || 'the server rejected the request').replace(/\s+/g, ' ').trim();
+      var msg = `Could not sync ${label} to the server: ${detail}. Your local changes are still visible on this device; fix the data or connection, then retry.`;
       console.warn(msg);
       if (typeof window.showToast === 'function') {
-        try { window.showToast(msg, 'error'); } catch (_) { /* ignore */ }
+        try { window.showToast(msg, 'error'); } catch (_) { /* keep console error */ }
       }
     }
 

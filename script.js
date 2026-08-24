@@ -3863,6 +3863,22 @@ function showStudentResults() {
 window.applyStudentAuth = applyStudentAuth;
 window.showStudentResults = showStudentResults;
 
+// The student quiz is bundled as an IIFE. Inline handlers rendered by the
+// legacy question UI resolve names on `window`, so explicitly bridge the
+// interaction functions instead of relying on module-scope declarations.
+window.selectOption = selectOption;
+window.submitMultiSelect = submitMultiSelect;
+window.handleDraggableNext = handleDraggableNext;
+// The old matching-pairs "Next" handler was retired when matching became
+// auto-progressing. Keep a safe global bridge for legacy inline markup so the
+// retired name can never abort the whole student bundle at load time.
+window.handleMatchingPairsNext = window.handleMatchingPairsNext || (() => {
+	if (typeof checkAllPairsMatched === 'function') checkAllPairsMatched();
+});
+window.handleDropZoneClick = handleDropZoneClick;
+window.handleWordClick = handleWordClick;
+window.validateFillBlankAnswer = validateFillBlankAnswer;
+
 let currentLightboxImages = [];
 let currentLightboxIndex = 0;
 let currentZoomLevel = 1;

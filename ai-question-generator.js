@@ -372,6 +372,9 @@ class AIQuestionGenerator {
 
 		const apiKey = this.config.apiKeys[this.config.provider];
 		if (!apiKey) return this.getAvailableModels();
+		if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+			return this.getAvailableModels();
+		}
 
 		// Google AI requires API key in the URL, so use provider-specific flow
 		if (this.config.provider === 'google') {
@@ -417,7 +420,11 @@ class AIQuestionGenerator {
 							success = true;
 						}
 					} catch (e) {
-						console.warn(`Fetch models failed for Google AI ${ver}:`, e);
+						if (/failed to fetch|network|err_name_not_resolved|load failed/i.test(String(e?.message || ''))) {
+							this.log(`Google AI model discovery unavailable (${ver}); using cached models.`);
+						} else {
+							console.warn(`Fetch models failed for Google AI ${ver}:`, e);
+						}
 					}
 				}
 
@@ -431,7 +438,7 @@ class AIQuestionGenerator {
 					return fetchedModels;
 				}
 
-				console.warn('Google AI model list failed for all versions, using static list');
+				this.log('Google AI model list unavailable; using static list');
 				return this.getAvailableModels();
 			} catch (error) {
 				console.error('Error fetching models:', error);
@@ -521,6 +528,18 @@ class AIQuestionGenerator {
 				return await fn();
 			} catch (error) {
 				lastError = error;
+
+				// DNS failures, blocked network requests, and offline browsers are
+				// deterministic failures. Retrying them only freezes the generator
+				// for several seconds and produces a noisy console, so let generate()
+				// switch to its local safety net immediately.
+				const isNetworkError =
+					error instanceof TypeError ||
+					error?.name === 'TypeError' ||
+					/failed to fetch|network|err_name_not_resolved|load failed/i.test(
+						String(error?.message || ''),
+					);
+				if (isNetworkError) throw error;
 				
 				// Check if rate limited (429) or server error (5xx)
 				const isRateLimit = error.status === 429;
@@ -554,6 +573,77 @@ class AIQuestionGenerator {
 			throw new Error('Rate limit exceeded. Please try a different model or wait a moment.');
 		}
 		throw lastError;
+	}
+
+	/**
+	 * Produce useful, clearly marked starter questions when a browser cannot
+	 * reach the configured provider. This keeps lesson authoring usable during
+	 * local development, school Wi-Fi outages, and temporary DNS failures.
+	 */
+	buildOfflineFallbackQuestions(options = {}) {
+		const topic = String(options.topic || 'this topic').trim() || 'this topic';
+		const requested = this.getRequestedCount(options) || 1;
+		const counts = options.typeCounts && typeof options.typeCounts === 'object'
+			? options.typeCounts
+			: { 'multiple-choice': requested };
+		const types = Object.entries(counts).flatMap(([type, count]) =>
+			Array.from({ length: Math.max(0, Number(count) || 0) }, () => type),
+		);
+		while (types.length < requested) types.push('multiple-choice');
+		const safeTopic = topic.replace(/[<>]/g, '');
+		const templates = {
+			'multiple-choice': (index) => ({
+				question: `Which statement is a useful starting point when studying ${safeTopic}?`,
+				options: [`Define the key terms in ${safeTopic}`, 'Skip the examples', 'Ignore the context', 'Use unrelated facts'],
+				answer: `Define the key terms in ${safeTopic}`,
+				explanation: 'Start with the vocabulary and core ideas before moving to advanced applications.',
+			}),
+			'true-false': () => ({
+				question: `A clear definition helps explain ${safeTopic}.`,
+				options: ['True', 'False'], answer: 'True',
+				explanation: 'Definitions give learners a shared reference point.',
+			}),
+			'fill-blank': () => ({
+				question: `A good revision plan for ${safeTopic} starts by reviewing the ___ concepts.`,
+				options: ['core', 'random', 'unrelated', 'hidden'], answer: 'core',
+				explanation: 'Core concepts provide the foundation for later questions.',
+			}),
+			'odd-one-out': () => ({
+				question: `Choose the item that does not belong with ${safeTopic}.`,
+				options: [`A key idea in ${safeTopic}`, `An example of ${safeTopic}`, 'A definition', 'A random unrelated fact'],
+				answer: 'A random unrelated fact',
+				explanation: 'The unrelated fact is the only item outside the topic.',
+			}),
+			draggable: () => ({
+				question: `Put these study steps for ${safeTopic} in the best order.`,
+				options: ['Review examples', 'Learn definitions', 'Apply the idea'],
+				answer: 'Learn definitions,Review examples,Apply the idea',
+				explanation: 'Learn the terms, inspect examples, then apply the concept.',
+				isDraggable: true,
+			}),
+			'matching-pairs': () => ({
+				question: `Match each learning action for ${safeTopic} with its purpose.`,
+				options: ['Define-->Build a shared vocabulary', 'Practice-->Strengthen recall', 'Apply-->Use the idea in context'],
+				answer: 'Define-->Build a shared vocabulary|Practice-->Strengthen recall|Apply-->Use the idea in context',
+				explanation: 'Each action supports a different part of learning.',
+			}),
+			code: () => ({
+				question: `What is the safest first step when writing code related to ${safeTopic}?`,
+				options: ['Clarify the input and expected output', 'Delete all tests', 'Ignore edge cases', 'Copy code blindly'],
+				answer: 'Clarify the input and expected output',
+				explanation: 'A precise contract makes implementation and testing reliable.',
+				codeSnippet: '// Add the implementation here', codeLanguage: 'javascript', codeAnswerMode: 'multiple-choice',
+			}),
+		};
+		return types.slice(0, requested).map((type, index) => {
+			const canonical = normalizeAIQuestionType(type);
+			const template = templates[canonical] || templates['multiple-choice'];
+			const question = this.normalizeQuestion(template(index), index);
+			if (index > 0) question.question = `${question.question} (Practice ${index + 1})`;
+			question.offlineFallback = true;
+			question.aiGenerated = true;
+			return question;
+		});
 	}
 
 	// Test connection to provider
@@ -1763,7 +1853,22 @@ Every key and every string value must use double quotes.`;
 		
 		try {
 			const requestedCount = this.getRequestedCount(options);
-			let questions = await this.requestInitialQuestionBatch(options);
+			let questions;
+			this.lastGenerationMode = 'online';
+			try {
+				questions = await this.requestInitialQuestionBatch(options);
+			} catch (error) {
+				const isNetworkError =
+					error instanceof TypeError ||
+					error?.name === 'TypeError' ||
+					/failed to fetch|network|err_name_not_resolved|load failed/i.test(
+						String(error?.message || ''),
+					);
+				if (!isNetworkError) throw error;
+				this.lastGenerationMode = 'offline';
+				this.log('AI provider unavailable; using local starter questions.', error);
+				questions = this.buildOfflineFallbackQuestions(options);
+			}
 			
 			// Safety: Filter and Slice to ensure exactly the requested count
 			if (questions.length > requestedCount) {

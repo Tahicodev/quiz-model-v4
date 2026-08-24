@@ -33,7 +33,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css" />
+		<link rel="stylesheet" href="styles.css?v=2026-08-24-blueprint-r4" />
 
 			<!-- APP_CONFIG injected by server.js in SaaS mode -->
 			<script>
@@ -46,7 +46,7 @@
 			</script>
 
 			<!-- Legacy Bridge — MUST load synchronously before all management scripts -->
-			<script src="legacy-bridge.js"></script>
+			<script src="legacy-bridge.js?v=2026-08-24-blueprint-r4"></script>
 
 			<!-- window.getSocket bridges refactored io() calls to the global io() from CDN
 					 and passes the JWT auth token so the server doesn't reject the connection.
@@ -84,7 +84,7 @@
 		<script src="utils.js" defer></script>
 		<script src="api-client.js" defer></script>
 		<script src="auth.js" defer></script>
-		<script src="games-core.js" defer></script>
+		<script src="games-core.js?v=2026-08-24-blueprint-r4" defer></script>
 		<script src="settings.js" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
@@ -95,7 +95,7 @@
 
 		<!-- Admin page scripts -->
 		<script src="category-management.js" defer></script>
-		<script src="questions-management.js" defer></script>
+		<script src="questions-management.js?v=2026-08-24-blueprint-r4" defer></script>
 		<script src="exam-management.js" defer></script>
 		<script src="class-management.js" defer></script>
 		<script src="results-management.js" defer></script>
@@ -103,7 +103,7 @@
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js" defer></script>
 		<script src="quiz-presets.js" defer></script>
-		<script src="games-management.js" defer></script>
+		<script src="games-management.js?v=2026-08-24-blueprint-r4" defer></script>
 			<script src="admin-main.js" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -117,7 +117,7 @@
 
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script> -->
-		<script src="ai-question-generator.js" defer></script>
+		<script src="ai-question-generator.js?v=2026-08-24-blueprint-r4" defer></script>
 		<script src="rag.js" defer></script>
 
 		<!-- Syntax Highlighting -->
@@ -1641,9 +1641,9 @@
 					<div class="dashboard-container">
 						<div class="dashboard-header">
 							<div class="welcome-text">
-								<h2 id="gamesTabTitle">Games Control Center</h2>
+								<h2 id="gamesTabTitle">Arena Control Center</h2>
 								<p id="gamesTabSubtitle" class="text-muted">
-									Build games and tournaments from one control panel.
+									Design live game rooms, share entry codes, and run tournaments from one control panel.
 								</p>
 							</div>
 							<div class="date-badge">
@@ -1672,6 +1672,25 @@
 
 						<div class="games-studio-pane active" data-games-studio-pane="games-studio">
 						<div class="game-admin-grid">
+							<div class="arena-library-toolbar">
+								<div>
+									<span class="arena-eyebrow">Game Studio</span>
+									<h3>Game Library</h3>
+									<p>Create rooms, share entry codes, and manage live sessions.</p>
+								</div>
+								<button type="button" class="btn btn-primary" id="addGameBtn">
+									<span aria-hidden="true">＋</span> Add game
+								</button>
+							</div>
+							<div id="gameEditorModal" class="modal arena-editor-modal" aria-hidden="true">
+								<div class="modal-content modal-lg arena-editor-content">
+									<div class="modal-header arena-editor-header">
+										<div>
+											<span class="arena-eyebrow">Game Studio</span>
+											<h2 id="gameEditorTitle">Create game</h2>
+										</div>
+										<button type="button" class="arena-modal-close" id="closeGameEditorBtn" aria-label="Close">×</button>
+									</div>
 							<div class="game-admin-panel">
 								<div class="panel-header">
 									<div>
@@ -2127,16 +2146,21 @@
 										<button type="button" class="btn btn-secondary" id="resetGameForm">Reset</button>
 										<button type="submit" class="btn btn-primary">Save Game</button>
 									</div>
-								</form>
+							</form>
+							</div>
+								</div>
 							</div>
 
 							<div class="game-admin-panel">
 								<div class="panel-header">
 									<div>
-										<h3>Game Library</h3>
+										<h3>Saved games</h3>
 										<p>Open lobbies, start live play, and review sessions.</p>
 									</div>
-									<button type="button" class="btn btn-sm btn-danger-soft" onclick="deleteAllGames()" title="Permanently delete all games from admin and students">Clear All</button>
+									<div class="panel-header-actions">
+										<button type="button" class="btn btn-sm btn-secondary" id="addGameInlineBtn">Add game</button>
+										<button type="button" class="btn btn-sm btn-danger-soft" onclick="deleteAllGames()" title="Permanently delete all games from admin and students">Clear All</button>
+									</div>
 								</div>
 								<div id="gameList" class="game-list"></div>
 								<div class="game-lobby" id="gameLobby">
@@ -2152,8 +2176,8 @@
 								<div class="game-admin-panel">
 									<div class="panel-header">
 										<div>
-											<h3>Tournament Planner</h3>
-											<p>Define how the tournament runs before launch.</p>
+										<h3>Tournament Library</h3>
+										<p>Manage events, assignments, live monitoring, and global tournament rules.</p>
 										</div>
 									</div>
 									<div class="gamification-controls">
@@ -2163,14 +2187,7 @@
 												class="tournament-studio-tab-btn active"
 												data-tournament-studio-tab="planner"
 											>
-												Planner
-											</button>
-											<button
-												type="button"
-												class="tournament-studio-tab-btn"
-												data-tournament-studio-tab="dashboard"
-											>
-												Dashboard
+												Tournaments
 											</button>
 											<button
 												type="button"
@@ -2184,12 +2201,30 @@
 												class="tournament-studio-tab-btn"
 												data-tournament-studio-tab="gamification"
 											>
-												EXP, Badges & Policy
+												Global Settings
 											</button>
 										</div>
 
 										<div class="tournament-studio-panel active" data-tournament-studio-panel="planner">
-											<div class="form-row">
+											<div class="tournament-catalog-toolbar">
+												<div>
+													<span class="arena-eyebrow">Tournament Studio</span>
+													<h3>Tournament library</h3>
+													<p>Enable events, monitor live rounds, and manage tournament templates.</p>
+												</div>
+												<button type="button" class="btn btn-primary" id="addTournamentBtn"><span aria-hidden="true">＋</span> Add tournament</button>
+											</div>
+											<div id="tournamentList" class="tournament-library-list"></div>
+											<div id="tournamentPlannerModal" class="modal arena-editor-modal" aria-hidden="true">
+												<div class="modal-content modal-lg arena-editor-content tournament-editor-content">
+													<div class="modal-header arena-editor-header">
+														<div>
+															<span class="arena-eyebrow">Tournament Studio</span>
+															<h2 id="tournamentEditorTitle">Create tournament</h2>
+														</div>
+														<button type="button" class="arena-modal-close" id="closeTournamentPlannerBtn" aria-label="Close">×</button>
+													</div>
+													<div class="form-row">
 												<div class="form-group half">
 													<label for="tournamentName">Tournament Name</label>
 													<input type="text" id="tournamentName" class="form-control" placeholder="e.g. Winter Card Duel Championship" />
@@ -2299,13 +2334,13 @@
 												</ul>
 											</div>
 
-											<div class="form-group">
-												<label>Round Game Assignments</label>
-												<p class="text-muted small">
-													For each round: optionally set a different game mode, then select one or more game templates. Each selected template launches as a fresh tournament-only copy, so old completed, won, or lost session data never carries into the round.
-												</p>
-												<div id="tournamentRoundGameAssignments" class="tournament-round-assignments"></div>
-											</div>
+										<div class="form-group tournament-assignment-launcher">
+											<label>Round Game Assignments</label>
+											<p class="text-muted small">
+												Choose the game templates available in each round. You can save the tournament first, or configure its round games in the focused assignment editor.
+											</p>
+											<button type="button" class="btn btn-secondary" onclick="openTournamentAssignmentsModal()">Configure round games</button>
+										</div>
 											<div class="tournament-recommendation-card" id="tournamentRecommendations">
 												<div class="empty-state-small">Adjust format and participants to generate recommendations.</div>
 											</div>
@@ -2313,9 +2348,11 @@
 												<button type="button" class="btn btn-secondary" id="applyTournamentRecommendationBtn">Apply Recommended Setup</button>
 												<button type="button" class="btn btn-primary-soft" id="saveTournamentPlannerBtn">Save Planner Draft</button>
 											</div>
-											<div class="tournament-sync-status">
+													<div class="tournament-sync-status">
 												<span id="tournamentDeviceSyncState" class="tournament-sync-chip is-disconnected">Realtime link: disconnected</span>
 												<span id="tournamentLastSyncAt" class="tournament-sync-chip muted">Last sync: Never</span>
+													</div>
+												</div>
 											</div>
 										</div>
 
@@ -2490,6 +2527,38 @@
 					</div>
 				</section>
 			</main>
+		</div>
+
+		<!-- Arena action modals -->
+		<div id="tournamentAssignmentsModal" class="modal arena-editor-modal" aria-hidden="true">
+			<div class="modal-content modal-lg arena-editor-content tournament-assignments-content">
+				<div class="modal-header arena-editor-header">
+					<div>
+						<span class="arena-eyebrow">Tournament Studio</span>
+						<h2 id="tournamentAssignmentsTitle">Round game assignments</h2>
+					</div>
+					<button type="button" class="arena-modal-close" id="closeTournamentAssignmentsBtn" aria-label="Close">×</button>
+				</div>
+				<div class="arena-modal-body">
+					<p class="arena-modal-intro">Choose the game templates available in each round. These selections are copied into fresh tournament-only lobbies when the event is enabled.</p>
+					<div id="tournamentRoundGameAssignmentsModal" class="tournament-round-assignments"></div>
+				</div>
+				<div class="modal-footer arena-modal-footer">
+					<button type="button" class="btn btn-primary" id="closeTournamentAssignmentsFooterBtn">Save assignments</button>
+				</div>
+			</div>
+		</div>
+		<div id="tournamentWatchModal" class="modal arena-editor-modal" aria-hidden="true">
+			<div class="modal-content arena-editor-content tournament-watch-content">
+				<div class="modal-header arena-editor-header">
+					<div>
+						<span class="arena-eyebrow">Tournament Monitor</span>
+						<h2 id="tournamentWatchModalTitle">Tournament overview</h2>
+					</div>
+					<button type="button" class="arena-modal-close" id="closeTournamentWatchBtn" aria-label="Close">×</button>
+				</div>
+				<div id="tournamentWatchModalContent" class="arena-modal-body"></div>
+			</div>
 		</div>
 
 		<!-- Modals -->

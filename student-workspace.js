@@ -5694,6 +5694,7 @@
 
 	function joinGame(gameId, context, teamId) {
 		return new Promise((resolve) => {
+			const localGame = getGameByIdResolved(gameId) || getCachedGame(gameId);
 			const socket = getSocket();
 			if (socket && socket.connected) {
 				socket.emit(
@@ -5707,6 +5708,18 @@
 					},
 					(response) => {
 						if (response?.error) {
+							// A local/offline game may not exist on the realtime server
+							// yet. Keep the classroom workflow usable and join the local
+							// snapshot while the server reconnects.
+							if (localGame) {
+								updateGameStore(gameId, (game) => {
+									ensureParticipantForGame(game, context, teamId);
+									return game;
+								}, { scope: 'student-local-join' });
+								showToast('Joined the local game lobby. Realtime will sync when available.', 'warning');
+								resolve({ ok: true, game: localGame, local: true });
+								return;
+							}
 							showToast(response.error, 'error');
 						}
 						resolve(response || null);
@@ -5734,8 +5747,94 @@
 				return;
 			}
 			notifyRealtimeDisconnected();
+			if (localGame) {
+				updateGameStore(gameId, (game) => {
+					ensureParticipantForGame(game, context, teamId);
+					return game;
+				}, { scope: 'student-local-join' });
+				showToast('Joined the local game lobby. Realtime will sync when available.', 'warning');
+				resolve({ ok: true, game: localGame, local: true });
+				return;
+			}
 			resolve({ error: 'Realtime server disconnected' });
 		});
+	}
+
+	function findGameByJoinCode(code) {
+		const normalized = String(code || '').trim().toUpperCase();
+		if (!normalized) return null;
+		return getGamesStore().find((game) => {
+			const values = [
+				game?.joinCode,
+				game?.join_code,
+				game?.lobbyCode,
+				game?.session?.joinCode,
+				game?.session?.lobbyId,
+				game?.id,
+			].map((value) => String(value || '').trim().toUpperCase());
+			return values.includes(normalized);
+		}) || null;
+	}
+
+	async function joinGameByCode(rawCode, context) {
+		const code = String(rawCode || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+		if (code.length < 4) {
+			showToast('Enter the game code shared by your teacher.', 'error');
+			return;
+		}
+		const localGame = findGameByJoinCode(code);
+		if (localGame) {
+			joinGame(localGame.id, context).then((response) => {
+				if (response?.error) return;
+				setActiveGameId(localGame.id);
+				renderGamesPanel(context);
+				renderGameStage(context);
+			});
+			return;
+		}
+
+		const socket = getSocket();
+		if (socket?.connected) {
+			socket.emit('game:join', {
+				joinCode: code,
+				userId: context.user.id,
+				userName: context.user.name || context.user.username || 'Student',
+				classId: context.user.classId || context.identity?.classId || '',
+			}, (response) => {
+				if (response?.error) {
+					showToast(response.error, 'error');
+					return;
+				}
+				const gameId = response?.game_id || response?.gameId || response?.session?.game_id;
+				if (gameId) {
+					showToast('Joined. Open the lobby from the Games tab after the next sync.', 'success');
+				} else {
+					showToast('Joined the lobby. Waiting for the game snapshot.', 'success');
+				}
+			});
+			return;
+		}
+
+		if (hasStudentRestApi()) {
+			try {
+				const session = await window.API.raw('POST', '/games/join', { join_code: code });
+				const gameId = session?.game_id || session?.gameId;
+				if (gameId) {
+					const game = await window.API.raw('GET', `/games/${encodeURIComponent(gameId)}`);
+					if (game) mergeServerGameSnapshot(game);
+				}
+				showToast('Joined the game lobby.', 'success');
+				if (gameId) {
+					setActiveGameId(gameId);
+					renderGamesPanel(context);
+					renderGameStage(context);
+				}
+			} catch (error) {
+				showToast(error?.message || 'No game was found for that code.', 'error');
+			}
+			return;
+		}
+		showToast('No matching game found. Ask your teacher to sync the lobby and try again.', 'warning');
 	}
 
 	function openGameStageForStudent(gameId, context) {
@@ -11524,10 +11623,22 @@
 				if (!context) return;
 
 				if (action === 'join-game') {
-					joinGame(gameId, context);
+					joinGame(gameId, context).then((response) => {
+						if (response?.error) return;
+						setActiveGameId(gameId);
+						renderGamesPanel(context);
+						renderGameStage(context);
+					});
+					return;
 				}
 				if (action === 'join-team') {
-					joinGame(gameId, context, team);
+					joinGame(gameId, context, team).then((response) => {
+						if (response?.error) return;
+						setActiveGameId(gameId);
+						renderGamesPanel(context);
+						renderGameStage(context);
+					});
+					return;
 				}
 				if (action === 'toggle-ready') {
 					toggleReady(gameId, context);
@@ -11540,6 +11651,26 @@
 				renderGamesPanel(context);
 			});
 		});
+
+		const quickJoinInput = byId('studentGameJoinCode');
+		const quickJoinButton = byId('studentGameJoinCodeBtn');
+		if (quickJoinInput && quickJoinButton) {
+			const submitQuickJoin = () => {
+				const context = getStudentContext();
+				if (!context) {
+					showAuthModal();
+					return;
+				}
+				joinGameByCode(quickJoinInput.value, context);
+			};
+			quickJoinButton.addEventListener('click', submitQuickJoin);
+			quickJoinInput.addEventListener('keydown', (event) => {
+				if (event.key === 'Enter') {
+					event.preventDefault();
+					submitQuickJoin();
+				}
+			});
+		}
 
 		const submitStructuredAnswerByMode = (
 			mode,
@@ -12504,6 +12635,15 @@
 
 			showToast('This game is not ready yet.', 'warning');
 		});
+	};
+
+	window.joinGameByCode = function (code) {
+		const context = getStudentContext();
+		if (!context) {
+			showAuthModal();
+			return;
+		}
+		return joinGameByCode(code, context);
 	};
 
 	window.loadStudentProfileRequest = function (requestId) {

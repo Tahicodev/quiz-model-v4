@@ -161,9 +161,15 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const indexHtml = readFileSync(resolve(__dirname, '../../index.html'), 'utf8');
-const adminHtml = readFileSync(resolve(__dirname, '../../admin.html'), 'utf8');
-const studentWorkspaceHtml = readFileSync(resolve(__dirname, '../../student-workspace.html'), 'utf8');
+const indexHtmlPath = resolve(__dirname, '../../index.html');
+const adminHtmlPath = resolve(__dirname, '../../admin.html');
+const studentWorkspaceHtmlPath = resolve(__dirname, '../../student-workspace.html');
+
+// Read entry HTML on each request in development so an already-running local
+// server cannot keep serving a stale page after a layout or cache-bust change.
+function readEntryHtml(filePath) {
+  return readFileSync(filePath, 'utf8');
+}
 
 function injectAppConfig(html) {
   return html.replace(
@@ -180,15 +186,15 @@ window.APP_CONFIG = ${JSON.stringify({
 }
 
 app.get('/', (req, res) => {
-  res.type('html').send(injectAppConfig(indexHtml));
+  res.type('html').send(injectAppConfig(readEntryHtml(indexHtmlPath)));
 });
 
 app.get('/admin.html', (req, res) => {
-  res.type('html').send(injectAppConfig(adminHtml));
+  res.type('html').send(injectAppConfig(readEntryHtml(adminHtmlPath)));
 });
 
 app.get('/student-workspace.html', (req, res) => {
-  res.type('html').send(injectAppConfig(studentWorkspaceHtml));
+  res.type('html').send(injectAppConfig(readEntryHtml(studentWorkspaceHtmlPath)));
 });
 
 app.use('/api/v1/auth', authLimiter, authRoutes);

@@ -11,6 +11,7 @@
 		tournamentRoundSearch: {},
 		tournamentPlannerHistoryMode: false,
 		tournamentPlannerHistoryId: '',
+		tournamentAssignmentModalId: '',
 		tournamentSyncStatus: {
 			connected: false,
 			deviceCount: 0,
@@ -38,6 +39,35 @@
 		'last-survivor': 'Last Survivor',
 	};
 
+	async function copyGameJoinCode(code, button) {
+		const value = String(code || '').trim().toUpperCase();
+		if (!value) return;
+		try {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(value);
+			} else {
+				const helper = document.createElement('textarea');
+				helper.value = value;
+				helper.setAttribute('readonly', '');
+				helper.style.position = 'fixed';
+				helper.style.opacity = '0';
+				document.body.appendChild(helper);
+				helper.select();
+				document.execCommand('copy');
+				helper.remove();
+			}
+			if (button) {
+				const original = button.textContent;
+				button.textContent = 'Copied';
+				button.disabled = true;
+				setTimeout(() => { button.textContent = original; button.disabled = false; }, 1400);
+			}
+			if (typeof showToast === 'function') showToast(`Entry code ${value} copied`, 'success');
+		} catch (_) {
+			if (typeof showToast === 'function') showToast(`Share this entry code: ${value}`, 'info');
+		}
+	}
+
 	function getGameTypeLabel(type) {
 		return GAME_TYPE_LABELS[type] || 'Game';
 	}
@@ -52,6 +82,68 @@
 		if (parsed < min) return min;
 		if (parsed > max) return max;
 		return parsed;
+	}
+
+	function getActionErrorMessage(error, fallback = 'Unknown error') {
+		const message =
+			error && typeof error === 'object' && error.message
+				? error.message
+				: error;
+		return String(message || fallback).replace(/\s+/g, ' ').trim() || fallback;
+	}
+
+	function showArenaMessage(message, type = 'error') {
+		const text = String(message || '').trim() || 'The requested action could not be completed.';
+		if (typeof showToast === 'function') showToast(text, type);
+		if (type === 'error') console.error(`[Arena] ${text}`);
+		else if (type === 'warning') console.warn(`[Arena] ${text}`);
+		return false;
+	}
+
+	function setArenaModal(id, open) {
+		const modal = byId(id);
+		if (!modal) return;
+		if (open) {
+			if (!modal.__arenaReturnFocus && document.activeElement instanceof HTMLElement) {
+				modal.__arenaReturnFocus = document.activeElement;
+			}
+			modal.classList.add('active');
+			modal.setAttribute('aria-hidden', 'false');
+			modal.style.display = 'flex';
+		} else {
+			// Move focus out before hiding the modal. Otherwise browsers keep the
+			// focused control inside an aria-hidden subtree and emit an a11y error.
+			if (modal.contains(document.activeElement) && document.activeElement instanceof HTMLElement) {
+				document.activeElement.blur();
+			}
+			modal.classList.remove('active');
+			modal.style.display = 'none';
+			modal.setAttribute('aria-hidden', 'true');
+			const returnFocus = modal.__arenaReturnFocus;
+			modal.__arenaReturnFocus = null;
+			if (returnFocus instanceof HTMLElement && returnFocus.isConnected && !returnFocus.closest('[aria-hidden="true"]')) {
+				try { returnFocus.focus({ preventScroll: true }); } catch (_) { returnFocus.focus(); }
+			}
+		}
+		document.body.classList.toggle(
+			'arena-modal-open',
+			Boolean(document.querySelector('.arena-editor-modal.active')),
+		);
+	}
+
+	function openGameEditorModal(gameId = '') {
+		if (gameId) {
+			editGame(gameId);
+		} else {
+			resetGameForm();
+		}
+		const title = byId('gameEditorTitle');
+		if (title) title.textContent = gameId ? 'Edit game' : 'Create game';
+		setArenaModal('gameEditorModal', true);
+	}
+
+	function closeGameEditorModal() {
+		setArenaModal('gameEditorModal', false);
 	}
 
 	function normalizeGameRules(rawRules = {}) {
@@ -347,6 +439,11 @@
 		);
 		const cloned = JSON.parse(JSON.stringify(templateGame));
 		cloned.id = instanceId;
+		// Tournament copies are independent lobbies. Never carry the template's
+		// unique entry code into another Game row; normalizeGame will derive a
+		// deterministic code from this fresh instance id.
+		delete cloned.joinCode;
+		delete cloned.join_code;
 		cloned.name =
 			String(templateGame.name || 'Untitled Game').trim() || 'Untitled Game';
 		cloned.status = 'draft';
@@ -390,8 +487,38 @@
 			)}`,
 			createdAt: nowIso,
 		};
-		ensureLobbyIdentity(cloned, cloned.session);
-		return cloned;
+		const normalizedClone = GameCore.normalizeGame
+			? GameCore.normalizeGame(cloned)
+			: cloned;
+		ensureLobbyIdentity(normalizedClone, normalizedClone.session);
+		return normalizedClone;
+	}
+
+	function deriveGameJoinCode(seed) {
+		let hash = 2166136261;
+		const source = String(seed || 'game');
+		for (let index = 0; index < source.length; index += 1) {
+			hash ^= source.charCodeAt(index);
+			hash = Math.imul(hash, 16777619);
+		}
+		return Math.abs(hash >>> 0).toString(36).toUpperCase().padStart(6, '0').slice(0, 6);
+	}
+
+	function ensureUniqueGameEntryCodes(games = []) {
+		const used = new Set();
+		return (Array.isArray(games) ? games : []).map((game, index) => {
+			const next = { ...game };
+			let code = String(next.joinCode || next.join_code || '').trim().toUpperCase();
+			let attempt = 0;
+			while (!code || used.has(code)) {
+				code = deriveGameJoinCode(`${next.id || 'game'}-${index}-${attempt}`);
+				attempt += 1;
+			}
+			next.joinCode = code;
+			delete next.join_code;
+			used.add(code);
+			return next;
+		});
 	}
 
 	function buildTournamentInstanceAssignments(
@@ -457,13 +584,22 @@
 	}
 
 	function persistTournamentGameInstances(games = []) {
-		const instanceGames = (Array.isArray(games) ? games : []).filter(
+		const requestedInstances = (Array.isArray(games) ? games : []).filter(
 			(game) => game?.id,
 		);
-		if (!instanceGames.length) return [];
+		if (!requestedInstances.length) return [];
 		const existingGames = GameCore.getQuizGames ? GameCore.getQuizGames() : [];
-		persistAuthoritativeGames([...existingGames, ...instanceGames]);
-		syncGamesIfPossible();
+		const allGames = ensureUniqueGameEntryCodes([...existingGames, ...requestedInstances]);
+		const requestedIds = new Set(requestedInstances.map((game) => String(game.id)));
+		const instanceGames = allGames.filter((game) => requestedIds.has(String(game.id)));
+		persistAuthoritativeGames(allGames, { report: true });
+		const syncResult = syncGamesIfPossible();
+		if (syncResult && syncResult.ok === false) {
+			showArenaMessage(
+				`Tournament games were saved on this device, but realtime sync is unavailable: ${syncResult.message}. Reconnect and retry before inviting students.`,
+				'warning',
+			);
+		}
 		try {
 			const socket = window.adminSocket || window.clientSocket;
 			if (socket && typeof socket.emit === 'function') {
@@ -481,24 +617,41 @@
 	}
 
 	function syncGamesIfPossible() {
-		if (typeof window.syncGamesToClients !== 'function') return;
+		if (typeof window.syncGamesToClients !== 'function') {
+			return { ok: false, message: 'the realtime sync service is not loaded' };
+		}
 		const isAdmin = window.Auth?.isAdmin && window.Auth.isAdmin();
 		const isTeacher = window.Auth?.isTeacher && window.Auth.isTeacher();
 		if (isAdmin || isTeacher) {
-			window.syncGamesToClients();
+			try {
+				window.syncGamesToClients();
+				return { ok: true };
+			} catch (error) {
+				return { ok: false, message: getActionErrorMessage(error, 'the sync request failed') };
+			}
 		}
+		return { ok: false, message: 'your account is not allowed to publish games' };
 	}
 
 	function persistAuthoritativeGames(games, options = {}) {
 		const normalizedGames = [];
 		const seenIds = new Set();
-		(Array.isArray(games) ? games : []).forEach((entry) => {
-			if (!entry?.id) return;
+		let duplicateCount = 0;
+		let invalidCount = 0;
+		ensureUniqueGameEntryCodes(games).forEach((entry) => {
+			if (!entry?.id) {
+				invalidCount += 1;
+				return;
+			}
 			const normalized = GameCore.normalizeGame
 				? GameCore.normalizeGame(entry)
 				: entry;
 			const id = String(normalized?.id || '').trim();
-			if (!id || seenIds.has(id)) return;
+			if (!id) return;
+			if (seenIds.has(id)) {
+				duplicateCount += 1;
+				return;
+			}
 			seenIds.add(id);
 			normalizedGames.push({
 				...normalized,
@@ -515,6 +668,18 @@
 				detail: { games: normalizedGames },
 			}),
 		);
+		if (duplicateCount && options.report === true) {
+			showArenaMessage(
+				`${duplicateCount} duplicate game record${duplicateCount === 1 ? '' : 's'} was ignored while saving. Keep one copy, rename it if needed, and retry sync.`,
+				'warning',
+			);
+		}
+		if (invalidCount && options.report === true) {
+			showArenaMessage(
+				`${invalidCount} invalid game record${invalidCount === 1 ? '' : 's'} was not saved because it has no game ID. Recreate that game before retrying sync.`,
+				'warning',
+			);
+		}
 		return normalizedGames;
 	}
 
@@ -558,6 +723,14 @@
 		}
 		socket.emit('game:list', (response) => {
 			if (!response?.ok || !Array.isArray(response.games)) {
+				const detail = getActionErrorMessage(
+					response?.error,
+					'the server did not return a valid game list',
+				);
+				showArenaMessage(
+					`Could not load the authoritative game list: ${detail}. Local games were kept; retry after the connection or server issue is fixed.`,
+					'warning',
+				);
 				if (typeof callback === 'function') {
 					callback(null, response?.error || 'list_unavailable');
 				}
@@ -583,6 +756,7 @@
 
 			const stored = persistAuthoritativeGames(response.games, {
 				syncedAt: new Date().toISOString(),
+				report: true,
 			});
 			if (typeof callback === 'function') callback(stored, null);
 		});
@@ -620,7 +794,7 @@
 		const classes = getClasses();
 		if (!classes.length) {
 			list.innerHTML =
-				'<div class="empty-state-small">No classes available.</div>';
+				'<div class="empty-state-small">No classes available. Create a class first if this game should be restricted to a class.</div>';
 			return;
 		}
 		list.innerHTML = classes
@@ -765,7 +939,7 @@
 
 		if (!filtered.length) {
 			list.innerHTML =
-				'<div class="empty-state-small">No questions found.</div>';
+				`<div class="empty-state-small">${questions.length ? 'No questions match the current search or filters.' : 'No questions are available. Create a question first, then return here to add it to this game.'}</div>`;
 			return;
 		}
 
@@ -859,10 +1033,20 @@
 			return;
 		}
 		const questions = getQuestions();
+		if (!questions.length) {
+			showArenaMessage(
+				'Questions could not be added: the question bank is empty or unavailable. Create a question, reload the bank, and try again.',
+			);
+			return;
+		}
+		let missingCount = 0;
 		checked.forEach((checkbox) => {
 			const index = parseInt(checkbox.dataset.questionIndex, 10);
 			const source = questions[index];
-			if (!source) return;
+			if (!source) {
+				missingCount += 1;
+				return;
+			}
 			const choices = Array.isArray(source.options)
 				? source.options
 				: Array.isArray(source.optionData)
@@ -986,27 +1170,11 @@
 		const q =
 			question && question.id ? question : normalizeGameQuestion(question);
 		const metaEncoded = encodeQuestionMeta(q);
-		const typeValue = window.QuizTypes?.normalize
-			? window.QuizTypes.normalize(q.type || q.questionType, q)
-			: q.questionType || q.type || 'multiple-choice';
-		const typeLabel = window.QuizTypes?.label
-			? window.QuizTypes.label(typeValue, q)
-			: String(typeValue);
-		const categoryLabel = String(
-			q.category || q.categoryId || 'Uncategorized',
-		).trim();
-		const optionCount = Array.isArray(q.options) ? q.options.length : 0;
-		const points = Number.parseFloat(q.points) || 1;
 		return `
 			<div class="game-selected-question" data-question-id="${escapeHtml(q.id)}" data-question-meta="${escapeHtml(metaEncoded)}">
-				<div class="selected-question-main">
-					<div class="selected-question-text">${escapeHtml(q.text || 'Untitled question')}</div>
-					<div class="selected-question-meta">
-						${escapeHtml(categoryLabel)} - ${escapeHtml(typeLabel)} - ${escapeHtml(String(points))} pts - ${optionCount} options${
-							q.answer ? ` - Answer: ${escapeHtml(q.answer)}` : ''
-						}
-					</div>
-				</div>
+				<input type="text" class="form-control" data-field="text" placeholder="Question" value="${escapeHtml(q.text)}" />
+				<input type="text" class="form-control" data-field="answer" placeholder="Correct answer" value="${escapeHtml(q.answer)}" />
+				<input type="text" class="form-control" data-field="choices" placeholder="Choices (comma separated)" value="${escapeHtml(q.choices?.join(', ') || '')}" />
 				<button type="button" class="btn btn-danger-soft" data-action="remove-selected-question">Remove</button>
 			</div>
 		`;
@@ -1056,10 +1224,20 @@
 			return;
 		}
 		const questions = getQuestions();
+		if (!questions.length) {
+			showArenaMessage(
+				'Questions could not be added: the question bank is empty or unavailable. Create a question, reload the bank, and try again.',
+			);
+			return;
+		}
+		let missingCount = 0;
 		checked.forEach((checkbox) => {
 			const index = parseInt(checkbox.dataset.questionIndex, 10);
 			const source = questions[index];
-			if (!source) return;
+			if (!source) {
+				missingCount += 1;
+				return;
+			}
 			addQuestionRow(
 				targetListId,
 				{
@@ -1076,6 +1254,12 @@
 		});
 		ensureQuestionListPlaceholder(targetListId);
 		refreshGameQuestionBanks();
+		if (missingCount) {
+			showArenaMessage(
+				`${missingCount} selected question${missingCount === 1 ? '' : 's'} no longer exists. Refresh the question bank and choose a current question.`,
+				'warning',
+			);
+		}
 	}
 
 	function addAllFromBank(listId, targetListId) {
@@ -1085,14 +1269,24 @@
 			list.querySelectorAll('input[type="checkbox"][data-question-index]'),
 		);
 		if (!allVisible.length) {
-			showToast('No questions available to add.', 'info');
+			showArenaMessage('No questions are available in the current filter. Create or unfilter a question before adding it.', 'info');
 			return;
 		}
 		const questions = getQuestions();
+		if (!questions.length) {
+			showArenaMessage(
+				'Questions could not be added: the question bank is empty or unavailable. Create a question, reload the bank, and try again.',
+			);
+			return;
+		}
+		let missingCount = 0;
 		allVisible.forEach((checkbox) => {
 			const index = parseInt(checkbox.dataset.questionIndex, 10);
 			const source = questions[index];
-			if (!source) return;
+			if (!source) {
+				missingCount += 1;
+				return;
+			}
 			addQuestionRow(
 				targetListId,
 				{
@@ -1107,6 +1301,12 @@
 		});
 		ensureQuestionListPlaceholder(targetListId);
 		refreshGameQuestionBanks();
+		if (missingCount) {
+			showArenaMessage(
+				`${missingCount} visible question${missingCount === 1 ? '' : 's'} disappeared before they could be added. Refresh the question bank and try again.`,
+				'warning',
+			);
+		}
 	}
 
 	function collectQuestions(containerId) {
@@ -1118,9 +1318,26 @@
 		return rows
 			.map((row) => {
 				const meta = decodeQuestionMeta(row.dataset.questionMeta);
+				const text = String(
+					row.querySelector('[data-field="text"]')?.value ??
+						meta.text ??
+						meta.question ??
+						'',
+				).trim();
+				const answer = String(
+					row.querySelector('[data-field="answer"]')?.value ?? meta.answer ?? '',
+				).trim();
+				const choices = String(
+					row.querySelector('[data-field="choices"]')?.value ??
+						(Array.isArray(meta.choices) ? meta.choices.join(', ') : meta.choices || ''),
+				);
 				return normalizeGameQuestion({
 					...meta,
 					id: row.dataset.questionId || meta.id,
+					text,
+					question: text,
+					answer,
+					choices,
 				});
 			})
 			.filter((q) => q.text.trim() && q.answer.trim())
@@ -1772,11 +1989,40 @@
 			sprintGlobalTimerSeconds > 0;
 
 		if (!name.trim()) {
-			showToast('Game name is required', 'error');
+			showArenaMessage('Game cannot be saved: enter a game name.');
 			return null;
 		}
 		if (!selectedPreset) {
-			showToast('Select a game preset to continue', 'error');
+			showArenaMessage('Game cannot be saved: select a game preset.');
+			return null;
+		}
+
+		const incompleteQuestionCounts = [
+			['main', 'gameQuestionsList'],
+			['penalty', 'gamePenaltyList'],
+		].map(([label, containerId]) => {
+			const container = byId(containerId);
+			const rows = container
+				? Array.from(container.querySelectorAll('.game-selected-question'))
+				: [];
+			const incomplete = rows.filter((row) => {
+				const text = String(row.querySelector('[data-field="text"]')?.value || '').trim();
+				const answer = String(row.querySelector('[data-field="answer"]')?.value || '').trim();
+				return !text || !answer || !String(row.dataset.questionId || '').trim();
+			}).length;
+			return { label, incomplete };
+		}).filter((entry) => entry.incomplete > 0);
+		if (incompleteQuestionCounts.length) {
+			const detail = incompleteQuestionCounts
+				.map((entry) => `${entry.incomplete} ${entry.label} question${entry.incomplete === 1 ? '' : 's'}`)
+				.join(' and ');
+			const incompleteTotal = incompleteQuestionCounts.reduce(
+				(total, entry) => total + entry.incomplete,
+				0,
+			);
+			showArenaMessage(
+				`Game cannot be saved: ${detail} ${incompleteTotal === 1 ? 'is' : 'are'} incomplete. Add the question text and answer, or remove the row.`,
+			);
 			return null;
 		}
 
@@ -1818,7 +2064,9 @@
 		});
 
 		if (!game.questions.length) {
-			showToast('Add at least one main question', 'error');
+			showArenaMessage(
+				'Game cannot be saved: no main questions are selected. Add at least one valid question in the Main Questions panel.',
+			);
 			return null;
 		}
 
@@ -1841,6 +2089,37 @@
 		toggleGameRulesVisibility();
 	}
 
+	function commitLocalGame(game) {
+		try {
+			const games = GameCore.getQuizGames();
+			const index = games.findIndex((entry) => entry.id === game.id);
+			if (index >= 0) games[index] = game;
+			else games.push(game);
+			persistAuthoritativeGames(games, { report: true });
+			return games;
+		} catch (error) {
+			showArenaMessage(
+				`Game could not be saved locally: ${getActionErrorMessage(error, 'the local game store rejected the data')}. Check the game fields and try again.`,
+			);
+			return null;
+		}
+	}
+
+	function finishGameSave(game, message = 'Game saved successfully') {
+		showToast(message, 'success');
+		const syncResult = syncGamesIfPossible();
+		if (syncResult && syncResult.ok === false) {
+			showArenaMessage(
+				`Game is saved locally, but realtime sync failed: ${syncResult.message}. Reconnect and retry so other users can see this game.`,
+				'warning',
+			);
+		}
+		resetGameForm();
+		renderGameList();
+		renderLobby();
+		closeGameEditorModal();
+	}
+
 	function saveGameForm(event) {
 		if (event) event.preventDefault();
 		const game = buildGameFromForm();
@@ -1852,51 +2131,43 @@
 			const isNew =
 				currentGames.findIndex((existing) => existing.id === game.id) === -1;
 			const eventName = isNew ? 'game:create' : 'game:update';
-			socket.emit(eventName, game, (response) => {
-				if (response && response.error) {
-					showToast(`Server sync error: ${response.error}`, 'error');
+			// Commit locally before waiting for Socket.IO. The API/realtime layer is
+			// best-effort, so a delayed acknowledgement must never leave the modal
+			// open or make a valid game appear unsaved.
+			if (!commitLocalGame(game)) return;
+			let finished = false;
+			const finish = (response = null) => {
+				if (finished) return;
+				finished = true;
+				if (response?.error) {
+					finishGameSave(game, 'Game saved locally; realtime sync needs attention');
+					showToast(`Realtime sync: ${response.error}`, 'warning');
 					return;
 				}
-				requestAuthoritativeGameList((gamesFromServer) => {
-					if (!gamesFromServer) {
-						const fallbackGames = GameCore.getQuizGames();
-						const fallbackIndex = fallbackGames.findIndex(
-							(entry) => entry.id === game.id,
-						);
-						if (fallbackIndex >= 0) {
-							fallbackGames[fallbackIndex] = game;
-						} else {
-							fallbackGames.push(game);
-						}
-						persistAuthoritativeGames(fallbackGames);
-					}
-					showToast('Game saved successfully', 'success');
-					syncGamesIfPossible();
-					resetGameForm();
-					renderGameList();
-					renderLobby();
-				});
-			});
+				finishGameSave(game);
+			};
+			try {
+				socket.emit(eventName, game, finish);
+			} catch (error) {
+				console.warn('[Games] Socket save failed:', error);
+				finish();
+			}
+			setTimeout(() => finish(), 1800);
 			return;
 		}
 
-		const games = GameCore.getQuizGames();
-		const index = games.findIndex((g) => g.id === game.id);
-		if (index >= 0) {
-			games[index] = game;
-		} else {
-			games.push(game);
-		}
-		persistAuthoritativeGames(games);
-		showToast('Game saved successfully', 'success');
-		syncGamesIfPossible();
-		resetGameForm();
-		renderGameList();
+		if (!commitLocalGame(game)) return;
+		finishGameSave(game);
 	}
 
 	function editGame(gameId) {
 		const game = GameCore.getGameById(gameId);
-		if (!game) return;
+		if (!game) {
+			showArenaMessage(
+				'Game cannot be opened: this game no longer exists in the local library. Refresh the library and choose another game.',
+			);
+			return;
+		}
 		state.editingId = game.id;
 		byId('gameId').value = game.id;
 		byId('gameName').value = game.name;
@@ -2025,13 +2296,20 @@
 
 		byId('gameQuestionsList').innerHTML = '';
 		byId('gamePenaltyList').innerHTML = '';
-		game.questions.forEach((q) => addQuestionRow('gameQuestionsList', q));
-		game.penaltyQuestions.forEach((q) => addQuestionRow('gamePenaltyList', q));
+		const mainQuestions = Array.isArray(game.questions) ? game.questions : [];
+		const penaltyQuestions = Array.isArray(game.penaltyQuestions)
+			? game.penaltyQuestions
+			: [];
+		mainQuestions.forEach((q) => addQuestionRow('gameQuestionsList', q));
+		penaltyQuestions.forEach((q) => addQuestionRow('gamePenaltyList', q));
 		ensureQuestionListPlaceholder('gameQuestionsList');
 		ensureQuestionListPlaceholder('gamePenaltyList');
 
 		toggleGameFormFields();
 		refreshGameQuestionBanks();
+		const title = byId('gameEditorTitle');
+		if (title) title.textContent = 'Edit game';
+		setArenaModal('gameEditorModal', true);
 		showToast('Game loaded for editing', 'info');
 	}
 
@@ -2040,8 +2318,18 @@
 		if (!confirm('Delete this game?')) return;
 
 		// Local delete
-		const games = GameCore.getQuizGames().filter((g) => g.id !== gameId);
-		GameCore.saveQuizGames(games);
+		const currentGames = GameCore.getQuizGames();
+		if (!currentGames.some((game) => String(game?.id) === String(gameId))) {
+			showArenaMessage('Game was not deleted: it no longer exists in the local library. Refresh the library and try again.');
+			return;
+		}
+		const games = currentGames.filter((g) => g.id !== gameId);
+		try {
+			GameCore.saveQuizGames(games);
+		} catch (error) {
+			showArenaMessage(`Game could not be deleted locally: ${getActionErrorMessage(error)}.`);
+			return;
+		}
 
 		// Server delete
 		const socket = window.clientSocket;
@@ -2049,7 +2337,13 @@
 			socket.emit('game:delete', { gameId });
 		}
 
-		syncGamesIfPossible();
+		const syncResult = syncGamesIfPossible();
+		if (syncResult && syncResult.ok === false) {
+			showArenaMessage(
+				`Game deleted locally, but the server was not updated: ${syncResult.message}. Retry realtime sync before students use this game.`,
+				'warning',
+			);
+		}
 		if (state.selectedGameId === gameId) {
 			state.selectedGameId = null;
 			const lobby = byId('gameLobby');
@@ -2098,6 +2392,11 @@
 	}
 
 	function openLobby(gameId) {
+		const localGame = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
+		if (!localGame) {
+			showArenaMessage('Lobby could not open: this game is missing from the local library. Refresh the games and choose a current game.');
+			return;
+		}
 		const socket = window.clientSocket;
 		if (socket && socket.connected) {
 			// Get game data from localStorage to help server hydrate if needed
@@ -2150,6 +2449,11 @@
 	}
 
 	function startGame(gameId) {
+		const localGame = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
+		if (!localGame) {
+			showArenaMessage('Game could not start: the selected game is missing from the local library. Refresh the games and try again.');
+			return;
+		}
 		const socket = window.clientSocket;
 		if (socket && socket.connected) {
 			const gameData =
@@ -2728,6 +3032,7 @@
 								<span class="game-badge">${escapeHtml(typeLabel)}</span>
 								<span class="game-badge">${game.mode === 'team' ? 'Team vs Team' : '1 vs 1'}</span>
 								<span class="game-badge ghost">${escapeHtml(lobbyLabel)}</span>
+								<span class="game-badge game-code-badge" title="Share this code with students">Code ${escapeHtml(game.joinCode || game.join_code || '------')}</span>
 							</div>
 						</div>
 						<span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
@@ -2784,6 +3089,7 @@
 				: lobbyStatus === 'completed'
 					? 'Watch Replay'
 					: 'Watch Lobby';
+		const joinCode = String(game.joinCode || game.join_code || '').trim().toUpperCase();
 
 		container.innerHTML = `
 			<div class="game-lobby-header">
@@ -2795,6 +3101,7 @@
 			<div class="game-lobby-meta">
 				${participants.length} participant(s) • ${game.mode === 'team' ? 'Team Mode' : 'Solo Mode'}
 			</div>
+			<div class="game-lobby-share-code"><span>Student entry code</span><strong>${escapeHtml(joinCode || '------')}</strong><button type="button" class="btn btn-sm btn-secondary" onclick="copyGameJoinCode('${escapeHtml(joinCode)}', this)">Copy</button></div>
 			<div class="game-lobby-list">
 				${
 					participants.length
@@ -4316,6 +4623,24 @@
 		);
 		renderGameList();
 		resetGameForm();
+		const openGameButtons = [byId('addGameBtn'), byId('addGameInlineBtn')].filter(Boolean);
+		openGameButtons.forEach((button) => {
+			if (button.dataset.bound === 'true') return;
+			button.dataset.bound = 'true';
+			button.addEventListener('click', () => openGameEditorModal());
+		});
+		const closeGameButton = byId('closeGameEditorBtn');
+		if (closeGameButton && closeGameButton.dataset.bound !== 'true') {
+			closeGameButton.dataset.bound = 'true';
+			closeGameButton.addEventListener('click', closeGameEditorModal);
+		}
+		const gameEditorModal = byId('gameEditorModal');
+		if (gameEditorModal && gameEditorModal.dataset.bound !== 'true') {
+			gameEditorModal.dataset.bound = 'true';
+			gameEditorModal.addEventListener('click', (event) => {
+				if (event.target === gameEditorModal) closeGameEditorModal();
+			});
+		}
 
 		const form = byId('gameForm');
 		if (form) {
@@ -4527,6 +4852,7 @@
 	window.resetGameSession = resetSession;
 	window.renderGameList = renderGameList;
 	window.renderGameLobby = renderLobby;
+	window.copyGameJoinCode = copyGameJoinCode;
 
 	// Game Presets Management
 	const GAME_PRESETS_KEY = 'gamePresets';
@@ -5357,10 +5683,7 @@
 
 		if (activeTab === 'tournament-studio') {
 			initTournamentStudioTabs();
-			const activeTournament = getActiveTournament();
-			// Default to dashboard if tournament is active, otherwise planner
-			const defaultTab = activeTournament ? 'dashboard' : 'planner';
-			setTournamentStudioTab(state.tournamentStudioTab || defaultTab);
+			setTournamentStudioTab(state.tournamentStudioTab || 'planner');
 			updateTournamentSyncStatus();
 		}
 	}
@@ -5386,8 +5709,7 @@
 			.toLowerCase();
 
 		let activeTab = 'planner';
-		if (normalized === 'dashboard') activeTab = 'dashboard';
-		else if (normalized === 'history' || normalized === 'recent')
+		if (normalized === 'history' || normalized === 'recent')
 			activeTab = 'history';
 		else if (normalized === 'gamification') activeTab = 'gamification';
 
@@ -5419,9 +5741,8 @@
 
 		state.tournamentStudioTab = activeTab;
 
-		if (activeTab === 'dashboard') {
-			renderTournamentPanels();
-		}
+		if (activeTab === 'planner') renderTournamentCatalog();
+		if (activeTab === 'history') renderTournamentPanels();
 	}
 
 	function initTournamentStudioTabs() {
@@ -5479,6 +5800,269 @@
 			});
 		}
 		return deduped;
+	}
+
+	function getTournamentCatalogEntries() {
+		const byKey = new Map();
+		const history = getTournamentHistory();
+		history.forEach((entry) => {
+			if (entry?.id) byKey.set(String(entry.id), { ...entry });
+		});
+		const active = getActiveTournament();
+		if (active?.id) byKey.set(String(active.id), { ...active });
+		const draft = getTournamentPlannerDraft();
+		if (draft) {
+			const draftId = String(draft.id || 'planner-draft');
+			byKey.set(draftId, { ...draft, id: draftId, status: 'draft' });
+		}
+		return Array.from(byKey.values()).sort((a, b) =>
+			String(b.updatedAt || b.startedAt || b.createdAt || '').localeCompare(
+				String(a.updatedAt || a.startedAt || a.createdAt || ''),
+			),
+		);
+	}
+
+	function getTournamentCatalogEntry(id) {
+		const key = String(id || '').trim();
+		return getTournamentCatalogEntries().find((entry) => String(entry.id) === key) || null;
+	}
+
+	function tournamentStatusLabel(status) {
+		const value = String(status || 'draft').toLowerCase();
+		return value === 'active' ? 'Active' : value === 'paused' ? 'Paused' : value === 'completed' ? 'Completed' : 'Draft';
+	}
+
+	function renderTournamentCatalog() {
+		const container = byId('tournamentList');
+		if (!container) return;
+		const entries = getTournamentCatalogEntries();
+		if (!entries.length) {
+			container.innerHTML = `<div class="arena-empty-state"><strong>No tournaments yet</strong><span>Create a tournament to start building your competitive calendar.</span><button type="button" class="btn btn-primary" onclick="openTournamentPlannerModal()">Add your first tournament</button></div>`;
+			return;
+		}
+		container.innerHTML = entries.map((entry) => {
+			const id = escapeHtml(String(entry.id || ''));
+			const status = String(entry.status || 'draft').toLowerCase();
+			const rounds = parseIntInRange(entry.rounds, 1, 1, 25);
+			const assignmentCount = Array.isArray(entry.roundAssignments)
+				? entry.roundAssignments.reduce((total, round) => total + (Array.isArray(round?.gameIds) ? round.gameIds.length : 0), 0)
+				: 0;
+			const isActive = status === 'active' || status === 'paused';
+			return `<article class="tournament-library-card ${isActive ? 'is-live' : ''}">
+				<div class="tournament-library-card-main">
+					<div class="tournament-library-card-heading">
+						<div><span class="arena-eyebrow">${escapeHtml(getTournamentModeLabel(entry.targetMode))}</span><h4>${escapeHtml(entry.name || 'Untitled tournament')}</h4></div>
+						<span class="tournament-library-status is-${escapeHtml(status)}">${escapeHtml(tournamentStatusLabel(status))}</span>
+					</div>
+					<div class="tournament-library-meta"><span>${escapeHtml(getTournamentFormatLabel(entry.format))}</span><span>${rounds} round${rounds === 1 ? '' : 's'}</span><span>${assignmentCount} assigned game${assignmentCount === 1 ? '' : 's'}</span><span>${escapeHtml(formatTournamentDate(entry.updatedAt || entry.startedAt || entry.createdAt))}</span></div>
+				</div>
+				<div class="tournament-library-actions">
+					${status === 'paused' ? `<button type="button" class="btn btn-sm btn-primary" onclick="enableTournament('${id}')">Resume</button>` : status === 'active' ? `<button type="button" class="btn btn-sm btn-primary" onclick="openTournamentWatchModal('${id}')">Watch</button>` : `<button type="button" class="btn btn-sm btn-primary" onclick="enableTournament('${id}')">Enable</button>`}
+					<button type="button" class="btn btn-sm btn-secondary" onclick="openTournamentAssignmentsModal('${id}')">Round games</button>
+					<button type="button" class="btn btn-sm btn-secondary" onclick="editTournament('${id}')">Edit</button>
+					${isActive ? `<button type="button" class="btn btn-sm btn-secondary" onclick="openTournamentWatchModal('${id}')">Watch</button>` : ''}
+					<button type="button" class="btn btn-sm btn-danger-soft" onclick="deleteTournament('${id}')">Delete</button>
+				</div>
+			</article>`;
+		}).join('');
+	}
+
+	function openTournamentPlannerModal(id = '') {
+		const target = id ? getTournamentCatalogEntry(id) : null;
+		if (id && !target) {
+			showArenaMessage('Tournament editor could not open: this tournament no longer exists. Refresh the tournament list and choose a current record.');
+			return;
+		}
+		if (target) {
+			state.tournamentPlannerHistoryMode = true;
+			state.tournamentPlannerHistoryId = String(target.id);
+			applyTournamentConfigToForm(target, { keepName: false });
+			setTournamentRoundDraft(target.roundAssignments, target.targetMode || 'any', { persistWorkingState: false });
+			renderTournamentRoundAssignments(target, { useDomDraft: false, forceUnlocked: true });
+		} else {
+			clearTournamentPlannerHistoryMode();
+			applyTournamentConfigToForm({ name: '', targetMode: 'any', format: 'elimination', maxParticipants: 16, rounds: 4, matchMinutes: 12, bestOf: 1, pointMultiplier: 1, winnerBonus: 100, rewardExpBonus: 250, rewardBadge: '', notes: '', autoSeeding: true, allowReentry: false });
+			setTournamentRoundDraft([], 'any', { persistWorkingState: false });
+			renderTournamentRoundAssignments(null, { useDomDraft: false, forceUnlocked: true });
+		}
+		setTournamentPlannerFormLocked(false);
+		const title = byId('tournamentEditorTitle');
+		if (title) title.textContent = target ? 'Edit tournament' : 'Create tournament';
+		setArenaModal('tournamentPlannerModal', true);
+	}
+
+	function closeTournamentPlannerModal() {
+		setArenaModal('tournamentPlannerModal', false);
+	}
+
+	function openTournamentAssignmentsModal(id = '') {
+		const requestedId = String(id || state.tournamentPlannerHistoryId || '').trim();
+		const target = requestedId ? getTournamentCatalogEntry(requestedId) : getActiveTournament();
+		if (requestedId && !target) {
+			showArenaMessage('Round assignments could not open: this tournament no longer exists. Refresh the tournament list and try again.');
+			return;
+		}
+		state.tournamentAssignmentModalId = target?.id ? String(target.id) : '';
+		if (target) {
+			applyTournamentConfigToForm(target, { keepName: false });
+			setTournamentRoundDraft(target.roundAssignments, target.targetMode || 'any', { persistWorkingState: false });
+			renderTournamentRoundAssignments(target, { useDomDraft: false, forceUnlocked: true });
+		} else {
+			renderTournamentRoundAssignments(null, { useDomDraft: true, forceUnlocked: true });
+		}
+		const title = byId('tournamentAssignmentsTitle');
+		if (title) title.textContent = target ? `${target.name || 'Tournament'} · round games` : 'Round game assignments';
+		setArenaModal('tournamentAssignmentsModal', true);
+	}
+
+	function persistTournamentAssignmentsModal() {
+		const id = String(state.tournamentAssignmentModalId || '').trim();
+		const planner = buildTournamentFormConfig();
+		const targetMode = normalizeTournamentModeValue(
+			byId('tournamentTargetMode')?.value,
+			'any',
+		);
+		const roundAssignments = normalizeTournamentRoundAssignments(
+			collectTournamentRoundAssignments(planner.rounds, { includeAllRounds: true }),
+			targetMode,
+		).map((entry) => ({
+			...entry,
+			gameDetails: buildTournamentAssignmentDetails(entry.gameIds),
+		}));
+		const allGames = GameCore.getQuizGames ? GameCore.getQuizGames() : [];
+		const availableIds = new Set(
+			getTournamentTemplateGames(allGames)
+				.map((game) => String(game?.id || '').trim())
+				.filter(Boolean),
+		);
+		const missingByRound = roundAssignments
+			.map((entry) => ({
+				round: Number(entry?.round) || 1,
+				missing: (Array.isArray(entry?.gameIds) ? entry.gameIds : [])
+					.map((gameId) => String(gameId || '').trim())
+					.filter((gameId) => gameId && !availableIds.has(gameId)),
+			}))
+			.filter((entry) => entry.missing.length);
+		if (missingByRound.length) {
+			showArenaMessage(
+				`Round assignments were not saved: round${missingByRound.length > 1 ? 's' : ''} ${missingByRound.map((entry) => entry.round).join(', ')} reference game${missingByRound.some((entry) => entry.missing.length > 1) ? 's' : ''} that no longer exist. Replace or remove the missing game${missingByRound.some((entry) => entry.missing.length > 1) ? 's' : ''}, then save again.`,
+			);
+			return false;
+		}
+
+		if (!id) {
+			setTournamentRoundDraft(roundAssignments, targetMode, { persistWorkingState: true });
+			showArenaMessage(
+				'Round assignments staged for this new tournament. Save the tournament draft or start it to keep these selections.',
+				'info',
+			);
+			return true;
+		}
+		const target = getTournamentCatalogEntry(id);
+		if (!target) {
+			showArenaMessage(
+				'Round assignments were not saved: this tournament no longer exists. Close the editor, refresh the tournament list, and open the current record.',
+			);
+			return false;
+		}
+		const active = getActiveTournament();
+		if (active?.id && String(active.id) === id) {
+			active.roundAssignments = roundAssignments;
+			active.rounds = planner.rounds;
+			localStorage.setItem('quizTournamentActive', JSON.stringify(active));
+			syncGamificationState();
+		} else {
+			const draft = getTournamentPlannerDraft();
+			if (draft && String(draft.id || '') === id) {
+				draft.roundAssignments = roundAssignments;
+				draft.rounds = planner.rounds;
+				draft.updatedAt = new Date().toISOString();
+				localStorage.setItem('quizTournamentPlannerDraft', JSON.stringify(draft));
+			} else {
+				const history = getTournamentHistory();
+				const index = history.findIndex((entry) => String(entry?.id || '') === id);
+				if (index >= 0) {
+					history[index] = { ...history[index], roundAssignments, rounds: planner.rounds, updatedAt: new Date().toISOString() };
+					saveTournamentHistory(history);
+				}
+			}
+		}
+		renderTournamentCatalog();
+		if (typeof showToast === 'function') showToast('Round assignments saved', 'success');
+		return true;
+	}
+
+	function closeTournamentAssignmentsModal() {
+		if (persistTournamentAssignmentsModal() === false) return;
+		setArenaModal('tournamentAssignmentsModal', false);
+		state.tournamentAssignmentModalId = '';
+	}
+
+	function openTournamentWatchModal(id = '') {
+		const target = id ? getTournamentCatalogEntry(id) : getActiveTournament();
+		const content = byId('tournamentWatchModalContent');
+		if (!target) {
+			showArenaMessage('Tournament monitor could not open: no current tournament was found. Refresh the tournament list and choose a current record.', 'info');
+			return;
+		}
+		if (!content) {
+			showArenaMessage('Tournament monitor could not open because its panel is missing. Reload the admin page.');
+			return;
+		}
+		const status = String(target.status || 'draft').toLowerCase();
+		const leaderboard = status === 'active' || status === 'paused' ? getTournamentLeaderboard(target, { includeZero: true }).slice(0, 8) : (target.finalStandings || []).slice(0, 8);
+		const rounds = Array.isArray(target.roundAssignments) ? target.roundAssignments : [];
+		content.innerHTML = `<div class="tournament-watch-summary"><div class="tournament-watch-hero"><span class="arena-eyebrow">${escapeHtml(tournamentStatusLabel(status))}</span><h3>${escapeHtml(target.name || 'Tournament')}</h3><p>${escapeHtml(getTournamentFormatLabel(target.format))} · ${rounds.length || 1} round(s) · ${escapeHtml(getTournamentModeLabel(target.targetMode))}</p></div><div class="tournament-watch-stats"><div><strong>${rounds.length || 1}</strong><span>Rounds</span></div><div><strong>${Array.isArray(target.participants) ? target.participants.length : Number(target.participantCount) || 0}</strong><span>Players</span></div><div><strong>${escapeHtml(String(target.currentRound || 1))}</strong><span>Current round</span></div></div></div><div class="tournament-watch-grid"><div><h4>Round schedule</h4>${rounds.length ? rounds.map((round) => `<div class="tournament-watch-round"><span>Round ${escapeHtml(String(round.round || 1))}</span><strong>${Array.isArray(round.gameIds) ? round.gameIds.length : 0} game template(s)</strong><em>${escapeHtml(String(round.status || 'pending'))}</em></div>`).join('') : '<div class="empty-state-small">No round assignments yet.</div>'}</div><div><h4>Leaderboard</h4>${leaderboard.length ? leaderboard.map((entry, index) => `<div class="tournament-watch-player"><span>#${index + 1}</span><strong>${escapeHtml(entry.name || entry.username || 'Player')}</strong><b>${escapeHtml(String(entry.points || entry.score || 0))} pts</b></div>`).join('') : '<div class="empty-state-small">No scores yet.</div>'}</div></div><div class="tournament-watch-actions">${status === 'active' ? '<button type="button" class="btn btn-secondary" onclick="pauseTournament(); closeTournamentWatchModal();">Pause</button><button type="button" class="btn btn-danger-soft" onclick="stopTournament(); closeTournamentWatchModal();">End tournament</button>' : status === 'paused' ? '<button type="button" class="btn btn-primary" onclick="resumeTournament(); closeTournamentWatchModal();">Resume</button>' : `<button type="button" class="btn btn-primary" onclick="enableTournament('${escapeHtml(String(target.id))}')">Enable tournament</button>`}<button type="button" class="btn btn-secondary" onclick="openTournamentAssignmentsModal('${escapeHtml(String(target.id))}')">Edit round games</button></div>`;
+		const title = byId('tournamentWatchModalTitle');
+		if (title) title.textContent = target.name || 'Tournament overview';
+		setArenaModal('tournamentWatchModal', true);
+	}
+
+	function closeTournamentWatchModal() {
+		setArenaModal('tournamentWatchModal', false);
+	}
+
+	function bindArenaTournamentModals() {
+		const bindings = [
+			['addTournamentBtn', openTournamentPlannerModal],
+			['closeTournamentPlannerBtn', closeTournamentPlannerModal],
+			['closeTournamentAssignmentsBtn', closeTournamentAssignmentsModal],
+			['closeTournamentAssignmentsFooterBtn', closeTournamentAssignmentsModal],
+			['closeTournamentWatchBtn', closeTournamentWatchModal],
+		];
+		bindings.forEach(([id, handler]) => {
+			const button = byId(id);
+			if (!button || button.dataset.bound === 'true') return;
+			button.dataset.bound = 'true';
+			button.addEventListener('click', handler);
+		});
+		['tournamentPlannerModal', 'tournamentAssignmentsModal', 'tournamentWatchModal'].forEach((id) => {
+			const modal = byId(id);
+			if (!modal || modal.dataset.bound === 'true') return;
+			modal.dataset.bound = 'true';
+			modal.addEventListener('click', (event) => {
+				if (event.target !== modal) return;
+				if (id === 'tournamentPlannerModal') closeTournamentPlannerModal();
+				if (id === 'tournamentAssignmentsModal') closeTournamentAssignmentsModal();
+				if (id === 'tournamentWatchModal') closeTournamentWatchModal();
+			});
+		});
+	}
+
+	function enableTournament(id) {
+		const active = getActiveTournament();
+		if (active?.id && String(active.id) === String(id)) {
+			if (active.status === 'paused') resumeTournament();
+			else openTournamentWatchModal(id);
+			return;
+		}
+		const target = getTournamentCatalogEntry(id);
+		if (!target) {
+			showArenaMessage('Tournament could not be enabled: this record no longer exists. Refresh the tournament list and try again.');
+			return;
+		}
+		openTournamentPlannerModal(id);
+		setTimeout(() => startTournament(), 80);
 	}
 
 		function saveTournamentHistory(history) {
@@ -5593,6 +6177,24 @@
 			...entry,
 			gameDetails: buildTournamentAssignmentDetails(entry.gameIds),
 		}));
+		const availableTemplateIds = new Set(
+			getTournamentTemplateGames(GameCore.getQuizGames ? GameCore.getQuizGames() : [])
+				.map((game) => String(game?.id || '').trim())
+				.filter(Boolean),
+		);
+		const missingDraftRounds = roundAssignments
+			.filter((entry) =>
+				(Array.isArray(entry?.gameIds) ? entry.gameIds : []).some(
+					(gameId) => !availableTemplateIds.has(String(gameId || '').trim()),
+				),
+			)
+			.map((entry) => Number(entry.round) || 1);
+		if (missingDraftRounds.length) {
+			showArenaMessage(
+				`Tournament draft was not saved: round${missingDraftRounds.length > 1 ? 's' : ''} ${missingDraftRounds.join(', ')} reference a deleted or unavailable game. Replace or remove it, then save the draft again.`,
+			);
+			return null;
+		}
 		const draft = {
 			id: `planner-draft-${Date.now()}`,
 			name: name || 'Tournament Draft',
@@ -5616,6 +6218,8 @@
 		localStorage.setItem('quizTournamentPlannerDraft', JSON.stringify(draft));
 		clearTournamentPlannerWorkingState();
 		showToast('Tournament planner draft saved.', 'success');
+		closeTournamentPlannerModal();
+		renderTournamentCatalog();
 		return draft;
 	}
 
@@ -5997,7 +6601,7 @@
 		}
 		document
 			.querySelectorAll(
-				'.tournament-round-target-mode, .tournament-round-games-select, .tournament-round-search, .tournament-round-game-checkbox, .tournament-round-select-visible, .tournament-round-clear-btn, .tournament-round-slot-action-select, .tournament-round-slot-apply-btn',
+				'.tournament-round-target-mode, .tournament-round-games-select, .tournament-round-search, .tournament-round-game-checkbox, .tournament-round-select-visible, .tournament-round-clear-btn, .tournament-round-slot-edit-btn, .tournament-round-slot-remove-btn, .tournament-round-slot-replacement-select, .tournament-round-slot-apply-btn, .tournament-round-slot-cancel-btn',
 			)
 			.forEach((field) => {
 				const canEditWhileLocked =
@@ -6397,7 +7001,7 @@
 		activeTournament = getActiveTournament(),
 		options = {},
 	) {
-		const container = byId('tournamentRoundGameAssignments');
+		const container = byId('tournamentRoundGameAssignmentsModal') || byId('tournamentRoundGameAssignments');
 		if (!container) return;
 
 		const config = buildTournamentFormConfig();
@@ -6526,7 +7130,7 @@
 			html += `
 				<div class="tournament-missing-games-panel is-warning">
 					<div class="tournament-missing-games-title">Missing Games Detected (${totalMissing})</div>
-					<p class="tournament-missing-games-note">Resolve each missing slot directly from the Selected Games cards below. Replace and remove now use a single control in one place.</p>
+					<p class="tournament-missing-games-note">Resolve each missing slot directly from the Selected Games cards below. Use the edit icon to replace a template or the remove icon to clear it.</p>
 				</div>
 			`;
 		}
@@ -6651,7 +7255,7 @@
 												entry.historyCount === 1 ? '' : 'ies'
 											} will not carry into this round.`
 										: 'This round will launch a brand-new tournament lobby with no carried-over wins, losses, or completions.';
-							const slotActionOptionsHtml = roundGames
+							const replacementOptionsHtml = roundGames
 								.filter((game) => {
 									const id = String(game?.id || '').trim();
 									return Boolean(id && id !== entry.id && !selectedIds.has(id));
@@ -6682,29 +7286,27 @@
 									<div class="tournament-round-selected-actions">
 										${
 											canManageEntry
-												? `<div class="tournament-round-replacement-row">
-														<select
-															class="form-control tournament-round-slot-action-select"
-															data-tournament-round="${round}"
-															data-game-id="${escapeHtml(entry.id)}"
-															data-persist-active="${shouldPersistActive ? 'true' : 'false'}"
-														>
-															<option value="">Manage this slot</option>
-															<option value="remove">Remove from round</option>
-															${slotActionOptionsHtml}
+													? `<div class="tournament-round-slot-toolbar" role="group" aria-label="Actions for ${escapeHtml(entry.name)}">
+														<button type="button" class="action-btn-icon edit tournament-round-slot-edit-btn" data-tournament-round="${round}" data-game-id="${escapeHtml(entry.id)}" data-persist-active="${shouldPersistActive ? 'true' : 'false'}" title="Replace game" aria-label="Replace ${escapeHtml(entry.name)}">
+															<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"></path></svg>
+														</button>
+														<button type="button" class="action-btn-icon delete tournament-round-slot-remove-btn" data-tournament-round="${round}" data-game-id="${escapeHtml(entry.id)}" data-persist-active="${shouldPersistActive ? 'true' : 'false'}" title="Remove from round" aria-label="Remove ${escapeHtml(entry.name)} from round">
+															<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="m19 6-1 14H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path></svg>
+														</button>
+													</div>
+													<div class="tournament-round-replacement-row" hidden>
+														<select class="form-control tournament-round-slot-replacement-select" data-tournament-round="${round}" data-game-id="${escapeHtml(entry.id)}" data-persist-active="${shouldPersistActive ? 'true' : 'false'}" aria-label="Replacement game for ${escapeHtml(entry.name)}">
+															<option value="">Choose replacement game</option>
+															${replacementOptionsHtml}
 														</select>
-														<button
-															type="button"
-															class="btn btn-sm btn-primary-soft tournament-round-slot-apply-btn"
-															data-tournament-round="${round}"
-															data-game-id="${escapeHtml(entry.id)}"
-															data-persist-active="${shouldPersistActive ? 'true' : 'false'}"
-															disabled
-														>
-															Apply
+														<button type="button" class="action-btn-icon apply tournament-round-slot-apply-btn" data-tournament-round="${round}" data-game-id="${escapeHtml(entry.id)}" data-persist-active="${shouldPersistActive ? 'true' : 'false'}" title="Apply replacement" aria-label="Apply replacement" disabled>
+															<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>
+														</button>
+														<button type="button" class="action-btn-icon cancel tournament-round-slot-cancel-btn" data-tournament-round="${round}" data-game-id="${escapeHtml(entry.id)}" data-persist-active="${shouldPersistActive ? 'true' : 'false'}" title="Cancel replacement" aria-label="Cancel replacement">
+															<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
 														</button>
 													</div>`
-												: ''
+											: ''
 										}
 									</div>
 								</article>
@@ -6969,23 +7571,69 @@
 					});
 				});
 			});
-		container
-			.querySelectorAll('.tournament-round-slot-action-select')
+	container
+			.querySelectorAll('.tournament-round-slot-edit-btn')
+			.forEach((button) => {
+				const newButton = button.cloneNode(true);
+				button.parentNode.replaceChild(newButton, button);
+				newButton.addEventListener('click', function () {
+					const card = this.closest('.tournament-round-selected-game');
+					const editor = card?.querySelector('.tournament-round-replacement-row');
+					const replacement = editor?.querySelector('.tournament-round-slot-replacement-select');
+					if (!editor || !replacement) return;
+					editor.hidden = false;
+					editor.classList.add('is-open');
+					replacement.focus();
+				});
+			});
+	container
+			.querySelectorAll('.tournament-round-slot-cancel-btn')
+			.forEach((button) => {
+				const newButton = button.cloneNode(true);
+				button.parentNode.replaceChild(newButton, button);
+				newButton.addEventListener('click', function () {
+					const editor = this.closest('.tournament-round-replacement-row');
+					const replacement = editor?.querySelector('.tournament-round-slot-replacement-select');
+					const applyButton = editor?.querySelector('.tournament-round-slot-apply-btn');
+					if (replacement) replacement.value = '';
+					if (applyButton) applyButton.disabled = true;
+					if (editor) {
+						editor.hidden = true;
+						editor.classList.remove('is-open');
+					}
+				});
+			});
+	container
+			.querySelectorAll('.tournament-round-slot-replacement-select')
 			.forEach((field) => {
 				const newField = field.cloneNode(true);
 				field.parentNode.replaceChild(newField, field);
 				newField.addEventListener('change', function () {
-					const round = Number(this.dataset.tournamentRound || 0);
-					const targetGameId = String(this.dataset.gameId || '').trim();
-					const applyButton = container.querySelector(
-						`.tournament-round-slot-apply-btn[data-tournament-round="${round}"][data-game-id="${targetGameId}"]`,
-					);
-					if (applyButton) {
-						applyButton.disabled = !String(this.value || '').trim();
-					}
+					const applyButton = this.closest('.tournament-round-replacement-row')?.querySelector('.tournament-round-slot-apply-btn');
+					if (applyButton) applyButton.disabled = !String(this.value || '').trim();
 				});
 			});
-		container
+	container
+			.querySelectorAll('.tournament-round-slot-remove-btn')
+			.forEach((button) => {
+				const newButton = button.cloneNode(true);
+				button.parentNode.replaceChild(newButton, button);
+				newButton.addEventListener('click', function () {
+					const round = Number(this.dataset.tournamentRound || 0);
+					const targetGameId = String(this.dataset.gameId || '').trim();
+					if (!round || !targetGameId) return;
+					updateTournamentRoundHiddenInput(container, round, (currentIds) =>
+						currentIds.filter((id) => id !== targetGameId),
+					);
+					applyTournamentRoundAssignmentsChange(activeTournament, rounds, {
+						globalTargetMode,
+						persistActive: this.dataset.persistActive === 'true',
+						persistWorkingState: !hasOngoingTournament,
+					});
+					showToast('Game removed from round.', 'success');
+				});
+			});
+	container
 			.querySelectorAll('.tournament-round-slot-apply-btn')
 			.forEach((button) => {
 				const newButton = button.cloneNode(true);
@@ -6993,42 +7641,21 @@
 				newButton.addEventListener('click', function () {
 					const round = Number(this.dataset.tournamentRound || 0);
 					const targetGameId = String(this.dataset.gameId || '').trim();
-					const actionSelect = container.querySelector(
-						`.tournament-round-slot-action-select[data-tournament-round="${round}"][data-game-id="${targetGameId}"]`,
+					const replacementId = String(
+						this.closest('.tournament-round-replacement-row')?.querySelector('.tournament-round-slot-replacement-select')?.value || '',
+					).trim();
+					if (!targetGameId || !replacementId) return;
+					updateTournamentRoundHiddenInput(container, round, (currentIds) =>
+						currentIds.map((id) =>
+							id === targetGameId ? replacementId : id,
+						),
 					);
-					const actionValue = String(actionSelect?.value || '').trim();
-					if (!targetGameId || !actionValue) return;
-					if (actionValue === 'remove') {
-						updateTournamentRoundHiddenInput(container, round, (currentIds) =>
-							currentIds.filter((id) => id !== targetGameId),
-						);
-					} else if (actionValue.startsWith('replace:')) {
-						const replacementId = String(
-							actionValue.slice('replace:'.length),
-						).trim();
-						if (!replacementId) {
-							showToast('Choose a replacement game first.', 'warning');
-							return;
-						}
-						updateTournamentRoundHiddenInput(container, round, (currentIds) =>
-							currentIds.map((id) =>
-								id === targetGameId ? replacementId : id,
-							),
-						);
-					} else {
-						return;
-					}
 					applyTournamentRoundAssignmentsChange(activeTournament, rounds, {
 						globalTargetMode,
 						persistActive: this.dataset.persistActive === 'true',
 						persistWorkingState: !hasOngoingTournament,
 					});
-					showToast(
-						actionValue === 'remove'
-							? 'Game removed from round.'
-							: 'Round game replaced successfully.',
-						'success',
-					);
+					showToast('Round game replaced successfully.', 'success');
 				});
 			});
 		setTournamentPlannerFormLocked(isLocked);
@@ -7038,7 +7665,7 @@
 	 * Show modal for managing all missing games across rounds
 	 */
 	function showTournamentMissingGamesModal(missingByRound, rounds) {
-		const container = byId('tournamentRoundGameAssignments');
+		const container = byId('tournamentRoundGameAssignmentsModal') || byId('tournamentRoundGameAssignments');
 		if (!container || !missingByRound || missingByRound.size === 0) return;
 
 		const templateGames = getTournamentTemplateGames(
@@ -8254,10 +8881,19 @@
 			return;
 		let history = getTournamentHistory();
 		const normalizedId = String(id || '').trim();
+		if (!getTournamentCatalogEntry(normalizedId)) {
+			showArenaMessage('Tournament was not deleted: this record no longer exists. Refresh the tournament list and try again.');
+			return;
+		}
 		history = history.filter(
 			(t) => String(t?.id || '').trim() !== normalizedId,
 		);
 		saveTournamentHistory(history);
+		const draft = getTournamentPlannerDraft();
+		if (draft && String(draft.id || '').trim() === normalizedId) {
+			localStorage.removeItem('quizTournamentPlannerDraft');
+			clearTournamentPlannerWorkingState();
+		}
 
 		const active = getActiveTournament();
 		if (active && String(active?.id || '').trim() === normalizedId) {
@@ -8275,10 +8911,13 @@
 	function editTournament(id) {
 		const history = getTournamentHistory();
 		const normalizedId = String(id || '').trim();
-		const target = history.find(
-			(t) => String(t?.id || '').trim() === normalizedId,
-		);
-		if (!target) return;
+		const target =
+			history.find((t) => String(t?.id || '').trim() === normalizedId) ||
+			getTournamentCatalogEntry(normalizedId);
+		if (!target) {
+			showArenaMessage('Tournament could not be edited: this record no longer exists. Refresh the tournament list and choose a current tournament.');
+			return;
+		}
 
 		state.tournamentPlannerHistoryMode = true;
 		state.tournamentPlannerHistoryId = normalizedId;
@@ -8298,11 +8937,21 @@
 				: 'Tournament configuration loaded into planner.',
 			'info',
 		);
+		const title = byId('tournamentEditorTitle');
+		if (title) title.textContent = 'Edit tournament';
+		setArenaModal('tournamentPlannerModal', true);
 	}
 
 	function pauseTournament() {
 		const active = getActiveTournament();
-		if (!active || active.status !== 'active') return;
+		if (!active) {
+			showArenaMessage('Tournament could not be paused: there is no active tournament.', 'info');
+			return;
+		}
+		if (active.status !== 'active') {
+			showArenaMessage(`Tournament could not be paused: its current status is ${active.status || 'unknown'}.`, 'warning');
+			return;
+		}
 		active.status = 'paused';
 		active.pausedAt = new Date().toISOString();
 		localStorage.setItem('quizTournamentActive', JSON.stringify(active));
@@ -8313,7 +8962,14 @@
 
 	function resumeTournament() {
 		const active = getActiveTournament();
-		if (!active || active.status !== 'paused') return;
+		if (!active) {
+			showArenaMessage('Tournament could not be resumed: there is no paused tournament.', 'info');
+			return;
+		}
+		if (active.status !== 'paused') {
+			showArenaMessage(`Tournament could not be resumed: its current status is ${active.status || 'unknown'}.`, 'warning');
+			return;
+		}
 		active.status = 'active';
 		active.pausedAt = null;
 		localStorage.setItem('quizTournamentActive', JSON.stringify(active));
@@ -8369,6 +9025,7 @@
 	}
 
 	function loadGamificationUI() {
+		bindArenaTournamentModals();
 		bindTournamentHistoryActions();
 		const config = getGamificationConfig();
 		if (byId('expPerCorrect'))
@@ -8380,6 +9037,7 @@
 		initTournamentStudioTabs();
 
 		const activeTournament = getActiveTournament();
+		renderTournamentCatalog();
 		const plannerDraft =
 			state.tournamentPlannerHistoryMode === true
 				? null
@@ -8547,7 +9205,7 @@
 	function startTournament() {
 		const name = byId('tournamentName')?.value.trim();
 		if (!name) {
-			showToast('Please enter a tournament name', 'error');
+			showArenaMessage('Tournament cannot start: enter a tournament name.');
 			return;
 		}
 		const existing = getActiveTournament();
@@ -8562,11 +9220,11 @@
 		const planner = buildTournamentFormConfig();
 		const targetMode = byId('tournamentTargetMode')?.value || 'any';
 		if (planner.rounds < 1) {
-			showToast('Tournament rounds must be at least 1', 'error');
+			showArenaMessage('Tournament cannot start: configure at least one round.');
 			return;
 		}
 		if (planner.maxParticipants < 2) {
-			showToast('Tournament must allow at least 2 participants', 'error');
+			showArenaMessage('Tournament cannot start: allow at least two participants.');
 			return;
 		}
 		clearTournamentPlannerHistoryMode();
@@ -8574,9 +9232,50 @@
 		const roundAssignments = collectTournamentRoundAssignments(planner.rounds, {
 			includeAllRounds: true,
 		});
+		const allGames = GameCore.getQuizGames ? GameCore.getQuizGames() : [];
+		const templateGames = getTournamentTemplateGames(allGames);
+		if (!templateGames.length) {
+			showArenaMessage(
+				'Tournament cannot start: no game templates are available. Create and save a game with at least one question first, then assign it to a round.',
+			);
+			return;
+		}
+		const templateMap = new Map(
+			templateGames.map((game) => [String(game.id), game]),
+		);
+		const assignedIds = [
+			...new Set(
+				roundAssignments.flatMap((entry) =>
+					Array.isArray(entry?.gameIds) ? entry.gameIds : [],
+				),
+			),
+		].map((id) => String(id || '').trim()).filter(Boolean);
+		if (!assignedIds.length) {
+			showArenaMessage(
+				'Tournament cannot start: no games are assigned to any round. Open "Configure round games", choose at least one game, and save the assignments.',
+			);
+			return;
+		}
+		const incompleteTemplates = assignedIds
+			.map((id) => templateMap.get(id))
+			.filter(Boolean)
+			.filter((game) => {
+				const questions = Array.isArray(game?.questions) ? game.questions : [];
+				return !questions.length || questions.some((question) => {
+					const text = String(question?.text || question?.question || '').trim();
+					const answer = String(question?.answer || '').trim();
+					return !text || !answer;
+				});
+			});
+		if (incompleteTemplates.length) {
+			showArenaMessage(
+				`Tournament cannot start: ${incompleteTemplates.map((game) => `"${game.name || 'Untitled game'}"`).join(', ')} ${incompleteTemplates.length === 1 ? 'has' : 'have'} missing or incomplete questions. Edit ${incompleteTemplates.length === 1 ? 'this game' : 'these games'} and add valid question text and answers, then try again.`,
+			);
+			return;
+		}
 
 		// Validate that all assigned games still exist in the system
-		const availableGameIds = getAvailableTournamentGameIds();
+		const availableGameIds = new Set(templateMap.keys());
 		let hasMissingGames = false;
 		const missingRounds = [];
 
@@ -8595,14 +9294,13 @@
 		});
 
 		if (hasMissingGames) {
-			showToast(
+			showArenaMessage(
 				`Cannot start tournament. Games are missing from rounds: ${missingRounds.join(', ')}. Please replace or remove them first.`,
-				'error',
 			);
-			// Scroll to missing games panel
-			const missingPanel = byId(
-				'tournamentRoundGameAssignments',
-			)?.querySelector('.tournament-missing-games-panel');
+			// Bring the focused assignment editor into view so the user can fix the
+			// exact round instead of having to search through the planner.
+			openTournamentAssignmentsModal();
+			const missingPanel = byId('tournamentRoundGameAssignmentsModal')?.querySelector('.tournament-missing-games-panel');
 			if (missingPanel) {
 				missingPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 			}
@@ -8611,7 +9309,6 @@
 
 		// Create tournament-only copies for every selected round template so the
 		// tournament never reuses old public session data.
-		const allGames = GameCore.getQuizGames ? GameCore.getQuizGames() : [];
 		const gameMap = new Map();
 		allGames.forEach((game) => {
 			if (game && game.id) gameMap.set(String(game.id), game);
@@ -8626,14 +9323,32 @@
 				const r = (Math.random() * 16) | 0;
 				return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
 			}));
-		const instanceBundle = buildTournamentInstanceAssignments(
-			roundAssignments,
-			{ id: tournamentId },
-			gameMap,
-		);
+		let instanceBundle;
+		try {
+			instanceBundle = buildTournamentInstanceAssignments(
+				roundAssignments,
+				{ id: tournamentId },
+				gameMap,
+			);
+			if (!instanceBundle.createdGames.length) {
+				throw new Error('No tournament game instances could be created from the selected templates.');
+			}
+		} catch (error) {
+			showArenaMessage(
+				`Tournament could not start: ${getActionErrorMessage(error, 'the selected games could not be copied')}. Check that every assigned game still exists, then replace or remove the invalid assignment.`,
+			);
+			return;
+		}
 		const enrichedAssignments = instanceBundle.assignments;
 		const createdTournamentGames = instanceBundle.createdGames;
-		persistTournamentGameInstances(createdTournamentGames);
+		try {
+			persistTournamentGameInstances(createdTournamentGames);
+		} catch (error) {
+			showArenaMessage(
+				`Tournament could not start because its game instances could not be saved: ${getActionErrorMessage(error, 'storage rejected the data')}. Fix the selected game data and try again.`,
+			);
+			return;
+		}
 		const tournament = {
 			id: tournamentId,
 			name,
@@ -8678,6 +9393,7 @@
 		}
 
 		showToast('Tournament started!', 'success');
+		closeTournamentPlannerModal();
 		loadGamificationUI();
 		syncGamificationState();
 		setTournamentStudioTab('dashboard');
@@ -8800,6 +9516,15 @@
 	window.advanceTournamentRound = advanceTournamentRound;
 	window.deleteTournament = deleteTournament;
 	window.editTournament = editTournament;
+	window.openGameEditorModal = openGameEditorModal;
+	window.closeGameEditorModal = closeGameEditorModal;
+	window.openTournamentPlannerModal = openTournamentPlannerModal;
+	window.closeTournamentPlannerModal = closeTournamentPlannerModal;
+	window.openTournamentAssignmentsModal = openTournamentAssignmentsModal;
+	window.closeTournamentAssignmentsModal = closeTournamentAssignmentsModal;
+	window.openTournamentWatchModal = openTournamentWatchModal;
+	window.closeTournamentWatchModal = closeTournamentWatchModal;
+	window.enableTournament = enableTournament;
 	window.loadGamificationUI = loadGamificationUI;
 	window.renderTournamentLeaderboard = renderTournamentPanels;
 

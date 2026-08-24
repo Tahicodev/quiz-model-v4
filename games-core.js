@@ -15,8 +15,29 @@
 		return new Date().toISOString();
 	}
 
+	// Local games need the same short, human-friendly entry point as games
+	// created through the API.  Keeping this deterministic means a game made
+	// while the realtime service is offline can still be joined from another
+	// tab/device after the admin syncs the game.
+	function makeJoinCode(seed) {
+		const source = String(seed || `${Date.now()}-${Math.random()}`);
+		let hash = 2166136261;
+		for (let index = 0; index < source.length; index += 1) {
+			hash ^= source.charCodeAt(index);
+			hash = Math.imul(hash, 16777619);
+		}
+		return Math.abs(hash >>> 0).toString(36).toUpperCase().padStart(6, '0').slice(0, 6);
+	}
+
 	function getQuizGames() {
-		return safeParse(localStorage.getItem(GAME_STORAGE_KEY), []);
+		const games = safeParse(localStorage.getItem(GAME_STORAGE_KEY), []);
+		return (Array.isArray(games) ? games : []).map((game) => {
+			if (!game || typeof game !== 'object') return game;
+			if (!game.joinCode && !game.join_code) {
+				game.joinCode = makeJoinCode(game.id || game.name);
+			}
+			return game;
+		});
 	}
 
 	function saveQuizGames(games) {
@@ -677,13 +698,14 @@
 				},
 			},
 		};
+		const normalizedId =
+			game.id ||
+			(typeof generateUUID === 'function'
+				? generateUUID()
+				: `game-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`);
 
 		return {
-			id:
-				game.id ||
-				(typeof generateUUID === 'function'
-					? generateUUID()
-					: `game-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`),
+			id: normalizedId,
 			name: String(game.name || 'New Game').trim(),
 			type: game.type || 'race',
 			mode: game.mode || 'solo',
@@ -697,6 +719,7 @@
 				? game.penaltyQuestions.map(normalizeQuestion)
 				: [],
 			ownerId: game.ownerId || '',
+			joinCode: String(game.joinCode || game.join_code || makeJoinCode(normalizedId)).toUpperCase(),
 			createdAt,
 			updatedAt: nowIso(),
 			session: game.session || null,
@@ -740,6 +763,9 @@
 		}
 		if (!game.session.lobbyLabel) {
 			game.session.lobbyLabel = `Lobby #${game.lobbyCounter}`;
+		}
+		if (!game.joinCode && !game.join_code) {
+			game.joinCode = makeJoinCode(game.id || game.name);
 		}
 
 		return game.session;
@@ -1039,6 +1065,7 @@
 	window.GameCore = {
 		getQuizGames,
 		saveQuizGames,
+		makeJoinCode,
 		normalizeGame,
 		ensureGameSession,
 		ensureParticipant,
