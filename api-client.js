@@ -234,9 +234,9 @@
       if (optionsJson !== undefined) out.options_json = optionsJson;
       if (q.explanation != null) out.explanation = String(q.explanation);
       if (q.instruction != null && !out.explanation) out.explanation = String(q.instruction);
-      if (q.media_url) out.media_url = String(q.media_url);
-      if (q.mediaUrl) out.media_url = String(q.mediaUrl);
-      if (q.image && q.image !== '') out.media_url = String(q.image);
+      if (q.media_url && String(q.media_url).trim()) out.media_url = String(q.media_url).trim();
+      if (q.mediaUrl && String(q.mediaUrl).trim()) out.media_url = String(q.mediaUrl).trim();
+      if (q.image && String(q.image).trim() !== '') out.media_url = String(q.image).trim();
       if (q.tags != null) {
         out.tags = Array.isArray(q.tags) ? q.tags.join(',') : String(q.tags);
       }

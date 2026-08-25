@@ -3109,120 +3109,62 @@ async function endQuiz() {
 function showCorrection() {
 	const correctionsDiv = document.getElementById('corrections');
 	const resultsDiv = document.getElementById('previous-results');
-	const correctionsButton = document.querySelector('.action-btn:first-child');
-	const resultsButton = document.querySelector('.action-btn:last-child');
+	const correctionsButton = document.querySelector('.quiz-actions .action-btn');
+	const resultsButton = document.querySelector('.quiz-actions .action-btn:last-child');
 
-	// Hide results if they're showing
-	resultsDiv.classList.add('hidden');
-	resultsButton.innerHTML = `
+	if (!correctionsDiv) return;
+
+	if (resultsDiv) {
+		resultsDiv.classList.add('hidden');
+	}
+	if (resultsButton && resultsButton !== correctionsButton) {
+		resultsButton.innerHTML = `
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
     </svg>
     Show Previous Results
   `;
+	}
 
 	if (correctionsDiv.classList.contains('hidden')) {
+		const questionList = Array.isArray(questions) ? questions : [];
+		const total = quizConfig?.totalQuestions ? Math.min(questionList.length, quizConfig.totalQuestions) : questionList.length;
+
 		correctionsDiv.innerHTML = `
       <div class="corrections-container">
         <h3>Corrections</h3>
-        ${questions
-					.slice(0, quizConfig.totalQuestions)
+        ${questionList
+					.slice(0, total)
 					.map((q, i) => {
-						// Determine question type
-						const questionType =
-							q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
-						const multiAnswer =
-							questionType === 'multiple-choice' && isQuestionMultiAnswer(q);
-						let typeLabel = '';
+						const qText = q.text || q.question || 'Question';
+						const questionType = q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
+						const multiAnswer = questionType === 'multiple-choice' && isQuestionMultiAnswer(q);
+						let typeLabel = '<span class="question-type-badge">Multiple choice</span>';
 
 						if (questionType === 'odd-one-out') {
-							typeLabel =
-								'<span class="question-type-badge odd-one-out">Find the odd one out</span>';
+							typeLabel = '<span class="question-type-badge odd-one-out">Find the odd one out</span>';
 						} else if (questionType === 'draggable') {
-							typeLabel =
-								'<span class="question-type-badge draggable">Arrange in order</span>';
+							typeLabel = '<span class="question-type-badge draggable">Arrange in order</span>';
 						} else if (questionType === 'matching-pairs') {
-							typeLabel =
-								'<span class="question-type-badge matching-pairs">Match the pairs</span>';
-						} else {
-							typeLabel =
-								'<span class="question-type-badge">Multiple choice</span>';
+							typeLabel = '<span class="question-type-badge matching-pairs">Match the pairs</span>';
 						}
 
-						// Format correct answers for display
-						let correctAnswerDisplay = q.answer;
-
-						// Check if this is a multiple choice question with multiple correct answers
+						let correctAnswerDisplay = q.answer || '';
 						if (multiAnswer) {
 							const answers = splitChoiceAnswerTokens(q.answer);
 							correctAnswerDisplay =
 								'<div class="answer-badges-container">' +
-								answers
-									.map(
-										(ans) =>
-											`<span class="correct-answer-badge">${escapeHtml(
-												ans,
-											)}</span>`,
-									)
-									.join('') +
-								'</div>';
-						} else if (q.type === 'draggable' && q.answer.includes(',')) {
-							// For draggable, show the order
-							const answers = q.answer.split(',').map((ans) => ans.trim());
-							correctAnswerDisplay =
-								'<div class="answer-badges-container">' +
-								answers
-									.map(
-										(ans, idx) =>
-											`<span class="answer-order-badge">${
-												idx + 1
-											}. ${escapeHtml(ans)}</span>`,
-									)
-									.join('') +
-								'</div>';
-						} else if (q.type === 'matching-pairs') {
-							// For matching pairs, show the pairs
-							const pairs = q.answer.split(',').map((pair) => {
-								let left, right;
-								if (pair.includes('→')) {
-									[left, right] = pair.split('→').map((item) => item.trim());
-								} else if (pair.includes('-->')) {
-									[left, right] = pair.split('-->').map((item) => item.trim());
-								} else {
-									[left, right] = [pair.trim(), ''];
-								}
-								return { left, right };
-							});
-							correctAnswerDisplay =
-								'<div class="answer-badges-container">' +
-								pairs
-									.map(
-										(pair) =>
-											`<span class="correct-answer-badge">${escapeHtml(
-												pair.left || '',
-											)} → ${escapeHtml(pair.right || '')}</span>`,
-									)
-									.join('') +
+								answers.map((ans) => `<span class="correct-answer-badge">${escapeHtml(ans)}</span>`).join('') +
 								'</div>';
 						} else {
-							correctAnswerDisplay = `<span class="correct-answer-badge">${escapeHtml(
-								q.answer,
-							)}</span>`;
+							correctAnswerDisplay = `<span class="correct-answer-badge">${escapeHtml(q.answer || '')}</span>`;
 						}
 
 						return `
           <div class="correction-item">
-            <p><strong>Question ${i + 1}:</strong> ${typeLabel} ${
-							q.question
-						}</p>
-            <p><strong>Correct Answer${
-							multiAnswer ? 's' : ''
-						}:</strong> ${correctAnswerDisplay}</p>
-            ${
-							q.explanation
-								? `<p><strong>Explanation:</strong> ${q.explanation}</p>`
-								: ''
-						}
+            <p><strong>Question ${i + 1}:</strong> ${typeLabel} ${escapeHtml(qText)}</p>
+            <p><strong>Correct Answer${multiAnswer ? 's' : ''}:</strong> ${correctAnswerDisplay}</p>
+            ${q.explanation ? `<p><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</p>` : ''}
           </div>
         `;
 					})
@@ -3230,20 +3172,24 @@ function showCorrection() {
       </div>
     `;
 		correctionsDiv.classList.remove('hidden');
-		correctionsButton.innerHTML = `
+		if (correctionsButton) {
+			correctionsButton.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       Hide Corrections
     `;
+		}
 	} else {
 		correctionsDiv.classList.add('hidden');
-		correctionsButton.innerHTML = `
+		if (correctionsButton) {
+			correctionsButton.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
       Show Corrections
     `;
+		}
 	}
 }
 

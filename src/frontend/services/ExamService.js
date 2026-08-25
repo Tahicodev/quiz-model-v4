@@ -208,6 +208,6 @@ export class ExamService {
   }
 
   #requireAdmin(user) {
-    if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) throw new ForbiddenError();
+    if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) throw new ForbiddenError();
   }
 }

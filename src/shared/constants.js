@@ -6,7 +6,8 @@
 
 export const ROLES = Object.freeze({
   SUPER_ADMIN: 'super_admin', // SaaS platform admin (manages schools)
-  ADMIN:       'admin',       // School admin / teacher
+  ADMIN:       'admin',       // School admin
+  TEACHER:     'teacher',     // Teacher / content author
   STUDENT:     'student',
 });
 

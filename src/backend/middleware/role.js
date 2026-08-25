@@ -25,8 +25,10 @@ export const requireRole = (allowedRoles) => {
         return next();
       }
 
-      // Regular admin/student must be in the allowed roles list
-      if (!allowedRoles.includes(req.user.role)) {
+      const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+
+      // Regular admin/teacher/student must be in the allowed roles list
+      if (!roles.includes(req.user.role)) {
         throw new ForbiddenError();
       }
 

@@ -856,11 +856,17 @@ const SANITIZERS = {
  */
 function normalizeSettingsBody(body) {
   if (Array.isArray(body?.items)) return body.items;
-  if (body && typeof body.value === 'object' && body.value !== null) {
-    return Object.entries(body.value).map(([key, value]) => ({
-      key,
-      value: value == null ? '' : String(value),
-    }));
+  if (body && typeof body === 'object') {
+    const target = body.value && typeof body.value === 'object' ? body.value : body;
+    const items = [];
+    for (const [key, value] of Object.entries(target)) {
+      if (key === 'items' || key === 'value' || key === 'school_id') continue;
+      items.push({
+        key,
+        value: value == null ? '' : String(value),
+      });
+    }
+    if (items.length > 0) return items;
   }
   return null;
 }
@@ -1084,6 +1090,19 @@ router.post('/:table', async (req, res, next) => {
             where: { school_id },
             create: row,
             update: rest,
+          });
+          upserted += 1;
+          continue;
+        }
+
+        // Setting model has composite unique index @@unique([school_id, key]).
+        if (table === 'settings') {
+          await model.upsert({
+            where: {
+              school_id_key: { school_id: req.schoolId, key: row.key },
+            },
+            create: row,
+            update: { value: row.value, ...(row.visibility && { visibility: row.visibility }) },
           });
           upserted += 1;
           continue;

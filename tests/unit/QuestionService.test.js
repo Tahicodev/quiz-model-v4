@@ -4,6 +4,7 @@ import { NotFoundError, ValidationError, ForbiddenError } from '../../src/shared
 import { ROLES, QUESTION_TYPES, DIFFICULTY } from '../../src/shared/constants.js';
 
 const ADMIN = { id: 'u-1', role: ROLES.ADMIN, school_id: 's-1' };
+const TEACHER = { id: 'u-t1', role: ROLES.TEACHER, school_id: 's-1' };
 const STUDENT = { id: 'u-2', role: ROLES.STUDENT };
 
 function makeRepo(overrides = {}) {
@@ -28,15 +29,22 @@ describe('QuestionService', () => {
   });
 
   describe('create()', () => {
-    it('throws ForbiddenError for non-admin', async () => {
+    it('throws ForbiddenError for student', async () => {
       await expect(service.create({ type: 'mcq', text: 'Q?', answer: 'A' }, STUDENT))
         .rejects.toBeInstanceOf(ForbiddenError);
     });
 
-    it('creates a question with valid data', async () => {
+    it('creates a question with valid data for admin', async () => {
       repo.create.mockResolvedValue({ id: 'q-1', text: 'Q?', type: 'mcq' });
       const result = await service.create({ type: 'mcq', text: 'Q?', answer: 'A' }, ADMIN);
       expect(result.text).toBe('Q?');
+      expect(repo.create).toHaveBeenCalled();
+    });
+
+    it('creates a question with valid data for teacher', async () => {
+      repo.create.mockResolvedValue({ id: 'q-2', text: 'Q2?', type: 'mcq' });
+      const result = await service.create({ type: 'mcq', text: 'Q2?', answer: 'B' }, TEACHER);
+      expect(result.text).toBe('Q2?');
       expect(repo.create).toHaveBeenCalled();
     });
   });

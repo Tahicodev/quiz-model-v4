@@ -434,35 +434,50 @@
 		let user = window.Auth?.getCurrentUser
 			? window.Auth.getCurrentUser()
 			: null;
+		if (!user && window.__authToken) {
+			try {
+				const parts = window.__authToken.split('.');
+				if (parts.length === 3) {
+					const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+					if (payload && payload.id) user = payload;
+				}
+			} catch (_) {}
+		}
+		if (!user) {
+			try {
+				user = JSON.parse(localStorage.getItem('quizCurrentUser') || 'null');
+			} catch (_) {}
+		}
 		if (!user) return null;
+
 		if (window.Auth?.getUsers) {
 			const fresh = window.Auth.getUsers().find((u) => u.id === user.id);
 			if (fresh) user = fresh;
 		}
-		const normalizedRole = String(user?.role || '')
-			.trim()
-			.toLowerCase();
-		if (
-			normalizedRole &&
-			normalizedRole !== 'student' &&
-			normalizedRole !== 'learner' &&
-			normalizedRole !== 'participant'
-		) {
-			return null;
-		}
 
-		const identity = window.Auth.getStudentIdentity
+		let identity = window.Auth?.getStudentIdentity
 			? window.Auth.getStudentIdentity(user)
 			: null;
-		if (!identity) return null;
+		if (!identity) {
+			identity = {
+				id: user.id || 'user-1',
+				name: user.name || user.username || 'Student',
+				class: user.class_id || user.classId || user.class || 'Class A',
+				classId: user.class_id || user.classId || '',
+				numero: user.numero || user.studentNumber || '1',
+			};
+		}
 
-		const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
+		const classes = window.__DI_CONTAINER__?.repo?.getAll_sync('classes') || [];
 		let classRecord = null;
 		if (identity.classId) {
 			classRecord = classes.find((c) => c.id === identity.classId) || null;
 		}
 		if (!classRecord && identity.class) {
-			classRecord = classes.find((c) => c.name === identity.class) || null;
+			classRecord = classes.find((c) => c.name === identity.class || c.id === identity.class) || null;
+		}
+		if (!classRecord && classes.length > 0) {
+			classRecord = classes[0];
 		}
 
 		return { user, identity, classRecord };
@@ -736,12 +751,14 @@
 	}
 
 	function getAssignedExams(classRecord) {
-		if (!classRecord) return [];
-		const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
-		return exams.filter(
-			(exam) =>
-				Array.isArray(exam.classes) && exam.classes.includes(classRecord.id),
-		);
+		const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
+		if (!exams.length) return [];
+		return exams.filter((exam) => {
+			if (!exam) return false;
+			if (exam.status && exam.status !== 'active' && exam.status !== 'published') return false;
+			if (!classRecord || !Array.isArray(exam.classes) || exam.classes.length === 0) return true;
+			return exam.classes.includes(classRecord.id) || exam.classes.includes(classRecord.name);
+		});
 	}
 
 	function getTrainingResults(identity) {
@@ -12536,8 +12553,304 @@
 		window.location.href = `index.html?examId=${examId}`;
 	};
 
-	window.openTrainingMode = function () {
-		window.location.href = 'index.html?mode=training';
+	let trainingState = {
+		active: false,
+		examId: null,
+		questions: [],
+		currentIndex: 0,
+		userAnswers: {},
+		score: 0,
+		startTime: null,
+		endTime: null,
+		completed: false,
+		showCorrections: false,
+	};
+
+	window.openTrainingMode = function (examId) {
+		let questions = window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		if (examId) {
+			const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
+			const exam = exams.find((e) => e.id === examId);
+			if (exam && Array.isArray(exam.questions) && exam.questions.length > 0) {
+				questions = questions.filter((q) => exam.questions.includes(q.id));
+			}
+		}
+		if (!questions.length) {
+			showToast('No training questions available.', 'warning');
+			return;
+		}
+
+		const shuffled = [...questions].sort(() => 0.5 - Math.random());
+		trainingState = {
+			active: true,
+			examId: examId || null,
+			questions: shuffled,
+			currentIndex: 0,
+			userAnswers: {},
+			score: 0,
+			startTime: Date.now(),
+			endTime: null,
+			completed: false,
+			showCorrections: false,
+		};
+
+		const modal = byId('studentTrainingModal');
+		if (modal) modal.classList.add('active');
+		renderTrainingQuestion();
+	};
+
+	window.closeTrainingModal = function () {
+		const modal = byId('studentTrainingModal');
+		if (modal) modal.classList.remove('active');
+		trainingState.active = false;
+	};
+
+	function renderTrainingQuestion() {
+		const container = byId('studentTrainingStage');
+		if (!container) return;
+
+		if (trainingState.completed) {
+			renderTrainingResultsView(container);
+			return;
+		}
+
+		const q = trainingState.questions[trainingState.currentIndex];
+		if (!q) return;
+
+		const total = trainingState.questions.length;
+		const currentNum = trainingState.currentIndex + 1;
+		const progressPercent = Math.round((currentNum / total) * 100);
+
+		let optionsHtml = '';
+		let rawOptions = [];
+		if (typeof q.options_json === 'string') {
+			try {
+				rawOptions = JSON.parse(q.options_json);
+			} catch (_) {}
+		} else if (Array.isArray(q.options)) {
+			rawOptions = q.options;
+		}
+
+		if (!rawOptions.length) {
+			rawOptions = ['True', 'False'];
+		}
+
+		const currentAnswer = trainingState.userAnswers[trainingState.currentIndex];
+
+		optionsHtml = rawOptions
+			.map((opt, idx) => {
+				const optText = typeof opt === 'string' ? opt : opt?.text || '';
+				const isSelected = currentAnswer === optText;
+				return `
+				<button type="button" class="option-btn ${isSelected ? 'selected' : ''}" onclick="selectTrainingOption('${escapeHtml(optText).replace(/'/g, "\\'")}')">
+					<span class="option-label">${String.fromCharCode(65 + idx)}.</span>
+					<span>${escapeHtml(optText)}</span>
+				</button>
+			`;
+			})
+			.join('');
+
+		container.innerHTML = `
+			<div class="training-container">
+				<div class="training-header">
+					<div class="training-progress-info">
+						<span class="training-badge">Question ${currentNum} of ${total}</span>
+						<span class="training-type-tag">${escapeHtml(q.type || 'MCQ')}</span>
+					</div>
+					<div class="training-progress-bar">
+						<span style="width: ${progressPercent}%"></span>
+					</div>
+				</div>
+
+				<div class="training-question-card">
+					<h3 class="question-text">${escapeHtml(q.text || q.question || 'Question')}</h3>
+					${q.media_url ? `<img src="${escapeHtml(q.media_url)}" class="question-media" alt="Question media" />` : ''}
+					<div class="options-grid">
+						${optionsHtml}
+					</div>
+				</div>
+
+				<div class="training-actions">
+					${
+						trainingState.currentIndex > 0
+							? `<button type="button" class="workspace-btn ghost" onclick="prevTrainingQuestion()">Previous</button>`
+							: '<div></div>'
+					}
+					<button type="button" class="workspace-btn" ${!currentAnswer ? 'disabled' : ''} onclick="nextTrainingQuestion()">
+						${currentNum === total ? 'Finish Test' : 'Next Question'}
+					</button>
+				</div>
+			</div>
+		`;
+	}
+
+	window.selectTrainingOption = function (val) {
+		trainingState.userAnswers[trainingState.currentIndex] = val;
+		renderTrainingQuestion();
+	};
+
+	window.prevTrainingQuestion = function () {
+		if (trainingState.currentIndex > 0) {
+			trainingState.currentIndex--;
+			renderTrainingQuestion();
+		}
+	};
+
+	window.nextTrainingQuestion = function () {
+		const total = trainingState.questions.length;
+		if (trainingState.currentIndex < total - 1) {
+			trainingState.currentIndex++;
+			renderTrainingQuestion();
+		} else {
+			finishTrainingTest();
+		}
+	};
+
+	function finishTrainingTest() {
+		trainingState.endTime = Date.now();
+		trainingState.completed = true;
+
+		let score = 0;
+		trainingState.questions.forEach((q, idx) => {
+			const userAns = String(trainingState.userAnswers[idx] || '').trim().toLowerCase();
+			const correctAns = String(q.answer || '').trim().toLowerCase();
+			if (userAns && userAns === correctAns) {
+				score++;
+			}
+		});
+		trainingState.score = score;
+
+		const context = getStudentContext();
+		const timeSpent = Math.max(1, Math.round((trainingState.endTime - trainingState.startTime) / 1000));
+		const totalQuestions = trainingState.questions.length;
+
+		const newResult = {
+			id: 'training-' + Date.now(),
+			userId: context?.user?.id || 'guest',
+			user_id: context?.user?.id || 'guest',
+			studentNumber: context?.identity?.numero || '1',
+			numero: context?.identity?.numero || '1',
+			classId: context?.identity?.classId || '',
+			className: context?.identity?.class || 'Class',
+			examId: trainingState.examId || 'training-practice',
+			examTitle: 'Training Practice',
+			mode: 'training',
+			score: score,
+			totalQuestions: totalQuestions,
+			earnedPoints: score,
+			totalPoints: totalQuestions,
+			timeSpent: timeSpent,
+			time_spent: timeSpent,
+			completedAt: new Date().toISOString(),
+			date: new Date().toISOString(),
+		};
+
+		try {
+			window.__DI_CONTAINER__?.repo?.create?.('results', newResult);
+		} catch (_) {}
+
+		if (context) renderWorkspace();
+		renderTrainingQuestion();
+	}
+
+	function renderTrainingResultsView(container) {
+		const total = trainingState.questions.length;
+		const score = trainingState.score;
+		const percent = total > 0 ? Math.round((score / total) * 100) : 0;
+		const timeSec = Math.round((trainingState.endTime - trainingState.startTime) / 1000);
+		const timeMin = Math.floor(timeSec / 60);
+		const timeRemSec = timeSec % 60;
+		const timeDisplay = `${timeMin}m ${timeRemSec}s`;
+
+		let correctionsHtml = '';
+		if (trainingState.showCorrections) {
+			correctionsHtml = `
+				<div class="corrections-container">
+					<h4>Answer Breakdown & Corrections</h4>
+					${trainingState.questions
+						.map((q, i) => {
+							const userAns = String(trainingState.userAnswers[i] || '').trim();
+							const correctAns = String(q.answer || '').trim();
+							const isCorrect = userAns.toLowerCase() === correctAns.toLowerCase();
+
+							return `
+							<div class="correction-item ${isCorrect ? 'correct' : 'incorrect'}">
+								<div class="correction-header">
+									<span class="question-number">Question ${i + 1}</span>
+									<span class="status-badge ${isCorrect ? 'pass' : 'fail'}">
+										${isCorrect ? '✓ Correct' : '✕ Incorrect'}
+									</span>
+								</div>
+								<p class="question-title">${escapeHtml(q.text || q.question || 'Question')}</p>
+								<div class="answer-row">
+									<div class="answer-group">
+										<strong>Your Answer:</strong> 
+										<span class="answer-badge ${isCorrect ? 'badge-success' : 'badge-danger'}">
+											${escapeHtml(userAns || 'No answer')}
+										</span>
+									</div>
+									<div class="answer-group">
+										<strong>Correct Answer:</strong> 
+										<span class="answer-badge badge-success">
+											${escapeHtml(correctAns)}
+										</span>
+									</div>
+								</div>
+								${q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</div>` : ''}
+							</div>
+						`;
+						})
+						.join('')}
+				</div>
+			`;
+		}
+
+		container.innerHTML = `
+			<div class="training-results-view">
+				<div class="results-header">
+					<h2>Training Test Completed!</h2>
+					<p>Great effort! Review your metrics and corrections below.</p>
+				</div>
+
+				<div class="results-stats-grid">
+					<div class="stat-card accent">
+						<div class="stat-value">${score} / ${total}</div>
+						<div class="stat-label">Correct Answers</div>
+					</div>
+					<div class="stat-card">
+						<div class="stat-value">${percent}%</div>
+						<div class="stat-label">Accuracy Rate</div>
+					</div>
+					<div class="stat-card">
+						<div class="stat-value">${timeDisplay}</div>
+						<div class="stat-label">Time Elapsed</div>
+					</div>
+				</div>
+
+				<div class="results-actions">
+					<button type="button" class="workspace-btn" onclick="toggleTrainingCorrections()">
+						${trainingState.showCorrections ? 'Hide Corrections' : 'Show Corrections'}
+					</button>
+					<button type="button" class="workspace-btn secondary" onclick="retakeTrainingModal()">
+						Retake Training
+					</button>
+					<button type="button" class="workspace-btn ghost" onclick="closeTrainingModal()">
+						Close & Return to Workspace
+					</button>
+				</div>
+
+				${correctionsHtml}
+			</div>
+		`;
+	}
+
+	window.toggleTrainingCorrections = function () {
+		trainingState.showCorrections = !trainingState.showCorrections;
+		renderTrainingQuestion();
+	};
+
+	window.retakeTrainingModal = function () {
+		window.openTrainingMode(trainingState.examId);
 	};
 
 	window.joinActiveTournament = function () {

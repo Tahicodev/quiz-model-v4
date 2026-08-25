@@ -37,7 +37,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/v1/questions
-router.post('/', requireRole(ROLES.ADMIN), validate(QuestionCreateSchema), async (req, res, next) => {
+router.post('/', requireRole([ROLES.ADMIN, ROLES.TEACHER]), validate(QuestionCreateSchema), async (req, res, next) => {
   try {
     const { questionSvc, auditSvc } = getContainer();
     const question = await questionSvc.create(req.body, req.user);
@@ -47,7 +47,7 @@ router.post('/', requireRole(ROLES.ADMIN), validate(QuestionCreateSchema), async
 });
 
 // PATCH /api/v1/questions/:id
-router.patch('/:id', requireRole(ROLES.ADMIN), validate(QuestionUpdateSchema), async (req, res, next) => {
+router.patch('/:id', requireRole([ROLES.ADMIN, ROLES.TEACHER]), validate(QuestionUpdateSchema), async (req, res, next) => {
   try {
     const { questionSvc, auditSvc } = getContainer();
     const updated = await questionSvc.update(req.params.id, req.body, req.user);
@@ -57,7 +57,7 @@ router.patch('/:id', requireRole(ROLES.ADMIN), validate(QuestionUpdateSchema), a
 });
 
 // DELETE /api/v1/questions/:id
-router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:id', requireRole([ROLES.ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const { questionSvc, auditSvc } = getContainer();
     await questionSvc.delete(req.params.id, req.user);
