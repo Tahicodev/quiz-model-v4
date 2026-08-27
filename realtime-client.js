@@ -1152,8 +1152,19 @@
 					return;
 				}
 			}
-			if (scope?.type === 'game') {
-				let mergedGames = payload.quizGames;
+			// The two branches below were identical (the `scope?.type === 'game'`
+			// and the `else` branch did the same union-merge). The union-merge
+			// was the source of the orphan-games bug: any game missing from the
+			// server payload stayed in localStorage forever. Now we replace the
+			// local cache when the payload is authoritative (scope is missing
+			// or carry-allowAll), and only union-merge for partial scopes that
+			// intentionally carry a classIds filter.
+			const isAuthoritativeScope =
+				!scope ||
+				scope?.allowAll === true ||
+				(scope?.type === 'game' && scope?.allowAll === true);
+			let finalGames = Array.isArray(payload.quizGames) ? payload.quizGames : [];
+			if (!isAuthoritativeScope) {
 				try {
 					const existingGames = JSON.parse(
 						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
@@ -1161,7 +1172,7 @@
 					const existingMap = new Map(
 						existingGames.map((game) => [String(game?.id || ''), game]),
 					);
-					mergedGames = payload.quizGames.map((incomingGame) =>
+					const merged = payload.quizGames.map((incomingGame) =>
 						mergeGame(
 							existingMap.get(String(incomingGame?.id || '')),
 							incomingGame,
@@ -1170,78 +1181,108 @@
 					existingGames.forEach((existingGame) => {
 						if (!existingGame?.id) return;
 						if (
-							!mergedGames.some(
+							!merged.some(
 								(g) => String(g?.id || '') === String(existingGame?.id || ''),
 							)
 						) {
-							mergedGames.push(existingGame);
+							merged.push(existingGame);
 						}
 					});
+					finalGames = merged;
 				} catch (e) {
-					mergedGames = payload.quizGames;
+					finalGames = payload.quizGames;
 				}
-				const normalizedMergedGames = mergedGames.map((entry) => {
-					const normalized = window.GameCore?.normalizeGame
-						? window.GameCore.normalizeGame(entry)
-						: entry;
-					if (normalized?.session) {
-						normalizeRealtimeCardSession(normalized.session);
-					}
-					return normalized;
-				});
-				localStorage.setItem(
-					'quizGames',
-					JSON.stringify(normalizedMergedGames),
-				);
-			} else {
-				let mergedGames = payload.quizGames;
-				try {
-					const existingGames = JSON.parse(
-						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
-					);
-					const existingMap = new Map(
-						existingGames.map((game) => [String(game?.id || ''), game]),
-					);
-					mergedGames = payload.quizGames.map((incomingGame) =>
-						mergeGame(
-							existingMap.get(String(incomingGame?.id || '')),
-							incomingGame,
-						),
-					);
-					existingGames.forEach((existingGame) => {
-						if (!existingGame?.id) return;
-						if (
-							!mergedGames.some(
-								(game) =>
-									String(game?.id || '') === String(existingGame?.id || ''),
-							)
-						) {
-							mergedGames.push(existingGame);
-						}
-					});
-				} catch (e) {
-					mergedGames = payload.quizGames;
-				}
-				const normalizedPayloadGames = mergedGames.map((entry) => {
-					const normalized = window.GameCore?.normalizeGame
-						? window.GameCore.normalizeGame(entry)
-						: entry;
-					if (normalized?.session) {
-						normalizeRealtimeCardSession(normalized.session);
-					}
-					return normalized;
-				});
-				localStorage.setItem(
-					'quizGames',
-					JSON.stringify(normalizedPayloadGames),
-				);
 			}
+			const normalizedFinalGames = finalGames.map((entry) => {
+				const normalized = window.GameCore?.normalizeGame
+					? window.GameCore.normalizeGame(entry)
+					: entry;
+				if (normalized?.session) {
+					normalizeRealtimeCardSession(normalized.session);
+				}
+				return normalized;
+			});
+			localStorage.setItem(
+				'quizGames',
+				JSON.stringify(normalizedFinalGames),
+			);
+			// Mark the wall-clock time of the last realtime write so the
+			// bootstrap reconciliation in legacy-bridge.js can back off if
+			// the realtime sync is fresher than the DB snapshot. The
+			// value is consumed by reconcileGamesFromBootstrap.
+			try {
+				localStorage.setItem(
+					'quizGamesLastRealtimeAt',
+					String(Date.now()),
+				);
+			} catch (_) {}
 			if (payload.syncedAt) {
 				localStorage.setItem('quizGamesSyncedAt', payload.syncedAt);
 			}
 			logCardDebugSnapshot('admin:syncGames');
 			window.dispatchEvent(new CustomEvent('quiz:games-updated'));
 		}
+	});
+
+	// Server tells us a single game was deleted (admin-initiated). Drop it
+	// from the local cache so it stops showing as an orphan in the Games tab.
+	socket.on('game:deleted', ({ gameId } = {}) => {
+		if (!gameId) return;
+		const targetId = String(gameId);
+		try {
+			if (window.GameCore?.getQuizGames && window.GameCore?.saveQuizGames) {
+				const existing = window.GameCore.getQuizGames() || [];
+				const filtered = existing.filter(
+					(g) => String(g?.id || '') !== targetId,
+				);
+				if (filtered.length !== existing.length) {
+					window.GameCore.saveQuizGames(filtered);
+				}
+			} else if (window.__DI_CONTAINER__?.repo) {
+				const existing =
+					window.__DI_CONTAINER__.repo.getAll_sync('games') || [];
+				const filtered = existing.filter(
+					(g) => String(g?.id || '') !== targetId,
+				);
+				if (filtered.length !== existing.length) {
+					window.__DI_CONTAINER__.repo.setAll_sync('games', filtered);
+				}
+			}
+			const raw = localStorage.getItem('quizGames');
+			if (raw) {
+				try {
+					const parsed = JSON.parse(raw);
+					if (Array.isArray(parsed)) {
+						const filtered = parsed.filter(
+							(g) => String(g?.id || '') !== targetId,
+						);
+						if (filtered.length !== parsed.length) {
+							localStorage.setItem('quizGames', JSON.stringify(filtered));
+						}
+					}
+				} catch (_) {}
+			}
+		} catch (err) {
+			console.warn('[realtime-client] game:deleted handler failed', err);
+		}
+		window.dispatchEvent(new CustomEvent('quiz:games-updated'));
+	});
+
+	// Server tells us every game was wiped (admin-initiated deleteAll).
+	// Wipe the local cache so the union-merge in admin:syncGames doesn't
+	// resurrect orphans from a still-stale local copy.
+	socket.on('game:deletedAll', () => {
+		try {
+			if (window.GameCore?.saveQuizGames) {
+				window.GameCore.saveQuizGames([]);
+			} else if (window.__DI_CONTAINER__?.repo) {
+				window.__DI_CONTAINER__.repo.setAll_sync('games', []);
+			}
+			localStorage.setItem('quizGames', JSON.stringify([]));
+		} catch (err) {
+			console.warn('[realtime-client] game:deletedAll handler failed', err);
+		}
+		window.dispatchEvent(new CustomEvent('quiz:games-updated'));
 	});
 
 	// Server-authoritative game state updates

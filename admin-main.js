@@ -1319,6 +1319,18 @@ function openTab(event, tabName) {
 		}
 	}
 
+	// Re-render the games list every time the admin opens the Games tab so
+	// any orphan-cleanup (via `game:deleted` or the bootstrap reconcile) is
+	// visible immediately. Previously the list was only rendered on initial
+	// DOMContentLoaded, which made the tab look frozen.
+	if (tabName === 'games' && typeof window.renderGameList === 'function') {
+		try {
+			window.renderGameList();
+		} catch (e) {
+			console.warn('[admin-main] renderGameList on tab open failed:', e);
+		}
+	}
+
 	// Auto-close mobile menu if open
 	const headerNav = document.getElementById('headerNav');
 	if (

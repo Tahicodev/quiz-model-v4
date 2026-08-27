@@ -149,6 +149,52 @@
     _origSetItem.call(localStorage, key, JSON.stringify(data));
   }
 
+  // ── Games reconciliation (orphan-cleanup against the DB-authoritative list)
+  // The realtime sync normally keeps `quizGames` aligned with the server, but
+  // a fresh page load (or a server restart) can leave orphans. The bootstrap
+  // is the only authoritative source that reads the Prisma `games` table, so
+  // use it as the source of truth here. We drop any local entry whose id is
+  // not in the bootstrap list. We also skip the reconcile if a realtime sync
+  // has fired in the last 2s to avoid clobbering a fresher payload.
+  function reconcileGamesFromBootstrap(serverGames) {
+    if (!Array.isArray(serverGames)) return;
+    var lastRealtimeAt = 0;
+    try {
+      lastRealtimeAt = parseInt(
+        localStorage.getItem('quizGamesLastRealtimeAt') || '0',
+        10,
+      ) || 0;
+    } catch (_) {}
+    if (lastRealtimeAt && Date.now() - lastRealtimeAt < 2000) {
+      // Realtime sync is fresh; don't overwrite it.
+      return;
+    }
+    var validIds = new Set();
+    serverGames.forEach(function (g) {
+      if (g && g.id) validIds.add(String(g.id));
+    });
+    var current = [];
+    try {
+      var raw = _origGetItem.call(localStorage, 'quizGames');
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) current = parsed;
+      }
+    } catch (_) {}
+    if (!current.length) return;
+    var filtered = current.filter(function (g) {
+      return g && g.id && validIds.has(String(g.id));
+    });
+    if (filtered.length === current.length) return; // nothing to drop
+    _origSetItem.call(localStorage, 'quizGames', JSON.stringify(filtered));
+    if (cache && typeof cache === 'object') {
+      cache.games = filtered;
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('quiz:games-updated'));
+    } catch (_) {}
+  }
+
   function removeAll(table) {
     var key = STORE_KEYS[table] || table;
     try {
@@ -289,6 +335,18 @@
               cache[table] = data[table];
               writeAll(table, data[table]);
             }
+          }
+          // Reconcile games against the DB-authoritative list. The realtime
+          // client normally keeps `quizGames` in sync via `admin:syncGames`,
+          // but on a fresh page load (or after a server restart) the local
+          // cache can hold orphans — games the DB no longer has. Drop them
+          // here so the student/admin Games tab never shows ghosts. The
+          // reconcile is skipped if a realtime sync fired in the last 2s
+          // so we don't clobber a fresher payload.
+          try {
+            reconcileGamesFromBootstrap(data && data.games ? data.games : []);
+          } catch (reconcileErr) {
+            console.warn('[legacy-bridge] games reconciliation failed:', reconcileErr);
           }
           try {
             window.dispatchEvent(new CustomEvent('quiz:bootstrap-ready', {

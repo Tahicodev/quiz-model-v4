@@ -2135,6 +2135,12 @@
 			// best-effort, so a delayed acknowledgement must never leave the modal
 			// open or make a valid game appear unsaved.
 			if (!commitLocalGame(game)) return;
+			// Persist to the Prisma `games` table in parallel so the DB is the
+			// source of truth. Without this, a delete-then-restart leaves
+			// phantom games in the database because the socket layer only
+			// mutates an in-memory Map. The REST call is best-effort: failure
+			// surfaces as a warning but doesn't block the local save.
+			persistGameToApi(game, isNew);
 			let finished = false;
 			const finish = (response = null) => {
 				if (finished) return;
@@ -2156,8 +2162,37 @@
 			return;
 		}
 
+		// No socket: still try the REST path so the DB is updated.
 		if (!commitLocalGame(game)) return;
+		persistGameToApi(game, !GameCore.getQuizGames().some((g) => g.id === game.id));
 		finishGameSave(game);
+	}
+
+	// Persist a single game to the REST API. Best-effort: logs failures but
+	// never throws so the local save and realtime sync remain unblocked.
+	function persistGameToApi(game, isNew) {
+		if (!window.API || typeof window.API.create !== 'function') return;
+		const runner = isNew
+			? window.API.create('games', game)
+			: window.API.update('games', game.id, game);
+		Promise.resolve(runner)
+			.then(() => {
+				if (typeof console !== 'undefined' && console.debug) {
+					console.debug(`[Games] Persisted ${isNew ? 'create' : 'update'} to DB: ${game.id}`);
+				}
+			})
+			.catch((err) => {
+				console.warn(
+					`[Games] DB ${isNew ? 'create' : 'update'} failed for ${game.id}:`,
+					err && err.message ? err.message : err,
+				);
+				showToast?.(
+					`Game saved locally, but the database write failed: ${
+						err?.message || 'unknown error'
+					}`,
+					'warning',
+				);
+			});
 	}
 
 	function editGame(gameId) {
@@ -2331,29 +2366,67 @@
 			return;
 		}
 
-		// Server delete
-		const socket = window.clientSocket;
-		if (socket && socket.connected) {
-			socket.emit('game:delete', { gameId });
-		}
-
-		const syncResult = syncGamesIfPossible();
-		if (syncResult && syncResult.ok === false) {
-			showArenaMessage(
-				`Game deleted locally, but the server was not updated: ${syncResult.message}. Retry realtime sync before students use this game.`,
-				'warning',
-			);
-		}
-		if (state.selectedGameId === gameId) {
-			state.selectedGameId = null;
-			const lobby = byId('gameLobby');
-			if (lobby) {
-				lobby.innerHTML =
-					'<div class="empty-state">Select a game to view the lobby.</div>';
+		// Best-effort DB delete via REST. If it succeeds, great. If it fails
+		// (e.g., the user role doesn't have permission), we don't roll back
+		// the local remove — instead we fall back to the local + socket path
+		// and surface a clear "local only" message. The user told us CRUD
+		// should "just work" even if the admin-secret / role check rejects
+		// the REST call; the socket layer is still gated by the admin
+		// secret for clients that have it.
+		const proceedWithBroadcast = (resultLabel) => {
+			const socket = window.clientSocket;
+			if (socket && socket.connected) {
+				socket.emit('game:delete', { gameId });
 			}
+			const syncResult = syncGamesIfPossible();
+			if (syncResult && syncResult.ok === false) {
+				showArenaMessage(
+					`Game removed ${resultLabel}, but the realtime sync had a problem: ${syncResult.message}.`,
+					'warning',
+				);
+			}
+			if (state.selectedGameId === gameId) {
+				state.selectedGameId = null;
+				const lobby = byId('gameLobby');
+				if (lobby) {
+					lobby.innerHTML =
+						'<div class="empty-state">Select a game to view the lobby.</div>';
+				}
+			}
+			renderGameList();
+		};
+
+		persistGameDeleteToApi(
+			gameId,
+			/* onSuccess */ () => {
+				proceedWithBroadcast('from the database');
+				showToast('Game deleted', 'success');
+			},
+			/* onError */ (err) => {
+				console.warn(
+					`[Games] DB delete failed for ${gameId}; falling back to local+realtime:`,
+					err && err.message ? err.message : err,
+				);
+				proceedWithBroadcast('locally');
+				showToast(
+					'Game removed locally. (Database write was rejected — row may persist until admin sync.)',
+					'warning',
+				);
+			},
+		);
+	}
+
+	// Best-effort DB delete with explicit success/error callbacks. The error
+	// path never throws — the caller's fallback branch always runs so the
+	// local UX stays usable even when the REST endpoint rejects the request.
+	function persistGameDeleteToApi(gameId, onSuccess, onError) {
+		if (!window.API || typeof window.API.remove !== 'function') {
+			onSuccess && onSuccess();
+			return;
 		}
-		renderGameList();
-		showToast('Game deleted', 'success');
+		Promise.resolve(window.API.remove('games', gameId))
+			.then(() => onSuccess && onSuccess())
+			.catch((err) => onError && onError(err));
 	}
 
 	function deleteAllGames() {
@@ -2364,31 +2437,75 @@
 		)
 			return;
 
-		// Local delete
+		// Snapshot the local ids BEFORE wiping the local cache so we can
+		// issue per-game REST deletes against the DB.
+		const idsToDelete = (GameCore.getQuizGames() || [])
+			.map((g) => g && g.id)
+			.filter(Boolean)
+			.map(String);
+
+		// Local delete (fast UI feedback)
 		GameCore.saveQuizGames([]);
 
-		// Server delete
-		const socket = window.clientSocket;
-		if (socket && socket.connected) {
-			socket.emit('game:deleteAll', (response) => {
-				if (response && response.ok) {
-					showToast('All games deleted successfully', 'success');
-				} else {
-					showToast('Error deleting all games', 'error');
-				}
-			});
-		} else {
-			showToast('All games deleted locally (server offline)', 'warning');
+		// Helper to finish the UX: clear the selected game, broadcast to
+		// other connected clients, and re-render the games list. Used by
+		// both the success path and the fallback path.
+		const finishUI = (toastMessage, toastType) => {
+			if (toastMessage) showToast(toastMessage, toastType || 'success');
+			const socket = window.clientSocket;
+			if (socket && socket.connected) {
+				socket.emit('game:deleteAll', (response) => {
+					if (!response || !response.ok) {
+						showToast('Realtime broadcast had a problem', 'warning');
+					}
+				});
+			}
+			syncGamesIfPossible();
+			state.selectedGameId = null;
+			const lobby = byId('gameLobby');
+			if (lobby) {
+				lobby.innerHTML =
+					'<div class="empty-state">Select a game to view the lobby.</div>';
+			}
+			renderGameList();
+		};
+
+		// If the REST client isn't available, skip directly to the local
+		// remove + broadcast path so the user is never blocked.
+		if (!window.API || typeof window.API.remove !== 'function' || !idsToDelete.length) {
+			finishUI('All games removed locally', 'warning');
+			return;
 		}
 
-		syncGamesIfPossible();
-		state.selectedGameId = null;
-		const lobby = byId('gameLobby');
-		if (lobby) {
-			lobby.innerHTML =
-				'<div class="empty-state">Select a game to view the lobby.</div>';
-		}
-		renderGameList();
+		// DB delete — fire each game delete and wait for all to settle. Use
+		// Promise.allSettled so one failed delete doesn't block the others.
+		const deletePromises = idsToDelete.map((id) =>
+			Promise.resolve(window.API.remove('games', id))
+				.then(() => ({ id, ok: true }))
+				.catch((err) => ({ id, ok: false, error: err })),
+		);
+		Promise.allSettled(deletePromises).then((settled) => {
+			const results = settled.map((s) =>
+				s.status === 'fulfilled' ? s.value : { ok: false, error: s.reason },
+			);
+			const failed = results.filter((r) => !r.ok);
+			const successCount = results.length - failed.length;
+			if (failed.length === 0) {
+				finishUI(`All ${results.length} games deleted from database`, 'success');
+			} else {
+				console.warn(
+					`[Games] ${failed.length}/${results.length} DB delete(s) failed`,
+					failed,
+				);
+				// Always proceed with the local + broadcast cleanup so the
+				// user's intent is honored. Surface a clear "partial" toast.
+				finishUI(
+					`${successCount} of ${results.length} games removed from the database; ` +
+						`${failed.length} could not be deleted (likely a role/permission check) and were removed locally only.`,
+					'warning',
+				);
+			}
+		});
 	}
 
 	function openLobby(gameId) {

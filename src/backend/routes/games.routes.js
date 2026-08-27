@@ -33,7 +33,13 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', requireRole(ROLES.ADMIN), validate(GameCreateSchema), async (req, res, next) => {
+// Games CRUD is shared between admins and teachers. The legacy admin panel
+// has been used by both roles since v3, and the realtime settings panel
+// already gates by `data-roles="admin,teacher"`, so we keep the same
+// posture here to avoid spurious 403s when a teacher deletes a game.
+const GAME_CRUD_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
+
+router.post('/', requireRole(GAME_CRUD_ROLES), validate(GameCreateSchema), async (req, res, next) => {
   try {
     const { gameSvc, auditSvc } = getContainer();
     const game = await gameSvc.create(req.body, req.user);
@@ -42,7 +48,7 @@ router.post('/', requireRole(ROLES.ADMIN), validate(GameCreateSchema), async (re
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireRole(ROLES.ADMIN), validate(GameUpdateSchema), async (req, res, next) => {
+router.patch('/:id', requireRole(GAME_CRUD_ROLES), validate(GameUpdateSchema), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const updated = await gameSvc.update(req.params.id, req.body, req.user);
@@ -50,7 +56,7 @@ router.patch('/:id', requireRole(ROLES.ADMIN), validate(GameUpdateSchema), async
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:id', requireRole(GAME_CRUD_ROLES), async (req, res, next) => {
   try {
     const { gameSvc, auditSvc } = getContainer();
     await gameSvc.delete(req.params.id, req.user);
@@ -63,8 +69,19 @@ router.post('/join', validate(GameJoinSchema), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const { game_id, gameId, join_code, joinCode } = req.body;
+    // Resolve the game first so we can apply a status + class-scope check
+    // before any write. The service does its own checks but a 404 here is
+    // cleaner than a 500 from a downstream invariant.
+    const targetId = game_id || gameId;
+    if (targetId) {
+      const target = await gameSvc.getById(targetId, req.schoolId);
+      if (!target) return res.status(404).json({ code: 'NOT_FOUND', message: 'Game not found' });
+      if (!['waiting', 'active'].includes(target.status)) {
+        return res.status(409).json({ code: 'CONFLICT', message: 'Game is not open for joining' });
+      }
+    }
     const session = await gameSvc.joinGame({
-      gameId: game_id || gameId,
+      gameId: targetId,
       joinCode: join_code || joinCode,
       userId: req.user.id,
     });
@@ -72,7 +89,7 @@ router.post('/join', validate(GameJoinSchema), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/start', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:id/start', requireRole(GAME_CRUD_ROLES), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const game = await gameSvc.start(req.params.id, req.user);
@@ -108,7 +125,7 @@ router.get('/:id/scores', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/finish', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:id/finish', requireRole(GAME_CRUD_ROLES), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const game = await gameSvc.finish(req.params.id, req.user);

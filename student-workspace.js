@@ -5,7 +5,7 @@
 	const state = {
 		filter: 'all',
 		trainingFilter: 'all',
-		gameFilter: 'open',
+		gameFilter: 'all',
 		workspaceTab: 'overview',
 		activeGameId: null,
 		gameActionsBound: false,
@@ -337,6 +337,11 @@
 		try {
 			return window.__DI_CONTAINER__.repo.getAll_sync('games');
 		} catch (e) {
+			// The repo is the only fallback path (no GameCore). A swallowed error
+			// here is what left the Games tab mysteriously empty when the JSON
+			// in localStorage was corrupt or the repo wasn't ready. Surface it
+			// so the empty state has a chance of being debugged.
+			console.warn('[student-workspace] getGamesStore fallback failed:', e);
 			return [];
 		}
 	}
@@ -542,30 +547,49 @@
 		const incoming = Array.isArray(serverGamesList)
 			? serverGamesList.filter((game) => game && game.id)
 			: [];
-		const existingGames = getGamesStore();
-		const existingById = new Map(
-			existingGames.map((game) => [String(game?.id || ''), game]),
-		);
-		const mergedById = new Map(
-			existingGames.map((game) => [String(game?.id || ''), game]),
-		);
-		incoming.forEach((game) => {
-			const id = String(game.id);
-			const previous = existingById.get(id) || {};
-			const combined = {
-				...previous,
-				...game,
-				id,
-			};
-			const normalized = window.GameCore?.normalizeGame
-				? window.GameCore.normalizeGame(combined)
-				: combined;
-			mergedById.set(id, normalized);
-		});
-		const merged = Array.from(mergedById.values()).filter(
-			(game) => game && game.id,
-		);
-		saveGamesStore(merged);
+
+		// `replaceMode` is true when the caller signals the payload is the
+		// authoritative full list (e.g., a `game:list` ack or a global
+		// `admin:syncGames`). In that case the local cache is replaced instead
+		// of union-merged, which is what kills the orphan-games bug: any game
+		// the server no longer tracks is dropped from localStorage.
+		const replaceMode = arguments[2] !== false; // default true
+
+		if (replaceMode) {
+			const replaced = incoming.map((game) => {
+				const id = String(game.id);
+				const combined = { ...game, id };
+				return window.GameCore?.normalizeGame
+					? window.GameCore.normalizeGame(combined)
+					: combined;
+			});
+			saveGamesStore(replaced);
+		} else {
+			const existingGames = getGamesStore();
+			const existingById = new Map(
+				existingGames.map((game) => [String(game?.id || ''), game]),
+			);
+			const mergedById = new Map(
+				existingGames.map((game) => [String(game?.id || ''), game]),
+			);
+			incoming.forEach((game) => {
+				const id = String(game.id);
+				const previous = existingById.get(id) || {};
+				const combined = {
+					...previous,
+					...game,
+					id,
+				};
+				const normalized = window.GameCore?.normalizeGame
+					? window.GameCore.normalizeGame(combined)
+					: combined;
+				mergedById.set(id, normalized);
+			});
+			const merged = Array.from(mergedById.values()).filter(
+				(game) => game && game.id,
+			);
+			saveGamesStore(merged);
+		}
 
 		incoming.forEach((game) => {
 			requestGameSync(String(game.id), context, 0);
@@ -6309,6 +6333,15 @@
 		const listIds = ['studentGameListMain'];
 		const lists = listIds.map((id) => byId(id)).filter(Boolean);
 		if (!lists.length) return;
+		// Defensive guard: if we don't yet have a student context, render a
+		// friendly empty state instead of dereferencing undefined later.
+		if (!context) {
+			setInnerHTMLForIds(
+				listIds,
+				'<div class="empty-state">Sign in to view available games.</div>',
+			);
+			return;
+		}
 		syncKnownGames(context, 12000);
 		const games = getAvailableGames(context);
 		games.forEach(cacheGameSnapshot);
@@ -6338,7 +6371,7 @@
 		if (!filtered.length) {
 			setInnerHTMLForIds(
 				listIds,
-				'<div class="empty-state">No games available for this view.</div>',
+				'<div class="empty-state">No games available for this view. Try switching to a different filter above (Open / Live / Completed / All).</div>',
 			);
 			return;
 		}
@@ -12553,6 +12586,18 @@
 		window.location.href = `index.html?examId=${examId}`;
 	};
 
+	// ────────────────────────────────────────────────────────────────────────
+	// Training Practice Test (modal)
+	//
+	// The original implementation only rendered MCQ-style buttons regardless
+	// of the question's `type`, which meant students lost the per-type
+	// manipulation that the legacy `script.js` runtime provided. This block
+	// ports the seven type renderers (mcq, multi-select, true-false,
+	// odd-one-out, draggable, matching-pairs, fill-blank, code) into the
+	// modal, plus a countdown timer, an image lightbox, auto-save/restore,
+	// and per-type pretty-printing in the corrections view.
+	// ────────────────────────────────────────────────────────────────────────
+
 	let trainingState = {
 		active: false,
 		examId: null,
@@ -12564,8 +12609,196 @@
 		endTime: null,
 		completed: false,
 		showCorrections: false,
+		// per-question answer records so the corrections view can pretty-print
+		// non-string types (matching pairs, fill-blank, draggable, etc.)
+		perQuestion: [],
+		// The original raw options array (for matching/fill-blank lookups).
+		questionOptions: [],
+		timerHandle: null,
+		timeLimitSec: 0,
 	};
 
+	const TRAINING_QUESTION_TYPE_ALIASES = {
+		'mcq': 'multiple-choice',
+		'multiple': 'multiple-choice',
+		'multiplechoice': 'multiple-choice',
+		'single': 'multiple-choice',
+		'multi': 'multiple-choice-multi',
+		'multiple-choice-multi': 'multiple-choice-multi',
+		'allowmultipleanswers': 'multiple-choice-multi',
+		'multiselect': 'multiple-choice-multi',
+		'multi-select': 'multiple-choice-multi',
+		'multi_select': 'multiple-choice-multi',
+		'true-false': 'true-false',
+		'truefalse': 'true-false',
+		'boolean': 'true-false',
+		'true-or-false': 'true-false',
+		'fill-blank': 'fill-blank',
+		'fillblank': 'fill-blank',
+		'cloze': 'fill-blank',
+		'fill': 'fill-blank',
+		'draggable': 'draggable',
+		'drag-drop': 'draggable',
+		'order': 'draggable',
+		'sequence': 'draggable',
+		'odd-one-out': 'odd-one-out',
+		'odd': 'odd-one-out',
+		'oddoneout': 'odd-one-out',
+		'matching-pairs': 'matching-pairs',
+		'match': 'matching-pairs',
+		'pairs': 'matching-pairs',
+		'matching': 'matching-pairs',
+		'code': 'code',
+		'programming': 'code',
+		'coding': 'code',
+	};
+
+	function normalizeTrainingQuestionType(q) {
+		const raw = String(q?.type || '').toLowerCase().trim();
+		if (TRAINING_QUESTION_TYPE_ALIASES[raw]) {
+			return TRAINING_QUESTION_TYPE_ALIASES[raw];
+		}
+		// Heuristics matching the legacy runtime in script.js
+		if (q?.isDraggable) return 'draggable';
+		const ans = String(q?.answer || '');
+		if (ans.includes('→') || ans.includes('-->')) return 'matching-pairs';
+		return 'multiple-choice';
+	}
+
+	function getTrainingOptionsForQuestion(q) {
+		let raw = [];
+		if (typeof q?.options_json === 'string') {
+			try {
+				raw = JSON.parse(q.options_json);
+			} catch (_) {}
+		} else if (Array.isArray(q?.options)) {
+			raw = q.options;
+		} else if (Array.isArray(q?.optionData)) {
+			raw = q.optionData;
+		}
+		if (!Array.isArray(raw) || raw.length === 0) {
+			// fall back to the type's natural options
+			if (normalizeTrainingQuestionType(q) === 'true-false') {
+				raw = ['True', 'False'];
+			} else {
+				raw = [];
+			}
+		}
+		return raw.map((o) => {
+			if (typeof o === 'string') return { text: o, image: '', isImageOnly: false };
+			return {
+				text: o?.text || '',
+				image: o?.image || '',
+				isImageOnly: !!o?.isImageOnly,
+			};
+		});
+	}
+
+	function getTrainingStorageKey() {
+		const context = getStudentContext();
+		const userId = context?.user?.id || 'guest';
+		return `training-${trainingState.examId || 'practice'}-${userId}`;
+	}
+
+	function persistTrainingAnswers() {
+		try {
+			const payload = {
+				currentIndex: trainingState.currentIndex,
+				userAnswers: trainingState.userAnswers,
+				perQuestion: trainingState.perQuestion,
+				startTime: trainingState.startTime,
+				completed: trainingState.completed,
+			};
+			localStorage.setItem(getTrainingStorageKey(), JSON.stringify(payload));
+		} catch (_) {}
+	}
+
+	function restoreTrainingAnswers() {
+		try {
+			const raw = localStorage.getItem(getTrainingStorageKey());
+			if (!raw) return false;
+			const payload = JSON.parse(raw);
+			if (!payload || typeof payload !== 'object') return false;
+			trainingState.currentIndex = Number(payload.currentIndex) || 0;
+			trainingState.userAnswers = payload.userAnswers || {};
+			trainingState.perQuestion = Array.isArray(payload.perQuestion)
+				? payload.perQuestion
+				: [];
+			if (payload.startTime) trainingState.startTime = payload.startTime;
+			return true;
+		} catch (_) {
+			return false;
+		}
+	}
+
+	function clearTrainingStorage() {
+		try {
+			localStorage.removeItem(getTrainingStorageKey());
+		} catch (_) {}
+	}
+
+	// ── Timer ───────────────────────────────────────────────────────────────
+	function stopTrainingTimer() {
+		if (trainingState.timerHandle) {
+			clearInterval(trainingState.timerHandle);
+			trainingState.timerHandle = null;
+		}
+		const el = byId('trainingTimer');
+		if (el) {
+			el.hidden = true;
+			el.textContent = '';
+		}
+	}
+
+	function startTrainingTimer(limitSec) {
+		stopTrainingTimer();
+		trainingState.timeLimitSec = Math.max(0, Number(limitSec) || 0);
+		if (!trainingState.timeLimitSec) return;
+		const el = byId('trainingTimer');
+		if (!el) return;
+		el.hidden = false;
+		const startedAt = trainingState.startTime || Date.now();
+		const tick = () => {
+			const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+			const remaining = Math.max(0, trainingState.timeLimitSec - elapsed);
+			const m = Math.floor(remaining / 60);
+			const s = remaining % 60;
+			el.textContent = `⏱ ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+			el.classList.toggle('warning', remaining < 30);
+			if (remaining <= 0) {
+				stopTrainingTimer();
+				if (typeof window.nextTrainingQuestion === 'function') {
+					// Skip to the end if time is up
+					if (trainingState.currentIndex < trainingState.questions.length - 1) {
+						trainingState.currentIndex = trainingState.questions.length - 1;
+					}
+					finishTrainingTest();
+				}
+			}
+		};
+		tick();
+		trainingState.timerHandle = setInterval(tick, 1000);
+	}
+
+	// ── Lightbox ─────────────────────────────────────────────────────────────
+	window.openTrainingLightbox = function (src) {
+		if (!src) return;
+		const box = byId('trainingImageLightbox');
+		const img = byId('trainingLightboxImg');
+		if (!box || !img) return;
+		img.src = src;
+		box.hidden = false;
+	};
+	window.closeTrainingLightbox = function () {
+		const box = byId('trainingImageLightbox');
+		const img = byId('trainingLightboxImg');
+		if (box) box.hidden = true;
+		// Clear the src so a stale image isn't visible if the lightbox ever
+		// shows again before a new src is set.
+		if (img) img.removeAttribute('src');
+	};
+
+	// ── Public API ──────────────────────────────────────────────────────────
 	window.openTrainingMode = function (examId) {
 		let questions = window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
 		if (examId) {
@@ -12592,10 +12825,31 @@
 			endTime: null,
 			completed: false,
 			showCorrections: false,
+			perQuestion: [],
+			questionOptions: shuffled.map(getTrainingOptionsForQuestion),
+			timerHandle: null,
+			timeLimitSec: 0,
 		};
+
+		// Per-exam time limit: read from the exam record (if any) or fall
+		// back to no timer. The default is "no timer" to preserve the
+		// previous behaviour for students who set a long test.
+		try {
+			if (examId) {
+				const exam = (window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [])
+					.find((e) => e.id === examId);
+				const limit = Number(exam?.timeLimit || exam?.duration || 0);
+				if (limit > 0) trainingState.timeLimitSec = limit * 60;
+			}
+		} catch (_) {}
+
+		restoreTrainingAnswers();
 
 		const modal = byId('studentTrainingModal');
 		if (modal) modal.classList.add('active');
+		if (trainingState.timeLimitSec) {
+			startTrainingTimer(trainingState.timeLimitSec);
+		}
 		renderTrainingQuestion();
 	};
 
@@ -12603,13 +12857,932 @@
 		const modal = byId('studentTrainingModal');
 		if (modal) modal.classList.remove('active');
 		trainingState.active = false;
+		stopTrainingTimer();
+		stopPerQuestionTimer();
+		// Also hide the image lightbox so it doesn't linger on the workspace.
+		if (typeof window.closeTrainingLightbox === 'function') {
+			window.closeTrainingLightbox();
+		}
 	};
+
+	window.selectTrainingOption = function (val) {
+		trainingState.userAnswers[trainingState.currentIndex] = val;
+		persistTrainingAnswers();
+		renderTrainingQuestion();
+	};
+
+	window.prevTrainingQuestion = function () {
+		if (trainingState.currentIndex > 0) {
+			trainingState.currentIndex--;
+			persistTrainingAnswers();
+			stopPerQuestionTimer();
+			renderTrainingQuestion();
+		}
+	};
+
+	window.nextTrainingQuestion = function () {
+		const total = trainingState.questions.length;
+		if (trainingState.currentIndex < total - 1) {
+			trainingState.currentIndex++;
+			persistTrainingAnswers();
+			stopPerQuestionTimer();
+			renderTrainingQuestion();
+		} else {
+			stopPerQuestionTimer();
+			finishTrainingTest();
+		}
+	};
+
+	// Multi-select live update: writes the joined answer to userAnswers
+	// every time the user toggles a checkbox. Enables the Next button
+	// without needing a "Submit Answer" step.
+	window.onTrainingMultiChange = function () {
+		const idx = trainingState.currentIndex;
+		const checkboxes = document.querySelectorAll(
+			`#trainingOptions input[type="checkbox"]:checked`,
+		);
+		const selectedTexts = Array.from(checkboxes).map((cb) => cb.value);
+		trainingState.userAnswers[idx] = selectedTexts.join('|');
+		persistTrainingAnswers();
+		updateTrainingNextButtonState();
+	};
+
+	// Draggable live update: writes the current visual order to
+	// userAnswers whenever the user re-orders the options.
+	window.commitTrainingDraggableOrder = function () {
+		const idx = trainingState.currentIndex;
+		const items = document.querySelectorAll(
+			'#trainingOptions .draggable-option',
+		);
+		const order = Array.from(items).map((it) => it.textContent.trim());
+		trainingState.userAnswers[idx] = order.join(',');
+		persistTrainingAnswers();
+		updateTrainingNextButtonState();
+	};
+
+	// Keep the old commit names around as no-op aliases so any leftover
+	// inline `onclick="commitTrainingFillBlank()"` markup never breaks
+	// the bundle. The new wiring writes live, so these are intentionally
+	// no-ops.
+	window.submitTrainingMultiSelect = function () {
+		window.onTrainingMultiChange();
+	};
+	window.commitTrainingFillBlank = function () {};
+	window.commitTrainingMatching = function () {};
+	window.commitTrainingDraggable = function () {
+		window.commitTrainingDraggableOrder();
+	};
+
+	// ── Per-type renderers ───────────────────────────────────────────────────
+	// Multi-select auto-detection: a question is treated as multi-select if
+	// (a) `allowMultipleAnswers === true` is set on the record, or
+	// (b) the `answer` field contains more than one token (joined by `|`,
+	//     `,`, or `;`). This catches the case where the AI generator
+	//     produced a question with multiple correct answers but the
+	//     question's `type` was still stored as "multiple-choice" (single).
+	function isTrainingMultiSelect(q) {
+		if (q && q.allowMultipleAnswers === true) return true;
+		const ans = String((q && q.answer) || '').trim();
+		if (!ans) return false;
+		if (ans.includes('|')) return true;
+		if (ans.split(',').filter((s) => s.trim()).length > 1) return true;
+		if (ans.split(';').filter((s) => s.trim()).length > 1) return true;
+		return false;
+	}
+
+	function renderTrainingMcq(q, options, forceMulti) {
+		const idx = trainingState.currentIndex;
+		// Auto-detect multi-select from `allowMultipleAnswers` or the answer
+		// format when the caller didn't explicitly request it.
+		const isMulti = forceMulti || isTrainingMultiSelect(q);
+		const currentAnswer = trainingState.userAnswers[idx] || '';
+		const selectedSet = isMulti
+			? new Set(
+					String(currentAnswer)
+						.split('|')
+						.map((s) => s.trim())
+						.filter(Boolean),
+			  )
+			: new Set();
+		const selectedSingle = !isMulti ? currentAnswer : '';
+
+		const buttons = options
+			.map((opt, i) => {
+				const text = opt.text;
+				const hasImage = !!opt.image;
+				const isImageOnly = opt.isImageOnly || (hasImage && !text);
+				const checked = isMulti
+					? selectedSet.has(text)
+					: selectedSingle === text;
+				if (isMulti) {
+					// Multi-select: render as a real checkbox inside a label so
+					// it works with screen readers and keyboard nav. The value
+					// is the option text; the live handler reads every checked
+					// box and joins the values with `|`. We deliberately do
+					// NOT add an inline `onchange` because the event-delegated
+					// handler in `wireTrainingLiveHandlers` catches it.
+					return `
+					<label class="training-option training-option-multi ${hasImage ? 'has-image' : ''} ${isImageOnly ? 'image-only' : ''}">
+						<input type="checkbox" value="${escapeHtml(text)}" data-option-text="${escapeHtml(text)}" ${checked ? 'checked' : ''}/>
+						${
+							hasImage
+								? `<span class="training-option-image" onclick="event.preventDefault(); event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option image"/></span>`
+								: ''
+						}
+						${isImageOnly ? '' : `<span class="training-option-label">${escapeHtml(text)}</span>`}
+					</label>`;
+				}
+				// Single-select: render as a `<button type="button">` with the
+				// option text stored in a `data-option-text` attribute (no
+				// inline `onclick` string-escape dance). The click handler
+				// reads the value from the dataset. This makes every option
+				// reliably clickable, including ones whose text contains
+				// quotes, slashes, or other special characters, and never
+				// reveals which option is the correct answer.
+				return `
+				<button type="button" class="training-option ${checked ? 'selected' : ''}" data-option-text="${escapeHtml(text)}">
+					${
+						hasImage
+							? `<span class="training-option-image" onclick="event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option image"/></span>`
+							: ''
+					}
+					${isImageOnly ? '' : `<span class="training-option-text">${escapeHtml(text)}</span>`}
+				</button>`;
+			})
+			.join('');
+
+		return `
+			<div class="training-options ${isMulti ? 'is-multi' : 'is-single'}" data-multi="${isMulti}" data-render-text="${isMulti ? 'true' : 'false'}">
+				${q.text || q.question
+					? `<div class="training-option-question">${escapeHtml(q.text || q.question || '')}</div>`
+					: ''}
+				${buttons}
+			</div>
+		`;
+	}
+
+	function renderTrainingTrueFalse(q) {
+		const options = getTrainingOptionsForQuestion(q).length
+			? getTrainingOptionsForQuestion(q)
+			: [{ text: 'True', image: '', isImageOnly: false }, { text: 'False', image: '', isImageOnly: false }];
+		return renderTrainingMcq(q, options, false);
+	}
+
+	function renderTrainingOddOneOut(q, options) {
+		const idx = trainingState.currentIndex;
+		const currentAnswer = trainingState.userAnswers[idx] || '';
+		const questionText = escapeHtml(q.text || q.question || '');
+		const buttons = options
+			.map((opt) => {
+				const text = opt.text;
+				const hasImage = !!opt.image;
+				const isImageOnly = opt.isImageOnly || (hasImage && !text);
+				const checked = currentAnswer === text;
+				return `
+				<button type="button" class="training-option odd-one ${checked ? 'selected' : ''}" data-option-text="${escapeHtml(text)}">
+					${
+						hasImage
+							? `<span class="training-option-image" onclick="event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option image"/></span>`
+							: ''
+					}
+					${isImageOnly ? '' : `<span class="training-option-text">${escapeHtml(text)}</span>`}
+				</button>`;
+			})
+			.join('');
+		return `
+			<div class="training-options odd-one-grid" data-render-text="false">
+				${questionText ? `<div class="training-option-question">${questionText}</div>` : ''}
+				${buttons}
+			</div>
+		`;
+	}
+
+	function renderTrainingDraggable(q, options) {
+		const idx = trainingState.currentIndex;
+		// Determine starting order. If the user has already answered, restore
+		// their last ordering; otherwise use the question's natural option order.
+		const saved = String(trainingState.userAnswers[idx] || '').split(',').map((s) => s.trim()).filter(Boolean);
+		const orderedOptions = saved.length
+			? saved
+					.map((text) => options.find((o) => o.text === text) || { text, image: '', isImageOnly: false })
+					.concat(options.filter((o) => !saved.includes(o.text)))
+			: options;
+		const items = orderedOptions
+			.map((opt) => {
+				const hasImage = !!opt.image;
+				const isImageOnly = opt.isImageOnly || (hasImage && !opt.text);
+				return `
+				<div class="draggable-option ${hasImage ? 'has-image' : ''} ${isImageOnly ? 'image-only' : ''}" draggable="true">
+					${
+						hasImage
+							? `<div class="draggable-image" onclick="event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option"/></div>`
+							: ''
+					}
+					${isImageOnly ? '' : `<div class="draggable-text">${escapeHtml(opt.text)}</div>`}
+				</div>`;
+			})
+			.join('');
+		return `
+			<div class="draggable-container" data-render-text="false">
+				${q.text || q.question ? `<div class="training-option-question">${escapeHtml(q.text || q.question || '')}</div>` : ''}
+				${items}
+			</div>`;
+	}
+
+	// The matching-pairs pattern matches the legacy `script.js` runtime:
+	// user clicks a left item (highlighted with a number badge), then
+	// clicks a right item — a pair is formed and stored live in
+	// `trainingState.userAnswers` as `A→1|B→2|...`. Clicking a paired
+	// item breaks the connection. No "Save Pairs" button — the user just
+	// clicks Next when they're done.
+	function renderTrainingMatching(q, options) {
+		const answer = String(q.answer || '');
+		const pairs = (answer.includes('|') ? answer.split('|') : answer.split(','))
+			.map((pair) => {
+				let left, right;
+				if (pair.includes('→')) [left, right] = pair.split('→').map((s) => s.trim());
+				else if (pair.includes('-->')) [left, right] = pair.split('-->').map((s) => s.trim());
+				else if (pair.includes(':')) [left, right] = pair.split(':').map((s) => s.trim());
+				else [left, right] = [pair.trim(), ''];
+				return { left, right };
+			})
+			.filter((p) => p.left);
+		const leftItems = [...new Set(pairs.map((p) => p.left))];
+		const rightItems = [...new Set(pairs.map((p) => p.right))];
+		const idx = trainingState.currentIndex;
+		const savedRaw = String(trainingState.userAnswers[idx] || '');
+		const savedPairs = [];
+		savedRaw.split('|').forEach((p) => {
+			if (p.includes('→')) {
+				const [l, r] = p.split('→');
+				savedPairs.push({ left: l.trim(), right: r.trim() });
+			}
+		});
+
+		// Persist the visible state (which left is currently selected, and
+		// which pair a left/right is currently in) on the dataset of the
+		// question container so the click handlers can read it.
+		const leftHtml = leftItems
+			.map(
+				(left) => `
+				<div class="matching-quiz-item quiz-item matching-left"
+					data-column="left"
+					data-value="${escapeHtml(left)}">
+					<span class="matching-item-text">${escapeHtml(left)}</span>
+				</div>`,
+			)
+			.join('');
+		const rightHtml = rightItems
+			.map(
+				(right) => `
+				<div class="matching-quiz-item quiz-item matching-right"
+					data-column="right"
+					data-value="${escapeHtml(right)}">
+					<span class="matching-item-text">${escapeHtml(right)}</span>
+				</div>`,
+			)
+			.join('');
+
+		// Stash a serialized version of the saved pairs on a hidden element
+		// so the click handler can rehydrate on re-render.
+		const savedJson = encodeURIComponent(JSON.stringify(savedPairs));
+		const questionText = escapeHtml(q.text || q.question || '');
+		return `
+			<div class="training-matching-quiz" data-saved-pairs="${savedJson}" data-render-text="false">
+				${questionText ? `<div class="training-option-question">${questionText}</div>` : ''}
+				<div class="matching-hint">Click an item on the left, then click its match on the right.</div>
+				<div class="matching-columns">
+					<div class="matching-column matching-left-col">
+						<h4>Left</h4>
+						<div class="matching-items-list">${leftHtml}</div>
+					</div>
+					<div class="matching-column matching-right-col">
+						<h4>Right</h4>
+						<div class="matching-items-list">${rightHtml}</div>
+					</div>
+				</div>
+			</div>
+		`;
+	}
+
+	// The fill-blank pattern matches the legacy `script.js` runtime: a word
+	// bank of unique shuffled chips, plus drop zones rendered inline. The
+	// user can drag a chip into a drop zone OR click a chip then click a
+	// drop zone. Click a filled zone to return the word to the bank. All
+	// answers are recorded live — no commit button.
+	function renderTrainingFillBlank(q, options) {
+		// Build the blanks list from {{n}} placeholders.
+		let text = String(q.question || q.text || '');
+		const idCheck = /\{\{(\d+)\}\}/g;
+		let m;
+		let maxId = 0;
+		while ((m = idCheck.exec(text)) !== null) {
+			const id = parseInt(m[1]);
+			if (id > maxId) maxId = id;
+		}
+		let nextId = maxId + 1;
+		text = text.replace(/_{3,}/g, () => `{{${nextId++}}}`);
+		const blankPattern = /\{\{(\d+)\}\}/g;
+		const blanks = [];
+		while ((m = blankPattern.exec(text)) !== null) {
+			const id = parseInt(m[1]);
+			if (!blanks.find((b) => b.id === id)) blanks.push({ id });
+		}
+		blanks.sort((a, b) => a.id - b.id);
+		// `showOptions` is the master switch for whether the student sees
+		// the options at all. When false, the student just types their own
+		// answer into each blank. When true, the options are shown either
+		// as a word bank (useWordBank) or as inline chips.
+		// Default true: existing questions without this field still show
+		// options.
+		const showOptions = q.showOptions === undefined ? true : !!q.showOptions;
+		const useWordBank = !!q.useWordBank && showOptions;
+		const idx = trainingState.currentIndex;
+		const savedRaw = String(trainingState.userAnswers[idx] || '');
+		const saved = new Map();
+		savedRaw.split('|').forEach((p) => {
+			if (p.includes(':')) {
+				const [id, val] = p.split(':');
+				saved.set(id.trim(), val.trim());
+			}
+		});
+
+		// Build the word bank from the options (unique, shuffled). If the
+		// question doesn't have explicit word-bank options, fall back to a
+		// small placeholder so the UI is still usable.
+		const wordBankSource = options.length
+			? options
+			: [
+					{ text: 'word', image: '', isImageOnly: false },
+					{ text: 'sentence', image: '', isImageOnly: false },
+					{ text: 'answer', image: '', isImageOnly: false },
+			  ];
+		const uniqueWords = [];
+		const seen = new Set();
+		wordBankSource.forEach((o) => {
+			const txt = (o && o.text) || '';
+			if (txt && !seen.has(txt)) {
+				seen.add(txt);
+				uniqueWords.push(txt);
+			}
+		});
+		// Shuffle the word bank so the answer isn't always first.
+		for (let i = uniqueWords.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[uniqueWords[i], uniqueWords[j]] = [uniqueWords[j], uniqueWords[i]];
+		}
+
+		// Replace each {{n}} with a span: a number badge + either a text
+		// input (no word bank) or a drop zone (with word bank).
+		let withInputs = escapeHtml(text);
+		const usedWords = new Set();
+		blanks.forEach((blank) => {
+			const regex = new RegExp(`\\{\\{${blank.id}\\}\\}`, 'g');
+			const savedVal = saved.get(String(blank.id)) || '';
+			if (savedVal) usedWords.add(savedVal);
+			if (useWordBank) {
+				withInputs = withInputs.replace(
+					regex,
+					`<span class="fill-blank-wrapper"><span class="blank-number-badge">${blank.id}</span><span class="fill-blank-drop-zone" data-blank-id="${blank.id}" data-value="${escapeHtml(savedVal)}">${
+						savedVal ? escapeHtml(savedVal) : ''
+					}</span></span>`,
+				);
+			} else {
+				withInputs = withInputs.replace(
+					regex,
+					`<span class="fill-blank-wrapper"><span class="blank-number-badge">${blank.id}</span><input type="text" class="fill-blank-input" data-blank-id="${blank.id}" placeholder="..." autocomplete="off" value="${escapeHtml(savedVal)}"/></span>`,
+				);
+			}
+		});
+		const wordBankHtml = useWordBank
+			? `
+				<div class="fill-blank-hint">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h16"></path></svg>
+					Click a word then a blank — or drag it.
+				</div>
+				<div class="word-bank">
+					${uniqueWords
+						.map(
+							(w) =>
+								`<span class="word-bank-chip ${usedWords.has(w) ? 'is-used' : ''}" data-word="${escapeHtml(w)}" draggable="true">${escapeHtml(w)}</span>`,
+						)
+						.join('')}
+				</div>`
+			: showOptions
+				? ''
+				: `
+				<div class="fill-blank-hint fill-blank-hint--free">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h16"></path></svg>
+					Type your answer in each blank.
+				</div>`;
+		return `
+			<div class="training-fill-blank" data-use-word-bank="${useWordBank}" data-show-options="${showOptions}" data-render-text="false">
+				<div class="fill-blank-question">${withInputs}</div>
+				${wordBankHtml}
+			</div>
+		`;
+	}
+
+	function renderTrainingCode(q, options) {
+		const snippet = String(q.codeSnippet || q.code || '');
+		const language = String(q.codeLanguage || 'code');
+		const questionText = escapeHtml(q.text || q.question || '');
+		const inner = `
+			<div class="training-code-snippet">
+				<div class="training-code-header">
+					<span class="training-code-lang">${escapeHtml(language)}</span>
+				</div>
+				<pre><code>${escapeHtml(snippet)}</code></pre>
+			</div>
+			${questionText ? `<div class="training-option-question">${questionText}</div>` : ''}`;
+		const answerMode = String(q.codeAnswerMode || 'multiple-choice').toLowerCase();
+		let sub = '';
+		if (answerMode === 'true-false' || answerMode === 'boolean') {
+			sub = renderTrainingTrueFalse(q);
+		} else if (answerMode === 'fill-blank' || answerMode === 'fill') {
+			sub = renderTrainingFillBlank(q, options);
+		} else {
+			sub = renderTrainingMcq(q, options, false);
+		}
+		return `<div data-render-text="false">${inner}${sub}</div>`;
+	}
+
+	// ── Main question renderer (dispatch) ───────────────────────────────────
+	// The Next button is enabled as soon as the user has provided any answer.
+	// Live updates from per-type widgets call this on every change.
+	function updateTrainingNextButtonState() {
+		const btn = byId('trainingNextBtn');
+		if (!btn) return;
+		const idx = trainingState.currentIndex;
+		const ans = trainingState.userAnswers[idx];
+		const hasAnswer = ans !== undefined && ans !== null && ans !== '';
+		btn.disabled = !hasAnswer;
+	}
+
+	// ── Per-question timer (auto-advance when expired) ──────────────────────
+	let perQuestionTimerHandle = null;
+	function stopPerQuestionTimer() {
+		if (perQuestionTimerHandle) {
+			clearInterval(perQuestionTimerHandle);
+			perQuestionTimerHandle = null;
+		}
+		const el = byId('trainingPerQuestionTimer');
+		if (el) el.hidden = true;
+	}
+	function startPerQuestionTimer(limitSec) {
+		stopPerQuestionTimer();
+		const sec = Math.max(1, Math.floor(Number(limitSec) || 0));
+		const el = byId('trainingPerQuestionTimer');
+		if (!el || sec <= 0) {
+			if (el) el.hidden = true;
+			return;
+		}
+		el.hidden = false;
+		const startedAt = Date.now();
+		const tick = () => {
+			const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+			const remaining = Math.max(0, sec - elapsed);
+			const m = Math.floor(remaining / 60);
+			const s = remaining % 60;
+			el.textContent = `⏱ ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+			el.classList.toggle('warning', remaining < 5);
+			if (remaining <= 0) {
+				stopPerQuestionTimer();
+				// Auto-advance: record current state and move on.
+				try {
+					if (typeof window.nextTrainingQuestion === 'function') {
+						window.nextTrainingQuestion();
+					}
+				} catch (_) {}
+			}
+		};
+		tick();
+		perQuestionTimerHandle = setInterval(tick, 1000);
+	}
+
+	// ── Per-type live wiring (runs after each render) ──────────────────────
+	function wireTrainingLiveHandlers() {
+		const container = byId('studentTrainingStage');
+		if (!container) return;
+
+		// ── MCQ event delegation ─────────────────────────────────────────
+		// Single-select buttons carry the option text in a `data-option-text`
+		// attribute; multi-select labels wrap a real `<input type="checkbox">`.
+		// We delegate clicks to the `#trainingOptions` container so the
+		// option text is read from the dataset (no inline `onclick` string
+		// escape dance, no chance of a wrong option being silently
+		// unclickable, and no answer-derived class is ever applied to a
+		// single-MCQ button — the student only sees the option they picked
+		// as `.selected` and never learns which is the correct one.
+		const optionsContainer = container.querySelector('#trainingOptions');
+		if (optionsContainer && !optionsContainer.dataset.mcqBound) {
+			optionsContainer.dataset.mcqBound = '1';
+			optionsContainer.addEventListener('click', (e) => {
+				// Single-select: a button with data-option-text.
+				const btn = e.target.closest('button.training-option[data-option-text]');
+				if (btn) {
+					e.preventDefault();
+					window.selectTrainingOption(btn.dataset.optionText);
+					return;
+				}
+				// Multi-select: the click bubbles from a checkbox or label;
+				// we read all checked boxes after a microtask to capture
+				// the new state and update userAnswers.
+				const checkbox = e.target.closest('input[type="checkbox"]');
+				if (checkbox) {
+					setTimeout(window.onTrainingMultiChange, 0);
+				}
+			});
+			// Listen to `change` directly on the container — the most
+			// reliable way to capture checkbox toggles regardless of the
+			// click target.
+			optionsContainer.addEventListener('change', (e) => {
+				if (e.target.matches('input[type="checkbox"]')) {
+					window.onTrainingMultiChange();
+				}
+			});
+		}
+
+		// ── Draggable: persist current visual order on every drag-end ──
+		const draggables = container.querySelectorAll('.draggable-option');
+		const dragContainer = container.querySelector('.draggable-container');
+		if (draggables.length && dragContainer) {
+			draggables.forEach((d) => {
+				d.addEventListener('click', (e) => e.preventDefault());
+				d.addEventListener('dragstart', (e) => {
+					d.classList.add('dragging');
+					e.dataTransfer.effectAllowed = 'move';
+					e.dataTransfer.setData('text/plain', '');
+				});
+				d.addEventListener('dragend', () => {
+					d.classList.remove('dragging');
+					window.commitTrainingDraggableOrder();
+				});
+			});
+			dragContainer.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				const after = getTrainingDragAfter(dragContainer, e.clientY);
+				const dragging = dragContainer.querySelector('.dragging');
+				if (!dragging) return;
+				if (after == null) {
+					dragContainer.appendChild(dragging);
+				} else {
+					dragContainer.insertBefore(dragging, after);
+				}
+			});
+			dragContainer.addEventListener('dragenter', (e) => e.preventDefault());
+			dragContainer.addEventListener('drop', (e) => e.preventDefault());
+		}
+
+		// ── Fill-blank: live updates from inputs + word bank ──
+		const inputs = container.querySelectorAll('.fill-blank-input');
+		inputs.forEach((input, i) => {
+			input.addEventListener('input', () => {
+				const idx = trainingState.currentIndex;
+				const parts = [];
+				container
+					.querySelectorAll('.fill-blank-input')
+					.forEach((inp) => {
+						const id = inp.getAttribute('data-blank-id');
+						parts.push(`${id}:${inp.value || ''}`);
+					});
+				trainingState.userAnswers[idx] = parts.join('|');
+				persistTrainingAnswers();
+				updateTrainingNextButtonState();
+			});
+			input.addEventListener('keypress', (e) => {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					if (i < inputs.length - 1) {
+						inputs[i + 1].focus();
+					} else {
+						input.blur();
+					}
+				}
+			});
+		});
+
+		// Word bank: click-to-select + click-on-zone + drag fallback.
+		const wordBank = container.querySelector('.word-bank');
+		if (wordBank) {
+			wordBank.addEventListener('click', (e) => {
+				const chip = e.target.closest('.word-bank-chip');
+				if (!chip) return;
+				// If a drop zone is the active target, place the word there.
+				const active = container.querySelector(
+					'.fill-blank-drop-zone.is-active-target',
+				);
+				if (active) {
+					fillBlankDropZone(active, chip.dataset.word);
+					chip.classList.add('is-used');
+					active.classList.remove('is-active-target');
+					persistFillBlankAnswer();
+					return;
+				}
+				// Otherwise select the chip and mark empty drop zones.
+				if (chip.classList.contains('is-used')) return;
+				container
+					.querySelectorAll('.word-bank-chip.is-selected')
+					.forEach((el) => el.classList.remove('is-selected'));
+				chip.classList.add('is-selected');
+				container
+					.querySelectorAll('.fill-blank-drop-zone')
+					.forEach((el) => el.classList.add('is-active-target'));
+			});
+			wordBank.addEventListener('dragstart', (e) => {
+				const chip = e.target.closest('.word-bank-chip');
+				if (!chip) return;
+				e.dataTransfer.setData('text/plain', chip.dataset.word || '');
+				e.dataTransfer.effectAllowed = 'copy';
+				chip.classList.add('dragging');
+			});
+			wordBank.addEventListener('dragend', (e) => {
+				const chip = e.target.closest('.word-bank-chip');
+				if (chip) chip.classList.remove('dragging');
+			});
+		}
+
+		// Drop zones: click to place the selected chip, or click a filled
+		// zone to return the word to the bank.
+		container.querySelectorAll('.fill-blank-drop-zone').forEach((zone) => {
+			zone.addEventListener('click', (e) => {
+				const selected = container.querySelector(
+					'.word-bank-chip.is-selected',
+				);
+				if (selected) {
+					fillBlankDropZone(zone, selected.dataset.word);
+					selected.classList.remove('is-selected');
+					selected.classList.add('is-used');
+					container
+						.querySelectorAll('.fill-blank-drop-zone')
+						.forEach((el) => el.classList.remove('is-active-target'));
+					persistFillBlankAnswer();
+					return;
+				}
+				// Click on a filled zone → return the word to the bank.
+				const value = zone.dataset.value;
+				if (value) {
+					zone.textContent = '';
+					delete zone.dataset.value;
+					zone.classList.remove('is-filled');
+					// Mark the corresponding chip in the bank as available.
+					container
+						.querySelectorAll('.word-bank-chip')
+						.forEach((c) => {
+							if (c.dataset.word === value) c.classList.remove('is-used');
+						});
+					persistFillBlankAnswer();
+				}
+			});
+			zone.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				zone.classList.add('is-drag-over');
+			});
+			zone.addEventListener('dragleave', () => {
+				zone.classList.remove('is-drag-over');
+			});
+			zone.addEventListener('drop', (e) => {
+				e.preventDefault();
+				zone.classList.remove('is-drag-over');
+				const word = e.dataTransfer.getData('text/plain');
+				if (!word) return;
+				fillBlankDropZone(zone, word);
+				container.querySelectorAll('.word-bank-chip').forEach((c) => {
+					if (c.dataset.word === word) c.classList.add('is-used');
+				});
+				persistFillBlankAnswer();
+			});
+		});
+
+		// ── Matching pairs: left-click first, then right-click ──
+		const matchContainer = container.querySelector('.training-matching-quiz');
+		if (matchContainer) {
+			let selectedLeft = null;
+			const pairColors = [
+				'#6366f1',
+				'#ec4899',
+				'#10b981',
+				'#f59e0b',
+				'#06b6d4',
+				'#8b5cf6',
+				'#ef4444',
+				'#84cc16',
+			];
+			// Rehydrate saved pairs.
+			let savedPairs = [];
+			try {
+				savedPairs = JSON.parse(
+					decodeURIComponent(
+						matchContainer.dataset.savedPairs || '[]',
+					) || '[]',
+				);
+			} catch (_) {
+				savedPairs = [];
+			}
+			const livePairs = savedPairs.slice();
+			const liveColorFor = (pair) =>
+				pairColors[
+					livePairs.findIndex(
+						(p) => p.left === pair.left && p.right === pair.right,
+					) % pairColors.length
+				];
+
+			const applyPairVisuals = () => {
+				matchContainer
+					.querySelectorAll('.matching-quiz-item')
+					.forEach((el) => {
+						el.classList.remove(
+							'paired',
+							'selected',
+							'is-pending-left',
+						);
+						el.style.backgroundColor = '';
+						el.style.color = '';
+						el.style.borderColor = '';
+						const badge = el.querySelector('.pair-number-badge');
+						if (badge) badge.remove();
+					});
+				livePairs.forEach((p, idx) => {
+					const leftEl = matchContainer.querySelector(
+						`.matching-quiz-item[data-column="left"][data-value="${cssEscape(p.left)}"]`,
+					);
+					const rightEl = matchContainer.querySelector(
+						`.matching-quiz-item[data-column="right"][data-value="${cssEscape(p.right)}"]`,
+					);
+					const color = pairColors[idx % pairColors.length];
+					const num = idx + 1;
+					[leftEl, rightEl].forEach((el) => {
+						if (!el) return;
+						el.classList.add('paired');
+						el.style.backgroundColor = color;
+						el.style.color = '#ffffff';
+						el.style.borderColor = color;
+						const badge = document.createElement('div');
+						badge.className = 'pair-number-badge';
+						badge.textContent = String(num);
+						badge.style.backgroundColor = color;
+						el.appendChild(badge);
+					});
+				});
+				if (selectedLeft) {
+					selectedLeft.classList.add('selected', 'is-pending-left');
+					selectedLeft.style.backgroundColor = '#fff7ed';
+					selectedLeft.style.color = '#9a3412';
+					selectedLeft.style.borderColor = '#fb923c';
+				}
+			};
+			applyPairVisuals();
+
+			const persistMatchingAnswer = () => {
+				const idx = trainingState.currentIndex;
+				trainingState.userAnswers[idx] = livePairs
+					.map((p) => `${p.left}→${p.right}`)
+					.join('|');
+				persistTrainingAnswers();
+				updateTrainingNextButtonState();
+			};
+
+			matchContainer.querySelectorAll('.matching-quiz-item').forEach((item) => {
+				item.addEventListener('click', () => {
+					const column = item.dataset.column;
+					const value = item.dataset.value;
+					// If already paired, break the connection.
+					const existingPair = livePairs.find(
+						(p) => p.left === value || p.right === value,
+					);
+					if (existingPair) {
+						const leftEl = matchContainer.querySelector(
+							`.matching-quiz-item[data-column="left"][data-value="${cssEscape(existingPair.left)}"]`,
+						);
+						const rightEl = matchContainer.querySelector(
+							`.matching-quiz-item[data-column="right"][data-value="${cssEscape(existingPair.right)}"]`,
+						);
+						[leftEl, rightEl].forEach((el) => {
+							if (!el) return;
+							el.classList.remove('paired');
+							el.style.backgroundColor = '';
+							el.style.color = '';
+							el.style.borderColor = '';
+							const badge = el.querySelector('.pair-number-badge');
+							if (badge) badge.remove();
+						});
+						const idx = livePairs.findIndex(
+							(p) =>
+								p.left === existingPair.left &&
+								p.right === existingPair.right,
+						);
+						if (idx >= 0) livePairs.splice(idx, 1);
+						applyPairVisuals();
+						persistMatchingAnswer();
+						return;
+					}
+					if (column === 'left') {
+						// Toggle selection on left item.
+						if (selectedLeft === item) {
+							selectedLeft = null;
+						} else {
+							selectedLeft = item;
+						}
+						applyPairVisuals();
+					} else if (column === 'right' && selectedLeft) {
+						// Form a new pair: left→right.
+						const leftValue = selectedLeft.dataset.value;
+						// Drop any existing right-side selection for the same right.
+						const dup = livePairs.findIndex((p) => p.right === value);
+						if (dup >= 0) livePairs.splice(dup, 1);
+						// Drop any existing pair where this left was already used.
+						const dupLeft = livePairs.findIndex(
+							(p) => p.left === leftValue,
+						);
+						if (dupLeft >= 0) livePairs.splice(dupLeft, 1);
+						livePairs.push({ left: leftValue, right: value });
+						selectedLeft = null;
+						applyPairVisuals();
+						persistMatchingAnswer();
+					}
+				});
+			});
+		}
+	}
+
+	// CSS.escape polyfill — for safe attribute selector use.
+	function cssEscape(value) {
+		if (window.CSS && typeof window.CSS.escape === 'function') {
+			return window.CSS.escape(value);
+		}
+		return String(value).replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+	}
+
+	// Fill-blank helpers (used by the live wiring).
+	function fillBlankDropZone(zone, word) {
+		zone.textContent = word;
+		zone.dataset.value = word;
+		zone.classList.add('is-filled');
+	}
+	function persistFillBlankAnswer() {
+		const container = byId('studentTrainingStage');
+		if (!container) return;
+		const idx = trainingState.currentIndex;
+		const parts = [];
+		container.querySelectorAll('.fill-blank-drop-zone').forEach((zone) => {
+			const id = zone.getAttribute('data-blank-id');
+			parts.push(`${id}:${zone.dataset.value || ''}`);
+		});
+		container.querySelectorAll('.fill-blank-input').forEach((input) => {
+			const id = input.getAttribute('data-blank-id');
+			parts.push(`${id}:${input.value || ''}`);
+		});
+		trainingState.userAnswers[idx] = parts.join('|');
+		persistTrainingAnswers();
+		updateTrainingNextButtonState();
+	}
+
+	// Render the top progress strip (1·2·3 dots). Each dot is clickable
+	// to jump to that question (only if the user has answered it).
+	function renderTrainingProgressStrip(currentIndex, total) {
+		const strip = byId('trainingProgressStrip');
+		if (!strip) return;
+		if (total <= 1) {
+			strip.innerHTML = '';
+			return;
+		}
+		const dots = [];
+		for (let i = 0; i < total; i++) {
+			const answered = trainingState.userAnswers[i] !== undefined &&
+				trainingState.userAnswers[i] !== null &&
+				trainingState.userAnswers[i] !== '';
+			const cls = [
+				'training-progress-dot',
+				i === currentIndex ? 'is-current' : '',
+				answered ? 'is-answered' : '',
+			]
+				.filter(Boolean)
+				.join(' ');
+			dots.push(
+				`<button type="button" class="${cls}" data-jump="${i}" title="Question ${
+					i + 1
+				}"><span class="dot"></span></button>`,
+			);
+		}
+		strip.innerHTML = dots.join('');
+		strip.querySelectorAll('.training-progress-dot').forEach((btn) => {
+			btn.addEventListener('click', () => {
+				const target = parseInt(btn.dataset.jump || '-1', 10);
+				if (target < 0 || target >= total) return;
+				trainingState.currentIndex = target;
+				persistTrainingAnswers();
+				renderTrainingQuestion();
+			});
+		});
+	}
 
 	function renderTrainingQuestion() {
 		const container = byId('studentTrainingStage');
 		if (!container) return;
 
 		if (trainingState.completed) {
+			stopTrainingTimer();
+			stopPerQuestionTimer();
 			renderTrainingResultsView(container);
 			return;
 		}
@@ -12621,41 +13794,91 @@
 		const currentNum = trainingState.currentIndex + 1;
 		const progressPercent = Math.round((currentNum / total) * 100);
 
-		let optionsHtml = '';
-		let rawOptions = [];
-		if (typeof q.options_json === 'string') {
-			try {
-				rawOptions = JSON.parse(q.options_json);
-			} catch (_) {}
-		} else if (Array.isArray(q.options)) {
-			rawOptions = q.options;
-		}
-
-		if (!rawOptions.length) {
-			rawOptions = ['True', 'False'];
-		}
-
+		const qType = normalizeTrainingQuestionType(q);
+		const options = trainingState.questionOptions[trainingState.currentIndex] || [];
 		const currentAnswer = trainingState.userAnswers[trainingState.currentIndex];
+		const hasAnswer =
+			currentAnswer !== undefined && currentAnswer !== null && currentAnswer !== '';
 
-		optionsHtml = rawOptions
-			.map((opt, idx) => {
-				const optText = typeof opt === 'string' ? opt : opt?.text || '';
-				const isSelected = currentAnswer === optText;
-				return `
-				<button type="button" class="option-btn ${isSelected ? 'selected' : ''}" onclick="selectTrainingOption('${escapeHtml(optText).replace(/'/g, "\\'")}')">
-					<span class="option-label">${String.fromCharCode(65 + idx)}.</span>
-					<span>${escapeHtml(optText)}</span>
-				</button>
-			`;
-			})
-			.join('');
+		const typeBadgeMap = {
+			'multiple-choice': 'Single answer',
+			'multiple-choice-multi': 'Multiple answers',
+			'true-false': 'True / False',
+			'fill-blank': 'Fill in the blanks',
+			'draggable': 'Arrange in order',
+			'odd-one-out': 'Find the odd one out',
+			'matching-pairs': 'Match the pairs',
+			'code': 'Code question',
+		};
+		// Auto-detected "Multiple answers" override: if the MCQ renderer
+		// decided this is multi-select (via `allowMultipleAnswers` or the
+		// answer format), use the multi label regardless of the stored
+		// `q.type`.
+		const isMultiOverride =
+			(qType === 'multiple-choice' || qType === 'multiple-choice-multi') &&
+			isTrainingMultiSelect(q);
+		const typeLabel =
+			(isMultiOverride && qType === 'multiple-choice'
+				? 'Multiple answers'
+				: typeBadgeMap[qType]) || qType;
+
+		// Update the persistent top bar.
+		const counter = byId('trainingQuestionCounter');
+		if (counter) counter.textContent = `Q ${currentNum} / ${total}`;
+		const typeBadge = byId('trainingTypeBadge');
+		if (typeBadge) typeBadge.textContent = typeLabel;
+		renderTrainingProgressStrip(trainingState.currentIndex, total);
+
+		let bodyHtml = '';
+		switch (qType) {
+			case 'multiple-choice':
+				// Auto-detect multi-select: pass `forceMulti=true` only when
+				// the question is multi by the heuristic. Otherwise treat as
+				// single answer.
+				bodyHtml = renderTrainingMcq(
+					q,
+					options,
+					isTrainingMultiSelect(q) && !q.allowMultipleAnswers
+						? true
+						: isTrainingMultiSelect(q),
+				);
+				break;
+			case 'multiple-choice-multi':
+				bodyHtml = renderTrainingMcq(q, options, true);
+				break;
+			case 'true-false':
+				bodyHtml = renderTrainingTrueFalse(q);
+				break;
+			case 'odd-one-out':
+				bodyHtml = renderTrainingOddOneOut(q, options);
+				break;
+			case 'draggable':
+				bodyHtml = renderTrainingDraggable(q, options);
+				break;
+			case 'matching-pairs':
+				bodyHtml = renderTrainingMatching(q, options);
+				break;
+			case 'fill-blank':
+				bodyHtml = renderTrainingFillBlank(q, options);
+				break;
+			case 'code':
+				bodyHtml = renderTrainingCode(q, options);
+				break;
+			default:
+				bodyHtml = renderTrainingMcq(q, options, false);
+		}
+
+		// The per-type widget always renders the question text (inside the
+		// body) so the layout is consistent and the text can never be lost.
+		// The top `<h3 class="question-text">` is hidden because the
+		// widget already shows the text in its own styled block.
 
 		container.innerHTML = `
 			<div class="training-container">
 				<div class="training-header">
 					<div class="training-progress-info">
 						<span class="training-badge">Question ${currentNum} of ${total}</span>
-						<span class="training-type-tag">${escapeHtml(q.type || 'MCQ')}</span>
+						<span class="training-type-tag">${escapeHtml(typeLabel)}</span>
 					</div>
 					<div class="training-progress-bar">
 						<span style="width: ${progressPercent}%"></span>
@@ -12663,58 +13886,187 @@
 				</div>
 
 				<div class="training-question-card">
-					<h3 class="question-text">${escapeHtml(q.text || q.question || 'Question')}</h3>
-					${q.media_url ? `<img src="${escapeHtml(q.media_url)}" class="question-media" alt="Question media" />` : ''}
-					<div class="options-grid">
-						${optionsHtml}
+					${
+						q.image
+							? `<div class="question-image-wrap" onclick="openTrainingLightbox('${escapeHtml(q.image)}')"><img src="${escapeHtml(q.image)}" alt="Question image"/></div>`
+							: q.media_url
+								? `<div class="question-image-wrap" onclick="openTrainingLightbox('${escapeHtml(q.media_url)}')"><img src="${escapeHtml(q.media_url)}" alt="Question media"/></div>`
+								: ''
+					}
+					${
+						q.instruction
+							? `<div class="question-instruction">${escapeHtml(q.instruction)}</div>`
+							: ''
+					}
+					<div id="trainingOptions" class="training-body">
+						${bodyHtml}
 					</div>
 				</div>
 
-				<div class="training-actions">
+				<div class="training-actions training-actions--primary">
 					${
 						trainingState.currentIndex > 0
 							? `<button type="button" class="workspace-btn ghost" onclick="prevTrainingQuestion()">Previous</button>`
 							: '<div></div>'
 					}
-					<button type="button" class="workspace-btn" ${!currentAnswer ? 'disabled' : ''} onclick="nextTrainingQuestion()">
-						${currentNum === total ? 'Finish Test' : 'Next Question'}
-					</button>
+					<button
+						type="button"
+						id="trainingNextBtn"
+						class="workspace-btn training-next-btn"
+						${!hasAnswer ? 'disabled' : ''}
+						onclick="nextTrainingQuestion()"
+					>${
+						currentNum === total ? 'Finish Test' : 'Next Question'
+					}</button>
 				</div>
 			</div>
 		`;
+
+		// Wire all the live event handlers (drag, fill-blank, matching,
+		// multi-select) so the answer is recorded on every interaction.
+		wireTrainingLiveHandlers();
+		updateTrainingNextButtonState();
+
+		// Per-question timer (if the question declares `timeLimit`).
+		stopPerQuestionTimer();
+		const perQ = Number(q.timeLimit || q.time_limit || 0);
+		if (perQ > 0) startPerQuestionTimer(perQ);
 	}
 
-	window.selectTrainingOption = function (val) {
-		trainingState.userAnswers[trainingState.currentIndex] = val;
-		renderTrainingQuestion();
-	};
+	function getTrainingDragAfter(container, y) {
+		const els = [
+			...container.querySelectorAll('.draggable-option:not(.dragging)'),
+		];
+		return els.reduce(
+			(closest, child) => {
+				const box = child.getBoundingClientRect();
+				const offset = y - box.top - box.height / 2;
+				if (offset < 0 && offset > closest.offset) {
+					return { offset, element: child };
+				}
+				return closest;
+			},
+			{ offset: Number.NEGATIVE_INFINITY },
+		).element;
+	}
 
-	window.prevTrainingQuestion = function () {
-		if (trainingState.currentIndex > 0) {
-			trainingState.currentIndex--;
-			renderTrainingQuestion();
+	// ── Grading helpers ─────────────────────────────────────────────────────
+	function trainingAnswersEqual(userAnswer, correctAnswer, qType) {
+		const u = String(userAnswer || '').trim();
+		const c = String(correctAnswer || '').trim();
+		if (!u) return false;
+		switch (qType) {
+			case 'multiple-choice':
+			case 'true-false':
+			case 'odd-one-out':
+				return u.toLowerCase() === c.toLowerCase();
+			case 'multiple-choice-multi': {
+				// User joined with '|', correct also '|'
+				const userSet = new Set(
+					u.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean),
+				);
+				const correctSet = new Set(
+					c.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean),
+				);
+				if (userSet.size !== correctSet.size) return false;
+				for (const v of userSet) {
+					if (!correctSet.has(v)) return false;
+				}
+				return true;
+			}
+			case 'draggable': {
+				const userOrder = u.split(',').map((s) => s.trim());
+				const correctOrder = c.split(',').map((s) => s.trim());
+				return userOrder.join('|') === correctOrder.join('|');
+			}
+			case 'matching-pairs': {
+				const userMap = new Map();
+				u.split('|').forEach((p) => {
+					if (p.includes('→')) {
+						const [l, r] = p.split('→');
+						userMap.set(l.trim(), r.trim());
+					}
+				});
+				const correctMap = new Map();
+				c.split('|').forEach((p) => {
+					if (p.includes('→')) {
+						const [l, r] = p.split('→');
+						correctMap.set(l.trim(), r.trim());
+					} else if (p.includes(':')) {
+						const [l, r] = p.split(':');
+						correctMap.set(l.trim(), r.trim());
+					}
+				});
+				if (userMap.size !== correctMap.size) return false;
+				for (const [k, v] of correctMap) {
+					if (userMap.get(k) !== v) return false;
+				}
+				return true;
+			}
+			case 'fill-blank': {
+				const userMap = new Map();
+				u.split('|').forEach((p) => {
+					if (p.includes(':')) {
+						const [id, val] = p.split(':');
+						userMap.set(id.trim(), val.trim());
+					}
+				});
+				const correctMap = new Map();
+				c.split('|').forEach((p) => {
+					if (p.includes(':')) {
+						const [id, val] = p.split(':');
+						correctMap.set(id.trim(), val.trim());
+					}
+				});
+				if (userMap.size !== correctMap.size) return false;
+				for (const [k, v] of correctMap) {
+					const userVal = userMap.get(k) || '';
+					if (String(userVal).toLowerCase() !== String(v).toLowerCase()) {
+						return false;
+					}
+				}
+				return true;
+			}
+			default:
+				return u.toLowerCase() === c.toLowerCase();
 		}
-	};
+	}
 
-	window.nextTrainingQuestion = function () {
-		const total = trainingState.questions.length;
-		if (trainingState.currentIndex < total - 1) {
-			trainingState.currentIndex++;
-			renderTrainingQuestion();
-		} else {
-			finishTrainingTest();
+	function prettyPrintTrainingAnswer(answer, qType) {
+		if (!answer) return '—';
+		if (qType === 'matching-pairs') {
+			return String(answer)
+				.split('|')
+				.map((p) => p.replace('→', ' → '))
+				.join('  ·  ');
 		}
-	};
+		if (qType === 'fill-blank') {
+			return String(answer)
+				.split('|')
+				.map((p) => p.replace(':', ' = '))
+				.join('  ·  ');
+		}
+		if (qType === 'draggable') {
+			return String(answer)
+				.split(',')
+				.map((s, i) => `${i + 1}. ${s}`)
+				.join('  ');
+		}
+		return String(answer);
+	}
 
+	// ── Finish + results view ───────────────────────────────────────────────
 	function finishTrainingTest() {
+		stopTrainingTimer();
 		trainingState.endTime = Date.now();
 		trainingState.completed = true;
 
 		let score = 0;
 		trainingState.questions.forEach((q, idx) => {
-			const userAns = String(trainingState.userAnswers[idx] || '').trim().toLowerCase();
-			const correctAns = String(q.answer || '').trim().toLowerCase();
-			if (userAns && userAns === correctAns) {
+			const userAns = trainingState.userAnswers[idx];
+			const correctAns = q.answer;
+			const qType = normalizeTrainingQuestionType(q);
+			if (trainingAnswersEqual(userAns, correctAns, qType)) {
 				score++;
 			}
 		});
@@ -12749,6 +14101,7 @@
 			window.__DI_CONTAINER__?.repo?.create?.('results', newResult);
 		} catch (_) {}
 
+		clearTrainingStorage();
 		if (context) renderWorkspace();
 		renderTrainingQuestion();
 	}
@@ -12769,14 +14122,15 @@
 					<h4>Answer Breakdown & Corrections</h4>
 					${trainingState.questions
 						.map((q, i) => {
-							const userAns = String(trainingState.userAnswers[i] || '').trim();
-							const correctAns = String(q.answer || '').trim();
-							const isCorrect = userAns.toLowerCase() === correctAns.toLowerCase();
-
+							const userAns = trainingState.userAnswers[i] || '';
+							const correctAns = q.answer || '';
+							const qType = normalizeTrainingQuestionType(q);
+							const isCorrect = trainingAnswersEqual(userAns, correctAns, qType);
 							return `
 							<div class="correction-item ${isCorrect ? 'correct' : 'incorrect'}">
 								<div class="correction-header">
 									<span class="question-number">Question ${i + 1}</span>
+									<span class="question-type-tag">${escapeHtml(qType)}</span>
 									<span class="status-badge ${isCorrect ? 'pass' : 'fail'}">
 										${isCorrect ? '✓ Correct' : '✕ Incorrect'}
 									</span>
@@ -12784,21 +14138,20 @@
 								<p class="question-title">${escapeHtml(q.text || q.question || 'Question')}</p>
 								<div class="answer-row">
 									<div class="answer-group">
-										<strong>Your Answer:</strong> 
+										<strong>Your Answer:</strong>
 										<span class="answer-badge ${isCorrect ? 'badge-success' : 'badge-danger'}">
-											${escapeHtml(userAns || 'No answer')}
+											${escapeHtml(prettyPrintTrainingAnswer(userAns, qType))}
 										</span>
 									</div>
 									<div class="answer-group">
-										<strong>Correct Answer:</strong> 
+										<strong>Correct Answer:</strong>
 										<span class="answer-badge badge-success">
-											${escapeHtml(correctAns)}
+											${escapeHtml(prettyPrintTrainingAnswer(correctAns, qType))}
 										</span>
 									</div>
 								</div>
 								${q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</div>` : ''}
-							</div>
-						`;
+							</div>`;
 						})
 						.join('')}
 				</div>
@@ -12850,6 +14203,7 @@
 	};
 
 	window.retakeTrainingModal = function () {
+		clearTrainingStorage();
 		window.openTrainingMode(trainingState.examId);
 	};
 

@@ -12,6 +12,9 @@ import { getContainer } from '../container.js';
 const router = Router();
 router.use(requireAuth, enforceTenant);
 
+// Teachers can create their own assignments; admin-only for PATCH/DELETE
+// because the service enforces ownership on update/delete.
+const authorRoles = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]);
 const adminOnly = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
 
 router.get('/', async (req, res, next) => {
@@ -22,7 +25,7 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', adminOnly, async (req, res, next) => {
+router.post('/', authorRoles, async (req, res, next) => {
   try {
     const { teacherAssignmentSvc } = getContainer();
     res.status(201).json(await teacherAssignmentSvc.create(req.user, req.body));

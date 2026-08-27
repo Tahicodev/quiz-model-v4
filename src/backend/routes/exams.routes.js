@@ -14,6 +14,11 @@ import { getContainer } from '../container.js';
 const router = Router();
 router.use(requireAuth, enforceTenant);
 
+// Exam authoring is shared between admins and teachers. Teachers create and
+// manage their own exams; admins keep the master roster. Hard delete and
+// class assignment stay admin-only because they affect the whole school.
+const EXAM_AUTHORING_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
+
 router.get('/', validateQuery(ExamFilterSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
@@ -45,7 +50,7 @@ router.get('/:id/questions', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/:id/classes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:id/classes', requireRole(EXAM_AUTHORING_ROLES), async (req, res, next) => {
   try {
     const { examSvc, repo } = getContainer();
     await examSvc.getById(req.params.id);
@@ -59,7 +64,7 @@ router.get('/:id/classes', requireRole(ROLES.ADMIN), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', requireRole(ROLES.ADMIN), validate(ExamCreateSchema), async (req, res, next) => {
+router.post('/', requireRole(EXAM_AUTHORING_ROLES), validate(ExamCreateSchema), async (req, res, next) => {
   try {
     const { examSvc, auditSvc } = getContainer();
     const exam = await examSvc.create(req.body, req.user);
@@ -68,7 +73,7 @@ router.post('/', requireRole(ROLES.ADMIN), validate(ExamCreateSchema), async (re
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireRole(ROLES.ADMIN), validate(ExamUpdateSchema), async (req, res, next) => {
+router.patch('/:id', requireRole(EXAM_AUTHORING_ROLES), validate(ExamUpdateSchema), async (req, res, next) => {
   try {
     const { examSvc, auditSvc } = getContainer();
     const updated = await examSvc.update(req.params.id, req.body, req.user);
@@ -77,7 +82,7 @@ router.patch('/:id', requireRole(ROLES.ADMIN), validate(ExamUpdateSchema), async
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
   try {
     const { examSvc, auditSvc } = getContainer();
     await examSvc.delete(req.params.id, req.user);
@@ -87,7 +92,7 @@ router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
 });
 
 // Question management
-router.post('/:id/questions', requireRole(ROLES.ADMIN), validate(ExamAddQuestionSchema), async (req, res, next) => {
+router.post('/:id/questions', requireRole(EXAM_AUTHORING_ROLES), validate(ExamAddQuestionSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     const link = await examSvc.addQuestion(req.params.id, req.body.question_id, req.body.order_index, req.user);
@@ -95,7 +100,7 @@ router.post('/:id/questions', requireRole(ROLES.ADMIN), validate(ExamAddQuestion
   } catch (err) { next(err); }
 });
 
-router.delete('/:id/questions/:questionId', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:id/questions/:questionId', requireRole(EXAM_AUTHORING_ROLES), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     await examSvc.removeQuestion(req.params.id, req.params.questionId, req.user);
@@ -103,7 +108,7 @@ router.delete('/:id/questions/:questionId', requireRole(ROLES.ADMIN), async (req
   } catch (err) { next(err); }
 });
 
-router.put('/:id/questions/order', requireRole(ROLES.ADMIN), validate(ExamReorderSchema), async (req, res, next) => {
+router.put('/:id/questions/order', requireRole(EXAM_AUTHORING_ROLES), validate(ExamReorderSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     await examSvc.reorderQuestions(req.params.id, req.body.question_ids, req.user);
@@ -112,7 +117,7 @@ router.put('/:id/questions/order', requireRole(ROLES.ADMIN), validate(ExamReorde
 });
 
 // Lifecycle
-router.post('/:id/publish', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:id/publish', requireRole(EXAM_AUTHORING_ROLES), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     const exam = await examSvc.publish(req.params.id, req.user);
@@ -120,7 +125,7 @@ router.post('/:id/publish', requireRole(ROLES.ADMIN), async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-router.post('/:id/archive', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:id/archive', requireRole(EXAM_AUTHORING_ROLES), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     const exam = await examSvc.archive(req.params.id, req.user);
@@ -129,7 +134,7 @@ router.post('/:id/archive', requireRole(ROLES.ADMIN), async (req, res, next) => 
 });
 
 // Class assignment
-router.post('/:id/classes', requireRole(ROLES.ADMIN), validate(ExamAssignClassSchema), async (req, res, next) => {
+router.post('/:id/classes', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), validate(ExamAssignClassSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     const link = await examSvc.assignToClass(req.params.id, req.body.class_id, req.user);
@@ -137,7 +142,7 @@ router.post('/:id/classes', requireRole(ROLES.ADMIN), validate(ExamAssignClassSc
   } catch (err) { next(err); }
 });
 
-router.delete('/:id/classes/:classId', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:id/classes/:classId', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
     await examSvc.removeFromClass(req.params.id, req.params.classId, req.user);

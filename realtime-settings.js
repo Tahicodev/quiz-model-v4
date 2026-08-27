@@ -259,36 +259,40 @@
 	 * Update realtime connection status UI
 	 */
 	function updateRealtimeStatus(status, message = '') {
-		const statusDiv = document.getElementById('realtime-connection-status');
-		const statusDot = document.getElementById('realtime-status-dot');
-		const statusText = document.getElementById('realtime-status-text');
+		// The DOM id is `connection-status` in admin.html. The function used to
+		// look for non-existent ids (`realtime-connection-status`, …) which made
+		// the entire block a no-op. Render inline into the existing element so
+		// the user can actually see the connection state under the host input.
+		const statusDiv = document.getElementById('connection-status');
 		const safeStatus =
 			status === 'connected' || status === 'error' ? status : 'disconnected';
 
 		const statusConfig = {
 			connected: {
 				color: '#10b981',
-				text: 'Connected to realtime server',
+				text: 'Status: Connected to realtime server',
 				background: '#ecfdf5',
 			},
 			disconnected: {
 				color: '#ef4444',
-				text: 'Disconnected from server',
+				text: 'Status: Disconnected from server',
 				background: '#fef2f2',
 			},
 			error: {
 				color: '#f97316',
-				text: `Error: ${message || 'Connection failed'}`,
+				text: `Status: Error — ${message || 'Connection failed'}`,
 				background: '#fff7ed',
 			},
 		};
 
 		const config = statusConfig[safeStatus] || statusConfig.disconnected;
-		if (statusDiv && statusDot && statusText) {
-			statusDiv.style.display = 'block';
-			statusDot.style.backgroundColor = config.color;
-			statusText.textContent = config.text;
-			statusDiv.parentElement.style.backgroundColor = config.background;
+		if (statusDiv) {
+			statusDiv.style.color = config.color;
+			statusDiv.style.fontWeight = '600';
+			statusDiv.textContent = config.text;
+			if (statusDiv.parentElement) {
+				statusDiv.parentElement.style.backgroundColor = config.background;
+			}
 		}
 		publishRealtimeState({
 			status: safeStatus,

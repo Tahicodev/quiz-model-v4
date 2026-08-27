@@ -17,7 +17,7 @@ const router = Router();
 router.use(requireAuth, enforceTenant);
 
 // GET /api/v1/users
-router.get('/', requireRole(ROLES.ADMIN), validateQuery(UserFilterSchema), async (req, res, next) => {
+router.get('/', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), validateQuery(UserFilterSchema), async (req, res, next) => {
   try {
     const { userSvc } = getContainer();
     const { limit, offset, orderBy, direction, search, ...filters } = req.query;
@@ -27,7 +27,7 @@ router.get('/', requireRole(ROLES.ADMIN), validateQuery(UserFilterSchema), async
 });
 
 // GET /api/v1/users/:id
-router.get('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
   try {
     const { userSvc } = getContainer();
     const user = await userSvc.getById(req.params.id);
@@ -36,7 +36,7 @@ router.get('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
 });
 
 // POST /api/v1/users
-router.post('/', requireRole(ROLES.ADMIN), validate(UserCreateSchema), async (req, res, next) => {
+router.post('/', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), validate(UserCreateSchema), async (req, res, next) => {
   try {
     const { userSvc, auditSvc } = getContainer();
     const user = await userSvc.create(req.body, req.user);
@@ -46,7 +46,7 @@ router.post('/', requireRole(ROLES.ADMIN), validate(UserCreateSchema), async (re
 });
 
 // PATCH /api/v1/users/:id
-router.patch('/:id', requireRole(ROLES.ADMIN), validate(UserUpdateSchema), async (req, res, next) => {
+router.patch('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), validate(UserUpdateSchema), async (req, res, next) => {
   try {
     const { userSvc, auditSvc } = getContainer();
     const updated = await userSvc.update(req.params.id, req.body, req.user);
@@ -56,7 +56,7 @@ router.patch('/:id', requireRole(ROLES.ADMIN), validate(UserUpdateSchema), async
 });
 
 // DELETE /api/v1/users/:id
-router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
   try {
     const { userSvc, auditSvc } = getContainer();
     await userSvc.delete(req.params.id, req.user);
@@ -66,7 +66,7 @@ router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
 });
 
 // POST /api/v1/users/:id/reset-password
-router.post('/:id/reset-password', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:id/reset-password', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
   try {
     const { userSvc } = getContainer();
     const { newPassword } = req.body;

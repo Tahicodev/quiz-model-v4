@@ -49,7 +49,7 @@ const IngestSchema = z.object({
  * POST /api/v1/ai/generate
  * Generate questions about a topic via LLM.
  */
-router.post('/generate', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/generate', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const parsed = GenerateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -69,7 +69,7 @@ router.post('/generate', requireRole(ROLES.ADMIN), async (req, res, next) => {
  * POST /api/v1/ai/generate/text
  * Extract questions from provided source text.
  */
-router.post('/generate/text', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/generate/text', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const parsed = GenerateTextSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -86,7 +86,7 @@ router.post('/generate/text', requireRole(ROLES.ADMIN), async (req, res, next) =
  * POST /api/v1/ai/rag/ingest
  * Ingest a document (provide raw text content).
  */
-router.post('/rag/ingest', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/rag/ingest', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const parsed = IngestSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -107,7 +107,7 @@ router.post('/rag/ingest', requireRole(ROLES.ADMIN), async (req, res, next) => {
  * POST /api/v1/ai/rag/query
  * Query the RAG store with a question.
  */
-router.post('/rag/query', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/rag/query', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const parsed = RAGQuerySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -127,7 +127,7 @@ router.post('/rag/query', requireRole(ROLES.ADMIN), async (req, res, next) => {
  * GET /api/v1/ai/rag/documents
  * List all ingested documents.
  */
-router.get('/rag/documents', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/rag/documents', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const { ragSvc } = getContainer();
     const docs = await ragSvc.listDocuments(req.schoolId);
@@ -139,7 +139,7 @@ router.get('/rag/documents', requireRole(ROLES.ADMIN), async (req, res, next) =>
  * DELETE /api/v1/ai/rag/documents/:id
  * Delete an ingested document.
  */
-router.delete('/rag/documents/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/rag/documents/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const { ragSvc } = getContainer();
     await ragSvc.deleteDocument(req.params.id, req.schoolId);

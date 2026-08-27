@@ -200,10 +200,12 @@ function createQuestionRow(question, index) {
 		console.log('No optionData to store for question:', question.question);
 	}
 
-	// Add fill-blank specific attributes
+		// Add fill-blank specific attributes
 	if (question.type === 'fill-blank') {
 		if (question.useWordBank !== undefined)
 			row.setAttribute('data-use-word-bank', question.useWordBank);
+		if (question.showOptions !== undefined)
+			row.setAttribute('data-show-options', String(question.showOptions));
 		if (question.distractors && question.distractors.length > 0) {
 			row.setAttribute(
 				'data-distractors',
@@ -808,6 +810,10 @@ function getQuestions() {
 			if (useWordBank !== null) {
 				questionObj.useWordBank = useWordBank === 'true';
 			}
+			const showOptions = row.getAttribute('data-show-options');
+			if (showOptions !== null) {
+				questionObj.showOptions = showOptions === 'true';
+			}
 			const distractors = row.getAttribute('data-distractors');
 			if (distractors) {
 				try {
@@ -1374,11 +1380,14 @@ async function addOrUpdateQuestion() {
 			});
 
 			const useWordBank = useWordBankEl ? useWordBankEl.checked : false;
+			const showOptionsEl = document.getElementById('show-options');
+			const showOptions = showOptionsEl ? showOptionsEl.checked : true;
 			const fillBlankInstruction = fillBlankInstructionEl
 				? fillBlankInstructionEl.value.trim()
 				: '';
 
 			questionObj.useWordBank = useWordBank;
+			questionObj.showOptions = showOptions;
 			questionObj.instruction = fillBlankInstruction; // Set instruction from fill-blank field
 
 			// If word bank is enabled, the 'options' field (which is general options) becomes the distractors
@@ -2149,6 +2158,13 @@ function populateEditForm(question) {
 			if (typeof toggleWordBank === 'function') {
 				toggleWordBank();
 			}
+		}
+		const showOptionsCheckbox = document.getElementById('show-options');
+		if (showOptionsCheckbox) {
+			// Default ON: existing questions that don't have this field are
+			// treated as showOptions=true so behavior is unchanged.
+			showOptionsCheckbox.checked =
+				question.showOptions === undefined ? true : !!question.showOptions;
 		}
 
 		// Populate instruction

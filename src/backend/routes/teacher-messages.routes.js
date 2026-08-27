@@ -12,6 +12,10 @@ import { getContainer } from '../container.js';
 const router = Router();
 router.use(requireAuth, enforceTenant);
 
+// Teachers create messages to their own classes; admins and super_admins
+// can manage any message. PATCH/DELETE stay admin-only because the existing
+// service `listForCaller`/`update`/`delete` already enforce ownership.
+const authorRoles = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]);
 const adminOnly = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
 
 router.get('/', async (req, res, next) => {
@@ -22,7 +26,7 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', adminOnly, async (req, res, next) => {
+router.post('/', authorRoles, async (req, res, next) => {
   try {
     const { teacherMessageSvc } = getContainer();
     res.status(201).json(await teacherMessageSvc.create(req.user, req.body));

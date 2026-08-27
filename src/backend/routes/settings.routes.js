@@ -13,6 +13,7 @@ import { requireRole } from '../middleware/role.js';
 import { validate } from '../middleware/validate.js';
 import { SettingUpdateSchema, SettingsBulkUpdateSchema } from '../../shared/schemas/settings.schema.js';
 import { ROLES, SETTINGS_VISIBILITY } from '../../shared/constants.js';
+import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 
 const router = Router();
@@ -32,7 +33,13 @@ router.get('/public', async (req, res, next) => {
 // ── Authenticated endpoints ──────────────────────────────────────────────────
 router.use(requireAuth, enforceTenant);
 
-router.get('/teacher', requireRole(ROLES.ADMIN), async (req, res, next) => {
+// Admins and teachers share the settings panel. Admin-only keys (adminSecret,
+// recoveryCode, system settings) are still enforced inside the per-key
+// sanitizer in bulk.routes.js and inside the SettingsService.
+const SETTINGS_SHARED_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
+const SETTINGS_ADMIN_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN];
+
+router.get('/teacher', requireRole(SETTINGS_SHARED_ROLES), async (req, res, next) => {
   try {
     const { settingsSvc } = getContainer();
     const settings = await settingsSvc.getTeacherSettings(req.schoolId);
@@ -40,7 +47,7 @@ router.get('/teacher', requireRole(ROLES.ADMIN), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/admin', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/admin', requireRole(SETTINGS_ADMIN_ROLES), async (req, res, next) => {
   try {
     const { settingsSvc } = getContainer();
     const settings = await settingsSvc.getAdminSettings(req.schoolId);
@@ -48,18 +55,27 @@ router.get('/admin', requireRole(ROLES.ADMIN), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.patch('/:key', requireRole(ROLES.ADMIN), validate(SettingUpdateSchema), async (req, res, next) => {
+router.patch('/:key', requireRole(SETTINGS_SHARED_ROLES), validate(SettingUpdateSchema), async (req, res, next) => {
   try {
     const { settingsSvc, auditSvc } = getContainer();
     const { key } = req.params;
     const { value, visibility } = req.body;
+    // The SettingsService should refuse to update admin-only keys for a
+    // teacher; the per-route role gate is a fast guard, the per-key check
+    // is the real authority.
+    if (
+      req.user.role === ROLES.TEACHER &&
+      ['adminSecret', 'recoveryCode'].includes(key)
+    ) {
+      return next(new ForbiddenError('Only admins can modify this setting'));
+    }
     const setting = await settingsSvc.updateSetting(req.schoolId, key, value, visibility);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'setting', entityId: setting.id, action: 'update', ip: req.ip });
     res.json(setting);
   } catch (err) { next(err); }
 });
 
-router.delete('/:key', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:key', requireRole(SETTINGS_ADMIN_ROLES), async (req, res, next) => {
   try {
     const { repo } = getContainer();
     const { data } = await repo.getAll('settings', {
@@ -72,9 +88,18 @@ router.delete('/:key', requireRole(ROLES.ADMIN), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/bulk', requireRole(ROLES.ADMIN), validate(SettingsBulkUpdateSchema), async (req, res, next) => {
+router.post('/bulk', requireRole(SETTINGS_SHARED_ROLES), validate(SettingsBulkUpdateSchema), async (req, res, next) => {
   try {
     const { settingsSvc } = getContainer();
+    // Defense-in-depth: drop admin-only keys from a teacher-initiated bulk
+    // write. The same filter is applied in bulk.routes.js; doing it here
+    // too means even non-bulk callers (a future POST /settings endpoint)
+    // stay safe.
+    if (req.user.role === ROLES.TEACHER && Array.isArray(req.body?.settings)) {
+      req.body.settings = req.body.settings.filter(
+        (s) => s && !['adminSecret', 'recoveryCode'].includes(s.key),
+      );
+    }
     const results = await settingsSvc.bulkUpdate(req.schoolId, req.body.settings);
     res.json(results);
   } catch (err) { next(err); }

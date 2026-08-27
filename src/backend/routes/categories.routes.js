@@ -39,7 +39,7 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/', requireRole(ROLES.ADMIN), validate(CategoryCreateSchema), async (req, res, next) => {
+router.post('/', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), validate(CategoryCreateSchema), async (req, res, next) => {
   try {
     const { categorySvc, auditSvc } = getContainer();
     const cat = await categorySvc.create(req.body, req.user);
@@ -48,7 +48,7 @@ router.post('/', requireRole(ROLES.ADMIN), validate(CategoryCreateSchema), async
   } catch (err) { next(err); }
 });
 
-router.patch('/:id', requireRole(ROLES.ADMIN), validate(CategoryUpdateSchema), async (req, res, next) => {
+router.patch('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), validate(CategoryUpdateSchema), async (req, res, next) => {
   try {
     const { categorySvc, auditSvc } = getContainer();
     const updated = await categorySvc.update(req.params.id, req.body, req.user);
@@ -57,7 +57,7 @@ router.patch('/:id', requireRole(ROLES.ADMIN), validate(CategoryUpdateSchema), a
   } catch (err) { next(err); }
 });
 
-router.delete('/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const { categorySvc, auditSvc } = getContainer();
     await categorySvc.delete(req.params.id, req.user);

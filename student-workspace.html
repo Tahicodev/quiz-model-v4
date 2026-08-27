@@ -294,11 +294,18 @@
 								class="performance-list"
 							></div>
 						</div>
-						<div
-							class="workspace-panel games-panel"
-							data-workspace-section="tournament"
-							style="margin-bottom: 2rem"
-						>
+					</section>
+
+					<!-- Full-width section for game-like tabs (My Games, Tournament).
+					     These need horizontal room for card grids and stat tiles,
+					     so they live outside the 2-col layout. -->
+					<section class="workspace-grid workspace-grid--full-width">
+						<div class="workspace-column">
+							<div
+								class="workspace-panel games-panel"
+								data-workspace-section="tournament"
+								style="margin-bottom: 2rem"
+							>
 							<div class="panel-header">
 								<div>
 									<h2>Tournament Arena</h2>
@@ -427,21 +434,25 @@
 							<div id="studentGameResultsMain" class="game-results-list"></div>
 						</div>
 					</div>
+					</section>
 
-					<aside class="workspace-sidebar">
-						<div class="workspace-panel" data-workspace-section="results">
-							<div class="panel-header">
-								<div>
-									<h2>Recent Results</h2>
-									<p>Your latest scores and attempts</p>
+					<section class="workspace-grid workspace-grid--full-width">
+						<div class="workspace-column">
+							<aside class="workspace-sidebar">
+								<div class="workspace-panel" data-workspace-section="results">
+									<div class="panel-header">
+										<div>
+											<h2>Recent Results</h2>
+											<p>Your latest scores and attempts</p>
+										</div>
+									</div>
+									<div id="studentResults" class="results-list"></div>
 								</div>
-							</div>
-							<div id="studentResults" class="results-list"></div>
+							</aside>
 						</div>
-					</aside>
-				</section>
-			</main>
-		</div>
+					</section>
+				</main>
+			</div>
 
 		<div id="studentAuthModal" class="modal auth-modal">
 			<div class="modal-content small-modal auth-modal-content student-auth">
@@ -646,42 +657,52 @@
 						</button>
 					</div>
 					<div id="profile-tab" class="profile-section">
-						<div class="profile-card profile-card--hero">
-							<div class="profile-avatar">
-								<div class="avatar-frame">
-									<img id="studentProfileAvatarImage" src="" alt="Profile" />
-									<span id="studentProfileAvatarFallback">S</span>
+						<!-- Premium hero banner: gradient cover + avatar floating over it -->
+						<div class="profile-hero-banner">
+							<div class="profile-hero-banner-bg" aria-hidden="true"></div>
+							<div class="profile-hero-banner-content">
+								<div class="profile-avatar profile-avatar--floating">
+									<div class="avatar-frame">
+										<img id="studentProfileAvatarImage" src="" alt="Profile" />
+										<span id="studentProfileAvatarFallback">S</span>
+									</div>
+									<label class="avatar-upload">
+										<input
+											type="file"
+											id="studentProfileAvatarInput"
+											accept="image/*"
+										/>
+										<span>Upload Photo</span>
+									</label>
 								</div>
-								<label class="avatar-upload">
-									<input
-										type="file"
-										id="studentProfileAvatarInput"
-										accept="image/*"
-									/>
-									<span>Upload Photo</span>
-								</label>
+								<div class="profile-meta profile-meta--banner">
+									<div class="profile-meta-top">
+										<div class="profile-name-row">
+											<h3 id="studentProfileName">Student</h3>
+											<span class="profile-premium-badge">★ Premium</span>
+										</div>
+										<p id="studentProfileClass">Class</p>
+									</div>
+									<div class="profile-chip-row">
+										<span class="profile-chip" id="studentProfileNumber"
+											>#--</span
+										>
+										<span
+											class="profile-chip profile-chip-points"
+											id="studentProfilePointsChip"
+											>Points: 0</span
+										>
+										<span
+											class="profile-chip profile-chip-badges"
+											id="studentProfileBadgesChip"
+											>Badges: 0</span
+										>
+									</div>
+								</div>
 							</div>
-							<div class="profile-meta">
-								<div class="profile-meta-top">
-									<h3 id="studentProfileName">Student</h3>
-									<p id="studentProfileClass">Class</p>
-								</div>
-								<div class="profile-chip-row">
-									<span class="profile-chip" id="studentProfileNumber"
-										>#--</span
-									>
-									<span
-										class="profile-chip profile-chip-points"
-										id="studentProfilePointsChip"
-										>Points: 0</span
-									>
-									<span
-										class="profile-chip profile-chip-badges"
-										id="studentProfileBadgesChip"
-										>Badges: 0</span
-									>
-								</div>
-							</div>
+						</div>
+						<div class="profile-stats-card">
+							<div class="profile-stats-card-bg" aria-hidden="true"></div>
 							<div class="profile-hero-stats">
 								<article class="profile-stat-tile">
 									<span>Level</span>
@@ -742,7 +763,12 @@
 								</div>
 							</article>
 						</div>
-						<form id="studentProfileForm" class="profile-form">
+						<div class="profile-form-card">
+							<div class="profile-form-card-header">
+								<h3>Update Profile</h3>
+								<p>Send a request to your teacher or admin to change your details.</p>
+							</div>
+							<form id="studentProfileForm" class="profile-form">
 							<div class="form-row">
 								<div class="form-group half">
 									<label for="studentProfileFullName">Full Name</label>
@@ -818,6 +844,7 @@
 							id="studentProfileRequestStatus"
 							class="profile-request-status"
 						></div>
+						</div>
 					</div>
 					<div id="security-tab" class="profile-section hidden">
 						<form id="studentPasswordForm" class="profile-form">
@@ -871,12 +898,21 @@
 			<div class="modal-content training-modal-content">
 				<div class="modal-header training-modal-header">
 					<h3 id="trainingModalTitle">Training Practice Test</h3>
-					<button type="button" class="close-modal-btn" onclick="closeTrainingModal()">&times;</button>
+					<div class="training-header-meta">
+						<span id="trainingQuestionCounter" class="training-counter">Q 1 / 1</span>
+						<span id="trainingTypeBadge" class="training-type-tag">Multiple choice</span>
+						<span id="trainingPerQuestionTimer" class="training-per-q-timer" hidden></span>
+						<button type="button" class="close-modal-btn" onclick="closeTrainingModal()">&times;</button>
+					</div>
 				</div>
+				<div class="training-progress-strip" id="trainingProgressStrip" aria-label="Question progress"></div>
 				<div class="modal-body" id="studentTrainingStage">
 					<!-- Training questions and results render here -->
 				</div>
 			</div>
+		</div>
+		<div id="trainingImageLightbox" class="training-lightbox" hidden onclick="closeTrainingLightbox()">
+			<img id="trainingLightboxImg" alt="preview" />
 		</div>
 	</body>
 </html>

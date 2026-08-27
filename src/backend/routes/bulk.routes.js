@@ -37,6 +37,25 @@ const router = Router();
 // exception explicit and deny every other table before it reaches Prisma.
 const STUDENT_BULK_TABLES = new Set(['results']);
 
+// Teachers share the realtime settings panel with admins (data-roles="admin,teacher"
+// in admin.html) so they need to be able to save their own preferences. The
+// per-key filter below keeps any admin-only key out of reach. Teachers also
+// own the content-authoring tables (presets, tournaments, messages,
+// assignments) so they can bulk-write those too.
+const TEACHER_WRITABLE_TABLES = new Set([
+  'settings',
+  'game_presets',
+  'tournaments',
+  'teacher_messages',
+  'teacher_assignments',
+]);
+
+// Keys that must NOT be writable by teachers. If a teacher bulk-writes settings
+// containing any of these, they are silently dropped (the other keys still go
+// through). This matches the existing UI policy: only admins rotate the
+// adminSecret and recoveryCode.
+const TEACHER_BLOCKED_SETTINGS_KEYS = new Set(['adminSecret', 'recoveryCode']);
+
 router.use(requireAuth, enforceTenant);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -931,9 +950,15 @@ router.post('/:table', async (req, res, next) => {
     const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user?.role);
     const isStudentResultWrite =
       req.user?.role === ROLES.STUDENT && STUDENT_BULK_TABLES.has(table);
-    if (!isAdmin && !isStudentResultWrite) {
+    const isTeacherWrite =
+      req.user?.role === ROLES.TEACHER && TEACHER_WRITABLE_TABLES.has(table);
+    if (!isAdmin && !isStudentResultWrite && !isTeacherWrite) {
       return next(new ForbiddenError());
     }
+
+    // Stash the actor's effective role so the settings normalizer can apply
+    // per-key filters (e.g., teachers cannot overwrite adminSecret).
+    req._bulkActorRole = req.user?.role;
 
     let { items } = req.body;
 
@@ -944,6 +969,19 @@ router.post('/:table', async (req, res, next) => {
     // Object-stores (gamification) send the object as the whole body.
     if (table === 'gamification' && !Array.isArray(items)) {
       items = normalizeObjectStoreBody(req.body);
+    }
+
+    // Per-key filter for teachers on the settings table: silently drop
+    // admin-only keys so a teacher-signed-in user cannot overwrite them.
+    if (table === 'settings' && req._bulkActorRole === ROLES.TEACHER && Array.isArray(items)) {
+      const before = items.length;
+      items = items.filter((it) => it && !TEACHER_BLOCKED_SETTINGS_KEYS.has(String(it.key)));
+      if (items.length !== before) {
+        logger.warn('bulk.routes: teacher write dropped admin-only setting keys', {
+          actorId: req.user?.id,
+          dropped: before - items.length,
+        });
+      }
     }
 
     if (!Array.isArray(items) || items.length === 0) {

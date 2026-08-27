@@ -3148,6 +3148,46 @@
 								>
 									<input
 										type="checkbox"
+										id="show-options"
+										checked
+										style="width: 18px; height: 18px"
+									/>
+									<span>Show Options to Student</span>
+								</label>
+								<span
+									class="help-tooltip"
+									title="When enabled, students see the options (as a word bank or inline chips) to place in the blanks. Disable to let the student type their answer freely."
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="var(--text-muted)"
+										stroke-width="2"
+									>
+										<circle cx="12" cy="12" r="10"></circle>
+										<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+										<line x1="12" y1="17" x2="12.01" y2="17"></line>
+									</svg>
+								</span>
+							</div>
+							<div
+								class="form-group"
+								style="display: flex; align-items: center; gap: var(--space-sm)"
+							>
+								<label
+									style="
+										margin: 0;
+										display: flex;
+										align-items: center;
+										gap: var(--space-sm);
+										cursor: pointer;
+									"
+								>
+									<input
+										type="checkbox"
 										id="use-word-bank"
 										style="width: 18px; height: 18px"
 									/>
@@ -4310,14 +4350,21 @@
 
 						<!-- Realtime Settings -->
 						<div id="realtime-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="realtime">
-							<!-- Server Configuration -->
-							<div class="settings-group">
-								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+					<!-- Server Configuration -->
+						<div class="settings-group">
+							<label class="switch-label" style="margin-bottom: 15px;">
+								<span style="display: flex; align-items: center; gap: 10px;">
 									<span style="background: #f0f9ff; color: #0c4a6e; padding: 6px; border-radius: 8px;">
 										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
 									</span>
-									<h3 style="margin: 0; font-size: 1.1rem;">LAN Realtime Server</h3>
-								</div>
+									<h3 class="switch-text" style="margin: 0; font-size: 1.1rem;">LAN Realtime Server</h3>
+								</span>
+								<span class="switch-container" style="flex-shrink: 0;">
+									<input type="checkbox" id="setting-realtimeEnabled" class="switch-checkbox" checked />
+									<span class="switch-slider"></span>
+								</span>
+							</label>
+							<small class="text-muted" style="display: block; margin-bottom: 15px;">Connect clients to this admin panel for real-time data sync</small>
 
 								<div class="form-group">
 									<label for="setting-serverHost">Server Host/Port</label>
@@ -4368,14 +4415,6 @@
 										style="padding: 10px;"
 									/>
 									<small class="text-muted">Used only for the local dashboard password reset panel. It is saved as a hash; leave blank to keep the existing code.</small>
-								</div>
-
-								<div class="form-group">
-									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-										<input type="checkbox" id="setting-realtimeEnabled" checked />
-										<span>Enable Realtime Sync</span>
-									</label>
-									<small class="text-muted" style="display: block; margin-left: 24px;">Connect clients to this admin panel for real-time data sync</small>
 								</div>
 							</div>
 
