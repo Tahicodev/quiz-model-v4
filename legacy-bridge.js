@@ -429,6 +429,13 @@
       return refreshPromise;
     }
 
+    // Per-table failure counter so transient errors (one dropped request,
+    // a brief network blip) don't spam the user with error toasts. After
+    // three consecutive failures for the same table we show a single toast
+    // that explains the data is local-only and will retry in the background.
+    var syncFailureCount = Object.create(null);
+    var MAX_SYNC_FAILURES_BEFORE_TOAST = 3;
+
     function notifySyncError(table, message) {
       var labels = {
         games: 'games',
@@ -437,13 +444,34 @@
         users: 'users',
         classes: 'classes',
         categories: 'categories',
+        results: 'results',
       };
       var label = labels[table] || table || 'data';
       var detail = String(message || 'the server rejected the request').replace(/\s+/g, ' ').trim();
-      var msg = `Could not sync ${label} to the server: ${detail}. Your local changes are still visible on this device; fix the data or connection, then retry.`;
-      console.warn(msg);
-      if (typeof window.showToast === 'function') {
-        try { window.showToast(msg, 'error'); } catch (_) { /* keep console error */ }
+      syncFailureCount[table] = (syncFailureCount[table] || 0) + 1;
+      // Always log to the console so developers can see what's happening.
+      console.warn(
+        '[sync] ' + label + ' sync failed (' + syncFailureCount[table] + '): ' + detail,
+      );
+      // Only show a toast once we've had several consecutive failures.
+      if (syncFailureCount[table] === MAX_SYNC_FAILURES_BEFORE_TOAST) {
+        var msg =
+          'Could not sync ' + label + ' to the server: ' + detail +
+          '. Your local changes are still visible on this device; the next attempt will retry automatically.';
+        if (typeof window.showToast === 'function') {
+          try { window.showToast(msg, 'error'); } catch (_) {}
+        }
+      }
+      // After many failures, suppress further toasts to avoid spam.
+      if (syncFailureCount[table] > 10) {
+        syncFailureCount[table] = MAX_SYNC_FAILURES_BEFORE_TOAST;
+      }
+    }
+
+    // Reset the per-table failure counter when a sync succeeds.
+    function notifySyncSuccess(table) {
+      if (syncFailureCount[table]) {
+        syncFailureCount[table] = 0;
       }
     }
 
@@ -527,7 +555,10 @@
               notifySyncError(table, 'HTTP ' + res.status + ' — ' + String(detail).slice(0, 200));
             });
           }
-          // Success — consume body to avoid dangling promise warnings.
+          // Success — reset the per-table failure counter so the
+          // next transient failure starts the count from zero (no toast
+          // until 3 consecutive failures).
+          notifySyncSuccess(table);
           return res.text().catch(function () { /* ignore */ });
         })
         .catch(function (err) {

@@ -81,4 +81,93 @@ router.get('/user/:userId/stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/v1/results — accept a result from the student workspace
+// (training, practice, etc.) and persist it. This complements the
+// `bulk/results` endpoint and is what the legacy bridge's `create_sync`
+// hits. Students can only create results for themselves.
+router.post('/', async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const body = req.body || {};
+    const userId = String(req.user.id);
+    const schoolId = String(req.schoolId);
+
+    const rawExamId = String(body.exam_id || body.examId || '').trim();
+    let validExamId = null;
+    if (rawExamId) {
+      try {
+        const exam = await repo.modelFor('exams').findFirst({
+          where: { id: rawExamId, school_id: schoolId },
+          select: { id: true },
+        });
+        if (exam) {
+          validExamId = exam.id;
+        }
+      } catch (_) {}
+    }
+
+    let answersJson = '';
+    if (typeof body.answers_json === 'string' && body.answers_json.trim()) {
+      answersJson = body.answers_json.trim();
+    } else if (typeof body.answersJson === 'string' && body.answersJson.trim()) {
+      answersJson = body.answersJson.trim();
+    } else if (body.answers && typeof body.answers === 'object') {
+      try {
+        answersJson = JSON.stringify(body.answers);
+      } catch (_) {
+        answersJson = '{}';
+      }
+    } else {
+      answersJson = JSON.stringify({
+        examId: rawExamId || null,
+        examTitle: body.examTitle || body.examName || null,
+        mode: body.mode || 'training',
+        userAnswers: body.userAnswers || body.answers || {},
+      });
+    }
+
+    // The bridge sends the row with a mix of snake_case and camelCase
+    // keys; we accept both and normalize to the Prisma schema.
+    const resultRow = {
+      id: body.id || (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : 'result-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10)),
+      user_id: body.user_id || body.userId || userId,
+      school_id: schoolId,
+      exam_id: validExamId,
+      score: body.score != null ? Number(body.score) : 0,
+      total_points: body.total_points != null
+        ? Math.round(Number(body.total_points))
+        : (body.totalPoints != null ? Math.round(Number(body.totalPoints)) : 0),
+      earned_points: body.earned_points != null
+        ? Math.round(Number(body.earned_points))
+        : (body.earnedPoints != null ? Math.round(Number(body.earnedPoints)) : 0),
+      time_spent: body.time_spent != null
+        ? Math.round(Number(body.time_spent))
+        : (body.timeSpent != null ? Math.round(Number(body.timeSpent)) : null),
+      mode: String(body.mode || 'training'),
+      passed: body.passed != null ? Boolean(body.passed) : false,
+      attempt_number: body.attempt_number != null
+        ? Number(body.attempt_number)
+        : (body.attemptNumber != null ? Number(body.attemptNumber) : 1),
+      answers_json: answersJson || '{}',
+      date_taken: body.date_taken || body.dateTaken || new Date().toISOString(),
+    };
+
+    // Prevent students from writing results on behalf of other users.
+    if (String(resultRow.user_id) !== userId && !isInstructor(req)) {
+      throw new ForbiddenError('You can only save your own results');
+    }
+
+    const resultModel = repo.modelFor('results');
+    const record = await resultModel.upsert({
+      where: { id: resultRow.id },
+      create: resultRow,
+      update: resultRow,
+    });
+    res.status(201).json(record);
+  } catch (err) { next(err); }
+});
+
 export default router;
+

@@ -1379,15 +1379,13 @@ async function addOrUpdateQuestion() {
 				fillBlankInstructionEl: fillBlankInstructionEl ? 'found' : 'NOT FOUND',
 			});
 
-			const useWordBank = useWordBankEl ? useWordBankEl.checked : false;
-			const showOptionsEl = document.getElementById('show-options');
-			const showOptions = showOptionsEl ? showOptionsEl.checked : true;
+			const useWordBank = useWordBankEl ? useWordBankEl.checked : true;
 			const fillBlankInstruction = fillBlankInstructionEl
 				? fillBlankInstructionEl.value.trim()
 				: '';
 
 			questionObj.useWordBank = useWordBank;
-			questionObj.showOptions = showOptions;
+			questionObj.showOptions = useWordBank;
 			questionObj.instruction = fillBlankInstruction; // Set instruction from fill-blank field
 
 			// If word bank is enabled, the 'options' field (which is general options) becomes the distractors
@@ -2151,20 +2149,16 @@ function populateEditForm(question) {
 			}
 		}
 
-		// Populate new fields
+		// Populate word bank checkbox
 		const useWordBankCheckbox = document.getElementById('use-word-bank');
 		if (useWordBankCheckbox) {
-			useWordBankCheckbox.checked = question.useWordBank || false;
+			useWordBankCheckbox.checked =
+				question.useWordBank !== undefined
+					? !!question.useWordBank
+					: (question.showOptions !== undefined ? !!question.showOptions : true);
 			if (typeof toggleWordBank === 'function') {
 				toggleWordBank();
 			}
-		}
-		const showOptionsCheckbox = document.getElementById('show-options');
-		if (showOptionsCheckbox) {
-			// Default ON: existing questions that don't have this field are
-			// treated as showOptions=true so behavior is unchanged.
-			showOptionsCheckbox.checked =
-				question.showOptions === undefined ? true : !!question.showOptions;
 		}
 
 		// Populate instruction

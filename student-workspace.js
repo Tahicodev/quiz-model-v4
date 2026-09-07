@@ -295,10 +295,13 @@
 		);
 		if (!tabsBar || !tabsDock || !dropdown || !headerActions) return;
 
-		const isSticky = tabsBar.getBoundingClientRect().top <= 12.5;
+		const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+		const isScrolled = scrollY > 40;
+		document.body.classList.toggle('workspace-scrolled', isScrolled);
+
 		const dropdownVisible = !dropdown.classList.contains('hidden');
 		const shouldDock =
-			isDesktopWorkspaceViewport() && dropdownVisible && isSticky;
+			isDesktopWorkspaceViewport() && dropdownVisible && isScrolled;
 		const isDocked = tabsDock.contains(dropdown);
 
 		if (shouldDock && !isDocked) {
@@ -330,6 +333,8 @@
 		window.addEventListener('resize', queueStickyProfileDockUpdate, {
 			passive: true,
 		});
+		// Sync immediately on initial bind
+		updateStickyProfileDock();
 	}
 
 	function getGamesStore() {
@@ -12666,6 +12671,7 @@
 	}
 
 	function getTrainingOptionsForQuestion(q) {
+		const qType = normalizeTrainingQuestionType(q);
 		let raw = [];
 		if (typeof q?.options_json === 'string') {
 			try {
@@ -12676,9 +12682,43 @@
 		} else if (Array.isArray(q?.optionData)) {
 			raw = q.optionData;
 		}
+
+		if (qType === 'fill-blank') {
+			const tokens = [];
+			const seen = new Set();
+			const addToken = (t) => {
+				const str = String(t || '').trim();
+				if (str && !seen.has(str.toLowerCase())) {
+					seen.add(str.toLowerCase());
+					tokens.push(str);
+				}
+			};
+			// 1. Extract from correct answers
+			if (typeof q?.answer === 'string') {
+				q.answer.split('|').forEach((p) => {
+					const val = p.includes(':') ? p.split(':')[1] : p;
+					if (val) {
+						val.split(',').forEach((sub) => addToken(sub));
+					}
+				});
+			} else if (Array.isArray(q?.answer)) {
+				q.answer.forEach((a) => addToken(typeof a === 'object' ? a.text || a.value : a));
+			}
+			// 2. Extract from distractors, wordBank, and options
+			const pools = [q?.distractors, q?.wordBank, q?.options, q?.optionData, raw];
+			pools.forEach((pool) => {
+				if (Array.isArray(pool)) {
+					pool.forEach((it) => addToken(typeof it === 'object' ? it.text || it.value : it));
+				}
+			});
+			if (tokens.length > 0) {
+				return tokens.map((t) => ({ text: t, image: '', isImageOnly: false }));
+			}
+		}
+
 		if (!Array.isArray(raw) || raw.length === 0) {
 			// fall back to the type's natural options
-			if (normalizeTrainingQuestionType(q) === 'true-false') {
+			if (qType === 'true-false') {
 				raw = ['True', 'False'];
 			} else {
 				raw = [];
@@ -12738,6 +12778,26 @@
 	}
 
 	// ── Timer ───────────────────────────────────────────────────────────────
+	function updateTrainingStripTimeDisplay() {
+		const textEl = byId('trainingStripTimerText');
+		if (!textEl) return;
+		const startedAt = trainingState.startTime || Date.now();
+		if (trainingState.timeLimitSec > 0) {
+			const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+			const remaining = Math.max(0, trainingState.timeLimitSec - elapsed);
+			const m = Math.floor(remaining / 60);
+			const s = remaining % 60;
+			textEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+			const badge = byId('trainingStripTimer');
+			if (badge) badge.classList.toggle('warning', remaining < 30);
+		} else {
+			const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+			const m = Math.floor(elapsed / 60);
+			const s = elapsed % 60;
+			textEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+		}
+	}
+
 	function stopTrainingTimer() {
 		if (trainingState.timerHandle) {
 			clearInterval(trainingState.timerHandle);
@@ -12753,26 +12813,27 @@
 	function startTrainingTimer(limitSec) {
 		stopTrainingTimer();
 		trainingState.timeLimitSec = Math.max(0, Number(limitSec) || 0);
-		if (!trainingState.timeLimitSec) return;
-		const el = byId('trainingTimer');
-		if (!el) return;
-		el.hidden = false;
 		const startedAt = trainingState.startTime || Date.now();
 		const tick = () => {
-			const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-			const remaining = Math.max(0, trainingState.timeLimitSec - elapsed);
-			const m = Math.floor(remaining / 60);
-			const s = remaining % 60;
-			el.textContent = `⏱ ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-			el.classList.toggle('warning', remaining < 30);
-			if (remaining <= 0) {
-				stopTrainingTimer();
-				if (typeof window.nextTrainingQuestion === 'function') {
-					// Skip to the end if time is up
-					if (trainingState.currentIndex < trainingState.questions.length - 1) {
-						trainingState.currentIndex = trainingState.questions.length - 1;
+			updateTrainingStripTimeDisplay();
+			if (trainingState.timeLimitSec > 0) {
+				const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+				const remaining = Math.max(0, trainingState.timeLimitSec - elapsed);
+				const el = byId('trainingTimer');
+				if (el) {
+					const m = Math.floor(remaining / 60);
+					const s = remaining % 60;
+					el.textContent = `⏱ ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+					el.classList.toggle('warning', remaining < 30);
+				}
+				if (remaining <= 0) {
+					stopTrainingTimer();
+					if (typeof window.nextTrainingQuestion === 'function') {
+						if (trainingState.currentIndex < trainingState.questions.length - 1) {
+							trainingState.currentIndex = trainingState.questions.length - 1;
+						}
+						finishTrainingTest();
 					}
-					finishTrainingTest();
 				}
 			}
 		};
@@ -12847,9 +12908,7 @@
 
 		const modal = byId('studentTrainingModal');
 		if (modal) modal.classList.add('active');
-		if (trainingState.timeLimitSec) {
-			startTrainingTimer(trainingState.timeLimitSec);
-		}
+		startTrainingTimer(trainingState.timeLimitSec || 0);
 		renderTrainingQuestion();
 	};
 
@@ -13188,15 +13247,8 @@
 			const id = parseInt(m[1]);
 			if (!blanks.find((b) => b.id === id)) blanks.push({ id });
 		}
-		blanks.sort((a, b) => a.id - b.id);
-		// `showOptions` is the master switch for whether the student sees
-		// the options at all. When false, the student just types their own
-		// answer into each blank. When true, the options are shown either
-		// as a word bank (useWordBank) or as inline chips.
-		// Default true: existing questions without this field still show
-		// options.
-		const showOptions = q.showOptions === undefined ? true : !!q.showOptions;
-		const useWordBank = !!q.useWordBank && showOptions;
+		// Word bank is enabled if useWordBank is not explicitly false, or if options exist
+		const useWordBank = q.useWordBank !== false && (q.showOptions !== false);
 		const idx = trainingState.currentIndex;
 		const savedRaw = String(trainingState.userAnswers[idx] || '');
 		const saved = new Map();
@@ -13207,16 +13259,34 @@
 			}
 		});
 
-		// Build the word bank from the options (unique, shuffled). If the
-		// question doesn't have explicit word-bank options, fall back to a
-		// small placeholder so the UI is still usable.
-		const wordBankSource = options.length
-			? options
-			: [
-					{ text: 'word', image: '', isImageOnly: false },
-					{ text: 'sentence', image: '', isImageOnly: false },
-					{ text: 'answer', image: '', isImageOnly: false },
-			  ];
+		// Build the word bank from the options (unique, shuffled).
+		let wordBankSource = Array.isArray(options) && options.length ? options : [];
+		if (!wordBankSource.length) {
+			const tokens = [];
+			const seenT = new Set();
+			const addT = (t) => {
+				const str = String(t || '').trim();
+				if (str && !seenT.has(str.toLowerCase())) {
+					seenT.add(str.toLowerCase());
+					tokens.push(str);
+				}
+			};
+			if (typeof q?.answer === 'string') {
+				q.answer.split('|').forEach((p) => {
+					const val = p.includes(':') ? p.split(':')[1] : p;
+					if (val) val.split(',').forEach(addT);
+				});
+			} else if (Array.isArray(q?.answer)) {
+				q.answer.forEach((a) => addT(typeof a === 'object' ? a.text || a.value : a));
+			}
+			const pools = [q?.distractors, q?.wordBank, q?.options, q?.optionData];
+			pools.forEach((pool) => {
+				if (Array.isArray(pool)) {
+					pool.forEach((it) => addT(typeof it === 'object' ? it.text || it.value : it));
+				}
+			});
+			wordBankSource = tokens.map((t) => ({ text: t, image: '', isImageOnly: false }));
+		}
 		const uniqueWords = [];
 		const seen = new Set();
 		wordBankSource.forEach((o) => {
@@ -13226,7 +13296,7 @@
 				uniqueWords.push(txt);
 			}
 		});
-		// Shuffle the word bank so the answer isn't always first.
+		// Shuffle the word bank so the answer isn't always in identical order.
 		for (let i = uniqueWords.length - 1; i > 0; i--) {
 			const j = Math.floor(Math.random() * (i + 1));
 			[uniqueWords[i], uniqueWords[j]] = [uniqueWords[j], uniqueWords[i]];
@@ -13268,15 +13338,13 @@
 						)
 						.join('')}
 				</div>`
-			: showOptions
-				? ''
-				: `
+			: `
 				<div class="fill-blank-hint fill-blank-hint--free">
 					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h16"></path></svg>
 					Type your answer in each blank.
 				</div>`;
 		return `
-			<div class="training-fill-blank" data-use-word-bank="${useWordBank}" data-show-options="${showOptions}" data-render-text="false">
+			<div class="training-fill-blank" data-use-word-bank="${useWordBank}" data-render-text="false">
 				<div class="fill-blank-question">${withInputs}</div>
 				${wordBankHtml}
 			</div>
@@ -13738,14 +13806,14 @@
 	}
 
 	// Render the top progress strip (1·2·3 dots). Each dot is clickable
-	// to jump to that question (only if the user has answered it).
+	// Render the top progress strip (1·2·3 dots + time + points).
+	// Each dot is clickable to jump to that question.
 	function renderTrainingProgressStrip(currentIndex, total) {
 		const strip = byId('trainingProgressStrip');
 		if (!strip) return;
-		if (total <= 1) {
-			strip.innerHTML = '';
-			return;
-		}
+		const currentQ = trainingState.questions[currentIndex];
+		const qPoints = currentQ?.points != null ? Number(currentQ.points) : 1;
+
 		const dots = [];
 		for (let i = 0; i < total; i++) {
 			const answered = trainingState.userAnswers[i] !== undefined &&
@@ -13764,7 +13832,24 @@
 				}"><span class="dot"></span></button>`,
 			);
 		}
-		strip.innerHTML = dots.join('');
+
+		strip.innerHTML = `
+			<div class="training-strip-dots" aria-label="Question dots">
+				${dots.join('')}
+			</div>
+			<div class="training-strip-meta">
+				<span class="training-meta-badge training-meta-time" id="trainingStripTimer" title="Elapsed / Remaining Time">
+					⏱ <span id="trainingStripTimerText">00:00</span>
+				</span>
+				<span class="training-meta-badge training-meta-points" title="Points for this question">
+					<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px; margin-right:3px;">
+						<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+					</svg>${qPoints} pt${qPoints === 1 ? '' : 's'}
+				</span>
+			</div>
+		`;
+		updateTrainingStripTimeDisplay();
+
 		strip.querySelectorAll('.training-progress-dot').forEach((btn) => {
 			btn.addEventListener('click', () => {
 				const target = parseInt(btn.dataset.jump || '-1', 10);
@@ -13822,11 +13907,6 @@
 				? 'Multiple answers'
 				: typeBadgeMap[qType]) || qType;
 
-		// Update the persistent top bar.
-		const counter = byId('trainingQuestionCounter');
-		if (counter) counter.textContent = `Q ${currentNum} / ${total}`;
-		const typeBadge = byId('trainingTypeBadge');
-		if (typeBadge) typeBadge.textContent = typeLabel;
 		renderTrainingProgressStrip(trainingState.currentIndex, total);
 
 		let bodyHtml = '';
@@ -14097,9 +14177,64 @@
 			date: new Date().toISOString(),
 		};
 
+		// Persist to localStorage + backend. The legacy bridge's
+		// `create_sync` POSTs to /api/v1/results (the new endpoint added
+		// in this round) and triggers an automatic bulk sync on the next
+		// bootstrap. The explicit `window.API.create` below is a real-time
+		// fire-and-forget that hits the same endpoint so the result shows
+		// up immediately across devices. Failure on either path is logged
+		// but never blocks the UX.
 		try {
-			window.__DI_CONTAINER__?.repo?.create?.('results', newResult);
-		} catch (_) {}
+			const repo = window.__DI_CONTAINER__?.repo;
+			if (repo && typeof repo.create_sync === 'function') {
+				repo.create_sync('results', newResult);
+			} else if (repo && typeof repo.create === 'function') {
+				repo.create('results', newResult);
+			}
+		} catch (e) {
+			console.warn(
+				'[training] localStorage persist failed for',
+				newResult.id,
+				e && e.message ? e.message : e,
+			);
+		}
+
+		// Real-time sync to the backend via the explicit REST client.
+		// Previously this 404'd because POST /api/v1/results didn't exist.
+		// The new endpoint accepts the same shape.
+		if (window.API && typeof window.API.create === 'function') {
+			try {
+				Promise.resolve(window.API.create('results', newResult))
+					.then(() => {
+						if (typeof console !== 'undefined' && console.debug) {
+							console.debug(
+								`[training] Persisted result ${newResult.id} to DB`,
+							);
+						}
+					})
+					.catch((apiErr) => {
+						console.warn(
+							'[training] DB persist failed for',
+							newResult.id,
+							apiErr && apiErr.message ? apiErr.message : apiErr,
+						);
+					});
+			} catch (_) {}
+		}
+
+		// Belt-and-suspenders: also write to the bulk endpoint so the
+		// result lands in the DB even if the single-record endpoint is
+		// unavailable. The bulk route accepts the same row shape via
+		// STUDENT_BULK_TABLES.
+		if (window.API && typeof window.API.raw === 'function') {
+			try {
+				Promise.resolve(
+					window.API.raw('POST', '/bulk/results', { items: [newResult] }),
+				).catch(() => {
+					/* already synced via create_sync; ignore */
+				});
+			} catch (_) {}
+		}
 
 		clearTrainingStorage();
 		if (context) renderWorkspace();
