@@ -832,7 +832,9 @@
 			return;
 		}
 
-		if (allowedRole && user.role !== allowedRole && user.role !== ROLE_ADMIN) {
+		// Student portal is strictly for student accounts. Admins and
+		// teachers must use the admin portal instead.
+		if (allowedRole && getEffectiveUserRole(user) !== allowedRole) {
 			showToast('This account cannot access this portal', 'error');
 			return;
 		}
@@ -3843,6 +3845,8 @@
 		isAdmin,
 		isTeacher,
 		isStudent,
+		isStudentLikeUser,
+		getEffectiveUserRole,
 		getTeacherClassIds,
 		getTeacherAccessSettings,
 		getStudentIdentity,
@@ -3875,6 +3879,10 @@
 
 	window.checkAuthState = checkAuthState;
 	window.checkStudentAuthState = checkStudentAuthState;
+	// Student-portal role gate used by legacy-auth-bridge.js after a SaaS
+	// login: only student-like accounts may enter the student workspace.
+	window.isStudentLikeUser = isStudentLikeUser;
+	window.getEffectiveUserRole = getEffectiveUserRole;
 	// legacy-auth-bridge.js looks these up as flat window globals after a
 	// successful SaaS login. Expose them there (not just under window.Auth) so
 	// the post-login path can apply the authed UI and close the modal — without

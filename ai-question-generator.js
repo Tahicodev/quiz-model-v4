@@ -1415,39 +1415,82 @@ STRICT JSON RULES:
 		q.difficulty = q.difficulty || 'medium';
 		q.points = q.points || 1;
 
+		// Resolve a raw answer token to the exact option text it refers to.
+		// The AI may answer with the option text itself, a 1-based index, a
+		// 0-based index (common slip), or a letter (A-H). The order matters:
+		// exact-text match wins, then 1-based index, then letter, then a
+		// 0-based index fallback — a bare numeric token that is NOT an option
+		// text is treated as 0-based so "0,1" over ["0","1","2","A"] resolves
+		// to "0,1" (texts) instead of collapsing to "0,0" (1-based double-hit).
 		const mapAnswerTokenToOptionText = (rawToken) => {
 			const token = String(rawToken || '').trim();
 			if (!token || !q.options.length) return token;
+
+			const textMatch = q.options.find(
+				(option) => option.toLowerCase() === token.toLowerCase(),
+			);
+			if (textMatch) return textMatch;
+
 			const asNumber = Number.parseInt(token, 10);
-			if (
-				Number.isFinite(asNumber) &&
-				String(asNumber) === token &&
-				asNumber >= 1 &&
-				asNumber <= q.options.length
-			) {
+			const isNumericToken =
+				Number.isFinite(asNumber) && String(asNumber) === token;
+			if (isNumericToken && asNumber >= 1 && asNumber <= q.options.length) {
 				return q.options[asNumber - 1];
 			}
+
 			const letterMatch = token.match(/^[A-H]$/i);
 			if (letterMatch) {
 				const idx = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
 				if (idx >= 0 && idx < q.options.length) return q.options[idx];
 			}
-			const match = q.options.find(
-				(option) => option.toLowerCase() === token.toLowerCase(),
-			);
-			return match || token;
+
+			// 0-based index fallback (only when the token is numeric and in
+			// range, and it did not already match an option text above).
+			if (isNumericToken && asNumber >= 0 && asNumber < q.options.length) {
+				return q.options[asNumber];
+			}
+
+			return token;
 		};
+		const effectiveAnswerType = q.type === 'code'
+			? q.codeAnswerMode
+			: q.type;
 		if (
-			((q.type === 'code' ? q.codeAnswerMode : q.type) === 'multiple-choice' ||
-				(q.type === 'code' ? q.codeAnswerMode : q.type) === 'odd-one-out' ||
-				(q.type === 'code' ? q.codeAnswerMode : q.type) === 'draggable') &&
+			(effectiveAnswerType === 'multiple-choice' ||
+				effectiveAnswerType === 'odd-one-out' ||
+				effectiveAnswerType === 'draggable') &&
 			q.answer
 		) {
-			q.answer = String(q.answer)
-				.split(',')
+			// Split on comma AND pipe — some models join multi-answers with "|".
+			const mappedTokens = String(q.answer)
+				.split(/[,|]/)
 				.map((token) => mapAnswerTokenToOptionText(token))
-				.filter(Boolean)
+				.filter(Boolean);
+			// Dedupe while preserving order: a collapsed mapping like "0,0"
+			// (both tokens resolving to the same option) must not persist.
+			const seenTokens = new Set();
+			q.answer = mappedTokens
+				.filter((token) => {
+					const key = token.toLowerCase();
+					if (seenTokens.has(key)) return false;
+					seenTokens.add(key);
+					return true;
+				})
 				.join(',');
+			// When the mapped answer carries more than one distinct option,
+			// the question is genuinely multi-answer regardless of what the
+			// model claimed in allowMultipleAnswers.
+			if (
+				effectiveAnswerType === 'multiple-choice' &&
+				new Set(
+					q.answer
+						.split(',')
+						.map((token) => token.trim().toLowerCase())
+						.filter(Boolean),
+				).size > 1
+			) {
+				q.allowMultipleAnswers = true;
+			}
 		}
 		
 		// Type-specific normalization
@@ -1455,13 +1498,32 @@ STRICT JSON RULES:
 			case 'draggable':
 				q.isDraggable = true;
 				break;
-			case 'fill-blank':
+			case 'fill-blank': {
 				q.useWordBank = q.useWordBank !== false;
 				// Normalize placeholders from [blank] to ___
 				if (q.question && q.question.includes('[blank]')) {
 					q.question = q.question.replace(/\[blank\]/g, '___');
 				}
+				// Repair fill-blank answers: the canonical format is
+				// "1:word|2:word" where the ids map 1:1 to the "___" blanks in
+				// order. Models sometimes return a bare word ("word") or a
+				// word list ("w1,w2") — renumber them so training/games
+				// grading (which parses "id:value" pairs) can match them.
+				const blankCount = (String(q.question || '').match(/_{3,}/g) || []).length;
+				const answerStr = String(q.answer || '').trim();
+				if (answerStr && !answerStr.includes('|') && !/^\d+\s*:/.test(answerStr)) {
+					const answerWords = answerStr
+						.split(',')
+						.map((token) => token.trim())
+						.filter(Boolean);
+					if (answerWords.length) {
+						q.answer = answerWords
+							.map((word, i) => `${i + 1}:${word}`)
+							.join('|');
+					}
+				}
 				break;
+			}
 			case 'multiple-choice':
 				q.allowMultipleAnswers =
 					rawType === 'multiple-choice-multi' ||

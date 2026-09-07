@@ -98,6 +98,78 @@ function parseJson(value, fallback) {
 }
 
 /**
+ * Restore question metadata that the Prisma schema cannot store. The write
+ * paths (api-client.js mapper, bulk.routes.js sanitizer) encode the legacy
+ * flags (allowMultipleAnswers, isDraggable, odd-one-out, code metadata)
+ * inside the `answer` string — the only field guaranteed to round-trip.
+ * Decode `multi::` / `meta::` prefixes here so every consumer (training,
+ * exams, games, tournaments) sees the original shape again.
+ */
+function decodeQuestionMetadata(question) {
+  const rawAnswer = String(question.answer ?? '');
+
+  if (rawAnswer.startsWith('multi::')) {
+    const tokens = rawAnswer
+      .slice('multi::'.length)
+      .split('|')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return {
+      ...question,
+      allowMultipleAnswers: true,
+      answer: tokens.join(','),
+    };
+  }
+
+  if (rawAnswer.startsWith('meta::')) {
+    const rest = rawAnswer.slice('meta::'.length);
+    const separatorIndex = rest.indexOf('::');
+    if (separatorIndex > 0) {
+      const encoded = rest.slice(0, separatorIndex);
+      const payload = rest.slice(separatorIndex + 2);
+      try {
+        const meta = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+        const decoded = { ...question, answer: payload };
+        if (meta.multi) decoded.allowMultipleAnswers = true;
+        if (meta.drag) decoded.isDraggable = true;
+        if (meta.odd) decoded.oddOneOut = true;
+        if (meta.code) {
+          decoded.codeSnippet = meta.code.snippet || '';
+          decoded.codeLanguage = meta.code.language || 'javascript';
+          decoded.codeAnswerMode = meta.code.mode || 'multiple-choice';
+          decoded.type = 'code';
+        }
+        return decoded;
+      } catch (decodeErr) {
+        logger.warn({ err: decodeErr }, 'Bootstrap: question meta decode failed');
+      }
+    }
+  }
+
+  if (rawAnswer && !question.allowMultipleAnswers) {
+    // No prefix on this row. Fall back to the multi-answer heuristic: a
+    // comma-joined answer whose tokens all match stored options means the
+    // multi flag was lost by an older write path.
+    try {
+      const options = parseJson(question.options_json, []);
+      if (Array.isArray(options) && options.length) {
+        const tokens = rawAnswer.split(',').map((t) => t.trim()).filter(Boolean);
+        if (
+          tokens.length > 1 &&
+          tokens.every((t) =>
+            options.some((o) => String(o || '').trim().toLowerCase() === t.toLowerCase()),
+          )
+        ) {
+          return { ...question, allowMultipleAnswers: true };
+        }
+      }
+    } catch (_) { /* heuristic only */ }
+  }
+
+  return question;
+}
+
+/**
  * The legacy workspace is still a supported student surface. Prisma returns
  * normalized snake_case rows and junction tables, while that surface expects
  * the old `{ questions, classes }` exam shape. Hydrate that compatibility
@@ -115,11 +187,14 @@ function hydrateLegacyPayload(data) {
     number: user.number || user.numero || '',
   }));
 
-  const questions = (data.questions || []).map((question) => ({
-    ...question,
-    question: question.question || question.text,
-    options: parseJson(question.options_json, question.options || []),
-  }));
+  const questions = (data.questions || []).map((question) => {
+    const decoded = decodeQuestionMetadata(question);
+    return {
+      ...decoded,
+      question: decoded.question || decoded.text,
+      options: parseJson(decoded.options_json, decoded.options || []),
+    };
+  });
   data.questions = questions;
 
   data.results = (data.results || []).map((result) => {

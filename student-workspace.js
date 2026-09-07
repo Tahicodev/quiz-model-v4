@@ -460,6 +460,22 @@
 		}
 		if (!user) return null;
 
+		// The student workspace is exclusively for student accounts. Admins
+		// and teachers (even ones that own or manage Class A) must use the
+		// admin portal. Reject here so no fake "Class A" identity is built.
+		const roleCheck =
+			window.isStudentLikeUser ||
+			window.Auth?.isStudentLikeUser ||
+			((candidate) => {
+				const role = String(candidate?.role || '')
+					.trim()
+					.toLowerCase();
+				return !role || role === 'student' || role === 'learner' || role === 'participant';
+			});
+		if (!roleCheck(user)) {
+			return null;
+		}
+
 		if (window.Auth?.getUsers) {
 			const fresh = window.Auth.getUsers().find((u) => u.id === user.id);
 			if (fresh) user = fresh;
@@ -841,15 +857,117 @@
 	}
 
 	function dedupeTrainingResultsByExam(trainingResults = []) {
-		const seen = new Map();
+		// Keep every attempt per exam so cards can surface repeat history
+		// (count, best/latest score, trend) for trainings passed many times.
+		const groups = new Map();
 		trainingResults.forEach((result) => {
 			const key = String(result.examId || result.title || 'training quiz')
 				.trim()
 				.toLowerCase();
-			if (!key || seen.has(key)) return;
-			seen.set(key, result);
+			if (!key) return;
+			if (!groups.has(key)) groups.set(key, []);
+			groups.get(key).push(result);
 		});
-		return Array.from(seen.values());
+		// Represent each group by its most recent attempt, with a copy of the
+		// full attempt list attached for the card renderer.
+		return Array.from(groups.values()).map((attempts) => ({
+			...attempts[0],
+			attempts,
+			attemptCount: attempts.length,
+		}));
+	}
+
+	function getTrainingAttemptSummary(result) {
+		const attempts = Array.isArray(result.attempts) ? result.attempts : [];
+		if (!attempts.length) return '';
+		const percents = attempts
+			.map((attempt) =>
+				getScorePercent(
+					Number(attempt.score || 0),
+					Number(attempt.totalQuestions || 0),
+				),
+			)
+			.filter((value) => Number.isFinite(value));
+		if (!percents.length) return '';
+		const best = Math.max(...percents);
+		const latest = percents[0];
+		const count = attempts.length;
+		const trend =
+			count > 1 && latest > percents[1]
+				? 'improving'
+				: count > 1 && latest < percents[1]
+					? 'slipping'
+					: 'steady';
+		const trendLabels = {
+			improving: '↑ Improving',
+			slipping: '↓ Slipping',
+			steady: '→ Steady',
+		};
+		const parts = [
+			`<span class="training-attempt-count">${count} attempt${count === 1 ? '' : 's'}</span>`,
+			count > 1 ? `<span class="training-best-score">Best ${best}%</span>` : '',
+			`<span class="training-trend training-trend--${trend}">${trendLabels[trend]}</span>`,
+		];
+		return parts.filter(Boolean).join('');
+	}
+
+	function renderTrainingCards(trainingResults) {
+		const grid = byId('studentTrainingGrid');
+		if (!grid) return;
+
+		const uniqueByExam = dedupeTrainingResultsByExam(trainingResults);
+		const filtered =
+			state.trainingFilter === 'recent'
+				? uniqueByExam.slice(0, 6)
+				: uniqueByExam;
+
+		if (!trainingResults.length) {
+			grid.innerHTML = `
+				<div class="empty-state">
+					No training attempts yet.
+					<div style="margin-top: 10px;">
+						<button class="workspace-btn small" onclick="openTrainingMode()">Start Training</button>
+					</div>
+				</div>
+			`;
+			return;
+		}
+
+		if (!filtered.length) {
+			grid.innerHTML =
+				'<div class="empty-state">No training attempts for this filter.</div>';
+			return;
+		}
+
+		grid.innerHTML = filtered
+			.map((result) => {
+				const total = Number(result.totalQuestions || 0);
+				const score = Number(result.score || 0);
+				const percent = getScorePercent(score, total);
+				const title = result.title || 'Training Quiz';
+				const attemptSummary = getTrainingAttemptSummary(result);
+				const repeatClass =
+					result.attemptCount > 1 ? ' training-card--repeated' : '';
+				return `
+					<div class="exam-card status-completed training-card${repeatClass}">
+						<div class="exam-card-header">
+							<span class="exam-status">Completed</span>
+							<span class="exam-tag">Training</span>
+						</div>
+						<h3>${escapeHtml(title)}</h3>
+						<p>${result.date ? new Date(result.date).toLocaleString() : 'No date'}</p>
+						${attemptSummary ? `<div class="training-attempt-meta">${attemptSummary}</div>` : ''}
+						<div class="exam-performance">
+							<div class="score-display">${score}/${total || '-'}</div>
+							<div class="performance-bar">
+								<span style="width: ${percent}%"></span>
+							</div>
+						</div>
+						<button class="workspace-btn small" onclick="openTrainingMode()">Start Training</button>
+					</div>
+				`;
+			})
+			.join('');
 	}
 
 	function renderHeader(context) {
@@ -1548,61 +1666,6 @@
 		);
 	}
 
-	function renderTrainingCards(trainingResults) {
-		const grid = byId('studentTrainingGrid');
-		if (!grid) return;
-
-		const uniqueByExam = dedupeTrainingResultsByExam(trainingResults);
-		const filtered =
-			state.trainingFilter === 'recent'
-				? uniqueByExam.slice(0, 6)
-				: uniqueByExam;
-
-		if (!trainingResults.length) {
-			grid.innerHTML = `
-				<div class="empty-state">
-					No training attempts yet.
-					<div style="margin-top: 10px;">
-						<button class="workspace-btn small" onclick="openTrainingMode()">Start Training</button>
-					</div>
-				</div>
-			`;
-			return;
-		}
-
-		if (!filtered.length) {
-			grid.innerHTML =
-				'<div class="empty-state">No training attempts for this filter.</div>';
-			return;
-		}
-
-		grid.innerHTML = filtered
-			.map((result) => {
-				const total = Number(result.totalQuestions || 0);
-				const score = Number(result.score || 0);
-				const percent = getScorePercent(score, total);
-				const title = result.title || 'Training Quiz';
-				return `
-					<div class="exam-card status-completed">
-						<div class="exam-card-header">
-							<span class="exam-status">Completed</span>
-							<span class="exam-tag">Training</span>
-						</div>
-						<h3>${escapeHtml(title)}</h3>
-						<p>${result.date ? new Date(result.date).toLocaleString() : 'No date'}</p>
-						<div class="exam-performance">
-							<div class="score-display">${score}/${total || '-'}</div>
-							<div class="performance-bar">
-								<span style="width: ${percent}%"></span>
-							</div>
-						</div>
-						<button class="workspace-btn small" onclick="openTrainingMode()">Start Training</button>
-					</div>
-				`;
-			})
-			.join('');
-	}
-
 	function renderTrainingPerformanceList(trainingResults) {
 		const container = byId('studentTrainingPerformanceList');
 		if (!container) return;
@@ -1628,33 +1691,45 @@
 				)
 			: 0;
 		const best = percents.length ? Math.max(...percents) : 0;
+		const recent = percents.length ? percents[0] : 0;
+		const lastDelta = percents.length > 1 ? recent - percents[1] : 0;
+		const deltaLabel =
+			percents.length > 1
+				? `${lastDelta > 0 ? '+' : ''}${lastDelta}% vs previous`
+				: 'First recorded attempt';
 
 		const summaryRows = `
-			<div class="performance-row">
-				<div>
-					<div class="performance-title">Total Attempts</div>
+			<div class="training-summary-grid">
+				<div class="training-summary-tile">
+					<div class="training-summary-heading">
+						<span class="performance-title">Total Attempts</span>
+						<div class="performance-metric"><span>${trainingResults.length}</span></div>
+					</div>
 					<div class="performance-subtitle">Completed training sessions</div>
 				</div>
-				<div class="performance-metric"><span>${trainingResults.length}</span></div>
-			</div>
-			<div class="performance-row">
-				<div>
-					<div class="performance-title">Average Score</div>
+				<div class="training-summary-tile">
+					<div class="training-summary-heading">
+						<span class="performance-title">Average Score</span>
+						<div class="performance-metric"><span>${average}%</span></div>
+					</div>
+					<div class="performance-bar"><span style="width: ${average}%"></span></div>
 					<div class="performance-subtitle">Across all scored attempts</div>
 				</div>
-				<div class="performance-metric">
-					<span>${average}%</span>
-					<div class="performance-bar"><span style="width: ${average}%"></span></div>
-				</div>
-			</div>
-			<div class="performance-row">
-				<div>
-					<div class="performance-title">Best Score</div>
+				<div class="training-summary-tile">
+					<div class="training-summary-heading">
+						<span class="performance-title">Best Score</span>
+						<div class="performance-metric"><span class="metric-best">${best}%</span></div>
+					</div>
+					<div class="performance-bar performance-bar--best"><span style="width: ${best}%"></span></div>
 					<div class="performance-subtitle">Highest training result</div>
 				</div>
-				<div class="performance-metric">
-					<span>${best}%</span>
-					<div class="performance-bar"><span style="width: ${best}%"></span></div>
+				<div class="training-summary-tile">
+					<div class="training-summary-heading">
+						<span class="performance-title">Latest Score</span>
+						<div class="performance-metric"><span>${recent}%</span></div>
+					</div>
+					<div class="training-delta ${lastDelta > 0 ? 'training-delta--up' : lastDelta < 0 ? 'training-delta--down' : ''}">${deltaLabel}</div>
+					<div class="performance-subtitle">Most recent attempt</div>
 				</div>
 			</div>
 		`;
@@ -1665,13 +1740,23 @@
 				const total = Number(result.totalQuestions || 0);
 				const score = Number(result.score || 0);
 				const percent = getScorePercent(score, total);
+				const attemptNumber = trainingResults.length - index;
+				const attemptClass =
+					percent >= 80
+						? 'performance-attempt--strong'
+						: percent >= 50
+							? 'performance-attempt--ok'
+							: 'performance-attempt--weak';
 				return `
-					<div class="performance-row">
-						<div>
-							<div class="performance-title">Attempt ${trainingResults.length - index}</div>
-							<div class="performance-subtitle">${
-								result.date ? new Date(result.date).toLocaleString() : ''
-							}</div>
+					<div class="performance-row performance-attempt ${attemptClass}">
+						<div class="performance-attempt-label">
+							<span class="performance-attempt-badge">#${attemptNumber}</span>
+							<div>
+								<div class="performance-title">Attempt ${attemptNumber}</div>
+								<div class="performance-subtitle">${
+									result.date ? new Date(result.date).toLocaleString() : ''
+								}</div>
+							</div>
 						</div>
 						<div class="performance-metric">
 							<span>${score}/${total || '-'}</span>
@@ -1682,7 +1767,11 @@
 			})
 			.join('');
 
-		window.safeSetHTML ? window.safeSetHTML(container, summaryRows + attemptsRows, true) : (container.innerHTML = summaryRows + attemptsRows);
+		const attemptsBlock = attemptsRows
+			? `<div class="training-attempts-block">${attemptsRows}</div>`
+			: '';
+
+		window.safeSetHTML ? window.safeSetHTML(container, summaryRows + attemptsBlock, true) : (container.innerHTML = summaryRows + attemptsBlock);
 	}
 
 	function renderMessages(context) {
@@ -1890,13 +1979,15 @@
 				type: r.title || 'Training',
 				score: `${r.score}/${r.totalQuestions}`,
 				date: r.date,
+				kind: 'training',
 			})),
 			...examResults.map((r) => ({
 				type: r.examName || 'Exam',
 				score: `${r.score}/${r.totalQuestions}`,
 				date: r.date,
+				kind: 'exam',
 			})),
-			...gameResults,
+			...gameResults.map((r) => ({ ...r, kind: 'game' })),
 		];
 
 		allResults.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
@@ -1908,19 +1999,39 @@
 
 		container.innerHTML = allResults
 			.slice(0, 6)
-			.map(
-				(result) => `
-				<div class="result-row">
-					<div>
-						<div class="result-title">${escapeHtml(result.type)}</div>
-						<div class="result-subtitle">${
-							result.date ? new Date(result.date).toLocaleString() : ''
-						}</div>
+			.map((result) => {
+				const kind = result.kind || 'training';
+				const kindLabels = {
+					training: 'Training',
+					exam: 'Exam',
+					game: 'Game',
+				};
+				const scoreText = String(result.score || '');
+				// Game summaries carry "pts"; training/exam scores are "score/total".
+				const isRatio = /\d+\s*\/\s*\d+/.test(scoreText);
+				let scoreTone = 'neutral';
+				if (isRatio) {
+					const [score, total] = scoreText.split('/').map((part) => Number(part.trim()));
+					if (Number.isFinite(score) && Number.isFinite(total) && total > 0) {
+						const percent = Math.round((score / total) * 100);
+						scoreTone = percent >= 50 ? 'passed' : 'failed';
+					}
+				}
+				return `
+					<div class="result-row">
+						<div class="result-main">
+							<div class="result-title-row">
+								<span class="result-kind result-kind--${kind}">${kindLabels[kind] || kind}</span>
+								<div class="result-title">${escapeHtml(result.type)}</div>
+							</div>
+							<div class="result-subtitle">${
+								result.date ? new Date(result.date).toLocaleString() : ''
+							}</div>
+						</div>
+						<div class="result-score ${scoreTone}">${escapeHtml(result.score)}</div>
 					</div>
-					<div class="result-score">${escapeHtml(result.score)}</div>
-				</div>
-			`,
-			)
+				`;
+			})
 			.join('');
 	}
 

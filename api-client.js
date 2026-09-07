@@ -209,6 +209,7 @@
         // stores them as MCQ-compatible records with their answer metadata in
         // the legacy cache. Never send the unsupported "code" enum to Zod.
         'code': 'mcq',
+        'odd-one-out': 'mcq',
       };
       var type = String(q.type || 'multiple-choice');
       var mappedType = TYPE_MAP[type] || 'mcq';
@@ -222,6 +223,43 @@
       if (typeof answer !== 'string') {
         answer = Array.isArray(answer) ? JSON.stringify(answer)
                : answer == null ? '' : String(answer);
+      }
+
+      // The Prisma Question model has no columns for allowMultipleAnswers,
+      // isDraggable or the code-question metadata, so a plain save silently
+      // loses them. Persist a compact metadata prefix inside `answer` — the
+      // one field guaranteed to round-trip — so consumers (training, exams,
+      // games, tournaments) can restore the flags on read. Format:
+      //   multi::<answers joined with |>
+      //   meta::<base64(json)>::<answer>
+      var meta = {};
+      if (mappedType === 'mcq' && q.allowMultipleAnswers) meta.multi = true;
+      if (type === 'draggable' || q.isDraggable) meta.drag = true;
+      if (type === 'odd-one-out') meta.odd = true;
+      if (type === 'code' || q.codeSnippet || q.codeAnswerMode) {
+        meta.code = {
+          snippet: String(q.codeSnippet || ''),
+          language: String(q.codeLanguage || 'javascript'),
+          mode: String(q.codeAnswerMode || 'multiple-choice'),
+        };
+      }
+      var metaKeys = Object.keys(meta);
+      if (metaKeys.length && answer && !/^meta::/.test(answer) && !/^multi::/.test(answer)) {
+        if (meta.multi && metaKeys.length === 1) {
+          // Multi-select MCQ: pipe-join the answers so the student
+          // workspace's multi grading (user answers joined with '|') matches.
+          answer = 'multi::' + String(answer).split(',').map(function (t) {
+            return String(t || '').trim();
+          }).filter(Boolean).join('|');
+        } else {
+          var encoded;
+          try {
+            encoded = btoa(unescape(encodeURIComponent(JSON.stringify(meta))));
+          } catch (e) {
+            encoded = null;
+          }
+          if (encoded) answer = 'meta::' + encoded + '::' + answer;
+        }
       }
 
       var out = {

@@ -251,6 +251,20 @@
         // renders the real profile instead of an empty shell.
         user = await hydrateFullUser(user, token);
 
+        // Student workspace is for student accounts only. Admins and
+        // teachers must use the admin portal — reject before any session
+        // is persisted so no stale admin session lingers here.
+        var authNS0 = window.Auth || {};
+        var roleCheck = window.isStudentLikeUser || authNS0.isStudentLikeUser;
+        var effectiveRole =
+          typeof roleCheck === 'function'
+            ? (roleCheck(user) ? 'student' : String(user.role || ''))
+            : String(user.role || '');
+        if (effectiveRole !== 'student') {
+          showMsg('Only student accounts can sign in here. Admins and teachers must use the admin portal.', 'error');
+          return;
+        }
+
         var session = buildSession(user, token, remember);
         persistSession(session, remember);
 

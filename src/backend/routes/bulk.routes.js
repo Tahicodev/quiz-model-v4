@@ -223,7 +223,7 @@ const SANITIZERS = {
 
     // answer must always be a string per the schema.
     const rawAnswer = row.answer;
-    const answer =
+    let answer =
       typeof rawAnswer === 'string'
         ? rawAnswer
         : Array.isArray(rawAnswer)
@@ -231,6 +231,50 @@ const SANITIZERS = {
           : rawAnswer == null
             ? ''
             : String(rawAnswer);
+
+    // The Prisma Question model has no columns for allowMultipleAnswers,
+    // isDraggable or the code-question metadata. Encode a compact prefix
+    // inside `answer` (the field guaranteed to round-trip) so training,
+    // exams, games and tournaments can restore the flags on read.
+    if (answer && !/^meta::/.test(answer) && !/^multi::/.test(answer)) {
+      const meta = {};
+      if (mappedType === 'mcq' && row.allowMultipleAnswers) meta.multi = true;
+      if (mappedType === 'order' || row.isDraggable) meta.drag = true;
+      if (rawType === 'odd-one-out') meta.odd = true;
+      if (rawType === 'code' || row.codeSnippet || row.codeAnswerMode) {
+        meta.code = {
+          snippet: String(row.codeSnippet || ''),
+          language: String(row.codeLanguage || 'javascript'),
+          mode: String(row.codeAnswerMode || 'multiple-choice'),
+        };
+      }
+      const metaKeys = Object.keys(meta);
+      if (metaKeys.length) {
+        if (meta.multi && metaKeys.length === 1) {
+          // Multi-select MCQ: pipe-join the answers so the student
+          // workspace's multi grading (user answers joined with '|') matches.
+          answer =
+            'multi::' +
+            answer
+              .split(',')
+              .map((t) => String(t || '').trim())
+              .filter(Boolean)
+              .join('|');
+        } else {
+          try {
+            const encoded = Buffer.from(
+              JSON.stringify(meta),
+              'utf8',
+            ).toString('base64');
+            answer = `meta::${encoded}::${answer}`;
+          } catch (encodeErr) {
+            logger.warn('bulk.routes: question meta encode failed', {
+              error: encodeErr?.message,
+            });
+          }
+        }
+      }
+    }
 
     const text = pickStr(row.text) ?? pickStr(row.question) ?? pickStr(row.title);
     if (!text) return null; // required by schema - skip silently
@@ -255,9 +299,10 @@ const SANITIZERS = {
       ...(row.media_url != null && { media_url: pickStr(row.media_url) }),
       ...(row.mediaUrl != null && { media_url: pickStr(row.mediaUrl) }),
       ...(row.image != null && row.image !== '' && { media_url: pickStr(row.image) }),
-      // legacy extras silently dropped: dateCreated, ownerId, isDraggable,
-      // allowMultipleAnswers, distractors, codeSnippet, codeLanguage,
-      // codeAnswerMode, optionData (already encoded into options_json).
+      // legacy extras encoded into `answer` above where they must survive the
+      // round trip: allowMultipleAnswers, isDraggable, codeSnippet,
+      // codeLanguage, codeAnswerMode. Purely-visual extras (dateCreated,
+      // ownerId, distractors, optionData shape) are dropped.
     };
   },
 

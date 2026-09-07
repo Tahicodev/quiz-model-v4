@@ -30664,3 +30664,608 @@ body.arena-modal-open { overflow: hidden; }
 		width: 100%;
 	}
 }
+
+/* ============================================================
+   STUDENT WORKSPACE ENHANCEMENTS (v2026-09-07)
+   Training Progress · Recent Results · My Training cards ·
+   Student Account modal — responsive across all viewports.
+   Scoped under .student-workspace / #studentProfileModal so the
+   admin panel (which shares some class names) is untouched.
+   ============================================================ */
+
+/* ---------- Training Progress: summary tiles ---------- */
+.student-workspace .training-summary-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 12px;
+}
+
+.student-workspace .training-summary-tile {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 16px;
+	border-radius: 16px;
+	background: linear-gradient(160deg, #f8fbff 0%, #ffffff 60%, #eef6ff 100%);
+	border: 1px solid rgba(148, 163, 184, 0.25);
+	box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+	transition:
+		transform 0.2s ease,
+		box-shadow 0.2s ease,
+		border-color 0.2s ease;
+}
+
+.student-workspace .training-summary-tile:hover {
+	transform: translateY(-2px);
+	border-color: rgba(99, 102, 241, 0.4);
+	box-shadow: 0 12px 24px rgba(99, 102, 241, 0.12);
+}
+
+.student-workspace .training-summary-heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+}
+
+.student-workspace .training-summary-tile .performance-metric span {
+	font-size: 1.55rem;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	color: #0f172a;
+	background: linear-gradient(135deg, #0ea5e9, #6366f1);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+.student-workspace .training-summary-tile .performance-metric .metric-best {
+	background: linear-gradient(135deg, #f59e0b, #d97706);
+	-webkit-background-clip: text;
+	background-clip: text;
+}
+
+.student-workspace .training-summary-tile .performance-bar {
+	margin-top: 2px;
+}
+
+.student-workspace .performance-bar--best span {
+	background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.student-workspace .training-delta {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	align-self: flex-start;
+	font-size: 0.78rem;
+	font-weight: 700;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.14);
+	color: #475569;
+}
+
+.student-workspace .training-delta--up {
+	background: rgba(16, 185, 129, 0.14);
+	color: #047857;
+}
+
+.student-workspace .training-delta--down {
+	background: rgba(239, 68, 68, 0.12);
+	color: #b91c1c;
+}
+
+/* ---------- Training Progress: attempt rows ---------- */
+.student-workspace .training-attempts-block {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 14px;
+}
+
+.student-workspace .performance-attempt {
+	padding: 14px 16px;
+	border-radius: 14px;
+	border: 1px solid rgba(148, 163, 184, 0.2);
+	background: #ffffff;
+	transition:
+		transform 0.2s ease,
+		box-shadow 0.2s ease,
+		border-color 0.2s ease;
+}
+
+.student-workspace .performance-attempt:hover {
+	transform: translateX(3px);
+	border-color: rgba(99, 102, 241, 0.35);
+	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);
+}
+
+.student-workspace .performance-attempt-label {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+}
+
+.student-workspace .performance-attempt-badge {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	border-radius: 12px;
+	font-size: 0.85rem;
+	font-weight: 800;
+	background: linear-gradient(135deg, #0ea5e9, #6366f1);
+	color: #ffffff;
+	box-shadow: 0 6px 14px rgba(99, 102, 241, 0.25);
+}
+
+.student-workspace .performance-attempt--strong .performance-attempt-badge {
+	background: linear-gradient(135deg, #10b981, #059669);
+	box-shadow: 0 6px 14px rgba(16, 185, 129, 0.25);
+}
+
+.student-workspace .performance-attempt--weak .performance-attempt-badge {
+	background: linear-gradient(135deg, #f87171, #dc2626);
+	box-shadow: 0 6px 14px rgba(239, 68, 68, 0.25);
+}
+
+.student-workspace .performance-attempt--ok .performance-attempt-badge {
+	background: linear-gradient(135deg, #fbbf24, #d97706);
+	box-shadow: 0 6px 14px rgba(245, 158, 11, 0.25);
+}
+
+.student-workspace .performance-attempt--strong .performance-bar span {
+	background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.student-workspace .performance-attempt--weak .performance-bar span {
+	background: linear-gradient(90deg, #f87171, #dc2626);
+}
+
+.student-workspace .performance-attempt--ok .performance-bar span {
+	background: linear-gradient(90deg, #fbbf24, #d97706);
+}
+
+/* ---------- My Training cards: repeat attempts meta ---------- */
+.student-workspace .training-card--repeated {
+	border-color: rgba(99, 102, 241, 0.35);
+	background:
+		radial-gradient(circle at top right, rgba(99, 102, 241, 0.10), transparent 42%),
+		linear-gradient(160deg, #f9fcff, #ffffff);
+}
+
+.student-workspace .training-attempt-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.student-workspace .training-attempt-count,
+.student-workspace .training-best-score {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.74rem;
+	font-weight: 800;
+	padding: 4px 10px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+.student-workspace .training-attempt-count {
+	background: rgba(99, 102, 241, 0.12);
+	color: #4338ca;
+}
+
+.student-workspace .training-best-score {
+	background: linear-gradient(135deg, rgba(245, 158, 11, 0.16), rgba(217, 119, 6, 0.16));
+	color: #92400e;
+}
+
+.student-workspace .training-trend {
+	display: inline-flex;
+	align-items: center;
+	font-size: 0.74rem;
+	font-weight: 700;
+	padding: 4px 10px;
+	border-radius: 999px;
+	white-space: nowrap;
+	background: rgba(148, 163, 184, 0.14);
+	color: #475569;
+}
+
+.student-workspace .training-trend--improving {
+	background: rgba(16, 185, 129, 0.14);
+	color: #047857;
+}
+
+.student-workspace .training-trend--slipping {
+	background: rgba(239, 68, 68, 0.12);
+	color: #b91c1c;
+}
+
+/* ---------- Recent Results rows ---------- */
+.student-workspace .results-list .result-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 16px;
+	border-radius: 14px;
+	border: 1px solid rgba(148, 163, 184, 0.22);
+	background: linear-gradient(160deg, #ffffff 0%, #f8fafc 100%);
+	transition:
+		transform 0.2s ease,
+		box-shadow 0.2s ease,
+		border-color 0.2s ease;
+}
+
+.student-workspace .results-list .result-row:hover {
+	transform: translateY(-2px);
+	border-color: rgba(99, 102, 241, 0.35);
+	box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.student-workspace .results-list .result-main {
+	min-width: 0;
+}
+
+.student-workspace .result-title-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.student-workspace .result-kind {
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	font-size: 0.66rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	padding: 3px 8px;
+	border-radius: 999px;
+}
+
+.student-workspace .result-kind--training {
+	background: rgba(14, 165, 233, 0.14);
+	color: #0369a1;
+}
+
+.student-workspace .result-kind--exam {
+	background: rgba(99, 102, 241, 0.14);
+	color: #4338ca;
+}
+
+.student-workspace .result-kind--game {
+	background: rgba(16, 185, 129, 0.14);
+	color: #047857;
+}
+
+.student-workspace .results-list .result-title {
+	font-weight: 700;
+	color: #0f172a;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.student-workspace .results-list .result-subtitle {
+	font-size: 0.75rem;
+	color: #94a3b8;
+	margin-top: 4px;
+}
+
+.student-workspace .results-list .result-score {
+	flex-shrink: 0;
+	font-weight: 800;
+	font-size: 1rem;
+	padding: 6px 12px;
+	border-radius: 10px;
+	background: rgba(14, 165, 233, 0.1);
+	color: #0369a1;
+	white-space: nowrap;
+}
+
+.student-workspace .results-list .result-score.passed {
+	background: rgba(16, 185, 129, 0.14);
+	color: #047857;
+}
+
+.student-workspace .results-list .result-score.failed {
+	background: rgba(239, 68, 68, 0.12);
+	color: #b91c1c;
+}
+
+
+/* ---------- Student Account modal ---------- */
+#studentProfileModal .modal-content {
+	max-width: 860px;
+	max-height: 92vh;
+	display: flex;
+	flex-direction: column;
+	animation: modalSlideIn 0.28s ease;
+	overflow: hidden;
+}
+
+#studentProfileModal .modal-header {
+	background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #312e81 100%);
+	border-bottom: none;
+	padding: 18px 24px;
+}
+
+#studentProfileModal .modal-header h2 {
+	color: #ffffff;
+	font-weight: 800;
+	letter-spacing: -0.01em;
+}
+
+#studentProfileModal .modal-header .close {
+	color: rgba(248, 250, 252, 0.75);
+	width: 38px;
+	height: 38px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.12);
+	transition:
+		background 0.2s ease,
+		color 0.2s ease,
+		transform 0.2s ease;
+}
+
+#studentProfileModal .modal-header .close:hover {
+	background: rgba(255, 255, 255, 0.24);
+	color: #ffffff;
+	transform: rotate(90deg);
+}
+
+#studentProfileModal .modal-body {
+	padding: 22px;
+	overscroll-behavior: contain;
+}
+
+/* Pill tab switcher */
+#studentProfileModal .profile-tabs {
+	display: inline-flex;
+	gap: 6px;
+	padding: 5px;
+	margin: 0 0 18px;
+	border-radius: 14px;
+	background: rgba(148, 163, 184, 0.14);
+	border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+#studentProfileModal .profile-tab-btn {
+	border: none;
+	background: transparent;
+	border-radius: 10px;
+	padding: 8px 18px;
+	font-size: 0.86rem;
+	font-weight: 700;
+	color: #475569;
+	transition:
+		background 0.2s ease,
+		color 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+#studentProfileModal .profile-tab-btn:hover {
+	color: #0f172a;
+}
+
+#studentProfileModal .profile-tab-btn.active {
+	background: #ffffff;
+	color: #4338ca;
+	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+/* Hero banner polish */
+#studentProfileModal .profile-hero-banner {
+	margin-bottom: 18px;
+	border-radius: 22px;
+}
+
+#studentProfileModal .profile-hero-banner-content {
+	gap: 28px;
+	padding: 30px 28px 34px;
+}
+
+#studentProfileModal .profile-avatar--floating {
+	margin-top: -60px;
+}
+
+#studentProfileModal .profile-meta--banner h3 {
+	font-size: 1.65rem;
+}
+
+#studentProfileModal .profile-chip-row {
+	gap: 8px;
+}
+
+/* Insight cards hover depth */
+#studentProfileModal .profile-insight-card {
+	transition:
+		transform 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+#studentProfileModal .profile-insight-card:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+}
+
+/* Form focus states */
+#studentProfileModal .form-control:focus {
+	border-color: #6366f1;
+	box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14);
+	outline: none;
+}
+
+/* ---------- Responsive: tablets and small laptops ---------- */
+@media (max-width: 1024px) {
+	#studentProfileModal .modal-content {
+		max-width: 92vw;
+	}
+
+	#studentProfileModal .profile-hero-stats {
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	}
+}
+
+@media (max-width: 768px) {
+	.student-workspace .training-summary-grid {
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 10px;
+	}
+
+	.student-workspace .performance-attempt {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.student-workspace .performance-attempt .performance-metric {
+		align-items: flex-end;
+		width: 100%;
+	}
+
+	#studentProfileModal .modal-content {
+		width: 96vw;
+		max-width: 96vw;
+		max-height: 94vh;
+	}
+
+	#studentProfileModal .modal-header {
+		padding: 14px 16px;
+	}
+
+	#studentProfileModal .modal-body {
+		padding: 14px;
+	}
+
+	#studentProfileModal .profile-tabs {
+		width: 100%;
+		justify-content: center;
+	}
+
+	#studentProfileModal .profile-hero-banner-content {
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: 16px;
+		padding: 26px 18px 30px;
+	}
+
+	#studentProfileModal .profile-avatar--floating {
+		margin-top: -48px;
+	}
+
+	#studentProfileModal .profile-meta--banner {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 10px;
+	}
+
+	#studentProfileModal .profile-name-row {
+		justify-content: center;
+	}
+
+	#studentProfileModal .profile-chip-row {
+		justify-content: center;
+	}
+
+	#studentProfileModal .profile-hero-stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	#studentProfileModal .profile-insight-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ---------- Responsive: phones ---------- */
+@media (max-width: 480px) {
+	.student-workspace .training-summary-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.student-workspace .training-summary-tile {
+		padding: 12px;
+	}
+
+	.student-workspace .training-summary-tile .performance-metric span {
+		font-size: 1.25rem;
+	}
+
+	.student-workspace .training-summary-heading {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
+	}
+
+	.student-workspace .training-attempt-badge {
+		width: 34px;
+		height: 34px;
+		border-radius: 10px;
+	}
+
+	.student-workspace .results-list .result-row {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 8px;
+	}
+
+	.student-workspace .results-list .result-score {
+		align-self: flex-end;
+	}
+
+	#studentProfileModal .profile-hero-stats {
+		grid-template-columns: 1fr;
+	}
+
+	#studentProfileModal .profile-tab-btn {
+		padding: 8px 14px;
+		font-size: 0.8rem;
+	}
+
+	#studentProfileModal .profile-meta--banner h3 {
+		font-size: 1.3rem;
+	}
+}
+
+/* ---------- Responsive: very small phones ---------- */
+@media (max-width: 360px) {
+	.student-workspace .training-summary-grid {
+		grid-template-columns: 1fr;
+	}
+
+	#studentProfileModal .profile-tabs {
+		flex-direction: column;
+	}
+
+	#studentProfileModal .profile-tab-btn {
+		width: 100%;
+	}
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+	.student-workspace .training-summary-tile,
+	.student-workspace .performance-attempt,
+	.student-workspace .results-list .result-row,
+	#studentProfileModal .profile-insight-card,
+	#studentProfileModal .modal-content,
+	#studentProfileModal .modal-header .close {
+		transition: none;
+		animation: none;
+	}
+}

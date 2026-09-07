@@ -6598,13 +6598,17 @@ function createPreviewCard(question, index) {
 	
 	let optionsHtml = '';
 	if (question.options && question.options.length > 0) {
+		// Split the stored answer into exact tokens so an option is only
+		// highlighted when its full text matches a correct-answer token.
+		const answerTokens = String(question.answer || '')
+			.split(/[,|]/)
+			.map((t) => t.trim())
+			.filter(Boolean);
 		optionsHtml = `
 			<div class="ai-preview-options">
-				${question.options.map((opt, i) => {
-					const isCorrect = question.answer && (
-						question.answer === opt ||
-						question.answer.includes(opt) ||
-						question.answer === String(i)
+				${question.options.map((opt) => {
+					const isCorrect = answerTokens.some(
+						(token) => token.toLowerCase() === String(opt).trim().toLowerCase(),
 					);
 					return `<span class="ai-preview-option ${isCorrect ? 'correct' : ''}">${escapeHtml(opt)}</span>`;
 				}).join('')}
@@ -6632,12 +6636,22 @@ function createPreviewCard(question, index) {
 	const typeLabel = isCode
 		? (typeLabels[subMode] || 'Multiple Choice')
 		: (typeLabels[normalizedType] || 'Multiple Choice');
-	
+	// A multi-answer MCQ must be labelled as such in the preview — the badge
+	// students see in training is derived from the same flag.
+	const answerTokens = String(question.answer || '')
+		.split(/[,|]/)
+		.map((t) => t.trim())
+		.filter(Boolean);
+	const isMulti =
+		normalizedType === 'multiple-choice' &&
+		Boolean(question.allowMultipleAnswers || answerTokens.length > 1);
+
 	card.innerHTML = `
 		<div class="ai-preview-header">
 			<input type="checkbox" class="ai-preview-checkbox" checked onchange="toggleAIQuestionSelection(${index}, this.checked)" />
 			<div style="display: flex; gap: 6px; align-items: center;">
 				<span class="ai-preview-type">${typeLabel}</span>
+				${isMulti ? '<span class="ai-preview-type" style="background:#ede9fe; color:#6d28d9;">Multiple answers</span>' : ''}
 				${isCode ? '<span class="ai-preview-type code-badge">💻 Code</span>' : ''}
 			</div>
 			<span style="margin-left: auto; font-size: 0.85rem; color: var(--text-muted);">Q${index + 1}</span>
@@ -6748,6 +6762,14 @@ function mapAnswerTokenToOptionText(rawToken, options = []) {
 	if (!token) return '';
 	if (!Array.isArray(options) || !options.length) return token;
 
+	// Exact text match wins — an option whose text IS a number ("0","1",...)
+	// must never be reinterpreted as a positional index.
+	const textMatch = options.find(
+		(option) =>
+			String(option || '').trim().toLowerCase() === token.toLowerCase(),
+	);
+	if (textMatch != null) return textMatch;
+
 	const numeric = Number.parseInt(token, 10);
 	if (
 		Number.isFinite(numeric) &&
@@ -6764,6 +6786,13 @@ function mapAnswerTokenToOptionText(rawToken, options = []) {
 		if (idx >= 0 && idx < options.length) {
 			return options[idx];
 		}
+	}
+
+	// 0-based index fallback — the AI sometimes answers with 0-based
+	// positions ("0,1"). Only reached when the token didn't match an option
+	// text or a 1-based position.
+	if (Number.isFinite(numeric) && String(numeric) === token && numeric >= 0 && numeric < options.length) {
+		return options[numeric];
 	}
 
 	const normalizedToken = token.toLowerCase();
@@ -6824,7 +6853,39 @@ function normalizeImportedAIQuestion(question, fallbackCategoryId = '') {
 	q.optionData = optionData;
 	q.options = optionData.map((entry) => entry.text).filter(Boolean);
 
-	const answerRaw = String(q.answer || '').trim();
+	let answerRaw = String(q.answer || '').trim();
+	// Decode the metadata prefixes the persistence layer writes into
+	// `answer` (the only field guaranteed to round-trip the Prisma schema):
+	//   multi::<a|b>  → multi-select MCQ answers
+	//   meta::<b64>::<answer> → full metadata blob (multi/drag/odd/code)
+	if (answerRaw.startsWith('multi::')) {
+		q.allowMultipleAnswers = true;
+		answerRaw = answerRaw
+			.slice('multi::'.length)
+			.split('|')
+			.map((token) => token.trim())
+			.filter(Boolean)
+			.join(',');
+	} else if (answerRaw.startsWith('meta::')) {
+		const rest = answerRaw.slice('meta::'.length);
+		const sepIdx = rest.indexOf('::');
+		if (sepIdx > 0) {
+			try {
+				const meta = JSON.parse(atob(rest.slice(0, sepIdx)));
+				if (meta.multi) q.allowMultipleAnswers = true;
+				if (meta.drag) q.isDraggable = true;
+				if (meta.odd) q.oddOneOut = true;
+				if (meta.code) {
+					q.codeSnippet = meta.code.snippet || '';
+					q.codeLanguage = meta.code.language || 'javascript';
+					q.codeAnswerMode = meta.code.mode || 'multiple-choice';
+				}
+			} catch (decodeErr) {
+				console.warn('[questions] failed to decode answer metadata prefix', decodeErr);
+			}
+			answerRaw = rest.slice(sepIdx + 2).trim();
+		}
+	}
 	const effectiveAnswerType =
 		q.type === 'code'
 			? normalizeCodeAnswerModeForStorage(q.codeAnswerMode, 'multiple-choice')
@@ -6835,11 +6896,32 @@ function normalizeImportedAIQuestion(question, fallbackCategoryId = '') {
 			effectiveAnswerType === 'draggable') &&
 		answerRaw
 	) {
+		const seenTokens = new Set();
 		const answerTokens = answerRaw
-			.split(',')
+			.split(/[,|]/)
 			.map((token) => mapAnswerTokenToOptionText(token, q.options))
-			.filter(Boolean);
+			.filter(Boolean)
+			.filter((token) => {
+				const key = String(token).trim().toLowerCase();
+				if (seenTokens.has(key)) return false;
+				seenTokens.add(key);
+				return true;
+			});
 		q.answer = answerTokens.join(',');
+		// The mapped answer carrying multiple distinct options is the
+		// authoritative multi-answer signal, regardless of what the model
+		// claimed in allowMultipleAnswers.
+		if (
+			effectiveAnswerType === 'multiple-choice' &&
+			new Set(
+				q.answer
+					.split(',')
+					.map((item) => item.trim().toLowerCase())
+					.filter(Boolean),
+			).size > 1
+		) {
+			q.allowMultipleAnswers = true;
+		}
 	} else {
 		q.answer = answerRaw;
 	}
