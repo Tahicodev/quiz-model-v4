@@ -4,7 +4,7 @@
 		window.QUIZ_SERVER_HOST ||
 		location.origin
 	).replace(/\/$/, '');
-	const REALTIME_CLIENT_BUILD = '2026-02-20-card-debug-v2';
+	const REALTIME_CLIENT_BUILD = '2026-09-08-post-login-reconnect';
 	const REALTIME_RUNTIME_KEY = '__QUIZ_REALTIME_CLIENT_RUNTIME__';
 	const existingRuntime = window[REALTIME_RUNTIME_KEY];
 	if (existingRuntime?.initialized && existingRuntime.socket) {
@@ -12,8 +12,58 @@
 		window.REALTIME_CLIENT_BUILD = REALTIME_CLIENT_BUILD;
 		return;
 	}
-	const socket = existingRuntime?.socket || (window.io ? window.getSocket() : null);
-	if (!socket) return;
+	// Resolve the current auth token. Login (legacy-auth-bridge) does NOT
+	// reload the page, so this value can appear any time after load.
+	function readAuthToken() {
+		try {
+			var stores = [
+				sessionStorage.getItem('quizSession'),
+				localStorage.getItem('quizSessionRemember'),
+				localStorage.getItem('quizSession'),
+			];
+			for (var i = 0; i < stores.length; i++) {
+				if (!stores[i]) continue;
+				var parsed = JSON.parse(stores[i]);
+				if (parsed && parsed.token) return parsed.token;
+			}
+		} catch (e) {}
+		return window.__authToken || localStorage.getItem('quizAuthToken') || '';
+	}
+	function createSocket() {
+		if (!window.io) return null;
+		var token = readAuthToken();
+		if (!token) return null;
+		var socket = window.getSocket
+			? window.getSocket()
+			: window.io('/', { auth: { token: token }, transports: ['polling','websocket'] });
+		return socket || null;
+	}
+	// Anonymous at load time is normal (login page first, workspace after).
+	// Poll until a token lands, then boot exactly once. The old behavior —
+	// permanently exiting when getSocket() was null — left students with no
+	// realtime for the whole session until a manual page reload.
+	var socket = existingRuntime?.socket || createSocket();
+	var bootRetries = 0;
+	var bootTimer = null;
+	if (!socket) {
+		bootTimer = setInterval(function () {
+			bootRetries += 1;
+			socket = createSocket();
+			if (socket) {
+				clearInterval(bootTimer);
+				bootTimer = null;
+				bootRealtimeClient();
+			} else if (bootRetries > 600) {
+				// ~30 minutes with no token — stop polling.
+				clearInterval(bootTimer);
+				bootTimer = null;
+			}
+		}, 3000);
+		return;
+	}
+	bootRealtimeClient();
+
+	function bootRealtimeClient() {
 	window[REALTIME_RUNTIME_KEY] = {
 		initialized: true,
 		socket,
@@ -1587,4 +1637,5 @@
 			sendLocalStorageUpdate();
 		} catch (e) {}
 	}, 5000);
+	}
 })();

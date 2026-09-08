@@ -23,8 +23,29 @@ import { registerTournamentHandlers } from './handlers/tournament.handler.js';
 import { registerSessionHandlers } from './handlers/session.handler.js';
 import { handleDisconnect } from './socket.cleanup.js';
 import { ROOM } from './socket.rooms.js';
+import { mountLegacyGameEngine } from './legacy-engine.bridge.js';
 
 let _io = null;
+
+/**
+ * The legacy MPA (student workspace + admin arena) is served from this same
+ * Express instance, so its Origin header is whatever host the user typed
+ * (localhost, 127.0.0.1, the LAN IP…). The SaaS REST layer already reflects
+ * LAN origins; the socket layer must accept them too or every non-localhost
+ * client fails the CORS handshake and "realtime" appears permanently down.
+ */
+function socketCorsOrigin(origin, callback) {
+  if (!origin) return callback(null, true); // same-origin / non-browser
+  if (origin === config.corsOrigin) return callback(null, true);
+  if (
+    /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|(\d{1,3}\.){3}\d{1,3})(:\d+)?$/i.test(origin) ||
+    /^https?:\/\/[a-z0-9-]+\.local(:\d+)?$/i.test(origin)
+  ) {
+    return callback(null, true);
+  }
+  logger.warn({ origin }, 'Socket CORS: allowing unexpected origin (LAN app)');
+  return callback(null, true);
+}
 
 /**
  * Initialize the Socket.io server on top of an existing httpServer. Must be
@@ -44,7 +65,7 @@ export async function initSocketServer(httpServer, services) {
   }
 
   _io = new Server(httpServer, {
-    cors: { origin: config.corsOrigin, credentials: true },
+    cors: { origin: socketCorsOrigin, credentials: true },
     // Reconnection is handled client-side; the server just tracks connections.
   });
 
@@ -62,6 +83,16 @@ export async function initSocketServer(httpServer, services) {
 
   // Verify JWT on every socket connection before any event fires.
   _io.use(socketAuthMiddleware);
+
+  // Legacy MPA engine (game:join / game:ready / game:start / game:sync /
+  // game:answer / game:playCard / game:stateUpdate …) + its admin sync relay.
+  // Mounted after auth so every engine socket is already JWT/admin-secret
+  // authenticated — the engine's own admin gates read socket.data.user.
+  try {
+    mountLegacyGameEngine(_io);
+  } catch (err) {
+    logger.error({ err }, 'Failed to mount legacy game engine — lobby actions will fall back to local mode');
+  }
 
   _io.on('connection', (socket) => {
     logger.info({ userId: socket.data.user.id, socketId: socket.id }, 'Socket connected');

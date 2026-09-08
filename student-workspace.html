@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
-		<link rel="stylesheet" href="styles.css?v=2026-09-07-workspace-r1" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-08-games-r5" />
 		<link
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -18,33 +18,72 @@
 				};
 			</script>
 				<!-- Legacy Bridge — must load synchronously -->
-					<script src="legacy-bridge.js?v=2026-09-07-workspace-r1"></script>
-					<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
-					<script>
-						window.getSocket = window.getSocket || function(url, opts) {
-							if (!window.io) { console.warn('getSocket called before Socket.IO loaded'); return null; }
-							if (window.__AUTH_SESSION_EXPIRED__) return null;
-							if (window.__QUIZ_LEGACY_SOCKET__) return window.__QUIZ_LEGACY_SOCKET__;
-							var token = window.__authToken || (function(){ try{ var s=JSON.parse(localStorage.getItem('quizSession')||'null'); return s&&s.token; }catch(e){} })() || localStorage.getItem('quizAuthToken') || '';
-							// SaaS sockets always require auth — skip when anonymous.
-							if (!token) return null;
-							var socket = window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
-							window.__QUIZ_LEGACY_SOCKET__ = socket;
-							return socket;
+					<script src="legacy-bridge.js?v=2026-09-08-games-r5"></script>
+				<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
+				<script>
+					window.getSocket = window.getSocket || function(url, opts) {
+						if (!window.io) { console.warn('getSocket called before Socket.IO loaded'); return null; }
+						if (window.__AUTH_SESSION_EXPIRED__) return null;
+						if (window.__QUIZ_LEGACY_SOCKET__) return window.__QUIZ_LEGACY_SOCKET__;
+						var readToken = function() {
+							try {
+								var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
+								if (s && s.token) return s.token;
+							} catch (e) {}
+							return window.__authToken || localStorage.getItem('quizAuthToken') || '';
 						};
-					</script>
+						var token = readToken();
+						// SaaS sockets always require auth — when anonymous, keep polling
+						// briefly in case the login (which does not reload the page) is
+						// finishing right now. Return null only once the grace window
+						// lapses, and let callers retry (getSocket re-dials next call).
+						if (!token) {
+							var startedAt = window.__GETSOCKET_ANON_AT__ || Date.now();
+							if (!window.__GETSOCKET_ANON_AT__) window.__GETSOCKET_ANON_AT__ = startedAt;
+							if (Date.now() - startedAt < 15000) return null;
+							return null;
+						}
+						window.__GETSOCKET_ANON_AT__ = 0;
+						var socket = window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
+						window.__QUIZ_LEGACY_SOCKET__ = socket;
+						return socket;
+					};
+				</script>
 				<script src="utils.js" defer></script>
 				<script src="api-client.js" defer></script>
 			<script src="auth.js" defer></script>
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
 		<script src="realtime-client.js" defer></script>
-				<script src="games-core.js?v=2026-09-07-workspace-r1" defer></script>
+				<script src="games-core.js?v=2026-09-08-games-r5" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
-					<script src="student-workspace.js?v=2026-09-07-workspace-r1" defer></script>
+					<script src="student-workspace.js?v=2026-09-08-games-r5" defer></script>
 	</head>
 	<body class="student-workspace">
 		<div class="workspace-shell">
 			<header class="workspace-header">
+				<button
+					type="button"
+					class="mobile-menu-btn"
+					onclick="toggleMobileNav()"
+					aria-label="Toggle navigation menu"
+					aria-controls="studentWorkspaceTabs"
+					aria-expanded="false"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="24"
+						height="24"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<line x1="3" y1="12" x2="21" y2="12"></line>
+						<line x1="3" y1="6" x2="21" y2="6"></line>
+						<line x1="3" y1="18" x2="21" y2="18"></line>
+					</svg>
+				</button>
+				<div class="workspace-header-row">
 				<div class="workspace-brand">
 					<div class="workspace-logo">S</div>
 					<div>
@@ -109,6 +148,7 @@
 							</button>
 						</div>
 					</div>
+				</div>
 				</div>
 			</header>
 
@@ -294,8 +334,8 @@
 								class="performance-list"
 							></div>
 						</div>
+						</div>
 					</section>
-
 					<!-- Full-width section for game-like tabs (My Games, Tournament).
 					     These need horizontal room for card grids and stat tiles,
 					     so they live outside the 2-col layout. -->
@@ -433,7 +473,7 @@
 							<div id="studentGameListMain" class="game-card-list"></div>
 							<div id="studentGameResultsMain" class="game-results-list"></div>
 						</div>
-					</div>
+						</div>
 					</section>
 
 					<section class="workspace-grid workspace-grid--full-width">
@@ -640,23 +680,72 @@
 					>
 				</div>
 				<div class="modal-body">
-					<div class="profile-tabs">
+					<nav class="profile-tabs profile-tabs-v2" role="tablist" aria-label="Account sections">
 						<button
 							type="button"
 							class="profile-tab-btn active"
 							data-profile-tab="profile"
+							role="tab"
+							aria-selected="true"
 						>
-							My Profile
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+								<circle cx="12" cy="7" r="4"></circle>
+							</svg>
+							<span>My Profile</span>
+						</button>
+						<button
+							type="button"
+							class="profile-tab-btn"
+							data-profile-tab="update"
+							role="tab"
+							aria-selected="false"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+								<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+							</svg>
+							<span>Update Profile</span>
 						</button>
 						<button
 							type="button"
 							class="profile-tab-btn"
 							data-profile-tab="security"
+							role="tab"
+							aria-selected="false"
 						>
-							Security
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+								<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+							</svg>
+							<span>Security</span>
 						</button>
-					</div>
-					<div id="profile-tab" class="profile-section">
+					</nav>
+					<div id="profile-tab" class="profile-section" role="tabpanel">
 						<!-- Premium hero banner: gradient cover + avatar floating over it -->
 						<div class="profile-hero-banner">
 							<div class="profile-hero-banner-bg" aria-hidden="true"></div>
@@ -763,90 +852,92 @@
 								</div>
 							</article>
 						</div>
+					</div>
+					<div id="update-tab" class="profile-section hidden" role="tabpanel">
 						<div class="profile-form-card">
 							<div class="profile-form-card-header">
 								<h3>Update Profile</h3>
 								<p>Send a request to your teacher or admin to change your details.</p>
 							</div>
 							<form id="studentProfileForm" class="profile-form">
-							<div class="form-row">
-								<div class="form-group half">
-									<label for="studentProfileFullName">Full Name</label>
-									<input
-										type="text"
-										id="studentProfileFullName"
-										class="form-control"
-										required
-									/>
+								<div class="form-row">
+									<div class="form-group half">
+										<label for="studentProfileFullName">Full Name</label>
+										<input
+											type="text"
+											id="studentProfileFullName"
+											class="form-control"
+											required
+										/>
+									</div>
+									<div class="form-group half">
+										<label for="studentProfileUsername">Username</label>
+										<input
+											type="text"
+											id="studentProfileUsername"
+											class="form-control"
+											required
+										/>
+									</div>
 								</div>
-								<div class="form-group half">
-									<label for="studentProfileUsername">Username</label>
-									<input
-										type="text"
-										id="studentProfileUsername"
-										class="form-control"
-										required
-									/>
+								<div class="form-row">
+									<div class="form-group half">
+										<label for="studentProfileEmail">Email (optional)</label>
+										<input
+											type="email"
+											id="studentProfileEmail"
+											class="form-control"
+											placeholder="student@example.com"
+										/>
+									</div>
 								</div>
-							</div>
-							<div class="form-row">
-								<div class="form-group half">
-									<label for="studentProfileEmail">Email (optional)</label>
-									<input
-										type="email"
-										id="studentProfileEmail"
-										class="form-control"
-										placeholder="student@example.com"
-									/>
+								<div class="form-row">
+									<div class="form-group half">
+										<label for="studentProfileNumberInput">Student Number</label>
+										<input
+											type="text"
+											id="studentProfileNumberInput"
+											class="form-control"
+											required
+										/>
+									</div>
+									<div class="form-group half">
+										<label for="studentProfileClassSelect">Class</label>
+										<select
+											id="studentProfileClassSelect"
+											class="form-control"
+										></select>
+									</div>
 								</div>
-							</div>
-							<div class="form-row">
-								<div class="form-group half">
-									<label for="studentProfileNumberInput">Student Number</label>
-									<input
-										type="text"
-										id="studentProfileNumberInput"
+								<div class="form-group">
+									<label for="studentProfileNote">Request Note (optional)</label>
+									<textarea
+										id="studentProfileNote"
 										class="form-control"
-										required
-									/>
+										rows="2"
+										placeholder="Explain what you need to update..."
+									></textarea>
 								</div>
-								<div class="form-group half">
-									<label for="studentProfileClassSelect">Class</label>
-									<select
-										id="studentProfileClassSelect"
-										class="form-control"
-									></select>
+								<div class="profile-actions">
+									<button type="submit" class="workspace-btn">
+										Send Update Request
+									</button>
+									<button
+										type="button"
+										class="workspace-btn ghost"
+										id="studentProfileReset"
+									>
+										Reset
+									</button>
 								</div>
-							</div>
-							<div class="form-group">
-								<label for="studentProfileNote">Request Note (optional)</label>
-								<textarea
-									id="studentProfileNote"
-									class="form-control"
-									rows="2"
-									placeholder="Explain what you need to update..."
-								></textarea>
-							</div>
-							<div class="profile-actions">
-								<button type="submit" class="workspace-btn">
-									Send Update Request
-								</button>
-								<button
-									type="button"
-									class="workspace-btn ghost"
-									id="studentProfileReset"
-								>
-									Reset
-								</button>
-							</div>
-						</form>
-						<div
-							id="studentProfileRequestStatus"
-							class="profile-request-status"
-						></div>
+							</form>
+							<div
+								id="studentProfileRequestStatus"
+								class="profile-request-status"
+							></div>
 						</div>
 					</div>
-					<div id="security-tab" class="profile-section hidden">
+					<div id="security-tab" class="profile-section hidden" role="tabpanel">
 						<form id="studentPasswordForm" class="profile-form">
 							<div class="form-row">
 								<div class="form-group half">

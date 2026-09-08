@@ -43,7 +43,18 @@ export function registerGameHandlers(socket, io, { gameService }) {
         joinCode,
         userId: socket.data.user.id,
         schoolId: socket.data.user.school_id,
+      }).catch((err) => {
+        // The legacy game engine (legacy-engine.bridge.js) also listens on
+        // `game:join` and handles the MPA's in-memory lobbies first. When the
+        // game is not a Prisma-backed SaaS game, silently defer to the engine
+        // instead of spraying app:error at the client.
+        if (err?.name === 'NotFoundError' || err?.code === 'NOT_FOUND') return null;
+        throw err;
       });
+      if (!session) {
+        if (typeof acknowledge === 'function') acknowledge({ ok: true, deferred: true });
+        return;
+      }
 
       const gid = session.game_id;
       joinRoom(socket, 'game', gid);
@@ -98,7 +109,14 @@ export function registerGameHandlers(socket, io, { gameService }) {
         questionId,
         answer,
         schoolId: socket.data.user.school_id,
+      }).catch((err) => {
+        // Legacy MPA answers ({gameId, userId, answer, questionIndex}) are
+        // owned by the mounted legacy engine; only surface errors that belong
+        // to the SaaS flow.
+        if (err?.name === 'NotFoundError' || err?.code === 'NOT_FOUND') return null;
+        throw err;
       });
+      if (!result) return;
 
       // Send answer feedback only to the answering player.
       socket.emit(SOCKET_EVENTS.ANSWER_RESULT, {
@@ -130,6 +148,11 @@ export function registerGameHandlers(socket, io, { gameService }) {
           gameId: activeGameId,
           userId: socket.data.user.id,
           schoolId: socket.data.user.school_id,
+        }).catch((err) => {
+          // The legacy engine owns MPA lobbies; a missing Prisma game is not
+          // an error here.
+          if (err?.name === 'NotFoundError' || err?.code === 'NOT_FOUND') return null;
+          throw err;
         });
       }
       if (activeGameId) {

@@ -280,16 +280,40 @@ function hydrateLegacyPayload(data) {
       completed: session.completed,
     });
   }
+  // Legacy status vocabulary: draft (admin-only) / open / live / completed.
+  // SaaS vocabulary: waiting / active / paused / finished. `draft` has no SaaS
+  // twin and never maps onto waiting — waiting means "lobby open for players"
+  // while draft means "still being authored, hidden from students". The bulk
+  // writer stores the exact legacy status in settings_json.legacyStatus; use
+  // it when present so a draft survives the DB round trip as a draft.
+  const toLegacyGameStatus = (status, settings) => {
+    const legacyStatus = String(settings?.legacyStatus || '').toLowerCase();
+    if (['draft', 'open', 'live', 'completed'].includes(legacyStatus)) return legacyStatus;
+    switch (String(status || '')) {
+      case 'waiting': return 'open';
+      case 'active': return 'live';
+      case 'paused': return 'live';
+      case 'finished': return 'completed';
+      default: return String(status || '');
+    }
+  };
   data.games = (data.games || []).map((game) => {
     const settings = parseJson(game.settings_json, {});
     const participants = sessionsByGame.get(String(game.id)) || settings.session?.participants || [];
+    // The Game table has no classIds column — bulk writes pack the legacy
+    // array into settings_json. Restore it to the top level the workspace
+    // filters on (game.classIds) so class scoping survives a DB round trip.
+    const classIds = Array.isArray(settings.classIds)
+      ? settings.classIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
     return {
       ...game,
-      status: game.status === 'waiting' ? 'open' : game.status === 'active' ? 'live' : game.status === 'finished' ? 'completed' : game.status,
+      status: toLegacyGameStatus(game.status, settings),
+      classIds,
       joinCode: game.join_code,
       questionIds: parseJson(game.question_ids, []),
       questions: parseJson(game.question_ids, []),
-      settings: { ...settings, session: { ...(settings.session || {}), participants } },
+      settings: { ...settings, classIds, session: { ...(settings.session || {}), participants } },
       session: { ...(settings.session || {}), participants },
     };
   });
@@ -385,6 +409,23 @@ router.get('/', async (req, res, next) => {
       // available through the dedicated game/tournament leaderboard routes.
       data.results = (data.results || []).filter((result) => String(result.user_id) === String(req.user.id));
       data.exam_sessions = (data.exam_sessions || []).filter((session) => String(session.user_id) === String(req.user.id));
+      // Games follow the same rule as exams: drafts stay hidden, and a game
+      // scoped to specific classes is only delivered to students of those
+      // classes. Games without a class assignment remain visible to everyone
+      // (legacy "all classes" behavior).
+      const classNamesById = new Map((data.classes || []).map((classRow) => [String(classRow.id), String(classRow.name || '').toLowerCase()]));
+      data.games = (data.games || []).filter((game) => {
+        const status = String(game.status || '').toLowerCase();
+        if (status === 'draft') return false;
+        const gameClassIds = Array.isArray(game.classIds) ? game.classIds.map((id) => String(id || '').trim()) : [];
+        if (!gameClassIds.length || !studentClassId) return true;
+        if (gameClassIds.includes(studentClassId)) return true;
+        const studentClassNameKey = studentClassName || String(classNamesById.get(studentClassId) || '').toLowerCase();
+        return gameClassIds.some((value) => {
+          const key = String(value || '').toLowerCase();
+          return key === studentClassNameKey;
+        });
+      });
       data.tournaments = (data.tournaments || []).filter((tournament) =>
         ['open', 'active', 'finished'].includes(tournament.status),
       );

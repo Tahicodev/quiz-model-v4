@@ -3,7 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const crypto = require('crypto');
-const { initGameServer } = require('./game-server');
+const { initGameServer } = require('./game-server.cjs');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -37,7 +37,7 @@ app.use((req, res, next) => {
 	const blocked = [
 		/^\/\.git(?:\/|$)/i,
 		/^\/node_modules(?:\/|$)/i,
-		/^\/(?:server|game-server|start-server)\.js$/i,
+		/^\/(?:server|game-server|game-server\.cjs|start-server)\.(?:js|cjs)?$/i,
 		/^\/package(?:-lock)?\.json$/i,
 		/^\/Security\.md$/i,
 		/^\/\.env/i,

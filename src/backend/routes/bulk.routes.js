@@ -418,6 +418,8 @@ const SANITIZERS = {
       class: row.class ?? row.className ?? null,
       classId: row.classId ?? null,
       totalQuestions: row.totalQuestions ?? null,
+      // /20 grading scale sent by the student training workspace.
+      grade20: Number.isFinite(Number(row.grade20)) ? Number(row.grade20) : null,
       gameId: row.gameId ?? null,
       gameName: row.gameName ?? null,
       lobbyId: row.lobbyId ?? null,
@@ -439,20 +441,40 @@ const SANITIZERS = {
     const scoreNum = Number(row.score);
     const earnedPointsRaw = row.earnedPoints ?? row.earned_points ?? row.score;
     const earnedPoints = Number.isFinite(Number(earnedPointsRaw)) ? Number(earnedPointsRaw) : 0;
+    // Prefer the explicit /20 grade when the client sends it (new training
+    // results): grade 12.5/20 → percentage 62.5. This keeps single-record
+    // and bulk writes consistent for the same payload.
+    const grade20Num = Number(row.grade20);
+    const hasGrade20 = Number.isFinite(grade20Num) && grade20Num >= 0 && grade20Num <= 20;
     // Legacy screens store `score` as the number of correct answers while
     // normalized Prisma results store it as a percentage. `totalQuestions`
     // identifies the legacy shape, so convert it once at the API boundary.
     const legacyCountScore = row.totalQuestions != null || row.total_questions != null;
-    const score = legacyCountScore && totalPoints > 0
-      ? (earnedPoints / totalPoints) * 100
-      : Number.isFinite(scoreNum)
+    let score;
+    if (hasGrade20) {
+      score = (grade20Num / 20) * 100;
+    } else if (legacyCountScore && totalPoints > 0) {
+      score = (earnedPoints / totalPoints) * 100;
+    } else if (Number.isFinite(scoreNum) && scoreNum >= 0 && scoreNum <= 20 && totalPoints > 0 && earnedPoints > 0 && scoreNum <= totalPoints) {
+      // Bare /20-style or count-style number: derive the percentage from
+      // the earned/total ratio for consistency.
+      score = (earnedPoints / totalPoints) * 100;
+    } else {
+      score = Number.isFinite(scoreNum)
         ? scoreNum
         : (totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0);
+    }
+    score = Math.max(0, Math.min(100, Math.round(score * 100) / 100));
 
+    // Pass threshold follows the /20 rule: grade strictly above 10/20.
+    const derivedPassed =
+      totalPoints > 0
+        ? earnedPoints * 2 > totalPoints
+        : score > 50;
     const passed =
       pickBool(row.passed) ??
       pickBool(row.isPassed) ??
-      (totalPoints > 0 ? earnedPoints >= Math.ceil(totalPoints / 2) : undefined);
+      derivedPassed;
 
     return {
       ...(row.id && { id: String(row.id) }),
@@ -492,7 +514,11 @@ const SANITIZERS = {
         : [];
     const settingsBlob = {
       ...(typeof row.settings === 'object' && row.settings !== null ? row.settings : {}),
-      classIds: Array.isArray(row.classIds) ? row.classIds : undefined,
+      classIds: Array.isArray(row.classIds)
+        ? row.classIds.map((id) => String(id || '').trim()).filter(Boolean)
+        : Array.isArray(row.settings?.classIds)
+          ? row.settings.classIds
+          : undefined,
       session: row.session ?? undefined,
       results: row.results ?? undefined,
       lobbyCounter: row.lobbyCounter ?? undefined,
@@ -504,13 +530,20 @@ const SANITIZERS = {
     for (const k of Object.keys(settingsBlob)) {
       if (settingsBlob[k] === undefined) delete settingsBlob[k];
     }
+    // The legacy status vocabulary (draft/open/live/completed) is richer than
+    // the SaaS column (waiting/active/paused/finished). `draft` in particular
+    // means "hidden from students", which waiting does NOT. Keep the exact
+    // legacy status in settings_json so bootstrap can restore it faithfully
+    // instead of a draft→waiting→open round trip that leaks drafts.
     const rawStatus = pickStr(row.status);
+    if (rawStatus) settingsBlob.legacyStatus = rawStatus;
     const status =
       rawStatus === 'live' ? 'active'
-      : rawStatus === 'completed' ? 'finished'
-      : rawStatus === 'open' ? 'waiting'
-      : ['waiting', 'active', 'paused', 'finished'].includes(rawStatus) ? rawStatus
-      : 'waiting';
+        : rawStatus === 'completed' ? 'finished'
+        : rawStatus === 'open' ? 'waiting'
+        : rawStatus === 'draft' ? 'waiting'
+        : ['waiting', 'active', 'paused', 'finished'].includes(rawStatus) ? rawStatus
+        : 'waiting';
 
     return {
       ...(row.id && { id: String(row.id) }),

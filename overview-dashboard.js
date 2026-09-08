@@ -11,6 +11,14 @@ document.addEventListener('DOMContentLoaded', () => {
 	if (document.getElementById('overview').classList.contains('active')) {
 		initDashboard();
 	}
+
+	// Re-run KPIs whenever the DB bootstrap lands. The legacy bridge hydrates
+	// the repo cache asynchronously from GET /api/v1/bootstrap — without
+	// this listener the Overview numbers only reflected the (possibly stale)
+	// localStorage cache until a manual reload.
+	window.addEventListener('quiz:bootstrap-ready', () => {
+		if (typeof initDashboard === 'function') initDashboard();
+	});
 });
 
 // Exposed init function for tab switching

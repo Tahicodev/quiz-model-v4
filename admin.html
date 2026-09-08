@@ -33,7 +33,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-07-workspace-r1" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-08-games-r5" />
 
 			<!-- APP_CONFIG injected by server.js in SaaS mode -->
 			<script>
@@ -46,7 +46,7 @@
 			</script>
 
 			<!-- Legacy Bridge — MUST load synchronously before all management scripts -->
-			<script src="legacy-bridge.js?v=2026-09-07-workspace-r1"></script>
+			<script src="legacy-bridge.js?v=2026-09-08-games-r5"></script>
 
 			<!-- window.getSocket bridges refactored io() calls to the global io() from CDN
 					 and passes the JWT auth token so the server doesn't reject the connection.
@@ -84,7 +84,7 @@
 		<script src="utils.js" defer></script>
 		<script src="api-client.js" defer></script>
 		<script src="auth.js" defer></script>
-		<script src="games-core.js?v=2026-09-07-workspace-r1" defer></script>
+		<script src="games-core.js?v=2026-09-08-games-r5" defer></script>
 		<script src="settings.js" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
@@ -95,7 +95,7 @@
 
 		<!-- Admin page scripts -->
 		<script src="category-management.js" defer></script>
-		<script src="questions-management.js?v=2026-09-07-workspace-r1" defer></script>
+		<script src="questions-management.js?v=2026-09-08-games-r5" defer></script>
 		<script src="exam-management.js" defer></script>
 		<script src="class-management.js" defer></script>
 		<script src="results-management.js" defer></script>
@@ -103,7 +103,7 @@
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js" defer></script>
 		<script src="quiz-presets.js" defer></script>
-		<script src="games-management.js?v=2026-09-07-workspace-r1" defer></script>
+		<script src="games-management.js?v=2026-09-08-games-r5" defer></script>
 			<script src="admin-main.js" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -117,7 +117,7 @@
 
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script> -->
-		<script src="ai-question-generator.js?v=2026-09-07-workspace-r1" defer></script>
+		<script src="ai-question-generator.js?v=2026-09-08-games-r5" defer></script>
 		<script src="rag.js" defer></script>
 
 		<!-- Syntax Highlighting -->
@@ -2578,7 +2578,28 @@
 		<div id="questionFormModal" class="modal">
 			<div class="modal-content">
 				<div class="modal-header">
-					<h2 id="question-action-text">Add Question</h2>
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-blue">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="22"
+								height="22"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<circle cx="12" cy="12" r="10"></circle>
+								<polygon points="10 8 16 12 10 16 10 8"></polygon>
+							</svg>
+						</div>
+						<div class="modal-header-text">
+							<h2 id="question-action-text">Add Question</h2>
+							<p class="modal-header-subtitle">
+								Build a question with options, answers, and settings
+							</p>
+						</div>
+					</div>
 					<span class="close" onclick="closeQuestionFormModal()">&times;</span>
 				</div>
 				<div class="modal-body">
@@ -3202,7 +3223,30 @@
 		<div id="categoryModal" class="modal">
 			<div class="modal-content">
 				<div class="modal-header">
-					<h2 id="categoryModalTitle">Manage Category</h2>
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-amber">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="22"
+								height="22"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path
+									d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
+								></path>
+								<line x1="7" y1="7" x2="7.01" y2="7"></line>
+							</svg>
+						</div>
+						<div class="modal-header-text">
+							<h2 id="categoryModalTitle">Manage Category</h2>
+							<p class="modal-header-subtitle">
+								Organize questions into reusable categories
+							</p>
+						</div>
+					</div>
 					<span class="close" onclick="closeCategoryModal()">&times;</span>
 				</div>
 				<div class="modal-body">
@@ -5037,7 +5081,28 @@
 		<div id="userModal" class="modal">
 			<div class="modal-content">
 				<div class="modal-header">
-					<h2>User Account</h2>
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-violet">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="22"
+								height="22"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+								<circle cx="12" cy="7" r="4"></circle>
+							</svg>
+						</div>
+						<div class="modal-header-text">
+							<h2>User Account</h2>
+							<p class="modal-header-subtitle">
+								Create or update an account and its role
+							</p>
+						</div>
+					</div>
 					<span class="close" onclick="closeUserModal()">&times;</span>
 				</div>
 				<div class="modal-body">
@@ -5174,7 +5239,30 @@
 		<div id="examModal" class="modal">
 			<div class="modal-content">
 				<div class="modal-header">
-					<h2 id="examModalTitle">Create Exam</h2>
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-green">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="22"
+								height="22"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+								<polyline points="14 2 14 8 20 8"></polyline>
+								<line x1="16" y1="13" x2="8" y2="13"></line>
+								<line x1="16" y1="17" x2="8" y2="17"></line>
+							</svg>
+						</div>
+						<div class="modal-header-text">
+							<h2 id="examModalTitle">Create Exam</h2>
+							<p class="modal-header-subtitle">
+								Pick questions, duration, and assignment settings
+							</p>
+						</div>
+					</div>
 					<span class="close" onclick="closeExamModal()">&times;</span>
 				</div>
 				<div class="modal-body">
@@ -5385,7 +5473,30 @@
 		<div id="classModal" class="modal">
 			<div class="modal-content">
 				<div class="modal-header">
-					<h2 id="classModalTitle">Create Class</h2>
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-blue">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="22"
+								height="22"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+								<circle cx="9" cy="7" r="4"></circle>
+								<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+							</svg>
+						</div>
+						<div class="modal-header-text">
+							<h2 id="classModalTitle">Create Class</h2>
+							<p class="modal-header-subtitle">
+								Group students and assign their exams
+							</p>
+						</div>
+					</div>
 					<span class="close" onclick="closeClassModal()">&times;</span>
 				</div>
 				<div class="modal-body">

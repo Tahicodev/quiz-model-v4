@@ -2356,6 +2356,155 @@ html.auth-pending.auth-ready body {
 	margin-top: 16px;
 }
 
+/* =========================================
+   STUDENT ACCOUNT MODAL — responsive layout
+   Wider dialog on desktop, stacking layout on
+   small screens. Shares the unified modal design.
+   ========================================= */
+#studentProfileModal .modal-content {
+	width: min(96%, 860px);
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100dvh - 48px);
+	margin: 24px auto;
+}
+
+#studentProfileModal .modal-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 22px clamp(14px, 3vw, 26px) 28px;
+	-webkit-overflow-scrolling: touch;
+}
+
+#studentProfileModal .profile-hero-banner {
+	border-radius: 20px;
+}
+
+#studentProfileModal .profile-hero-banner-content {
+	padding: 26px 20px 30px;
+	gap: 18px;
+}
+
+@media (max-width: 768px) {
+	#studentProfileModal .modal-content {
+		width: 100%;
+		max-width: none;
+		max-height: 100dvh;
+		margin: 0;
+		border-radius: 0;
+	}
+
+	#studentProfileModal .modal-header {
+		padding: 14px 16px;
+		position: sticky;
+		top: 0;
+		background: var(--bg-surface, #ffffff);
+		z-index: 5;
+	}
+
+	#studentProfileModal .modal-header h2 {
+		font-size: 1.1rem;
+	}
+
+	#studentProfileModal .modal-body {
+		padding: 16px 12px 26px;
+	}
+
+	/* Floating avatar shrinks so it never overflows the banner */
+	.profile-hero-banner-content {
+		padding: 22px 14px 26px;
+	}
+
+	.profile-avatar--floating {
+		margin-top: -40px;
+	}
+
+	.avatar-frame {
+		width: 76px;
+		height: 76px;
+		border-radius: 22px;
+	}
+
+	.profile-meta--banner h3 {
+		font-size: 1.25rem;
+	}
+
+	.profile-stats-card > .profile-hero-stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		padding: 14px;
+		gap: 10px;
+		border-radius: 18px;
+	}
+
+	.profile-stat-tile {
+		padding: 14px 12px;
+		border-radius: 14px;
+	}
+
+	.profile-stat-tile strong {
+		font-size: 1.5rem;
+	}
+
+	/* Insight cards keep side-by-side until 640px, then stack */
+	.profile-insight-grid {
+		gap: 10px;
+	}
+
+	.profile-form-card {
+		padding: 16px 14px;
+		border-radius: 18px;
+	}
+
+	/* Two-column form rows become single column */
+	#studentProfileModal .form-row,
+	.profile-form .form-row {
+		flex-direction: column;
+		gap: 0;
+	}
+
+	#studentProfileModal .form-group.half,
+	.profile-form .form-group.half {
+		width: 100%;
+	}
+
+	.profile-actions {
+		flex-direction: column-reverse;
+		gap: 8px;
+	}
+
+	.profile-actions .workspace-btn {
+		width: 100%;
+	}
+
+	/* Tabs become a segmented control that fits narrow screens */
+	.profile-tabs {
+		gap: 6px;
+	}
+
+	.profile-tab-btn {
+		flex: 1 1 auto;
+		text-align: center;
+		padding: 9px 10px;
+		font-size: 0.82rem;
+		border-radius: 12px;
+	}
+}
+
+@media (max-width: 640px) {
+	.profile-insight-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.profile-stats-card > .profile-hero-stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.profile-hero-stats .profile-stat-tile:nth-child(n + 5) {
+		grid-column: span 2;
+	}
+}
+
 .tournament-joined-mini {
 	display: inline-flex;
 	align-items: center;
@@ -6482,26 +6631,238 @@ html.auth-pending.auth-ready body {
 	}
 }
 
-@media (max-width: 640px) {
-	.workspace-shell {
-		padding: 18px 12px 30px;
-	}
+/* =========================================
+   STUDENT WORKSPACE — MOBILE NAV (matches admin.html pattern:
+   hamburger button in header, tabs collapse into a dropdown panel)
+   ========================================= */
+
+/* Hidden on desktop — same convention as admin's .mobile-menu-btn */
+.workspace-header .mobile-menu-btn {
+	display: none;
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--text-main, #0f172a);
+	padding: 8px;
+	border-radius: var(--radius-md, 10px);
+	flex: 0 0 auto;
+}
+
+.workspace-header .mobile-menu-btn:hover {
+	background-color: rgba(148, 163, 184, 0.16);
+}
+
+.workspace-header-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+@media (max-width: 960px) {
+	/* Row layout: hamburger | brand ... actions (compact) */
 	.workspace-header {
-		padding: 14px;
-		border-radius: 16px;
+		flex-direction: row;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 10px;
+		padding: 12px 14px;
 	}
+
+	.workspace-header .mobile-menu-btn {
+		display: block;
+	}
+
+	.workspace-brand {
+		gap: 10px;
+		min-width: 0;
+	}
+
+	.workspace-brand h1 {
+		font-size: 1.15rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.workspace-brand p {
+		font-size: 0.78rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 46vw;
+	}
+
+	.workspace-logo {
+		width: 38px;
+		height: 38px;
+		border-radius: 12px;
+		font-size: 0.95rem;
+		flex: 0 0 auto;
+	}
+
+	.workspace-actions {
+		flex-direction: row;
+		align-items: center;
+		width: auto;
+		gap: 8px;
+	}
+
+	.workspace-actions .workspace-btn {
+		width: auto;
+		padding: 8px 14px;
+		font-size: 0.82rem;
+	}
+
+	.workspace-profile-dropdown {
+		width: auto;
+	}
+
+	.workspace-profile-btn {
+		width: auto;
+		padding: 6px 10px;
+	}
+
+	.workspace-profile-info {
+		display: none; /* Keep the header compact — avatar only */
+	}
+
+	.workspace-profile-btn .dropdown-arrow {
+		display: none;
+	}
+
+	.workspace-dropdown-menu {
+		left: auto;
+		right: 0;
+		min-width: 200px;
+	}
+
+	/* Collapsible tabs panel — hidden until .active (admin pattern) */
 	.workspace-tabs {
-		gap: 6px;
+		display: none;
+		position: static;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 4px;
 		padding: 6px;
 		border-radius: 14px;
+		width: 100%;
 	}
+
+	.workspace-tabs.active {
+		display: flex;
+		animation: workspaceMenuSlideDown 0.2s ease-out;
+	}
+
 	.workspace-tab-btn {
-		flex: 1 1 calc(50% - 6px);
-		text-align: center;
+		width: 100%;
+		flex: 0 0 auto;
+		text-align: left;
+		padding: 12px 14px;
+		border-radius: 10px;
+		font-size: 0.92rem;
 	}
+
+	.workspace-tab-btn.active {
+		border-radius: 10px;
+	}
+
+	/* Profile dock inside tabs: keep it visible in the dropdown */
+	.workspace-tabs-profile-dock {
+		margin-left: 0;
+		padding-top: 6px;
+		border-top: 1px solid rgba(148, 163, 184, 0.3);
+	}
+
+	.workspace-tabs-profile-dock .workspace-profile-btn {
+		min-width: 0;
+		width: 100%;
+		justify-content: center;
+	}
+}
+
+@keyframes workspaceMenuSlideDown {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (max-width: 640px) {
+	.workspace-shell {
+		padding: 12px 10px 26px;
+	}
+	.workspace-header {
+		padding: 10px 12px;
+		border-radius: 16px;
+		gap: 8px;
+	}
+
+	/* Tabs stay in the hamburger dropdown, not inline grids */
+	.workspace-tabs,
+	.workspace-tabs.active {
+		grid-template-columns: none;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.workspace-tab-btn {
+		flex: 0 0 auto;
+		width: 100%;
+		text-align: left;
+	}
+
+	.workspace-main {
+		gap: 14px;
+	}
+
 	.workspace-hero {
 		grid-template-columns: 1fr;
 	}
+
+	/* Panels: tighter mobile padding, full-bleed headers */
+	.workspace-panel {
+		padding: 14px;
+		border-radius: 16px;
+	}
+
+	.panel-header {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	.panel-filters {
+		width: 100%;
+	}
+
+	/* Full-width grid variant panels were 24px — align with above */
+	.workspace-grid.workspace-grid--full-width .workspace-panel {
+		padding: 14px;
+		border-radius: 16px;
+	}
+
+	/* Tournament / stats tiles stack */
+	.student-tournament-grid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+
+	.student-tournament-layout {
+		flex-direction: column;
+	}
+
+	.game-quick-join-form {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
 	.exam-card-grid {
 		grid-template-columns: 1fr;
 	}
@@ -7085,20 +7446,269 @@ tr:last-child td {
 	max-width: 500px;
 }
 
-/* Fix for Add Question Modal stretching and scrolling */
-#questionFormModal .modal-content {
-	width: 95%;
-	max-width: 650px;
+/* =========================================
+   UNIFIED "ADD" MODALS — question / category /
+   user / exam / class share one dialog design:
+   wide, flex-column, fixed header + scrolling
+   body + fixed footer.
+   ========================================= */
+
+/* Unified modal header — icon + title + subtitle, shared by the add modals */
+.modal-header-with-icon {
 	display: flex;
-	flex-direction: column;
-	max-height: 90vh;
-	margin: auto;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
 }
 
-@media (min-width: 769px) {
+.modal-header-icon {
+	width: 40px;
+	height: 40px;
+	border-radius: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	color: #ffffff;
+	box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+.modal-header-icon.icon-blue {
+	background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.modal-header-icon.icon-amber {
+	background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.modal-header-icon.icon-green {
+	background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.modal-header-icon.icon-violet {
+	background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+.modal-header-text {
+	min-width: 0;
+}
+
+.modal-header-text h2 {
+	margin: 0;
+	line-height: 1.2;
+}
+
+.modal-header-subtitle {
+	margin: 3px 0 0;
+	font-size: 0.8rem;
+	color: var(--text-muted, #64748b);
+	line-height: 1.35;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+@media (max-width: 768px) {
+	.modal-header-subtitle {
+		display: none; /* Keep mobile headers to a single compact row */
+	}
+
+	.modal-header-icon {
+		width: 34px;
+		height: 34px;
+		border-radius: 10px;
+	}
+}
+
+/* Add Question — bigger canvas for the rich builders
+   (options, drag sorter, matching pairs, fill-blank) */
+#questionFormModal .modal-content {
+	width: min(96%, 860px);
+	max-width: none;
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100dvh - 48px);
+	margin: 24px auto;
+}
+
+@media (min-width: 1200px) {
 	#questionFormModal .modal-content {
-		width: 40%;
+		width: min(94%, 960px);
+	}
+}
+
+/* Shared dialog geometry for the smaller "add" forms — width values here
+   are defaults; the intentionally divergent user/exam/class overrides
+   below in the file keep their own tuned geometry (!important rules). */
+#categoryModal .modal-content,
+#quickCategoryModal .modal-content,
+#userModal .modal-content,
+#examModal .modal-content,
+#classModal .modal-content {
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100dvh - 48px);
+	margin: 24px auto;
+}
+
+#categoryModal .modal-content {
+	width: min(96%, 640px);
+}
+
+/* User/Exam/Class keep wider canvases — override the 640px default */
+#userModal .modal-content,
+#examModal .modal-content {
+	width: min(96%, 760px);
+}
+
+/* Unified header/body/footer rhythm */
+#questionFormModal .modal-header,
+#categoryModal .modal-header,
+#quickCategoryModal .modal-header,
+#userModal .modal-header,
+#examModal .modal-header,
+#classModal .modal-header {
+	padding: 16px 22px;
+	border-bottom: 1px solid var(--border-color);
+	background:
+		radial-gradient(circle at 100% 0%, rgba(59, 130, 246, 0.07), transparent 42%),
+		var(--bg-surface);
+	border-top-left-radius: var(--radius-lg);
+	border-top-right-radius: var(--radius-lg);
+}
+
+#questionFormModal .modal-header h2,
+#categoryModal .modal-header h2,
+#quickCategoryModal .modal-header h2,
+#userModal .modal-header h2,
+#examModal .modal-header h2,
+#classModal .modal-header h2 {
+	font-size: 1.15rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+#questionFormModal .modal-body,
+#categoryModal .modal-body,
+#quickCategoryModal .modal-body,
+#userModal .modal-body,
+#examModal .modal-body,
+#classModal .modal-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 22px clamp(16px, 3vw, 26px) 26px;
+	-webkit-overflow-scrolling: touch;
+}
+
+/* Sticky unified footer: actions always visible while scrolling.
+   The negative margins pull the bar flush to the scrolling body edges. */
+#questionFormModal .form-actions,
+#categoryModal .form-actions,
+#quickCategoryModal .form-actions,
+#userModal .form-actions,
+#examModal .form-actions,
+#classModal .form-actions {
+	position: sticky;
+	bottom: 0;
+	margin: 20px -clamp(16px, 3vw, 26px) -26px;
+	padding: 14px clamp(16px, 3vw, 26px);
+	background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), #f8fafc 42%);
+	backdrop-filter: blur(6px);
+	border-top: 1px solid var(--border-color);
+}
+
+/* Question modal: breathing room between builder sections */
+#questionFormModal .modal-body form > .form-group {
+	margin-bottom: 18px;
+}
+
+#questionFormModal #question {
+	min-height: 92px;
+	resize: vertical;
+}
+
+#questionFormModal .radio-group {
+	gap: 10px;
+	padding: 14px;
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	background: #f8fafc;
+}
+
+/* Mobile: unified full-screen dialog behavior */
+@media (max-width: 768px) {
+	#questionFormModal .modal-content,
+	#categoryModal .modal-content,
+	#quickCategoryModal .modal-content,
+	#userModal .modal-content,
+	#examModal .modal-content,
+	#classModal .modal-content {
+		width: 100%;
 		max-width: none;
+		max-height: 100dvh;
+		margin: 0;
+		border-radius: 0;
+	}
+
+	#questionFormModal .modal-header,
+	#categoryModal .modal-header,
+	#quickCategoryModal .modal-header,
+	#userModal .modal-header,
+	#examModal .modal-header,
+	#classModal .modal-header {
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		padding: 13px 16px;
+	}
+
+	#questionFormModal .modal-header h2,
+	#categoryModal .modal-header h2,
+	#quickCategoryModal .modal-header h2,
+	#userModal .modal-header h2,
+	#examModal .modal-header h2,
+	#classModal .modal-header h2 {
+		font-size: 1.02rem;
+	}
+
+	#questionFormModal .modal-body,
+	#categoryModal .modal-body,
+	#quickCategoryModal .modal-body,
+	#userModal .modal-body,
+	#examModal .modal-body,
+	#classModal .modal-body {
+		padding: 16px 12px 22px;
+	}
+
+	/* Sticky form-actions revert to the fixed bottom bar (existing rule) */
+	#questionFormModal .form-actions,
+	#categoryModal .form-actions,
+	#quickCategoryModal .form-actions,
+	#userModal .form-actions,
+	#examModal .form-actions,
+	#classModal .form-actions {
+		margin: 16px -12px -22px;
+		padding: 12px 16px;
+		padding-bottom: max(12px, env(safe-area-inset-bottom));
+	}
+
+	#questionFormModal .radio-group {
+		gap: 8px;
+		padding: 10px;
+	}
+
+	/* Builders get full width on phones */
+	.matching-pairs-columns,
+	.option-add-row {
+		flex-direction: column;
+	}
+}
+
+/* Legacy desktop width rule kept for reference but overridden above */
+@media (min-width: 769px) and (max-width: 1023px) {
+	#questionFormModal .modal-content {
+		width: min(96%, 860px);
 	}
 }
 
@@ -7197,7 +7807,8 @@ textarea {
 	border-top: 1px solid var(--border-color);
 }
 
-/* Sticky form actions for mobile */
+/* Sticky form actions for mobile — EXCLUDES the unified add modals,
+   which use their own in-dialog sticky bar (see "UNIFIED ADD MODALS"). */
 @media (max-width: 768px) {
 	.modal-body {
 		padding-bottom: 80px; /* Make space for sticky footer */
@@ -7215,6 +7826,27 @@ textarea {
 		border-top: 1px solid var(--border-color);
 		border-radius: 0;
 		box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+	}
+
+	/* Unified add modals: sticky-in-body instead of viewport-fixed */
+	#questionFormModal .form-actions,
+	#categoryModal .form-actions,
+	#quickCategoryModal .form-actions,
+	#userModal .form-actions,
+	#examModal .form-actions,
+	#classModal .form-actions {
+		position: sticky;
+		bottom: 0;
+		z-index: 6;
+	}
+
+	#questionFormModal .modal-body,
+	#categoryModal .modal-body,
+	#quickCategoryModal .modal-body,
+	#userModal .modal-body,
+	#examModal .modal-body,
+	#classModal .modal-body {
+		padding-bottom: 22px; /* Undo the 80px reserved for fixed bar */
 	}
 
 	/* Specific adjustments for different modals */
@@ -31267,5 +31899,453 @@ body.arena-modal-open { overflow: hidden; }
 	#studentProfileModal .modal-header .close {
 		transition: none;
 		animation: none;
+	}
+}
+
+
+/* ============================================================
+   STUDENT ACCOUNT POLISH (v2026-09-07) — buttons, insight grid
+   and /20 pass-fail stat cards in the training results view.
+   ============================================================ */
+
+/* ---------- Training results: pass/fail grade cards ---------- */
+.student-workspace .results-stats-grid .stat-card.stat-passed {
+	border-color: rgba(16, 185, 129, 0.4);
+	background: linear-gradient(160deg, #f0fdf9 0%, #dcfce7 100%);
+}
+
+.student-workspace .results-stats-grid .stat-card.stat-passed .stat-value {
+	color: #047857;
+}
+
+.student-workspace .results-stats-grid .stat-card.stat-passed .stat-label {
+	color: #047857;
+	font-weight: 800;
+}
+
+.student-workspace .results-stats-grid .stat-card.stat-failed {
+	border-color: rgba(239, 68, 68, 0.35);
+	background: linear-gradient(160deg, #fef5f5 0%, #fee2e2 100%);
+}
+
+.student-workspace .results-stats-grid .stat-card.stat-failed .stat-value {
+	color: #b91c1c;
+}
+
+.student-workspace .results-stats-grid .stat-card.stat-failed .stat-label {
+	color: #b91c1c;
+	font-weight: 800;
+}
+
+/* ---------- My Training cards: Passed / Failed status pills ---------- */
+.student-workspace .exam-card .exam-status.status-passed {
+	background: #dcfce7;
+	color: #166534;
+}
+
+.student-workspace .exam-card .exam-status.status-failed {
+	background: #fee2e2;
+	color: #991b1b;
+}
+
+/* ---------- Student Account: action buttons ---------- */
+#studentProfileModal .profile-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 6px;
+}
+
+#studentProfileModal .profile-actions .workspace-btn {
+	flex: 1 1 160px;
+	min-width: 0;
+	padding: 12px 20px;
+	border-radius: 14px;
+	font-size: 0.88rem;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	transition:
+		transform 0.18s ease,
+		box-shadow 0.18s ease,
+		filter 0.18s ease;
+}
+
+#studentProfileModal .profile-actions .workspace-btn:hover {
+	transform: translateY(-2px);
+	filter: brightness(1.04);
+	box-shadow: 0 10px 22px rgba(99, 102, 241, 0.22);
+}
+
+#studentProfileModal .profile-actions .workspace-btn:active {
+	transform: translateY(0);
+}
+
+#studentProfileModal .profile-actions .workspace-btn.ghost {
+	background: #f8fafc;
+	color: #475569;
+	border: 1px solid rgba(148, 163, 184, 0.4);
+	box-shadow: none;
+}
+
+#studentProfileModal .profile-actions .workspace-btn.ghost:hover {
+	background: #f1f5f9;
+	color: #0f172a;
+	border-color: rgba(148, 163, 184, 0.65);
+	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+/* ---------- profile-insight-grid polish ---------- */
+#studentProfileModal .profile-insight-grid {
+	grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+#studentProfileModal .profile-insight-card {
+	position: relative;
+	overflow: hidden;
+	padding: 18px 16px 16px;
+	border-radius: 18px;
+	border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+/* Colored top rail per accent so each card reads at a glance */
+#studentProfileModal .profile-insight-card::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 4px;
+	border-radius: 18px 18px 0 0;
+}
+
+#studentProfileModal .profile-insight-card.accent-blue::before {
+	background: linear-gradient(90deg, #3b82f6, #06b6d4);
+}
+
+#studentProfileModal .profile-insight-card.accent-gold::before {
+	background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+#studentProfileModal .profile-insight-card.accent-emerald::before {
+	background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+/* Kicker chips with accent tint */
+#studentProfileModal .profile-insight-kicker {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.68rem;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: #475569;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.12);
+}
+
+#studentProfileModal .profile-insight-card.accent-blue .profile-insight-kicker {
+	color: #1d4ed8;
+	background: rgba(59, 130, 246, 0.12);
+}
+
+#studentProfileModal .profile-insight-card.accent-gold .profile-insight-kicker {
+	color: #b45309;
+	background: rgba(245, 158, 11, 0.14);
+}
+
+#studentProfileModal .profile-insight-card.accent-emerald .profile-insight-kicker {
+	color: #047857;
+	background: rgba(16, 185, 129, 0.14);
+}
+
+#studentProfileModal .profile-insight-value {
+	margin-top: 12px;
+	font-size: 1.45rem;
+	letter-spacing: -0.02em;
+	line-height: 1.15;
+}
+
+#studentProfileModal .profile-insight-copy {
+	margin-top: 8px;
+	font-size: 0.83rem;
+	color: #64748b;
+	line-height: 1.5;
+}
+
+/* Level progress bar: gradient per accent card */
+#studentProfileModal .profile-progress-bar {
+	height: 8px;
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.16);
+}
+
+#studentProfileModal .profile-insight-card.accent-blue .profile-progress-fill {
+	background: linear-gradient(90deg, #3b82f6, #06b6d4);
+}
+
+/* Insight cards on small screens: keep single column tidy */
+@media (max-width: 600px) {
+	#studentProfileModal .profile-insight-grid {
+		grid-template-columns: 1fr;
+		gap: 10px;
+	}
+
+	#studentProfileModal .profile-actions .workspace-btn {
+		flex: 1 1 100%;
+	}
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+	#studentProfileModal .profile-actions .workspace-btn,
+	#studentProfileModal .profile-insight-card,
+	#studentProfileModal .profile-progress-fill {
+		transition: none;
+	}
+}
+
+/* =========================================
+   STUDENT WORKSPACE MOBILE NAV — v2 (final override layer)
+   The blueprint skin above uses body.student-workspace
+   specificity, so these rules match it and come last.
+   Mirrors the admin panel: hamburger replaces the brand on
+   mobile; the tab bar becomes a collapsible dropdown.
+   ========================================= */
+
+/* Hamburger button — hidden on desktop */
+body.student-workspace .workspace-header .mobile-menu-btn {
+	display: none;
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--arena-ink, #0f172a);
+	padding: 8px;
+	border-radius: 10px;
+	flex: 0 0 auto;
+	align-self: center;
+}
+
+body.student-workspace .workspace-header .mobile-menu-btn:hover {
+	background: rgba(148, 163, 184, 0.16);
+}
+
+@media (max-width: 980px) {
+	/* 1. Header: hamburger + compact actions only — brand hidden */
+	body.student-workspace .workspace-header {
+		display: flex;
+		flex-direction: row;
+		align-items: center;
+		justify-content: flex-start;
+		gap: 10px;
+		min-height: 0;
+		padding: 10px 14px;
+	}
+
+	body.student-workspace .workspace-header .mobile-menu-btn {
+		display: block;
+	}
+
+	body.student-workspace .workspace-brand {
+		display: none; /* logo, "Student Workspace" title, subtitle all hidden on mobile */
+	}
+
+	/* Compact right side: avatar-only profile chip */
+	body.student-workspace .workspace-actions {
+		flex: 1 1 auto;
+		justify-content: flex-end;
+		gap: 8px;
+	}
+
+	body.student-workspace .workspace-actions .workspace-btn {
+		padding: 8px 14px;
+		font-size: 0.82rem;
+	}
+
+	body.student-workspace .workspace-profile-btn {
+		min-width: 0;
+		width: auto;
+		padding: 5px;
+		gap: 0;
+		border-radius: 999px;
+	}
+
+	body.student-workspace .workspace-profile-info,
+	body.student-workspace .workspace-profile-btn .dropdown-arrow {
+		display: none; /* avatar-only */
+	}
+
+	body.student-workspace .workspace-dropdown-menu {
+		left: auto;
+		right: 0;
+		min-width: 210px;
+	}
+
+	/* 2. Tab bar = collapsible dropdown (admin pattern): closed by default */
+	body.student-workspace .workspace-tabs {
+		display: none;
+	}
+
+	body.student-workspace .workspace-tabs.active {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 4px;
+		padding: 6px;
+		position: static;
+		overflow-x: visible;
+		margin: 0 0 14px;
+		animation: workspaceMenuSlideDown 0.2s ease-out;
+	}
+
+	body.student-workspace .workspace-tab-btn {
+		flex: 0 0 auto;
+		width: 100%;
+		min-height: 44px;
+		text-align: left;
+		justify-content: flex-start;
+		padding: 10px 14px;
+	}
+
+	/* Profile dock lives inside the dropdown when header is scrolled away */
+	body.student-workspace .workspace-tabs-profile-dock {
+		margin-left: 0;
+		padding-top: 6px;
+		border-top: 1px solid var(--arena-line, #e2e8f0);
+	}
+
+	body.student-workspace .workspace-tabs-profile-dock .workspace-profile-btn {
+		width: 100%;
+		min-width: 0;
+		justify-content: center;
+	}
+
+	body.student-workspace .workspace-tabs-profile-dock .workspace-profile-info {
+		display: flex; /* show name inside the dropdown — there is room */
+	}
+}
+
+@media (max-width: 640px) {
+	body.student-workspace .workspace-header {
+		padding: 8px 10px;
+		gap: 8px;
+	}
+
+	body.student-workspace .workspace-shell {
+		padding: 12px 10px 40px;
+	}
+
+	/* Tabs stay a vertical list inside the hamburger dropdown */
+	body.student-workspace .workspace-tabs.active {
+		gap: 4px;
+	}
+}
+
+/* =========================================
+   STUDENT ACCOUNT MODAL — v2 polished tabs
+   (My Profile / Update Profile / Security)
+   Segmented pill bar with icons; replaces the
+   old round chip tabs.
+   ========================================= */
+
+#studentProfileModal .profile-tabs-v2 {
+	display: flex;
+	gap: 6px;
+	margin: 0 0 20px;
+	padding: 5px;
+	background: linear-gradient(180deg, #f1f5f9, #f8fafc);
+	border: 1px solid #e2e8f0;
+	border-radius: 14px;
+	box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+#studentProfileModal .profile-tabs-v2::-webkit-scrollbar {
+	display: none;
+}
+
+#studentProfileModal .profile-tabs-v2 .profile-tab-btn {
+	flex: 1 1 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 42px;
+	padding: 9px 14px;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	background: transparent;
+	color: #475569;
+	font-size: 0.86rem;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease,
+		border-color 0.18s ease;
+}
+
+#studentProfileModal .profile-tabs-v2 .profile-tab-btn svg {
+	flex: 0 0 auto;
+	opacity: 0.75;
+	transition: opacity 0.18s ease;
+}
+
+#studentProfileModal .profile-tabs-v2 .profile-tab-btn:hover {
+	color: #1d4ed8;
+	background: rgba(255, 255, 255, 0.85);
+	border-color: #dbeafe;
+}
+
+#studentProfileModal .profile-tabs-v2 .profile-tab-btn:hover svg {
+	opacity: 1;
+}
+
+#studentProfileModal .profile-tabs-v2 .profile-tab-btn.active {
+	background: linear-gradient(135deg, #1d4ed8, #2563eb);
+	border-color: #1d4ed8;
+	color: #ffffff;
+	box-shadow: 0 8px 18px rgba(37, 99, 235, 0.32);
+}
+
+#studentProfileModal .profile-tabs-v2 .profile-tab-btn.active svg {
+	opacity: 1;
+}
+
+@media (max-width: 640px) {
+	#studentProfileModal .profile-tabs-v2 {
+		padding: 4px;
+		gap: 4px;
+		border-radius: 12px;
+	}
+
+	/* Icon-only tabs on narrow phones: labels appear under 400px? No —
+	   keep labels, they fit at 0.78rem; drop only the extra gap. */
+	#studentProfileModal .profile-tabs-v2 .profile-tab-btn {
+		flex: 1 1 auto;
+		gap: 6px;
+		min-height: 40px;
+		padding: 8px 8px;
+		font-size: 0.76rem;
+	}
+
+	#studentProfileModal .profile-tabs-v2 .profile-tab-btn svg {
+		width: 14px;
+		height: 14px;
+	}
+}
+
+@media (max-width: 400px) {
+	/* Very narrow: icons only, labels hidden */
+	#studentProfileModal .profile-tabs-v2 .profile-tab-btn span {
+		display: none;
+	}
+
+	#studentProfileModal .profile-tabs-v2 .profile-tab-btn {
+		padding: 10px;
 	}
 }

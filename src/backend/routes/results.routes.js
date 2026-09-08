@@ -128,6 +128,39 @@ router.post('/', async (req, res, next) => {
 
     // The bridge sends the row with a mix of snake_case and camelCase
     // keys; we accept both and normalize to the Prisma schema.
+    const totalPoints = body.total_points != null
+      ? Math.round(Number(body.total_points))
+      : (body.totalPoints != null ? Math.round(Number(body.totalPoints)) : 0);
+    const earnedPoints = body.earned_points != null
+      ? Math.round(Number(body.earned_points))
+      : (body.earnedPoints != null ? Math.round(Number(body.earnedPoints)) : 0);
+    const mode = String(body.mode || 'training');
+
+    // `score` is stored as a percentage (0-100) per the Result schema.
+    // The student workspace now sends the /20 grade directly (grade20),
+    // but legacy count-based payloads (score = correct answers) are still
+    // normalized here so single-record and bulk writes stay consistent.
+    let score;
+    if (body.grade20 != null && Number.isFinite(Number(body.grade20))) {
+      score = Math.round((Number(body.grade20) / 20) * 10000) / 100; // /20 → %
+    } else if (body.score != null && Number.isFinite(Number(body.score))) {
+      const raw = Number(body.score);
+      if (totalPoints > 0 && earnedPoints > 0 && raw <= totalPoints && raw <= 20) {
+        // Legacy count-based score (e.g. 8 correct of 10): convert to %.
+        score = Math.round((raw / totalPoints) * 10000) / 100;
+      } else if (raw >= 0 && raw <= 20) {
+        // /20 grade (e.g. 12.5) → percentage.
+        score = Math.round((raw / 20) * 10000) / 100;
+      } else {
+        score = Math.max(0, Math.min(100, raw)); // already a percentage
+      }
+    } else {
+      score = totalPoints > 0
+        ? Math.round((earnedPoints / totalPoints) * 10000) / 100
+        : 0;
+    }
+    score = Math.max(0, Math.min(100, score));
+
     const resultRow = {
       id: body.id || (typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
@@ -135,18 +168,16 @@ router.post('/', async (req, res, next) => {
       user_id: body.user_id || body.userId || userId,
       school_id: schoolId,
       exam_id: validExamId,
-      score: body.score != null ? Number(body.score) : 0,
-      total_points: body.total_points != null
-        ? Math.round(Number(body.total_points))
-        : (body.totalPoints != null ? Math.round(Number(body.totalPoints)) : 0),
-      earned_points: body.earned_points != null
-        ? Math.round(Number(body.earned_points))
-        : (body.earnedPoints != null ? Math.round(Number(body.earnedPoints)) : 0),
+      score,
+      total_points: totalPoints,
+      earned_points: earnedPoints,
       time_spent: body.time_spent != null
         ? Math.round(Number(body.time_spent))
         : (body.timeSpent != null ? Math.round(Number(body.timeSpent)) : null),
-      mode: String(body.mode || 'training'),
-      passed: body.passed != null ? Boolean(body.passed) : false,
+      mode,
+      passed: body.passed != null
+        ? Boolean(body.passed)
+        : (totalPoints > 0 ? earnedPoints * 2 > totalPoints : score > 50),
       attempt_number: body.attempt_number != null
         ? Number(body.attempt_number)
         : (body.attemptNumber != null ? Number(body.attemptNumber) : 1),

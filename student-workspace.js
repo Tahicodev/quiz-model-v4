@@ -841,14 +841,33 @@
 				);
 			})
 			.map((result, index) => {
-				const score = Number(result.score);
+				// DB rows store `score` as a percentage (0-100) plus
+				// earned/total point counts; freshly saved local rows keep
+				// the /20 grade on `grade20`. Derive the /20 grade from
+				// whichever source is available.
+				const earned = Number(result.earnedPoints ?? result.earned_points ?? result.score);
 				const totalQuestions = Number(
-					result.totalQuestions || result.totalPoints || 0,
+					result.totalQuestions || result.totalPoints || result.total_points || 0,
 				);
+				const score = Number.isFinite(earned) ? earned : 0;
+				// Prefer an explicit /20 grade; fall back to counts, then
+				// to converting the stored percentage back to /20.
+				let grade = Number(result.grade20);
+				if (!Number.isFinite(grade)) {
+					if (totalQuestions > 0) {
+						grade = (score / totalQuestions) * 20;
+					} else {
+						const pct = Number(result.score);
+						grade = Number.isFinite(pct) ? (pct / 100) * 20 : 0;
+					}
+				}
+				grade = Math.max(0, Math.min(20, Math.round(grade * 100) / 100));
 				return {
 					id: result.id || `training-${index}`,
 					title: result.examTitle || 'Training Quiz',
-					score: Number.isFinite(score) ? score : 0,
+					score: score, // raw correct-answer count (for x/y display)
+					grade,
+					passed: grade > 10,
 					totalQuestions: Number.isFinite(totalQuestions) ? totalQuestions : 0,
 					date: result.date || result.dateTaken || '',
 				};
@@ -880,22 +899,24 @@
 	function getTrainingAttemptSummary(result) {
 		const attempts = Array.isArray(result.attempts) ? result.attempts : [];
 		if (!attempts.length) return '';
-		const percents = attempts
+		const grades = attempts
 			.map((attempt) =>
-				getScorePercent(
-					Number(attempt.score || 0),
-					Number(attempt.totalQuestions || 0),
-				),
+				Number.isFinite(Number(attempt.grade))
+					? Number(attempt.grade)
+					: grade20(
+							Number(attempt.score || 0),
+							Number(attempt.totalQuestions || 0),
+						),
 			)
 			.filter((value) => Number.isFinite(value));
-		if (!percents.length) return '';
-		const best = Math.max(...percents);
-		const latest = percents[0];
+		if (!grades.length) return '';
+		const best = Math.max(...grades);
+		const latest = grades[0];
 		const count = attempts.length;
 		const trend =
-			count > 1 && latest > percents[1]
+			count > 1 && latest > grades[1]
 				? 'improving'
-				: count > 1 && latest < percents[1]
+				: count > 1 && latest < grades[1]
 					? 'slipping'
 					: 'steady';
 		const trendLabels = {
@@ -905,7 +926,7 @@
 		};
 		const parts = [
 			`<span class="training-attempt-count">${count} attempt${count === 1 ? '' : 's'}</span>`,
-			count > 1 ? `<span class="training-best-score">Best ${best}%</span>` : '',
+			count > 1 ? `<span class="training-best-score">Best ${best.toFixed(2).replace('.', ',')}/20</span>` : '',
 			`<span class="training-trend training-trend--${trend}">${trendLabels[trend]}</span>`,
 		];
 		return parts.filter(Boolean).join('');
@@ -943,22 +964,27 @@
 			.map((result) => {
 				const total = Number(result.totalQuestions || 0);
 				const score = Number(result.score || 0);
+				const grade = Number.isFinite(Number(result.grade))
+					? Number(result.grade)
+					: grade20(score, total);
 				const percent = getScorePercent(score, total);
+				const passed = grade > 10;
 				const title = result.title || 'Training Quiz';
 				const attemptSummary = getTrainingAttemptSummary(result);
 				const repeatClass =
 					result.attemptCount > 1 ? ' training-card--repeated' : '';
+				const statusClass = passed ? 'status-passed' : 'status-failed';
 				return `
 					<div class="exam-card status-completed training-card${repeatClass}">
 						<div class="exam-card-header">
-							<span class="exam-status">Completed</span>
+							<span class="exam-status ${statusClass}">${passed ? 'Passed' : 'Failed'}</span>
 							<span class="exam-tag">Training</span>
 						</div>
 						<h3>${escapeHtml(title)}</h3>
 						<p>${result.date ? new Date(result.date).toLocaleString() : 'No date'}</p>
 						${attemptSummary ? `<div class="training-attempt-meta">${attemptSummary}</div>` : ''}
 						<div class="exam-performance">
-							<div class="score-display">${score}/${total || '-'}</div>
+							<div class="score-display">${formatGrade20(grade)}</div>
 							<div class="performance-bar">
 								<span style="width: ${percent}%"></span>
 							</div>
@@ -1098,6 +1124,27 @@
 				renderGamificationUI(context);
 			}
 		}
+	}
+
+	// Mobile navigation — mirrors the admin panel's hamburger menu. The
+	// tabs bar collapses into a dropdown panel that closes once a tab is
+	// picked so the content below is immediately visible again.
+	function toggleMobileNav(force) {
+		const tabs = byId('studentWorkspaceTabs');
+		const menuBtn = document.querySelector(
+			'.workspace-header .mobile-menu-btn',
+		);
+		if (!tabs) return;
+		const shouldOpen =
+			typeof force === 'boolean' ? force : !tabs.classList.contains('active');
+		tabs.classList.toggle('active', shouldOpen);
+		if (menuBtn) {
+			menuBtn.setAttribute('aria-expanded', String(shouldOpen));
+		}
+	}
+
+	function closeMobileNav() {
+		toggleMobileNav(false);
 	}
 
 		function getProfileRequestsForUser(userId) {
@@ -1367,15 +1414,19 @@
 	}
 
 	function switchStudentProfileTab(tabKey) {
+		const known = new Set(['profile', 'update', 'security']);
+		const target = known.has(tabKey) ? tabKey : 'profile';
 		document.querySelectorAll('.profile-section').forEach((section) => {
-			if (section.id === `${tabKey}-tab`) {
+			if (section.id === `${target}-tab`) {
 				section.classList.remove('hidden');
 			} else {
 				section.classList.add('hidden');
 			}
 		});
 		document.querySelectorAll('.profile-tab-btn').forEach((btn) => {
-			btn.classList.toggle('active', btn.dataset.profileTab === tabKey);
+			const isActive = btn.dataset.profileTab === target;
+			btn.classList.toggle('active', isActive);
+			btn.setAttribute('aria-selected', String(isActive));
 		});
 	}
 
@@ -1676,27 +1727,25 @@
 			return;
 		}
 
-		const validScores = trainingResults.filter(
-			(item) =>
-				Number.isFinite(Number(item.score)) &&
-				Number.isFinite(Number(item.totalQuestions)) &&
-				Number(item.totalQuestions) > 0,
+		// /20 grade per attempt (explicit grade preferred; counts fallback)
+		const grades = trainingResults.map((item) =>
+			Number.isFinite(Number(item.grade))
+				? Number(item.grade)
+				: grade20(Number(item.score) || 0, Number(item.totalQuestions) || 0),
 		);
-		const percents = validScores.map((item) =>
-			getScorePercent(Number(item.score), Number(item.totalQuestions)),
-		);
-		const average = percents.length
-			? Math.round(
-					percents.reduce((sum, value) => sum + value, 0) / percents.length,
-				)
-			: 0;
-		const best = percents.length ? Math.max(...percents) : 0;
-		const recent = percents.length ? percents[0] : 0;
-		const lastDelta = percents.length > 1 ? recent - percents[1] : 0;
+		const average =
+			grades.length
+				? Math.round((grades.reduce((sum, value) => sum + value, 0) / grades.length) * 100) / 100
+				: 0;
+		const best = grades.length ? Math.max(...grades) : 0;
+		const recent = grades.length ? grades[0] : 0;
+		const lastDelta = grades.length > 1 ? Math.round((recent - grades[1]) * 100) / 100 : 0;
 		const deltaLabel =
-			percents.length > 1
-				? `${lastDelta > 0 ? '+' : ''}${lastDelta}% vs previous`
+			grades.length > 1
+				? `${lastDelta > 0 ? '+' : ''}${lastDelta.toFixed(2).replace('.', ',')}/20 vs previous`
 				: 'First recorded attempt';
+		const averagePercent = Math.round((average / 20) * 100);
+		const bestPercent = Math.round((best / 20) * 100);
 
 		const summaryRows = `
 			<div class="training-summary-grid">
@@ -1710,23 +1759,23 @@
 				<div class="training-summary-tile">
 					<div class="training-summary-heading">
 						<span class="performance-title">Average Score</span>
-						<div class="performance-metric"><span>${average}%</span></div>
+						<div class="performance-metric"><span>${formatGrade20(average)}</span></div>
 					</div>
-					<div class="performance-bar"><span style="width: ${average}%"></span></div>
+					<div class="performance-bar"><span style="width: ${averagePercent}%"></span></div>
 					<div class="performance-subtitle">Across all scored attempts</div>
 				</div>
 				<div class="training-summary-tile">
 					<div class="training-summary-heading">
 						<span class="performance-title">Best Score</span>
-						<div class="performance-metric"><span class="metric-best">${best}%</span></div>
+						<div class="performance-metric"><span class="metric-best">${formatGrade20(best)}</span></div>
 					</div>
-					<div class="performance-bar performance-bar--best"><span style="width: ${best}%"></span></div>
+					<div class="performance-bar performance-bar--best"><span style="width: ${bestPercent}%"></span></div>
 					<div class="performance-subtitle">Highest training result</div>
 				</div>
 				<div class="training-summary-tile">
 					<div class="training-summary-heading">
 						<span class="performance-title">Latest Score</span>
-						<div class="performance-metric"><span>${recent}%</span></div>
+						<div class="performance-metric"><span>${formatGrade20(recent)}</span></div>
 					</div>
 					<div class="training-delta ${lastDelta > 0 ? 'training-delta--up' : lastDelta < 0 ? 'training-delta--down' : ''}">${deltaLabel}</div>
 					<div class="performance-subtitle">Most recent attempt</div>
@@ -1739,12 +1788,15 @@
 			.map((result, index) => {
 				const total = Number(result.totalQuestions || 0);
 				const score = Number(result.score || 0);
-				const percent = getScorePercent(score, total);
+				const grade = Number.isFinite(Number(result.grade))
+					? Number(result.grade)
+					: grade20(score, total);
+				const percent = Math.round((grade / 20) * 100);
 				const attemptNumber = trainingResults.length - index;
 				const attemptClass =
-					percent >= 80
+					grade > 10
 						? 'performance-attempt--strong'
-						: percent >= 50
+						: grade >= 8
 							? 'performance-attempt--ok'
 							: 'performance-attempt--weak';
 				return `
@@ -1759,7 +1811,7 @@
 							</div>
 						</div>
 						<div class="performance-metric">
-							<span>${score}/${total || '-'}</span>
+							<span>${formatGrade20(grade)}</span>
 							<div class="performance-bar"><span style="width: ${percent}%"></span></div>
 						</div>
 					</div>
@@ -1977,7 +2029,9 @@
 		const allResults = [
 			...trainingResults.map((r) => ({
 				type: r.title || 'Training',
-				score: `${r.score}/${r.totalQuestions}`,
+				score: formatGrade20(r.grade),
+				// /20 grade with comma decimals — pass strictly above 10
+				passed: Number(r.grade) > 10,
 				date: r.date,
 				kind: 'training',
 			})),
@@ -2007,14 +2061,20 @@
 					game: 'Game',
 				};
 				const scoreText = String(result.score || '');
-				// Game summaries carry "pts"; training/exam scores are "score/total".
-				const isRatio = /\d+\s*\/\s*\d+/.test(scoreText);
 				let scoreTone = 'neutral';
-				if (isRatio) {
-					const [score, total] = scoreText.split('/').map((part) => Number(part.trim()));
-					if (Number.isFinite(score) && Number.isFinite(total) && total > 0) {
-						const percent = Math.round((score / total) * 100);
-						scoreTone = percent >= 50 ? 'passed' : 'failed';
+				if (result.kind === 'training') {
+					// /20 grades: green above 10, red below
+					const grade = parseFloat(scoreText.replace(',', '.'));
+					scoreTone = Number.isFinite(grade) && grade > 10 ? 'passed' : 'failed';
+				} else {
+					// Game summaries carry "pts"; exam scores are "score/total".
+					const isRatio = /\d+\s*\/\s*\d+/.test(scoreText);
+					if (isRatio) {
+						const [score, total] = scoreText.split('/').map((part) => Number(part.trim()));
+						if (Number.isFinite(score) && Number.isFinite(total) && total > 0) {
+							const percent = Math.round((score / total) * 100);
+							scoreTone = percent >= 50 ? 'passed' : 'failed';
+						}
 					}
 				}
 				return `
@@ -2063,14 +2123,27 @@
 		return keys;
 	}
 
+	function getGameClassIds(game) {
+		const sources = [game?.classIds, game?.settings?.classIds, game?.class_ids];
+		for (const source of sources) {
+			if (Array.isArray(source) && source.length) {
+				return source
+					.map((value) => String(value || '').trim())
+					.filter(Boolean);
+			}
+		}
+		return [];
+	}
+
 	function gameMatchesStudentClass(game, context) {
 		const classKeys = getStudentClassAccessKeys(context);
-		const gameClassIds = Array.isArray(game?.classIds)
-			? game.classIds
-					.map((value) => String(value || '').trim())
-					.filter(Boolean)
-			: [];
-		if (!gameClassIds.length || !classKeys.size) return true;
+		const gameClassIds = getGameClassIds(game);
+		// Games without a class assignment are school-wide (legacy behavior).
+		if (!gameClassIds.length) return true;
+		// The student must be in one of the assigned classes. A student with no
+		// resolvable class keys can never match a class-scoped game — previously
+		// this fell through to `return true`, leaking other classes' games.
+		if (!classKeys.size) return false;
 		if (
 			getParticipant(game?.session || {}, context?.user?.id) ||
 			String(game?.ownerId || '').trim() === String(context?.user?.id || '').trim()
@@ -2087,6 +2160,9 @@
 		return getGamesStore().filter((game) => {
 			if (!game || !game.id) return false;
 			if (isTournamentManagedGame(game)) return false;
+			// Draft games are still being authored by the teacher — they are
+			// admin-only until the lobby is opened. Students must not see them.
+			if (String(game.status || 'draft').toLowerCase() === 'draft') return false;
 			return gameMatchesStudentClass(game, context);
 		});
 	}
@@ -6317,9 +6393,7 @@
 	) {
 		if (!targetIds.some((id) => byId(id))) return;
 		const liveCount = games.filter((g) => g.status === 'live').length;
-		const openCount = games.filter(
-			(g) => g.status === 'open' || g.status === 'draft',
-		).length;
+		const openCount = games.filter((g) => g.status === 'open').length;
 		const resultRecords = buildGameResultRecords(games);
 		const outcomes = resultRecords
 			.map((record) => getGameRecordOutcome(record, context))
@@ -6463,16 +6537,14 @@
 		games.forEach(cacheGameSnapshot);
 		renderGameStats(games, context);
 		renderGameResultsPanel(games, context);
-		const filtered = games.filter((game) => {
-			const viewModel = getStudentGameViewModel(game, context);
-			// Filter by status
-			let matchesStatus = false;
-			if (state.gameFilter === 'open')
-				matchesStatus =
-					viewModel.displayStatus === 'open' ||
-					viewModel.displayStatus === 'draft';
-			else if (state.gameFilter === 'live')
-				matchesStatus = viewModel.displayStatus === 'live';
+			const filtered = games.filter((game) => {
+				const viewModel = getStudentGameViewModel(game, context);
+				// Filter by status
+				let matchesStatus = false;
+				if (state.gameFilter === 'open')
+					matchesStatus = viewModel.displayStatus === 'open';
+				else if (state.gameFilter === 'live')
+					matchesStatus = viewModel.displayStatus === 'live';
 			else if (state.gameFilter === 'completed')
 				matchesStatus =
 					viewModel.displayStatus === 'completed' ||
@@ -6584,8 +6656,7 @@
 					}
 					<div class="game-actions">
 						${
-							globalStatus === 'open' ||
-							globalStatus === 'draft'
+							globalStatus === 'open'
 								? game.mode === 'team'
 									? `
 								${
@@ -11443,6 +11514,7 @@
 		document.querySelectorAll('.workspace-tab-btn').forEach((btn) => {
 			btn.addEventListener('click', () => {
 				switchWorkspaceTab(btn.dataset.workspaceTab || 'overview');
+				closeMobileNav();
 			});
 		});
 	}
@@ -12734,6 +12806,41 @@
 		timeLimitSec: 0,
 	};
 
+	// ── 20-point grading scale ─────────────────────────────────────────────
+	// All training (and exam-facing) scores are normalized to a /20 scale
+	// regardless of question count: 12.5/20, 8.75/20 … Passing threshold is
+	// strictly above 10 (x,xx > 10 passed; x,xx < 10 failed).
+	function grade20(score, totalQuestions) {
+		const total = Math.max(0, Number(totalQuestions) || 0);
+		const correct = Math.max(0, Number(score) || 0);
+		if (total <= 0) return 0;
+		const value = Math.min(20, (correct / total) * 20);
+		return Math.round(value * 100) / 100;
+	}
+
+	function isPassingGrade20(grade) {
+		return Number(grade) > 10;
+	}
+
+	// French-style decimal comma for display: 12,50 / 20
+	function formatGrade20(grade) {
+		const fixed = (Number(grade) || 0).toFixed(2).replace('.', ',');
+		return `${fixed} / 20`;
+	}
+
+	// Human-readable duration: seconds → "1h 05m", "12m 30s", "45s".
+	// Never renders absurd minute counts (the old `16232m 38s` came from a
+	// stale persisted startTime being reused across sessions).
+	function formatTrainingDuration(totalSeconds) {
+		const sec = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+		const h = Math.floor(sec / 3600);
+		const m = Math.floor((sec % 3600) / 60);
+		const s = sec % 60;
+		if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+		if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
+		return `${s}s`;
+	}
+
 	const TRAINING_QUESTION_TYPE_ALIASES = {
 		'mcq': 'multiple-choice',
 		'multiple': 'multiple-choice',
@@ -12851,35 +12958,16 @@
 		return `training-${trainingState.examId || 'practice'}-${userId}`;
 	}
 
+	// NOTE: no restore path anymore. Closing the modal or finishing the
+	// test ends the attempt for good; `openTrainingMode` always starts a
+	// fresh session (new shuffle, new startTime). persistTrainingAnswers is
+	// kept as a no-op so legacy call sites keep working without resuming.
 	function persistTrainingAnswers() {
-		try {
-			const payload = {
-				currentIndex: trainingState.currentIndex,
-				userAnswers: trainingState.userAnswers,
-				perQuestion: trainingState.perQuestion,
-				startTime: trainingState.startTime,
-				completed: trainingState.completed,
-			};
-			localStorage.setItem(getTrainingStorageKey(), JSON.stringify(payload));
-		} catch (_) {}
+		/* intentionally disabled — sessions are never resumed */
 	}
 
 	function restoreTrainingAnswers() {
-		try {
-			const raw = localStorage.getItem(getTrainingStorageKey());
-			if (!raw) return false;
-			const payload = JSON.parse(raw);
-			if (!payload || typeof payload !== 'object') return false;
-			trainingState.currentIndex = Number(payload.currentIndex) || 0;
-			trainingState.userAnswers = payload.userAnswers || {};
-			trainingState.perQuestion = Array.isArray(payload.perQuestion)
-				? payload.perQuestion
-				: [];
-			if (payload.startTime) trainingState.startTime = payload.startTime;
-			return true;
-		} catch (_) {
-			return false;
-		}
+		return false;
 	}
 
 	function clearTrainingStorage() {
@@ -13015,7 +13103,10 @@
 			}
 		} catch (_) {}
 
-		restoreTrainingAnswers();
+		// Every training launch is a fresh attempt: no session resume.
+		// Closing the modal or finishing the test ends the attempt (already
+		// counted as a try), and the next start reshuffles question order.
+		clearTrainingStorage();
 
 		const modal = byId('studentTrainingModal');
 		if (modal) modal.classList.add('active');
@@ -13026,6 +13117,16 @@
 	window.closeTrainingModal = function () {
 		const modal = byId('studentTrainingModal');
 		if (modal) modal.classList.remove('active');
+		// Closing the modal mid-test counts the attempt as finished: the
+		// result is saved with whatever was answered so far, and the next
+		// start begins a brand-new session with reshuffled questions.
+		if (
+			trainingState.active &&
+			!trainingState.completed &&
+			trainingState.questions.length > 0
+		) {
+			finishTrainingTest();
+		}
 		trainingState.active = false;
 		stopTrainingTimer();
 		stopPerQuestionTimer();
@@ -13114,6 +13215,10 @@
 		if (q && q.allowMultipleAnswers === true) return true;
 		const ans = String((q && q.answer) || '').trim();
 		if (!ans) return false;
+		// `multi::a|b` is the encoded multi-select convention some write
+		// paths store; the bootstrap decoder normally rewrites it, but the
+		// local cache can still carry the raw prefix.
+		if (ans.startsWith('multi::')) return true;
 		if (ans.includes('|')) return true;
 		if (ans.split(',').filter((s) => s.trim()).length > 1) return true;
 		if (ans.split(';').filter((s) => s.trim()).length > 1) return true;
@@ -14142,23 +14247,42 @@
 	}
 
 	// ── Grading helpers ─────────────────────────────────────────────────────
+	// Split a multi-select answer into its tokens, whatever separator the
+	// source used. User checkboxes join with `|`, but stored correct
+	// answers arrive comma-joined ("0,1" — the bootstrap decoder rewrites
+	// `multi::0|1` to "0,1") and some rows use `;`. Splitting both sides
+	// on every separator keeps the comparison symmetric.
+	function splitTrainingMultiAnswer(raw) {
+		return String(raw || '')
+			.split(/[|,;]/)
+			.map((s) => s.trim().toLowerCase())
+			.filter(Boolean);
+	}
+
+	// Strip the `multi::` prefix some write paths store on multi-select
+	// answers (normally decoded at bootstrap, but raw cached rows can still
+	// carry it).
+	function stripTrainingMultiPrefix(raw) {
+		const s = String(raw || '').trim();
+		return s.startsWith('multi::') ? s.slice('multi::'.length) : s;
+	}
+
 	function trainingAnswersEqual(userAnswer, correctAnswer, qType) {
-		const u = String(userAnswer || '').trim();
-		const c = String(correctAnswer || '').trim();
+		let u = String(userAnswer || '').trim();
+		let c = String(correctAnswer || '').trim();
 		if (!u) return false;
+		if (qType === 'multiple-choice-multi') {
+			u = stripTrainingMultiPrefix(u);
+			c = stripTrainingMultiPrefix(c);
+		}
 		switch (qType) {
 			case 'multiple-choice':
 			case 'true-false':
 			case 'odd-one-out':
 				return u.toLowerCase() === c.toLowerCase();
 			case 'multiple-choice-multi': {
-				// User joined with '|', correct also '|'
-				const userSet = new Set(
-					u.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean),
-				);
-				const correctSet = new Set(
-					c.split('|').map((s) => s.trim().toLowerCase()).filter(Boolean),
-				);
+				const userSet = new Set(splitTrainingMultiAnswer(u));
+				const correctSet = new Set(splitTrainingMultiAnswer(c));
 				if (userSet.size !== correctSet.size) return false;
 				for (const v of userSet) {
 					if (!correctSet.has(v)) return false;
@@ -14243,6 +14367,16 @@
 				.map((s, i) => `${i + 1}. ${s}`)
 				.join('  ');
 		}
+		if (qType === 'multiple-choice-multi') {
+			// Checkboxes join with `|`, stored answers use `,` — show a clean
+			// comma list in either case (also strips a raw `multi::` prefix).
+			const cleaned = stripTrainingMultiPrefix(answer);
+			return cleaned
+				.split(/[|,;]/)
+				.map((s) => s.trim())
+				.filter(Boolean)
+				.join(', ');
+		}
 		return String(answer);
 	}
 
@@ -14264,8 +14398,24 @@
 		trainingState.score = score;
 
 		const context = getStudentContext();
-		const timeSpent = Math.max(1, Math.round((trainingState.endTime - trainingState.startTime) / 1000));
+		// Elapsed time is measured from THIS attempt's start only — a stale
+		// persisted startTime across sessions previously produced absurd
+		// values like "16232m 38s".
+		const attemptStart = trainingState.startTime || trainingState.endTime;
+		const timeSpent = Math.max(
+			1,
+			Math.min(
+				86400,
+				Math.round((trainingState.endTime - attemptStart) / 1000),
+			),
+		);
 		const totalQuestions = trainingState.questions.length;
+
+		// /20 grading scale: normalized regardless of question count.
+		// Grade > 10 passes; grade < 10 fails. Stored as a decimal number
+		// (e.g. 12.5) in the DB; displayed as "12,50 / 20".
+		const grade = grade20(score, totalQuestions);
+		const passed = isPassingGrade20(grade);
 
 		const newResult = {
 			id: 'training-' + Date.now(),
@@ -14278,10 +14428,13 @@
 			examId: trainingState.examId || 'training-practice',
 			examTitle: 'Training Practice',
 			mode: 'training',
-			score: score,
+			// /20 scale everywhere (score = grade out of 20, e.g. 12.5)
+			score: grade,
 			totalQuestions: totalQuestions,
 			earnedPoints: score,
 			totalPoints: totalQuestions,
+			grade20: grade,
+			passed: passed,
 			timeSpent: timeSpent,
 			time_spent: timeSpent,
 			completedAt: new Date().toISOString(),
@@ -14355,11 +14508,18 @@
 	function renderTrainingResultsView(container) {
 		const total = trainingState.questions.length;
 		const score = trainingState.score;
+		const grade = grade20(score, total);
+		const passed = isPassingGrade20(grade);
 		const percent = total > 0 ? Math.round((score / total) * 100) : 0;
-		const timeSec = Math.round((trainingState.endTime - trainingState.startTime) / 1000);
-		const timeMin = Math.floor(timeSec / 60);
-		const timeRemSec = timeSec % 60;
-		const timeDisplay = `${timeMin}m ${timeRemSec}s`;
+		const timeSec = Math.max(
+			0,
+			Math.round(
+				((trainingState.endTime || Date.now()) -
+					(trainingState.startTime || trainingState.endTime || Date.now())) /
+					1000,
+			),
+		);
+		const timeDisplay = formatTrainingDuration(timeSec);
 
 		let correctionsHtml = '';
 		if (trainingState.showCorrections) {
@@ -14412,7 +14572,11 @@
 				</div>
 
 				<div class="results-stats-grid">
-					<div class="stat-card accent">
+					<div class="stat-card accent ${passed ? 'stat-passed' : 'stat-failed'}">
+						<div class="stat-value">${formatGrade20(grade)}</div>
+						<div class="stat-label">${passed ? 'Passed' : 'Failed'} · Grade</div>
+					</div>
+					<div class="stat-card">
 						<div class="stat-value">${score} / ${total}</div>
 						<div class="stat-label">Correct Answers</div>
 					</div>
@@ -14523,12 +14687,20 @@
 				return;
 			}
 
-			if (participant && (status === 'open' || status === 'draft' || status === 'live')) {
+			if (status === 'draft') {
+				showToast(
+					'This game has not been published yet. Wait for your teacher to open the lobby.',
+					'info',
+				);
+				return;
+			}
+
+			if (participant && (status === 'open' || status === 'live')) {
 				openGameStageForStudent(gameId, context);
 				return;
 			}
 
-			if (!game || status === 'open' || status === 'draft') {
+			if (!game || status === 'open') {
 				joinGame(gameId, context).then((response) => {
 					if (response?.error) return;
 					syncGameStateNow(gameId, context).finally(() => {
@@ -14577,6 +14749,10 @@
 		if (!confirm('Delete this pending profile request?')) return;
 		deletePendingProfileRequest(requestId, context);
 	};
+
+	// Exposed for the inline onclick on the header hamburger button
+	// (same pattern as the admin panel's toggleMobileNav).
+	window.toggleMobileNav = toggleMobileNav;
 
 	document.addEventListener('DOMContentLoaded', () => {
 		bindWorkspaceTabs();
