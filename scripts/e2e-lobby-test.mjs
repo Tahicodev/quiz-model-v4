@@ -92,6 +92,68 @@ try {
     }),
   );
 
+  // Regression: "Need at least 1 question" when 16 questions are assigned.
+  // A bootstrap-hydrated copy carries only question ID strings; a later
+  // snapshot from the admin carries the full objects. The engine must adopt
+  // the client's questions when the tracked copy is poisoned.
+  // game:hydrate is fire-and-forget in the engine (no ack) — emit and settle.
+  await step('game:hydrate (poisoned: question id strings only)', async () => {
+    admin.emit('game:hydrate', {
+      id: 'g-e2e-2',
+      name: 'E2E DB-shaped',
+      type: 'race',
+      status: 'open',
+      mode: 'individual',
+      questions: ['q-a', 'q-b'],
+      settings: {},
+      classIds: ['class-a'],
+    });
+    await new Promise((r) => setTimeout(r, 200));
+  });
+  await step('game:openLobby (db-shaped game)', () =>
+    emitAck(admin, 'game:openLobby', {
+      gameId: 'g-e2e-2',
+      gameData: {
+        id: 'g-e2e-2',
+        name: 'E2E DB-shaped',
+        type: 'race',
+        status: 'open',
+        mode: 'individual',
+        questions: ['q-a', 'q-b'],
+        settings: {},
+        classIds: ['class-a'],
+      },
+    }),
+  );
+  const join2 = await step('game:join (db-shaped game)', () =>
+    emitAck(student, 'game:join', { gameId: 'g-e2e-2', userId: 'stu-e2e', userName: 'Alice', classId: 'class-a' }),
+  );
+  if (!join2?.ok) throw new Error('join of db-shaped game failed');
+  const start2 = await step('game:start with rescued client questions', () =>
+    emitAck(admin, 'game:start', {
+      gameId: 'g-e2e-2',
+      gameData: {
+        id: 'g-e2e-2',
+        name: 'E2E DB-shaped',
+        type: 'race',
+        status: 'open',
+        mode: 'individual',
+        questions: [
+          { id: 'q-a', question: '3+3?', answer: '6', options: ['5', '6'] },
+          { id: 'q-b', question: '5+5?', answer: '10', options: ['9', '10'] },
+        ],
+        settings: {},
+        classIds: ['class-a'],
+        session: join2.session,
+      },
+    }),
+  );
+  if (start2?.error) throw new Error(`rescue start failed: ${start2.error}`);
+  if (start2?.game?.status !== 'live') throw new Error(`expected live, got ${start2?.game?.status}`);
+  if (start2?.game?.questions?.length !== 2) {
+    throw new Error(`expected 2 rescued questions, got ${start2?.game?.questions?.length}`);
+  }
+
   await step('game:openLobby', () => emitAck(admin, 'game:openLobby', { gameId: 'g-e2e-1' }));
 
   const joinAck = await step('game:join', () =>

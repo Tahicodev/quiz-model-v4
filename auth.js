@@ -10,6 +10,7 @@
 	const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
 	const PROFILE_REQUESTS_KEY = 'quizProfileRequests';
 	const ACCOUNT_REQUESTS_KEY = 'quizAccountRequests';
+	const PENDING_IMPORTS_KEY = 'quizPendingImports';
 	const DEFAULT_RECOVERY_CODE = 'QuizAdminRecovery2024';
 	const RECOVERY_UNLOCK_TTL_MS = 1000 * 60 * 15;
 
@@ -1854,14 +1855,13 @@
 						return;
 					}
 
-					const existingClasses = safeJsonParse(
-						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
-						[],
-					);
-					const ownerId = currentUser?.id || '';
+					// ── Teacher gate: stage the import for admin confirmation ──
+					// Teachers may prepare imports for their own classes, but the
+					// roster is only materialized once an admin confirms it. Admins
+					// keep the previous direct-apply behaviour.
 					if (isTeacher()) {
 						if (scope.mode !== 'class') {
-							showToast('Select a class before importing', 'error');
+							showToast('Select one of your classes before importing', 'error');
 							return;
 						}
 						const allowedClassIds = getTeacherClassIds();
@@ -1869,7 +1869,25 @@
 							showToast('You can only import into your classes', 'error');
 							return;
 						}
+						const staged = stagePendingImport({
+							classId: scope.classId,
+							students: extractedStudents,
+							sourceFileName: file.name || 'import.json',
+						});
+						if (staged) {
+							showToast(
+								`Import staged: ${staged.studentCount} student(s) sent to admin for confirmation`,
+								'success',
+							);
+						}
+						return;
 					}
+
+					const existingClasses = safeJsonParse(
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+						[],
+					);
+					const ownerId = currentUser?.id || '';
 
 					if (scope.mode === 'class' || scope.mode === 'guest') {
 						const classes = existingClasses;
@@ -2856,7 +2874,235 @@
 			}
 		}
 
-		function getProfileRequests() {
+		// ── Pending student imports (teacher-staged, admin-confirmed) ───────────
+	// Teachers can prepare CSV/JSON student imports for their own classes, but
+	// nothing materializes until an admin confirms the request — mirroring the
+	// account-requests review flow.
+
+	function getPendingImports() {
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		return r
+			? r.getValue_sync('pending_imports', [])
+			: safeJsonParse(localStorage.getItem(PENDING_IMPORTS_KEY), []);
+	}
+
+	function savePendingImports(imports) {
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		if (r) {
+			r.setAll_sync('pending_imports', imports);
+		} else {
+			localStorage.setItem(PENDING_IMPORTS_KEY, JSON.stringify(imports));
+		}
+	}
+
+	function stagePendingImport({ classId, students, sourceFileName }) {
+		const roster = dedupeStudentRoster(students || []);
+		if (!roster.length) {
+			showToast('No students found in file', 'error');
+			return null;
+		}
+		const className = resolveClassNameById(classId);
+		if (!className) {
+			showToast('Selected class not found', 'error');
+			return null;
+		}
+
+		const imports = getPendingImports();
+		const request = {
+			id:
+				typeof generateUUID === 'function'
+					? generateUUID()
+					: `pi-${Date.now()}`,
+			type: 'pending_import',
+			createdAt: new Date().toISOString(),
+			status: 'pending',
+			teacherId: currentUser?.id || '',
+			teacherName: currentUser?.name || currentUser?.username || '',
+			classId: String(classId),
+			className,
+			sourceFileName: String(sourceFileName || ''),
+			studentCount: roster.length,
+			students: roster.map((s) => ({ number: s.number, name: s.name })),
+			reviewerId: '',
+			reviewedAt: '',
+			reviewNote: '',
+		};
+		imports.unshift(request);
+		savePendingImports(imports);
+
+		if (typeof logActivity === 'function') {
+			logActivity(
+				'pending_import',
+				`${request.teacherName || 'Teacher'} staged ${roster.length} student import`,
+				'requested',
+				{ importId: request.id, classId, className },
+			);
+		}
+		if (typeof window.addAdminNotification === 'function') {
+			window.addAdminNotification({
+				type: 'pending_import',
+				message: `${request.teacherName || 'A teacher'} staged an import of ${roster.length} student(s) for ${className}`,
+				data: { importId: request.id, classId, className },
+			});
+		}
+		if (typeof window.refreshPendingImportsBadge === 'function') {
+			window.refreshPendingImportsBadge();
+		}
+		return request;
+	}
+
+	async function applyPendingImport(importId) {
+		if (!isAdmin()) {
+			showToast('Only admins can confirm staged imports', 'error');
+			return null;
+		}
+		const imports = getPendingImports();
+		const request = imports.find((entry) => entry.id === importId);
+		if (!request || request.status !== 'pending') return null;
+
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
+		const targetClass = classes.find(
+			(cls) => String(cls.id) === String(request.classId),
+		);
+		if (!targetClass) {
+			request.status = 'rejected';
+			request.reviewNote = 'Class no longer exists';
+			request.reviewedAt = new Date().toISOString();
+			savePendingImports(imports);
+			showToast('Import rejected: class no longer exists', 'error');
+			return null;
+		}
+
+		const incomingRoster = dedupeStudentRoster(request.students || []);
+		if (!incomingRoster.length) {
+			showToast('Staged import has no students', 'error');
+			return null;
+		}
+
+		const mergedRoster = dedupeStudentRoster([
+			...(targetClass.students || []),
+			...incomingRoster,
+		]);
+		targetClass.students = mergedRoster.map((student) => ({
+			number: student.number,
+			name: student.name,
+		}));
+
+		window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
+		await syncClassStudentsFromClassData(targetClass, mergedRoster, {
+			removeMissing: false,
+		});
+
+		request.status = 'approved';
+		request.reviewerId = currentUser?.id || '';
+		request.reviewedAt = new Date().toISOString();
+		savePendingImports(imports);
+
+		if (typeof window.updateClassList === 'function') {
+			window.updateClassList(classes);
+		}
+		if (typeof window.renderUsersTable === 'function') {
+			window.renderUsersTable();
+		}
+		if (typeof logActivity === 'function') {
+			logActivity(
+				'pending_import',
+				`Import of ${incomingRoster.length} student(s) into ${targetClass.name}`,
+				'approved',
+				{ importId: request.id, classId: targetClass.id },
+			);
+		}
+		return request;
+	}
+
+	function rejectPendingImport(importId, note = '') {
+		if (!isAdmin()) {
+			showToast('Only admins can review staged imports', 'error');
+			return null;
+		}
+		const imports = getPendingImports();
+		const request = imports.find((entry) => entry.id === importId);
+		if (!request || request.status !== 'pending') return null;
+		request.status = 'rejected';
+		request.reviewNote = note;
+		request.reviewerId = currentUser?.id || '';
+		request.reviewedAt = new Date().toISOString();
+		savePendingImports(imports);
+		if (typeof logActivity === 'function') {
+			logActivity(
+				'pending_import',
+				`Staged import for ${request.className}`,
+				'rejected',
+				{ importId: request.id, classId: request.classId },
+			);
+		}
+		return request;
+	}
+
+	function renderPendingImports() {
+		const container = document.getElementById('pendingImportsList');
+		if (!container) return;
+		const imports = getPendingImports();
+		const pending = imports.filter(
+			(entry) => String(entry.status || 'pending') === 'pending',
+		);
+
+		if (typeof window.refreshPendingImportsBadge === 'function') {
+			window.refreshPendingImportsBadge();
+		}
+
+		if (!pending.length) {
+			container.innerHTML =
+				'<div class="empty-state">No staged imports waiting for confirmation.</div>';
+			return;
+		}
+
+		container.innerHTML = pending
+			.map((req) => {
+				const rosterPreview = (req.students || [])
+					.slice(0, 5)
+					.map(
+						(s) =>
+							`<span class="pending-import-chip">${escapeHtml(
+								String(s.number || ''),
+							)} · ${escapeHtml(String(s.name || ''))}</span>`,
+					)
+					.join('');
+				const remaining = (req.students || []).length - 5;
+				return `
+					<div class="pending-import-card" data-import-id="${escapeHtml(req.id)}">
+						<div class="pending-import-main">
+							<div>
+								<div class="pending-import-title">${escapeHtml(
+									req.className || 'Class',
+								)} — ${escapeHtml(String(req.studentCount || 0))} student(s)</div>
+								<div class="pending-import-meta">
+									By ${escapeHtml(req.teacherName || 'Teacher')} · ${new Date(
+									req.createdAt,
+								).toLocaleString()}
+									${req.sourceFileName ? ` · ${escapeHtml(req.sourceFileName)}` : ''}
+								</div>
+								<div class="pending-import-roster">${rosterPreview}${
+									remaining > 0
+										? `<span class="pending-import-chip muted">+${remaining} more</span>`
+										: ''
+								}</div>
+							</div>
+							<div class="pending-import-actions">
+								<button class="btn btn-sm btn-primary" onclick="approvePendingImport('${escapeHtml(req.id)}')">Confirm</button>
+								<button class="btn btn-sm btn-danger-soft" onclick="rejectPendingImportUI('${escapeHtml(req.id)}')">Reject</button>
+							</div>
+						</div>
+					</div>
+				`;
+			})
+			.join('');
+	}
+
+	function getProfileRequests() {
 			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
 			return r ? r.getValue_sync('profile_requests', []) : safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
 		}
@@ -3864,6 +4110,11 @@
 		deleteProfileRequest,
 		approveProfileRequest,
 		rejectProfileRequest,
+		getPendingImports,
+		stagePendingImport,
+		applyPendingImport,
+		rejectPendingImport,
+		renderPendingImports,
 		getAccountRequests,
 		submitAccountRequest,
 		approveAccountRequest,
@@ -3896,6 +4147,30 @@
 	window.toggleUserStatus = toggleUserStatus;
 	window.renderUsersTable = renderUsersTable;
 	window.renderProfileRequests = renderProfileRequests;
+	window.renderPendingImports = renderPendingImports;
+	window.approvePendingImport = async function (importId) {
+		const result = await applyPendingImport(importId);
+		if (result) {
+			showToast('Staged import confirmed and applied', 'success');
+			renderPendingImports();
+		}
+	};
+	window.rejectPendingImportUI = function (importId) {
+		const result = rejectPendingImport(importId);
+		if (result) {
+			showToast('Staged import rejected', 'info');
+			renderPendingImports();
+		}
+	};
+	window.refreshPendingImportsBadge = function () {
+		const badge = document.getElementById('pendingImportsBadge');
+		if (!badge) return;
+		const pending = getPendingImports().filter(
+			(entry) => String(entry.status || 'pending') === 'pending',
+		).length;
+		badge.textContent = String(pending);
+		badge.classList.toggle('hidden', pending === 0);
+	};
 	window.exportUserData = exportUserData;
 	window.importUserData = importUserData;
 	window.exportUsersWithClasses = exportUsersWithClasses;

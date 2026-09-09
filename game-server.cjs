@@ -4529,6 +4529,21 @@ function registerGameEngine(io) {
 				return;
 			}
 			let game = getTrackedGame(gameId);
+			// A tracked copy can carry a poisoned questions array (e.g. hydrated
+			// from a bootstrap snapshot where questions were only ID strings).
+			// If the tracked copy has no engine-valid questions but the client's
+			// snapshot does, adopt the client's questions — the game otherwise
+			// fails start validation with "Need at least 1 question" even though
+			// 16 are assigned in the database.
+			const hasValidQuestions = (candidate) =>
+				Array.isArray(candidate?.questions) &&
+				candidate.questions.some((q) => q && typeof q === 'object' && q.id);
+			if (game && gameData && gameData.id === gameId && !hasValidQuestions(game) && hasValidQuestions(gameData)) {
+				game.questions = JSON.parse(JSON.stringify(gameData.questions));
+				console.log(
+					`[GameServer] Rescued questions from client snapshot during start: ${game.name} (${game.questions.length} questions)`,
+				);
+			}
 			if (!game && gameData && gameData.id === gameId) {
 				const hydrated = JSON.parse(JSON.stringify(gameData));
 				hydrated.type = normalizeGameType(hydrated.type);

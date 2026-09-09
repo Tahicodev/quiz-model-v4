@@ -284,23 +284,10 @@ function createNewCategory() {
     document.getElementById('categoryModalTitle').textContent = 'Create New Category';
     document.getElementById('categoryForm').reset();
     document.getElementById('categoryColor').value = getRandomCategoryColor();
-    
-    // Clear selected questions
-    const selectedContainer = document.getElementById('selectedQuestionsListCategory');
-    if (selectedContainer) {
-        selectedContainer.innerHTML = '';
-    }
-    
-    // Show modal first
+
+    // The create/edit form no longer embeds the question picker — questions
+    // are assigned from the dedicated Assign Questions modal (table action).
     openCategoryModal();
-    
-    // Load available questions after a small delay
-    setTimeout(() => {
-        populateCategoryFilter();
-        loadAvailableQuestionsForCategory();
-        updateCategoryQuestionCountsUI();
-        console.log('New category modal opened and questions loaded');
-    }, 100);
 }
 
 function editCategory(categoryId) {
@@ -316,24 +303,10 @@ function editCategory(categoryId) {
     document.getElementById('categoryName').value = category.name || '';
     document.getElementById('categoryDescription').value = category.description || '';
     document.getElementById('categoryColor').value = category.color || '#3b82f6';
-    
-    // Clear selected questions container
-    const selectedContainer = document.getElementById('selectedQuestionsListCategory');
-    if (selectedContainer) {
-        selectedContainer.innerHTML = '';
-    }
-    
-    // Show modal first
+
+    // Questions are no longer part of the edit form; they are managed via the
+    // Assign Questions action in the categories table.
     openCategoryModal();
-    
-    // Load available questions - selected questions are now handled inside loadAvailableQuestionsForCategory
-    setTimeout(() => {
-        populateCategoryFilter();
-        loadAvailableQuestionsForCategory();
-        updateCategoryQuestionCountsUI();
-        updateBulkActionButtonsForCategory();
-        console.log('Edit category modal opened and questions loaded');
-    }, 100);
 }
 
 async function deleteCategory(categoryId) {
@@ -402,9 +375,12 @@ async function saveCategoryForm() {
         return;
     }
 
-    // Get assigned questions from the selected questions list in the modal
-    const selectedQuestionElements = document.querySelectorAll('#selectedQuestionsListCategory .premium-question-item, #selectedQuestionsListCategory .question-item');
-    const assignedQuestionIds = Array.from(selectedQuestionElements).map(el => parseInt(el.dataset.questionId || el.dataset.index));
+    // Question assignments are handled by the dedicated Assign Questions
+    // modal; here we only preserve whatever the category already has.
+    const existing = currentCategoryId
+        ? categories.find(c => c.id === currentCategoryId)
+        : null;
+    const assignedQuestionIds = Array.isArray(existing?.questions) ? existing.questions : [];
 
     const categoryData = {
         id: currentCategoryId || generateUUID(),
@@ -412,7 +388,7 @@ async function saveCategoryForm() {
         description: description || '',
         color: color,
         questions: assignedQuestionIds,
-        questionCount: assignedQuestionIds.length,
+        questionCount: existing?.questionCount ?? assignedQuestionIds.length,
         dateCreated: currentCategoryId ?
             categories.find(c => c.id === currentCategoryId)?.dateCreated || new Date().toISOString() :
             new Date().toISOString(),
@@ -459,40 +435,20 @@ async function saveCategoryForm() {
         categories.push(categoryData);
     }
 
-    // Update questions with category assignment FIRST
-    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
-    
-    // First, remove this category from all questions
-    savedQuestions.forEach(question => {
-        if (question.category === categoryData.id) {
-            question.category = 'uncategorized';
-        }
-    });
-    
-    // Then assign the category to selected questions
-    assignedQuestionIds.forEach(questionId => {
-        if (savedQuestions[questionId]) {
-            savedQuestions[questionId].category = categoryData.id;
-        }
-    });
-    
-    // Save updated questions
-    window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
-    
     // NOW save categories and update UI (counts will be correct now)
     saveCategories();
     updateCategoryList();
     loadCategoriesIntoSelect();
     loadCategoriesIntoFilters();
-    
+
     closeCategoryModal();
-    showToast('Category saved successfully!', 'success');
-    
+    showToast('Category saved successfully!');
+
     // Log activity
     if (typeof logActivity === 'function') {
         logActivity('category', categoryData.name, currentCategoryId ? 'edited' : 'created', {
             id: categoryData.id,
-            questionCount: assignedQuestionIds.length
+            questionCount: categoryData.questionCount
         });
     }
 }
@@ -552,9 +508,6 @@ function rgbToHex(rgb) {
 }
 
 function openCategoryModal() {
-    // Reset selected questions
-    selectedQuestionsForCategory = [];
-    
     // Show modal first
     const modal = document.getElementById('categoryModal');
     if (modal) {
@@ -563,22 +516,13 @@ function openCategoryModal() {
             modal.classList.add('active');
         }, 10);
     }
-    
+
     // Initialize color picker logic
     initColorPicker();
-    
+
     // Set initial color state
     const currentColor = document.getElementById('categoryColor').value;
     selectColorSwatch(currentColor);
-    
-    // Load available questions after a small delay to ensure DOM is ready
-    setTimeout(() => {
-        populateCategoryFilter();
-        setupCategoryModalFilters();
-        loadAvailableQuestionsForCategory();
-        updateCategoryQuestionCountsUI();
-        console.log('Category modal opened and questions loaded');
-    }, 100);
 }
 
 function setupCategoryModalFilters() {
@@ -621,12 +565,78 @@ function closeCategoryModal() {
         modal.style.display = 'none';
         modal.classList.remove('active');
     }
-    
-    // Reset selected questions
+
+    // Clear form
+    document.getElementById('categoryForm').reset();
+}
+
+// ============================================
+// ASSIGN QUESTIONS MODAL (category ↔ questions)
+// ============================================
+// Question assignment was split out of the create/edit modal: the categories
+// table's "Assign Questions" action opens this dedicated modal. The picker
+// markup keeps its original element IDs (availableQuestionsCategory,
+// selectedQuestionsListCategory, …) so the existing filter/toggle helpers
+// keep working unchanged.
+
+let assignCategoryQuestionsId = null;
+
+function openAssignCategoryQuestions(categoryId) {
+    const modal = document.getElementById('assignCategoryQuestionsModal');
+    if (!modal) {
+        showToast('Assign Questions modal not found', 'error');
+        return;
+    }
+
+    // Resolve target category ('uncategorized' is a system pseudo-category)
+    const isUncategorized = categoryId === 'uncategorized';
+    const category = isUncategorized
+        ? { id: 'uncategorized', name: 'Uncategorized' }
+        : categories.find(c => c.id === categoryId);
+    if (!category) {
+        showToast('Category not found', 'error');
+        return;
+    }
+
+    assignCategoryQuestionsId = categoryId;
+
+    const titleEl = document.getElementById('assignCategoryQuestionsTitle');
+    if (titleEl) titleEl.textContent = `Assign Questions — ${category.name}`;
+
+    // Reset any previous state, then show the modal. Selected questions are
+    // populated inside loadAvailableQuestionsForCategory from the questions'
+    // current category value.
+    selectedQuestionsForCategory = [];
+    const selectedContainer = document.getElementById('selectedQuestionsListCategory');
+    if (selectedContainer) selectedContainer.innerHTML = '';
+    resetAssignCategoryFilters();
+
+    promoteAssignModal(modal);
+    modal.style.display = 'flex';
+    setTimeout(() => modal.classList.add('active'), 10);
+
+    setTimeout(() => {
+        setupCategoryModalFilters();
+        populateCategoryFilter();
+        loadAvailableQuestionsForCategory(false).then(() => {
+            preloadCategorySelectionFromRepo();
+        });
+        updateCategoryQuestionCountsUI();
+    }, 100);
+}
+
+function closeAssignCategoryQuestions() {
+    const modal = document.getElementById('assignCategoryQuestionsModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+    }
+    assignCategoryQuestionsId = null;
     selectedQuestionsForCategory = [];
     availableQuestionsForCategory = [];
-    
-    // Clear filters
+}
+
+function resetAssignCategoryFilters() {
     currentFilterForCategory = {
         search: '',
         type: 'all',
@@ -634,9 +644,123 @@ function closeCategoryModal() {
         difficulty: '',
         points: ''
     };
-    
-    // Clear form
-    document.getElementById('categoryForm').reset();
+    window.quickFilterActiveForCategory = [];
+    const ids = [
+        'questionSearchCategory',
+        'pointFilterCategoryMin',
+        'pointFilterCategoryMax',
+    ];
+    ids.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    const selects = [
+        ['difficultyFilterCategory', ''],
+        ['categoryFilterCategory', ''],
+        ['questionFilterCategory', 'all'],
+    ];
+    selects.forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+    });
+}
+
+// Seed the Selected column with questions currently belonging to the target
+// category, mirroring what the old edit modal did after loading the bank.
+function preloadCategorySelectionFromRepo() {
+    if (!assignCategoryQuestionsId) return;
+    const targetId = assignCategoryQuestionsId;
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
+    const selectedContainer = document.getElementById('selectedQuestionsListCategory');
+    if (!selectedContainer) return;
+
+    savedQuestions.forEach((question, index) => {
+        const belongs =
+            targetId === 'uncategorized'
+                ? !question.category || question.category === '' || question.category === 'uncategorized'
+                : question.category === targetId;
+        if (!belongs) return;
+        if (window.Auth?.canAccessItem && !window.Auth.canAccessItem('question', question)) return;
+
+        const questionType = getQuestionType(question);
+        const content = typeof window.renderQuestionContent === 'function'
+            ? window.renderQuestionContent(question.question, question, questionType, question.options, question.image, true)
+            : escapeHtml(question.question || 'Question Text Missing');
+
+        const item = document.createElement('div');
+        item.className = 'question-item categorized selected';
+        item.dataset.index = String(index);
+        item.dataset.questionId = String(index);
+        item.dataset.category = String(targetId);
+        item.dataset.type = questionType;
+        item.dataset.points = String(Number.parseFloat(question.points) || 1);
+        item.style.display = 'block';
+        item.onclick = () => removeQuestionFromCategoryAssignment(item);
+        item.innerHTML = `<div class="question-content">${content}</div>`;
+        selectedContainer.appendChild(item);
+    });
+
+    // Re-render the available side so pre-selected questions disappear from it
+    loadAvailableQuestionsForCategory(true);
+    updateCategoryQuestionCountsUI();
+}
+
+async function saveAssignCategoryQuestions() {
+    if (!assignCategoryQuestionsId) return;
+    const categoryId = assignCategoryQuestionsId;
+    const category = categories.find(c => c.id === categoryId);
+
+    const selectedQuestionElements = document.querySelectorAll(
+        '#selectedQuestionsListCategory .premium-question-item, #selectedQuestionsListCategory .question-item'
+    );
+    const assignedQuestionIds = Array.from(selectedQuestionElements).map(el =>
+        parseInt(el.dataset.questionId || el.dataset.index)
+    );
+
+    // Apply the assignment to the question store: first detach this category
+    // from every question, then attach it to the selected ones. This mirrors
+    // the legacy saveCategoryForm question logic exactly.
+    const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
+    savedQuestions.forEach(question => {
+        if (question.category === categoryId) {
+            question.category = 'uncategorized';
+        }
+    });
+    assignedQuestionIds.forEach(questionId => {
+        if (savedQuestions[questionId]) {
+            savedQuestions[questionId].category = categoryId;
+        }
+    });
+    window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
+
+    // Keep the category row's cached counts in sync
+    if (category) {
+        category.questions = assignedQuestionIds;
+        category.questionCount = assignedQuestionIds.length;
+        saveCategories();
+    }
+
+    updateCategoryList();
+    loadCategoriesIntoSelect();
+    loadCategoriesIntoFilters();
+    if (typeof window.renderQuestionList === 'function') {
+        try { window.renderQuestionList(); } catch (e) { /* optional */ }
+    }
+
+    closeAssignCategoryQuestions();
+    showToast(
+        assignedQuestionIds.length
+            ? `${assignedQuestionIds.length} question(s) assigned successfully!`
+            : 'Assignment cleared — no questions in this category.',
+        'success'
+    );
+
+    if (typeof logActivity === 'function') {
+        logActivity('category', category?.name || categoryId, 'assigned questions', {
+            id: categoryId,
+            questionCount: assignedQuestionIds.length
+        });
+    }
 }
 
 // Helper function to determine question type
@@ -648,22 +772,9 @@ function getQuestionType(question) {
 }
 
 function assignQuestionsToUncategorized() {
-    currentCategoryId = 'uncategorized';
-    document.getElementById('categoryModalTitle').textContent = 'Assign Questions to Uncategorized';
-    document.getElementById('categoryForm').reset();
-    
-    console.log('Opening assign to uncategorized modal');
-    
-    // Reset selected questions
-    selectedQuestionsForCategory = [];
-    
-    // Load available questions
-    loadAvailableQuestionsForCategory();
-    
-    // Show modal
-    document.getElementById('categoryModal').style.display = 'block';
-    
-    console.log('Modal should be open now');
+    // The "Assign Questions to Uncategorized" entry point now opens the same
+    // dedicated assign modal used by the table action.
+    openAssignCategoryQuestions('uncategorized');
 }
 
 // Load questions for category assignment interface with premium question selection grid
@@ -1457,16 +1568,23 @@ function updateCategoryList(categoriesList = categories) {
                 e.stopPropagation();
                 MobileActionSheet.open(`Category: ${escapeHtml(category.name)}`, [
                     {
-                        label: 'Edit Category',
-                        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
-                        onClick: () => editCategory(category.id)
+                        label: 'Assign Questions',
+                        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+                        onClick: () => openAssignCategoryQuestions(category.id)
                     },
-                    {
-                        label: 'Delete Category',
-                        icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-                        variant: 'danger',
-                        onClick: () => deleteCategory(category.id)
-                    }
+                    ...(!category.isSystem ? [
+                        {
+                            label: 'Edit Category',
+                            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+                            onClick: () => editCategory(category.id)
+                        },
+                        {
+                            label: 'Delete Category',
+                            icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+                            variant: 'danger',
+                            onClick: () => deleteCategory(category.id)
+                        }
+                    ] : [])
                 ]);
             }
         });
@@ -1482,10 +1600,16 @@ function updateCategoryList(categoriesList = categories) {
             <td>${category.questionCount}</td>
             <td>${new Date(category.dateCreated).toLocaleDateString()}</td>
             <td class="actions-cell">
-                ${category.isSystem ? `
-                    <span class="no-actions">-</span>
-                ` : `
-                    <div class="exam-actions">
+                <div class="exam-actions">
+                    <button class="exam-action-btn exam-assign-btn" onclick="openAssignCategoryQuestions('${category.id}')" title="Assign Questions">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                        </svg>
+                    </button>
+                    ${category.isSystem ? `
+                        <span class="no-actions" title="System category">—</span>
+                    ` : `
                         <button class="exam-action-btn exam-edit-btn" onclick="editCategory('${category.id}')" title="Edit">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1499,8 +1623,8 @@ function updateCategoryList(categoriesList = categories) {
                                 <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                             </svg>
                         </button>
-                    </div>
-                `}
+                    `}
+                </div>
             </td>
         `;
         tbody.appendChild(row);
@@ -2945,17 +3069,8 @@ function getCurrentCategoryId() {
 
 // Open category modal with specific category ID
 function openCategoryModalWithCategoryId(categoryId) {
-    // Set current category ID
-    window.currentCategoryId = categoryId;
-    
-    // Reset selected questions
-    selectedQuestionsForCategory = [];
-    
-    // Load available questions
-    loadAvailableQuestionsForCategory();
-    
-    // Show modal
-    document.getElementById('categoryModal').style.display = 'block';
+    // Question assignment now happens in the dedicated assign modal.
+    openAssignCategoryQuestions(categoryId);
 }
 
 
@@ -3050,6 +3165,22 @@ window.closeCategoryModal = closeCategoryModal;
 window.saveCategory = saveCategoryForm;
 window.editCategory = editCategory;
 window.deleteCategory = deleteCategory;
+window.openAssignCategoryQuestions = openAssignCategoryQuestions;
+window.closeAssignCategoryQuestions = closeAssignCategoryQuestions;
+window.saveAssignCategoryQuestions = saveAssignCategoryQuestions;
+
+// Shared helper for the dedicated assignment modals: promote the element to
+// <body> so it always stacks above nested containers, and hide the profile
+// dropdown the same way the class/exam modals do.
+function promoteAssignModal(modal) {
+    if (!modal) return;
+    if (modal.parentElement !== document.body) {
+        document.body.appendChild(modal);
+    }
+    const profileMenu = document.getElementById('profileMenu');
+    if (profileMenu) profileMenu.classList.remove('active');
+}
+window.promoteAssignModal = promoteAssignModal;
 
 // ============================================
 // INLINE CATEGORY CREATION

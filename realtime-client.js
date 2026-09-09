@@ -4,7 +4,7 @@
 		window.QUIZ_SERVER_HOST ||
 		location.origin
 	).replace(/\/$/, '');
-	const REALTIME_CLIENT_BUILD = '2026-09-08-post-login-reconnect';
+	const REALTIME_CLIENT_BUILD = '2026-09-09-socket-auth-keeper';
 	const REALTIME_RUNTIME_KEY = '__QUIZ_REALTIME_CLIENT_RUNTIME__';
 	const existingRuntime = window[REALTIME_RUNTIME_KEY];
 	if (existingRuntime?.initialized && existingRuntime.socket) {
@@ -15,6 +15,17 @@
 	// Resolve the current auth token. Login (legacy-auth-bridge) does NOT
 	// reload the page, so this value can appear any time after load.
 	function readAuthToken() {
+		// Prefer the socket-auth-keeper's resolution: it maps THIS tab's
+		// sessionStorage session (per-tab, never clobbered) ahead of the
+		// shared localStorage copy (which the admin tab's login may have
+		// overwritten in this same browser).
+		try {
+			var keeper = window.__QUIZ_SOCKET_AUTH_KEEPER__;
+			if (keeper && typeof keeper.getActiveToken === 'function') {
+				var active = keeper.getActiveToken();
+				if (active) return active;
+			}
+		} catch (e) {}
 		try {
 			var stores = [
 				sessionStorage.getItem('quizSession'),
@@ -522,6 +533,44 @@
 
 	socket.on('disconnect', (reason) => {
 		console.warn('[RealtimeClient] Socket disconnected:', reason || 'unknown');
+	});
+
+	// Auth failures (expired access token, wrong identity from a shared-
+	// localStorage socket) surface as connect_error, NOT disconnect — and
+	// socket.io keeps replaying the same dead token on every reconnect
+	// attempt. Ask the keeper to refresh the token (httpOnly cookie) and
+	// re-authenticate the socket in place. The socket object is preserved,
+	// so all handlers bound here keep working.
+	socket.on('connect_error', (error) => {
+		var message = (error && error.message) || '';
+		var isAuthFailure = /unauthorized|invalid.*token|expired|token.*required|jwt/i.test(
+			message,
+		);
+		if (!isAuthFailure) return;
+		console.warn(
+			'[RealtimeClient] Socket auth rejected — attempting token refresh + re-auth:',
+			message,
+		);
+		try {
+			var keeper = window.__QUIZ_SOCKET_AUTH_KEEPER__;
+			if (keeper && typeof keeper.recoverSocket === 'function') {
+				keeper.recoverSocket(socket);
+				return;
+			}
+		} catch (e) {}
+		// Keeper absent (older page cache): fall back to the bridge-level
+		// refresh the REST layer exposes, then force a reconnect attempt.
+		try {
+			if (typeof window.__legacyBridgeRefresh === 'function') {
+				window.__legacyBridgeRefresh().then(function (token) {
+					if (token) {
+						socket.auth = socket.auth || {};
+						socket.auth.token = token;
+						socket.connect();
+					}
+				});
+			}
+		} catch (e) {}
 	});
 
 	socket.on('requestLocalStorage', () => {

@@ -578,6 +578,11 @@
     // Expose a re-bootstrap hook so login flows can re-prime the cache once a
     // token becomes available without forcing a full page reload.
     window.__legacyBridgeBootstrap = fetchAll;
+    // Socket-auth recovery: the socket layer (realtime-client, socket-auth-
+    // keeper) has no REST hooks of its own — when a socket handshake is
+    // rejected (expired/wrong-identity token from a shared-localStorage
+    // socket), it refreshes the access token through here.
+    window.__legacyBridgeRefresh = refreshAccessToken;
 
     return {
       getAll_sync: function (table) {

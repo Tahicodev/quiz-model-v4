@@ -74,21 +74,9 @@ function createNewExam() {
 	document.getElementById('examModalTitle').textContent = 'Create New Exam';
 	document.getElementById('examForm').reset();
 
-	// Clear selected questions
-	const selectedContainer = document.getElementById('selectedQuestionsList');
-	if (selectedContainer) {
-		selectedContainer.innerHTML = '';
-	}
-
-	// Open modal first
+	// The create/edit form no longer embeds the question picker — questions
+	// are assigned from the dedicated Assign Questions modal (table action).
 	openExamModal();
-
-	// Load categories and questions after modal is shown
-	setTimeout(() => {
-		populateCategoryFilter();
-		loadAvailableQuestions();
-		// loadAvailableQuestions() already calls updateSelectedCount() at the end
-	}, 100);
 }
 
 function openExamModal() {
@@ -1444,6 +1432,24 @@ function updateExamList(examsList = exams) {
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                         </button>
+						<button class="exam-action-btn exam-assign-btn" onclick="openAssignExamQuestions('${
+													exam.id
+												}')" title="Assign Questions">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M9 11l3 3L22 4"></path>
+								<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+							</svg>
+						</button>
+						<button class="exam-action-btn exam-classes-btn" onclick="openAssignExamClasses('${
+													exam.id
+												}')" title="Assign to Classes">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+								<circle cx="9" cy="7" r="4"></circle>
+								<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+							</svg>
+						</button>
 						<button class="exam-action-btn exam-push-btn" onclick="pushExamToDevices('${
 													exam.id
 												}')" title="Push to Devices" style="background: #10b981; color: white;">
@@ -1462,13 +1468,13 @@ function updateExamList(examsList = exams) {
 						<button class="exam-action-btn exam-delete-btn" onclick="deleteExam('${
 													exam.id
 												}')" title="Delete">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="3 6 5 6 21 6"></polyline>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                        </button>
-                    </div>
-                </td>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="3 6 5 6 21 6"></polyline>
+								<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+							</svg>
+						</button>
+					</div>
+				</td>
             </tr>
         `;
 		})
@@ -1489,6 +1495,16 @@ function updateExamList(examsList = exams) {
 						label: 'Edit Exam',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
 						onClick: () => editExam(exam.id)
+					},
+					{
+						label: 'Assign Questions',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+						onClick: () => openAssignExamQuestions(exam.id)
+					},
+					{
+						label: 'Assign to Classes',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+						onClick: () => openAssignExamClasses(exam.id)
 					},
 					{
 						label: 'Push to Devices',
@@ -1604,20 +1620,18 @@ async function saveExamForm() {
 		return;
 	}
 
-	// Get selected questions from the selected questions list
-	const selectedQuestions = Array.from(
-		document.querySelectorAll('#selectedQuestionsList .question-item'),
-	).map((el) => parseInt(el.dataset.index));
-
-	if (selectedQuestions.length === 0) {
-		showToast('Please select at least one question for the exam', 'error');
-		return;
-	}
-
-	const currentUserId = window.Auth?.getCurrentUser?.()?.id || '';
-	const existingExam = currentExamId
+	// Question selection is managed by the dedicated Assign Questions modal.
+	// When editing, keep the exam's existing question set untouched; new exams
+	// start empty and get their questions via the Assign action.
+	const existingExamForQuestions = currentExamId
 		? exams.find((e) => e.id === currentExamId) || null
 		: null;
+	const selectedQuestions = Array.isArray(existingExamForQuestions?.questions)
+		? [...existingExamForQuestions.questions]
+		: [];
+
+	const currentUserId = window.Auth?.getCurrentUser?.()?.id || '';
+	const existingExam = existingExamForQuestions;
 
 	const examData = {
 		...(existingExam || {}),
@@ -1726,10 +1740,7 @@ function editExam(examId) {
 	if (examNameEl) examNameEl.value = exam.name || '';
 	if (examDurationEl) examDurationEl.value = exam.duration || '';
 
-	// Clear the selected questions list first
-	document.getElementById('selectedQuestionsList').innerHTML = '';
-
-	// Open modal first (this also populates preset dropdown)
+	// Open modal (this also populates preset dropdown)
 	openExamModal();
 
 	// Set preset selection after dropdown is populated
@@ -1737,31 +1748,290 @@ function editExam(examId) {
 	if (examPresetEl && exam.presetId) {
 		examPresetEl.value = exam.presetId;
 	}
+}
 
-	// Load categories and questions after modal is shown
+// ============================================
+// ASSIGN QUESTIONS MODAL (exam ↔ questions)
+// ============================================
+// Question assignment was split out of the create/edit modal: the exams
+// table's "Assign Questions" action opens this dedicated modal. The picker
+// markup keeps its original element IDs (availableQuestions,
+// selectedQuestionsList, …) so the existing filter/toggle helpers keep
+// working unchanged.
+
+let assignExamQuestionsId = null;
+
+function openAssignExamQuestions(examId) {
+	const modal = document.getElementById('assignExamQuestionsModal');
+	if (!modal) {
+		showToast('Assign Questions modal not found', 'error');
+		return;
+	}
+	const exam = exams.find((e) => e.id === examId);
+	if (!exam) {
+		showToast('Exam not found', 'error');
+		return;
+	}
+
+	assignExamQuestionsId = examId;
+
+	const titleEl = document.getElementById('assignExamQuestionsTitle');
+	if (titleEl) titleEl.textContent = `Assign Questions — ${exam.name}`;
+
+	// Reset staged state
+	const selectedContainer = document.getElementById('selectedQuestionsList');
+	if (selectedContainer) selectedContainer.innerHTML = '';
+	const countEl = document.getElementById('selectedQuestionCount');
+	if (countEl) countEl.textContent = '0';
+
+	if (typeof window.promoteAssignModal === 'function') {
+		window.promoteAssignModal(modal);
+	}
+	modal.style.display = 'flex';
+	setTimeout(() => modal.classList.add('active'), 10);
+
+	// Load the bank, then pre-select the exam's current questions.
 	setTimeout(() => {
 		populateCategoryFilter();
 		loadAvailableQuestions();
-
-		// Wait for questions to be loaded, then select them
 		setTimeout(() => {
-			// For each question in the exam, select it and move to selected list
-			exam.questions.forEach((qIndex) => {
+			const indices = Array.isArray(exam.questions) ? exam.questions : [];
+			indices.forEach((qIndex) => {
 				const questionEl = document.querySelector(
 					`#availableQuestions .question-item[data-index="${qIndex}"]`,
 				);
-				if (questionEl) {
-					// Hide from available and add to selected
-					addQuestionToSelected(questionEl);
-				}
+				if (questionEl) addQuestionToSelected(questionEl);
 			});
-
-			// Update the counters
 			updateSelectedCount();
-			updateGlobalAvailableCount();
-			updatePremiumSummaryStats();
 		}, 200);
 	}, 100);
+}
+
+function closeAssignExamQuestions() {
+	const modal = document.getElementById('assignExamQuestionsModal');
+	if (modal) {
+		modal.style.display = 'none';
+		modal.classList.remove('active');
+	}
+	assignExamQuestionsId = null;
+}
+
+async function saveAssignExamQuestions() {
+	if (!assignExamQuestionsId) return;
+	const examId = assignExamQuestionsId;
+	const exam = exams.find((e) => e.id === examId);
+	if (!exam) {
+		showToast('Exam not found', 'error');
+		return;
+	}
+
+	const selectedQuestions = Array.from(
+		document.querySelectorAll('#selectedQuestionsList .question-item'),
+	).map((el) => parseInt(el.dataset.index));
+
+	if (selectedQuestions.length === 0) {
+		showToast('Please select at least one question for the exam', 'error');
+		return;
+	}
+
+	exam.questions = selectedQuestions;
+
+	// Persist to the backend first; mirror into localStorage on success.
+	if (window.API && typeof window.API.update === 'function') {
+		try {
+			await window.API.update('exams', examId, {
+				name: exam.name,
+				duration: exam.duration,
+				passingScore: exam.passingScore,
+				questions: exam.questions,
+				classes: Array.isArray(exam.classes) ? exam.classes : [],
+				presetId: exam.presetId || null,
+			});
+		} catch (apiErr) {
+			console.warn('[exams] API assign questions failed:', apiErr);
+			showToast(
+				'Failed to save assignment on server: ' +
+					(apiErr?.message || 'network error'),
+				'error',
+			);
+			return;
+		}
+	}
+
+	saveExams();
+	updateExamList();
+	if (window.initDashboard) window.initDashboard();
+
+	closeAssignExamQuestions();
+	showToast(
+		`${selectedQuestions.length} question(s) assigned to "${exam.name}"!`,
+		'success',
+	);
+
+	if (typeof logActivity === 'function') {
+		logActivity('exam', exam.name, 'assigned questions', {
+			id: exam.id,
+			questionCount: selectedQuestions.length,
+		});
+	}
+}
+
+// ============================================
+// ASSIGN CLASSES MODAL (exam ↔ classes)
+// ============================================
+// The exams table's "Assign to Classes" action opens a compact checklist of
+// classes; saving syncs exam.classes both in the local cache and the server.
+
+let assignExamClassesId = null;
+
+function openAssignExamClasses(examId) {
+	const modal = document.getElementById('assignExamClassesModal');
+	if (!modal) {
+		showToast('Assign to Classes modal not found', 'error');
+		return;
+	}
+	const exam = exams.find((e) => e.id === examId);
+	if (!exam) {
+		showToast('Exam not found', 'error');
+		return;
+	}
+
+	assignExamClassesId = examId;
+
+	const titleEl = document.getElementById('assignExamClassesTitle');
+	if (titleEl) titleEl.textContent = `Assign to Classes — ${exam.name}`;
+
+	const listEl = document.getElementById('assignExamClassesList');
+	const searchEl = document.getElementById('assignExamClassesSearch');
+	if (searchEl) searchEl.value = '';
+
+	const savedClasses =
+		JSON.parse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')) || '[]',
+		) || [];
+	const visibleClasses = savedClasses.filter((cls) =>
+		window.Auth?.canAccessItem ? window.Auth.canAccessItem('class', cls) : true,
+	);
+	const assigned = new Set(Array.isArray(exam.classes) ? exam.classes : []);
+
+	if (listEl) {
+		if (visibleClasses.length === 0) {
+			listEl.innerHTML =
+				'<p class="assign-checklist__empty">No classes yet. Create a class first.</p>';
+		} else {
+			listEl.innerHTML = visibleClasses
+				.map((cls) => {
+					const checked = assigned.has(cls.id) ? 'checked' : '';
+					const count = Array.isArray(cls.students) ? cls.students.length : 0;
+					return `
+						<label class="assign-checklist__item" data-class-name="${escapeHtml(cls.name)}">
+							<input type="checkbox" class="assign-checklist__checkbox" value="${escapeHtml(cls.id)}" ${checked} />
+							<span class="assign-checklist__label">${escapeHtml(cls.name)}</span>
+							<span class="assign-checklist__meta">${count} student(s)</span>
+						</label>
+					`;
+				})
+				.join('');
+		}
+	}
+
+	if (typeof window.promoteAssignModal === 'function') {
+		window.promoteAssignModal(modal);
+	}
+	modal.style.display = 'flex';
+	setTimeout(() => modal.classList.add('active'), 10);
+}
+
+function closeAssignExamClasses() {
+	const modal = document.getElementById('assignExamClassesModal');
+	if (modal) {
+		modal.style.display = 'none';
+		modal.classList.remove('active');
+	}
+	assignExamClassesId = null;
+}
+
+function filterAssignExamClasses() {
+	const searchEl = document.getElementById('assignExamClassesSearch');
+	const listEl = document.getElementById('assignExamClassesList');
+	if (!searchEl || !listEl) return;
+	const term = searchEl.value.trim().toLowerCase();
+	listEl.querySelectorAll('.assign-checklist__item').forEach((item) => {
+		const name = item.dataset.className || '';
+		item.style.display = !term || name.toLowerCase().includes(term) ? '' : 'none';
+	});
+}
+
+async function saveAssignExamClasses() {
+	if (!assignExamClassesId) return;
+	const examId = assignExamClassesId;
+	const exam = exams.find((e) => e.id === examId);
+	if (!exam) {
+		showToast('Exam not found', 'error');
+		return;
+	}
+
+	const selectedIds = Array.from(
+		document.querySelectorAll('#assignExamClassesList .assign-checklist__checkbox:checked'),
+	).map((el) => el.value);
+
+	const previousIds = new Set(Array.isArray(exam.classes) ? exam.classes : []);
+	const nextIds = new Set(selectedIds);
+
+	// Apply to local exam cache
+	exam.classes = [...nextIds];
+
+	// Mirror the class list on every affected exam side (legacy local shape)
+	const examsCopy = window.__DI_CONTAINER__.repo.getAll_sync('exams');
+	examsCopy.forEach((other) => {
+		if (other.id === exam.id) return;
+		if (!Array.isArray(other.classes)) other.classes = [];
+		const had = other.classes.includes(exam.id);
+		// untouched for other exams — class-side sync happens in class modal
+		if (had !== other.classes.includes(exam.id)) {
+			/* no-op */
+		}
+	});
+
+	// Persist to the backend first; mirror into localStorage on success.
+	if (window.API && typeof window.API.update === 'function') {
+		try {
+			await window.API.update('exams', examId, {
+				name: exam.name,
+				duration: exam.duration,
+				passingScore: exam.passingScore,
+				questions: Array.isArray(exam.questions) ? exam.questions : [],
+				classes: exam.classes,
+				presetId: exam.presetId || null,
+			});
+		} catch (apiErr) {
+			console.warn('[exams] API assign classes failed:', apiErr);
+			showToast(
+				'Failed to save assignment on server: ' +
+					(apiErr?.message || 'network error'),
+				'error',
+			);
+			return;
+		}
+	}
+
+	saveExams();
+	updateExamList();
+	if (typeof window.updateClassList === 'function') {
+		window.updateClassList();
+	}
+	if (window.initDashboard) window.initDashboard();
+
+	closeAssignExamClasses();
+	showToast(`"${exam.name}" assigned to ${selectedIds.length} class(es)!`, 'success');
+
+	if (typeof logActivity === 'function') {
+		logActivity('exam', exam.name, 'assigned classes', {
+			id: exam.id,
+			classCount: selectedIds.length,
+			added: selectedIds.filter((id) => !previousIds.has(id)).length,
+		});
+	}
 }
 
 async function deleteExam(examId) {
@@ -2443,6 +2713,13 @@ window.closeExamModal = closeExamModal;
 window.saveExam = saveExamForm;
 window.editExam = editExam;
 window.deleteExam = deleteExam;
+window.openAssignExamQuestions = openAssignExamQuestions;
+window.closeAssignExamQuestions = closeAssignExamQuestions;
+window.saveAssignExamQuestions = saveAssignExamQuestions;
+window.openAssignExamClasses = openAssignExamClasses;
+window.closeAssignExamClasses = closeAssignExamClasses;
+window.saveAssignExamClasses = saveAssignExamClasses;
+window.filterAssignExamClasses = filterAssignExamClasses;
 window.toggleQuestionSelection = toggleQuestionSelection;
 window.addQuestionToSelected = addQuestionToSelected;
 window.removeQuestionFromSelected = removeQuestionFromSelected;

@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
-		<link rel="stylesheet" href="styles.css?v=2026-09-08-games-r5" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-09-realtime-r6" />
 		<link
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -18,14 +18,31 @@
 				};
 			</script>
 				<!-- Legacy Bridge — must load synchronously -->
-					<script src="legacy-bridge.js?v=2026-09-08-games-r5"></script>
+					<script src="legacy-bridge.js?v=2026-09-09-realtime-r6"></script>
+				<!-- Socket auth keeper — heals sockets whose token expired or was
+				     replaced by another tab's login (shared localStorage). Load
+				     right after the bridge so getSocket can consult it. -->
+				<script src="socket-auth-keeper.js?v=2026-09-09-realtime-r6" defer></script>
 				<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
 				<script>
 					window.getSocket = window.getSocket || function(url, opts) {
 						if (!window.io) { console.warn('getSocket called before Socket.IO loaded'); return null; }
 						if (window.__AUTH_SESSION_EXPIRED__) return null;
+						// Consult the keeper when the cached socket exists: it heals
+						// sockets killed by a REST 401 (manual disconnect never retries)
+						// and re-authenticates ones carrying another tab's identity,
+						// before we hand the cached object out.
+						var keeper = window.__QUIZ_SOCKET_AUTH_KEEPER__;
+						if (window.__QUIZ_LEGACY_SOCKET__ && keeper) {
+							try { keeper.reviveCachedSocket(); } catch (e) {}
+							keeper.attachSocketGuards(window.__QUIZ_LEGACY_SOCKET__);
+							return window.__QUIZ_LEGACY_SOCKET__;
+						}
 						if (window.__QUIZ_LEGACY_SOCKET__) return window.__QUIZ_LEGACY_SOCKET__;
+						// This tab's session wins over the shared localStorage copy
+						// (which may hold the admin tab's login from this browser).
 						var readToken = function() {
+							if (keeper) { var kt = keeper.getActiveToken(); if (kt) return kt; }
 							try {
 								var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
 								if (s && s.token) return s.token;
@@ -46,6 +63,7 @@
 						window.__GETSOCKET_ANON_AT__ = 0;
 						var socket = window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
 						window.__QUIZ_LEGACY_SOCKET__ = socket;
+						if (keeper) keeper.attachSocketGuards(socket);
 						return socket;
 					};
 				</script>
@@ -54,9 +72,9 @@
 			<script src="auth.js" defer></script>
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
 		<script src="realtime-client.js" defer></script>
-				<script src="games-core.js?v=2026-09-08-games-r5" defer></script>
+				<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
-					<script src="student-workspace.js?v=2026-09-08-games-r5" defer></script>
+					<script src="student-workspace.js?v=2026-09-09-realtime-r6" defer></script>
 	</head>
 	<body class="student-workspace">
 		<div class="workspace-shell">

@@ -56,11 +56,6 @@ function createNewClass() {
 		currentClassId = null;
 		document.getElementById('classModalTitle').textContent = 'Create New Class';
 		document.getElementById('classForm').reset();
-		document.getElementById('selectedStudentsList').innerHTML = '';
-		const classFilter = document.getElementById('studentClassFilter');
-		if (classFilter) classFilter.value = 'all';
-		populateStudentUserPicker();
-		loadAvailableExams();
 		openClassModal();
 		console.log('createNewClass completed');
 	} catch (e) {
@@ -125,6 +120,47 @@ function promoteClassModal(modal) {
 	modal.style.setProperty('visibility', 'visible', 'important');
 	modal.style.setProperty('pointer-events', 'auto', 'important');
 }
+
+// Generic open/close for the dedicated assign modals: same promotion treatment
+// as the main entity modals, plus the modal-open body lock and an optional
+// focus target inside the modal.
+function openModalLike(modal, focusId) {
+	if (!modal) return;
+	promoteClassModal(modal);
+	modal.classList.add('is-open');
+	modal.setAttribute('aria-hidden', 'false');
+	modal.setAttribute('aria-modal', 'true');
+	modal.setAttribute('role', 'dialog');
+	document.documentElement.classList.add('modal-open');
+	document.body.classList.add('modal-open');
+	setTimeout(() => {
+		modal.classList.add('active');
+		if (focusId) {
+			document.getElementById(focusId)?.focus();
+		}
+	}, 10);
+}
+
+function closeModalLike(modal) {
+	if (!modal) return;
+	modal.style.setProperty('display', 'none', 'important');
+	[
+		'position',
+		'inset',
+		'z-index',
+		'opacity',
+		'visibility',
+		'pointer-events',
+	].forEach((property) => modal.style.removeProperty(property));
+	modal.classList.remove('active', 'is-open');
+	modal.setAttribute('aria-hidden', 'true');
+	modal.removeAttribute('aria-modal');
+	modal.removeAttribute('role');
+	document.documentElement.classList.remove('modal-open');
+	document.body.classList.remove('modal-open');
+}
+window.openModalLike = openModalLike;
+window.closeModalLike = closeModalLike;
 
 function loadAvailableExams() {
 	const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
@@ -570,29 +606,13 @@ function setupClassEventListeners() {
 async function saveClassForm() {
 	const className = document.getElementById('className').value;
 
-	// Get students
-	const students = mergeStudentEntries(
-		Array.from(
-			document.querySelectorAll(
-				'#selectedStudentsList .selected-student-item',
-			),
-		).map((el) => {
-			const number =
-				String(el.dataset.number || '').trim() ||
-				String(el.querySelector('span')?.textContent || '').split(' - ')[0] ||
-				'';
-			const name =
-				String(el.dataset.name || '').trim() ||
-				String(el.querySelector('span')?.textContent || '').split(' - ')[1] ||
-				'';
-			return { number: number.trim(), name: name.trim() };
-		}),
-	);
-
-	// Get selected exams
-	const selectedExams = Array.from(
-		document.querySelectorAll('#availableExams .exam-item.selected')
-	).map((el) => el.dataset.examId);
+	// Roster and exam assignments are managed by the dedicated Assign
+	// Students / Assign Exams modals (table actions). Preserve whatever the
+	// class already has.
+	const existing = currentClassId
+		? classes.find((c) => c.id === currentClassId)
+		: null;
+	const students = Array.isArray(existing?.students) ? existing.students : [];
 
 	const classData = {
 		id: currentClassId || generateUUID(),
@@ -650,38 +670,6 @@ async function saveClassForm() {
 		}
 	}
 
-	// Update exam assignments
-	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
-	console.log('Updating exam assignments for class:', classData.name);
-	console.log('Selected exams:', selectedExams);
-
-	// Track which exams were updated
-	const updatedExams = [];
-
-	exams.forEach((exam) => {
-		// Initialize classes array if it doesn't exist
-		if (!exam.classes) exam.classes = [];
-
-		// If exam is selected, make sure class is in the exam's classes array
-		if (selectedExams.includes(exam.id)) {
-			if (!exam.classes.includes(classData.id)) {
-				exam.classes.push(classData.id);
-				updatedExams.push(exam.name);
-				console.log(`Added class ${classData.name} to exam ${exam.name}`);
-			}
-		} else {
-			// If exam is not selected, make sure class is not in the exam's classes array
-			if (exam.classes.includes(classData.id)) {
-				exam.classes = exam.classes.filter((id) => id !== classData.id);
-				console.log(`Removed class ${classData.name} from exam ${exam.name}`);
-			}
-		}
-	});
-
-	// Save updated exams to localStorage
-	window.__DI_CONTAINER__.repo.setAll_sync('exams', exams);
-	console.log('Updated exams saved to localStorage');
-
 	// Log activity
 	if (typeof logActivity === 'function') {
 		logActivity(
@@ -691,7 +679,6 @@ async function saveClassForm() {
 			{
 				id: classData.id,
 				studentCount: students.length,
-				examCount: selectedExams.length,
 			}
 		);
 	}
@@ -700,14 +687,6 @@ async function saveClassForm() {
 	saveClasses();
 	updateClassList();
 	closeClassModal();
-
-	if (window.Auth?.syncClassStudentsFromClassData) {
-		try {
-			await window.Auth.syncClassStudentsFromClassData(classData, students);
-		} catch (error) {
-			console.error('Failed to sync class students:', error);
-		}
-	}
 
 	// If teacher, ensure this class is assigned to them
 	if (window.Auth?.isTeacher && window.Auth.isTeacher()) {
@@ -728,14 +707,7 @@ async function saveClassForm() {
 		}
 	}
 
-	// Show success message with details of updated exams
-	if (updatedExams.length > 0) {
-		showToast(
-			`Class saved with ${updatedExams.length} exam assignments updated!`
-		);
-	} else {
-		showToast('Class saved successfully!');
-	}
+	showToast('Class saved successfully!');
 }
 
 function editClass(classId) {
@@ -747,12 +719,46 @@ function editClass(classId) {
 		return;
 	}
 
+	// Roster and exam assignments are managed via the dedicated Assign modals.
 	document.getElementById('classModalTitle').textContent = 'Edit Class';
 	document.getElementById('className').value = classData.name;
 
-	// Load students
+	openClassModal();
+}
+
+// ============================================
+// ASSIGN STUDENTS MODAL (class ↔ students)
+// ============================================
+// Roster management was split out of the create/edit modal: the classes
+// table's "Assign Students" action opens this dedicated modal. The roster
+// markup keeps its original element IDs (studentNumber, studentName,
+// selectedStudentsList, studentUserPicker, …) so the existing roster helpers
+// keep working unchanged.
+
+let assignClassStudentsId = null;
+
+function openAssignClassStudents(classId) {
+	loadClasses();
+	const modal = document.getElementById('assignClassStudentsModal');
+	if (!modal) {
+		showToast('Assign Students modal not found', 'error');
+		return;
+	}
+	const classData = classes.find((c) => c.id === classId);
+	if (!classData) {
+		showToast('Class not found', 'error');
+		return;
+	}
+
+	assignClassStudentsId = classId;
+
+	const titleEl = document.getElementById('assignClassStudentsTitle');
+	if (titleEl) titleEl.textContent = `Assign Students — ${classData.name}`;
+
+	// Seed the roster with the class's current students (merged with student
+	// users that already point at this class — same as the legacy edit flow).
 	const studentsList = document.getElementById('selectedStudentsList');
-	studentsList.innerHTML = '';
+	if (studentsList) studentsList.innerHTML = '';
 	const mergedStudents = mergeStudentEntries(
 		classData.students || [],
 		getStudentsFromUsers(classId),
@@ -764,25 +770,257 @@ function editClass(classId) {
 	if (classFilter) classFilter.value = 'all';
 	populateStudentUserPicker();
 
-	// Load and mark selected exams
+	if (typeof window.promoteAssignModal === 'function') {
+		window.promoteAssignModal(modal);
+	}
+	openModalLike(modal, 'className');
+}
+
+function closeAssignClassStudents() {
+	const modal = document.getElementById('assignClassStudentsModal');
+	if (modal) {
+		closeModalLike(modal);
+	}
+	assignClassStudentsId = null;
+}
+
+async function saveAssignClassStudents() {
+	if (!assignClassStudentsId) return;
+	const classId = assignClassStudentsId;
+	const classData = classes.find((c) => c.id === classId);
+	if (!classData) {
+		showToast('Class not found', 'error');
+		return;
+	}
+
+	// Read the staged roster from the modal
+	const students = mergeStudentEntries(
+		Array.from(
+			document.querySelectorAll(
+				'#selectedStudentsList .selected-student-item',
+			),
+		).map((el) => {
+			const number =
+				String(el.dataset.number || '').trim() ||
+				String(el.querySelector('span')?.textContent || '').split(' - ')[0] ||
+				'';
+			const name =
+				String(el.dataset.name || '').trim() ||
+				String(el.querySelector('span')?.textContent || '').split(' - ')[1] ||
+				'';
+			return { number: number.trim(), name: name.trim() };
+		}),
+	);
+
+	// ── Teacher gate: roster changes materialize only after admin confirms ──
+	// Teachers can stage the new roster in this modal, but pushing it live
+	// would create/move student accounts without review. Diff against the
+	// current roster and hand the change set to the admin confirmation queue
+	// (same flow as Users → Pending Imports). Admins keep the direct save.
+	const isTeacherSession =
+		window.Auth?.isTeacher && window.Auth.isTeacher();
+	if (isTeacherSession) {
+		const currentNumbers = new Set(
+			(classData.students || []).map((s) => String(s.number || '').trim()),
+		);
+		const stagedNumbers = new Set(
+			students.map((s) => String(s.number || '').trim()),
+		);
+		const added = students.filter(
+			(s) => !currentNumbers.has(String(s.number || '').trim()),
+		);
+		const removedCount = Array.from(currentNumbers).filter(
+			(n) => !stagedNumbers.has(n),
+		).length;
+
+		if (added.length || removedCount) {
+			if (window.Auth?.stagePendingImport) {
+				const staged = window.Auth.stagePendingImport({
+					classId,
+					students: added.length ? added : students,
+					sourceFileName: 'roster edit',
+				});
+				if (staged) {
+					closeAssignClassStudents();
+					showToast(
+						`Roster changes staged: ${added.length} added, ${removedCount} removed — an admin must confirm`,
+						'success',
+					);
+					return;
+				}
+			}
+			showToast(
+				'Your changes need admin confirmation, but staging is unavailable right now',
+				'warning',
+			);
+			return;
+		}
+
+		// No diff → nothing to confirm; just close.
+		closeAssignClassStudents();
+		showToast('No roster changes to apply', 'info');
+		return;
+	}
+
+	classData.students = students;
+	saveClasses();
+	updateClassList();
+
+	// Sync student user accounts (creates / moves / unassigns student users)
+	if (window.Auth?.syncClassStudentsFromClassData) {
+		try {
+			await window.Auth.syncClassStudentsFromClassData(classData, students);
+		} catch (error) {
+			console.error('Failed to sync class students:', error);
+		}
+	}
+
+	closeAssignClassStudents();
+	showToast(`${students.length} student(s) assigned to "${classData.name}"!`, 'success');
+
+	if (typeof logActivity === 'function') {
+		logActivity('class', classData.name, 'assigned students', {
+			id: classData.id,
+			studentCount: students.length,
+		});
+	}
+}
+
+// ============================================
+// ASSIGN EXAMS MODAL (class ↔ exams)
+// ============================================
+// The classes table's "Assign Exams" action opens the exam selection list;
+// saving syncs exam.classes across the exam cache (legacy local shape).
+
+let assignClassExamsId = null;
+
+function openAssignClassExams(classId) {
+	loadClasses();
+	const modal = document.getElementById('assignClassExamsModal');
+	if (!modal) {
+		showToast('Assign Exams modal not found', 'error');
+		return;
+	}
+	const classData = classes.find((c) => c.id === classId);
+	if (!classData) {
+		showToast('Class not found', 'error');
+		return;
+	}
+
+	assignClassExamsId = classId;
+
+	const titleEl = document.getElementById('assignClassExamsTitle');
+	if (titleEl) titleEl.textContent = `Assign Exams — ${classData.name}`;
+
+	// Render the exam list and pre-mark exams already assigned to this class
 	loadAvailableExams();
 	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const assignedExams = exams.filter((exam) => exam.classes?.includes(classId));
-
-	// Mark assigned exams as selected
 	assignedExams.forEach((exam) => {
 		const examElement = document.querySelector(
-			`.exam-item[data-exam-id="${exam.id}"]`
+			`.exam-item[data-exam-id="${exam.id}"]`,
 		);
 		if (examElement) {
 			examElement.classList.add('selected');
 		}
 	});
+	updateAssignClassExamsCount();
 
-	// Update selected count
-	updateSelectedExamsCount(assignedExams.length);
+	const searchEl = document.getElementById('examSearchInClass');
+	if (searchEl) searchEl.value = '';
 
-	openClassModal();
+	if (typeof window.promoteAssignModal === 'function') {
+		window.promoteAssignModal(modal);
+	}
+	openModalLike(modal, 'examSearchInClass');
+}
+
+function closeAssignClassExams() {
+	const modal = document.getElementById('assignClassExamsModal');
+	if (modal) {
+		closeModalLike(modal);
+	}
+	assignClassExamsId = null;
+}
+
+function updateAssignClassExamsCount() {
+	const countEl = document.getElementById('assignClassExamsCount');
+	if (!countEl) return;
+	const selected = document.querySelectorAll(
+		'#availableExams .exam-item.selected',
+	).length;
+	countEl.textContent = `${selected} selected`;
+}
+
+async function saveAssignClassExams() {
+	if (!assignClassExamsId) return;
+	const classId = assignClassExamsId;
+	const classData = classes.find((c) => c.id === classId);
+	if (!classData) {
+		showToast('Class not found', 'error');
+		return;
+	}
+
+	const selectedExams = Array.from(
+		document.querySelectorAll('#availableExams .exam-item.selected')
+	).map((el) => el.dataset.examId);
+
+	// Mirror the assignment into every exam's classes array (local cache)
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
+	const updatedExams = [];
+	exams.forEach((exam) => {
+		if (!exam.classes) exam.classes = [];
+		if (selectedExams.includes(exam.id)) {
+			if (!exam.classes.includes(classId)) {
+				exam.classes.push(classId);
+				updatedExams.push(exam.name);
+			}
+		} else if (exam.classes.includes(classId)) {
+			exam.classes = exam.classes.filter((id) => id !== classId);
+			updatedExams.push(exam.name);
+		}
+	});
+	window.__DI_CONTAINER__.repo.setAll_sync('exams', exams);
+
+	// Persist touched exams to the backend
+	if (window.API && typeof window.API.update === 'function') {
+		for (const exam of exams) {
+			if (!updatedExams.includes(exam.name)) continue;
+			try {
+				await window.API.update('exams', exam.id, {
+					name: exam.name,
+					duration: exam.duration,
+					passingScore: exam.passingScore,
+					questions: Array.isArray(exam.questions) ? exam.questions : [],
+					classes: exam.classes,
+					presetId: exam.presetId || null,
+				});
+			} catch (apiErr) {
+				console.warn('[classes] API exam assignment sync failed:', apiErr);
+			}
+		}
+	}
+
+	closeAssignClassExams();
+	updateClassList();
+	if (typeof window.updateExamList === 'function') {
+		window.updateExamList();
+	}
+	if (window.initDashboard) window.initDashboard();
+
+	showToast(
+		updatedExams.length
+			? `${updatedExams.length} exam assignment(s) updated for "${classData.name}"!`
+			: 'No exam assignment changes.',
+		'success',
+	);
+
+	if (typeof logActivity === 'function') {
+		logActivity('class', classData.name, 'assigned exams', {
+			id: classData.id,
+			examCount: selectedExams.length,
+		});
+	}
 }
 
 async function deleteClass(classId) {
@@ -968,6 +1206,16 @@ function updateClassList(classesList = classes) {
 
 			// Open mobile action sheet
 			MobileActionSheet.open(`Class: ${cls.name}`, [
+				{
+					label: 'Assign Students',
+					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+					onClick: () => openAssignClassStudents(cls.id),
+				},
+				{
+					label: 'Assign Exams',
+					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>',
+					onClick: () => openAssignClassExams(cls.id),
+				},
 				// Changed cls.className to cls.name
 				{
 					label: 'Edit Class',
@@ -1006,6 +1254,26 @@ function updateClassList(classesList = classes) {
             <td>${examCount}</td>
             <td class="actions-cell">
                 <div class="exam-actions">
+                    <button class="exam-action-btn exam-assign-btn" onclick="openAssignClassStudents('${
+											cls.id
+										}')" title="Assign Students">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </button>
+                    <button class="exam-action-btn exam-classes-btn" onclick="openAssignClassExams('${
+											cls.id
+										}')" title="Assign Exams">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                    </button>
                     <button class="exam-action-btn exam-edit-btn" onclick="editClass('${
 											cls.id
 										}')" title="Edit">
@@ -1075,6 +1343,7 @@ function toggleExamSelection(element) {
 
 	// Update UI elements showing selected count
 	updateSelectedExamsCount(selectedExams.length);
+	updateAssignClassExamsCount();
 }
 
 function getSelectedExams() {
@@ -1279,6 +1548,13 @@ window.onStudentClassFilterChange = onStudentClassFilterChange;
 window.populateStudentUserPicker = populateStudentUserPicker;
 window.exportStudents = exportStudents;
 window.importStudents = importStudents;
+window.openAssignClassStudents = openAssignClassStudents;
+window.closeAssignClassStudents = closeAssignClassStudents;
+window.saveAssignClassStudents = saveAssignClassStudents;
+window.openAssignClassExams = openAssignClassExams;
+window.closeAssignClassExams = closeAssignClassExams;
+window.saveAssignClassExams = saveAssignClassExams;
+window.updateAssignClassExamsCount = updateAssignClassExamsCount;
 
 // Export students as CSV
 function exportStudents() {

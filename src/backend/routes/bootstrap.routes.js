@@ -297,6 +297,33 @@ function hydrateLegacyPayload(data) {
       default: return String(status || '');
     }
   };
+  // Hydrate a game's embedded questions from the bootstrap question list.
+  // `question_ids` is only an array of ID strings — the engine's start
+  // validation (game.questions.filter(q => q && q.id)) rejects bare strings,
+  // so serving them raw made games fail "Need at least 1 question" even
+  // with 16 assigned questions.
+  const materializeGameQuestions = (game, questionsById) => {
+    const ids = parseJson(game.question_ids, []);
+    if (!Array.isArray(ids) || !ids.length) return [];
+    return ids
+      .map((id) => {
+        const source = questionsById.get(String(id || '').trim());
+        if (!source) return null;
+        const decoded = decodeQuestionMetadata(source);
+        return {
+          ...decoded,
+          id: decoded.id,
+          question: decoded.question || decoded.text,
+          text: decoded.text || decoded.question,
+          options: parseJson(decoded.options_json, decoded.options || []),
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const questionsById = new Map(
+    (data.questions || []).map((question) => [String(question.id || '').trim(), question]),
+  );
   data.games = (data.games || []).map((game) => {
     const settings = parseJson(game.settings_json, {});
     const participants = sessionsByGame.get(String(game.id)) || settings.session?.participants || [];
@@ -306,15 +333,17 @@ function hydrateLegacyPayload(data) {
     const classIds = Array.isArray(settings.classIds)
       ? settings.classIds.map((id) => String(id || '').trim()).filter(Boolean)
       : [];
+    const questions = materializeGameQuestions(game, questionsById);
+    const settingsSession = { ...(settings.session || {}), participants };
     return {
       ...game,
       status: toLegacyGameStatus(game.status, settings),
       classIds,
       joinCode: game.join_code,
       questionIds: parseJson(game.question_ids, []),
-      questions: parseJson(game.question_ids, []),
-      settings: { ...settings, classIds, session: { ...(settings.session || {}), participants } },
-      session: { ...(settings.session || {}), participants },
+      questions,
+      settings: { ...settings, classIds, session: settingsSession },
+      session: settingsSession,
     };
   });
 

@@ -9,7 +9,7 @@
 			type="image/x-icon"
 			href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 		/>
-		<link rel="stylesheet" href="styles.css?v=2026-09-08-games-r5" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-09-realtime-r6" />
 		<link
 			rel="stylesheet"
 			href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css"
@@ -24,7 +24,10 @@
 		</script>
 
 			<!-- Legacy Bridge — must load synchronously (defines globals used by getSocket) -->
-			<script src="legacy-bridge.js?v=2026-09-08-games-r5"></script>
+			<script src="legacy-bridge.js?v=2026-09-09-realtime-r6"></script>
+			<!-- Socket auth keeper — heals sockets whose token expired or was
+			     replaced by another tab's login (shared localStorage). -->
+			<script src="socket-auth-keeper.js?v=2026-09-09-realtime-r6" defer></script>
 			<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
 			<script>
 				window.getSocket =
@@ -35,8 +38,21 @@
 							return null;
 						}
 						if (window.__AUTH_SESSION_EXPIRED__) return null;
+						// Consult the keeper when the cached socket exists: it heals
+						// sockets killed by a REST 401 (manual disconnect never retries)
+						// and re-authenticates ones carrying another tab's identity,
+						// before we hand the cached object out.
+						var keeper = window.__QUIZ_SOCKET_AUTH_KEEPER__;
+						if (window.__QUIZ_LEGACY_SOCKET__ && keeper) {
+							try { keeper.reviveCachedSocket(); } catch (e) {}
+							keeper.attachSocketGuards(window.__QUIZ_LEGACY_SOCKET__);
+							return window.__QUIZ_LEGACY_SOCKET__;
+						}
 						if (window.__QUIZ_LEGACY_SOCKET__) return window.__QUIZ_LEGACY_SOCKET__;
+						// This tab's session wins over the shared localStorage copy
+						// (which may hold another tab's login from this browser).
 						var token =
+							(keeper && keeper.getActiveToken()) ||
 							window.__authToken ||
 							(function () {
 								try {
@@ -62,6 +78,7 @@
 							),
 						);
 						window.__QUIZ_LEGACY_SOCKET__ = socket;
+						if (keeper) keeper.attachSocketGuards(socket);
 						return socket;
 					};
 		</script>
@@ -73,7 +90,7 @@
 		></script>
 
 		<!-- Student SPA shell -->
-		<script src="public/student-bundle.js?v=2026-09-08-games-r5" defer></script>
+		<script src="public/student-bundle.js?v=2026-09-09-realtime-r6" defer></script>
 	</head>
 	<body>
 		<!-- The single root container that the new student SPA mounts into -->

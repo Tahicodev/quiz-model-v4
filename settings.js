@@ -572,6 +572,10 @@ function switchSettingsTab(event, tabName) {
 			);
 			const usersTab = activeUsersTabBtn?.dataset.userTab || 'management';
 			switchUsersSettingsTab(null, usersTab);
+			// Refresh the pending-imports badge as soon as Users opens.
+			if (typeof window.refreshPendingImportsBadge === 'function') {
+				window.refreshPendingImportsBadge();
+			}
 		}
 	}
 
@@ -603,7 +607,19 @@ function switchUsersSettingsTab(event, tabName) {
 	const scope = document.getElementById('users-settings');
 	if (!scope) return;
 
-	const safeTab = tabName === 'requests' ? 'requests' : 'management';
+	// The imports review queue is admin-only: hide its tab from teachers
+	// (staged imports wait for admin confirmation).
+	const importsTab = scope.querySelector('.user-settings-tab-btn[data-user-tab="imports"]');
+	if (importsTab) {
+		const isAdmin =
+			window.Auth && typeof window.Auth.isAdmin === 'function'
+				? window.Auth.isAdmin()
+				: false;
+		importsTab.classList.toggle('hidden', !isAdmin);
+	}
+
+	const safeTab =
+		tabName === 'requests' || tabName === 'imports' ? tabName : 'management';
 
 	scope
 		.querySelectorAll('.user-settings-panel')
@@ -622,6 +638,9 @@ function switchUsersSettingsTab(event, tabName) {
 
 	if (safeTab === 'management' && typeof window.renderUsersTable === 'function') {
 		window.renderUsersTable();
+	}
+	if (safeTab === 'imports' && typeof window.renderPendingImports === 'function') {
+		window.renderPendingImports();
 	}
 	if (safeTab === 'requests' && typeof window.renderProfileRequests === 'function') {
 		window.renderProfileRequests();
