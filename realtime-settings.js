@@ -173,7 +173,7 @@
 			realtimeSocket.on('admin:auth:error', (payload = {}) => {
 				const message =
 					payload.message ||
-					'Admin Secret rejected. Check Settings > LAN Realtime.';
+					'Realtime admin access was rejected. Sign in with an admin or teacher account and retry.';
 				console.warn('[Realtime] Admin auth failed:', message);
 				updateRealtimeStatus('error', message);
 				showRealtimeStatus(message, 'error');
@@ -485,7 +485,8 @@
 		testSocket.on('admin:auth:error', (payload = {}) => {
 			clearTimeout(timeoutId);
 			showRealtimeStatus(
-				payload.message || 'Connected, but Admin Secret was rejected',
+				payload.message ||
+					'Connected, but admin access was rejected — sign in with an admin or teacher account',
 				'error',
 			);
 			testSocket.disconnect();

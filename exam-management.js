@@ -114,6 +114,69 @@ function populatePresetDropdown() {
 			.join('');
 }
 
+// Live summary of the selected preset inside the exam modal — shows the
+// admin exactly which values will be embedded on the exam and surfaced to
+// students in their workspace (welcome title/message, penalty, time limit,
+// pass mark, shuffle, explanations).
+function renderExamPresetSummary() {
+	const container = document.getElementById('examPresetSummary');
+	const select = document.getElementById('examPreset');
+	if (!container || !select) return;
+
+	const presetId = select.value;
+	if (!presetId) {
+		container.classList.add('hidden');
+		container.innerHTML = '';
+		return;
+	}
+
+	const preset = window.getPresetById ? window.getPresetById(presetId) : null;
+	if (!preset) {
+		container.classList.add('hidden');
+		container.innerHTML = '';
+		return;
+	}
+
+	const formatTime = (seconds) => {
+		const total = Math.max(0, Math.floor(Number(seconds) || 0));
+		if (!total) return '—';
+		if (total < 60) return `${total}s`;
+		const mins = Math.floor(total / 60);
+		const secs = total % 60;
+		return secs ? `${mins}m ${secs}s` : `${mins} min`;
+	};
+
+	const chips = [
+		{ label: 'Time limit', value: formatTime(preset.timeLimit) },
+		{ label: 'Penalty', value: `−${preset.penalty || 0} pts` },
+		{ label: 'Pass mark', value: `${preset.passingScore || 50}%` },
+		{ label: 'Questions', value: preset.shuffleQuestions ? 'Shuffled' : 'Fixed order' },
+		{ label: 'Explanations', value: preset.showExplanations ? 'Shown' : 'Hidden' },
+	];
+	const welcomeHtml =
+		preset.welcomeTitle || preset.welcomeMessage
+			? `<div class="exam-preset-welcome">${
+					preset.welcomeTitle ? `<strong>${escapeHtml(preset.welcomeTitle)}</strong>` : ''
+				}${
+					preset.welcomeMessage ? `<span>${escapeHtml(preset.welcomeMessage)}</span>` : ''
+				}</div>`
+			: '';
+
+	container.classList.remove('hidden');
+	container.innerHTML = `
+		<div class="exam-preset-head">
+			<span class="exam-preset-tag">${escapeHtml(preset.name || 'Preset')}</span>
+		</div>
+		${welcomeHtml}
+		<div class="exam-preset-chips">${chips
+			.map(
+				(chip) =>
+					`<span class="exam-preset-chip"><span class="exam-preset-chip-label">${escapeHtml(chip.label)}</span><span class="exam-preset-chip-value">${escapeHtml(String(chip.value))}</span></span>`,
+			)
+			.join('')}</div>
+	`;
+}
+
 function closeExamModal() {
 	const modal = document.getElementById('examModal');
 	if (modal) {
@@ -1615,6 +1678,16 @@ async function saveExamForm() {
 	const examPresetEl = document.getElementById('examPreset');
 	const presetId = examPresetEl ? examPresetEl.value : '';
 
+	// Snapshot the full preset configuration onto the exam. The preset itself
+	// lives only in the admin's localStorage (quizPresets) and never reaches
+	// student devices — but students need every preset-driven rule (welcome
+	// title/message, penalty, time limit, colors, shuffle, explanations,
+	// passing score, font) to configure their exam session. Embedding the
+	// values at save time makes the exam self-describing on any device.
+	const presetSnapshot = presetId && window.getPresetById
+		? window.getPresetById(presetId) || null
+		: null;
+
 	if (!examName || isNaN(duration)) {
 		showToast('Please fill in all required fields', 'error');
 		return;
@@ -1640,6 +1713,25 @@ async function saveExamForm() {
 		duration: duration,
 		passingScore: passingScore,
 		presetId: presetId || null,
+		presetName: presetSnapshot?.name || existingExam?.presetName || '',
+		presetSnapshot: presetSnapshot
+			? {
+					name: presetSnapshot.name || '',
+					timeLimit: presetSnapshot.timeLimit ?? 300,
+					penalty: presetSnapshot.penalty ?? 0,
+					shuffleQuestions: presetSnapshot.shuffleQuestions ?? true,
+					showExplanations: presetSnapshot.showExplanations ?? false,
+					passingScore: presetSnapshot.passingScore ?? 50,
+					primaryColor: presetSnapshot.primaryColor || '#2563eb',
+					secondaryColor: presetSnapshot.secondaryColor || '#1e40af',
+					backgroundColor: presetSnapshot.backgroundColor || '#f8fafc',
+					textColor: presetSnapshot.textColor || '#1e293b',
+					inputFocusColor: presetSnapshot.inputFocusColor || '#3b82f6',
+					fontFamily: presetSnapshot.fontFamily || "'Segoe UI', system-ui",
+					welcomeTitle: presetSnapshot.welcomeTitle || '',
+					welcomeMessage: presetSnapshot.welcomeMessage || '',
+				}
+			: (existingExam?.presetSnapshot || null),
 		questions: selectedQuestions,
 		// Preserve class assignments when an exam is edited from the exam modal.
 		classes: Array.isArray(existingExam?.classes) ? [...existingExam.classes] : [],
@@ -1666,6 +1758,8 @@ async function saveExamForm() {
 				questions: examData.questions,
 				classes: examData.classes,
 				presetId: examData.presetId,
+				presetName: examData.presetName,
+				presetSnapshot: examData.presetSnapshot,
 			};
 			let saved = null;
 			if (currentExamId) {
@@ -1748,6 +1842,7 @@ function editExam(examId) {
 	if (examPresetEl && exam.presetId) {
 		examPresetEl.value = exam.presetId;
 	}
+	renderExamPresetSummary();
 }
 
 // ============================================
@@ -2034,7 +2129,38 @@ async function saveAssignExamClasses() {
 	}
 }
 
+// Count recorded results for an exam from the local results cache.
+// Field spellings vary by writer (exam_id from the API, examId from
+// legacy local writes) so match both.
+function countExamResults(examId) {
+	try {
+		const allResults =
+			window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
+		return allResults.filter(
+			(r) => String(r.examId || r.exam_id || '') === String(examId),
+		).length;
+	} catch (e) {
+		return 0;
+	}
+}
+
 async function deleteExam(examId) {
+	// The backend refuses to hard-delete exams with recorded results (they
+	// would orphan score history). Detect that BEFORE prompting so the user
+	// gets one clear choice up front instead of a second surprise dialog
+	// after the server rejects the delete.
+	const resultCount = countExamResults(examId);
+	if (resultCount > 0) {
+		const archive = confirm(
+			`This exam has ${resultCount} recorded result(s), so it cannot be deleted without losing that history.\n\n` +
+				'OK = Archive it (recommended): the exam is hidden from students but all results are kept.\n' +
+				'Cancel = Keep the exam as it is.',
+		);
+		if (archive) {
+			await archiveExamLegacy(examId);
+		}
+		return;
+	}
 	if (confirm('Are you sure you want to delete this exam?')) {
 		// Persist to server first; only after confirmation do we drop the
 		// local row. This keeps the DB the source of truth.
@@ -2043,10 +2169,22 @@ async function deleteExam(examId) {
 				await window.API.remove('exams', examId);
 			} catch (apiErr) {
 				console.warn('[exams] API delete failed:', apiErr);
-				showToast(
-					'Failed to delete exam on server: ' + (apiErr?.message || 'network error'),
-					'error',
-				);
+				// The local cache may be stale (results synced after load).
+				// If the server still reports recorded results, fall back to
+				// the archive path — results are preserved.
+				const msg = String(apiErr?.message || 'network error');
+				if (/recorded results/i.test(msg)) {
+					if (
+						confirm(
+							'This exam has recorded results on the server and cannot be deleted.\n\n' +
+								'Do you want to archive it instead? Archived exams are hidden from students but all results are preserved.',
+						)
+					) {
+						await archiveExamLegacy(examId);
+					}
+					return;
+				}
+				showToast('Failed to delete exam on server: ' + msg, 'error');
 				return;
 			}
 		}
@@ -2060,6 +2198,24 @@ async function deleteExam(examId) {
 			console.log('Broadcast Updates enabled, triggering sync after exam deletion...');
 			if (window.syncQuestionsToClients) window.syncQuestionsToClients();
 		}
+	}
+}
+
+// Archive fallback for exams with recorded results (legacy UI vocabulary:
+// status 'archived' hides the exam from students, results stay intact).
+async function archiveExamLegacy(examId) {
+	const exam = exams.find((e) => e.id === examId);
+	if (!exam) return;
+	try {
+		if (window.API && typeof window.API.update === 'function') {
+			await window.API.update('exams', examId, { status: 'archived' });
+		}
+		exam.status = 'archived';
+		saveExams();
+		updateExamList();
+		showToast('Exam archived — results preserved', 'success');
+	} catch (err) {
+		showToast('Failed to archive exam: ' + (err?.message || 'error'), 'error');
 	}
 }
 
@@ -2712,6 +2868,7 @@ window.openExamModal = openExamModal;
 window.closeExamModal = closeExamModal;
 window.saveExam = saveExamForm;
 window.editExam = editExam;
+window.renderExamPresetSummary = renderExamPresetSummary;
 window.deleteExam = deleteExam;
 window.openAssignExamQuestions = openAssignExamQuestions;
 window.closeAssignExamQuestions = closeAssignExamQuestions;
@@ -2842,7 +2999,9 @@ function createExamPackage(examId) {
 		.map((entry) => resolveExamQuestionEntry(entry))
 		.filter((question) => question);
 
-	// Get preset settings if assigned
+	// Get preset settings if assigned. The exam may carry a full presetSnapshot
+	// (embedded at save time) which works even when the local quizPresets
+	// store doesn't contain the preset (e.g. a different admin's device).
 	let presetSettings = {};
 	if (exam.presetId && window.getPresetById) {
 		const preset = window.getPresetById(exam.presetId);
@@ -2863,6 +3022,9 @@ function createExamPackage(examId) {
 				welcomeMessage: preset.welcomeMessage,
 			};
 		}
+	}
+	if (!Object.keys(presetSettings).length && exam.presetSnapshot) {
+		presetSettings = { ...exam.presetSnapshot };
 	}
 
 	// Get current app settings as fallback
@@ -3008,6 +3170,7 @@ function createExamPackage(examId) {
 		mode: 'exam',
 		examId: exam.id,
 		examName: exam.name,
+		examPresetName: exam.presetName || presetSettings.name || '',
 		duration: exam.duration,
 		timeLimit:
 			presetSettings.timeLimit ||

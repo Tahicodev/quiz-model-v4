@@ -2,22 +2,24 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { initGameServer } = require('./game-server.cjs');
 
 const app = express();
 const port = process.env.PORT || 3000;
-const configuredAdminSecret = String(process.env.QUIZ_ADMIN_SECRET || '').trim();
-const adminSecret =
-	configuredAdminSecret || crypto.randomBytes(24).toString('base64url');
+// JWT verification replaces the old shared Admin Secret: the identify event
+// proves staff identity with the caller's signed access token (same secret the
+// SaaS backend uses). No secret needs to be typed into the admin panel.
+const JWT_SECRET = String(process.env.JWT_SECRET || '').trim();
+const STAFF_ROLES = new Set(['admin', 'teacher', 'super_admin']);
 const corsOrigins = String(process.env.QUIZ_CORS_ORIGIN || '')
 	.split(',')
 	.map((origin) => origin.trim())
 	.filter(Boolean);
 
-if (!configuredAdminSecret) {
-	console.log(
-		`QUIZ_ADMIN_SECRET was not set. Temporary Admin Secret for this server run: ${adminSecret}`,
+if (!JWT_SECRET) {
+	console.warn(
+		'JWT_SECRET is not set — admin identify events will be rejected until it matches the backend JWT_SECRET.',
 	);
 }
 
@@ -61,7 +63,8 @@ function requireAdminSocket(socket, eventName) {
 	if (isAdminSocket(socket)) return true;
 	socket.emit('admin:auth:error', {
 		event: eventName,
-		message: 'Admin Secret is required for this realtime action.',
+		message:
+			'Admin access requires a signed-in admin or teacher account.',
 	});
 	return false;
 }
@@ -112,14 +115,33 @@ io.on('connection', (socket) => {
 	socket.on('identify', (payload = {}) => {
 		const requestedRole = payload.role || 'client';
 		if (requestedRole === 'admin') {
-			const providedSecret = String(
-				payload.adminSecret || payload.secret || '',
+			// Staff prove their identity with the signed JWT (same token the
+			// REST API issued at login) instead of a shared Admin Secret.
+			// A student/invalid token never gains admin powers.
+			const token = String(
+				payload.token ||
+					payload.jwt ||
+					socket.handshake?.auth?.token ||
+					socket.handshake?.query?.token ||
+					'',
 			).trim();
-			if (!providedSecret || providedSecret !== adminSecret) {
+			let staff = false;
+			if (token && JWT_SECRET) {
+				try {
+					const decoded = jwt.verify(token, JWT_SECRET);
+					const role = String(decoded.role || '').toLowerCase();
+					staff = STAFF_ROLES.has(role);
+					socket.jwtUser = decoded;
+				} catch (err) {
+					staff = false;
+				}
+			}
+			if (!staff) {
 				socket.role = 'unauthorized';
 				socket.adminAuthenticated = false;
 				socket.emit('admin:auth:error', {
-					message: 'Invalid or missing Admin Secret.',
+					message:
+						'Admin access requires a signed-in admin or teacher account.',
 				});
 				return;
 			}

@@ -4519,12 +4519,9 @@ function registerGameEngine(io) {
 				socket.role === 'admin' && socket.adminAuthenticated === true;
 			const saasRole = String(socket.data?.user?.role || '').toLowerCase();
 			const isSaasStaff = ['admin', 'teacher', 'super_admin'].includes(saasRole);
-			const adminSecret = String(
-				socket.handshake?.auth?.adminSecret || '',
-			).trim();
-			if (!isLegacyAdmin && !isSaasStaff && !adminSecret) {
+			if (!isLegacyAdmin && !isSaasStaff) {
 				if (typeof ack === 'function') {
-					ack({ error: 'Admin Secret is required to start games.' });
+					ack({ error: 'Admin or teacher account is required to start games.' });
 				}
 				return;
 			}
@@ -5099,7 +5096,7 @@ function registerGameEngine(io) {
 			const isSaasStaff = ['admin', 'teacher', 'super_admin'].includes(saasRole);
 			if (!isLegacyAdmin && !isSaasStaff) {
 				if (typeof ack === 'function') {
-					ack({ error: 'Admin Secret is required to delete games.' });
+					ack({ error: 'Admin or teacher account is required to delete games.' });
 				}
 				return;
 			}

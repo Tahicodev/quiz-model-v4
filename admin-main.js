@@ -775,18 +775,15 @@ function makeCheckboxItemsClickable() {
 
 		item.addEventListener('click', function (e) {
 			const checkbox = this.querySelector('input[type="checkbox"]');
+			if (!checkbox) return;
 
-			if (e.target !== checkbox) {
-				checkbox.checked = !checkbox.checked;
-
-				if (checkbox.checked) {
-					this.classList.add('active');
-				} else {
-					this.classList.remove('active');
-				}
-
-				const event = new Event('change');
-				checkbox.dispatchEvent(event);
+			// Native label activation already forwards a click to the wrapped
+			// input, so never toggle `checked` manually here — doing both
+			// double-toggles and the box appears stuck. Just sync the visual
+			// highlight with the resulting state.
+			if (this.classList.contains('active') !== checkbox.checked) {
+				this.classList.toggle('active', checkbox.checked);
+				checkbox.dispatchEvent(new Event('change'));
 			}
 		});
 	});

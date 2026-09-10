@@ -17577,20 +17577,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     className: getQuizQuestionTypeClass,
     isTrueFalse: isTrueFalseQuestion
   };
-  function getStoredAdminSecret() {
-    try {
-      const settings = window.__DI_CONTAINER__.repo.getAll_sync("settings")[0] || {};
-      return String(settings.adminSecret || localStorage.getItem("quizAdminSecret") || "").trim();
-    } catch (e) {
-      return String(localStorage.getItem("quizAdminSecret") || "").trim();
-    }
-  }
   function buildAdminIdentifyPayload(extra = {}) {
-    return {
-      role: "admin",
-      adminSecret: getStoredAdminSecret(),
-      ...extra
-    };
+    const payload = { role: "admin", ...extra };
+    let token = "";
+    try {
+      const session = JSON.parse(localStorage.getItem("quizSession") || "null");
+      token = session && session.token || "";
+    } catch (e) {
+    }
+    if (!token) token = localStorage.getItem("quizAuthToken") || "";
+    if (!token) token = window.__authToken || "";
+    if (token) payload.token = token;
+    return payload;
   }
   function sanitizeImageUrl(value) {
     const raw = String(value || "").trim();
@@ -17613,7 +17611,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (/^hsla?\(\s*\d{1,3}\s*,\s*\d{1,3}%\s*,\s*\d{1,3}%(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/i.test(raw)) return raw;
     return fallback;
   }
-  window.getStoredAdminSecret = getStoredAdminSecret;
   window.buildAdminIdentifyPayload = buildAdminIdentifyPayload;
   window.sanitizeImageUrl = window.sanitizeImageUrl || sanitizeImageUrl;
   window.sanitizeCssColor = window.sanitizeCssColor || sanitizeCssColor;
@@ -17736,7 +17733,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function parseError(res, body) {
       try {
         var j = JSON.parse(body);
-        return j && j.error && j.error.message || j && j.message || body || "HTTP " + res.status;
+        var base = j && j.error && j.error.message || j && j.message || body || "HTTP " + res.status;
+        var fields = j && j.error && j.error.fields;
+        if (fields && typeof fields === "object") {
+          var details = Object.keys(fields).map(function(k) {
+            var v = fields[k];
+            return Array.isArray(v) ? v.join(", ") : String(v);
+          }).filter(Boolean).join("; ");
+          if (details) {
+            base = String(base) + (base === "Validation failed" ? "" : " \u2014 ") + details;
+          }
+        }
+        return base;
       } catch (_) {
         return body || "HTTP " + res.status;
       }
@@ -17907,6 +17915,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (Array.isArray(e.classes)) legacy.classes = e.classes;
         if (e.presetId != null) legacy.presetId = e.presetId;
         if (e.dateCreated != null) legacy.dateCreated = e.dateCreated;
+        if (e.presetName != null) legacy.presetName = e.presetName;
+        if (e.presetSnapshot && typeof e.presetSnapshot === "object") legacy.presetSnapshot = e.presetSnapshot;
         if (Object.keys(legacy).length > 0) out.options_json = JSON.stringify(legacy);
         return out;
       },

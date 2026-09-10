@@ -473,8 +473,26 @@
 		return isStudentLikeUser(currentUser);
 	}
 
+	// Teacher → class assignments persisted server-side in the settings table
+	// (key "teacherClassAssignments": { userId: [classId, ...] }). The local
+	// mirror is written by saveUserForm and refreshed by bootstrap.
+	function getTeacherClassAssignments() {
+		try {
+			const raw = localStorage.getItem('quizTeacherClassAssignments');
+			const parsed = raw ? JSON.parse(raw) : {};
+			return parsed && typeof parsed === 'object' ? parsed : {};
+		} catch (e) {
+			return {};
+		}
+	}
+
 	function getTeacherClassIds(user = currentUser) {
-		return Array.isArray(user?.classIds) ? user.classIds : [];
+		const own = Array.isArray(user?.classIds) ? user.classIds : [];
+		if (own.length > 0) return own;
+		// Fallback: the local assignments mirror (survives reloads even when
+		// the users row lost its classIds during a sync round trip).
+		const mirrored = getTeacherClassAssignments()[user?.id || ''];
+		return Array.isArray(mirrored) ? mirrored : [];
 	}
 
 	function getAccessibleClasses() {
@@ -561,8 +579,10 @@
 		settingsTabs: {
 			general: true,
 			presets: true,
-			data: true,
-			realtime: true,
+			// Data and Realtime manage school-wide datasets and the LAN server —
+			// admin-only by default now (markup gates them with data-roles="admin").
+			data: false,
+			realtime: false,
 			'ai-generation': true,
 			users: true,
 		},
@@ -698,6 +718,38 @@
 		return roles.includes(currentUser?.role);
 	}
 
+	// Settings-section guard (mirror of canAccessTab for .settings-section).
+	// Some sections are school-wide admin concerns (teacher access control,
+	// data backup/import, LAN realtime server) and must never open for a
+	// teacher even if a stale teacherAccess settings value says otherwise.
+	// The rest honor the admin-configurable teacherAccess.settingsTabs map.
+	function canAccessSettingsTab(tabName) {
+		if (isAdmin()) return true;
+		if (isTeacher()) {
+			if (
+				tabName === 'teacher-access' ||
+				tabName === 'data' ||
+				tabName === 'realtime'
+			) {
+				return false;
+			}
+			const access = getTeacherAccessSettings();
+			if (access.settings === false) return false;
+			if (access.settingsTabs && access.settingsTabs[tabName] === false) {
+				return false;
+			}
+			const section = document.getElementById(`${tabName}-settings`);
+			const rolesSource = section?.dataset?.roles || '';
+			const roles = String(rolesSource)
+				.split(',')
+				.map((r) => r.trim())
+				.filter(Boolean);
+			if (roles.length) return roles.includes(currentUser?.role);
+			return true;
+		}
+		return false;
+	}
+
 	function applyTeacherAccess() {
 		if (!isTeacher()) return;
 		const access = getTeacherAccessSettings();
@@ -736,6 +788,12 @@
 			.forEach((btn) => {
 				const key = btn.dataset.settingsTab;
 				if (!key) return;
+				// Admin-only sections must stay hidden for teachers regardless of
+				// the settingsTabs map (which never lists them).
+				if (key === 'teacher-access' || key === 'data' || key === 'realtime') {
+					btn.classList.add('role-hidden');
+					return;
+				}
 				if (access.settingsTabs && access.settingsTabs[key] === false) {
 					btn.classList.add('role-hidden');
 				} else {
@@ -748,6 +806,11 @@
 			.forEach((section) => {
 				const key = section.dataset.settingsTab;
 				if (!key) return;
+				// Same admin-only protection for the section panels themselves.
+				if (key === 'teacher-access' || key === 'data' || key === 'realtime') {
+					section.classList.add('role-hidden');
+					return;
+				}
 				if (access.settingsTabs && access.settingsTabs[key] === false) {
 					section.classList.add('role-hidden');
 				} else {
@@ -2529,13 +2592,23 @@
 		const teacherClassList = document.getElementById('teacherClassList');
 		if (teacherClassList) {
 			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+			// Use the app-wide custom checkbox pattern (.custom-checkbox +
+			// .custom-checkmark from styles.css) so the box is actually visible.
+			// The native input stays zero-sized and is toggled by the
+			// makeCheckboxItemsClickable() label handler in admin-main.js.
+			const assignedClassIds = Array.isArray(user?.classIds)
+				? user.classIds
+				: getTeacherClassAssignments()[user?.id] || [];
 			teacherClassList.innerHTML = classes
 				.map((c) => {
-					const checked = user?.classIds?.includes(c.id) ? 'checked' : '';
+					const checked = assignedClassIds.includes(c.id) ? 'checked' : '';
 					return `
             <label class="checkbox-list-item">
-                <input type="checkbox" value="${escapeHtml(c.id)}" ${checked}>
-                <span>${escapeHtml(c.name)}</span>
+                <div class="custom-checkbox-container">
+                    <input type="checkbox" class="custom-checkbox" value="${escapeHtml(c.id)}" ${checked}>
+                    <span class="custom-checkmark" aria-hidden="true"></span>
+                </div>
+                <span class="checkbox-label">${escapeHtml(c.name)}</span>
             </label>
           `;
 				})
@@ -2744,6 +2817,58 @@
 						const i = users.findIndex((u) => u.id === updatedUser.id || u.username === updatedUser.username);
 						if (i !== -1) users[i] = updatedUser;
 						savedToServer = true;
+					}
+
+					// Teacher class assignments have no User column — persist
+					// them through the settings table so they survive a DB
+					// round trip (bootstrap rehydrates user.classIds from the
+					// same key). Only admins reach here: teachers can't edit
+					// teacher rows.
+					if (role === ROLE_TEACHER && Array.isArray(updatedUser.classIds)) {
+						try {
+							const settingsRepo =
+								window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+							let assignments = {};
+							if (settingsRepo && settingsRepo.getValue_sync) {
+								const raw = settingsRepo.getValue_sync('settings', {});
+								const row = Array.isArray(raw?.settings)
+									? raw.settings.find(
+											(s) => s && s.key === 'teacherClassAssignments',
+										)
+									: null;
+								if (row?.value) {
+									try {
+										assignments = JSON.parse(row.value) || {};
+									} catch (_) {}
+								}
+							}
+							assignments[updatedUser.id] = updatedUser.classIds;
+							const serialized = JSON.stringify(assignments);
+							if (window.API && typeof window.API.update === 'function') {
+								// PATCH /settings/teacherClassAssignments — value is a
+								// string per SettingUpdateSchema.
+								await window.API.update(
+									'settings',
+									'teacherClassAssignments',
+									{
+										key: 'teacherClassAssignments',
+										value: serialized,
+										visibility: 'admin',
+									},
+								);
+							}
+							// Mirror locally so the modal shows the right state
+							// before the next bootstrap.
+							localStorage.setItem(
+								'quizTeacherClassAssignments',
+								serialized,
+							);
+						} catch (assignmentErr) {
+							console.warn(
+								'[auth] teacher class assignments save failed:',
+								assignmentErr,
+							);
+						}
 					}
 				} catch (apiErr) {
 					console.warn('[auth] API save user failed:', apiErr);
@@ -4102,6 +4227,7 @@
 		setCurrentUser,
 		applyRolePermissions,
 		canAccessTab,
+		canAccessSettingsTab,
 		updateUserById,
 		updateUserPassword,
 		getProfileRequests,

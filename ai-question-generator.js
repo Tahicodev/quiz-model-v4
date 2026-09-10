@@ -23,24 +23,21 @@ const AI_PROVIDERS = {
 		helpLink: 'https://openrouter.ai/keys',
 		models: {
 			free: [
-				// Currently available free models on OpenRouter (as of 2024)
-				{ id: 'meta-llama/llama-3.2-3b-instruct:free', name: 'Llama 3.2 3B Instruct (Free)' },
-				{ id: 'meta-llama/llama-3.2-1b-instruct:free', name: 'Llama 3.2 1B Instruct (Free)' },
-				{ id: 'meta-llama/llama-3.1-8b-instruct:free', name: 'Llama 3.1 8B Instruct (Free)' },
-				{ id: 'qwen/qwen-2-7b-instruct:free', name: 'Qwen 2 7B Instruct (Free)' },
-				{ id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash Exp (Free)' },
-				{ id: 'google/gemini-exp-1206:free', name: 'Gemini Exp 1206 (Free)' },
-				{ id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free)' },
-				{ id: 'deepseek/deepseek-chat:free', name: 'DeepSeek Chat (Free)' },
-				{ id: 'huggingfaceh4/zephyr-7b-beta:free', name: 'Zephyr 7B Beta (Free)' },
-				{ id: 'mistralai/mistral-7b-instruct:free', name: 'Mistral 7B Instruct (Free)' }
+				// Free OpenRouter models — auto-refreshed live via the API when a
+				// key is present; these are fallbacks for offline/no-key use.
+				{ id: 'google/gemini-2.5-flash:free', name: 'Gemini 2.5 Flash (Free)' },
+				{ id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Instruct (Free)' },
+				{ id: 'deepseek/deepseek-chat-v3-0324:free', name: 'DeepSeek V3 (Free)' },
+				{ id: 'qwen/qwen3-coder:free', name: 'Qwen 3 Coder (Free)' },
+				{ id: 'mistralai/mistral-small-3.2-24b-instruct:free', name: 'Mistral Small 3.2 (Free)' }
 			],
 			premium: [
-				{ id: 'deepseek/deepseek-chat', name: 'DeepSeek V3' },
-				{ id: 'deepseek/deepseek-r1', name: 'DeepSeek R1' },
-				{ id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet' },
-				{ id: 'openai/gpt-4o', name: 'GPT-4o' },
-				{ id: 'google/gemini-pro-1.5', name: 'Gemini 1.5 Pro' }
+				{ id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5 (Best JSON)' },
+				{ id: 'openai/gpt-5.2', name: 'GPT-5.2' },
+				{ id: 'openai/gpt-5-mini', name: 'GPT-5 Mini (Cheap + Reliable)' },
+				{ id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+				{ id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast)' },
+				{ id: 'deepseek/deepseek-chat-v3.1', name: 'DeepSeek V3.1 (Very Cheap)' }
 			]
 		},
 		headers: (apiKey) => {
@@ -61,8 +58,9 @@ const AI_PROVIDERS = {
 		helpLink: 'https://console.anthropic.com/settings/keys',
 		models: {
 			premium: [
-				{ id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
-				{ id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku' }
+				{ id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5 (Recommended)' },
+				{ id: 'claude-opus-4-1', name: 'Claude Opus 4.1 (Most Capable)' },
+				{ id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku (Fast + Cheap)' }
 			]
 		},
 		headers: (apiKey) => ({
@@ -78,9 +76,10 @@ const AI_PROVIDERS = {
 		helpLink: 'https://platform.openai.com/api-keys',
 		models: {
 			premium: [
-				{ id: 'gpt-4o', name: 'GPT-4o' },
-				{ id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-				{ id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
+				{ id: 'gpt-5.2', name: 'GPT-5.2 (Recommended)' },
+				{ id: 'gpt-5.1', name: 'GPT-5.1' },
+				{ id: 'gpt-5-mini', name: 'GPT-5 Mini (Cheap + Reliable)' },
+				{ id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini (Cheap)' }
 			]
 		},
 		headers: (apiKey) => ({
@@ -95,16 +94,15 @@ const AI_PROVIDERS = {
 		helpLink: 'https://aistudio.google.com/app/apikey',
 		models: {
 			free: [
-				{ id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview (Recommended)' },
-				{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recommended)' },
-				{ id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Recommended)' },
-				{ id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image (Multimodal)' },
-				{ id: 'gemini-2.5-flash-native-audio-preview', name: 'Gemini 2.5 Flash Audio (Beta)' }
+				// Gemini API has a generous free tier — see AI Studio for limits
+				{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Free Tier — Recommended)' },
+				{ id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Free Tier — Fastest)' },
+				{ id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Free Tier)' }
 			],
 			premium: [
 				{ id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview' },
-				{ id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro Image (Beta)' },
-				{ id: 'gemini-exp-1206', name: 'Gemini Exp 1206' }
+				{ id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' },
+				{ id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
 			]
 		},
 		headers: (apiKey) => ({
@@ -117,10 +115,12 @@ const AI_PROVIDERS = {
 		helpLink: 'https://platform.deepseek.com/api_keys',
 		models: {
 			free: [
-				{ id: 'deepseek-chat', name: 'DeepSeek V3 (Cheap)' },
+				// DeepSeek's API is among the cheapest paid APIs — no free tier,
+				// but a small credit lasts a long time for question generation.
+				{ id: 'deepseek-chat', name: 'DeepSeek V3.2 (Very Cheap — Recommended)' },
 				{ id: 'deepseek-reasoner', name: 'DeepSeek R1 (Reasoner)' }
 			],
-			premium: [] // DeepSeek is very cheap, putting in free tier for visibility or generic
+			premium: []
 		},
 		headers: (apiKey) => ({
 			'Authorization': `Bearer ${apiKey}`,
@@ -128,14 +128,19 @@ const AI_PROVIDERS = {
 		})
 	},
 	custom: {
-		name: 'Custom / Local (Ollama, LM Studio)',
-		baseUrl: 'http://localhost:11434/v1/chat/completions', // Default
-		helpLink: '',
+		// Any OpenAI-compatible endpoint works: Ollama, LM Studio, vLLM,
+		// Groq, Together, OpenRouter-compatible proxies, enterprise gateways...
+		// Local models (Ollama/LM Studio) keep ALL data on this machine —
+		// nothing is sent to any external server.
+		name: 'Custom / Local (Any Provider)',
+		baseUrl: 'http://localhost:11434/v1/chat/completions', // Ollama default
+		helpLink: 'https://ollama.com',
 		models: {
 			free: [
-				{ id: 'llama3:8b', name: 'Llama 3 8B (Ollama)' },
-				{ id: 'mistral', name: 'Mistral (Ollama)' },
+				{ id: 'llama3.1:8b', name: 'Llama 3.1 8B (Ollama)' },
 				{ id: 'qwen2.5:7b', name: 'Qwen 2.5 7B (Ollama)' },
+				{ id: 'qwen2.5-coder:7b', name: 'Qwen 2.5 Coder 7B (Ollama — code questions)' },
+				{ id: 'mistral', name: 'Mistral (Ollama)' },
 				{ id: 'deepseek-r1:8b', name: 'DeepSeek R1 8B (Ollama)' }
 			],
 			premium: []
@@ -162,7 +167,7 @@ const DEFAULT_AI_CONFIG = {
 		deepseek: '',
 		custom: ''
 	},
-	model: 'google/gemini-2.0-flash-lite-preview-02-05:free', // Switched to a more capable model for better JSON adherence and longer outputs
+	model: 'google/gemini-2.5-flash:free', // Current-gen free model with strong JSON adherence
 	customModel: '',
 	customBaseUrl: '', // For custom/local provider
 	temperature: 0.7,

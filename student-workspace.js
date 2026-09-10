@@ -806,6 +806,285 @@
 		});
 	}
 
+	// ── Preset info on exam cards ───────────────────────────────────────────────
+	// Exams created after the preset-snapshot feature carry the full preset
+	// configuration (welcome title/message, penalty, time limit, passing score,
+	// shuffle, explanations, colors, font) in `presetSnapshot`. Older exams
+	// only carry `presetId`, in which case we try the local quizPresets store
+	// (same device as the admin) before falling back to exam-level fields.
+	function getExamPresetInfo(exam) {
+		if (!exam) return null;
+
+		const snapshot =
+			exam.presetSnapshot && typeof exam.presetSnapshot === 'object'
+				? exam.presetSnapshot
+				: null;
+
+		let fallback = null;
+		if (exam.presetId) {
+			try {
+				const presets = JSON.parse(
+					localStorage.getItem('quizPresets') || '[]',
+				);
+				fallback = Array.isArray(presets)
+					? presets.find((p) => String(p.id) === String(exam.presetId)) || null
+					: null;
+			} catch (_) {
+				fallback = null;
+			}
+		}
+
+		const source = snapshot || fallback;
+		if (!source && !exam.presetId) return null;
+		if (!source) {
+			return {
+				name: exam.presetName || 'Preset',
+				hasPreset: true,
+				timeLimit: exam.timeLimit || null,
+				penalty: null,
+				passingScore: exam.passingScore || null,
+				shuffleQuestions: null,
+				showExplanations: null,
+				welcomeTitle: '',
+				welcomeMessage: '',
+			};
+		}
+
+		return {
+			name: source.name || exam.presetName || 'Preset',
+			hasPreset: true,
+			timeLimit: Number.isFinite(Number(source.timeLimit))
+				? Number(source.timeLimit)
+				: null,
+			penalty: Number.isFinite(Number(source.penalty))
+				? Number(source.penalty)
+				: null,
+			passingScore: Number.isFinite(Number(source.passingScore))
+				? Number(source.passingScore)
+				: null,
+			shuffleQuestions: Boolean(source.shuffleQuestions),
+			showExplanations: Boolean(source.showExplanations),
+			welcomeTitle: String(source.welcomeTitle || ''),
+			welcomeMessage: String(source.welcomeMessage || ''),
+		};
+	}
+
+	function formatPresetTimeLimit(seconds) {
+		const total = Math.max(0, Math.floor(Number(seconds) || 0));
+		if (!total) return '';
+		if (total < 60) return `${total}s`;
+		const mins = Math.floor(total / 60);
+		const secs = total % 60;
+		return secs ? `${mins}m ${secs}s` : `${mins} min`;
+	}
+
+	// Render the full preset rule set as a chip grid — every preset field gets
+	// a visible slot so nothing in the preset stays hidden from students.
+	function renderExamPresetChips(exam) {
+		const preset = getExamPresetInfo(exam);
+		if (!preset) return '';
+
+		const timeLimitLabel = preset.timeLimit
+			? formatPresetTimeLimit(preset.timeLimit)
+			: `${exam.duration || 0} min`;
+		const chips = [
+			{ label: 'Time limit', value: timeLimitLabel || '—' },
+			{
+				label: 'Penalty',
+				value: preset.penalty != null ? `−${preset.penalty} pts` : '—',
+			},
+			{
+				label: 'Pass mark',
+				value: preset.passingScore != null ? `${preset.passingScore}%` : `${exam.passingScore || 60}%`,
+			},
+		];
+		if (preset.shuffleQuestions) chips.push({ label: 'Questions', value: 'Shuffled' });
+		if (preset.showExplanations) chips.push({ label: 'Explanations', value: 'Shown' });
+
+		const chipsHtml = chips
+			.map(
+				(chip) => `
+					<span class="exam-preset-chip">
+						<span class="exam-preset-chip-label">${escapeHtml(chip.label)}</span>
+						<span class="exam-preset-chip-value">${escapeHtml(String(chip.value))}</span>
+					</span>
+				`,
+			)
+			.join('');
+
+		const welcomeHtml =
+			preset.welcomeTitle || preset.welcomeMessage
+				? `
+					<div class="exam-preset-welcome">
+						${preset.welcomeTitle ? `<strong>${escapeHtml(preset.welcomeTitle)}</strong>` : ''}
+						${preset.welcomeMessage ? `<span>${escapeHtml(preset.welcomeMessage)}</span>` : ''}
+					</div>
+				`
+				: '';
+
+		return `
+			<div class="exam-preset-info">
+				<div class="exam-preset-head">
+					<span class="exam-preset-tag">${escapeHtml(preset.name)}</span>
+				</div>
+				<div class="exam-preset-chips">${chipsHtml}</div>
+				${welcomeHtml}
+			</div>
+		`;
+	}
+
+	// ── Game preset chips ───────────────────────────────────────────────────────
+	// Game presets define rule switches (mirror card, time warp, streak
+	// multiplier, sudden death…) plus timers (sprint global timer, hot potato
+	// total timer, last-survivor bonus). Surface every active rule so students
+	// know exactly how the match they're joining is scored.
+	const GAME_RULE_LABELS = {
+		mirrorCard: 'Mirror Card',
+		timeWarp: 'Time Warp',
+		doubleOrNothing: 'Double or Nothing',
+		shieldCard: 'Shield Card',
+		freezeCard: 'Freeze Card',
+		stealCard: 'Steal Card',
+		fogCard: 'Fog Card',
+		comboBreakerCard: 'Combo Breaker',
+		overclockCard: 'Overclock',
+		streakMultiplier: 'Streak Multiplier',
+		bountyBonus: 'Bounty Bonus',
+		teamBetting: 'Team Betting',
+		suddenDeath: 'Sudden Death',
+		hintCost: 'Hints Cost Points',
+		autoPlayTimeoutCard: 'Auto Timeout Card',
+	};
+
+	function renderGamePresetChips(game) {
+		const rules =
+			game?.settings?.gameRules && typeof game.settings.gameRules === 'object'
+				? game.settings.gameRules
+				: {};
+		const presetName = String(
+			game?.settings?.gamePresetName || '',
+		).trim();
+
+		const activeRules = Object.keys(GAME_RULE_LABELS).filter(
+			(key) => rules[key] === true,
+		);
+
+		const sprintTimer = Number(rules.sprintGlobalTimeLimit || 0);
+		if (sprintTimer > 0) {
+			activeRules.push(`Sprint ${formatPresetTimeLimit(sprintTimer)}`);
+		}
+
+		const pointsCorrect = Number(game?.settings?.pointsCorrect || 0);
+		const pointsWrong = Number(game?.settings?.pointsWrong || 0);
+		const chips = [];
+		if (pointsCorrect > 0) {
+			chips.push(`+${pointsCorrect} per correct`);
+			if (pointsWrong > 0) chips.push(`−${pointsWrong} per wrong`);
+		}
+		const questionTime = Number(game?.settings?.questionTimeLimit || 0);
+		if (questionTime > 0) {
+			chips.push(`${formatPresetTimeLimit(questionTime)} per question`);
+		}
+		chips.push(...activeRules);
+
+		if (!presetName && !chips.length) return '';
+
+		return `
+			<div class="exam-preset-info game-preset-info">
+				<div class="exam-preset-head">
+					${presetName ? `<span class="exam-preset-tag">${escapeHtml(presetName)}</span>` : '<span class="exam-preset-tag">Game Rules</span>'}
+				</div>
+			${chips.length ? `<div class="exam-preset-chips">${chips
+				.map(
+					(chip) => `
+						<span class="exam-preset-chip">
+							<span class="exam-preset-chip-value">${escapeHtml(String(chip))}</span>
+						</span>
+					`,
+				)
+				.join('')}</div>` : ''}
+		</div>
+	`;
+	}
+
+	// ── Training preset banner ──────────────────────────────────────────────────
+	// Training mode is configured by the admin's Training Preset (Settings →
+	// General → Training Preset) or falls back to the app-level quizSettings.
+	// Show the exact rule set students will train under: welcome title/message,
+	// time limit, penalty, pass mark, shuffle + explanations behavior.
+	function renderTrainingRulesCard() {
+		const container = byId('studentTrainingRulesCard');
+		if (!container) return;
+
+		const appSettings =
+			(window.__DI_CONTAINER__?.repo?.getAll_sync('settings') || [])[0] || {};
+		const trainingPresetId = String(appSettings.trainingPresetId || '').trim();
+
+		let preset = null;
+		if (trainingPresetId) {
+			try {
+				const presets = JSON.parse(
+					localStorage.getItem('quizPresets') || '[]',
+				);
+				preset =
+					Array.isArray(presets)
+						? presets.find((p) => String(p.id) === trainingPresetId) || null
+						: null;
+			} catch (_) {
+				preset = null;
+			}
+		}
+
+		const source = preset || appSettings;
+		const title = String(
+			preset?.welcomeTitle || source.welcomeTitle || 'Training Quiz',
+		);
+		const message = String(
+			preset?.welcomeMessage || source.welcomeMessage || '',
+		).trim();
+		const timeLimit = Number(
+			preset?.timeLimit ?? source.timeLimit ?? 300,
+		);
+		const penalty = Number(preset?.penalty ?? source.penalty ?? 0);
+		const passingScore = Number(
+			preset?.passingScore ?? source.passingScore ?? 50,
+		);
+		const shuffle = Boolean(preset?.shuffleQuestions ?? source.shuffleQuestions ?? true);
+		const explanations = Boolean(
+			preset?.showExplanations ?? source.showExplanations ?? true,
+		);
+
+		const chips = [
+			{ label: 'Time limit', value: formatPresetTimeLimit(timeLimit) || '—' },
+			{ label: 'Penalty', value: penalty ? `−${penalty} pts` : 'None' },
+			{ label: 'Pass mark', value: `${passingScore}%` },
+			{ label: 'Questions', value: shuffle ? 'Shuffled' : 'Fixed order' },
+			{ label: 'Explanations', value: explanations ? 'Shown' : 'Hidden' },
+		];
+
+		container.innerHTML = `
+			<div class="exam-preset-info training-preset-banner">
+				<div class="exam-preset-head">
+					<span class="exam-preset-tag">${escapeHtml(preset ? preset.name || 'Training Preset' : 'Default Rules')}</span>
+				</div>
+				<div class="exam-preset-welcome">
+					<strong>${escapeHtml(title)}</strong>
+					${message ? `<span>${escapeHtml(message)}</span>` : ''}
+				</div>
+				<div class="exam-preset-chips">${chips
+					.map(
+						(chip) => `
+							<span class="exam-preset-chip">
+								<span class="exam-preset-chip-label">${escapeHtml(chip.label)}</span>
+								<span class="exam-preset-chip-value">${escapeHtml(String(chip.value))}</span>
+							</span>
+						`,
+					)
+					.join('')}</div>
+			</div>
+		`;
+	}
+
 	function getTrainingResults(identity) {
 		let results = [];
 		try {
@@ -935,6 +1214,7 @@
 	function renderTrainingCards(trainingResults) {
 		const grid = byId('studentTrainingGrid');
 		if (!grid) return;
+		renderTrainingRulesCard();
 
 		const uniqueByExam = dedupeTrainingResultsByExam(trainingResults);
 		const filtered =
@@ -1651,6 +1931,7 @@
 						<p>${totalQuestions} questions - ${
 							exam.passingScore ? `Pass: ${exam.passingScore}%` : 'Graded'
 						}</p>
+						${renderExamPresetChips(exam)}
 						<div class="exam-performance">
 							<div class="score-display">${
 								completed
@@ -6629,6 +6910,7 @@
 								: `${session.participants?.length || 0} joined`
 						}</span>
 					</div>
+					${renderGamePresetChips(game)}
 					${
 						status === 'completed' && globalStatus === 'completed'
 							? `<div class="game-result-inline ${outcomeClass}">

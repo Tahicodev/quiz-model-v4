@@ -5902,17 +5902,22 @@ window.onAIProviderChange = function() {
 	updateAIModelSelect();
 };
 
-// Recommendations for different providers
+// Recommendations for different providers — current-generation models with
+// the strongest strict-JSON output for the generator's schema. Free/cheap
+// picks first so a zero-budget setup still gets reliable results.
 const MODEL_RECOMMENDATIONS = {
 	'openrouter': [
-		'google/gemini-2.0-flash-exp:free',
-		'meta-llama/llama-3.1-8b-instruct:free',
-		'deepseek/deepseek-chat',
-		'anthropic/claude-3.5-sonnet',
-		'openai/gpt-4o'
+		'google/gemini-2.5-flash:free',
+		'meta-llama/llama-3.3-70b-instruct:free',
+		'openai/gpt-5-mini',
+		'anthropic/claude-sonnet-4.5',
+		'deepseek/deepseek-chat-v3.1'
 	],
-	'google': ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-flash-image'],
-	'openai': ['gpt-4o-mini', 'gpt-4o']
+	'google': ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview'],
+	'openai': ['gpt-5-mini', 'gpt-5.2'],
+	'anthropic': ['claude-sonnet-4-5', 'claude-3-5-haiku-latest'],
+	'deepseek': ['deepseek-chat', 'deepseek-reasoner'],
+	'custom': ['llama3.1:8b', 'qwen2.5:7b']
 };
 
 // Handle model select change

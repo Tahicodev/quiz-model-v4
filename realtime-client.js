@@ -1592,6 +1592,22 @@
 			if (results) out.quizResults = JSON.parse(results);
 		} catch (e) {}
 
+		// Cached copies of the school's published content — lets the admin
+		// rebuild exams/questions/classes from a device export (USB/offline
+		// recovery) even when the server was never reachable.
+		try {
+			const exams = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('exams'));
+			if (exams) out.quizExams = JSON.parse(exams);
+		} catch (e) {}
+		try {
+			const questions = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions'));
+			if (questions) out.quizQuestions = JSON.parse(questions);
+		} catch (e) {}
+		try {
+			const classes = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes'));
+			if (classes) out.quizClasses = JSON.parse(classes);
+		} catch (e) {}
+
 		// Get quiz activity
 		try {
 			const activity = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('audit_logs'));

@@ -33061,20 +33061,26 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 }
 
 #assignClassStudentsModal .selected-list{
-	flex: 1;
-	min-height: 170px;
-	max-height: 260px;
-	overflow-y: auto !important;
-	margin: 0;
+	/* tbody of the roster table — the generic .selected-list card styles
+	   (flex/border/padding) must not apply to a table body. */
+	display: table-row-group;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	max-height: none;
+	overflow: visible;
 }
 
 #assignClassStudentsModal .selected-student-item{
-	padding: 9px 10px;
-	border-radius: 10px;
-	border: 1px solid #dbe3ef;
-	background: #ffffff;
-	margin-bottom: 8px;
-	gap: 10px;
+	/* Roster rows are <tr> now — override the generic flex pill styles. */
+	display: table-row;
+	padding: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	margin-bottom: 0;
+	cursor: default;
 }
 
 #assignClassStudentsModal .selected-student-item span{
@@ -33103,10 +33109,6 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 }
 
 @media (max-width: 768px){
-	#assignClassStudentsModal .class-student-entry {
-		grid-template-columns: 1fr;
-	}
-
 	#assignClassStudentsModal .class-filter-row {
 		grid-template-columns: 1fr;
 	}
@@ -33124,7 +33126,6 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 		flex: 1 1 120px;
 	}
 
-	#assignClassStudentsModal .selected-list,
 	#assignClassExamsModal .exam-selection-list {
 		max-height: 220px;
 	}
@@ -33220,4 +33221,973 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	display: flex;
 	gap: 8px;
 	flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PREMIUM FILTER TOOLBAR (assign questions modals — category & exam)
+   A two-tier toolbar: search + selects on one row, quick-chips + undo
+   on the second; collapses to a single column on small screens.
+   ═══════════════════════════════════════════════════════════════ */
+.category-filter-section,
+.exam-filters-container{
+	margin-bottom: 14px;
+}
+
+.category-filter-section .filter-toolbar,
+.exam-filters-container .filter-toolbar{
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px 14px;
+	background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+	border: 1px solid #dbe4f0;
+	border-radius: 14px;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.filter-toolbar-group{
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.filter-toolbar-main{
+	flex-wrap: wrap;
+}
+
+/* Search field with icon */
+.filter-field-icon{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	flex-shrink: 0;
+	color: #64748b;
+	background: #ffffff;
+	border: 1px solid #dbe4f0;
+	border-right: none;
+	border-radius: 10px 0 0 10px;
+}
+
+.filter-search-input{
+	flex: 2 1 200px !important;
+	min-width: 160px;
+	height: 34px;
+	padding: 0 12px 0 0 !important;
+	border: 1px solid #dbe4f0;
+	border-left: none;
+	border-radius: 0 10px 10px 0 !important;
+	font-size: 0.87rem !important;
+	color: #1e293b;
+	background: #ffffff;
+	outline: none;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-field-icon:focus-within{
+	border-color: #6366f1;
+	color: #6366f1;
+}
+
+.filter-search-input:focus{
+	border-color: #6366f1;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.filter-select{
+	flex: 1 1 120px;
+	height: 34px;
+	padding: 0 26px 0 10px !important;
+	border: 1px solid #dbe4f0 !important;
+	border-radius: 10px !important;
+	font-size: 0.82rem !important;
+	color: #334155 !important;
+	background-color: #ffffff !important;
+	cursor: pointer;
+	outline: none;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-select:hover{
+	border-color: #b6c4d9 !important;
+}
+
+.filter-select:focus{
+	border-color: #6366f1 !important;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+/* Points interval inside the toolbar */
+.filter-toolbar .points-interval-filter{
+	display: flex;
+	align-items: center;
+	gap: 0;
+	flex: 1 1 150px;
+}
+
+.filter-toolbar .points-interval-filter input{
+	height: 34px;
+	width: 100%;
+	min-width: 0;
+	padding: 0 8px !important;
+	border: 1px solid #dbe4f0 !important;
+	font-size: 0.8rem !important;
+	border-radius: 10px !important;
+	outline: none;
+	background: #ffffff;
+	color: #334155;
+}
+
+.filter-toolbar .points-interval-filter input:first-child{
+	border-top-right-radius: 0 !important;
+	border-bottom-right-radius: 0 !important;
+	border-right: none !important;
+}
+
+.filter-toolbar .points-interval-filter input:last-child{
+	border-top-left-radius: 0 !important;
+	border-bottom-left-radius: 0 !important;
+	border-left: none !important;
+}
+
+.filter-toolbar .points-interval-sep{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 34px;
+	width: 22px;
+	flex-shrink: 0;
+	color: #94a3b8;
+	background: #ffffff;
+	border-top: 1px solid #dbe4f0;
+	border-bottom: 1px solid #dbe4f0;
+	font-size: 0.8rem;
+}
+
+/* Second tier: quick chips + undo */
+.filter-toolbar-quick{
+	justify-content: space-between;
+	flex-wrap: wrap;
+}
+
+.filter-toolbar-quick .quick-filters{
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+	margin: 0;
+}
+
+.filter-toolbar-quick .quick-filter-btn{
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 12px;
+	border-radius: 999px;
+	border: 1px solid #dbe4f0;
+	background: #ffffff;
+	color: #475569;
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.18s ease;
+}
+
+.filter-toolbar-quick .quick-filter-btn:hover{
+	border-color: #6366f1;
+	color: #6366f1;
+	background: #eef2ff;
+	transform: translateY(-1px);
+}
+
+.filter-toolbar-quick .quick-filter-btn:active{
+	transform: translateY(0);
+}
+
+.filter-undo-btn{
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 12px;
+	border-radius: 999px;
+	border: 1px dashed #cbd5e1;
+	background: transparent;
+	color: #64748b;
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.18s ease;
+}
+
+.filter-undo-btn:hover{
+	border-color: #f59e0b;
+	color: #b45309;
+	background: #fffbeb;
+}
+
+/* Tablet / small desktop: wrap selects onto two rows */
+@media (max-width: 1180px){
+	.filter-search-input{
+		flex: 1 1 100%;
+	}
+
+	.filter-select{
+		flex: 1 1 calc(50% - 12px);
+	}
+
+	.filter-toolbar .points-interval-filter{
+		flex: 1 1 calc(50% - 12px);
+	}
+}
+
+/* Mobile: single column stack */
+@media (max-width: 640px){
+	.category-filter-section .filter-toolbar,
+	.exam-filters-container .filter-toolbar{
+		padding: 10px;
+		gap: 8px;
+	}
+
+	.filter-toolbar-group{
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+
+	.filter-toolbar-quick{
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.filter-toolbar-quick .quick-filters{
+		justify-content: center;
+	}
+
+	.filter-toolbar-quick .quick-filter-btn{
+		flex: 1 1 auto;
+		justify-content: center;
+		min-width: 70px;
+	}
+
+	.filter-undo-btn{
+		justify-content: center;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPACT QUESTION ITEMS — clear, simple, responsive
+   Applies to both assign-question modals (category & exam). Slightly
+   reduced padding, normal-weight text, tighter meta chips.
+   ═══════════════════════════════════════════════════════════════ */
+#assignCategoryQuestionsModal .question-item,
+#assignCategoryQuestionsModal .premium-question-item,
+#assignExamQuestionsModal .question-item,
+#assignExamQuestionsModal .premium-question-item{
+	padding: 9px 12px;
+	margin-bottom: 5px;
+	border-radius: 10px;
+	border: 1px solid #e2e8f0;
+	background: #ffffff;
+	font-weight: 400;
+	transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#assignCategoryQuestionsModal .question-item:hover,
+#assignCategoryQuestionsModal .premium-question-item:hover,
+#assignExamQuestionsModal .question-item:hover,
+#assignExamQuestionsModal .premium-question-item:hover{
+	border-color: #93c5fd;
+	background: #f0f7ff;
+	box-shadow: 0 1px 4px rgba(59, 130, 246, 0.1);
+	transform: none;
+}
+
+#assignCategoryQuestionsModal .question-item.selected,
+#assignCategoryQuestionsModal .premium-question-item.selected,
+#assignExamQuestionsModal .question-item.selected,
+#assignExamQuestionsModal .premium-question-item.selected{
+	border-color: #3b82f6;
+	background: #eff6ff;
+	border-left: 3px solid #3b82f6;
+}
+
+/* Title: normal weight, clear size */
+#assignCategoryQuestionsModal .premium-question-title,
+#assignExamQuestionsModal .premium-question-title{
+	font-weight: 500;
+	font-size: 0.84rem;
+	line-height: 1.35;
+	color: #334155;
+}
+
+#assignCategoryQuestionsModal .premium-question-number,
+#assignExamQuestionsModal .premium-question-number{
+	font-size: 0.7rem;
+	font-weight: 500;
+	padding: 1px 6px;
+	color: #94a3b8;
+	background: #f1f5f9;
+}
+
+/* Preview text: quieter */
+#assignCategoryQuestionsModal .premium-question-preview,
+#assignExamQuestionsModal .premium-question-preview{
+	font-size: 0.76rem;
+	color: #94a3b8;
+	margin: 4px 0 6px;
+}
+
+/* Meta chips: small and light */
+#assignCategoryQuestionsModal .premium-badge,
+#assignExamQuestionsModal .premium-badge{
+	font-size: 0.62rem;
+	font-weight: 500;
+	padding: 1px 7px;
+	letter-spacing: 0.03em;
+	opacity: 0.9;
+}
+#assignCategoryQuestionsModal .premium-question-footer,
+#assignExamQuestionsModal .premium-question-footer{
+	margin-top: 4px;
+}
+
+#assignCategoryQuestionsModal .premium-question-date,
+#assignExamQuestionsModal .premium-question-date{
+	font-size: 0.68rem;
+	color: #a8b3c5;
+}
+
+/* Legacy .question-item text (used by exam picker) */
+#assignExamQuestionsModal .question-item .question-content,
+#assignCategoryQuestionsModal .question-item .question-content{
+	font-size: 0.84rem;
+	font-weight: 400;
+	color: #334155;
+}
+
+/* Mobile: even more compact */
+@media (max-width: 640px){
+	#assignCategoryQuestionsModal .question-item,
+	#assignCategoryQuestionsModal .premium-question-item,
+	#assignExamQuestionsModal .question-item,
+	#assignExamQuestionsModal .premium-question-item{
+		padding: 8px 10px;
+		margin-bottom: 4px;
+	}
+
+	#assignCategoryQuestionsModal .premium-question-title,
+	#assignExamQuestionsModal .premium-question-title{
+		font-size: 0.8rem;
+	}
+}
+
+/* ═══ ASSIGN TO CLASSES MODAL — wider, grid checklist ═══ */
+#assignExamClassesModal .modal-content.assign-classes-modal{
+	width: min(94vw, 760px) !important;
+	max-width: 760px !important;
+	max-height: calc(100vh - 48px);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+#assignExamClassesModal .modal-body{
+	overflow-y: auto;
+	min-height: 0;
+}
+
+#assignExamClassesModal .assign-checklist{
+	max-height: 56vh;
+	overflow-y: auto;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	padding: 4px;
+}
+
+#assignExamClassesModal .assign-checklist .assign-checklist__empty{
+	grid-column: 1 / -1;
+}
+
+@media (max-width: 720px){
+	#assignExamClassesModal .modal-content.assign-classes-modal{
+		width: 100% !important;
+		max-width: 100% !important;
+	}
+
+	#assignExamClassesModal .assign-checklist{
+		grid-template-columns: 1fr;
+		max-height: 48vh;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ASSIGN STUDENTS MODAL — full roster management table
+   (number / name / account / status / actions + toolbar filters)
+   ═══════════════════════════════════════════════════════════════ */
+#assignClassStudentsModal .modal-content.assign-students-modal{
+	width: min(94vw, 780px);
+	display: flex;
+	flex-direction: column;
+	max-height: calc(100vh - 48px);
+}
+
+#assignClassStudentsModal .class-section-header{
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
+	flex-wrap: wrap;
+}
+
+#assignClassStudentsModal .roster-summary{
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: #64748b;
+	background: #f1f5f9;
+	border: 1px solid #e2e8f0;
+	border-radius: 999px;
+	padding: 3px 10px;
+	white-space: nowrap;
+}
+
+#assignClassStudentsModal .roster-toolbar{
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding: 12px 14px;
+	background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+	border: 1px solid #dbe4f0;
+	border-radius: 14px;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+	margin-bottom: 12px;
+}
+
+#assignClassStudentsModal .roster-toolbar .filter-field-icon{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	flex-shrink: 0;
+	color: #64748b;
+	background: #ffffff;
+	border: 1px solid #dbe4f0;
+	border-right: none;
+	border-radius: 10px 0 0 10px;
+}
+
+#assignClassStudentsModal .roster-toolbar .filter-search-input{
+	flex: 2 1 200px;
+	min-width: 160px;
+	height: 34px;
+	padding: 0 12px !important;
+	border: 1px solid #dbe4f0;
+	border-left: none;
+	border-radius: 0 10px 10px 0 !important;
+	font-size: 0.87rem !important;
+	color: #1e293b;
+	background: #ffffff;
+	outline: none;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#assignClassStudentsModal .roster-toolbar .filter-search-input:focus{
+	border-color: #6366f1;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+#assignClassStudentsModal .roster-toolbar .filter-select{
+	flex: 0 1 150px;
+	height: 34px;
+	padding: 0 26px 0 10px !important;
+	border: 1px solid #dbe4f0 !important;
+	border-radius: 10px !important;
+	font-size: 0.82rem !important;
+	color: #334155 !important;
+	background-color: #ffffff !important;
+	cursor: pointer;
+	outline: none;
+}
+
+#assignClassStudentsModal .roster-toolbar .filter-undo-btn{
+	height: 34px;
+	align-self: center;
+}
+
+/* Picker (add from users) — collapsed secondary block */
+#assignClassStudentsModal .class-user-picker-row{
+	border: 1px dashed #d7e0ec;
+	border-radius: 12px;
+	padding: 10px 12px;
+	background: #fbfdff;
+	margin-bottom: 10px;
+}
+
+#assignClassStudentsModal .bulk-student-actions{
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+#assignClassStudentsModal .bulk-student-actions .btn{
+	height: 28px;
+	padding: 0 12px;
+	font-size: 0.76rem;
+	border-radius: 8px;
+}
+
+/* Roster table */
+#assignClassStudentsModal .roster-table-wrapper{
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	background: #ffffff;
+	overflow: auto;
+	max-height: 46vh;
+}
+
+#assignClassStudentsModal table.roster-table{
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.84rem;
+	margin: 0;
+}
+
+#assignClassStudentsModal table.roster-table th{
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	background: #f8fafc;
+	color: #475569;
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	text-align: left;
+	padding: 9px 12px;
+	border-bottom: 1px solid #e2e8f0;
+	white-space: nowrap;
+}
+
+#assignClassStudentsModal table.roster-table td{
+	padding: 9px 12px;
+	border-bottom: 1px solid #f1f5f9;
+	color: #334155;
+	vertical-align: middle;
+}
+
+#assignClassStudentsModal table.roster-table tbody tr:last-child td{
+	border-bottom: none;
+}
+
+#assignClassStudentsModal table.roster-table tbody tr:hover{
+	background: #f8fbff;
+}
+
+#assignClassStudentsModal td.roster-number{
+	font-weight: 600;
+	color: #475569;
+	white-space: nowrap;
+}
+
+#assignClassStudentsModal td.roster-name{
+	min-width: 140px;
+}
+
+#assignClassStudentsModal .roster-name-text{
+	display: block;
+	font-weight: 500;
+	color: #1e293b;
+	word-break: break-word;
+}
+
+#assignClassStudentsModal .roster-name-class{
+	display: block;
+	font-size: 0.72rem;
+	color: #94a3b8;
+	margin-top: 2px;
+}
+
+#assignClassStudentsModal td.roster-account{
+	color: #64748b;
+	white-space: nowrap;
+}
+
+/* Status pills */
+#assignClassStudentsModal .roster-status{
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.72rem;
+	font-weight: 600;
+	padding: 3px 10px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+#assignClassStudentsModal .roster-status::before{
+	content: '';
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+#assignClassStudentsModal .roster-status-active{
+	color: #047857;
+	background: #ecfdf5;
+	border: 1px solid #a7f3d0;
+}
+
+#assignClassStudentsModal .roster-status-active::before{
+	background: #10b981;
+}
+
+#assignClassStudentsModal .roster-status-disabled{
+	color: #b45309;
+	background: #fffbeb;
+	border: 1px solid #fde68a;
+}
+
+#assignClassStudentsModal .roster-status-disabled::before{
+	background: #f59e0b;
+}
+
+#assignClassStudentsModal .roster-status-pending{
+	color: #64748b;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+}
+
+#assignClassStudentsModal .roster-status-pending::before{
+	background: #94a3b8;
+}
+
+/* Row actions */
+#assignClassStudentsModal td.roster-actions{
+	text-align: right;
+	white-space: nowrap;
+}
+
+#assignClassStudentsModal .roster-action-btn{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	border: 1px solid #e2e8f0;
+	background: #ffffff;
+	color: #64748b;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	vertical-align: middle;
+	margin-left: 6px;
+}
+
+#assignClassStudentsModal .roster-action-btn:hover{
+	border-color: #6366f1;
+	color: #6366f1;
+	background: #eef2ff;
+}
+
+#assignClassStudentsModal .roster-action-btn:disabled{
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+#assignClassStudentsModal .roster-action-btn:disabled:hover{
+	border-color: #e2e8f0;
+	color: #64748b;
+	background: #ffffff;
+}
+
+#assignClassStudentsModal .roster-action-danger:hover{
+	border-color: #ef4444;
+	color: #dc2626;
+	background: #fef2f2;
+}
+
+#assignClassStudentsModal .roster-table-wrapper .empty-state{
+	padding: 26px 16px;
+	text-align: center;
+	color: #94a3b8;
+	font-size: 0.85rem;
+}
+
+/* Responsive: tablet + mobile */
+@media (max-width: 720px){
+	#assignClassStudentsModal .modal-content.assign-students-modal{
+		width: 96vw;
+	}
+
+	#assignClassStudentsModal .roster-toolbar{
+		flex-direction: column;
+		align-items: stretch;
+		padding: 10px;
+	}
+
+	#assignClassStudentsModal .roster-toolbar .filter-select{
+		flex: 1 1 auto;
+	}
+
+	#assignClassStudentsModal .roster-toolbar .filter-undo-btn{
+		justify-content: center;
+	}
+
+	#assignClassStudentsModal table.roster-table th,
+	#assignClassStudentsModal table.roster-table td{
+		padding: 8px 10px;
+	}
+
+	#assignClassStudentsModal td.roster-name{
+		min-width: 110px;
+	}
+
+	#assignClassStudentsModal .roster-table-wrapper{
+		max-height: 40vh;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PRESET INFO CARDS — exam cards, game cards, training banner
+   Surfaces every preset-driven rule (welcome title/message, penalty,
+   time limit, pass mark, shuffle, explanations, game rules) directly
+   in the student workspace so no preset field stays unused.
+   ═══════════════════════════════════════════════════════════════ */
+.exam-preset-info{
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: 12px;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+}
+
+.exam-preset-head{
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.exam-preset-tag{
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	color: #4f46e5;
+	background: #eef2ff;
+	border: 1px solid #e0e7ff;
+	padding: 3px 10px;
+	border-radius: 999px;
+	text-transform: uppercase;
+}
+
+.exam-preset-tag::before{
+	content: '';
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #6366f1;
+}
+
+.exam-preset-chips{
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.exam-preset-chip{
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 9px;
+	background: #ffffff;
+	border: 1px solid #dbe4f0;
+	border-radius: 999px;
+	font-size: 0.72rem;
+	line-height: 1.35;
+}
+
+.exam-preset-chip-label{
+	color: #94a3b8;
+	font-weight: 500;
+}
+
+.exam-preset-chip-value{
+	color: #334155;
+	font-weight: 600;
+}
+
+.exam-preset-welcome{
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.exam-preset-welcome strong{
+	font-size: 0.82rem;
+	font-weight: 700;
+	color: #1e293b;
+}
+
+.exam-preset-welcome span{
+	font-size: 0.76rem;
+	color: #64748b;
+	line-height: 1.45;
+}
+
+/* Training banner spans the panel width above the grid */
+.training-preset-banner{
+	background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+	border: 1px solid #e0e7ff;
+	margin-bottom: 12px;
+}
+
+/* Game cards: chips sit under the meta row */
+.game-card .exam-preset-info{
+	background: #f8fafc;
+	border-color: #e2e8f0;
+}
+
+/* Responsive: keep chips readable on narrow phones */
+@media (max-width: 640px){
+	.exam-preset-chips{
+		gap: 5px;
+	}
+
+	.exam-preset-chip{
+		padding: 2px 8px;
+		font-size: 0.7rem;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SETTINGS MODAL — TABLET VIEWPORT (761px–1024px)
+   The global settings layout (28113+) assumes an 1180px modal: a 250px
+   sidebar with 42px-tall full-width rows looks oversized and cramped on a
+   tablet, and the old max-width:1024 "wrap" rules are nullified by the
+   global !important column rules. Give tablets a slim icon rail instead:
+   narrower sidebar, compact square buttons, smaller type, scrollable.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 761px) and (max-width: 1024px){
+	#settingsModal .modal-content{
+		width: calc(100vw - 20px) !important;
+		height: calc(100dvh - 20px) !important;
+		margin: 10px auto !important;
+	}
+
+	/* Kill the legacy 23624 wrap rules: in a column-direction sidebar,
+	   flex-grow stretches buttons to ~175px tall and flex-wrap pushes the
+	   last tab into a second ~1000px column — the "big menu items" bug. */
+	#settingsModal .settings-tabs{
+		flex-wrap: nowrap !important;
+		padding: 12px 8px !important;
+		gap: 5px !important;
+	}
+
+	#settingsModal .settings-tab-btn{
+		flex: 0 0 auto !important;
+		min-height: 36px !important;
+		gap: 8px !important;
+		padding: 7px 10px !important;
+		border-radius: 9px !important;
+		font-size: 0.8rem !important;
+		line-height: 1.15 !important;
+		white-space: nowrap !important;
+	}
+
+	#settingsModal .settings-tab-btn svg{
+		width: 15px !important;
+		height: 15px !important;
+	}
+
+	/* Slim sidebar: 190px keeps labels visible without eating the content area */
+	#settingsModal #settingsForm{
+		grid-template-columns: 190px minmax(0, 1fr) !important;
+	}
+
+	#settingsModal .settings-header-actions{
+		gap: 8px;
+	}
+
+	/* Header controls shrink with the modal */
+	#settingsModal .settings-sidebar-toggle,
+	#settingsModal .settings-reset-btn,
+	#settingsModal .settings-autosave-status{
+		min-height: 32px !important;
+		padding: 6px 10px !important;
+		font-size: 0.76rem !important;
+	}
+
+	#settingsModal .modal-header{
+		min-height: 56px !important;
+		padding: 10px 14px !important;
+	}
+
+	#settingsModal .modal-header h2{
+		font-size: 1.05rem !important;
+	}
+
+	#settingsModal .settings-section{
+		padding: 16px 16px 20px !important;
+	}
+}
+
+/* Narrow end of the tablet range: rail becomes icon-only at a glance */
+@media (min-width: 761px) and (max-width: 860px){
+	#settingsModal #settingsForm{
+		grid-template-columns: 56px minmax(0, 1fr) !important;
+	}
+
+	#settingsModal .settings-tabs{
+		padding: 12px 2px !important;
+	}
+
+	/* Icon rail: labels hide (title attr keeps a11y), icon carries the affordance */
+	#settingsModal .settings-tab-btn{
+		justify-content: center !important;
+		gap: 0 !important;
+		padding: 9px 4px !important;
+	}
+
+	#settingsModal .settings-tab-btn svg{
+		width: 17px !important;
+		height: 17px !important;
+		margin-right: 0 !important;
+	}
+
+	/* The button text is a raw text node after the <svg>, so wrap-target it:
+	   zero the font to collapse the label, but give the SVG an explicit
+	   color — the global rule at 28364 makes icons use currentColor, which
+	   would inherit a transparent button color and vanish. */
+	#settingsModal .settings-tab-btn{
+		font-size: 0 !important;
+		color: transparent !important;
+	}
+
+	#settingsModal .settings-tab-btn.active,
+	#settingsModal .settings-tab-btn:hover{
+		color: transparent !important;
+	}
+
+	/* Restore visible icon strokes: slate icons normally, blue when active */
+	#settingsModal .settings-tab-btn svg{
+		color: #475569 !important;
+	}
+
+	#settingsModal .settings-tab-btn.active svg,
+	#settingsModal .settings-tab-btn:hover svg{
+		color: #1d4ed8 !important;
+	}
+
+	#settingsModal.settings-sidebar-collapsed #settingsForm{
+		grid-template-columns: 0 minmax(0, 1fr) !important;
+	}
 }

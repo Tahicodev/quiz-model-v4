@@ -1,5 +1,4 @@
 import http from 'http';
-import crypto from 'crypto';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -11,15 +10,6 @@ import { errorHandler } from './middleware/error.js';
 import { initSocketServer } from './realtime/socket.server.js';
 
 const app = express();
-
-// ── Admin Secret (for realtime settings pairing) ──────────────────────────────
-const configuredAdminSecret = String(process.env.QUIZ_ADMIN_SECRET || '').trim();
-const adminSecret = configuredAdminSecret || crypto.randomBytes(24).toString('base64url');
-if (!configuredAdminSecret) {
-  logger.info({ adminSecret }, 'QUIZ_ADMIN_SECRET not set — temporary secret for this run');
-}
-// Expose on app so routes/socket handlers can read it
-app.set('adminSecret', adminSecret);
 
 // ── Security headers ────────────────────────────────────────────────────────
 app.use(helmet({
@@ -87,22 +77,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Expose the admin secret for the realtime settings panel ──────────────────
-// Strictly admin-only. The secret grants admin-level socket privileges, so
-// leaking it would be equivalent to exposing an admin credential.
-// NOTE: SUPER_ADMIN bypasses the role check inside requireRole itself.
+// ── Auth middleware imports ─────────────────────────────────────────────────
 import { requireAuth } from './middleware/auth.js';
 import { requireRole } from './middleware/role.js';
 import { ROLES } from '../shared/constants.js';
-
-app.get(
-  '/api/v1/admin-secret',
-  requireAuth,
-  requireRole([ROLES.ADMIN]),
-  (req, res) => {
-    res.json({ secret: adminSecret });
-  }
-);
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
@@ -294,7 +272,6 @@ const httpServer = http.createServer(app);
 	      gameService:       gameSvc,
 	      tournamentService:  tournamentSvc,
 	      sessionService:     sessionSvc,
-	      adminSecret,        // for legacy admin panel socket auth
 	    });
     httpServer.listen(config.port, '0.0.0.0', () => {
       logger.info({ port: config.port, host: '0.0.0.0' }, 'Backend server started (SaaS) — reachable on LAN');

@@ -326,6 +326,10 @@ const SANITIZERS = {
       optionsPayload.classes = row.classes;
     }
     if (row.presetId != null) optionsPayload.presetId = row.presetId;
+    if (row.presetName != null) optionsPayload.presetName = row.presetName;
+    if (row.presetSnapshot && typeof row.presetSnapshot === 'object') {
+      optionsPayload.presetSnapshot = row.presetSnapshot;
+    }
     if (row.dateCreated != null) optionsPayload.dateCreated = row.dateCreated;
 
     return {
@@ -1312,6 +1316,66 @@ router.post('/:table', async (req, res, next) => {
         }
         upserted += 1;
       }
+
+      // Teacher class assignments (user.classIds) have no column on User —
+      // persist them as a JSON map under a dedicated settings key, merged with
+      // the existing map so a partial bulk sync never wipes other teachers'
+      // assignments. This runs after the upserts so ids are already known.
+      if (table === 'users') {
+        const assignmentsFromPayload = new Map();
+        for (const item of items) {
+          if (!item || typeof item !== 'object') continue;
+          if (!Array.isArray(item.classIds)) continue;
+          // Only trust classIds on teacher rows or rows with a known id —
+          // a student's classId is a real FK (class_id), not this blob.
+          const id = String(item.id || '').trim();
+          const isTeacher = String(item.role || '').toLowerCase() === 'teacher';
+          if (!id || !isTeacher) continue;
+          assignmentsFromPayload.set(
+            id,
+            item.classIds.map((cid) => String(cid || '').trim()).filter(Boolean),
+          );
+        }
+        if (assignmentsFromPayload.size > 0) {
+          try {
+            const settingsModel = repo.modelFor ? repo.modelFor('settings') : null;
+            if (settingsModel && typeof settingsModel.findFirst === 'function') {
+              const existingSetting = await settingsModel.findFirst({
+                where: { school_id: req.schoolId, key: 'teacherClassAssignments' },
+                select: { id: true, value: true },
+              });
+              let merged = {};
+              if (existingSetting?.value) {
+                try { merged = JSON.parse(existingSetting.value) || {}; } catch (_) { merged = {}; }
+              }
+              for (const [userId, classIdList] of assignmentsFromPayload) {
+                merged[userId] = classIdList;
+              }
+              const serialized = JSON.stringify(merged);
+              if (existingSetting) {
+                await settingsModel.update({
+                  where: { id: existingSetting.id },
+                  data: { value: serialized },
+                });
+              } else {
+                await settingsModel.create({
+                  data: {
+                    school_id: req.schoolId,
+                    key: 'teacherClassAssignments',
+                    value: serialized,
+                    visibility: 'admin',
+                  },
+                });
+              }
+            }
+          } catch (assignmentErr) {
+            logger.warn('bulk.routes: teacherClassAssignments persist failed', {
+              error: assignmentErr?.message,
+            });
+          }
+        }
+      }
+
       return res.status(201).json({
         count: upserted,
         ...(missingRequiredCount > 0 && { droppedInvalid: missingRequiredCount }),

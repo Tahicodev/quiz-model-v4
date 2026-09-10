@@ -3483,31 +3483,31 @@
 						<form id="settingsForm">
 							<!-- Tabs for Settings -->
 							<div class="settings-tabs">
-								<button type="button" class="settings-tab-btn active" data-roles="admin,teacher" data-settings-tab="general" onclick="switchSettingsTab(event, 'general')">
+								<button type="button" class="settings-tab-btn active" title="General" data-roles="admin,teacher" data-settings-tab="general" onclick="switchSettingsTab(event, 'general')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
 									General
 								</button>
-								<button type="button" class="settings-tab-btn" data-roles="admin,teacher" data-settings-tab="presets" onclick="switchSettingsTab(event, 'presets')">
+								<button type="button" class="settings-tab-btn" title="Presets" data-roles="admin,teacher" data-settings-tab="presets" onclick="switchSettingsTab(event, 'presets')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
 									Presets
 								</button>
-								<button type="button" class="settings-tab-btn" data-roles="admin,teacher" data-settings-tab="data" onclick="switchSettingsTab(event, 'data')">
+								<button type="button" class="settings-tab-btn" title="Data" data-roles="admin" data-settings-tab="data" onclick="switchSettingsTab(event, 'data')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
 									Data
 								</button>
-								<button type="button" class="settings-tab-btn" data-roles="admin,teacher" data-settings-tab="realtime" onclick="switchSettingsTab(event, 'realtime')">
+								<button type="button" class="settings-tab-btn" title="Realtime" data-roles="admin" data-settings-tab="realtime" onclick="switchSettingsTab(event, 'realtime')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
 									Realtime
 								</button>
-								<button type="button" class="settings-tab-btn" data-roles="admin,teacher" data-settings-tab="ai-generation" onclick="switchSettingsTab(event, 'ai-generation')">
+								<button type="button" class="settings-tab-btn" title="AI Generation" data-roles="admin,teacher" data-settings-tab="ai-generation" onclick="switchSettingsTab(event, 'ai-generation')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
 									AI Generation
 								</button>
-								<button type="button" class="settings-tab-btn" data-roles="admin,teacher" data-settings-tab="users" onclick="switchSettingsTab(event, 'users')">
+								<button type="button" class="settings-tab-btn" title="Users" data-roles="admin,teacher" data-settings-tab="users" onclick="switchSettingsTab(event, 'users')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 									Users
 								</button>
-								<button type="button" class="settings-tab-btn" data-roles="admin" data-settings-tab="teacher-access" onclick="switchSettingsTab(event, 'teacher-access')">
+								<button type="button" class="settings-tab-btn" title="Teacher Access" data-roles="admin" data-settings-tab="teacher-access" onclick="switchSettingsTab(event, 'teacher-access')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M12 2 3 7l9 5 9-5-9-5z"></path><path d="m3 17 9 5 9-5"></path><path d="m3 12 9 5 9-5"></path></svg>
 									Teacher Access
 								</button>
@@ -4176,7 +4176,7 @@
 						</div>
 
 						<!-- Data Settings -->
-						<div id="data-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="data">
+						<div id="data-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="data">
 							<div class="settings-group">
 								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
 									<span style="background: #f0f9ff; color: #0284c7; padding: 6px; border-radius: 8px;">
@@ -4186,7 +4186,7 @@
 								</div>
 								
 								<p class="text-muted" style="margin-bottom: 20px;">
-									Download a complete backup of your application data (Questions, Exams, Classes, Results, Settings).
+									Download a complete backup of the application data: users, classes, categories, questions, exams, results, games, tournaments, sessions, presets, settings, notifications, messages and activity — everything the app stores.
 								</p>
 								
 								<button type="button" class="btn btn-primary" onclick="window.exportAllData()">
@@ -4215,7 +4215,7 @@
 
 								<div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 20px;">
 									<p class="text-muted" style="margin-bottom: 15px;">
-										Import data downloaded from a specific student device. Adds results to existing data.
+										Import data downloaded from a student device (Realtime &rarr; Devices &rarr; Download data, or a USB/local copy). Adds exam results, completed sessions, activity and any cached exams/questions/classes to your existing data without overwriting it. Duplicates are skipped automatically.
 									</p>
 									<button type="button" class="btn btn-primary" onclick="document.getElementById('importDeviceDataInput').click()" style="background: #ffffff; color: #2563eb; border: 1px solid #2563eb;">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -4227,7 +4227,7 @@
 						</div>
 
 						<!-- Realtime Settings -->
-						<div id="realtime-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="realtime">
+						<div id="realtime-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="realtime">
 					<!-- Server Configuration -->
 						<div class="settings-group">
 							<label class="switch-label" style="margin-bottom: 15px;">
@@ -4269,21 +4269,18 @@
 									</div>
 								</div>
 
-								<div class="form-group">
-									<label for="setting-adminSecret">Admin Secret</label>
-									<input
-										type="password"
-										id="setting-adminSecret"
-										class="form-control"
-										placeholder="Enter the server Admin Secret"
-										autocomplete="off"
-										style="padding: 10px;"
-									/>
-									<small class="text-muted">Must match QUIZ_ADMIN_SECRET on the Node server. Required for pushing exams, syncing users, and game admin actions.</small>
-								</div>
+									<div class="form-group">
+										<label>Realtime access</label>
+										<div class="realtime-access-note" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e0e7ff; border-radius: 10px; background: #eef2ff;">
+											<span style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; background: #e0e7ff; color: #4f46e5; flex-shrink: 0;">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+											</span>
+											<small class="text-muted" style="color: #4338ca !important;">Realtime actions are secured by your signed-in admin or teacher account — no secret to enter. The server verifies your session token automatically.</small>
+										</div>
+									</div>
 
-								<div class="form-group">
-									<label for="setting-recoveryCode">Recovery Code</label>
+									<div class="form-group">
+										<label for="setting-recoveryCode">Recovery Code</label>
 									<input
 										type="password"
 										id="setting-recoveryCode"
@@ -4405,20 +4402,38 @@
 							<div class="form-group">
 								<label for="ai-provider-select">AI Provider</label>
 								<select id="ai-provider-select" class="form-control" style="padding: 10px;" onchange="window.onAIProviderChange()">
-									<option value="openrouter">OpenRouter (Recommended)</option>
-									<option value="openai">OpenAI</option>
-									<option value="anthropic">Anthropic (Claude)</option>
-									<option value="google">Google AI (Gemini)</option>
-									<option value="deepseek">DeepSeek</option>
-									<option value="custom">Custom / Local (Ollama, LM Studio)</option>
+									<option value="openrouter">OpenRouter — All providers, free tier available</option>
+									<option value="openai">OpenAI (GPT-5 family)</option>
+									<option value="anthropic">Anthropic (Claude — best JSON accuracy)</option>
+									<option value="google">Google AI (Gemini — generous free tier)</option>
+									<option value="deepseek">DeepSeek (cheapest paid API)</option>
+									<option value="custom">Custom / Local — any provider, incl. Ollama &amp; LM Studio (private)</option>
 								</select>
-								<small class="text-muted">OpenRouter offers free and premium models from multiple providers</small>
+								<small class="text-muted">
+									<strong>OpenRouter</strong> aggregates all providers (free + paid models) behind one key &middot;
+									<strong>Custom / Local</strong> accepts <em>any</em> OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, Groq, Together or an internal gateway — so you keep full freedom of provider and model.
+								</small>
 							</div>
 
 							<div id="ai-base-url-group" class="form-group hidden">
 								<label for="ai-base-url">Base URL</label>
 								<input type="text" id="ai-base-url" class="form-control" placeholder="e.g. http://localhost:11434/v1/chat/completions" />
-								<small class="text-muted">API endpoint for local models (Ollama, LM Studio) or custom proxies</small>
+								<small class="text-muted">Full chat-completions endpoint of any OpenAI-compatible server (Ollama, LM Studio, vLLM, Groq, Together, proxies, enterprise gateways…)</small>
+							</div>
+
+							<div class="form-group">
+								<div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
+									<strong style="color: #166534; font-size: 0.85rem;">🔒 Privacy &amp; Confidentiality</strong>
+									<small class="text-muted" style="display: block; margin-top: 4px;">
+										Your API key is stored <strong>only in this browser's local storage</strong> and sent directly to the provider you choose — never to any other server. For maximum confidentiality, pick <strong>Custom / Local</strong> with an on-device model (e.g. Ollama): prompts never leave this machine. Avoid pasting confidential material into cloud providers if your school policy forbids it.
+									</small>
+								</div>
+								<div style="background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px 12px;">
+									<strong style="color: #1e40af; font-size: 0.85rem;">🎯 Choosing a model that fits the app's structure</strong>
+									<small class="text-muted" style="display: block; margin-top: 4px;">
+										Generated questions must match the app's exact JSON structure (question, type, options, answer, explanation, difficulty — see the format guide below). Any current-generation chat model works; the ones marked <strong>[REC]</strong> are proven to follow the schema strictly with no broken JSON. <strong>Free options:</strong> OpenRouter's <code>:free</code> models, Google AI Studio's free tier, or a local Ollama model — all work with the full question-type set. Weaker/small models may produce invalid JSON (the generator auto-repairs, but results are better with recommended models).
+									</small>
+								</div>
 							</div>
 							
 							<div class="form-group">
@@ -4453,13 +4468,37 @@
 								<select id="ai-model-select" class="form-control" style="padding: 10px;" onchange="onAIModelSelectChange()">
 									<option value="">-- Select API Key First --</option>
 								</select>
-								<small class="text-muted">Models marked with ✨ are free; [REC] are recommended</small>
+								<small class="text-muted">✨ free &middot; 💎 paid &middot; <strong>[REC]</strong> proven to follow the app's question JSON structure. The list auto-refreshes live from the provider once a key is entered.</small>
 							</div>
 							
 							<div class="form-group">
-								<label for="ai-custom-model">Custom Model ID (optional)</label>
-								<input type="text" id="ai-custom-model" class="form-control" placeholder="e.g., meta-llama/llama-3.3-70b-instruct:free" style="padding: 10px;" />
-								<small class="text-muted">Enter a model ID manually if not in the list. Find models at <a href="https://openrouter.ai/models" target="_blank" style="color: #8b5cf6;">openrouter.ai/models</a></small>
+								<label for="ai-custom-model">Custom Model ID (any model, any provider)</label>
+								<input type="text" id="ai-custom-model" class="form-control" placeholder="e.g. llama3.1:8b, gpt-5-mini, provider/model-name" style="padding: 10px;" />
+								<small class="text-muted">
+									Type any model ID manually if it's not in the list — you are never limited to the suggestions. For the <strong>Custom / Local</strong> provider this is the model name exactly as your server reports it (<code>ollama list</code>, LM Studio, etc.). Model catalogs:
+									<a href="https://openrouter.ai/models" target="_blank" style="color: #8b5cf6;">openrouter.ai/models</a> &middot;
+									<a href="https://ollama.com/library" target="_blank" style="color: #8b5cf6;">ollama.com/library</a>
+								</small>
+							</div>
+
+							<!-- Structure compatibility guide -->
+							<div class="form-group">
+								<details style="background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 8px; padding: 10px 12px;">
+									<summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem; color: #57534e;">📐 Required question structure (what the model must output)</summary>
+									<small class="text-muted" style="display: block; margin-top: 8px; line-height: 1.6;">
+										Every generated question is a JSON object with <code>question</code>, <code>type</code>, <code>options</code>, <code>answer</code>, <code>explanation</code>, <code>difficulty</code> — the generator's prompt enforces this automatically, so <strong>any capable chat model is compatible</strong>. The app supports these types and answer formats:
+									<ul style="margin: 6px 0 6px 18px; padding: 0;">
+										<li><strong>multiple-choice</strong> — answer = exact option text (<code>allowMultipleAnswers</code>: true for multi-select)</li>
+										<li><strong>true-false</strong> — options Vrai / Faux</li>
+										<li><strong>fill-blank</strong> — <code>___</code> in question, answer <code>1:word|2:word</code>, options = word bank</li>
+										<li><strong>draggable</strong> — answer = correct order, comma-joined</li>
+										<li><strong>odd-one-out</strong> — answer = the odd option's text</li>
+										<li><strong>matching-pairs</strong> — answer <code>Key-->Value|…</code>, options = keys + values</li>
+										<li><strong>code</strong> — adds <code>codeSnippet</code>, <code>codeLanguage</code>, <code>codeAnswerMode</code></li>
+									</ul>
+									Pick a model that follows instructions strictly (all <strong>[REC]</strong> models do). If a model outputs broken JSON, the app auto-repairs common issues, but switching to a recommended model gives the best results.
+									</small>
+								</details>
 							</div>
 						</div>
 						
@@ -4509,15 +4548,27 @@
 						
 						<!-- Quick Actions -->
 						<div class="settings-group" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-color: #6ee7b7;">
-							<div style="display: flex; justify-content: space-between; align-items: center;">
+							<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
 								<div>
-									<h4 style="margin: 0 0 5px 0; font-size: 1rem; color: #065f46;">💡 Get Started</h4>
-									<small class="text-muted">Get your free API key from OpenRouter to start generating questions</small>
+									<h4 style="margin: 0 0 5px 0; font-size: 1rem; color: #065f46;">💡 Get Started — three free paths</h4>
+									<small class="text-muted" style="display: block; max-width: 560px;">
+										① <strong>OpenRouter</strong> — one free key, access to free models from all providers &middot;
+										② <strong>Google AI Studio</strong> — generous free Gemini tier &middot;
+										③ <strong>Ollama / LM Studio</strong> — free local models, fully offline &amp; private (use the Custom / Local provider)
+									</small>
 								</div>
-								<a href="https://openrouter.ai/keys" target="_blank" class="btn btn-secondary" style="white-space: nowrap;">
-									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-									Get API Key
-								</a>
+								<div style="display: flex; gap: 8px; flex-wrap: wrap;">
+									<a href="https://openrouter.ai/keys" target="_blank" class="btn btn-secondary" style="white-space: nowrap;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+										OpenRouter Key
+									</a>
+									<a href="https://aistudio.google.com/app/apikey" target="_blank" class="btn btn-secondary" style="white-space: nowrap;">
+										Gemini Key
+									</a>
+									<a href="https://ollama.com" target="_blank" class="btn btn-secondary" style="white-space: nowrap;">
+										Ollama (Local)
+									</a>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -5171,10 +5222,11 @@
 						</div>
 						<div class="form-group">
 							<label for="examPreset">Settings Preset</label>
-							<select id="examPreset" class="form-control">
+							<select id="examPreset" class="form-control" onchange="renderExamPresetSummary()">
 								<option value="">-- Select Preset (Optional) --</option>
 							</select>
 							<small class="text-muted">Assign a preset for time limit, penalty, and other settings</small>
+							<div id="examPresetSummary" class="exam-preset-info hidden"></div>
 						</div>
 
 						<!-- Question selection now lives in its own modal (Assign
@@ -5335,137 +5387,149 @@
 				<div class="modal-body">
 					<form id="assignCategoryQuestionsForm" onsubmit="return false;">
 						<div class="category-filter-section">
-							<div class="filter-row">
-								<select
-									id="difficultyFilterCategory"
-									onchange="loadAvailableQuestionsForCategory()"
-								>
-									<option value="">All Difficulty</option>
-									<option value="easy">Easy</option>
-									<option value="medium">Medium</option>
-									<option value="hard">Hard</option>
-								</select>
-								<div class="points-interval-filter">
-									<input type="number" id="pointFilterCategoryMin" placeholder="Min pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
-									<span class="points-interval-sep">-</span>
-									<input type="number" id="pointFilterCategoryMax" placeholder="Max pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
+							<div class="filter-toolbar">
+								<div class="filter-toolbar-group filter-toolbar-main">
+									<span class="filter-field-icon">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+									</span>
+									<input
+										type="text"
+										id="questionSearchCategory"
+										class="filter-search-input"
+										placeholder="Search questions..."
+										onkeyup="loadAvailableQuestionsForCategory()"
+									/>
+									<select
+										id="categoryFilterCategory"
+										class="filter-select"
+										onchange="loadAvailableQuestionsForCategory()"
+									>
+										<option value="">All Categories</option>
+									</select>
+									<select
+										id="questionFilterCategory"
+										class="filter-select"
+										onchange="loadAvailableQuestionsForCategory()"
+									>
+										<option value="all">All Types</option>
+										<option value="multiple-choice">Multiple Choice</option>
+										<option value="true-false">True / False</option>
+										<option value="draggable">Drag &amp; Drop</option>
+										<option value="odd-one-out">Odd One Out</option>
+										<option value="matching-pairs">Matching Pairs</option>
+										<option value="fill-blank">Fill in Blank</option>
+										<option value="code">Code</option>
+									</select>
+									<select
+										id="difficultyFilterCategory"
+										class="filter-select"
+										onchange="loadAvailableQuestionsForCategory()"
+									>
+										<option value="">All Difficulty</option>
+										<option value="easy">Easy</option>
+										<option value="medium">Medium</option>
+										<option value="hard">Hard</option>
+									</select>
+									<div class="points-interval-filter">
+										<input type="number" id="pointFilterCategoryMin" placeholder="Min pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
+										<span class="points-interval-sep">–</span>
+										<input type="number" id="pointFilterCategoryMax" placeholder="Max pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
+									</div>
 								</div>
-								<select
-									id="categoryFilterCategory"
-									onchange="loadAvailableQuestionsForCategory()"
-								>
-									<option value="">All Categories</option>
-								</select>
-								<select
-									id="questionFilterCategory"
-									onchange="loadAvailableQuestionsForCategory()"
-								>
-									<option value="all">All Types</option>
-									<option value="multiple-choice">Multiple Choice</option>
-									<option value="true-false">True / False</option>
-									<option value="draggable">Drag &amp; Drop</option>
-									<option value="odd-one-out">Odd One Out</option>
-									<option value="matching-pairs">Matching Pairs</option>
-									<option value="fill-blank">Fill in Blank</option>
-									<option value="code">Code</option>
-								</select>
-								<input
-									type="text"
-									id="questionSearchCategory"
-									placeholder="Search questions..."
-									onkeyup="loadAvailableQuestionsForCategory()"
-								/>
-								<button
-									type="button"
-									class="btn btn-secondary"
-									onclick="undoCategorySelections()"
-								>
-									Undo Selections
-								</button>
-							</div>
-							<div class="quick-filters">
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="setQuickFilterForCategory('recent')"
-									title="Recently Added"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
+								<div class="filter-toolbar-group filter-toolbar-quick">
+									<div class="quick-filters">
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="setQuickFilterForCategory('recent')"
+											title="Recently Added"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<circle cx="12" cy="12" r="10"></circle>
+												<polyline points="12 6 12 12 16 14"></polyline>
+											</svg>
+											Recent
+										</button>
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="setQuickFilterForCategory('hard')"
+											title="Hard Questions"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path
+													d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+												></path>
+											</svg>
+											Hard
+										</button>
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="setQuickFilterForCategory('unused')"
+											title="Unused Questions"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<circle cx="12" cy="12" r="10"></circle>
+												<line x1="12" y1="8" x2="12" y2="12"></line>
+												<line x1="12" y1="16" x2="12.01" y2="16"></line>
+											</svg>
+											Unused
+										</button>
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="clearAllCategoryFilters()"
+											title="Clear All Filters"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<line x1="18" y1="6" x2="6" y2="18"></line>
+												<line x1="6" y1="6" x2="18" y2="18"></line>
+											</svg>
+											Clear All
+										</button>
+									</div>
+									<button
+										type="button"
+										class="btn btn-ghost filter-undo-btn"
+										onclick="undoCategorySelections()"
 									>
-										<circle cx="12" cy="12" r="10"></circle>
-										<polyline points="12 6 12 12 16 14"></polyline>
-									</svg>
-									Recent
-								</button>
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="setQuickFilterForCategory('hard')"
-									title="Hard Questions"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path
-											d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-										></path>
-									</svg>
-									Hard
-								</button>
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="setQuickFilterForCategory('unused')"
-									title="Unused Questions"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<circle cx="12" cy="12" r="10"></circle>
-										<line x1="12" y1="8" x2="12" y2="12"></line>
-										<line x1="12" y1="16" x2="12.01" y2="16"></line>
-									</svg>
-									Unused
-								</button>
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="clearAllCategoryFilters()"
-									title="Clear All Filters"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<line x1="18" y1="6" x2="6" y2="18"></line>
-										<line x1="6" y1="6" x2="18" y2="18"></line>
-									</svg>
-									Clear All
-								</button>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+										Undo
+									</button>
+								</div>
 							</div>
 						</div>
 						<div class="question-selection-container">
@@ -5548,149 +5612,161 @@
 				<div class="modal-body">
 					<form id="assignExamQuestionsForm" onsubmit="return false;">
 						<div class="exam-filters-container">
-							<div class="filter-row">
-								<select
-									id="categoryFilterExam"
-									onchange="filterExamQuestionsEnhanced()"
-								>
-									<option value="">All Categories</option>
-								</select>
-								<select
-									id="typeFilterExam"
-									onchange="filterExamQuestionsEnhanced()"
-								>
-									<option value="">All Types</option>
-									<option value="multiple-choice">Multiple Choice</option>
-									<option value="true-false">True / False</option>
-									<option value="draggable">Drag &amp; Drop</option>
-									<option value="odd-one-out">Odd One Out</option>
-									<option value="matching-pairs">Matching Pairs</option>
-									<option value="fill-blank">Fill in Blank</option>
-									<option value="code">Code</option>
-								</select>
-								<select
-									id="difficultyFilterExam"
-									onchange="filterExamQuestionsEnhanced()"
-								>
-									<option value="">All Difficulty</option>
-									<option value="easy">Easy</option>
-									<option value="medium">Medium</option>
-									<option value="hard">Hard</option>
-								</select>
-								<div class="points-interval-filter">
-									<input type="number" id="pointFilterExamMin" placeholder="Min pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
-									<span class="points-interval-sep">-</span>
-									<input type="number" id="pointFilterExamMax" placeholder="Max pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
+							<div class="filter-toolbar">
+								<div class="filter-toolbar-group filter-toolbar-main">
+									<span class="filter-field-icon">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+									</span>
+									<input
+										type="text"
+										id="examQuestionSearch"
+										class="filter-search-input"
+										placeholder="Search questions..."
+										onkeyup="debounceFilterExamQuestions()"
+									/>
+									<select
+										id="categoryFilterExam"
+										class="filter-select"
+										onchange="filterExamQuestionsEnhanced()"
+									>
+										<option value="">All Categories</option>
+									</select>
+									<select
+										id="typeFilterExam"
+										class="filter-select"
+										onchange="filterExamQuestionsEnhanced()"
+									>
+										<option value="">All Types</option>
+										<option value="multiple-choice">Multiple Choice</option>
+										<option value="true-false">True / False</option>
+										<option value="draggable">Drag &amp; Drop</option>
+										<option value="odd-one-out">Odd One Out</option>
+										<option value="matching-pairs">Matching Pairs</option>
+										<option value="fill-blank">Fill in Blank</option>
+										<option value="code">Code</option>
+									</select>
+									<select
+										id="difficultyFilterExam"
+										class="filter-select"
+										onchange="filterExamQuestionsEnhanced()"
+									>
+										<option value="">All Difficulty</option>
+										<option value="easy">Easy</option>
+										<option value="medium">Medium</option>
+										<option value="hard">Hard</option>
+									</select>
+									<div class="points-interval-filter">
+										<input type="number" id="pointFilterExamMin" placeholder="Min pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
+										<span class="points-interval-sep">–</span>
+										<input type="number" id="pointFilterExamMax" placeholder="Max pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
+									</div>
 								</div>
-								<input
-									type="text"
-									id="examQuestionSearch"
-									placeholder="Search..."
-									onkeyup="debounceFilterExamQuestions()"
-								/>
-								<button
-									type="button"
-									class="btn btn-secondary"
-									onclick="undoQuestionSelections()"
-								>
-									Undo Selections
-								</button>
+								<div class="filter-toolbar-group filter-toolbar-quick">
+									<div class="quick-filters">
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="applyQuickFilter('recent')"
+											title="Recently Added"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<circle cx="12" cy="12" r="10"></circle>
+												<polyline points="12 6 12 12 16 14"></polyline>
+											</svg>
+											Recent
+										</button>
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="applyQuickFilter('hard')"
+											title="Hard Questions"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path
+													d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+												></path>
+											</svg>
+											Hard
+										</button>
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="applyQuickFilter('images')"
+											title="With Images"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<rect
+													x="3"
+													y="3"
+													width="18"
+													height="18"
+													rx="2"
+													ry="2"
+												></rect>
+												<circle cx="8.5" cy="8.5" r="1.5"></circle>
+												<polyline points="21 15 16 10 5 21"></polyline>
+											</svg>
+											Images
+										</button>
+										<button
+											type="button"
+											class="quick-filter-btn"
+											onclick="clearAllFiltersAndSelections()"
+											title="Clear All Filters and Selections"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<line x1="18" y1="6" x2="6" y2="18"></line>
+												<line x1="6" y1="6" x2="18" y2="18"></line>
+											</svg>
+											Clear All
+										</button>
+									</div>
+									<button
+										type="button"
+										class="btn btn-ghost filter-undo-btn"
+										onclick="undoQuestionSelections()"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+										Undo
+									</button>
+									</div>
+								</div>
 							</div>
-							<div class="quick-filters">
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="applyQuickFilter('recent')"
-									title="Recently Added"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<circle cx="12" cy="12" r="10"></circle>
-										<polyline points="12 6 12 12 16 14"></polyline>
-									</svg>
-									Recent
-								</button>
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="applyQuickFilter('hard')"
-									title="Hard Questions"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path
-											d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-										></path>
-									</svg>
-									Hard
-								</button>
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="applyQuickFilter('images')"
-									title="With Images"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<rect
-											x="3"
-											y="3"
-											width="18"
-											height="18"
-											rx="2"
-											ry="2"
-										></rect>
-										<circle cx="8.5" cy="8.5" r="1.5"></circle>
-										<polyline points="21 15 16 10 5 21"></polyline>
-									</svg>
-									Images
-								</button>
-								<button
-									type="button"
-									class="quick-filter-btn"
-									onclick="clearAllFiltersAndSelections()"
-									title="Clear All Filters and Selections"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<line x1="18" y1="6" x2="6" y2="18"></line>
-										<line x1="6" y1="6" x2="18" y2="18"></line>
-									</svg>
-									Clear All
-								</button>
-							</div>
-						</div>
-						<div class="question-selection-container">
-							<div class="question-column">
-								<h4>Available Questions</h4>
+							<div class="question-selection-container">
+								<div class="question-column">
+									<h4>Available Questions</h4>
 								<div
 									id="availableQuestions"
 									class="question-list-scroll"
@@ -5727,7 +5803,7 @@
 
 		<!-- Assign Exam to Classes -->
 		<div id="assignExamClassesModal" class="modal">
-			<div class="modal-content small-modal">
+			<div class="modal-content assign-classes-modal">
 				<div class="modal-header">
 					<div class="modal-header-with-icon">
 						<div class="modal-header-icon icon-green">
@@ -5765,7 +5841,7 @@
 								onkeyup="filterAssignExamClasses()"
 							/>
 						</div>
-						<div id="assignExamClassesList" class="assign-checklist"></div>
+						<div id="assignExamClassesList" class="assign-checklist assign-checklist-grid"></div>
 						<div class="form-actions">
 							<button
 								type="button"
@@ -5789,7 +5865,7 @@
 
 		<!-- Assign Students to Class -->
 		<div id="assignClassStudentsModal" class="modal">
-			<div class="modal-content small-modal assign-modal">
+			<div class="modal-content assign-students-modal assign-modal">
 				<div class="modal-header">
 					<div class="modal-header-with-icon">
 						<div class="modal-header-icon icon-blue">
@@ -5811,7 +5887,7 @@
 						<div class="modal-header-text">
 							<h2 id="assignClassStudentsTitle">Assign Students</h2>
 							<p class="modal-header-subtitle">
-								Add students from existing accounts or create new entries
+								Manage this class's roster — accounts and passwords live in Settings → Users
 							</p>
 						</div>
 					</div>
@@ -5822,6 +5898,7 @@
 						<div class="form-group class-students-group">
 							<div class="class-section-header">
 								<label>Class Roster</label>
+								<span class="roster-summary" id="assignClassRosterSummary">0 student(s)</span>
 								<div class="class-section-actions">
 									<button
 										type="button"
@@ -5867,25 +5944,41 @@
 									</button>
 								</div>
 							</div>
-							<div class="input-row class-student-entry">
+
+							<!-- Roster toolbar: search + add existing students -->
+							<div class="roster-toolbar">
+								<span class="filter-field-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+								</span>
 								<input
 									type="text"
-									id="studentNumber"
-									placeholder="Student Number"
+									id="studentRosterSearch"
+									class="filter-search-input"
+									placeholder="Search roster by name or number..."
+									onkeyup="filterStudentRosterTable()"
 								/>
-								<input
-									type="text"
-									id="studentName"
-									placeholder="Student Name"
-								/>
+								<select
+									id="studentRosterStatusFilter"
+									class="filter-select"
+									onchange="filterStudentRosterTable()"
+								>
+									<option value="all">All Status</option>
+									<option value="active">Active</option>
+									<option value="disabled">Disabled</option>
+									<option value="no-account">No account yet</option>
+								</select>
 								<button
 									type="button"
-									class="btn btn-secondary"
-									onclick="addStudent()"
+									class="btn btn-ghost filter-undo-btn"
+									onclick="addStudentFromUserPicker()"
+									title="Add every student user picked below"
 								>
-									Add
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+									Add from users
 								</button>
 							</div>
+
+							<!-- Pick existing student users (hidden helper, still drives addStudentFromUserPicker) -->
 							<div class="class-user-picker-row">
 								<div class="class-filter-row">
 									<label for="studentClassFilter">Filter by Class</label>
@@ -5926,10 +6019,30 @@
 									</div>
 								</div>
 							</div>
+
 							<div class="text-muted class-helper-text">
-								Students created in User Settings are available here. Click items to select multiple users.
+								Students join via signup or are created in Settings → Users. Passwords and
+								credentials are managed there, never in this roster.
 							</div>
-							<div id="selectedStudentsList" class="selected-list"></div>
+
+							<!-- Full roster table -->
+							<div class="roster-table-wrapper">
+								<table class="data-table roster-table" id="studentRosterTable">
+									<thead>
+										<tr>
+											<th>Student #</th>
+											<th>Name</th>
+											<th>Account</th>
+											<th>Status</th>
+											<th>Actions</th>
+										</tr>
+									</thead>
+									<tbody id="selectedStudentsList"></tbody>
+								</table>
+								<div id="rosterEmptyState" class="empty-state hidden">
+									No students match your search.
+								</div>
+							</div>
 						</div>
 						<div class="form-actions">
 							<button

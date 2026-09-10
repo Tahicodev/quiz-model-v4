@@ -235,6 +235,25 @@ function hydrateLegacyPayload(data) {
     className: user.className || classNamesById.get(String(user.class_id || user.classId || '')) || '',
   }));
 
+  // Teacher class assignments live in a dedicated settings row (JSON map of
+  // userId → classIds) because User has no such column. Rehydrate them onto
+  // the top level so the legacy UI's teacher scoping keeps working after a
+  // DB round trip.
+  try {
+    const assignmentRow = (data.settings || []).find(
+      (row) => String(row?.key || '') === 'teacherClassAssignments',
+    );
+    if (assignmentRow?.value) {
+      const assignments = parseJson(assignmentRow.value, {});
+      data.users = (data.users || []).map((user) => ({
+        ...user,
+        classIds: Array.isArray(assignments[String(user.id)]) ? assignments[String(user.id)] : [],
+      }));
+    }
+  } catch (assignmentErr) {
+    logger.warn({ err: assignmentErr }, 'Bootstrap: teacherClassAssignments hydrate failed');
+  }
+
   const questionIdsByExam = new Map();
   for (const link of data.exam_questions || []) {
     const key = String(link.exam_id || '');
@@ -262,6 +281,13 @@ function hydrateLegacyPayload(data) {
       passingScore: exam.passing_score,
       isTraining: exam.is_training,
       maxAttempts: exam.max_attempts,
+      // Preset configuration travels with the exam (options_json) so student
+      // devices — which never receive the admin's quizPresets store — still
+      // see every preset-driven rule: welcome title/message, penalty, time
+      // limit, colors, shuffle, explanations, font family.
+      presetId: legacy.presetId ?? exam.preset_id ?? null,
+      presetName: legacy.presetName ?? '',
+      presetSnapshot: legacy.presetSnapshot ?? null,
     };
   });
 

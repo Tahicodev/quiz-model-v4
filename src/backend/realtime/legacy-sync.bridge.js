@@ -11,19 +11,19 @@
  *   - `admin:syncGames`/`admin:syncUsers`/`admin:syncGamification` → admin
  *                       panels could not push data snapshots to students.
  *
- * Auth model: sockets arrive pre-authenticated by socket.auth.js (JWT or the
- * admin pairing secret), which stamps `socket.data.user`. `identify` keeps the
- * legacy shape ({role, adminSecret}) for old panels and upgrades the role from
- * the JWT when it proves the caller is staff.
+ * Auth model: sockets arrive pre-authenticated by socket.auth.js (JWT only),
+ * which stamps `socket.data.user`. `identify` keeps the legacy shape
+ * ({role:'admin'}) for old panels and upgrades the role from the verified
+ * JWT — staff (admin/teacher/super_admin) get the admin relay surface, no
+ * shared secret involved.
  */
 
 import { logger } from '../logger.js';
 
 const STAFF_ROLES = new Set(['admin', 'teacher', 'super_admin']);
 
-/** Legacy panels send {role:'admin', adminSecret} — the secret now arrives in the handshake auth. */
+/** Staff JWTs (verified at handshake) carry the admin relay surface. */
 function isAdminSocket(socket) {
-  if (socket.role === 'admin' && socket.adminAuthenticated === true) return true;
   return STAFF_ROLES.has(String(socket.data?.user?.role || '').toLowerCase());
 }
 
@@ -47,30 +47,17 @@ export function registerLegacySyncHandlers(io) {
       const requestedRole = String(payload.role || 'client').toLowerCase();
       const jwtUser = socket.data?.user || {};
       const jwtRole = String(jwtUser.role || '').toLowerCase();
-      const providedSecret = String(payload.adminSecret || payload.secret || '').trim();
+      const isStaff = STAFF_ROLES.has(jwtRole);
 
-      if (requestedRole === 'admin') {
-        // Legacy path: verify the admin secret carried in the payload (the
-        // pairing secret the admin panel stores). The handshake may also have
-        // authenticated via the same secret (socket.data.user.role === 'admin'
-        // with id 'admin-secret-auth').
-        const handshakeSecret = String(socket.handshake?.auth?.adminSecret || '').trim();
-        const secretAuthenticated = jwtRole === 'admin' && String(jwtUser.id || '') === 'admin-secret-auth';
-        if (!providedSecret && !secretAuthenticated && !STAFF_ROLES.has(jwtRole)) {
-          socket.role = 'unauthorized';
-          socket.adminAuthenticated = false;
-          socket.emit('admin:auth:error', { message: 'Invalid or missing Admin Secret.' });
-          return;
-        }
-        socket.role = 'admin';
-        socket.adminAuthenticated = true;
-      } else {
-        socket.role = STAFF_ROLES.has(jwtRole) ? 'admin' : 'client';
-        socket.adminAuthenticated = socket.role === 'admin';
-        if (socket.role === 'admin' && requestedRole !== 'admin') {
-          // A staff JWT identifies itself as a plain client — still grant
-          // admin powers; the engine's game:start gate checks socket.data.
-        }
+      // Role comes from the handshake JWT only — the shared Admin Secret is
+      // gone. Staff sockets get the admin relay surface regardless of the
+      // legacy `role` the panel asked for; everyone else is a plain client.
+      socket.role = isStaff ? 'admin' : 'client';
+      socket.adminAuthenticated = isStaff;
+      if (requestedRole === 'admin' && !isStaff) {
+        socket.emit('admin:auth:error', {
+          message: 'Admin access requires an admin or teacher account.',
+        });
       }
 
       const schoolId = String(jwtUser.school_id || '').trim();
@@ -125,7 +112,7 @@ export function registerLegacySyncHandlers(io) {
         io.to(`school:${schoolId}`).emit('admin:syncUsers', cleanPayload);
         logger.debug({ schoolId, count: cleanUsers.length }, 'legacy bridge: users synced');
       } else {
-        // No school scope (admin-secret socket without school_id): broadcast.
+        // No school scope (token without school_id): broadcast.
         io.emit('admin:syncUsers', cleanPayload);
       }
     });

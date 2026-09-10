@@ -17,7 +17,7 @@
 import { Server } from 'socket.io';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { setAdminSecret, socketAuthMiddleware } from './socket.auth.js';
+import { socketAuthMiddleware } from './socket.auth.js';
 import { registerGameHandlers } from './handlers/game.handler.js';
 import { registerTournamentHandlers } from './handlers/tournament.handler.js';
 import { registerSessionHandlers } from './handlers/session.handler.js';
@@ -60,9 +60,6 @@ function socketCorsOrigin(origin, callback) {
 export async function initSocketServer(httpServer, services) {
 
   if (_io) throw new Error('Socket.io already initialized M-bM-^@M-^T do not call initSocketServer twice');
-  if (services.adminSecret) {
-    setAdminSecret(services.adminSecret);
-  }
 
   _io = new Server(httpServer, {
     cors: { origin: socketCorsOrigin, credentials: true },
@@ -86,8 +83,8 @@ export async function initSocketServer(httpServer, services) {
 
   // Legacy MPA engine (game:join / game:ready / game:start / game:sync /
   // game:answer / game:playCard / game:stateUpdate …) + its admin sync relay.
-  // Mounted after auth so every engine socket is already JWT/admin-secret
-  // authenticated — the engine's own admin gates read socket.data.user.
+  // Mounted after auth so every engine socket is already JWT-authenticated —
+  // the engine's own admin gates read socket.data.user.
   try {
     mountLegacyGameEngine(_io);
   } catch (err) {

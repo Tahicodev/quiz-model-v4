@@ -15,7 +15,6 @@ const DEFAULT_SETTINGS = {
 	welcomeMessage: 'Test your knowledge with our interactive quiz!',
 	// Realtime settings
 	serverHost: '',
-	adminSecret: '',
 	recoveryCodeHash: '',
 	realtimeEnabled: false,
 	autoSync: true,
@@ -39,8 +38,10 @@ const DEFAULT_SETTINGS = {
 		settingsTabs: {
 			general: true,
 			presets: true,
-			data: true,
-			realtime: true,
+			// Data and Realtime are school-wide admin concerns
+			// (full backups, LAN server config) — off for teachers by default.
+			data: false,
+			realtime: false,
 			'ai-generation': true,
 			users: true,
 			games: true,
@@ -177,9 +178,6 @@ function openSettingsModal() {
 	// Populate realtime settings
 	const serverHostInput = document.getElementById('setting-serverHost');
 	if (serverHostInput) serverHostInput.value = currentSettings.serverHost || '';
-
-	const adminSecretInput = document.getElementById('setting-adminSecret');
-	if (adminSecretInput) adminSecretInput.value = currentSettings.adminSecret || '';
 
 	const recoveryCodeInput = document.getElementById('setting-recoveryCode');
 	if (recoveryCodeInput) recoveryCodeInput.value = '';
@@ -543,6 +541,20 @@ function readTeacherAccessForm() {
 
 // Switch Tabs
 function switchSettingsTab(event, tabName) {
+	// Role guard: admin-only tabs (teacher-access, data, realtime) can never be
+	// opened by a teacher, even via console calls or stale cached buttons.
+	if (
+		typeof window.Auth === 'object' &&
+		window.Auth &&
+		typeof window.Auth.isTeacher === 'function' &&
+		window.Auth.isTeacher() &&
+		!window.Auth.canAccessSettingsTab(tabName)
+	) {
+		if (typeof showToast === 'function')
+			showToast('This settings section is admin-only', 'error');
+		return;
+	}
+
 	// Hide all sections
 	document
 		.querySelectorAll('.settings-section')
@@ -724,9 +736,6 @@ async function saveSettingsForm(options = {}) {
 		serverHost: document.getElementById('setting-serverHost')
 			? document.getElementById('setting-serverHost').value
 			: currentSettings.serverHost || '',
-		adminSecret: document.getElementById('setting-adminSecret')
-			? document.getElementById('setting-adminSecret').value.trim()
-			: currentSettings.adminSecret || '',
 		recoveryCodeHash,
 		realtimeEnabled: document.getElementById('setting-realtimeEnabled')
 			? document.getElementById('setting-realtimeEnabled').checked
@@ -754,11 +763,9 @@ async function saveSettingsForm(options = {}) {
 	currentSettings = newSettings;
 	localStorage.setItem('quizSettings', JSON.stringify(currentSettings));
 	if (source !== 'auto') settingsAutoSaveDirty = false;
-	if (currentSettings.adminSecret) {
-		localStorage.setItem('quizAdminSecret', currentSettings.adminSecret);
-	} else {
-		localStorage.removeItem('quizAdminSecret');
-	}
+	// Clean up any Admin Secret left over from the old shared-secret flow —
+	// realtime auth now rides on the login JWT instead.
+	localStorage.removeItem('quizAdminSecret');
 	window.dispatchEvent(new CustomEvent('quiz:settings-applied', { detail: currentSettings }));
 
 	// Apply
@@ -840,23 +847,93 @@ function __set(entity, data) {
 /**
  * Exports all application data to a JSON file
  */
-function exportAllData() {
-	try {
-		const timestamp = new Date().toISOString();
-		const exportData = {
-			version: '1.0',
-			timestamp: timestamp,
-			type: 'quiz-app-backup',
-			data: {
-					settings: __get('settings', {}),
-					questions: __get('questions', []),
-					categories: __get('categories', []),
-					exams: __get('exams', []),
-					classes: __get('classes', []),
-					results: __get('results', []),
-					activityLog: __get('activity', []),
-				},
+	/**
+	 * Collects every application store for the backup payload. Reads all entity
+	 * tables plus the extra admin stores the bootstrap keeps in localStorage, so
+	 * "Export All Data" really exports ALL data.
+	 */
+	function collectAllStores() {
+		const arrayStores = {
+			users: 'quizUsers',
+			classes: 'quizClasses',
+			categories: 'quizCategories',
+			questions: 'quizQuestions',
+			exams: 'quizExams',
+			results: 'quizResults',
+			games: 'quizGames',
+			tournaments: 'quizTournaments',
+			exam_sessions: 'quizExamSessions',
+			exam_questions: 'quizExamQuestions',
+			exam_classes: 'quizExamClasses',
+			game_sessions: 'quizGameSessions',
+			tournament_entries: 'quizTournamentEntries',
+			tournament_history: 'quizTournamentsHistory',
+			game_presets: 'gamePresets',
+			profile_requests: 'quizProfileRequests',
+			account_requests: 'quizAccountRequests',
+			notifications: 'adminNotifications',
+			teacher_messages: 'teacherMessages',
+			teacher_assignments: 'teacherAssignments',
 		};
+		const collected = {};
+		// Entity tables go through the repository shim (server-backed).
+		for (const [entity, lsKey] of Object.entries(arrayStores)) {
+			try {
+				if (entity === 'game_presets') {
+					// game presets are stored as an object map, not an array
+					collected[entity] = safeReadLS(lsKey, {});
+				} else {
+					collected[entity] = safeReadLS(lsKey, []);
+				}
+			} catch (e) {
+				collected[entity] = [];
+			}
+		}
+		// The repository shim already mirrors these through STORE_KEYS, but read
+		// them through it anyway so exported values match what the app displays.
+		collected.activity = __get('activity', []);
+		try {
+			collected.gamification = JSON.parse(
+				localStorage.getItem('quizGamification') || '{}',
+			);
+		} catch (e) {
+			collected.gamification = {};
+		}
+		try {
+			collected.settings = __get('settings', {});
+		} catch (e) {
+			collected.settings = {};
+		}
+		return collected;
+	}
+
+	// Safe JSON read from localStorage with fallback (used by backups/imports).
+	function safeReadLS(key, fallback) {
+		try {
+			const raw = localStorage.getItem(key);
+			if (raw === null || raw === undefined) return fallback;
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(fallback)) return Array.isArray(parsed) ? parsed : fallback;
+			return parsed && typeof parsed === 'object' ? parsed : fallback;
+		} catch (e) {
+			return fallback;
+		}
+	}
+
+	function exportAllData() {
+		try {
+			const timestamp = new Date().toISOString();
+			const collected = collectAllStores();
+			const exportData = {
+				version: '2.0',
+				timestamp: timestamp,
+				type: 'quiz-app-backup',
+				data: {
+						...collected,
+						// Legacy key kept so old imports and tooling keep working
+						activityLog: collected.activity,
+					},
+			};
 
 		const dataStr = JSON.stringify(exportData, null, 2);
 		const dataUri =
@@ -963,6 +1040,42 @@ function importAllData(inputElement) {
 					__set('exams', data.exams);
 				if (data.classes)
 					__set('classes', data.classes);
+
+				// Full-backup stores (v2 backups): every entity table the app
+				// keeps, restored only when present so legacy backups stay valid.
+				if (data.users && Array.isArray(data.users))
+					__set('users', data.users);
+				if (data.games && Array.isArray(data.games))
+					__set('games', data.games);
+				if (data.tournaments && Array.isArray(data.tournaments))
+					__set('tournaments', data.tournaments);
+				if (data.exam_sessions && Array.isArray(data.exam_sessions))
+					__set('exam_sessions', data.exam_sessions);
+				if (data.exam_questions && Array.isArray(data.exam_questions))
+					__set('exam_questions', data.exam_questions);
+				if (data.exam_classes && Array.isArray(data.exam_classes))
+					__set('exam_classes', data.exam_classes);
+				if (data.game_sessions && Array.isArray(data.game_sessions))
+					__set('game_sessions', data.game_sessions);
+				if (data.tournament_entries && Array.isArray(data.tournament_entries))
+					__set('tournament_entries', data.tournament_entries);
+				if (data.tournament_history && Array.isArray(data.tournament_history))
+					__set('tournament_history', data.tournament_history);
+				if (data.profile_requests && Array.isArray(data.profile_requests))
+					__set('profile_requests', data.profile_requests);
+				if (data.account_requests && Array.isArray(data.account_requests))
+					__set('account_requests', data.account_requests);
+				if (data.notifications && Array.isArray(data.notifications))
+					__set('notifications', data.notifications);
+				if (data.teacher_messages && Array.isArray(data.teacher_messages))
+					__set('teacher_messages', data.teacher_messages);
+				if (data.teacher_assignments && Array.isArray(data.teacher_assignments))
+					__set('teacher_assignments', data.teacher_assignments);
+				if (data.gamification && typeof data.gamification === 'object')
+					__set('gamification', data.gamification);
+				if (data.game_presets && typeof data.game_presets === 'object')
+					__set('game_presets', data.game_presets);
+
 				if (data.results) {
 					try {
 						const processedResults = data.results.map((r) => {
@@ -1048,6 +1161,7 @@ function importAllData(inputElement) {
 // Make globally available
 window.exportAllData = exportAllData;
 window.importAllData = importAllData;
+window.safeReadLS = safeReadLS; // used by importDeviceData result mapping
 
 /**
  * Imports device data from a JSON file (data downloaded from device)
@@ -1065,73 +1179,122 @@ function importDeviceData(inputElement) {
 			const content = e.target.result;
 			const fileData = JSON.parse(content);
 
-			let importedCount = 0;
-			let importedStudents = 0;
+			// Per-store counters so the write guard and the summary are accurate
+			let resultsImported = 0;
+			let examsImported = 0;
+			let questionsImported = 0;
+			let classesImported = 0;
+			let studentsImported = 0;
+			let activityImported = 0;
 
 			console.log('Importing device data:', fileData);
 
 			// Extract the actual data from the wrapped structure
 			const deviceData = fileData.data || fileData;
-			const examSession =
-				deviceData.examActiveSession || fileData.data?.examActiveSession;
 
-				// Handle examActiveSession results
+			// examActiveSession holds BOTH the legacy single-result shape
+			// ({examId, studentInfo, results}) and the shared-device cumulative
+			// list (completedResults[]) written after each submission.
+			const examSession = deviceData.examActiveSession;
+
+			// Normalize one raw session result (legacy or completedResults entry)
+			// into the app's result shape.
+			const mapSessionResult = (entry, fallbackKey) => {
+				if (!entry) return null;
+				// Legacy single-result shape keeps the root results object
+				const res = entry.results || {};
+				const info = entry.studentInfo || {};
+				const rawId =
+					entry.id ||
+					`${entry.examId || 'exam'}-${info.numero || ''}-${entry.completedAt || ''}`;
+				return {
+					id: rawId || `imported-${Date.now()}`,
+					examId: entry.examId,
+					examName: entry.examName || 'Imported Exam',
+					mode: entry.mode || 'exam',
+					studentName: info.name || 'Unknown',
+					studentNumber: info.numero || '',
+					className: info.class || '',
+					score: res.score ?? res.earnedPoints ?? 0,
+					totalQuestions: res.totalQuestions ?? 0,
+					answers: res.answers || [],
+					timeSpent: res.timeSpent ?? 0,
+					dateTaken: entry.completedAt || new Date().toISOString(),
+					deviceId: fileData.deviceId || fallbackKey || 'imported',
+					deviceName: fileData.deviceName || 'Unknown Device',
+				};
+			};
+
+			const existingResults = __get('results', []);
+			const pushUniqueResult = (candidate) => {
+				if (!candidate || !candidate.examId) return;
+				if (existingResults.some((r) => String(r.id) === String(candidate.id))) return;
+				existingResults.push(candidate);
+				resultsImported++;
+			};
+
+				// Handle examActiveSession — legacy single result
 				if (examSession?.results) {
-					const existingResults = __get('results', []);
+					pushUniqueResult(
+						mapSessionResult(
+							{
+								...examSession,
+								// legacy root shape has no id — synthesize one
+								id: `${examSession.examId}-${fileData.deviceId || 'imported'}`,
+							},
+							'active-session',
+						),
+					);
+				}
 
-					const newResult = {
-						id:
-							examSession.examId +
-							'-' +
-							(fileData.deviceId || 'imported-' + Date.now()),
-						examId: examSession.examId,
-						examName: examSession.examName,
-						mode: examSession.mode || 'exam',
-						studentName: examSession.studentInfo?.name || 'Unknown',
-						studentNumber: examSession.studentInfo?.numero || '',
-						className: examSession.studentInfo?.class || '',
-						score: examSession.results.score || 0,
-						totalQuestions: examSession.results.totalQuestions || 0,
-						answers: examSession.results.answers || [],
-						timeSpent: examSession.results.timeSpent || 0,
-						dateTaken: examSession.completedAt || new Date().toISOString(),
-						deviceId: fileData.deviceId || 'imported',
-						deviceName: fileData.deviceName || 'Unknown Device',
-					};
+				// Handle examActiveSession.completedResults (shared-device list)
+				if (Array.isArray(examSession?.completedResults)) {
+					examSession.completedResults.forEach((entry) =>
+						pushUniqueResult(mapSessionResult(entry, 'completed')),
+					);
+				}
 
-					if (!existingResults.some((r) => r.id === newResult.id)) {
-						existingResults.push(newResult);
-						__set('results', existingResults);
-						importedCount++;
-					}
+				if (resultsImported > 0) {
+					__set('results', existingResults);
 				}
 
 				// Handle quizResults array
 				if (deviceData.quizResults && Array.isArray(deviceData.quizResults)) {
-					const existingResults = __get('results', []);
 					deviceData.quizResults.forEach((result) => {
 						if (
 							!existingResults.some(
-								(r) => r.id === result.id && r.dateTaken === result.dateTaken,
+								(r) => String(r.id) === String(result.id),
 							)
 						) {
-							existingResults.push(result);
-							importedCount++;
+							// Result records come from the repo and use various field
+							// spellings (user_id/userId, date_taken/date) depending on
+							// which side wrote them. Keep the record as-is — it is
+							// already the app's canonical shape — only stamp the
+							// device provenance if missing.
+							const stamped = { ...result };
+							if (!stamped.deviceId && fileData.deviceId)
+								stamped.deviceId = fileData.deviceId;
+							if (!stamped.deviceName && fileData.deviceName)
+								stamped.deviceName = fileData.deviceName;
+							existingResults.push(stamped);
+							resultsImported++;
 						}
 					});
-					__set('results', existingResults);
+					if (resultsImported > 0) {
+						__set('results', existingResults);
+					}
 				}
 
 				// Handle quizExams
 				if (deviceData.quizExams && Array.isArray(deviceData.quizExams)) {
 					const existingExams = __get('exams', []);
 					deviceData.quizExams.forEach((exam) => {
-						if (!existingExams.some((e) => e.id === exam.id)) {
+						if (!existingExams.some((e) => String(e.id) === String(exam.id))) {
 							existingExams.push(exam);
-							importedCount++;
+							examsImported++;
 						}
 					});
-					if (importedCount > 0) {
+					if (examsImported > 0) {
 						__set('exams', existingExams);
 					}
 				}
@@ -1140,12 +1303,12 @@ function importDeviceData(inputElement) {
 				if (deviceData.quizQuestions && Array.isArray(deviceData.quizQuestions)) {
 					const existingQuestions = __get('questions', []);
 					deviceData.quizQuestions.forEach((q) => {
-						if (!existingQuestions.some((eq) => eq.id === q.id)) {
+						if (!existingQuestions.some((eq) => String(eq.id) === String(q.id))) {
 							existingQuestions.push(q);
-							importedCount++;
+							questionsImported++;
 						}
 					});
-					if (importedCount > 0) {
+					if (questionsImported > 0) {
 						__set('questions', existingQuestions);
 					}
 				}
@@ -1154,28 +1317,28 @@ function importDeviceData(inputElement) {
 				if (deviceData.quizClasses && Array.isArray(deviceData.quizClasses)) {
 					const existingClasses = __get('classes', []);
 					deviceData.quizClasses.forEach((cls) => {
-						if (!existingClasses.some((ec) => ec.id === cls.id)) {
+						if (!existingClasses.some((ec) => String(ec.id) === String(cls.id))) {
 							existingClasses.push(cls);
-							importedStudents += cls.students?.length || 0;
+							classesImported++;
+							studentsImported += cls.students?.length || 0;
 						}
 					});
-					if (importedCount > 0) {
+					if (classesImported > 0) {
 						__set('classes', existingClasses);
 					}
 				}
 
 				// Handle quizActivity
-				let activityImported = 0;
 				if (deviceData.quizActivity && Array.isArray(deviceData.quizActivity)) {
 					const existingActivity = __get('activity', []);
-					
+
 					deviceData.quizActivity.forEach(activity => {
 						// Filter out 'noisy' or redundant activities
 						if (activity.type === 'quiz_started' || activity.type === 'answer_submitted' || activity.type === 'result') return;
 
 						const activityDate = activity.date || activity.timestamp || '';
-						const isDuplicate = existingActivity.some(a => 
-							a.type === activity.type && 
+						const isDuplicate = existingActivity.some(a =>
+							a.type === activity.type &&
 							(a.date || a.timestamp || '') === activityDate &&
 							a.studentNumber === activity.studentNumber &&
 							a.name === activity.name
@@ -1201,16 +1364,24 @@ function importDeviceData(inputElement) {
 				}
 
 			// Summary
-			if (importedCount > 0 || importedStudents > 0 || activityImported > 0) {
+			const totalImported =
+				resultsImported + examsImported + questionsImported + classesImported;
+			if (totalImported > 0 || studentsImported > 0 || activityImported > 0) {
 				const summary = [];
-				if (importedCount > 0) summary.push(`${importedCount} result(s)`);
-				if (importedStudents > 0) summary.push(`${importedStudents} student(s)`);
+				if (resultsImported > 0) summary.push(`${resultsImported} result(s)`);
+				if (examsImported > 0) summary.push(`${examsImported} exam(s)`);
+				if (questionsImported > 0) summary.push(`${questionsImported} question(s)`);
+				if (classesImported > 0) summary.push(`${classesImported} class(es)`);
+				if (studentsImported > 0) summary.push(`${studentsImported} student(s)`);
 				if (activityImported > 0) summary.push(`${activityImported} activities`);
 				showToast(`✅ Imported: ${summary.join(', ')}`, 'success');
-				
+
 				// Refresh UIs
 				if (window.loadResults) window.loadResults();
 				if (typeof window.renderRecentActivity === 'function') window.renderRecentActivity();
+				if (typeof window.updateExamList === 'function') window.updateExamList();
+				if (typeof window.updateQuestionList === 'function') window.updateQuestionList();
+				if (typeof window.updateClassList === 'function') window.updateClassList();
 			} else {
 				showToast('ℹ️ No new data to import', 'info');
 			}

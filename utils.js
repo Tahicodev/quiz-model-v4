@@ -337,21 +337,23 @@ window.QuizTypes = {
     isTrueFalse: isTrueFalseQuestion
 };
 
-function getStoredAdminSecret() {
-    try {
-        const settings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
-        return String(settings.adminSecret || localStorage.getItem('quizAdminSecret') || '').trim();
-    } catch (e) {
-        return String(localStorage.getItem('quizAdminSecret') || '').trim();
-    }
-}
-
+/**
+ * Payload for the realtime `identify` event. The shared Admin Secret is gone —
+ * admin/teacher identity is proven by the signed JWT issued at login, which
+ * the server verifies (root server.js) or already verified at the socket
+ * handshake (SaaS socket.auth.js).
+ */
 function buildAdminIdentifyPayload(extra = {}) {
-    return {
-        role: 'admin',
-        adminSecret: getStoredAdminSecret(),
-        ...extra
-    };
+    const payload = { role: 'admin', ...extra };
+    let token = '';
+    try {
+        const session = JSON.parse(localStorage.getItem('quizSession') || 'null');
+        token = (session && session.token) || '';
+    } catch (e) { /* non-fatal */ }
+    if (!token) token = localStorage.getItem('quizAuthToken') || '';
+    if (!token) token = window.__authToken || '';
+    if (token) payload.token = token;
+    return payload;
 }
 
 function sanitizeImageUrl(value) {
@@ -377,7 +379,6 @@ function sanitizeCssColor(value, fallback = '#9ca3af') {
     return fallback;
 }
 
-window.getStoredAdminSecret = getStoredAdminSecret;
 window.buildAdminIdentifyPayload = buildAdminIdentifyPayload;
 window.sanitizeImageUrl = window.sanitizeImageUrl || sanitizeImageUrl;
 window.sanitizeCssColor = window.sanitizeCssColor || sanitizeCssColor;

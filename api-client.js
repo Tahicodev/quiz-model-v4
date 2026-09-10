@@ -112,12 +112,28 @@
   function parseError(res, body) {
     try {
       var j = JSON.parse(body);
-      return (
+      var base =
         (j && j.error && j.error.message) ||
         (j && j.message) ||
         body ||
-        ('HTTP ' + res.status)
-      );
+        ('HTTP ' + res.status);
+      // Validation errors carry per-field details ({ field: ['reason'] }).
+      // Append them so the UI shows the real cause ("Cannot delete an exam
+      // that has recorded results") instead of the generic "Validation failed".
+      var fields = j && j.error && j.error.fields;
+      if (fields && typeof fields === 'object') {
+        var details = Object.keys(fields)
+          .map(function (k) {
+            var v = fields[k];
+            return Array.isArray(v) ? v.join(', ') : String(v);
+          })
+          .filter(Boolean)
+          .join('; ');
+        if (details) {
+          base = String(base) + (base === 'Validation failed' ? '' : ' — ') + details;
+        }
+      }
+      return base;
     } catch (_) {
       return body || ('HTTP ' + res.status);
     }
@@ -308,6 +324,12 @@
       if (Array.isArray(e.classes)) legacy.classes = e.classes;
       if (e.presetId != null) legacy.presetId = e.presetId;
       if (e.dateCreated != null) legacy.dateCreated = e.dateCreated;
+      // Full preset configuration embedded on the exam so student devices
+      // (which never see the admin's quizPresets store) still receive every
+      // preset-driven rule: welcome title/message, penalty, time limit,
+      // colors, shuffle, explanations, passing score, font family.
+      if (e.presetName != null) legacy.presetName = e.presetName;
+      if (e.presetSnapshot && typeof e.presetSnapshot === 'object') legacy.presetSnapshot = e.presetSnapshot;
       if (Object.keys(legacy).length > 0) out.options_json = JSON.stringify(legacy);
       return out;
     },
