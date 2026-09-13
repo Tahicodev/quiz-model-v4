@@ -4465,8 +4465,40 @@ html.auth-pending.auth-ready body{
 	align-self: flex-start;
 }
 
-.game-quiz-shell .workspace-btn.small{
-	align-self: flex-start;
+/* In-game submit/hint actions: one full-width block under the question body
+   so the primary action is always reachable and equally sized on every
+   viewport — previously this button was a tiny left-aligned pill
+   (align-self: flex-start) squeezed next to full-width elements. */
+.game-question-actions{
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 4px;
+}
+
+.game-question-actions .workspace-btn,
+.game-quiz-shell .game-submit-btn{
+	align-self: stretch;
+	justify-content: center;
+	min-height: 44px;
+	padding: 10px 18px;
+	font-size: 0.95rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.game-question-actions .hint-btn{
+	width: 100%;
+	font-weight: 600;
+}
+
+/* Win over the compact body.student-workspace .workspace-btn sizing so the
+   primary submit stays a comfortable touch target inside the game modal. */
+body.student-workspace .game-question-actions .workspace-btn,
+body.student-workspace .game-quiz-shell .game-submit-btn{
+	min-height: 44px;
+	padding: 10px 18px;
+	font-size: 0.92rem;
 }
 
 .game-draggable-list{
@@ -4855,6 +4887,30 @@ html.auth-pending.auth-ready body{
 	gap: 10px;
 	align-items: center;
 	flex-wrap: wrap;
+}
+
+/* Text-answer rows: the Submit button keeps a comfortable minimum width so it
+   never collapses into a cramped pill beside the input. */
+.game-answer-box .workspace-btn.small{
+	flex: 0 0 auto;
+	min-width: 120px;
+}
+
+.game-answer-box .form-control{
+	flex: 1 1 200px;
+	min-width: 0;
+}
+
+@media (max-width: 640px){
+	.game-answer-box{
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.game-answer-box .workspace-btn.small{
+		width: 100%;
+		min-width: 0;
+	}
 }
 
 .game-fill-blank-prompt{
@@ -34211,5 +34267,167 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 
 	#settingsModal.settings-sidebar-collapsed #settingsForm{
 		grid-template-columns: 0 minmax(0, 1fr) !important;
+	}
+}
+
+/* ─── Quick Start wizard ──────────────────────────────────────────────── */
+.quick-start-layout{
+	display: flex;
+	min-height: 420px;
+}
+
+.quick-start-steps{
+	flex: 0 0 230px;
+	border-right: 1px solid rgba(15, 23, 42, 0.08);
+	padding: 18px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	background: rgba(241, 245, 249, 0.6);
+}
+
+.qs-step{
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	cursor: pointer;
+	transition: background 150ms ease;
+	font-size: 0.9rem;
+	color: #475569;
+}
+
+.qs-step:hover{
+	background: rgba(59, 130, 246, 0.08);
+}
+
+.qs-step.active{
+	background: linear-gradient(135deg, #3b82f6, #2563eb);
+	color: white;
+	font-weight: 700;
+	box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
+}
+
+.qs-step.visited{
+	color: #059669;
+}
+
+.qs-step-num{
+	flex: 0 0 22px;
+	height: 22px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	background: rgba(15, 23, 42, 0.08);
+	font-size: 0.72rem;
+	font-weight: 700;
+}
+
+.qs-step.active .qs-step-num{
+	background: rgba(255, 255, 255, 0.25);
+}
+
+.qs-step-icon{
+	flex: 0 0 auto;
+}
+
+.qs-step-label{
+	flex: 1 1 auto;
+}
+
+.qs-count{
+	font-size: 0.68rem;
+	font-weight: 700;
+	padding: 2px 7px;
+	border-radius: 999px;
+	background: rgba(15, 23, 42, 0.06);
+	color: #64748b;
+}
+
+.qs-count.done{
+	background: rgba(16, 185, 129, 0.15);
+	color: #059669;
+}
+
+.qs-step.active .qs-count{
+	background: rgba(255, 255, 255, 0.2);
+	color: white;
+}
+
+.quick-start-panel{
+	flex: 1 1 auto;
+	padding: 26px 30px;
+	overflow-y: auto;
+}
+
+.qs-title{
+	margin: 0 0 10px;
+	font-size: 1.3rem;
+}
+
+.qs-desc{
+	color: #64748b;
+	line-height: 1.6;
+	margin-bottom: 16px;
+}
+
+.qs-status{
+	padding: 10px 14px;
+	border-radius: 10px;
+	background: rgba(241, 245, 249, 0.9);
+	color: #64748b;
+	font-size: 0.88rem;
+	margin-bottom: 18px;
+}
+
+.qs-status.ok{
+	background: rgba(16, 185, 129, 0.1);
+	color: #059669;
+}
+
+.qs-actions{
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-bottom: 22px;
+}
+
+.qs-load{
+	border-top: 1px dashed rgba(15, 23, 42, 0.12);
+	padding-top: 16px;
+}
+
+.qs-load .text-muted{
+	font-size: 0.85rem;
+	margin-bottom: 10px;
+}
+
+.qs-summary{
+	margin: 0 0 0 20px;
+	line-height: 1.9;
+	color: #475569;
+}
+
+@media (max-width: 700px){
+	.quick-start-layout{
+		flex-direction: column;
+	}
+
+	.quick-start-steps{
+		flex: 0 0 auto;
+		flex-direction: row;
+		overflow-x: auto;
+		border-right: none;
+		border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+	}
+
+	.qs-step .qs-count{
+		display: none;
+	}
+
+	.quick-start-panel{
+		padding: 18px;
 	}
 }

@@ -5556,10 +5556,10 @@
 						.filter(Boolean);
 			if (!orderSource.length) {
 				body = `
-					<div class="game-answer-box">
-						<input type="text" id="${actions.textInputId}" class="form-control" placeholder="Type the correct order" ${answered ? 'disabled' : ''} />
-						<button type="button" class="workspace-btn small" data-action="${actions.textSubmitAction}" data-game-id="${game.id}" ${answered ? 'disabled' : ''}>Submit</button>
-					</div>
+						<div class="game-answer-box">
+							<input type="text" id="${actions.textInputId}" class="form-control" placeholder="Type the correct order" ${answered ? 'disabled' : ''} />
+							<button type="button" class="workspace-btn small game-submit-btn" data-action="${actions.textSubmitAction}" data-game-id="${game.id}" ${answered ? 'disabled' : ''}>Submit</button>
+						</div>
 				`;
 			} else {
 				body = `
@@ -5587,19 +5587,21 @@
 							})
 							.join('')}
 					</div>
-					<button type="button" class="workspace-btn small" data-action="submit-structured-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" ${answered ? 'disabled' : ''}>
-						Submit Order
-					</button>
+					<div class="game-question-actions">
+						<button type="button" class="workspace-btn small game-submit-btn" data-action="submit-structured-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" ${answered ? 'disabled' : ''}>
+							Submit Order
+						</button>
+					</div>
 				`;
 			}
 		} else if (questionType === 'matching-pairs') {
 			const pairs = extractMatchingPairs(question);
 			if (!pairs.length) {
 				body = `
-					<div class="game-answer-box">
-						<input type="text" id="${actions.textInputId}" class="form-control" placeholder="Type your answer" ${answered ? 'disabled' : ''} />
-						<button type="button" class="workspace-btn small" data-action="${actions.textSubmitAction}" data-game-id="${game.id}" ${answered ? 'disabled' : ''}>Submit</button>
-					</div>
+						<div class="game-answer-box">
+							<input type="text" id="${actions.textInputId}" class="form-control" placeholder="Type your answer" ${answered ? 'disabled' : ''} />
+							<button type="button" class="workspace-btn small game-submit-btn" data-action="${actions.textSubmitAction}" data-game-id="${game.id}" ${answered ? 'disabled' : ''}>Submit</button>
+						</div>
 				`;
 			} else {
 				const leftItems = pairs.map((pair, index) => ({
@@ -5662,9 +5664,11 @@
 					</div>
 					<div class="game-match-pairs"></div>
 				</div>
-				<button type="button" class="workspace-btn small" data-action="submit-structured-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" ${answered ? 'disabled' : ''}>
-					Submit Matches
-				</button>
+				<div class="game-question-actions">
+					<button type="button" class="workspace-btn small game-submit-btn" data-action="submit-structured-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" ${answered ? 'disabled' : ''}>
+						Submit Matches
+					</button>
+				</div>
 			`;
 			}
 		} else if (questionType === 'fill-blank') {
@@ -5706,9 +5710,11 @@
 			<div class="fill-blank-body">
 				${generatedBlankFields}
 				${wordBankHtml}
-				<button type="button" class="workspace-btn small" data-action="submit-structured-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" ${answered ? 'disabled' : ''}>
-					Submit Answers
-				</button>
+				<div class="game-question-actions">
+					<button type="button" class="workspace-btn small game-submit-btn" data-action="submit-structured-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" ${answered ? 'disabled' : ''}>
+						Submit Answers
+					</button>
+				</div>
 			</div>
 		`;
 		} else if (questionType === 'odd-one-out' && options.length) {
@@ -5739,7 +5745,7 @@
 				</div>
 				${
 					hintAllowed && !answered
-						? `<button class="workspace-btn ghost small hint-btn" data-action="use-hint" data-game-id="${game.id}" style="margin-top: 12px; width: 100%;">Hint (50/50)</button>`
+						? `<div class="game-question-actions"><button class="workspace-btn ghost small hint-btn" data-action="use-hint" data-game-id="${game.id}">Hint (50/50)</button></div>`
 						: ''
 				}
 			`;
@@ -5795,23 +5801,25 @@
 					`;
 						})
 						.join('')}
-				</div>
-				${
-					isMultiSelect
-						? `<button type="button" class="workspace-btn small" data-action="submit-multi-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" data-question-key="${escapeHtml(questionSelectionKey)}" ${answered ? 'disabled' : ''}>Submit Selection</button>`
-						: ''
-				}
-				${
-					hintAllowed && !answered
-						? `<button class="workspace-btn ghost small hint-btn" data-action="use-hint" data-game-id="${game.id}" style="margin-top: 12px; width: 100%;">Hint (50/50)</button>`
-						: ''
-				}
-			`;
+					</div>
+					<div class="game-question-actions">
+						${
+							isMultiSelect
+								? `<button type="button" class="workspace-btn small game-submit-btn" data-action="submit-multi-answer" data-mode="${escapeHtml(mode)}" data-game-id="${escapeHtml(game.id)}" data-question-key="${escapeHtml(questionSelectionKey)}" ${answered ? 'disabled' : ''}>Submit Selection</button>`
+								: ''
+						}
+						${
+							hintAllowed && !answered
+								? `<button class="workspace-btn ghost small hint-btn" data-action="use-hint" data-game-id="${game.id}">Hint (50/50)</button>`
+								: ''
+						}
+					</div>
+				`;
 		} else {
 			body = `
 				<div class="game-answer-box">
 					<input type="text" id="${actions.textInputId}" class="form-control" placeholder="Your answer" ${answered ? 'disabled' : ''} />
-					<button type="button" class="workspace-btn small" data-action="${actions.textSubmitAction}" data-game-id="${game.id}" ${answered ? 'disabled' : ''}>Submit</button>
+					<button type="button" class="workspace-btn small game-submit-btn" data-action="${actions.textSubmitAction}" data-game-id="${game.id}" ${answered ? 'disabled' : ''}>Submit</button>
 				</div>
 			`;
 		}
@@ -8233,7 +8241,7 @@
 						<p class="game-hint">Attempts left before a new operation: ${attemptsLeft}</p>
 						<div class="game-answer-box">
 							<input type="text" id="warmupAnswerInput" class="form-control" placeholder="Your answer" />
-							<button type="button" class="workspace-btn small" data-action="submit-warmup" data-game-id="${game.id}">Submit</button>
+							<button type="button" class="workspace-btn small game-submit-btn" data-action="submit-warmup" data-game-id="${game.id}">Submit</button>
 						</div>
 					</div>
 				</div>

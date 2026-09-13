@@ -448,6 +448,11 @@ class DocumentQuestionGenerator {
     return questions;
   }
 
+  /** Current extracted document text (used by the server-side generation path). */
+  getDocumentText() {
+    return String(this.extractedContent || '');
+  }
+
   buildPrompt(params) {
     const {
       count,

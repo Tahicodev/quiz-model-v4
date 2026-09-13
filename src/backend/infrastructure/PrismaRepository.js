@@ -42,6 +42,8 @@ const MODEL_MAP = {
 	gamification: 'gamificationConfig',
 	teacher_messages: 'teacherMessage',
 	teacher_assignments: 'teacherAssignment',
+	// NOTE: Prisma camelCases "AIConfig" to "aIConfig" on the client delegate.
+	ai_configs: 'aIConfig',
 };
 
 /**

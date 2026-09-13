@@ -24,27 +24,28 @@ model School {
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
-  users       User[]
-  classes     Class[]
-  categories  Category[]
-  questions   Question[]
-  exams       Exam[]
-  results     Result[]
-  games       Game[]
-  tournaments Tournament[]
-  tournamentHistory TournamentHistory[]
-  tournamentEntries TournamentEntry[]
-  settings    Setting[]
-  auditLogs   AuditLog[]
-  sessions    ExamSession[]
-  gameSessions GameSession[]
-  profileRequests ProfileRequest[]
-  accountRequests AccountRequest[]
-  gamePresets GamePreset[]
-  notifications Notification[]
-  gamification GamificationConfig?
-  teacherMessages TeacherMessage[]
+  users              User[]
+  classes            Class[]
+  categories         Category[]
+  questions          Question[]
+  exams              Exam[]
+  results            Result[]
+  games              Game[]
+  tournaments        Tournament[]
+  tournamentHistory  TournamentHistory[]
+  tournamentEntries  TournamentEntry[]
+  settings           Setting[]
+  auditLogs          AuditLog[]
+  sessions           ExamSession[]
+  gameSessions       GameSession[]
+  profileRequests    ProfileRequest[]
+  accountRequests    AccountRequest[]
+  gamePresets        GamePreset[]
+  notifications      Notification[]
+  gamification       GamificationConfig?
+  teacherMessages    TeacherMessage[]
   teacherAssignments TeacherAssignment[]
+  aiConfigs          AIConfig[]
 }
 
 // ─── Users & Auth ────────────────────────────────────────────────────────────
@@ -62,23 +63,23 @@ model User {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 
-  school            School            @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  class             Class?            @relation(fields: [class_id], references: [id], onDelete: SetNull)
-  results           Result[]
-  createdExams      Exam[]            @relation("ExamCreator")
-  createdGames      Game[]            @relation("GameCreator")
-  createdTournaments Tournament[]     @relation("TournamentCreator")
-  gameSessions      GameSession[]
-  tournamentEntries TournamentEntry[]
-  examSessions      ExamSession[]
-  refreshTokens     RefreshToken[]
-  auditLogs         AuditLog[]        @relation("AuditActor")
-  profileRequests   ProfileRequest[]
-  reviewedProfileRequests ProfileRequest[] @relation("ProfileRequestReviewer")
-  reviewedAccountRequests AccountRequest[] @relation("AccountRequestReviewer")
-  fulfilledAccountRequests AccountRequest[] @relation("AccountRequestCreatedUser")
-  teacherMessages   TeacherMessage[]
-  teacherAssignments TeacherAssignment[]
+  school                   School              @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  class                    Class?              @relation(fields: [class_id], references: [id], onDelete: SetNull)
+  results                  Result[]
+  createdExams             Exam[]              @relation("ExamCreator")
+  createdGames             Game[]              @relation("GameCreator")
+  createdTournaments       Tournament[]        @relation("TournamentCreator")
+  gameSessions             GameSession[]
+  tournamentEntries        TournamentEntry[]
+  examSessions             ExamSession[]
+  refreshTokens            RefreshToken[]
+  auditLogs                AuditLog[]          @relation("AuditActor")
+  profileRequests          ProfileRequest[]
+  reviewedProfileRequests  ProfileRequest[]    @relation("ProfileRequestReviewer")
+  reviewedAccountRequests  AccountRequest[]    @relation("AccountRequestReviewer")
+  fulfilledAccountRequests AccountRequest[]    @relation("AccountRequestCreatedUser")
+  teacherMessages          TeacherMessage[]
+  teacherAssignments       TeacherAssignment[]
 
   @@unique([school_id, username])
   @@index([school_id])
@@ -111,11 +112,11 @@ model Class {
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
-  school      School      @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  users       User[]
-  examClasses ExamClass[]
-  accountRequests AccountRequest[]
-  teacherMessages TeacherMessage[]
+  school             School              @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  users              User[]
+  examClasses        ExamClass[]
+  accountRequests    AccountRequest[]
+  teacherMessages    TeacherMessage[]
   teacherAssignments TeacherAssignment[]
 
   @@unique([school_id, name])
@@ -209,10 +210,10 @@ model Exam {
 // Join tables use a surrogate `id` so they satisfy the generic IStorageRepository
 // contract (getById/update/delete by id). @@unique preserves idempotency.
 model ExamQuestion {
-  id              String   @id @default(uuid())
+  id              String @id @default(uuid())
   exam_id         String
   question_id     String
-  order_index     Int      @default(0)
+  order_index     Int    @default(0)
   points_override Int? // override question's default points for this exam
 
   exam     Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
@@ -372,13 +373,13 @@ model Tournament {
 // legacy payload (planner config, round assignments, winners) is preserved
 // verbatim in `payload_json`.
 model TournamentHistory {
-  id            String    @id @default(uuid())
-  school_id     String
-  name          String
-  ended_at      DateTime?
-  winners_json  String? // JSON array of { userId, score, ... }
-  payload_json  String? // full legacy row, untouched
-  created_at    DateTime  @default(now())
+  id           String    @id @default(uuid())
+  school_id    String
+  name         String
+  ended_at     DateTime?
+  winners_json String? // JSON array of { userId, score, ... }
+  payload_json String? // full legacy row, untouched
+  created_at   DateTime  @default(now())
 
   school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
 
@@ -454,19 +455,19 @@ model ProfileRequest {
   school_id     String
   user_id       String
   status        String    @default("pending") // pending | approved | rejected
-  changes_json  String                          // JSON: { name?, username?, studentNumber?, classId? }
+  changes_json  String // JSON: { name?, username?, studentNumber?, classId? }
   avatar        String?
   note          String?
-  snapshot_json String?                         // current user row for diff display
+  snapshot_json String? // current user row for diff display
   reviewer_id   String?
   review_note   String?
   reviewed_at   DateTime?
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 
-  school   School  @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  user     User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  reviewer User?   @relation("ProfileRequestReviewer", fields: [reviewer_id], references: [id], onDelete: SetNull)
+  school   School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  reviewer User?  @relation("ProfileRequestReviewer", fields: [reviewer_id], references: [id], onDelete: SetNull)
 
   @@index([school_id, status])
   @@index([user_id])
@@ -480,20 +481,20 @@ model AccountRequest {
   username        String
   student_number  String
   class_id        String?
-  class_name      String?   // denormalised display label
-  password_hash   String    // captured at request time; only admins ever read
+  class_name      String? // denormalised display label
+  password_hash   String // captured at request time; only admins ever read
   note            String?
   reviewer_id     String?
   reviewed_at     DateTime?
   review_note     String?
-  created_user_id String?   // set on approve; FK so auditing can resolve
+  created_user_id String? // set on approve; FK so auditing can resolve
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 
-  school        School  @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  class         Class?  @relation(fields: [class_id], references: [id], onDelete: SetNull)
-  reviewer      User?   @relation("AccountRequestReviewer", fields: [reviewer_id], references: [id], onDelete: SetNull)
-  created_user  User?   @relation("AccountRequestCreatedUser", fields: [created_user_id], references: [id], onDelete: SetNull)
+  school       School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  class        Class? @relation(fields: [class_id], references: [id], onDelete: SetNull)
+  reviewer     User?  @relation("AccountRequestReviewer", fields: [reviewer_id], references: [id], onDelete: SetNull)
+  created_user User?  @relation("AccountRequestCreatedUser", fields: [created_user_id], references: [id], onDelete: SetNull)
 
   @@unique([school_id, username])
   @@index([school_id, status])
@@ -508,7 +509,7 @@ model GamePreset {
   name       String
   game_type  String
   game_mode  String
-  rules_json String                          // JSON: { mirrorCard, timeWarp, ... }
+  rules_json String // JSON: { mirrorCard, timeWarp, ... }
   is_default Boolean  @default(false)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -560,9 +561,9 @@ model TeacherMessage {
   body         String
   date         DateTime @default(now())
 
-  school  School  @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  class   Class?  @relation(fields: [class_id], references: [id], onDelete: SetNull)
-  teacher User?   @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
+  school  School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  class   Class? @relation(fields: [class_id], references: [id], onDelete: SetNull)
+  teacher User?  @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
 
   @@index([school_id, class_id, date])
 }
@@ -578,9 +579,32 @@ model TeacherAssignment {
   created_at  DateTime  @default(now())
   updated_at  DateTime  @updatedAt
 
-  school  School  @relation(fields: [school_id], references: [id], onDelete: Cascade)
-  class   Class?  @relation(fields: [class_id], references: [id], onDelete: SetNull)
-  teacher User?   @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
+  school  School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  class   Class? @relation(fields: [class_id], references: [id], onDelete: SetNull)
+  teacher User?  @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
 
   @@index([school_id, class_id, due_date])
+}
+
+// ─── AI Configurations ──────────────────────────────────────────────────────
+// AI model entries for question generation. Shared entries (owner_id NULL)
+// are created by the admin and selectable by every teacher in the school;
+// personal entries belong to one teacher (their own provider + key).
+// API keys are stored AES-256-GCM encrypted and NEVER returned to clients.
+model AIConfig {
+  id          String   @id @default(uuid())
+  school_id   String
+  owner_id    String? // NULL = shared (admin-managed), else personal
+  provider    String // openrouter|openai|anthropic|google|deepseek|custom
+  name        String // display name
+  model_id    String // provider model identifier
+  base_url    String? // custom OpenAI-compatible endpoint
+  api_key_enc String? // AES-256-GCM ciphertext — never sent to any client
+  is_default  Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+
+  @@index([school_id, owner_id])
 }

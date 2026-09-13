@@ -27843,9 +27843,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (window.__AUTH_BRIDGE__) return;
     window.__AUTH_BRIDGE__ = true;
     var baseUrl = window.APP_CONFIG && window.APP_CONFIG.apiUrl || "/api/v1";
-    var _origGetLS = Storage.prototype.getItem;
-    var _origSetLS = Storage.prototype.setItem;
-    var _origRemoveLS = Storage.prototype.removeItem;
+    var _origGetLS = function(k) {
+      return localStorage.getItem(k);
+    };
+    var _origSetLS = function(k, v) {
+      localStorage.setItem(k, v);
+    };
+    var _origRemoveLS = function(k) {
+      localStorage.removeItem(k);
+    };
     function showMsg(msg, type) {
       if (typeof window.showToast === "function") {
         window.showToast(msg, type || "info");

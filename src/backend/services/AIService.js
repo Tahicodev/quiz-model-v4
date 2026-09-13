@@ -200,4 +200,206 @@ Respond ONLY with a valid JSON array. Example for MCQ:
       tags: null,
     }));
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Structured generation with explicit provider configs (AIConfig / custom).
+  // This is the surface used by the Settings → AI Generation UI: generation
+  // runs SERVER-SIDE with the stored (encrypted) key, so keys never reach
+  // any browser and provider calls are not blocked by the app's CSP.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Build the full structured prompt for the app's question types — the exact
+   * format importSelectedAIQuestions() / normalizeImportedAIQuestion() accept,
+   * so generated output imports with zero manual fixing. Also served verbatim
+   * by POST /api/v1/ai/prompt for keyless users to paste into ChatGPT/Claude.
+   *
+   * Supported legacy type ids (the admin UI vocabulary):
+   *   multiple-choice, multiple-choice-multi, true-false, odd-one-out,
+   *   draggable, matching-pairs, fill-blank, code
+   */
+  buildStructurePrompt({ topic, typeCounts = {}, difficulty = 'medium', points = 1, language = 'English' }) {
+    const typeSpecs = {
+      'multiple-choice': '"options" = array of 4 plausible strings; "answer" = the exact correct option string',
+      'multiple-choice-multi': '"options" = array of 4-6 strings; "answer" = correct options joined with " | " (pipe-separated)',
+      'true-false': '"options" = ["true","false"]; "answer" = "true" or "false"',
+      'odd-one-out': '"options" = array of 4 strings where exactly one does not belong; "answer" = the odd one',
+      'draggable': '"options" = array of 4-6 strings in the CORRECT order; "answer" = the same strings joined with "," (comma-separated, correct order)',
+      'matching-pairs': '"options" = array of "left-->right" pair strings; "answer" = the pairs joined with "|" (e.g. "A-->1|B-->2")',
+      'fill-blank': '"question" contains "[[1]]", "[[2]]"… placeholders; "options" = array of the correct words for each blank; "answer" = the words joined with "|" in blank order',
+      'code': '"question" contains the code snippet; "answer" = the expected output/value; optional "language" and "answerMode" ("text"|"options")',
+    };
+
+    const requested = Object.entries(typeCounts || {})
+      .filter(([, n]) => Number(n) > 0)
+      .map(([t, n]) => `- ${n} × ${t}${typeSpecs[t] ? ` — ${typeSpecs[t]}` : ''}`);
+
+    if (!requested.length) {
+      requested.push(`- 5 × multiple-choice — ${typeSpecs['multiple-choice']}`);
+    }
+
+    const total = Object.values(typeCounts || {}).reduce((s, n) => s + Number(n || 0), 0) || 5;
+
+    return `You are a quiz-question generator for a school quiz app. Generate questions about the topic below.
+
+TOPIC / SOURCE MATERIAL:
+"""${String(topic || '').slice(0, 8000)}"""
+
+REQUIRED QUESTIONS (exact counts):
+${requested.join('\n')}
+
+RULES:
+- Difficulty: ${difficulty}. Points per question: ${points}. Language: ${language}.
+- Each question object MUST use EXACTLY these keys:
+  { "question": string, "type": one of ["multiple-choice","multiple-choice-multi","true-false","odd-one-out","draggable","matching-pairs","fill-blank","code"], "options": string[], "answer": string, "explanation": string, "difficulty": "${difficulty}", "points": ${points} }
+- The "answer" MUST be copy-pasteable from the "options" array (except fill-blank / code).
+- No numbering, no markdown, no commentary — respond with ONE valid JSON array of question objects and NOTHING else.
+
+Example output:
+[
+  {
+    "question": "What is the result of 12 × 12?",
+    "type": "multiple-choice",
+    "options": ["124", "144", "156", "132"],
+    "answer": "144",
+    "explanation": "12 × 12 = 144.",
+    "difficulty": "${difficulty}",
+    "points": ${points}
+  }
+]`;
+  }
+
+  /**
+   * Generate questions using an explicit provider config (from AIConfig rows
+   * or a teacher's custom entry). Returns legacy-shape question objects.
+   */
+  async generateWithProvider(config, params) {
+    if (!config?.model_id) throw new ValidationError({ model_id: ['No model selected'] });
+    const prompt = this.buildStructurePrompt(params);
+    const raw = await this.#callProvider(config, prompt);
+    const questions = this.#parseStructuredQuestions(raw);
+    return questions;
+  }
+
+  /** Server-side provider call with per-provider request shapes + timeout. */
+  async #callProvider(config, prompt) {
+    const { provider, model_id: model, base_url: baseUrl, api_key: apiKey } = config;
+    let url;
+    let headers = { 'Content-Type': 'application/json' };
+    let body;
+
+    if (provider === 'anthropic') {
+      url = baseUrl || 'https://api.anthropic.com/v1/messages';
+      headers = { ...headers, 'x-api-key': apiKey || '', 'anthropic-version': '2023-06-01' };
+      body = { model, max_tokens: 4000, messages: [{ role: 'user', content: prompt }] };
+    } else if (provider === 'google') {
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey || '')}`;
+      body = { contents: [{ parts: [{ text: prompt }] }] };
+    } else if (provider === 'custom') {
+      if (!baseUrl) throw new ValidationError({ base_url: ['Base URL is required for custom providers'] });
+      url = baseUrl;
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+      body = { model, messages: [{ role: 'user', content: prompt }], temperature: 0.7, max_tokens: 4000 };
+    } else {
+      // openrouter / openai / deepseek — all OpenAI-compatible
+      const endpoints = {
+        openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+        openai: 'https://api.openai.com/v1/chat/completions',
+        deepseek: 'https://api.deepseek.com/v1/chat/completions',
+      };
+      url = baseUrl || endpoints[provider] || endpoints.openai;
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+      body = { model, messages: [{ role: 'user', content: prompt }], temperature: 0.7, max_tokens: 4000 };
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90000);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Provider ${provider} responded ${res.status}: ${errText.slice(0, 300)}`);
+      }
+      const data = await res.json();
+      if (provider === 'google') {
+        return data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+      }
+      if (provider === 'anthropic') {
+        return data?.content?.[0]?.text || '';
+      }
+      return data?.choices?.[0]?.message?.content || '';
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Repair-and-parse the model output into legacy question shape. Tolerates
+   * markdown fences, prose wrappers, and truncated arrays.
+   */
+  #parseStructuredQuestions(raw) {
+    let text = String(raw || '').trim();
+
+    // Strip markdown fences and leading prose.
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (arrayMatch) text = arrayMatch[0];
+
+    let rows = null;
+    try {
+      const parsed = JSON.parse(text);
+      rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.questions) ? parsed.questions : null;
+    } catch {
+      // Rescue mode: pull out individual {...} blocks.
+      const blocks = text.match(/\{[^{}]*\}/g) || [];
+      rows = blocks
+        .map((b) => { try { return JSON.parse(b); } catch { return null; } })
+        .filter((o) => o && (o.question || o.text));
+    }
+
+    if (!rows || !rows.length) {
+      throw new ValidationError({ response: ['The model did not return parseable questions — try again or pick a stronger model.'] });
+    }
+
+    // Legacy type aliases → canonical UI ids.
+    const TYPE_ALIASES = {
+      mcq: 'multiple-choice', multiple_choice: 'multiple-choice',
+      'multiple-choice': 'multiple-choice',
+      'multiple-choice-multi': 'multiple-choice-multi', multi: 'multiple-choice-multi',
+      'true-false': 'true-false', truefalse: 'true-false', boolean: 'true-false',
+      'odd-one-out': 'odd-one-out', oddoneout: 'odd-one-out',
+      'draggable': 'draggable', order: 'draggable', ordering: 'draggable',
+      'matching-pairs': 'matching-pairs', matching: 'matching-pairs', match: 'matching-pairs',
+      'fill-blank': 'fill-blank', fillblank: 'fill-blank', cloze: 'fill-blank',
+      'code': 'code',
+    };
+
+    return rows.map((row) => {
+      const rawType = String(row.type || 'multiple-choice').trim().toLowerCase();
+      const type = TYPE_ALIASES[rawType] || 'multiple-choice';
+      let options = row.options;
+      if (typeof options === 'string') {
+        options = options.split(',').map((s) => s.trim()).filter(Boolean);
+      }
+      return {
+        question: String(row.question || row.text || '').trim(),
+        type,
+        options: Array.isArray(options) ? options.map((o) => (typeof o === 'object' ? String(o.text || o.value || '') : String(o))) : [],
+        answer: String(row.answer || '').trim(),
+        explanation: String(row.explanation || '').trim() || '',
+        difficulty: ['easy', 'medium', 'hard'].includes(String(row.difficulty).toLowerCase())
+          ? String(row.difficulty).toLowerCase()
+          : 'medium',
+        points: Number(row.points) > 0 ? Math.min(Number(row.points), 100) : 1,
+        language: row.language || undefined,
+        answerMode: row.answerMode || undefined,
+        codeSnippet: row.codeSnippet || undefined,
+      };
+    }).filter((q) => q.question && q.answer);
+  }
 }

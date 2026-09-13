@@ -19,6 +19,7 @@ import { UserService } from './services/UserService.js';
 import { AuditService } from './services/AuditService.js';
 import { AIService } from './services/AIService.js';
 import { RAGService } from './services/RAGService.js';
+import { AIConfigService } from './services/AIConfigService.js';
 import { ProfileRequestService } from './services/ProfileRequestService.js';
 import { AccountRequestService } from './services/AccountRequestService.js';
 import { GamePresetService } from './services/GamePresetService.js';
@@ -60,6 +61,7 @@ export function createContainer() {
     // AI
     aiSvc:  new AIService(repo, logger),
     ragSvc: new RAGService(repo, logger),
+    aiConfigSvc: new AIConfigService(repo, logger),
     questionSvc: new QuestionService(repo),
     examSvc: new ExamService(repo),
     resultSvc: new ResultService(repo),

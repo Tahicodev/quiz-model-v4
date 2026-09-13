@@ -1362,6 +1362,43 @@ router.post('/:table', async (req, res, next) => {
             }
             await model.create({ data: row });
           }
+        } else if (table === 'game_presets') {
+          // Legacy clients re-sync the whole preset list with synthetic ids
+          // (default-race, Date.now()…). Without a name+type match this would
+          // CREATE a fresh UUID row on every sync cycle and the list would
+          // multiply endlessly. Match by (school, name, game_type) instead and
+          // collapse any duplicates the old bug already produced.
+          const existingRows = await model.findMany({
+            where: {
+              school_id: req.schoolId,
+              name: row.name,
+              game_type: row.game_type,
+            },
+            orderBy: { created_at: 'desc' },
+          });
+          if (existingRows.length > 0) {
+            const [keep, ...dupes] = existingRows;
+            await model.update({
+              where: { id: keep.id },
+              data: {
+                game_mode: row.game_mode,
+                rules_json: row.rules_json,
+                is_default: row.is_default,
+              },
+            });
+            if (dupes.length > 0) {
+              await model.deleteMany({
+                where: { id: { in: dupes.map((d) => d.id) } },
+              });
+              logger.info('bulk.routes: collapsed duplicate game presets', {
+                table,
+                name: row.name,
+                removed: dupes.length,
+              });
+            }
+          } else {
+            await model.create({ data: row });
+          }
         } else {
           await model.create({ data: row });
         }

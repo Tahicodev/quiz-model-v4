@@ -1367,17 +1367,19 @@
 	}
 
 	function getSelectedGamePreset() {
-		const typeValue = byId('gameType')?.value || '';
-		if (!typeValue || !typeValue.startsWith('preset_')) return null;
-		const presetId = getGameTypeFromPresetValue(typeValue);
+		// The rules preset dropdown is the only preset-backed select now —
+		// #gameType holds the canonical engine values (race, cards, …).
+		const presetValue = byId('gameRulesPreset')?.value || '';
+		if (!presetValue || !presetValue.startsWith('preset_')) return null;
+		const presetId = getGameTypeFromPresetValue(presetValue);
 		return getGamePresets().find((preset) => preset.id === presetId) || null;
 	}
 
 	function resolveSelectedGameType() {
-		const preset = getSelectedGamePreset();
-		if (preset && preset.gameType) return preset.gameType;
 		const rawType = byId('gameType')?.value || '';
-		return GAME_TYPE_LABELS[rawType] ? rawType : '';
+		if (GAME_TYPE_LABELS[rawType]) return rawType;
+		const preset = getSelectedGamePreset();
+		return preset && preset.gameType ? preset.gameType : '';
 	}
 
 	function resolveSelectedGameMode() {
@@ -1995,8 +1997,9 @@
 			showArenaMessage('Game cannot be saved: enter a game name.');
 			return null;
 		}
-		if (!selectedPreset) {
-			showArenaMessage('Game cannot be saved: select a game preset.');
+		const resolvedType = resolveSelectedGameType();
+		if (!resolvedType) {
+			showArenaMessage('Game cannot be saved: select a game type.');
 			return null;
 		}
 
@@ -2210,35 +2213,41 @@
 		byId('gameId').value = game.id;
 		byId('gameName').value = game.name;
 
-		// Check if this game was created from a preset
+		// Restore the engine type first, then the rules preset if the game was
+		// built from one. Default presets map to the plain "Default rules"
+		// entry — only custom presets are selectable in the preset dropdown.
 		const presets = getGamePresets();
+		const gameTypeValue = GAME_TYPE_LABELS[game.type] ? game.type : 'race';
+		const typeSelectEl = byId('gameType');
+		if (typeSelectEl) typeSelectEl.value = gameTypeValue;
+		refreshGameRulesPresetOptions();
+
 		let matchingPreset = null;
 		const presetId = game.settings?.gamePresetId;
 		if (presetId) {
-			matchingPreset = presets.find((p) => p.id === presetId);
+			matchingPreset = presets.find(
+				(p) => p.id === presetId && !p.isDefault && p.gameType === gameTypeValue,
+			);
 		}
 		if (!matchingPreset && game.settings?.gamePresetName) {
 			matchingPreset = presets.find(
-				(p) => p.name === game.settings.gamePresetName,
+				(p) =>
+					!p.isDefault &&
+					p.gameType === gameTypeValue &&
+					p.name === game.settings.gamePresetName,
 			);
-		}
-		if (!matchingPreset && game.type) {
-			matchingPreset = presets.find(
-				(p) => p.isDefault && p.gameType === game.type,
-			);
-		}
-		if (!matchingPreset && presets.length) {
-			matchingPreset = presets[0];
 		}
 
+		const presetSelectEl = byId('gameRulesPreset');
+		if (presetSelectEl) {
+			presetSelectEl.value = matchingPreset ? `preset_${matchingPreset.id}` : '';
+		}
 		if (matchingPreset) {
-			byId('gameType').value = `preset_${matchingPreset.id}`;
 			applyGamePresetToForm(matchingPreset);
 			byId('gameMode').value = game.mode || matchingPreset.gameMode || 'solo';
 		} else {
-			byId('gameType').value = '';
 			clearGamePresetSelection();
-			byId('gameMode').value = game.mode;
+			byId('gameMode').value = game.mode || 'solo';
 		}
 		byId('gamePoints').value = game.settings?.pointsCorrect || 10;
 		byId('gameExpectedPlayers').value = game.settings?.expectedPlayers || 0;
@@ -5235,64 +5244,94 @@
 			localStorage.setItem(GAME_PRESETS_INIT_KEY, 'true');
 		}
 
+	function refreshGameRulesPresetOptions() {
+		const typeSelect = byId('gameType');
+		const presetSelect = byId('gameRulesPreset');
+		if (!typeSelect || !presetSelect) return;
+
+		const selectedType = typeSelect.value;
+		const currentPresetValue = presetSelect.value;
+		const presets = getGamePresets();
+
+		// Only presets matching the chosen engine type are offered; defaults
+		// are the "Default rules" entry (always present), customs are opt-in.
+		const matching = presets.filter((preset) => preset.gameType === selectedType);
+
+		presetSelect.innerHTML = '';
+		const defaultOption = document.createElement('option');
+		defaultOption.value = '';
+		defaultOption.textContent = 'Default rules';
+		presetSelect.appendChild(defaultOption);
+		matching.forEach((preset) => {
+			if (preset.isDefault) return; // defaults are covered by "Default rules"
+			const option = document.createElement('option');
+			option.value = `preset_${preset.id}`;
+			option.textContent = preset.name;
+			presetSelect.appendChild(option);
+		});
+
+		if (
+			currentPresetValue &&
+			Array.from(presetSelect.options).some((opt) => opt.value === currentPresetValue)
+		) {
+			presetSelect.value = currentPresetValue;
+		} else {
+			presetSelect.value = '';
+		}
+	}
+
 	function loadGamePresets() {
 		const typeSelect = byId('gameType');
 		if (!typeSelect) return;
 
-		const currentValue = typeSelect.value;
-		const presets = getGamePresets();
-
-		typeSelect.innerHTML = '';
-		if (!presets.length) {
-			const placeholder = document.createElement('option');
-			placeholder.value = '';
-			placeholder.textContent = 'No presets available';
-			placeholder.disabled = true;
-			placeholder.selected = true;
-			typeSelect.appendChild(placeholder);
+		// #gameType is a static canonical list (the 6 engines) — never rebuilt
+		// from the preset store (that was the source of the duplicated
+		// options). The preset store only feeds #gameRulesPreset.
+		if (!typeSelect.options.length) {
+			typeSelect.innerHTML = '';
+			GAME_TYPE_ORDER.forEach((type) => {
+				const option = document.createElement('option');
+				option.value = type;
+				option.textContent = getGameTypeLabel(type);
+				typeSelect.appendChild(option);
+			});
+		}
+		if (!typeSelect.value && typeSelect.options.length) {
+			typeSelect.value = typeSelect.options[0].value;
 		}
 
-		presets.forEach((preset) => {
-			const option = document.createElement('option');
-			option.value = `preset_${preset.id}`;
-			option.textContent = preset.isDefault
-				? preset.name
-				: `${preset.name} (${getGameTypeLabel(preset.gameType)})`;
-			typeSelect.appendChild(option);
-		});
-
-		typeSelect.disabled = presets.length === 0;
-
-		if (
-			currentValue &&
-			Array.from(typeSelect.options).some((opt) => opt.value === currentValue)
-		) {
-			typeSelect.value = currentValue;
-		} else if (presets.length) {
-			typeSelect.value = `preset_${presets[0].id}`;
-		}
+		refreshGameRulesPresetOptions();
 
 		typeSelect.onchange = function () {
-			const preset = getSelectedGamePreset();
-			if (preset) {
-				applyGamePresetToForm(preset);
-			} else {
-				clearGamePresetSelection();
-			}
+			refreshGameRulesPresetOptions();
+			applySelectedRulesPresetToForm();
 			toggleGameFormFields();
 			toggleGameRulesVisibility();
 		};
-
-		const selectedPreset = getSelectedGamePreset();
-		if (selectedPreset) {
-			applyGamePresetToForm(selectedPreset);
-		} else {
-			clearGamePresetSelection();
-		}
+		presetSelectOnchange();
 
 		toggleGameFormFields();
 		toggleGameRulesVisibility();
 		toggleGamePresetRulesVisibility();
+	}
+
+	function presetSelectOnchange() {
+		const presetSelect = byId('gameRulesPreset');
+		if (!presetSelect) return;
+		presetSelect.onchange = function () {
+			applySelectedRulesPresetToForm();
+			toggleGameFormFields();
+			toggleGameRulesVisibility();
+		};
+	}
+
+	function applySelectedRulesPresetToForm() {
+		const preset = getSelectedGamePreset();
+		if (preset) {
+			applyGamePresetToForm(preset);
+		} else {
+			clearGamePresetSelection();
+		}
 	}
 
 	function saveCurrentRulesAsPreset() {

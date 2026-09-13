@@ -5781,379 +5781,411 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Initialize AI Settings UI
-function initAISettingsUI() {
-	if (!aiGenerator) return;
-	
-	const config = aiGenerator.config;
-	
-	// Set provider
-	const providerSelect = document.getElementById('ai-provider-select');
-	if (providerSelect) {
-		providerSelect.value = config.provider;
-	}
-	
-	// Set API key if exists
-	const apiKeyInput = document.getElementById('ai-api-key');
-	if (apiKeyInput && config.apiKeys[config.provider]) {
-		apiKeyInput.value = config.apiKeys[config.provider];
-	}
-	
-	// Set custom model if exists
-	const customModelInput = document.getElementById('ai-custom-model');
-	if (customModelInput && config.customModel) {
-		customModelInput.value = config.customModel;
-	}
-	
-	// Set parameters
-	const tempSlider = document.getElementById('ai-temperature');
-	if (tempSlider) {
-		tempSlider.value = config.temperature;
-		const tempValue = document.getElementById('ai-temp-value');
-		if (tempValue) tempValue.textContent = config.temperature;
-	}
-	
-	const maxTokens = document.getElementById('ai-max-tokens');
-	if (maxTokens) maxTokens.value = config.maxTokens;
-	
-	const cooldown = document.getElementById('ai-cooldown');
-	if (cooldown) cooldown.value = config.cooldownSeconds;
-	
-	const timeout = document.getElementById('ai-timeout');
-	if (timeout) timeout.value = config.timeoutSeconds;
-	
-	const debugMode = document.getElementById('ai-debug-mode');
-	if (debugMode) debugMode.checked = config.debug;
-	
-	// Populate models
-	updateAIModelSelect();
-	
-	// Init help link
-	const helpLink = document.getElementById('ai-api-help-link');
-	
-	// Init Custom Base URL
-	const baseUrlInput = document.getElementById('ai-base-url');
-	const baseUrlGroup = document.getElementById('ai-base-url-group');
-	if (baseUrlInput) {
-		baseUrlInput.value = config.customBaseUrl || '';
-		if (baseUrlGroup) {
-			if (config.provider === 'custom') {
-				baseUrlGroup.classList.remove('hidden');
-			} else {
-				baseUrlGroup.classList.add('hidden');
-			}
-		}
-	}
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Settings UI — server-backed model management.
+// Shared models are stored server-side (encrypted keys, never in this
+// browser); generation runs through POST /api/v1/ai/generate/structured.
+// ─────────────────────────────────────────────────────────────────────────────
 
-	const providerConfig = aiGenerator.getProviderConfig();
-	if (helpLink) {
-		if (providerConfig && providerConfig.helpLink) {
-			helpLink.href = providerConfig.helpLink;
-			helpLink.style.display = 'block';
-		} else {
-			helpLink.style.display = 'none';
-		}
+let aiCatalogModels = []; // last live-fetched provider models (admin)
+let aiSharedConfigs = []; // shared + personal configs visible to this user
+
+function aiIsAdmin() {
+	try {
+		const u = window.Auth?.getCurrentUser?.();
+		const role = String(u?.role || '').toLowerCase();
+		return role === 'admin' || role === 'super_admin';
+	} catch (_) {
+		return false;
 	}
 }
 
-// Handle provider change
-window.onAIProviderChange = function() {
-	const providerSelect = document.getElementById('ai-provider-select');
-	if (!providerSelect || !aiGenerator) return;
-	
-	const provider = providerSelect.value;
-	aiGenerator.saveConfig({ provider });
-	
-	// Show/hide Base URL field
+async function aiApi(method, path, body) {
+	return window.API.raw(method, path, body);
+}
+
+// Load the visible configs and render both dropdowns.
+async function refreshAIConfigLists() {
+	const sharedSelect = document.getElementById('ai-shared-model-select');
+	const statusEl = document.getElementById('ai-shared-model-status');
+	try {
+		const res = await aiApi('GET', '/ai/configs');
+		aiSharedConfigs = Array.isArray(res?.data) ? res.data : [];
+	} catch (err) {
+		aiSharedConfigs = [];
+		if (statusEl) statusEl.textContent = 'Could not load shared models.';
+	}
+
+	const shared = aiSharedConfigs.filter((c) => c.is_shared);
+	const mine = aiSharedConfigs.filter((c) => !c.is_shared);
+
+	if (sharedSelect) {
+		sharedSelect.innerHTML = '';
+		const none = document.createElement('option');
+		none.value = '';
+		none.textContent = '-- No shared model selected --';
+		sharedSelect.appendChild(none);
+		shared.forEach((cfg) => {
+			const opt = document.createElement('option');
+			opt.value = cfg.id;
+			opt.textContent = `${cfg.name} (${cfg.provider})${cfg.key_hint ? ' ' + cfg.key_hint : ''}`;
+			sharedSelect.appendChild(opt);
+		});
+		// restore last selection
+		try {
+			const saved = localStorage.getItem('quizAISelectedConfig');
+			if (saved && shared.some((c) => c.id === saved)) sharedSelect.value = saved;
+		} catch (_) {}
+	}
+	if (statusEl) {
+		statusEl.textContent = shared.length
+			? `${shared.length} shared model${shared.length === 1 ? '' : 's'} available${aiIsAdmin() ? ' (visible to all teachers)' : ''}.`
+			: 'No shared models yet' + (aiIsAdmin() ? ' — load a provider list below to publish some.' : ' — ask your admin, or add your own model below.');
+	}
+
+	renderAISharedCatalogList();
+	renderAIMyModelsList(mine);
+
+	// Admin-only blocks
+	const adminGroup = document.getElementById('ai-admin-catalog-group');
+	if (adminGroup) adminGroup.style.display = aiIsAdmin() ? '' : 'none';
+}
+
+function renderAISharedCatalogList() {
+	const listEl = document.getElementById('ai-shared-catalog-list');
+	if (!listEl) return;
+	const shared = aiSharedConfigs.filter((c) => c.is_shared);
+	if (!shared.length) {
+		listEl.innerHTML = '<small class="text-muted">No shared models yet — load a provider list above and expose models to teachers.</small>';
+		return;
+	}
+	listEl.innerHTML = shared.map((cfg) => `
+		<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid #f3f4f6;">
+			<div>
+				<strong style="font-size:0.9rem;">${escapeHtml(cfg.name)}</strong>
+				<small class="text-muted" style="display:block;">${escapeHtml(cfg.provider)} · ${escapeHtml(cfg.model_id)}${cfg.key_hint ? ' · ' + escapeHtml(cfg.key_hint) : ''}</small>
+			</div>
+			<div style="display:flex; gap:6px;">
+				<button type="button" class="btn btn-sm btn-secondary" onclick="window.testAISharedConfig('${cfg.id}')">Test</button>
+				${aiIsAdmin() ? `<button type="button" class="btn btn-sm btn-secondary" style="color:#dc2626;" onclick="window.deleteAISharedConfig('${cfg.id}')">Remove</button>` : ''}
+			</div>
+		</div>`).join('');
+}
+
+function renderAIMyModelsList(mine) {
+	const listEl = document.getElementById('ai-my-models-list');
+	if (!listEl) return;
+	if (!mine || !mine.length) {
+		listEl.innerHTML = '';
+		return;
+	}
+	listEl.innerHTML = '<label style="font-size:0.85rem; font-weight:600; margin-bottom:6px; display:block;">My saved models</label>' +
+		mine.map((cfg) => `
+		<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid #f3f4f6; border-radius:8px; margin-bottom:6px;">
+			<div>
+				<strong style="font-size:0.9rem;">${escapeHtml(cfg.name)}</strong>
+				<small class="text-muted" style="display:block;">${escapeHtml(cfg.model_id)}${cfg.base_url ? ' · ' + escapeHtml(cfg.base_url) : ''}</small>
+			</div>
+			<div style="display:flex; gap:6px;">
+				<button type="button" class="btn btn-sm btn-secondary" onclick="window.useMyAIModel('${cfg.id}')">Use</button>
+				<button type="button" class="btn btn-sm btn-secondary" style="color:#dc2626;" onclick="window.deleteAISharedConfig('${cfg.id}')">Delete</button>
+			</div>
+		</div>`).join('');
+}
+
+window.onAISharedModelChange = function () {
+	const select = document.getElementById('ai-shared-model-select');
+	if (select?.value) {
+		try { localStorage.setItem('quizAISelectedConfig', select.value); } catch (_) {}
+	}
+};
+
+// Provider change (admin catalog block): show/hide base URL + help link.
+window.onAIProviderChange = function () {
+	const provider = document.getElementById('ai-provider-select')?.value;
 	const baseUrlGroup = document.getElementById('ai-base-url-group');
 	if (baseUrlGroup) {
-		if (provider === 'custom') {
-			baseUrlGroup.classList.remove('hidden');
-		} else {
-			baseUrlGroup.classList.add('hidden');
-		}
+		baseUrlGroup.classList.toggle('hidden', provider !== 'custom');
 	}
-	
-	// Load API key for this provider if exists
-	const apiKeyInput = document.getElementById('ai-api-key');
-	if (apiKeyInput) {
-		apiKeyInput.value = aiGenerator.config.apiKeys[provider] || '';
-	}
-	
-	// Update Help Link
+	const HELP_LINKS = {
+		openrouter: 'https://openrouter.ai/keys',
+		openai: 'https://platform.openai.com/api-keys',
+		anthropic: 'https://console.anthropic.com/settings/keys',
+		google: 'https://aistudio.google.com/app/apikey',
+		deepseek: 'https://platform.deepseek.com/api_keys',
+	};
 	const helpLink = document.getElementById('ai-api-help-link');
-	const providerConfig = aiGenerator.getProviderConfig();
 	if (helpLink) {
-		if (providerConfig && providerConfig.helpLink) {
-			helpLink.href = providerConfig.helpLink;
-			helpLink.style.display = 'block';
+		if (HELP_LINKS[provider]) {
+			helpLink.href = HELP_LINKS[provider];
+			helpLink.style.display = 'inline-block';
 		} else {
 			helpLink.style.display = 'none';
 		}
 	}
-	
-	// Update status
-	const status = document.getElementById('ai-connection-status');
-	if (status) {
-		status.innerHTML = 'Status: Not configured';
-		status.className = 'mt-2 text-muted';
-	}
-	
-	// Update models
-	updateAIModelSelect();
 };
 
-// Recommendations for different providers — current-generation models with
-// the strongest strict-JSON output for the generator's schema. Free/cheap
-// picks first so a zero-budget setup still gets reliable results.
-const MODEL_RECOMMENDATIONS = {
-	'openrouter': [
-		'google/gemini-2.5-flash:free',
-		'meta-llama/llama-3.3-70b-instruct:free',
-		'openai/gpt-5-mini',
-		'anthropic/claude-sonnet-4.5',
-		'deepseek/deepseek-chat-v3.1'
-	],
-	'google': ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview'],
-	'openai': ['gpt-5-mini', 'gpt-5.2'],
-	'anthropic': ['claude-sonnet-4-5', 'claude-3-5-haiku-latest'],
-	'deepseek': ['deepseek-chat', 'deepseek-reasoner'],
-	'custom': ['llama3.1:8b', 'qwen2.5:7b']
-};
-
-// Handle model select change
-window.onAIModelSelectChange = function() {
-	const modelSelect = document.getElementById('ai-model-select');
-	const customModelInput = document.getElementById('ai-custom-model');
-	
-	// If a standard model is selected, clear the custom input
-	if (modelSelect && modelSelect.value && customModelInput) {
-		customModelInput.value = '';
-	}
-};
-
-// Update model select options
-async function updateAIModelSelect() {
-	if (!aiGenerator) return;
-	
-	const modelSelect = document.getElementById('ai-model-select');
-	const customModelInput = document.getElementById('ai-custom-model');
-	if (!modelSelect) return;
-	
-	const providerId = aiGenerator.config.provider;
-	const recommendations = MODEL_RECOMMENDATIONS[providerId] || [];
-	
-	modelSelect.innerHTML = '<option value="">-- Fetching Models... --</option>';
-	modelSelect.disabled = true;
-
-	try {
-		const models = await aiGenerator.fetchAvailableModels();
-		modelSelect.innerHTML = '';
-		modelSelect.disabled = false;
-		
-		// Add default option
-		const defaultOption = document.createElement('option');
-		defaultOption.value = "";
-		defaultOption.textContent = "-- Select Model --";
-		modelSelect.appendChild(defaultOption);
-		
-		if (models.length === 0) {
-			// Fallback if something went wrong
-			const errorOpt = document.createElement('option');
-			errorOpt.disabled = true;
-			errorOpt.textContent = "No models found. Check API key.";
-			modelSelect.appendChild(errorOpt);
-		} else {
-			// Sort models: 1. Recommendations + Free, 2. Free, 3. Recommendations + Premium, 4. Others
-			const sortedModels = [...models].sort((a, b) => {
-				const aRec = recommendations.includes(a.id);
-				const bRec = recommendations.includes(b.id);
-				const aFree = a.isFree || (a.id && a.id.endsWith(':free'));
-				const bFree = b.isFree || (b.id && b.id.endsWith(':free'));
-				
-				if (aRec && !bRec) return -1;
-				if (!aRec && bRec) return 1;
-				if (aFree && !bFree) return -1;
-				if (!aFree && bFree) return 1;
-				return (a.name || a.id).localeCompare(b.name || b.id);
-			});
-
-			sortedModels.forEach(model => {
-				const isFree = model.isFree || (model.id && model.id.endsWith(':free'));
-				const isRec = recommendations.includes(model.id);
-				
-				const option = document.createElement('option');
-				option.value = model.id;
-				
-				let prefix = '';
-				if (isRec && isFree) prefix = '✨ [REC] ';
-				else if (isRec) prefix = '💎 [REC] ';
-				else if (isFree) prefix = '✨ ';
-				
-				option.textContent = `${prefix}${model.name || model.id}`;
-				if (isRec) option.style.fontWeight = 'bold';
-				modelSelect.appendChild(option);
-			});
-		}
-
-		// Restore selection
-		const currentModel = aiGenerator.config.model;
-		if (currentModel) {
-			modelSelect.value = currentModel;
-		}
-	} catch (error) {
-		console.error('Error updating model select:', error);
-		modelSelect.innerHTML = '<option value="">-- Error loading models --</option>';
-		modelSelect.disabled = false;
-	}
-}
-
-// Toggle API key visibility
-window.toggleAIKeyVisibility = function() {
-	const input = document.getElementById('ai-api-key');
-	const icon = document.getElementById('ai-key-eye-icon');
-	if (!input) return;
-	
-	if (input.type === 'password') {
-		input.type = 'text';
-		icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
-	} else {
-		input.type = 'password';
-		icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
-	}
-};
-
-// Test AI connection
-window.testAIConnection = async function() {
-	if (!aiGenerator) {
-		showToast('AI Generator not initialized', 'error');
-		return;
-	}
-	
-	const apiKeyInput = document.getElementById('ai-api-key');
-	const providerSelect = document.getElementById('ai-provider-select');
-	const modelSelect = document.getElementById('ai-model-select');
-	const customModelInput = document.getElementById('ai-custom-model');
-	const status = document.getElementById('ai-connection-status');
-	
-	if (!apiKeyInput || !apiKeyInput.value.trim()) {
-		if (status) {
-			status.innerHTML = '<span class="ai-status-badge error">❌ Please enter an API key</span>';
-		}
-		return;
-	}
-	
-	// Determine model to use
-	let model = modelSelect?.value;
-	let customModel = customModelInput?.value?.trim();
-	
-	// Use custom model if standard one is not selected or if custom overrides
-	if (customModel) {
-		model = customModel;
-	}
-	
-	// Save current settings (temporary save for test)
-	const provider = providerSelect?.value || 'openrouter';
-	const apiKeys = { ...aiGenerator.config.apiKeys };
-	apiKeys[provider] = apiKeyInput.value.trim();
-	
-	aiGenerator.saveConfig({ 
-		provider, 
-		model,
-		customModel: customModel || '', // Save custom model text too
-		apiKeys 
-	});
-	
-	// Update status to testing
-	if (status) {
-		status.innerHTML = '<span class="ai-status-badge pending">⏳ Testing connection...</span>';
-	}
-	
-	try {
-		const result = await aiGenerator.testConnection();
-		if (status) {
-			status.innerHTML = `<span class="ai-status-badge success">✅ ${result.message}</span>`;
-		}
-		showToast('Connection successful!', 'success');
-		
-		// Update models after successful connection
-		updateAIModelSelect();
-	} catch (error) {
-		if (status) {
-			status.innerHTML = `<span class="ai-status-badge error">❌ ${error.message}</span>`;
-		}
-		showToast(`Connection failed: ${error.message}`, 'error');
-	}
-};
-
-// Save AI settings (called when settings modal is saved)
-function saveAISettings() {
-	if (!aiGenerator) return;
-	
+// Admin: fetch the provider's LIVE model list (server-side fetch).
+window.loadAIModelCatalog = async function () {
 	const provider = document.getElementById('ai-provider-select')?.value;
-	const apiKey = document.getElementById('ai-api-key')?.value;
-	
-	// Model logic
-	const modelSelect = document.getElementById('ai-model-select');
-	const customModelInput = document.getElementById('ai-custom-model');
-	
-	let model = modelSelect?.value;
-	const customModel = customModelInput?.value?.trim();
-	const customBaseUrl = document.getElementById('ai-base-url')?.value?.trim();
-	
-	// If custom model is provided, it takes precedence if standard is empty or user typed detailed one
-	if (customModel) {
-		model = customModel;
+	const apiKey = document.getElementById('ai-api-key')?.value.trim();
+	const baseUrl = document.getElementById('ai-base-url')?.value.trim();
+	const btn = document.getElementById('ai-load-models-btn');
+	const statusEl = document.getElementById('ai-connection-status');
+
+	if (provider === 'custom' && !baseUrl) {
+		if (statusEl) statusEl.textContent = 'Status: enter your server Base URL first';
+		return;
 	}
-	
-	const temperature = parseFloat(document.getElementById('ai-temperature')?.value) || 0.7;
-	const maxTokens = parseInt(document.getElementById('ai-max-tokens')?.value) || 2000;
-	const cooldownSeconds = parseInt(document.getElementById('ai-cooldown')?.value) || 10;
-	const timeoutSeconds = parseInt(document.getElementById('ai-timeout')?.value) || 60;
-	const debug = document.getElementById('ai-debug-mode')?.checked || false;
-	
-	const apiKeys = { ...aiGenerator.config.apiKeys };
-	if (provider && apiKey) {
-		apiKeys[provider] = apiKey;
+	if (!apiKey && provider !== 'custom' && provider !== 'anthropic' && provider !== 'deepseek') {
+		if (statusEl) statusEl.textContent = 'Status: enter an API key first (free keys work)';
+		return;
 	}
-	
-	aiGenerator.saveConfig({
-		provider,
-		model,
-		customModel: customModel || '',
-		customBaseUrl: customBaseUrl || '',
-		apiKeys,
-		temperature,
-		maxTokens,
-		cooldownSeconds,
-		timeoutSeconds,
-		debug
-	});
+
+	if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+	if (statusEl) statusEl.textContent = 'Status: fetching live model list…';
+
+	try {
+		const res = await aiApi('POST', '/ai/models/refresh', {
+			provider,
+			...(apiKey ? { api_key: apiKey } : {}),
+			...(baseUrl ? { base_url: baseUrl } : {}),
+		});
+		aiCatalogModels = Array.isArray(res?.data) ? res.data : [];
+		renderAIModelCatalog();
+		if (statusEl) statusEl.textContent = `Status: ${aiCatalogModels.length} models loaded from ${provider}`;
+		const catalogGroup = document.getElementById('ai-model-catalog-group');
+		if (catalogGroup) catalogGroup.classList.remove('hidden');
+	} catch (err) {
+		aiCatalogModels = [];
+		if (statusEl) statusEl.textContent = `Status: ${err?.message || 'failed to load models'}`;
+	} finally {
+		if (btn) { btn.disabled = false; btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M2.5 2v6h6M21.5 22v-6h-6"></path><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"></path></svg> Load models (live)'; }
+	}
+};
+
+function renderAIModelCatalog() {
+	const listEl = document.getElementById('ai-model-list');
+	const countEl = document.getElementById('ai-model-count');
+	if (!listEl) return;
+	if (countEl) countEl.textContent = String(aiCatalogModels.length);
+	if (!aiCatalogModels.length) {
+		listEl.innerHTML = '<small class="text-muted">No models returned — check the API key.</small>';
+		return;
+	}
+	const filter = String(document.getElementById('ai-model-search')?.value || '').toLowerCase();
+	const visible = aiCatalogModels.filter((m) =>
+		!filter || String(m.id).toLowerCase().includes(filter) || String(m.name).toLowerCase().includes(filter));
+	listEl.innerHTML = visible.map((m) => `
+		<label style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #f3f4f6; cursor:pointer;">
+			<input type="checkbox" class="ai-model-check" value="${escapeHtml(m.id)}" data-name="${escapeHtml(m.name)}" />
+			<span style="flex:1; font-size:0.85rem;">${escapeHtml(m.name || m.id)}</span>
+			<code style="font-size:0.72rem; color:#7c3aed;">${escapeHtml(m.id)}</code>
+		</label>`).join('');
 }
+
+window.filterAIModelCatalog = renderAIModelCatalog;
+
+// Admin: create one shared AIConfig per checked model (key stored encrypted).
+window.publishSelectedAIModels = async function () {
+	const checks = Array.from(document.querySelectorAll('.ai-model-check:checked'));
+	if (!checks.length) {
+		showToast('Check at least one model to expose.', 'warning');
+		return;
+	}
+	const provider = document.getElementById('ai-provider-select')?.value;
+	const apiKey = document.getElementById('ai-api-key')?.value.trim();
+	const baseUrl = document.getElementById('ai-base-url')?.value.trim();
+
+	let created = 0;
+	for (const check of checks) {
+		try {
+			await aiApi('POST', '/ai/configs', {
+				provider,
+				name: check.dataset.name || check.value,
+				model_id: check.value,
+				shared: true,
+				...(apiKey ? { api_key: apiKey } : {}),
+				...(baseUrl ? { base_url: baseUrl } : {}),
+			});
+			created += 1;
+		} catch (err) {
+			console.warn('publish model failed:', check.value, err);
+		}
+	}
+	showToast(`Exposed ${created}/${checks.length} models to teachers.`, created ? 'success' : 'error');
+	refreshAIConfigLists();
+};
+
+window.testAISharedConfig = async function (configId) {
+	try {
+		const res = await aiApi('POST', `/ai/configs/${configId}/test`);
+		showToast(res?.message || 'Test sent.', res?.ok ? 'success' : 'warning');
+	} catch (err) {
+		showToast(`Test failed: ${err?.message || 'error'}`, 'error');
+	}
+};
+
+window.deleteAISharedConfig = async function (configId) {
+	if (!confirm('Remove this AI model?')) return;
+	try {
+		await aiApi('DELETE', `/ai/configs/${configId}`);
+		showToast('Model removed.', 'success');
+		refreshAIConfigLists();
+	} catch (err) {
+		showToast(`Remove failed: ${err?.message || 'error'}`, 'error');
+	}
+};
+
+// Save (and optionally select) a personal custom model.
+window.saveMyAIModel = async function (useNow) {
+	const name = document.getElementById('ai-custom-name')?.value.trim();
+	const modelId = document.getElementById('ai-custom-model')?.value.trim();
+	const baseUrl = document.getElementById('ai-custom-base-url')?.value.trim();
+	const apiKey = document.getElementById('ai-custom-key')?.value.trim();
+	const statusEl = document.getElementById('ai-personal-status');
+
+	if (!modelId) {
+		if (statusEl) statusEl.textContent = 'Enter at least the model id.';
+		return;
+	}
+	if (!baseUrl) {
+		if (statusEl) statusEl.textContent = 'Enter the server Base URL (e.g. http://localhost:11434/v1).';
+		return;
+	}
+
+	try {
+		const res = await aiApi('POST', '/ai/configs', {
+			provider: 'custom',
+			name: name || modelId,
+			model_id: modelId,
+			base_url: baseUrl,
+			...(apiKey ? { api_key: apiKey } : {}),
+			shared: false,
+		});
+		if (useNow && res?.data?.id) {
+			try { localStorage.setItem('quizAISelectedConfig', res.data.id); } catch (_) {}
+		}
+		if (statusEl) statusEl.textContent = 'Saved ✓';
+		showToast('Your model was saved (key encrypted server-side).', 'success');
+		refreshAIConfigLists();
+	} catch (err) {
+		if (statusEl) statusEl.textContent = err?.message || 'Save failed.';
+	}
+};
+
+window.useMyAIModel = function (configId) {
+	try { localStorage.setItem('quizAISelectedConfig', configId); } catch (_) {}
+	showToast('Model selected for generation.', 'success');
+};
+
+// Test the admin's provider key by listing models (no saving).
+window.testAIConnection = async function () {
+	const apiKey = document.getElementById('ai-api-key')?.value.trim();
+	const provider = document.getElementById('ai-provider-select')?.value;
+	const statusEl = document.getElementById('ai-connection-status');
+	if (statusEl) statusEl.textContent = 'Status: testing…';
+	try {
+		const res = await aiApi('POST', '/ai/models/refresh', {
+			provider,
+			...(apiKey ? { api_key: apiKey } : {}),
+			...(document.getElementById('ai-base-url')?.value.trim()
+				? { base_url: document.getElementById('ai-base-url').value.trim() } : {}),
+		});
+		const n = Array.isArray(res?.data) ? res.data.length : 0;
+		if (statusEl) statusEl.textContent = `Status: ✓ reachable — ${n} models found`;
+		showToast('Connection successful!', 'success');
+	} catch (err) {
+		if (statusEl) statusEl.textContent = `Status: ${err?.message || 'failed'}`;
+		showToast(`Connection failed: ${err?.message || 'error'}`, 'error');
+	}
+};
+
+// Keyless path: copy the exact structure prompt for ChatGPT/Claude.
+window.copyAIStructurePrompt = async function () {
+	const statusEl = document.getElementById('ai-copy-prompt-status');
+	try {
+		// Sane defaults matching the generator modal's typical shape.
+		const res = await aiApi('POST', '/ai/prompt', {
+			topic: 'the topic you are teaching',
+			typeCounts: { 'multiple-choice': 5, 'true-false': 2, 'fill-blank': 2 },
+			difficulty: 'medium',
+			points: 1,
+			language: 'English',
+		});
+		const prompt = String(res?.prompt || '');
+		if (!prompt) throw new Error('empty prompt');
+
+		const copyToClipboard = async () => {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(prompt);
+				return true;
+			}
+			// Fallback for non-secure contexts.
+			const ta = document.createElement('textarea');
+			ta.value = prompt;
+			ta.style.position = 'fixed';
+			ta.style.opacity = '0';
+			document.body.appendChild(ta);
+			ta.select();
+			const ok = document.execCommand('copy');
+			ta.remove();
+			return ok;
+		};
+
+		const ok = await copyToClipboard();
+		if (statusEl) statusEl.textContent = ok
+			? '✓ Prompt copied! Paste it into ChatGPT/Claude, replace the topic, then import the JSON answer via the Import button.'
+			: 'Copy failed — select the prompt text manually from the console (see browser console).';
+		if (!ok) console.log('[AI structure prompt]\n\n' + prompt);
+		showToast(ok ? 'Structure prompt copied to clipboard' : 'Prompt logged to console', ok ? 'success' : 'warning');
+	} catch (err) {
+		if (statusEl) statusEl.textContent = `Failed: ${err?.message || 'error'}`;
+	}
+};
+
+// Initialize AI Settings UI
+function initAISettingsUI() {
+	refreshAIConfigLists();
+	window.onAIProviderChange();
+}
+window.initAISettingsUI = initAISettingsUI;
+window.refreshAIConfigLists = refreshAIConfigLists;
+
+// No-op kept for legacy saveSettingsForm callers.
+function saveAISettings() {}
+
 
 // Open AI Generator Modal
 function openAIGeneratorModal() {
 	const modal = document.getElementById('aiGeneratorModal');
 	if (!modal) return;
 	
-	// Check if AI is configured
-	if (!aiGenerator) {
-		showToast('Please configure AI settings first (Settings → AI Generation)', 'warning');
-		return;
-	}
-	const isAIConfigured = Boolean(
-		aiGenerator.config.apiKeys[aiGenerator.config.provider],
+	// Check if AI is configured — either a server-side model (shared or
+	// personal, selected in Settings → AI Generation) or the legacy local key.
+	let selectedServerConfigId = null;
+	try { selectedServerConfigId = localStorage.getItem('quizAISelectedConfig'); } catch (_) {}
+	const hasServerModel = Boolean(selectedServerConfigId);
+	const isAIConfigured = hasServerModel || Boolean(
+		aiGenerator && aiGenerator.config.apiKeys[aiGenerator.config.provider],
 	);
 	if (!isAIConfigured) {
 		showToast('Please configure AI settings first (Settings → AI Generation)', 'warning');
 	}
-	
+
 	// Update active model indicator
 	const modelNameEl = document.getElementById('ai-current-model-name');
-	if (modelNameEl && aiGenerator && aiGenerator.config) {
-		const currentModel = aiGenerator.config.model || 'Default';
-		// Clean up model name for display (remove provider prefix if present)
-		const displayName = currentModel.split('/').pop().replace(':free', '').replace(/-/g, ' ');
-		modelNameEl.textContent = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+	if (modelNameEl) {
+		let displayName = 'Default';
+		if (hasServerModel && Array.isArray(aiSharedConfigs)) {
+			const cfg = aiSharedConfigs.find((c) => c.id === selectedServerConfigId);
+			if (cfg) displayName = cfg.name || cfg.model_id;
+		} else if (aiGenerator && aiGenerator.config) {
+			const currentModel = aiGenerator.config.model || 'Default';
+			displayName = currentModel.split('/').pop().replace(':free', '').replace(/-/g, ' ');
+			displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+		}
+		modelNameEl.textContent = displayName;
 	}
 
 	// Reset state
@@ -6331,6 +6363,48 @@ function validateCodeTypeDistribution(typeCounts = {}, codeTypeCounts = {}) {
 }
 
 // Generate questions with AI
+// Generate questions through the server (shared or personal AI config), so
+// the API key never needs to exist in this browser. Falls back to the legacy
+// client-side generator when no model is selected/configured.
+async function generateQuestionsViaServer({ topic, typeCounts, difficulty, points, language }) {
+	let configId = null;
+	try { configId = localStorage.getItem('quizAISelectedConfig') || null; } catch (_) {}
+
+	if (!configId) {
+		// No model selected: use the legacy browser-side generator if it's
+		// configured (key in this browser), else explain what to do.
+		const shared = aiSharedConfigs || [];
+		const sharedList = shared.filter((c) => c.is_shared);
+		if (aiGenerator && !sharedList.length) {
+			return aiGenerator.generate({
+				topic,
+				types: Object.keys(typeCounts).filter((t) => typeCounts[t] > 0),
+				typeCounts,
+				count: Object.values(typeCounts).reduce((s, v) => s + v, 0),
+				difficulty,
+				category: '',
+				codeTypeCounts: {},
+				language,
+			});
+		}
+		throw new Error('No AI model selected — pick a shared model in Settings → AI Generation, or configure your own.');
+	}
+
+	const res = await window.API.raw('POST', '/ai/generate/structured', {
+		configId,
+		topic,
+		typeCounts,
+		difficulty,
+		points,
+		language,
+	});
+	const questions = Array.isArray(res?.data) ? res.data : [];
+	if (!questions.length) {
+		throw new Error(res?.message || 'The model returned no usable questions — try again or pick a stronger model.');
+	}
+	return questions;
+}
+
 window.generateQuestionsWithAI = async function() {
 	if (!aiGenerator) {
 		showToast('AI Generator not initialized', 'error');
@@ -6367,25 +6441,22 @@ window.generateQuestionsWithAI = async function() {
 	
 	try {
 		let questions = [];
-		
+
 		if (currentAITab === 'standard') {
 			const language = document.getElementById('ai-language')?.value || 'fr';
 			const points = parseInt(document.getElementById('ai-points')?.value) || 1;
-			
+
 			const codeTypeCounts = getCodeTypeCounts('standard');
 			validateCodeTypeDistribution(typeCounts, codeTypeCounts);
-			
-			questions = await aiGenerator.generate({
+
+			questions = await generateQuestionsViaServer({
 				topic,
-				types,
 				typeCounts,
-				count,
 				difficulty,
-				category,
-				codeTypeCounts,
-				language
+				points,
+				language,
 			});
-			
+
 			// Apply points
 			if (questions) questions.forEach(q => { q.points = points; });
 		} else {
@@ -6393,7 +6464,7 @@ window.generateQuestionsWithAI = async function() {
 			if (typeof documentQuestionGenerator === 'undefined') {
 				throw new Error('Document Generator not initialized');
 			}
-			
+
 			// Get RAG parameters from steppers
 			const docTypeCounts = getTypeCounts('document');
 			const docTypes = Object.keys(docTypeCounts).filter(t => docTypeCounts[t] > 0);
@@ -6402,30 +6473,46 @@ window.generateQuestionsWithAI = async function() {
 			const docCategory = document.getElementById('docCategory')?.value || '';
 			const docPoints = parseInt(document.getElementById('docPoints')?.value) || 1;
 			const strategy = document.querySelector('input[name="generationMode"]:checked')?.value || 'auto';
-			
+
 			const codeTypeCounts = getCodeTypeCounts('document');
 			validateCodeTypeDistribution(docTypeCounts, codeTypeCounts);
-			
+
 			if (docTypes.length === 0 || docCount === 0) {
 				throw new Error('Please select at least one question type and set a count > 0');
 			}
-			
-			questions = await documentQuestionGenerator.generateFromDocument({
-				count: docCount,
-				difficulty: docDifficulty,
-				category: docCategory,
-				types: docTypes,
-				typeCounts: docTypeCounts,
-				strategy: strategy,
-				points: docPoints,
-				codeTypeCounts
-			});
+
+			// Send the extracted document text through the server-side model
+			// (shared/personal config) instead of calling from the browser.
+			const docText = (typeof documentQuestionGenerator.getDocumentText === 'function'
+				? documentQuestionGenerator.getDocumentText()
+				: '') || '';
+			if (docText) {
+				questions = await generateQuestionsViaServer({
+					topic: docText,
+					typeCounts: docTypeCounts,
+					difficulty: docDifficulty,
+					points: docPoints,
+					language: 'English',
+				});
+			} else {
+				// Legacy client path (kept as fallback).
+				questions = await documentQuestionGenerator.generateFromDocument({
+					count: docCount,
+					difficulty: docDifficulty,
+					category: docCategory,
+					types: docTypes,
+					typeCounts: docTypeCounts,
+					strategy: strategy,
+					points: docPoints,
+					codeTypeCounts
+				});
+			}
 		}
 		
 		if (questions && questions.length > 0) {
 			aiGeneratedQuestions = questions;
 			displayAIPreview(questions);
-			if (aiGenerator.lastGenerationMode === 'offline') {
+			if (aiGenerator?.lastGenerationMode === 'offline') {
 				showToast(`Provider unavailable. Added ${questions.length} local starter question(s). You can edit them now and retry AI later.`, 'warning');
 				return;
 			}
@@ -7073,7 +7160,9 @@ window.openAIGeneratorModal = openAIGeneratorModal;
 window.closeAIGeneratorModal = closeAIGeneratorModal;
 window.generateQuestionsWithAI = generateQuestionsWithAI;
 window.resetAIGenerator = resetAIGenerator;
+window.openQuestionFormModal = openQuestionFormModal;
 window.importSelectedAIQuestions = importSelectedAIQuestions;
+window.normalizeImportedAIQuestion = normalizeImportedAIQuestion;
 window.selectAllAIQuestions = selectAllAIQuestions;
 window.deselectAllAIQuestions = deselectAllAIQuestions;
 window.toggleAIQuestionSelection = toggleAIQuestionSelection;

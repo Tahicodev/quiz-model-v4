@@ -134,6 +134,7 @@
 		<script src="realtime-settings.js" defer></script>
 		<script src="quiz-presets.js" defer></script>
 		<script src="games-management.js?v=2026-09-09-realtime-r6" defer></script>
+		<script src="quick-start.js?v=2026-09-13-r4" defer></script>
 			<script src="admin-main.js" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -1755,6 +1756,13 @@
 											</select>
 											<small class="text-muted">Custom rule sets saved in Settings &gt; Presets for the chosen type.</small>
 										</div>
+									</div>
+									<div class="form-group">
+										<label for="gameMode">Match Mode</label>
+										<select id="gameMode" class="form-control">
+											<option value="solo">1 vs 1</option>
+											<option value="team">Team vs Team</option>
+										</select>
 									</div>
 									<div class="form-group">
 										<label>Assign Classes</label>
@@ -4225,17 +4233,60 @@
 								<input type="file" id="importDataInput" accept=".json" style="display: none" onchange="window.importAllData(this)" />
 
 								<div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 20px;">
-									<p class="text-muted" style="margin-bottom: 15px;">
-										Import data downloaded from a student device (Realtime &rarr; Devices &rarr; Download data, or a USB/local copy). Adds exam results, completed sessions, activity and any cached exams/questions/classes to your existing data without overwriting it. Duplicates are skipped automatically.
+										<p class="text-muted" style="margin-bottom: 15px;">
+											Import data downloaded from a student device (Realtime &rarr; Devices &rarr; Download data, or a USB/local copy). Adds exam results, completed sessions, activity and any cached exams/questions/classes to your existing data without overwriting it. Duplicates are skipped automatically.
+										</p>
+										<button type="button" class="btn btn-primary" onclick="document.getElementById('importDeviceDataInput').click()" style="background: #ffffff; color: #2563eb; border: 1px solid #2563eb;">
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+											Import Device Data
+										</button>
+										<input type="file" id="importDeviceDataInput" accept=".json" style="display: none" onchange="window.importDeviceData(this)" />
+									</div>
+
+									<div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 20px;">
+										<p class="text-muted" style="margin-bottom: 15px;">
+											Have questions generated outside the app (ChatGPT, Claude…)? Import the JSON the model produced here — the app repairs and normalizes it into proper questions. See <strong>Settings &rarr; AI Generation &rarr; Copy structure prompt</strong> for the exact format to give the model.
+										</p>
+										<button type="button" class="btn btn-primary" onclick="document.getElementById('importAIQuestionsInput').click()" style="background: #f5f3ff; color: #7c3aed; border: 1px solid #c4b5fd;">
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+											Import AI-Generated Questions (JSON)
+										</button>
+										<input type="file" id="importAIQuestionsInput" accept=".json,.txt" style="display: none" onchange="window.importAIQuestions(this)" />
+									</div>
+								</div>
+
+								<div class="settings-group" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);">
+									<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+										<span style="background: #fee2e2; color: #b91c1c; padding: 6px; border-radius: 8px;">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+										</span>
+										<h3 style="margin: 0; font-size: 1.1rem;">Quick Start</h3>
+									</div>
+									<p class="text-muted" style="margin-bottom: 20px;">
+										Run the guided setup wizard: classes, students, categories, questions, exams and games — step by step, or load a backup.
 									</p>
-									<button type="button" class="btn btn-primary" onclick="document.getElementById('importDeviceDataInput').click()" style="background: #ffffff; color: #2563eb; border: 1px solid #2563eb;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-										Import Device Data
+									<button type="button" class="btn btn-primary" onclick="window.openQuickStart(true)" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+										Run Quick Start
 									</button>
-									<input type="file" id="importDeviceDataInput" accept=".json" style="display: none" onchange="window.importDeviceData(this)" />
+								</div>
+
+								<div class="settings-group" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
+									<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+										<span style="background: #dc2626; color: white; padding: 6px; border-radius: 8px;">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+										</span>
+										<h3 style="margin: 0; font-size: 1.1rem;">Reset Data</h3>
+									</div>
+									<p class="text-muted" style="margin-bottom: 20px;">
+										Wipe <strong>everything</strong> back to the first-setup state: classes, students, teachers, categories, questions, exams, games, tournaments, results, messages, presets and settings. Only your admin account survives. <strong style="color: #dc2626;">This cannot be undone — export a backup first!</strong>
+									</p>
+									<button type="button" class="btn btn-danger" onclick="window.openResetDataModal()" style="background: #dc2626; color: white; border: none;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+										Reset All Data
+									</button>
 								</div>
 							</div>
-						</div>
 
 						<!-- Realtime Settings -->
 						<div id="realtime-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="realtime">
@@ -4396,193 +4447,182 @@
 							</div>
 						</div>
 
-					<!-- AI Generation Settings -->
+						<!-- AI Generation Settings -->
 						<div id="ai-generation-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="ai-generation">
-						<!-- Provider Configuration -->
-						<div class="settings-group" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-color: #c084fc;">
-							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-								<span style="background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%); color: white; padding: 8px; border-radius: 10px;">
-									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-								</span>
-								<div>
-									<h3 style="margin: 0; font-size: 1.1rem;">AI Question Generator</h3>
-									<small class="text-muted">Configure AI providers to auto-generate quiz questions</small>
+							<!-- Shared model catalog (admin: load + publish; teacher: select) -->
+							<div class="settings-group" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-color: #c084fc;">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+									<span style="background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%); color: white; padding: 8px; border-radius: 10px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+									</span>
+									<div>
+										<h3 style="margin: 0; font-size: 1.1rem;">AI Models for Question Generation</h3>
+										<small class="text-muted">Shared models are configured by the admin — every teacher can use them (the key stays encrypted on the server)</small>
+									</div>
 								</div>
-							</div>
-							
-							<div class="form-group">
-								<label for="ai-provider-select">AI Provider</label>
-								<select id="ai-provider-select" class="form-control" style="padding: 10px;" onchange="window.onAIProviderChange()">
-									<option value="openrouter">OpenRouter — All providers, free tier available</option>
-									<option value="openai">OpenAI (GPT-5 family)</option>
-									<option value="anthropic">Anthropic (Claude — best JSON accuracy)</option>
-									<option value="google">Google AI (Gemini — generous free tier)</option>
-									<option value="deepseek">DeepSeek (cheapest paid API)</option>
-									<option value="custom">Custom / Local — any provider, incl. Ollama &amp; LM Studio (private)</option>
-								</select>
-								<small class="text-muted">
-									<strong>OpenRouter</strong> aggregates all providers (free + paid models) behind one key &middot;
-									<strong>Custom / Local</strong> accepts <em>any</em> OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, Groq, Together or an internal gateway — so you keep full freedom of provider and model.
-								</small>
-							</div>
 
-							<div id="ai-base-url-group" class="form-group hidden">
-								<label for="ai-base-url">Base URL</label>
-								<input type="text" id="ai-base-url" class="form-control" placeholder="e.g. http://localhost:11434/v1/chat/completions" />
-								<small class="text-muted">Full chat-completions endpoint of any OpenAI-compatible server (Ollama, LM Studio, vLLM, Groq, Together, proxies, enterprise gateways…)</small>
-							</div>
+								<div class="form-group">
+									<label for="ai-shared-model-select">Use a shared model</label>
+									<select id="ai-shared-model-select" class="form-control" style="padding: 10px;" onchange="window.onAISharedModelChange()">
+										<option value="">-- No shared model selected --</option>
+									</select>
+									<div id="ai-shared-model-status" class="text-muted" style="font-size: 0.85em; margin-top: 6px;">Loading shared models…</div>
+								</div>
 
-							<div class="form-group">
-								<div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
-									<strong style="color: #166534; font-size: 0.85rem;">🔒 Privacy &amp; Confidentiality</strong>
-									<small class="text-muted" style="display: block; margin-top: 4px;">
-										Your API key is stored <strong>only in this browser's local storage</strong> and sent directly to the provider you choose — never to any other server. For maximum confidentiality, pick <strong>Custom / Local</strong> with an on-device model (e.g. Ollama): prompts never leave this machine. Avoid pasting confidential material into cloud providers if your school policy forbids it.
-									</small>
-								</div>
-								<div style="background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px 12px;">
-									<strong style="color: #1e40af; font-size: 0.85rem;">🎯 Choosing a model that fits the app's structure</strong>
-									<small class="text-muted" style="display: block; margin-top: 4px;">
-										Generated questions must match the app's exact JSON structure (question, type, options, answer, explanation, difficulty — see the format guide below). Any current-generation chat model works; the ones marked <strong>[REC]</strong> are proven to follow the schema strictly with no broken JSON. <strong>Free options:</strong> OpenRouter's <code>:free</code> models, Google AI Studio's free tier, or a local Ollama model — all work with the full question-type set. Weaker/small models may produce invalid JSON (the generator auto-repairs, but results are better with recommended models).
-									</small>
-								</div>
-							</div>
-							
-							<div class="form-group">
-								<div style="display: flex; justify-content: space-between; align-items: center;">
-									<label for="ai-api-key">API Key</label>
-									<a id="ai-api-help-link" href="#" target="_blank" style="font-size: 0.85em; color: #8b5cf6; text-decoration: none; display: none;">Get API Key &rarr;</a>
-								</div>
-								<div style="display: flex; gap: 10px; align-items: flex-start;">
-									<div style="flex: 1; position: relative;">
-										<input type="password" id="ai-api-key" class="form-control" placeholder="Enter your API key" style="padding: 10px; padding-right: 40px;" />
-										<button type="button" class="btn-icon-only" onclick="toggleAIKeyVisibility()" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #6b7280;">
-											<svg id="ai-key-eye-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+								<!-- Admin-only: load live model lists from a provider and publish them -->
+								<div id="ai-admin-catalog-group" class="form-group" style="border-top: 1px dashed #ddd6fe; padding-top: 16px;">
+									<div style="background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;">
+										<strong style="color: #1e40af; font-size: 0.85rem;">🛠 Admin: load &amp; publish models</strong>
+										<small class="text-muted" style="display: block; margin-top: 4px;">
+											Enter a provider API key once, fetch the <strong>current live model list</strong>, then select the models to expose to your teachers. The key is stored <strong>encrypted server-side</strong> and is never sent to any browser — generation runs on the server.
+										</small>
+									</div>
+
+									<div class="form-row">
+										<div class="form-group half">
+											<label for="ai-provider-select">Provider</label>
+											<select id="ai-provider-select" class="form-control" style="padding: 10px;" onchange="window.onAIProviderChange()">
+												<option value="openrouter">OpenRouter — all providers, free tier</option>
+												<option value="openai">OpenAI (GPT family)</option>
+												<option value="anthropic">Anthropic (Claude)</option>
+												<option value="google">Google AI (Gemini)</option>
+												<option value="deepseek">DeepSeek</option>
+												<option value="custom">Custom / Local (Ollama, LM Studio…)</option>
+											</select>
+										</div>
+										<div class="form-group half">
+											<label for="ai-api-key">API Key</label>
+											<input type="password" id="ai-api-key" class="form-control" placeholder="sk-… (OpenRouter, OpenAI, Gemini…)" style="padding: 10px;" autocomplete="new-password" />
+											<a id="ai-api-help-link" href="#" target="_blank" style="font-size: 0.8em; color: #8b5cf6; text-decoration: none; display: none;">Get an API key →</a>
+										</div>
+									</div>
+
+									<div id="ai-base-url-group" class="form-group hidden">
+										<label for="ai-base-url">Base URL (custom / local server)</label>
+										<input type="text" id="ai-base-url" class="form-control" placeholder="e.g. http://localhost:11434/v1" />
+										<small class="text-muted">Chat-completions endpoint of any OpenAI-compatible server (Ollama, LM Studio, vLLM, Groq, enterprise gateway…)</small>
+									</div>
+
+									<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;">
+										<button type="button" class="btn btn-primary" onclick="window.loadAIModelCatalog()" id="ai-load-models-btn">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M2.5 2v6h6M21.5 22v-6h-6"></path><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"></path></svg>
+											Load models (live)
+										</button>
+										<button type="button" class="btn btn-secondary" onclick="window.testAIConnection()">Test connection</button>
+										<span id="ai-connection-status" class="text-muted" style="font-size: 0.85em; align-self: center;">Status: not configured</span>
+									</div>
+
+									<div id="ai-model-catalog-group" class="hidden">
+										<div class="form-group">
+											<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+												<label style="margin: 0;">Available models (<span id="ai-model-count">0</span>)</label>
+												<input type="text" id="ai-model-search" class="form-control" placeholder="🔍 Filter models…" style="max-width: 220px; padding: 6px 10px;" oninput="window.filterAIModelCatalog()" />
+											</div>
+											<div id="ai-model-list" style="max-height: 260px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; background: #fff;">
+											</div>
+										</div>
+										<button type="button" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed); border: none;" onclick="window.publishSelectedAIModels()">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+											Expose selected to teachers
 										</button>
 									</div>
-									<button type="button" class="btn btn-secondary" onclick="testAIConnection()" style="white-space: nowrap;">
-										Test Connection
-									</button>
+
+									<!-- Published shared models -->
+									<div class="form-group" id="ai-shared-catalog-group">
+										<label>Shared models</label>
+										<div id="ai-shared-catalog-list" style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px; background: #fff;">
+											<small class="text-muted">No shared models yet — load a provider list above and expose models to teachers.</small>
+										</div>
+									</div>
 								</div>
-								<div id="ai-connection-status" class="mt-2 text-muted" style="font-size: 0.85em;">
-									Status: Not configured
+
+								<!-- Teacher (and admin): personal custom model -->
+								<div class="form-group" style="border-top: 1px dashed #ddd6fe; padding-top: 16px;">
+									<label for="ai-custom-model">Your own model (private to you)</label>
+									<div style="background: #fefce8; border: 1px solid #fde68a; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
+										<small class="text-muted">
+											No shared model fits? Enter any OpenAI-compatible endpoint + key — it's stored <strong>encrypted server-side, visible only to you</strong>. Local servers (Ollama / LM Studio) need no key and stay fully private.
+										</small>
+									</div>
+									<div class="form-row">
+										<div class="form-group half">
+											<input type="text" id="ai-custom-name" class="form-control" placeholder="Display name (e.g. My Ollama)" style="padding: 10px;" />
+										</div>
+										<div class="form-group half">
+											<input type="text" id="ai-custom-model" class="form-control" placeholder="Model id (e.g. llama3.1:8b, gpt-5-mini)" style="padding: 10px;" />
+										</div>
+									</div>
+									<div class="form-row">
+										<div class="form-group half">
+											<input type="text" id="ai-custom-base-url" class="form-control" placeholder="Base URL (e.g. http://localhost:11434/v1)" style="padding: 10px;" />
+										</div>
+										<div class="form-group half">
+											<input type="password" id="ai-custom-key" class="form-control" placeholder="API key (optional for local)" style="padding: 10px;" autocomplete="new-password" />
+										</div>
+									</div>
+									<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+										<button type="button" class="btn btn-secondary" onclick="window.saveMyAIModel(false)">Save my model</button>
+										<button type="button" class="btn btn-secondary" onclick="window.saveMyAIModel(true)">Save &amp; use it now</button>
+										<span id="ai-personal-status" class="text-muted" style="font-size: 0.85em; align-self: center;"></span>
+									</div>
+									<div id="ai-my-models-list" style="margin-top: 10px;"></div>
 								</div>
 							</div>
-							
-							<div class="form-group">
-								<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-									<label for="ai-model-select" style="margin: 0;">Model</label>
-									<button type="button" class="btn btn-sm btn-secondary" onclick="updateAIModelSelect()" style="padding: 2px 8px; font-size: 0.75rem;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 4px;"><path d="M2.5 2v6h6M21.5 22v-6h-6"></path><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"></path></svg>
-										Refresh List
-									</button>
+
+							<!-- Keyless path: copy prompt for ChatGPT/Claude + import -->
+							<div class="settings-group" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-color: #6ee7b7;">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+									<span style="background: #10b981; color: white; padding: 8px; border-radius: 10px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+									</span>
+									<div>
+										<h3 style="margin: 0; font-size: 1.1rem;">No API key? Use ChatGPT / Claude directly</h3>
+										<small class="text-muted">Copy the exact question structure, generate in any chat AI, import back</small>
+									</div>
 								</div>
-								<select id="ai-model-select" class="form-control" style="padding: 10px;" onchange="onAIModelSelectChange()">
-									<option value="">-- Select API Key First --</option>
-								</select>
-								<small class="text-muted">✨ free &middot; 💎 paid &middot; <strong>[REC]</strong> proven to follow the app's question JSON structure. The list auto-refreshes live from the provider once a key is entered.</small>
-							</div>
-							
-							<div class="form-group">
-								<label for="ai-custom-model">Custom Model ID (any model, any provider)</label>
-								<input type="text" id="ai-custom-model" class="form-control" placeholder="e.g. llama3.1:8b, gpt-5-mini, provider/model-name" style="padding: 10px;" />
-								<small class="text-muted">
-									Type any model ID manually if it's not in the list — you are never limited to the suggestions. For the <strong>Custom / Local</strong> provider this is the model name exactly as your server reports it (<code>ollama list</code>, LM Studio, etc.). Model catalogs:
-									<a href="https://openrouter.ai/models" target="_blank" style="color: #8b5cf6;">openrouter.ai/models</a> &middot;
-									<a href="https://ollama.com/library" target="_blank" style="color: #8b5cf6;">ollama.com/library</a>
-								</small>
+								<p class="text-muted" style="font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
+									① Copy the structure prompt (it matches the app's exact JSON format) &rarr; ② paste it into <strong>ChatGPT, Claude, Gemini…</strong> with your topic &rarr; ③ copy the model's JSON answer &rarr; ④ import it in <strong>Settings &rarr; Data &rarr; Import AI-Generated Questions</strong>. The app repairs and normalizes the JSON automatically.
+								</p>
+								<div style="display: flex; gap: 10px; flex-wrap: wrap;">
+									<button type="button" class="btn btn-primary" style="background: #059669; border: none;" onclick="window.copyAIStructurePrompt()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+										Copy structure prompt
+									</button>
+									<button type="button" class="btn btn-secondary" onclick="document.getElementById('importAIQuestionsInput').click()">
+										Import generated JSON
+									</button>
+									<input type="file" id="aiPromptImportInline" accept=".json,.txt" style="display: none" onchange="window.importAIQuestions(this)" />
+								</div>
+								<div id="ai-copy-prompt-status" class="text-muted" style="font-size: 0.85em; margin-top: 8px;"></div>
 							</div>
 
 							<!-- Structure compatibility guide -->
-							<div class="form-group">
+							<div class="settings-group">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+									<span style="background: #fef3c7; color: #d97706; padding: 6px; border-radius: 8px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+									</span>
+									<h3 style="margin: 0; font-size: 1.1rem;">Question structure guide</h3>
+								</div>
 								<details style="background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 8px; padding: 10px 12px;">
 									<summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem; color: #57534e;">📐 Required question structure (what the model must output)</summary>
 									<small class="text-muted" style="display: block; margin-top: 8px; line-height: 1.6;">
-										Every generated question is a JSON object with <code>question</code>, <code>type</code>, <code>options</code>, <code>answer</code>, <code>explanation</code>, <code>difficulty</code> — the generator's prompt enforces this automatically, so <strong>any capable chat model is compatible</strong>. The app supports these types and answer formats:
-									<ul style="margin: 6px 0 6px 18px; padding: 0;">
-										<li><strong>multiple-choice</strong> — answer = exact option text (<code>allowMultipleAnswers</code>: true for multi-select)</li>
-										<li><strong>true-false</strong> — options Vrai / Faux</li>
-										<li><strong>fill-blank</strong> — <code>___</code> in question, answer <code>1:word|2:word</code>, options = word bank</li>
-										<li><strong>draggable</strong> — answer = correct order, comma-joined</li>
-										<li><strong>odd-one-out</strong> — answer = the odd option's text</li>
-										<li><strong>matching-pairs</strong> — answer <code>Key-->Value|…</code>, options = keys + values</li>
-										<li><strong>code</strong> — adds <code>codeSnippet</code>, <code>codeLanguage</code>, <code>codeAnswerMode</code></li>
-									</ul>
-									Pick a model that follows instructions strictly (all <strong>[REC]</strong> models do). If a model outputs broken JSON, the app auto-repairs common issues, but switching to a recommended model gives the best results.
+										Every generated question is a JSON object with <code>question</code>, <code>type</code>, <code>options</code>, <code>answer</code>, <code>explanation</code>, <code>difficulty</code> — the copy-prompt and server prompt both enforce this automatically.
+										<ul style="margin: 6px 0 6px 18px; padding: 0;">
+											<li><strong>multiple-choice</strong> — answer = exact option text</li>
+											<li><strong>multiple-choice-multi</strong> — answer = options joined with " | "</li>
+											<li><strong>true-false</strong> — answer = "true" / "false"</li>
+											<li><strong>odd-one-out</strong> — answer = the odd option</li>
+											<li><strong>draggable</strong> — answer = correct order, comma-joined</li>
+											<li><strong>matching-pairs</strong> — answer = "Key--&gt;Value|…" pairs</li>
+											<li><strong>fill-blank</strong> — question uses [[1]], [[2]] placeholders; answer = words joined with "|"</li>
+											<li><strong>code</strong> — adds codeSnippet, language, answerMode</li>
+										</ul>
+										Weaker models may output broken JSON — the app auto-repairs common issues on import, but recommended models give the best results.
 									</small>
 								</details>
 							</div>
 						</div>
-						
-						<!-- Advanced Parameters -->
-						<div class="settings-group">
-							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-								<span style="background: #fef3c7; color: #d97706; padding: 6px; border-radius: 8px;">
-									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-								</span>
-								<h3 style="margin: 0; font-size: 1.1rem;">Advanced Parameters</h3>
-							</div>
-							
-							<div class="form-row">
-								<div class="form-group half">
-									<label for="ai-temperature">Temperature: <span id="ai-temp-value">0.7</span></label>
-									<input type="range" id="ai-temperature" class="form-control" min="0" max="1" step="0.1" value="0.7" oninput="document.getElementById('ai-temp-value').textContent = this.value" style="padding: 0;" />
-									<small class="text-muted">Lower = focused, Higher = creative</small>
-								</div>
-								<div class="form-group half">
-									<label for="ai-max-tokens">Max Tokens</label>
-									<input type="number" id="ai-max-tokens" class="form-control" min="500" max="4000" value="2000" style="padding: 10px;" />
-									<small class="text-muted">Maximum response length</small>
-								</div>
-							</div>
-							
-							<div class="form-row">
-								<div class="form-group half">
-									<label for="ai-cooldown">Cooldown (seconds)</label>
-									<input type="number" id="ai-cooldown" class="form-control" min="5" max="120" value="10" style="padding: 10px;" />
-									<small class="text-muted">Wait time between requests</small>
-								</div>
-								<div class="form-group half">
-									<label for="ai-timeout">Timeout (seconds)</label>
-									<input type="number" id="ai-timeout" class="form-control" min="30" max="180" value="60" style="padding: 10px;" />
-									<small class="text-muted">Request timeout limit</small>
-								</div>
-							</div>
-							
-							<div class="form-group">
-								<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-									<input type="checkbox" id="ai-debug-mode" />
-									<span>Debug Mode</span>
-								</label>
-								<small class="text-muted" style="display: block; margin-left: 24px;">Show detailed logs in browser console</small>
-							</div>
-						</div>
-						
-						<!-- Quick Actions -->
-						<div class="settings-group" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-color: #6ee7b7;">
-							<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-								<div>
-									<h4 style="margin: 0 0 5px 0; font-size: 1rem; color: #065f46;">💡 Get Started — three free paths</h4>
-									<small class="text-muted" style="display: block; max-width: 560px;">
-										① <strong>OpenRouter</strong> — one free key, access to free models from all providers &middot;
-										② <strong>Google AI Studio</strong> — generous free Gemini tier &middot;
-										③ <strong>Ollama / LM Studio</strong> — free local models, fully offline &amp; private (use the Custom / Local provider)
-									</small>
-								</div>
-								<div style="display: flex; gap: 8px; flex-wrap: wrap;">
-									<a href="https://openrouter.ai/keys" target="_blank" class="btn btn-secondary" style="white-space: nowrap;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-										OpenRouter Key
-									</a>
-									<a href="https://aistudio.google.com/app/apikey" target="_blank" class="btn btn-secondary" style="white-space: nowrap;">
-										Gemini Key
-									</a>
-									<a href="https://ollama.com" target="_blank" class="btn btn-secondary" style="white-space: nowrap;">
-										Ollama (Local)
-									</a>
-								</div>
-							</div>
-						</div>
-					</div>
 
 					<!-- Users Settings -->
 					<div id="users-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="users">
@@ -6796,6 +6836,60 @@
 							</button>
 						</div>
 					</div>
+			</div>
+		</div>
+
+		<!-- Reset Data danger modal -->
+		<div id="resetDataModal" class="modal">
+			<div class="modal-content" style="max-width: 480px;">
+				<div class="modal-header">
+					<h2 style="color: #dc2626;">⚠ Reset All Data</h2>
+					<button type="button" class="modal-close" onclick="window.closeResetDataModal()">&times;</button>
+				</div>
+				<div class="modal-body">
+					<p style="margin-bottom: 12px;">This will permanently delete <strong>all</strong> of the following:</p>
+					<ul style="margin: 0 0 16px 20px; color: #6b7280; line-height: 1.7;">
+						<li>Classes, students and teachers</li>
+						<li>Categories, questions and exams</li>
+						<li>Games, tournaments and results</li>
+						<li>Messages, notifications and presets</li>
+						<li>All settings (back to defaults)</li>
+					</ul>
+					<p style="margin-bottom: 16px;">Only your <strong>admin account</strong> survives. The app will restart as a fresh first-time setup. <strong style="color: #dc2626;">Export a backup first if you might need this data later.</strong></p>
+					<label for="resetDataConfirmInput" style="display: block; font-weight: 600; margin-bottom: 6px;">Type <code style="color:#dc2626; font-weight:700;">RESET</code> to confirm</label>
+					<input type="text" id="resetDataConfirmInput" class="form-control" autocomplete="off" placeholder="RESET" oninput="window.updateResetDataButtonState()" style="border-color: #fecaca; margin-bottom: 16px;" />
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" onclick="window.closeResetDataModal()">Cancel</button>
+					<button type="button" class="btn btn-danger" id="resetDataConfirmBtn" onclick="window.resetAllData()" disabled style="background: #dc2626; color: white; border: none; opacity: 0.5; cursor: not-allowed;">
+						Delete Everything &amp; Restart App
+					</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Quick Start wizard modal -->
+		<div id="quickStartModal" class="modal">
+			<div class="modal-content" style="max-width: 780px;">
+				<div class="modal-header">
+					<h2>🚀 Quick Start Setup</h2>
+					<button type="button" class="modal-close" onclick="window.dismissQuickStart('later')">&times;</button>
+				</div>
+				<div class="modal-body" style="padding: 0;">
+					<div class="quick-start-layout">
+						<div class="quick-start-steps" id="quickStartSteps"></div>
+						<div class="quick-start-panel">
+							<div id="quickStartStepContent"></div>
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer" style="justify-content: space-between;">
+					<button type="button" class="btn btn-secondary" id="quickStartBackBtn" onclick="window.quickStartGo(-1)">Back</button>
+					<div style="display: flex; gap: 10px;">
+						<button type="button" class="btn btn-secondary" onclick="window.dismissQuickStart('later')">Later</button>
+						<button type="button" class="btn btn-primary" id="quickStartNextBtn" onclick="window.quickStartGo(1)">Next</button>
+					</div>
+				</div>
 			</div>
 		</div>
 

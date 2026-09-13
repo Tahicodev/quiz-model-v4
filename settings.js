@@ -589,6 +589,11 @@ function switchSettingsTab(event, tabName) {
 				window.refreshPendingImportsBadge();
 			}
 		}
+		// Refresh AI model lists (shared models, admin catalog, personal models)
+		// whenever the AI Generation tab is opened.
+		if (tabName === 'ai-generation' && window.refreshAIConfigLists) {
+			window.refreshAIConfigLists();
+		}
 	}
 
 	// Update buttons
@@ -1440,3 +1445,163 @@ window.refreshTrainingPresetDropdown = function () {
 		console.warn('Cannot refresh preset dropdown: Select element or getAllPresets missing');
 	}
 };
+
+// ─── Reset Data (Settings → Data tab) ────────────────────────────────────────
+// Wipes the school back to first-setup state via POST /api/v1/admin/reset-data
+// (admin-only), then clears the local mirrors so the page reload bootstraps a
+// clean server state instead of re-uploading the cached rows.
+
+const RESET_DATA_MIRROR_KEYS = [
+	'quizUsers', 'quizClasses', 'quizCategories', 'quizQuestions', 'quizExams',
+	'quizResults', 'quizGames', 'quizTournaments', 'quizTournamentsHistory',
+	'quizExamSessions', 'quizExamQuestions', 'quizExamClasses', 'quizGameSessions',
+	'quizTournamentEntries', 'quizAuditLogs', 'quizSettings', 'quizActivity',
+	'quizGamification', 'quizProfileRequests', 'quizAccountRequests',
+	'adminNotifications', 'teacherMessages', 'teacherAssignments',
+	'gamePresets', 'gamePresetsInitialized', 'adminProfileRequests',
+];
+
+function openResetDataModal() {
+	const modal = document.getElementById('resetDataModal');
+	const input = document.getElementById('resetDataConfirmInput');
+	if (!modal) return;
+	if (input) input.value = '';
+	updateResetDataButtonState();
+	if (modal.parentElement && modal.parentElement !== document.body) {
+		document.body.appendChild(modal);
+	}
+	modal.style.display = 'flex';
+}
+
+function closeResetDataModal() {
+	const modal = document.getElementById('resetDataModal');
+	if (modal) modal.style.display = 'none';
+}
+
+function updateResetDataButtonState() {
+	const input = document.getElementById('resetDataConfirmInput');
+	const btn = document.getElementById('resetDataConfirmBtn');
+	if (!btn) return;
+	const confirmed = String(input?.value || '').trim() === 'RESET';
+	btn.disabled = !confirmed;
+	btn.style.opacity = confirmed ? '1' : '0.5';
+	btn.style.cursor = confirmed ? 'pointer' : 'not-allowed';
+}
+
+async function resetAllData() {
+	const btn = document.getElementById('resetDataConfirmBtn');
+	if (btn?.disabled) return;
+	if (String(document.getElementById('resetDataConfirmInput')?.value || '').trim() !== 'RESET') return;
+
+	const originalText = btn.textContent;
+	btn.disabled = true;
+	btn.textContent = 'Resetting…';
+	try {
+		const result = await window.API.raw('POST', '/admin/reset-data', {
+			confirm: 'RESET',
+		});
+		if (!result || result.success === false) {
+			throw new Error(result?.message || 'The server rejected the reset.');
+		}
+
+		showToast('Data reset complete. Reloading…', 'success');
+		closeResetDataModal();
+
+		// Drop every local mirror + wizard flag so the reload comes back as a
+		// genuine first setup. Auth/session keys are untouched — the admin
+		// stays logged in.
+		RESET_DATA_MIRROR_KEYS.forEach((key) => {
+			try { localStorage.removeItem(key); } catch (_) {}
+		});
+		try { localStorage.removeItem('quizSetupComplete'); } catch (_) {}
+		try { localStorage.removeItem('quizQuickStartDismissedAt'); } catch (_) {}
+
+		setTimeout(() => window.location.reload(), 800);
+	} catch (err) {
+		console.error('Reset failed:', err);
+		showToast(`Reset failed: ${err?.message || 'server error'}`, 'error');
+		btn.disabled = false;
+		btn.textContent = originalText;
+	}
+}
+
+window.openResetDataModal = openResetDataModal;
+window.closeResetDataModal = closeResetDataModal;
+window.updateResetDataButtonState = updateResetDataButtonState;
+window.resetAllData = resetAllData;
+
+// ─── Import AI-generated questions (Settings → Data tab) ─────────────────────
+// Accepts the raw JSON output of an external model (ChatGPT/Claude), repairs
+// it and turns the rows into real questions through the normal import path.
+
+function importAIQuestions(inputElement) {
+	const file = inputElement?.files?.[0];
+	if (!file) return;
+	const reader = new FileReader();
+
+	reader.onload = (e) => {
+		try {
+			const rawText = String(e.target.result || '');
+			let questions = null;
+
+			try {
+				const parsed = JSON.parse(rawText);
+				if (Array.isArray(parsed)) questions = parsed;
+				else if (Array.isArray(parsed?.questions)) questions = parsed.questions;
+				else if (parsed && typeof parsed === 'object') questions = [parsed];
+			} catch (_) {
+				// Tolerant parse: pull out top-level {...} objects.
+				const matches = rawText.match(/\{[\s\S]*?\}/g) || [];
+				const candidates = matches
+					.map((m) => { try { return JSON.parse(m); } catch (_) { return null; } })
+					.filter((o) => o && (o.question || o.text));
+				if (candidates.length) questions = candidates;
+			}
+
+			if (!questions || !questions.length) {
+				showToast('No questions found in that file — expected the JSON structure from the copy-prompt step.', 'error');
+				return;
+			}
+
+			const normalized = questions
+				.map((q) => {
+					try { return window.normalizeImportedAIQuestion ? window.normalizeImportedAIQuestion(q) : q; } catch (_) { return null; }
+				})
+				.filter(Boolean);
+
+			if (!normalized.length) {
+				showToast('The file contained rows, but none matched the question structure.', 'error');
+				return;
+			}
+
+			const apply = confirm(
+				`Import ${normalized.length} AI-generated question${normalized.length === 1 ? '' : 's'} into your Questions bank?`,
+			);
+			if (!apply) return;
+
+			(async () => {
+				let imported = 0;
+				for (const question of normalized) {
+					try {
+						await window.API.create('questions', question);
+						imported += 1;
+					} catch (err) {
+						console.warn('AI question import row failed:', err);
+					}
+				}
+				showToast(`Imported ${imported}/${normalized.length} questions.`, imported ? 'success' : 'error');
+				if (window.refreshQuestionsList) window.refreshQuestionsList();
+				if (imported && window.updateQuickStartCounts) window.updateQuickStartCounts();
+			})();
+		} catch (err) {
+			console.error('AI questions import failed:', err);
+			showToast(`Import failed: ${err?.message || 'invalid file'}`, 'error');
+		} finally {
+			inputElement.value = '';
+		}
+	};
+
+	reader.readAsText(file);
+}
+
+window.importAIQuestions = importAIQuestions;
