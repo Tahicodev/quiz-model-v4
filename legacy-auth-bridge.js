@@ -18,6 +18,18 @@
 
   var baseUrl = (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
 
+  // ── Direct Storage access ──────────────────────────────────────────────────
+  // Instance-method wrappers (NOT bare prototype references — calling those
+  // without a receiver throws "Illegal invocation" under strict mode and the
+  // catch below would silently swallow every persistSession write after the
+  // first). They intentionally route through whatever Storage.prototype
+  // methods are current: legacy-bridge.js's patch is a passthrough for the
+  // auth keys, and quizUsers seeding through the patch is exactly what the
+  // pre-bridge code did (keeps the repo cache coherent).
+  var _origGetLS = function (k) { return localStorage.getItem(k); };
+  var _origSetLS = function (k, v) { localStorage.setItem(k, v); };
+  var _origRemoveLS = function (k) { localStorage.removeItem(k); };
+
   // ── Helper: show toast if available ─────────────────────────────────────────
   function showMsg(msg, type) {
     if (typeof window.showToast === 'function') {
@@ -55,49 +67,120 @@
   }
 
   // ── Persist session in the format auth.js expects ───────────────────────────
+  // sessionStorage is per-tab and always safe. The localStorage copies are
+  // SHARED with every other tab of this browser: the admin portal and the
+  // student workspace both read/write the same keys, so a student login in
+  // one tab used to overwrite the admin tab's identity (quizSession /
+  // quizAuthToken / quizCurrentUser). Guard those writes:
+  //   - write the role-scoped copy (quizSession:student etc.) unconditionally
+  //   - only overwrite the SHARED unscoped keys when the previous shared
+  //     session belongs to the same user+role (a refresh), or when there is
+  //     no session in this tab (a genuine first login in this tab)
   function persistSession(session, remember) {
     try {
-      // auth.js reads the active session from sessionStorage and the
-      // remembered session from localStorage. Keep both stores in the shape
-      // expected by the legacy UI while retaining the API token.
       sessionStorage.setItem('quizSession', JSON.stringify(session));
-      localStorage.setItem('quizSession', JSON.stringify(session));
-      if (remember) {
-        localStorage.setItem('quizSessionRemember', JSON.stringify(session));
-      } else {
-        localStorage.removeItem('quizSessionRemember');
-      }
-      // Also set the auth token in the legacy format
-      if (session.token) {
-        localStorage.setItem('quizAuthToken', session.token);
+
+      var role = String(session.role || '').toLowerCase();
+      var scopedKey = 'quizSession:' + (role || 'user');
+      var scopedTokenKey = 'quizAuthToken:' + (role || 'user');
+      var scopedUserKey = 'quizCurrentUser:' + (role || 'user');
+      _origSetLS(scopedKey, JSON.stringify(session));
+      if (session.token) _origSetLS(scopedTokenKey, session.token);
+
+      // This tab's previous session (per-tab source of truth). When the SAME
+      // tab logs in again (re-login or role change within this tab) the shared
+      // copies may follow the new identity.
+      var thisTabBefore = _origGetLS('quizSession');
+      var thisTabBeforeUser = null;
+      try { thisTabBeforeUser = thisTabBefore ? JSON.parse(thisTabBefore).userId : null; } catch (_) {}
+      var sameUserBefore = thisTabBefore !== null &&
+        String(thisTabBeforeUser || '') === String(session.userId || '');
+
+      // The shared unscoped session: only replace when it is absent, or it
+      // already matches this session's user (token refresh) — otherwise the
+      // other portal's tab owns it and must keep its identity.
+      var sharedRaw = _origGetLS('quizSession');
+      var sharedSession = null;
+      try { sharedSession = sharedRaw ? JSON.parse(sharedRaw) : null; } catch (_) {}
+      var sharedMatches = sharedSession &&
+        String(sharedSession.userId || '') === String(session.userId || '') &&
+        String(sharedSession.role || '').toLowerCase() === role;
+
+      if (!sharedRaw || sharedMatches || sameUserBefore) {
+        _origSetLS('quizSession', JSON.stringify(session));
+        if (session.token) _origSetLS('quizAuthToken', session.token);
+        if (session.userId) {
+          var currentUser = {
+            id: session.userId,
+            username: session.username,
+            name: session.name || session.username,
+            role: session.role,
+            status: 'active',
+          };
+          _origSetLS('quizCurrentUser', JSON.stringify(currentUser));
+        }
+        if (remember) {
+          _origSetLS('quizSessionRemember', JSON.stringify(session));
+        } else {
+          _origRemoveLS('quizSessionRemember');
+        }
+      } else if (session.userId) {
+        // The shared identity belongs to the other portal's tab — keep it,
+        // but mirror this session's user in the role-scoped slot so this
+        // portal's pages can always find their own identity.
+        _origSetLS(scopedUserKey, JSON.stringify({
+          id: session.userId,
+          username: session.username,
+          name: session.name || session.username,
+          role: session.role,
+          status: 'active',
+        }));
       }
       if (session.userId) {
-        var currentUser = {
+        var scopedUser2 = {
           id: session.userId,
           username: session.username,
           name: session.name || session.username,
           role: session.role,
           status: 'active',
         };
-        localStorage.setItem('quizCurrentUser', JSON.stringify(currentUser));
-
-        // Seed the local auth view immediately. The SaaS preload is
-        // asynchronous, while auth.js validates a session synchronously on
-        // the next page load.
-        var users = [];
-        try { users = JSON.parse(localStorage.getItem('quizUsers') || '[]'); } catch (_) {}
-        if (!Array.isArray(users)) users = [];
-        var found = false;
-        users = users.map(function (user) {
-          if (user && user.id === currentUser.id) {
-            found = true;
-            return Object.assign({}, user, currentUser);
-          }
-          return user;
-        });
-        if (!found) users.push(currentUser);
-        localStorage.setItem('quizUsers', JSON.stringify(users));
+        // Always refresh the scoped user copy.
+        var existingScopedRaw = _origGetLS(scopedUserKey);
+        var existingScoped = null;
+        try { existingScoped = existingScopedRaw ? JSON.parse(existingScopedRaw) : null; } catch (_) {}
+        if (!existingScoped || String(existingScoped.id || '') === String(session.userId || '')) {
+          _origSetLS(scopedUserKey, JSON.stringify(scopedUser2));
+        }
       }
+
+      // Seed the local auth view immediately. The SaaS preload is
+      // asynchronous, while auth.js validates a session synchronously on
+      // the next page load.
+      var users = [];
+      try { users = JSON.parse(_origGetLS('quizUsers') || '[]'); } catch (_) {}
+      if (!Array.isArray(users)) users = [];
+      var found = false;
+      users = users.map(function (user) {
+        if (user && user.id === session.userId) {
+          found = true;
+          return Object.assign({}, user, {
+            id: session.userId,
+            username: session.username,
+            name: session.name || session.username,
+            role: session.role,
+            status: 'active',
+          });
+        }
+        return user;
+      });
+      if (!found && session.userId) users.push({
+        id: session.userId,
+        username: session.username,
+        name: session.name || session.username,
+        role: session.role,
+        status: 'active',
+      });
+      _origSetLS('quizUsers', JSON.stringify(users));
       // Store token for the API repo
       window.__authToken = session.token;
       window.__AUTH_SESSION_EXPIRED__ = false;
@@ -176,7 +259,13 @@
         var res = await fetch(baseUrl + '/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username.trim(), password: password }),
+          body: JSON.stringify({
+            username: username.trim(),
+            password: password,
+            // Scope the refresh cookie to this portal so a student login in
+            // another tab of the same browser never rotates it.
+            portal: 'admin',
+          }),
           credentials: 'include',
         });
 
@@ -231,7 +320,13 @@
         var res = await fetch(baseUrl + '/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username.trim(), password: password }),
+          body: JSON.stringify({
+            username: username.trim(),
+            password: password,
+            // Scope the refresh cookie to this portal so an admin login in
+            // another tab of the same browser never rotates it.
+            portal: 'student',
+          }),
           credentials: 'include',
         });
 
@@ -265,10 +360,22 @@
           return;
         }
 
-        var session = buildSession(user, token, remember);
-        persistSession(session, remember);
+	        var session = buildSession(user, token, remember);
+	        persistSession(session, remember);
 
-        // Re-prime the legacy-bridge cache with the now-authenticated user's
+	        // Apply the user to auth.js BEFORE notifying anyone. The bridge
+	        // previously persisted the session but left Auth.getCurrentUser()
+	        // null, so the `auth:changed` handlers re-ran renderWorkspace with
+	        // no context and re-opened the sign-in modal right after the
+	        // bridge had just hidden it — the "modal persists after login" bug.
+	        var authNSApply = window.Auth || {};
+	        if (typeof authNSApply.setCurrentUser === 'function') {
+	          try { authNSApply.setCurrentUser(user, session); } catch (e) {
+	            console.warn('[legacy-auth] setCurrentUser failed:', e);
+	          }
+	        }
+
+	        // Re-prime the legacy-bridge cache with the now-authenticated user's
         // tenant data so the student UI has fresh state without waiting for
         // a page reload. Fire-and-forget — UI hooks below still run.
         if (typeof window.__legacyBridgeBootstrap === 'function') {
@@ -306,21 +413,48 @@
     if (typeof window.authLogout === 'function') {
       var origLogout = window.authLogout;
       window.authLogout = function () {
-        // Call API logout (fire-and-forget)
+        // Call API logout (fire-and-forget). Name this portal so the server
+        // only revokes THIS portal's refresh cookie — the other portal's tab
+        // (e.g. a student workspace in the same browser) keeps its session.
+        var portal = null;
+        try {
+          var s = JSON.parse(sessionStorage.getItem('quizSession') || 'null');
+          var role = String((s && s.role) || '').toLowerCase();
+          portal = role === 'student' ? 'student' : 'admin';
+        } catch (_) {}
         fetch(baseUrl + '/auth/logout', {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Authorization': 'Bearer ' + (window.__authToken || '') },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + (window.__authToken || ''),
+          },
+          body: JSON.stringify(portal ? { portal: portal } : {}),
         }).catch(function () { /* ignore */ });
 
-        // Clear legacy tokens
+        // Clear legacy tokens. Both the shared unscoped keys and this
+        // session's role-scoped copies — a logout must not leave any stale
+        // identity behind for either portal to rehydrate from.
         try {
+          var activeRole = '';
+          try {
+            var s = JSON.parse(sessionStorage.getItem('quizSession') || 'null');
+            activeRole = String((s && s.role) || '').toLowerCase();
+          } catch (_) {}
           localStorage.removeItem('quizSession');
           sessionStorage.removeItem('quizSession');
           localStorage.removeItem('quizSessionRemember');
           localStorage.removeItem('quizAuthToken');
           localStorage.removeItem('quizCurrentUser');
           sessionStorage.removeItem('adminLoggedIn');
+          ['admin', 'student', 'teacher', 'super_admin', 'user'].forEach(function (r) {
+            localStorage.removeItem('quizSession:' + r);
+            localStorage.removeItem('quizAuthToken:' + r);
+            localStorage.removeItem('quizCurrentUser:' + r);
+          });
+          if (activeRole) {
+            localStorage.removeItem('quizCurrentUser:' + activeRole);
+          }
         } catch (_) {}
 
         window.__authToken = null;

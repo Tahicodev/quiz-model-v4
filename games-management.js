@@ -5,6 +5,9 @@
 		editingId: null,
 		selectedGameId: null,
 		watchingGameId: null,
+		// Last blocking start error (e.g. "no questions assigned"). Kept so
+		// renderLobby can show it persistently instead of a 4s toast.
+		lastStartError: '',
 		gamesStudioTab: 'games-studio',
 		tournamentStudioTab: 'planner',
 		tournamentRoundDraft: [],
@@ -2565,6 +2568,34 @@
 		renderLobby();
 	}
 
+	// Mirrors the server's getGameStartValidationError: a game needs at least
+	// one valid question (an entry with an id) before it can go live. Math
+	// games that generate their own questions still pass because their
+	// generated entries carry ids.
+	function getLocalStartValidationError(game) {
+		if (!game) return 'Game not found';
+		const session = game.session || {};
+		const participants = Array.isArray(session.participants)
+			? session.participants
+			: [];
+		if (!participants.length) return 'No participants have joined yet';
+		const totalQuestions = Array.isArray(game.questions)
+			? game.questions.filter((question) => question && question.id).length
+			: 0;
+		if (totalQuestions < 1) {
+			return 'This game has no questions assigned. Edit the game and add at least 1 question before starting.';
+		}
+		const participantCount = participants.length;
+		const type = String(game.type || '').toLowerCase();
+		const needsTwo = ['hot-potato', 'last-survivor', 'sprint-race', 'cards', 'cards-draw'].some(
+			(prefix) => type.includes(prefix),
+		);
+		if (needsTwo && participantCount < 2) {
+			return 'Need at least 2 participants for this game type';
+		}
+		return '';
+	}
+
 	function startGame(gameId) {
 		const localGame = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
 		if (!localGame) {
@@ -2578,10 +2609,26 @@
 				window.__DI_CONTAINER__.repo.getAll_sync('games').find(
 					(g) => g.id === gameId,
 				);
+			// Pre-flight with the same validation the server applies, so a
+			// rejection (e.g. "no questions assigned") is a persistent banner
+			// instead of a 4-second toast that reads as "nothing happened".
+			const localValidationError = getLocalStartValidationError(gameData || localGame);
+			if (localValidationError) {
+				state.lastStartError = localValidationError;
+				showArenaMessage(localValidationError, 'error');
+				renderLobby();
+				return;
+			}
 			socket.emit('game:start', { gameId, gameData }, (response) => {
 				if (response && response.error) {
-					showToast(response.error, 'error');
+					// Server-side rejections are blocking conditions (missing
+					// questions, too few participants) — surface them in the
+					// lobby itself, not as a transient toast.
+					state.lastStartError = response.error;
+					showArenaMessage(response.error, 'error');
+					renderLobby();
 				} else {
+					state.lastStartError = '';
 					if (response?.game) {
 						upsertAuthoritativeGameSnapshot(response.game);
 					} else {
@@ -3206,7 +3253,27 @@
 				: lobbyStatus === 'completed'
 					? 'Watch Replay'
 					: 'Watch Lobby';
-		const joinCode = String(game.joinCode || game.join_code || '').trim().toUpperCase();
+			const joinCode = String(game.joinCode || game.join_code || '').trim().toUpperCase();
+			// Blocking-start banner. The LIVE validation of the current game
+			// state always wins: a remembered error used to take priority, so
+			// after players joined the banner still read "No participants
+			// have joined yet" instead of the actual blocker (missing
+			// questions) and kept Start disabled on stale grounds. The stored
+			// server error only surfaces when the local check passes
+			// (server-only rules, e.g. tournament readiness).
+			const currentStartError = getLocalStartValidationError(game);
+			const pendingStartError =
+				currentStartError || state.lastStartError || '';
+			const startErrorBanner = pendingStartError
+				? `<div class="game-start-error-banner" role="alert">${escapeHtml(pendingStartError)}</div>`
+				: '';
+			// Only the live check may block the button — a remembered server
+			// rejection stays clickable so the host can retry once the
+			// underlying issue is addressed.
+			const startIsBlocked = Boolean(currentStartError);
+			const startButtonTitle = pendingStartError
+				? escapeHtml(pendingStartError)
+				: 'Start the game for all participants';
 
 		container.innerHTML = `
 			<div class="game-lobby-header">
@@ -3219,6 +3286,7 @@
 				${participants.length} participant(s) • ${game.mode === 'team' ? 'Team Mode' : 'Solo Mode'}
 			</div>
 			<div class="game-lobby-share-code"><span>Student entry code</span><strong>${escapeHtml(joinCode || '------')}</strong><button type="button" class="btn btn-sm btn-secondary" onclick="copyGameJoinCode('${escapeHtml(joinCode)}', this)">Copy</button></div>
+				${startErrorBanner}
 			<div class="game-lobby-list">
 				${
 					participants.length
@@ -3247,8 +3315,8 @@
 				}
 			</div>
 			<div class="game-lobby-actions">
-				<button class="btn btn-secondary" onclick="openGameLobby('${game.id}')">Refresh</button>
-				<button class="btn btn-primary" onclick="startGameSession('${game.id}')">Start Game</button>
+					<button class="btn btn-secondary" onclick="openGameLobby('${game.id}')">Refresh</button>
+					<button class="btn btn-primary" title="${startButtonTitle}" ${startIsBlocked ? 'disabled' : ''} onclick="startGameSession('${game.id}')">Start Game</button>
 				<button class="btn btn-info" ${watchable ? '' : 'disabled'} onclick="${
 					watchable ? `openAdminGameWatch('${game.id}')` : 'return false'
 				}">${escapeHtml(watchLabel)}</button>
@@ -5077,35 +5145,60 @@
 
 	function ensureDefaultGamePresets(presets) {
 		const list = Array.isArray(presets) ? presets : [];
-		const normalizedCustomPresets = [];
-		const normalizedById = new Map();
+		const normalized = list.map((preset) => normalizeGamePreset(preset));
 
-		list.forEach((preset) => {
-			const normalized = normalizeGamePreset(preset);
-			normalizedById.set(normalized.id, normalized);
+		// Server rows carry real UUID ids — reuse them for the defaults so the
+		// id survives a server round-trip. Matching on is_default+gameType (not
+		// the synthetic default-* ids) keeps the normalized output equal to the
+		// raw store; otherwise every getGamePresets() write-back would re-create
+		// the rows server-side and the list would multiply endlessly.
+		const byDefaultType = new Map();
+		normalized.forEach((preset) => {
+			if (!preset.isDefault) return;
+			const gameType = preset.gameType;
+			const existing = byDefaultType.get(gameType);
+			if (!existing) {
+				byDefaultType.set(gameType, preset);
+				return;
+			}
+			// Duplicate default rows for the same type: keep the newest (the
+			// one whose id is a stable server UUID wins ties).
+			const isNewer = String(preset.createdAt || '') >= String(existing.createdAt || '');
+			const candidate = isNewer ? preset : existing;
+			const hasUuidId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(candidate.id || ''));
+			byDefaultType.set(gameType, hasUuidId ? candidate : existing);
 		});
 
 		const defaults = createDefaultGamePresets().map((defaultPreset) => {
-			const existing = normalizedById.get(defaultPreset.id);
+			const existing = byDefaultType.get(defaultPreset.gameType);
 			if (!existing) return defaultPreset;
 			return {
 				...existing,
-				id: defaultPreset.id,
 				name: defaultPreset.name,
 				gameType: defaultPreset.gameType,
+				gameMode: defaultPreset.gameMode,
+				gameRules: normalizeGameRules({ ...defaultPreset.gameRules, ...existing.gameRules }),
 				isDefault: true,
 			};
 		});
 
+		// Custom presets: dedupe by name+gameType+gameMode (case-insensitive,
+		// keep the newest) so repeated legacy syncs can't multiply them either.
 		const defaultIds = new Set(defaults.map((preset) => preset.id));
-		normalizedById.forEach((preset) => {
-			if (!defaultIds.has(preset.id)) {
-				normalizedCustomPresets.push({
-					...preset,
-					isDefault: false,
-				});
+		const customByFingerprint = new Map();
+		normalized.forEach((preset) => {
+			if (preset.isDefault) return;
+			if (defaultIds.has(preset.id)) return;
+			const fingerprintKey = `${String(preset.name || '').trim().toLowerCase()}|${preset.gameType}|${preset.gameMode}`;
+			const existing = customByFingerprint.get(fingerprintKey);
+			if (
+				!existing ||
+				String(preset.createdAt || '') >= String(existing.createdAt || '')
+			) {
+				customByFingerprint.set(fingerprintKey, preset);
 			}
 		});
+		const normalizedCustomPresets = Array.from(customByFingerprint.values());
 
 		return sortGamePresetsForDisplay([...defaults, ...normalizedCustomPresets]);
 	}

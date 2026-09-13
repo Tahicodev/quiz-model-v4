@@ -69,6 +69,16 @@ router.post('/join', validate(GameJoinSchema), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const { game_id, gameId, join_code, joinCode } = req.body;
+    // Games are played by students. Staff (admin/teacher) accounts used to
+    // land in lobbies as "Administrator Solo player" because an admin
+    // browser session could call this endpoint — a player join is a player
+    // join, so reject staff here rather than in the client.
+    if ([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER].includes(req.user.role)) {
+      return res.status(403).json({
+        code: 'FORBIDDEN',
+        message: 'Staff accounts cannot join games as players. Use the admin lobby to monitor instead.',
+      });
+    }
     // Resolve the game first so we can apply a status + class-scope check
     // before any write. The service does its own checks but a 404 here is
     // cleaner than a 500 from a downstream invariant.

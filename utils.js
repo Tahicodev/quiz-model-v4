@@ -345,12 +345,24 @@ window.QuizTypes = {
  */
 function buildAdminIdentifyPayload(extra = {}) {
     const payload = { role: 'admin', ...extra };
+    // This tab's session first (per-tab, never clobbered by another tab's
+    // login), then the admin-portal scoped copy, then the shared fallback.
     let token = '';
     try {
-        const session = JSON.parse(localStorage.getItem('quizSession') || 'null');
+        let session = JSON.parse(
+            sessionStorage.getItem('quizSession') || 'null',
+        );
+        if (!session || !session.token) {
+            session = JSON.parse(
+                localStorage.getItem('quizSession:admin') || 'null',
+            );
+        }
+        if (!session || !session.token) {
+            session = JSON.parse(localStorage.getItem('quizSession') || 'null');
+        }
         token = (session && session.token) || '';
     } catch (e) { /* non-fatal */ }
-    if (!token) token = localStorage.getItem('quizAuthToken') || '';
+    if (!token) token = localStorage.getItem('quizAuthToken:admin') || '';
     if (!token) token = window.__authToken || '';
     if (token) payload.token = token;
     return payload;

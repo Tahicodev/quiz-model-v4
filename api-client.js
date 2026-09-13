@@ -33,27 +33,81 @@
   function getToken() {
     if (window.__authToken) return window.__authToken;
     try {
-      var s = JSON.parse(localStorage.getItem('quizSession') || 'null');
+      // This tab's session wins over the shared localStorage copy (which may
+      // hold another portal's login from this same browser).
+      var s = JSON.parse(
+        sessionStorage.getItem('quizSession') ||
+          localStorage.getItem('quizSession') ||
+          'null',
+      );
       return (s && s.token) || localStorage.getItem('quizAuthToken') || '';
-    } catch (_) {
+    } catch (e) {
       return localStorage.getItem('quizAuthToken') || '';
+    }
+  }
+
+  // JWT payload (id/role) — used to refuse tokens minted for a different
+  // user than this tab's active session (the refresh cookie is shared
+  // browser-wide, so a refresh can return the OTHER portal's token).
+  function decodeJwtIdentity(token) {
+    try {
+      var parts = String(token || '').split('.');
+      if (parts.length < 2) return null;
+      var encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (encoded.length % 4) encoded += '=';
+      var payload = JSON.parse(atob(encoded));
+      return payload && (payload.id || payload.role) ? payload : null;
+    } catch (e) {
+      return null;
     }
   }
 
   function setToken(newToken) {
     if (!newToken) return;
+    // Identity guard: never accept a token minted for a different user than
+    // this tab's active session.
+    var tabSession = null;
+    try {
+      tabSession = JSON.parse(sessionStorage.getItem('quizSession') || 'null');
+    } catch (e) { /* ignore */ }
+    if (tabSession && tabSession.userId) {
+      var fresh = decodeJwtIdentity(newToken);
+      if (
+        fresh &&
+        (String(fresh.id || '') !== String(tabSession.userId || '') ||
+          String(fresh.role || '').toLowerCase() !== String(tabSession.role || '').toLowerCase())
+      ) {
+        console.warn(
+          '[api-client] refusing token for a different user than this tab\'s session',
+        );
+        return;
+      }
+    }
     window.__authToken = newToken;
     authUnavailable = false;
     window.__AUTH_SESSION_EXPIRED__ = false;
     try {
-      var s = JSON.parse(localStorage.getItem('quizSession') || 'null');
+      var s = JSON.parse(
+        sessionStorage.getItem('quizSession') ||
+          localStorage.getItem('quizSession') ||
+          'null',
+      );
       if (s) {
         s.token = newToken;
-        localStorage.setItem('quizSession', JSON.stringify(s));
         sessionStorage.setItem('quizSession', JSON.stringify(s));
+        // Update the shared localStorage copy only when it belongs to the
+        // same user — the other portal's tab must keep its identity.
+        var shared = JSON.parse(localStorage.getItem('quizSession') || 'null');
+        if (
+          shared &&
+          String(shared.userId || '') === String(s.userId || '') &&
+          String(shared.role || '').toLowerCase() === String(s.role || '').toLowerCase()
+        ) {
+          localStorage.setItem('quizSession', JSON.stringify(s));
+        }
       }
       localStorage.setItem('quizAuthToken', newToken);
-    } catch (_) { /* non-fatal */ }
+    } catch (e) { /* non-fatal */ }
   }
 
   var refreshing = null;
@@ -88,6 +142,10 @@
     refreshing = fetch(getBaseUrl() + '/auth/refresh', {
       method: 'POST',
       credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      // Name this tab's portal so the server rotates the matching cookie
+      // (admin and student tabs of one browser each keep their own).
+      body: JSON.stringify({ portal: window.APP_PORTAL || undefined }),
     })
       .then(function (r) {
         if (!r.ok) {
@@ -354,7 +412,10 @@
         type: g.type || g.mode || 'custom',
         status: status,
         settings_json: JSON.stringify(settings),
-        question_ids: JSON.stringify(questionIds),
+        // The REST schema expects a real array (it stringifies for the DB
+        // itself). Sending JSON.stringify here made every legacy-panel save
+        // fail with "expected array, received string".
+        question_ids: questionIds,
         join_code: g.joinCode || g.join_code || undefined,
       };
     },

@@ -43,4 +43,9 @@ export const LoginSchema = z.object({
 	username: z.string().min(1),
 	password: z.string().min(1),
 	schoolSlug: z.string().optional(),
+	// Which surface is signing in ("admin" | "student"). The admin portal and
+	// the student workspace can be open in two tabs of the SAME browser — the
+	// refresh cookie is scoped per portal so one tab's refresh never rotates
+	// (or mints a wrong-identity token for) the other tab's session.
+	portal: z.enum(['admin', 'student']).optional(),
 });

@@ -380,6 +380,86 @@
     // Track in-flight refresh to prevent a thundering herd on 401s.
     var refreshPromise = null;
 
+    // ── Identity-checked token application ─────────────────────────────────────
+    // The refresh response's access token identifies the user whose refresh
+    // cookie was consumed. When the admin and student portals share a
+    // browser, a tab can receive the OTHER portal's token (legacy unscoped
+    // cookie, or a stale shared session). Applying it blindly stamps the
+    // wrong identity into THIS tab's session. Compare the JWT identities
+    // first and reject mismatches.
+    function decodeJwtIdentity(token) {
+      try {
+        var parts = String(token || '').split('.');
+        if (parts.length < 2) return null;
+        var encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (encoded.length % 4) encoded += '=';
+        var payload = JSON.parse(atob(encoded));
+        return payload && (payload.id || payload.sub || payload.role)
+          ? payload
+          : null;
+      } catch (e) { return null; }
+    }
+
+    function identitiesMatch(a, b) {
+      if (!a || !b) return true; // unverifiable → don't block on legacy tokens
+      return String(a.id || a.sub || '') === String(b.id || b.sub || '') &&
+        String(a.role || '') === String(b.role || '');
+    }
+
+    function persistRefreshedToken(newToken) {
+      window.__authToken = newToken;
+      authUnavailable = false;
+      window.__AUTH_SESSION_EXPIRED__ = false;
+      try {
+        // THIS tab's session wins (sessionStorage). Only the shared copies
+        // that already match the token's identity are updated — a mismatch
+        // means the other portal owns them.
+        var tab = JSON.parse(_origGetItem.call(sessionStorage, 'quizSession') || 'null');
+        var shared = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
+        var target = tab || shared;
+        if (target) {
+          target.token = newToken;
+          _origSetItem.call(sessionStorage, 'quizSession', JSON.stringify(target));
+          // Update the shared unscoped copy only when it holds the same user.
+          if (
+            shared &&
+            String(shared.userId || '') === String(target.userId || '') &&
+            String(shared.role || '').toLowerCase() === String(target.role || '').toLowerCase()
+          ) {
+            _origSetItem.call(localStorage, 'quizSession', JSON.stringify(target));
+            var remember = JSON.parse(_origGetItem.call(localStorage, 'quizSessionRemember') || 'null');
+            if (
+              remember &&
+              String(remember.userId || '') === String(target.userId || '')
+            ) {
+              remember.token = newToken;
+              _origSetItem.call(localStorage, 'quizSessionRemember', JSON.stringify(remember));
+            }
+          }
+          // Keep the role-scoped copy for this session's role in step.
+          var roleKey = 'quizSession:' + (String(target.role || '').toLowerCase() || 'user');
+          var scoped = JSON.parse(_origGetItem.call(localStorage, roleKey) || 'null');
+          if (
+            scoped &&
+            String(scoped.userId || '') === String(target.userId || '')
+          ) {
+            scoped.token = newToken;
+            _origSetItem.call(localStorage, roleKey, JSON.stringify(scoped));
+          }
+        }
+        // The raw-token key is a shared legacy convenience — only touch it
+        // when no other portal owns it differently. If the shared session
+        // belongs to another user, leave their token key alone.
+        var sharedOwner = shared
+          ? decodeJwtIdentity(shared.token)
+          : null;
+        var freshOwner = decodeJwtIdentity(newToken);
+        if (!shared || identitiesMatch(sharedOwner, freshOwner)) {
+          _origSetItem.call(localStorage, 'quizAuthToken', newToken);
+        }
+      } catch (_) { /* non-fatal */ }
+    }
+
     function refreshAccessToken() {
       if (refreshPromise) return refreshPromise;
       if (authUnavailable) {
@@ -390,6 +470,10 @@
       refreshPromise = fetch(getBaseUrl() + '/auth/refresh', {
         method: 'POST',
         credentials: 'include', // sends the refreshToken httpOnly cookie
+        headers: { 'Content-Type': 'application/json' },
+        // Name this tab's portal so the server rotates the matching cookie
+        // (admin and student tabs of one browser each keep their own).
+        body: JSON.stringify({ portal: window.APP_PORTAL || undefined }),
       })
         .then(function (r) {
           if (!r.ok) {
@@ -402,25 +486,33 @@
         .then(function (data) {
           var newToken = data && (data.accessToken || data.token);
           if (!newToken) throw new Error('Refresh returned no token');
-          // Update the in-memory token and all persisted copies so subsequent
-          // syncs and the next page load use the fresh token.
-          window.__authToken = newToken;
-          authUnavailable = false;
-          window.__AUTH_SESSION_EXPIRED__ = false;
+          // Identity guard: the refreshed token must belong to the same user
+          // this tab is signed in as. A mismatch means another portal's
+          // cookie was consumed — applying it would silently sign this tab
+          // in as the wrong user.
+          var tabSession = null;
           try {
-            var s = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
-            if (s) {
-              s.token = newToken;
-              _origSetItem.call(localStorage, 'quizSession', JSON.stringify(s));
-              _origSetItem.call(sessionStorage, 'quizSession', JSON.stringify(s));
-              var r = JSON.parse(_origGetItem.call(localStorage, 'quizSessionRemember') || 'null');
-              if (r) {
-                r.token = newToken;
-                _origSetItem.call(localStorage, 'quizSessionRemember', JSON.stringify(r));
-              }
-            }
-            _origSetItem.call(localStorage, 'quizAuthToken', newToken);
-          } catch (_) { /* non-fatal */ }
+            tabSession = JSON.parse(_origGetItem.call(sessionStorage, 'quizSession') || 'null');
+          } catch (_) {}
+          var expected = tabSession && tabSession.userId
+            ? { id: tabSession.userId, role: tabSession.role }
+            : null;
+          var fresh = decodeJwtIdentity(newToken);
+          if (
+            expected &&
+            fresh &&
+            (String(fresh.id || '') !== String(expected.id || '') ||
+              String(fresh.role || '').toLowerCase() !== String(expected.role || '').toLowerCase())
+          ) {
+            console.warn(
+              '[legacy-bridge] refresh returned a token for a different user — ' +
+                'another portal owns the refresh cookie; keeping this tab\'s session',
+            );
+            var mismatch = new Error('Refreshed token identity mismatch');
+            mismatch.status = 401;
+            throw mismatch;
+          }
+          persistRefreshedToken(newToken);
           return newToken;
         })
         .finally(function () {
@@ -648,11 +740,40 @@
   }
 
   // ── Restore any previously-minted access token so the bootstrap can auth ────
+  // Precedence: this tab's session first (sessionStorage — never clobbered by
+  // another tab's login), then the role-scoped copies, then the shared
+  // localStorage fallback (which may hold the OTHER portal's last login when
+  // admin and student share a browser; readers downstream guard by identity).
   if (!window.__authToken) {
     try {
-      var savedSession = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
-      window.__authToken = savedSession && savedSession.token;
-    } catch (_) { /* ignore malformed legacy sessions */ }
+      var tabSession = JSON.parse(_origGetItem.call(sessionStorage, 'quizSession') || 'null');
+      window.__authToken = tabSession && tabSession.token;
+    } catch (e) { /* ignore malformed sessions */ }
+    if (!window.__authToken) {
+      try {
+        var scopedAdmin = JSON.parse(_origGetItem.call(localStorage, 'quizSession:admin') || 'null');
+        var scopedStudent = JSON.parse(_origGetItem.call(localStorage, 'quizSession:student') || 'null');
+        // Prefer whichever scoped copy matches the last shared session's role —
+        // otherwise the newest one (student logins write :student last).
+        var sharedRole = '';
+        try {
+          var sharedS = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
+          sharedRole = String((sharedS && sharedS.role) || '').toLowerCase();
+        } catch (e) {}
+        var pick = sharedRole === 'admin' || sharedRole === 'super_admin' || sharedRole === 'teacher'
+          ? scopedAdmin
+          : sharedRole === 'student'
+            ? scopedStudent
+            : (scopedStudent && scopedStudent.token) ? scopedStudent : scopedAdmin;
+        window.__authToken = pick && pick.token;
+      } catch (e) { /* ignore malformed scoped sessions */ }
+    }
+    if (!window.__authToken) {
+      try {
+        var savedSession = JSON.parse(_origGetItem.call(localStorage, 'quizSession') || 'null');
+        window.__authToken = savedSession && savedSession.token;
+      } catch (e) { /* ignore malformed legacy sessions */ }
+    }
     if (!window.__authToken) {
       window.__authToken = _origGetItem.call(localStorage, 'quizAuthToken') || '';
     }

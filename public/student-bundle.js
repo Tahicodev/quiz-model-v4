@@ -252,7 +252,11 @@ var QuizStudent = (() => {
         try {
           const res = await fetch(this.#url("/auth/refresh"), {
             method: "POST",
-            credentials: "include"
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            // Name this SPA's portal so the server rotates the matching refresh
+            // cookie — admin and student tabs of one browser each keep their own.
+            body: JSON.stringify({ portal: window.APP_PORTAL || void 0 })
           });
           if (!res.ok) return false;
           const { accessToken } = await res.json();
@@ -15098,7 +15102,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var LoginSchema = external_exports.object({
     username: external_exports.string().min(1),
     password: external_exports.string().min(1),
-    schoolSlug: external_exports.string().optional()
+    schoolSlug: external_exports.string().optional(),
+    // Which surface is signing in ("admin" | "student"). The admin portal and
+    // the student workspace can be open in two tabs of the SAME browser — the
+    // refresh cookie is scoped per portal so one tab's refresh never rotates
+    // (or mints a wrong-identity token for) the other tab's session.
+    portal: external_exports.enum(["admin", "student"]).optional()
   });
 
   // src/frontend/infrastructure/socket.client.js
@@ -15137,7 +15146,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(parsed.data)
+        // Name this SPA's portal so the server scopes the refresh cookie —
+        // admin and student tabs of the same browser each keep their own.
+        body: JSON.stringify({ ...parsed.data, portal: window.APP_PORTAL || void 0 })
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -15148,6 +15159,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#user = this.#stripSensitive(body.user || body);
       this.#persistSession(this.#user);
       window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+        if (!newToken || !this.#user) return;
+        try {
+          const parts = String(newToken).split(".");
+          const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const payload = JSON.parse(atob(encoded));
+          if (payload && this.#user.id && String(payload.id || "") !== String(this.#user.id)) {
+            return;
+          }
+        } catch {
+        }
         this.#token = newToken;
       };
       return { user: this.#user, token: this.#token };
@@ -16125,9 +16146,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   // src/shared/schemas/game.schema.js
   var typeValues2 = Object.values(GAME_TYPES);
   var statusValues2 = Object.values(GAME_STATUS);
+  var LEGACY_ENGINE_TYPES = [
+    "race",
+    "sprint-race",
+    "cards",
+    "cards-draw",
+    "hot-potato",
+    "last-survivor"
+  ];
+  var gameTypeSchema = external_exports.string().min(1).refine((value) => typeValues2.includes(value) || LEGACY_ENGINE_TYPES.includes(value), {
+    message: `Invalid option: expected a game type (${[...typeValues2, ...LEGACY_ENGINE_TYPES].join(", ")})`
+  });
   var GameCreateSchema = external_exports.object({
     name: external_exports.string().min(1).max(200),
-    type: external_exports.enum(typeValues2).default("quiz"),
+    type: gameTypeSchema.default("quiz"),
     settings_json: external_exports.string().optional().nullable(),
     // JSON: time per question, max players, etc.
     question_ids: external_exports.array(external_exports.string().uuid()).min(1)
@@ -16139,7 +16171,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     question_ids: external_exports.array(external_exports.string().uuid()).optional()
   });
   var GameFilterSchema = external_exports.object({
-    type: external_exports.enum(typeValues2).optional(),
+    type: gameTypeSchema.optional(),
     status: external_exports.enum(statusValues2).optional(),
     search: external_exports.string().optional(),
     limit: external_exports.coerce.number().int().min(1).max(200).default(50),
@@ -16223,13 +16255,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
       const joinCode = await this.#generateJoinCode();
-      return this.#repo.create("games", {
+      const created = await this.#repo.create("games", {
         ...parsed.data,
+        question_ids: JSON.stringify(parsed.data.question_ids),
         school_id: currentUser?.school_id,
         creator_id: currentUser?.id ?? null,
         status: GAME_STATUS.WAITING,
         join_code: joinCode
       });
+      return { ...created, question_ids: JSON.parse(created.question_ids ?? "[]") };
     }
     async update(id, data, currentUser) {
       this.#requireAdmin(currentUser);
@@ -16242,7 +16276,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (parsed.data.question_ids) {
         await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
       }
-      return this.#repo.update("games", id, parsed.data);
+      const updated = await this.#repo.update("games", id, {
+        ...parsed.data,
+        ...parsed.data.question_ids && {
+          question_ids: JSON.stringify(parsed.data.question_ids)
+        }
+      });
+      return { ...updated, question_ids: JSON.parse(updated.question_ids ?? "[]") };
     }
     async joinGame({ gameId, joinCode, userId, schoolId = null }) {
       const parsed = GameJoinSchema.safeParse({ game_id: gameId, join_code: joinCode });
@@ -17134,16 +17174,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     };
     try {
       sessionStorage.setItem("quizSession", JSON.stringify(session));
-      localStorage.setItem("quizSession", JSON.stringify(session));
-      if (remember) {
-        localStorage.setItem("quizSessionRemember", JSON.stringify(session));
-      } else {
-        localStorage.removeItem("quizSessionRemember");
-      }
+      const role = String(user.role || "").toLowerCase();
+      localStorage.setItem(`quizSession:${role || "user"}`, JSON.stringify(session));
       if (token) {
-        localStorage.setItem("quizAuthToken", token);
+        localStorage.setItem(`quizAuthToken:${role || "user"}`, token);
       }
-      if (user && user.id) {
+      let sharedSession = null;
+      try {
+        sharedSession = JSON.parse(localStorage.getItem("quizSession") || "null");
+      } catch {
+      }
+      const sharedMatches = sharedSession && String(sharedSession.userId || "") === String(session.userId || "") && String(sharedSession.role || "").toLowerCase() === role;
+      const thisTabBefore = sessionStorage.getItem("quizSession");
+      if (!localStorage.getItem("quizSession") || sharedMatches || thisTabBefore === null) {
+        localStorage.setItem("quizSession", JSON.stringify(session));
+        if (token) {
+          localStorage.setItem("quizAuthToken", token);
+        }
         const currentUser = {
           id: user.id,
           username: user.username,
@@ -17156,6 +17203,36 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           status: "active"
         };
         localStorage.setItem("quizCurrentUser", JSON.stringify(currentUser));
+        if (remember) {
+          localStorage.setItem("quizSessionRemember", JSON.stringify(session));
+        } else {
+          localStorage.removeItem("quizSessionRemember");
+        }
+      } else {
+        localStorage.setItem(`quizCurrentUser:${role || "user"}`, JSON.stringify({
+          id: user.id,
+          username: user.username,
+          name: user.name || user.username,
+          role: user.role,
+          numero: user.numero || user.studentNumber || "",
+          studentNumber: user.studentNumber || user.numero || "",
+          classId: user.class_id || user.classId || "",
+          className: user.class_name || user.className || "",
+          status: "active"
+        }));
+      }
+      const seedUser = {
+        id: user.id,
+        username: user.username,
+        name: user.name || user.username,
+        role: user.role,
+        numero: user.numero || user.studentNumber || "",
+        studentNumber: user.studentNumber || user.numero || "",
+        classId: user.class_id || user.classId || "",
+        className: user.class_name || user.className || "",
+        status: "active"
+      };
+      if (user && user.id) {
         let users = [];
         try {
           users = JSON.parse(localStorage.getItem("quizUsers") || "[]");
@@ -17164,13 +17241,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (!Array.isArray(users)) users = [];
         let found = false;
         users = users.map((u) => {
-          if (u && u.id === currentUser.id) {
+          if (u && u.id === seedUser.id) {
             found = true;
-            return Object.assign({}, u, currentUser);
+            return Object.assign({}, u, seedUser);
           }
           return u;
         });
-        if (!found) users.push(currentUser);
+        if (!found) users.push(seedUser);
         localStorage.setItem("quizUsers", JSON.stringify(users));
       }
       window.__authToken = token;
@@ -17581,11 +17658,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const payload = { role: "admin", ...extra };
     let token = "";
     try {
-      const session = JSON.parse(localStorage.getItem("quizSession") || "null");
+      let session = JSON.parse(
+        sessionStorage.getItem("quizSession") || "null"
+      );
+      if (!session || !session.token) {
+        session = JSON.parse(
+          localStorage.getItem("quizSession:admin") || "null"
+        );
+      }
+      if (!session || !session.token) {
+        session = JSON.parse(localStorage.getItem("quizSession") || "null");
+      }
       token = session && session.token || "";
     } catch (e) {
     }
-    if (!token) token = localStorage.getItem("quizAuthToken") || "";
+    if (!token) token = localStorage.getItem("quizAuthToken:admin") || "";
     if (!token) token = window.__authToken || "";
     if (token) payload.token = token;
     return payload;
@@ -17658,26 +17745,59 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function getToken() {
       if (window.__authToken) return window.__authToken;
       try {
-        var s = JSON.parse(localStorage.getItem("quizSession") || "null");
+        var s = JSON.parse(
+          sessionStorage.getItem("quizSession") || localStorage.getItem("quizSession") || "null"
+        );
         return s && s.token || localStorage.getItem("quizAuthToken") || "";
-      } catch (_) {
+      } catch (e) {
         return localStorage.getItem("quizAuthToken") || "";
+      }
+    }
+    function decodeJwtIdentity(token) {
+      try {
+        var parts = String(token || "").split(".");
+        if (parts.length < 2) return null;
+        var encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        while (encoded.length % 4) encoded += "=";
+        var payload = JSON.parse(atob(encoded));
+        return payload && (payload.id || payload.role) ? payload : null;
+      } catch (e) {
+        return null;
       }
     }
     function setToken(newToken) {
       if (!newToken) return;
+      var tabSession = null;
+      try {
+        tabSession = JSON.parse(sessionStorage.getItem("quizSession") || "null");
+      } catch (e) {
+      }
+      if (tabSession && tabSession.userId) {
+        var fresh = decodeJwtIdentity(newToken);
+        if (fresh && (String(fresh.id || "") !== String(tabSession.userId || "") || String(fresh.role || "").toLowerCase() !== String(tabSession.role || "").toLowerCase())) {
+          console.warn(
+            "[api-client] refusing token for a different user than this tab's session"
+          );
+          return;
+        }
+      }
       window.__authToken = newToken;
       authUnavailable = false;
       window.__AUTH_SESSION_EXPIRED__ = false;
       try {
-        var s = JSON.parse(localStorage.getItem("quizSession") || "null");
+        var s = JSON.parse(
+          sessionStorage.getItem("quizSession") || localStorage.getItem("quizSession") || "null"
+        );
         if (s) {
           s.token = newToken;
-          localStorage.setItem("quizSession", JSON.stringify(s));
           sessionStorage.setItem("quizSession", JSON.stringify(s));
+          var shared = JSON.parse(localStorage.getItem("quizSession") || "null");
+          if (shared && String(shared.userId || "") === String(s.userId || "") && String(shared.role || "").toLowerCase() === String(s.role || "").toLowerCase()) {
+            localStorage.setItem("quizSession", JSON.stringify(s));
+          }
         }
         localStorage.setItem("quizAuthToken", newToken);
-      } catch (_) {
+      } catch (e) {
       }
     }
     var refreshing = null;
@@ -17712,7 +17832,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       refreshing = fetch(getBaseUrl() + "/auth/refresh", {
         method: "POST",
-        credentials: "include"
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        // Name this tab's portal so the server rotates the matching cookie
+        // (admin and student tabs of one browser each keep their own).
+        body: JSON.stringify({ portal: window.APP_PORTAL || void 0 })
       }).then(function(r) {
         if (!r.ok) {
           var err = new Error("Refresh failed (" + r.status + ")");
@@ -17940,7 +18064,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           type: g.type || g.mode || "custom",
           status,
           settings_json: JSON.stringify(settings),
-          question_ids: JSON.stringify(questionIds2),
+          // The REST schema expects a real array (it stringifies for the DB
+          // itself). Sending JSON.stringify here made every legacy-panel save
+          // fail with "expected array, received string".
+          question_ids: questionIds2,
           join_code: g.joinCode || g.join_code || void 0
         };
       },
@@ -18388,6 +18515,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function clearStoredSession() {
       sessionStorage.removeItem(SESSION_STORAGE_KEY);
       localStorage.removeItem(SESSION_REMEMBER_KEY);
+      ["admin", "teacher", "student", "super_admin", "user"].forEach((role) => {
+        localStorage.removeItem(`${SESSION_STORAGE_KEY}:${role}`);
+      });
     }
     function loadSession(allowedRoles) {
       const raw = sessionStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem(SESSION_REMEMBER_KEY);
@@ -18404,11 +18534,31 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return null;
       }
       if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
-        if (!allowedRoles.includes(getEffectiveUserRole(user))) {
+        const role = getEffectiveUserRole(user);
+        if (!allowedRoles.includes(role)) {
+          const scopedSession = loadScopedSession(allowedRoles, users);
+          if (scopedSession) return scopedSession;
           return null;
         }
       }
       return { session, user };
+    }
+    function loadScopedSession(allowedRoles, users) {
+      for (const role of allowedRoles) {
+        const raw = localStorage.getItem(`${SESSION_STORAGE_KEY}:${role}`);
+        const session = safeJsonParse(raw, null);
+        if (!session) continue;
+        if (session.expiresAt && Date.now() > session.expiresAt) {
+          localStorage.removeItem(`${SESSION_STORAGE_KEY}:${role}`);
+          continue;
+        }
+        const user = getUserById(users, session.userId);
+        if (!user || user.status === "disabled") continue;
+        if (!allowedRoles.includes(getEffectiveUserRole(user))) continue;
+        sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+        return { session, user };
+      }
+      return null;
     }
     function setCurrentUser(user, session) {
       currentUser = user;
@@ -18450,8 +18600,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function isStudent() {
       return isStudentLikeUser(currentUser);
     }
+    function getTeacherClassAssignments() {
+      try {
+        const raw = localStorage.getItem("quizTeacherClassAssignments");
+        const parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === "object" ? parsed : {};
+      } catch (e) {
+        return {};
+      }
+    }
     function getTeacherClassIds(user = currentUser) {
-      return Array.isArray(user?.classIds) ? user.classIds : [];
+      const own = Array.isArray(user?.classIds) ? user.classIds : [];
+      if (own.length > 0) return own;
+      const mirrored = getTeacherClassAssignments()[user?.id || ""];
+      return Array.isArray(mirrored) ? mirrored : [];
     }
     function getAccessibleClasses() {
       const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
@@ -18526,8 +18688,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       settingsTabs: {
         general: true,
         presets: true,
-        data: true,
-        realtime: true,
+        // Data and Realtime manage school-wide datasets and the LAN server —
+        // admin-only by default now (markup gates them with data-roles="admin").
+        data: false,
+        realtime: false,
         "ai-generation": true,
         users: true
       }
@@ -18636,6 +18800,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!roles.length) return true;
       return roles.includes(currentUser?.role);
     }
+    function canAccessSettingsTab(tabName) {
+      if (isAdmin()) return true;
+      if (isTeacher()) {
+        if (tabName === "teacher-access" || tabName === "data" || tabName === "realtime") {
+          return false;
+        }
+        const access = getTeacherAccessSettings();
+        if (access.settings === false) return false;
+        if (access.settingsTabs && access.settingsTabs[tabName] === false) {
+          return false;
+        }
+        const section = document.getElementById(`${tabName}-settings`);
+        const rolesSource = section?.dataset?.roles || "";
+        const roles = String(rolesSource).split(",").map((r) => r.trim()).filter(Boolean);
+        if (roles.length) return roles.includes(currentUser?.role);
+        return true;
+      }
+      return false;
+    }
     function applyTeacherAccess() {
       if (!isTeacher()) return;
       const access = getTeacherAccessSettings();
@@ -18668,6 +18851,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-tab-btn[data-settings-tab]").forEach((btn) => {
         const key = btn.dataset.settingsTab;
         if (!key) return;
+        if (key === "teacher-access" || key === "data" || key === "realtime") {
+          btn.classList.add("role-hidden");
+          return;
+        }
         if (access.settingsTabs && access.settingsTabs[key] === false) {
           btn.classList.add("role-hidden");
         } else {
@@ -18677,6 +18864,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-section[data-settings-tab]").forEach((section) => {
         const key = section.dataset.settingsTab;
         if (!key) return;
+        if (key === "teacher-access" || key === "data" || key === "realtime") {
+          section.classList.add("role-hidden");
+          return;
+        }
         if (access.settingsTabs && access.settingsTabs[key] === false) {
           section.classList.add("role-hidden");
         } else {
@@ -20137,12 +20328,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const teacherClassList = document.getElementById("teacherClassList");
       if (teacherClassList) {
         const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+        const assignedClassIds = Array.isArray(user?.classIds) ? user.classIds : getTeacherClassAssignments()[user?.id] || [];
         teacherClassList.innerHTML = classes.map((c) => {
-          const checked = user?.classIds?.includes(c.id) ? "checked" : "";
+          const checked = assignedClassIds.includes(c.id) ? "checked" : "";
           return `
             <label class="checkbox-list-item">
-                <input type="checkbox" value="${escapeHtml(c.id)}" ${checked}>
-                <span>${escapeHtml(c.name)}</span>
+                <div class="custom-checkbox-container">
+                    <input type="checkbox" class="custom-checkbox" value="${escapeHtml(c.id)}" ${checked}>
+                    <span class="custom-checkmark" aria-hidden="true"></span>
+                </div>
+                <span class="checkbox-label">${escapeHtml(c.name)}</span>
             </label>
           `;
         }).join("");
@@ -20311,6 +20506,46 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             const i = users.findIndex((u) => u.id === updatedUser.id || u.username === updatedUser.username);
             if (i !== -1) users[i] = updatedUser;
             savedToServer = true;
+          }
+          if (role === ROLE_TEACHER && Array.isArray(updatedUser.classIds)) {
+            try {
+              const settingsRepo = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+              let assignments = {};
+              if (settingsRepo && settingsRepo.getValue_sync) {
+                const raw = settingsRepo.getValue_sync("settings", {});
+                const row = Array.isArray(raw?.settings) ? raw.settings.find(
+                  (s) => s && s.key === "teacherClassAssignments"
+                ) : null;
+                if (row?.value) {
+                  try {
+                    assignments = JSON.parse(row.value) || {};
+                  } catch (_) {
+                  }
+                }
+              }
+              assignments[updatedUser.id] = updatedUser.classIds;
+              const serialized = JSON.stringify(assignments);
+              if (window.API && typeof window.API.update === "function") {
+                await window.API.update(
+                  "settings",
+                  "teacherClassAssignments",
+                  {
+                    key: "teacherClassAssignments",
+                    value: serialized,
+                    visibility: "admin"
+                  }
+                );
+              }
+              localStorage.setItem(
+                "quizTeacherClassAssignments",
+                serialized
+              );
+            } catch (assignmentErr) {
+              console.warn(
+                "[auth] teacher class assignments save failed:",
+                assignmentErr
+              );
+            }
           }
         } catch (apiErr) {
           console.warn("[auth] API save user failed:", apiErr);
@@ -21476,6 +21711,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       setCurrentUser,
       applyRolePermissions,
       canAccessTab,
+      canAccessSettingsTab,
       updateUserById,
       updateUserPassword,
       getProfileRequests,
@@ -26257,6 +26493,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       try {
         var stores = [
           sessionStorage.getItem("quizSession"),
+          // Role-scoped copy — this student tab keeps its identity even
+          // when an admin tab in this same browser logged in last.
+          localStorage.getItem("quizSession:student"),
           localStorage.getItem("quizSessionRemember"),
           localStorage.getItem("quizSession")
         ];
@@ -26267,7 +26506,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
       } catch (e) {
       }
-      return window.__authToken || localStorage.getItem("quizAuthToken") || "";
+      return window.__authToken || localStorage.getItem("quizAuthToken:student") || localStorage.getItem("quizAuthToken") || "";
     }
     function createSocket() {
       if (!window.io) return null;
@@ -26343,14 +26582,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const cfg = payload.quizGamification || {};
         const active = payload.quizTournamentActive || null;
         const history = Array.isArray(payload.quizTournamentsHistory) ? payload.quizTournamentsHistory : [];
+        const historySample = history.slice(0, 5).map((h) => String(h?.id || h?.name || "")).join(",");
         return [
-          payload.syncedAt || "",
           Number(cfg.expPerCorrect) || 0,
           Number(cfg.expPerWin) || 0,
           cfg.autoAwardBadges === false ? "0" : "1",
           active?.id || "",
           active?.status || "",
-          history.length
+          history.length,
+          historySample
         ].join("::");
       }
       function shouldSkipDuplicateSync(payload, listKey, syncType) {
@@ -27502,6 +27742,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         } catch (e) {
         }
         try {
+          const exams = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("exams"));
+          if (exams) out.quizExams = JSON.parse(exams);
+        } catch (e) {
+        }
+        try {
+          const questions2 = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("questions"));
+          if (questions2) out.quizQuestions = JSON.parse(questions2);
+        } catch (e) {
+        }
+        try {
+          const classes = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes"));
+          if (classes) out.quizClasses = JSON.parse(classes);
+        } catch (e) {
+        }
+        try {
           const activity = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("audit_logs"));
           if (activity) out.quizActivity = JSON.parse(activity);
         } catch (e) {
@@ -27588,6 +27843,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     if (window.__AUTH_BRIDGE__) return;
     window.__AUTH_BRIDGE__ = true;
     var baseUrl = window.APP_CONFIG && window.APP_CONFIG.apiUrl || "/api/v1";
+    var _origGetLS = Storage.prototype.getItem;
+    var _origSetLS = Storage.prototype.setItem;
+    var _origRemoveLS = Storage.prototype.removeItem;
     function showMsg(msg, type) {
       if (typeof window.showToast === "function") {
         window.showToast(msg, type || "info");
@@ -27620,41 +27878,99 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function persistSession(session, remember) {
       try {
         sessionStorage.setItem("quizSession", JSON.stringify(session));
-        localStorage.setItem("quizSession", JSON.stringify(session));
-        if (remember) {
-          localStorage.setItem("quizSessionRemember", JSON.stringify(session));
-        } else {
-          localStorage.removeItem("quizSessionRemember");
+        var role = String(session.role || "").toLowerCase();
+        var scopedKey = "quizSession:" + (role || "user");
+        var scopedTokenKey = "quizAuthToken:" + (role || "user");
+        var scopedUserKey = "quizCurrentUser:" + (role || "user");
+        _origSetLS(scopedKey, JSON.stringify(session));
+        if (session.token) _origSetLS(scopedTokenKey, session.token);
+        var thisTabBefore = _origGetLS("quizSession");
+        var thisTabBeforeUser = null;
+        try {
+          thisTabBeforeUser = thisTabBefore ? JSON.parse(thisTabBefore).userId : null;
+        } catch (_) {
         }
-        if (session.token) {
-          localStorage.setItem("quizAuthToken", session.token);
+        var sameUserBefore = thisTabBefore !== null && String(thisTabBeforeUser || "") === String(session.userId || "");
+        var sharedRaw = _origGetLS("quizSession");
+        var sharedSession = null;
+        try {
+          sharedSession = sharedRaw ? JSON.parse(sharedRaw) : null;
+        } catch (_) {
+        }
+        var sharedMatches = sharedSession && String(sharedSession.userId || "") === String(session.userId || "") && String(sharedSession.role || "").toLowerCase() === role;
+        if (!sharedRaw || sharedMatches || sameUserBefore) {
+          _origSetLS("quizSession", JSON.stringify(session));
+          if (session.token) _origSetLS("quizAuthToken", session.token);
+          if (session.userId) {
+            var currentUser = {
+              id: session.userId,
+              username: session.username,
+              name: session.name || session.username,
+              role: session.role,
+              status: "active"
+            };
+            _origSetLS("quizCurrentUser", JSON.stringify(currentUser));
+          }
+          if (remember) {
+            _origSetLS("quizSessionRemember", JSON.stringify(session));
+          } else {
+            _origRemoveLS("quizSessionRemember");
+          }
+        } else if (session.userId) {
+          _origSetLS(scopedUserKey, JSON.stringify({
+            id: session.userId,
+            username: session.username,
+            name: session.name || session.username,
+            role: session.role,
+            status: "active"
+          }));
         }
         if (session.userId) {
-          var currentUser = {
+          var scopedUser2 = {
             id: session.userId,
             username: session.username,
             name: session.name || session.username,
             role: session.role,
             status: "active"
           };
-          localStorage.setItem("quizCurrentUser", JSON.stringify(currentUser));
-          var users = [];
+          var existingScopedRaw = _origGetLS(scopedUserKey);
+          var existingScoped = null;
           try {
-            users = JSON.parse(localStorage.getItem("quizUsers") || "[]");
+            existingScoped = existingScopedRaw ? JSON.parse(existingScopedRaw) : null;
           } catch (_) {
           }
-          if (!Array.isArray(users)) users = [];
-          var found = false;
-          users = users.map(function(user) {
-            if (user && user.id === currentUser.id) {
-              found = true;
-              return Object.assign({}, user, currentUser);
-            }
-            return user;
-          });
-          if (!found) users.push(currentUser);
-          localStorage.setItem("quizUsers", JSON.stringify(users));
+          if (!existingScoped || String(existingScoped.id || "") === String(session.userId || "")) {
+            _origSetLS(scopedUserKey, JSON.stringify(scopedUser2));
+          }
         }
+        var users = [];
+        try {
+          users = JSON.parse(_origGetLS("quizUsers") || "[]");
+        } catch (_) {
+        }
+        if (!Array.isArray(users)) users = [];
+        var found = false;
+        users = users.map(function(user) {
+          if (user && user.id === session.userId) {
+            found = true;
+            return Object.assign({}, user, {
+              id: session.userId,
+              username: session.username,
+              name: session.name || session.username,
+              role: session.role,
+              status: "active"
+            });
+          }
+          return user;
+        });
+        if (!found && session.userId) users.push({
+          id: session.userId,
+          username: session.username,
+          name: session.name || session.username,
+          role: session.role,
+          status: "active"
+        });
+        _origSetLS("quizUsers", JSON.stringify(users));
         window.__authToken = session.token;
         window.__AUTH_SESSION_EXPIRED__ = false;
       } catch (e) {
@@ -27718,7 +28034,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           var res = await fetch(baseUrl + "/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username.trim(), password }),
+            body: JSON.stringify({
+              username: username.trim(),
+              password,
+              // Scope the refresh cookie to this portal so a student login in
+              // another tab of the same browser never rotates it.
+              portal: "admin"
+            }),
             credentials: "include"
           });
           if (!res.ok) {
@@ -27766,7 +28088,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           var res = await fetch(baseUrl + "/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username.trim(), password }),
+            body: JSON.stringify({
+              username: username.trim(),
+              password,
+              // Scope the refresh cookie to this portal so an admin login in
+              // another tab of the same browser never rotates it.
+              portal: "student"
+            }),
             credentials: "include"
           });
           if (!res.ok) {
@@ -27792,6 +28120,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           }
           var session = buildSession(user, token, remember);
           persistSession(session, remember);
+          var authNSApply = window.Auth || {};
+          if (typeof authNSApply.setCurrentUser === "function") {
+            try {
+              authNSApply.setCurrentUser(user, session);
+            } catch (e2) {
+              console.warn("[legacy-auth] setCurrentUser failed:", e2);
+            }
+          }
           if (typeof window.__legacyBridgeBootstrap === "function") {
             window.__legacyBridgeBootstrap().catch(function() {
             });
@@ -27831,19 +28167,44 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (typeof window.authLogout === "function") {
         var origLogout = window.authLogout;
         window.authLogout = function() {
+          var portal = null;
+          try {
+            var s = JSON.parse(sessionStorage.getItem("quizSession") || "null");
+            var role = String(s && s.role || "").toLowerCase();
+            portal = role === "student" ? "student" : "admin";
+          } catch (_) {
+          }
           fetch(baseUrl + "/auth/logout", {
             method: "POST",
             credentials: "include",
-            headers: { "Authorization": "Bearer " + (window.__authToken || "") }
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer " + (window.__authToken || "")
+            },
+            body: JSON.stringify(portal ? { portal } : {})
           }).catch(function() {
           });
           try {
+            var activeRole = "";
+            try {
+              var s = JSON.parse(sessionStorage.getItem("quizSession") || "null");
+              activeRole = String(s && s.role || "").toLowerCase();
+            } catch (_) {
+            }
             localStorage.removeItem("quizSession");
             sessionStorage.removeItem("quizSession");
             localStorage.removeItem("quizSessionRemember");
             localStorage.removeItem("quizAuthToken");
             localStorage.removeItem("quizCurrentUser");
             sessionStorage.removeItem("adminLoggedIn");
+            ["admin", "student", "teacher", "super_admin", "user"].forEach(function(r) {
+              localStorage.removeItem("quizSession:" + r);
+              localStorage.removeItem("quizAuthToken:" + r);
+              localStorage.removeItem("quizCurrentUser:" + r);
+            });
+            if (activeRole) {
+              localStorage.removeItem("quizCurrentUser:" + activeRole);
+            }
           } catch (_) {
           }
           window.__authToken = null;

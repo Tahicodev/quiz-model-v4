@@ -4304,13 +4304,49 @@ function registerGameEngine(io) {
 		socket.on(
 			'game:join',
 			({ gameId, joinCode, userId, userName, classId, teamId }, ack) => {
+				// Games are played by students. A staff (admin/teacher) socket
+				// that emits game:join lands in the lobby as "Administrator
+				// Solo player" — the admin should be watching the lobby, not
+				// registered in it. The JWT handshake role (SaaS) or the
+				// authenticated `identify` role (legacy) both prove staff.
+				const legacyAdmin =
+					socket.role === 'admin' && socket.adminAuthenticated === true;
+				const saasJoinRole = String(
+					socket.data?.user?.role || '',
+				).toLowerCase();
+				const saasStaff = ['admin', 'teacher', 'super_admin'].includes(
+					saasJoinRole,
+				);
+				if (legacyAdmin || saasStaff) {
+					if (typeof ack === 'function') {
+						ack({
+							error:
+								'Staff accounts cannot join games as players. Open the lobby in the admin panel to monitor instead.',
+						});
+					}
+					return;
+				}
 				const resolvedGame = gameId ? getTrackedGame(gameId) : getTrackedGameByJoinCode(joinCode);
 				const game = resolvedGame;
 				if (!game) {
 					if (typeof ack === 'function') ack({ error: 'Game not found' });
 					return;
 				}
-				if (game.status !== 'open' && game.status !== 'draft') {
+				// Late-join policy: a student who opens the workspace after the
+				// host pressed Start would otherwise be locked out forever
+				// ("Game is not open for joining" -> the client dead-ends on
+				// "Preparing your match..."). Race-like modes (race /
+				// sprint-race / hot-potato / last-survivor) can absorb a late
+				// joiner: they get a participant slot at 0 points and enter the
+				// current round. Turn-based card games cannot — the deck was
+				// already dealt — so those keep rejecting while live.
+				const raceLikeGame = !isCardGameType(game.type);
+				const joinWhileLive = game.status === 'live' && raceLikeGame;
+				if (
+					game.status !== 'open' &&
+					game.status !== 'draft' &&
+					!joinWhileLive
+				) {
 					if (typeof ack === 'function')
 						ack({ error: 'Game is not open for joining' });
 					return;
@@ -4364,6 +4400,30 @@ function registerGameEngine(io) {
 				if (game.status === 'draft') {
 					game.status = 'open';
 					game.session.status = 'open';
+				}
+
+				if (joinWhileLive) {
+					// Absorb the late joiner into the running match state.
+					// - sprint: give them a fresh per-user sprint entry
+					// - hot-potato: append them to the live turn order
+					// - plain race / last-survivor: round.answers already
+					//   tolerates new participants (per-user answer checks)
+					game.session.status = 'live';
+					if (isSprintRaceGameType(game.type)) {
+						ensureSprintRaceState(game, game.session);
+					} else if (isHotPotatoGameType(game.type)) {
+						const hotPotato =
+							game.session.hotPotato ||
+							initializeHotPotatoRound(game, game.session);
+						if (hotPotato && typeof hotPotato === 'object') {
+							hotPotato.turnOrder = buildHotPotatoTurnOrder(
+								game.session,
+								Array.isArray(hotPotato.turnOrder)
+									? hotPotato.turnOrder
+									: [],
+							);
+						}
+					}
 				}
 
 				// Auto-start check (deduplication safe ط·آ·ط¢آ·ط·آ¢ط¢آ£ط·آ·ط¢آ¢ط·آ¢ط¢آ¢ط·آ·ط¢آ£ط·آ¢ط¢آ¢ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¹أ¢â‚¬ع©ط·آ·ط¢آ¢ط·آ¢ط¢آ¬ط·آ·ط¢آ£ط·آ¢ط¢آ¢ط·آ£ط¢آ¢ط£آ¢أ¢â€ڑآ¬ط¹â€کط·آ¢ط¢آ¬ط·آ£ط¢آ¢ط£آ¢أ¢â‚¬ع‘ط¢آ¬ط·آ¥أ¢â‚¬â„¢ participants are unique by userId)

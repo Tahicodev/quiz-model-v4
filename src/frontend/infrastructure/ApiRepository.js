@@ -90,6 +90,10 @@ export class ApiRepository extends IStorageRepository {
       const res = await fetch(this.#url('/auth/refresh'), {
         method: 'POST',
         credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        // Name this SPA's portal so the server rotates the matching refresh
+        // cookie — admin and student tabs of one browser each keep their own.
+        body: JSON.stringify({ portal: window.APP_PORTAL || undefined }),
       });
       if (!res.ok) return false;
       const { accessToken } = await res.json();

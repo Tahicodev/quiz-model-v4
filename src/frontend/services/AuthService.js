@@ -42,7 +42,9 @@ export class AuthService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify(parsed.data),
+      // Name this SPA's portal so the server scopes the refresh cookie —
+      // admin and student tabs of the same browser each keep their own.
+      body: JSON.stringify({ ...parsed.data, portal: window.APP_PORTAL || undefined }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -53,7 +55,25 @@ export class AuthService {
     this.#token = body.accessToken || body.token || null;
     this.#user = this.#stripSensitive(body.user || body);
     this.#persistSession(this.#user);
-    window.__AUTH_REFRESH_CALLBACK__ = (newToken) => { this.#token = newToken; };
+    // Refresh results arrive via ApiRepository's #tryRefresh. The refresh
+    // cookie is shared browser-wide, so a refresh can return the OTHER
+    // portal's token — only accept one that matches this session's user.
+    window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+      if (!newToken || !this.#user) return;
+      try {
+        const parts = String(newToken).split('.');
+        const encoded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(atob(encoded));
+        if (
+          payload &&
+          this.#user.id &&
+          String(payload.id || '') !== String(this.#user.id)
+        ) {
+          return; // another portal's token — keep ours
+        }
+      } catch { /* unverifiable token: accept as-is (legacy shape) */ }
+      this.#token = newToken;
+    };
     return { user: this.#user, token: this.#token };
   }
 

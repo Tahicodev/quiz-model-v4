@@ -128,6 +128,11 @@
 		refreshInFlight = fetch(getBaseUrl() + '/auth/refresh', {
 			method: 'POST',
 			credentials: 'include', // sends the refreshToken httpOnly cookie
+			headers: { 'Content-Type': 'application/json' },
+			// Name this tab's portal so the server rotates the matching
+			// cookie — admin and student tabs of one browser each keep
+			// their own refresh token.
+			body: JSON.stringify({ portal: window.APP_PORTAL || undefined }),
 		})
 			.then(function (r) {
 				if (!r.ok) {

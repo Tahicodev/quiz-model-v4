@@ -10,12 +10,18 @@
 			// exists, hide the page chrome before first paint so unauthenticated
 			// visitors only see the Admin Login modal. auth.js checkAuthState()
 			// will finalize (show modal or restore the content) on DOMContentLoaded.
-			(function () {
-				try {
-					var candidates = [
-						sessionStorage.getItem('quizSession'),
-						localStorage.getItem('quizSessionRemember'),
-					];
+		(function () {
+			try {
+				var candidates = [
+					sessionStorage.getItem('quizSession'),
+					localStorage.getItem('quizSessionRemember'),
+					// Role-scoped copies written at login — the admin portal
+					// keeps its identity even when a student tab in this same
+					// browser logged in last (shared keys hold the student).
+					localStorage.getItem('quizSession:admin'),
+					localStorage.getItem('quizSession:teacher'),
+					localStorage.getItem('quizSession:super_admin'),
+				];
 					var hasAdminAreaSession = candidates.some(function (value) {
 						try {
 							var session = value ? JSON.parse(value) : null;
@@ -43,6 +49,11 @@
 					socketUrl: '/',
 					telemetryUrl: '',
 				};
+				// This page is the admin/teacher surface. Naming the portal lets
+				// the auth stack scope the refresh cookie per portal, so a student
+				// workspace tab in the SAME browser never rotates this tab's
+				// refresh token (and vice versa).
+				window.APP_PORTAL = 'admin';
 			</script>
 
 			<!-- Legacy Bridge — MUST load synchronously before all management scripts -->
@@ -1735,14 +1746,14 @@
 												<option value="last-survivor">Last Survivor</option>
 											</select>
 											<input type="hidden" id="customGameTypeName" value="" />
-											<small class="text-muted">Manage game presets in Settings &gt; Presets.</small>
+											<small class="text-muted">The 6 core game engines.</small>
 										</div>
 										<div class="form-group half">
-											<label for="gameMode">Match Mode</label>
-											<select id="gameMode" class="form-control">
-												<option value="solo">1 vs 1</option>
-												<option value="team">Team vs Team</option>
+											<label for="gameRulesPreset">Rules Preset <span class="text-muted">(optional)</span></label>
+											<select id="gameRulesPreset" class="form-control">
+												<option value="">Default rules</option>
 											</select>
+											<small class="text-muted">Custom rule sets saved in Settings &gt; Presets for the chosen type.</small>
 										</div>
 									</div>
 									<div class="form-group">

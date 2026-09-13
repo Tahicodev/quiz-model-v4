@@ -21,6 +21,11 @@
 				apiUrl: '/api/v1',
 				socketUrl: '/',
 			};
+			// This page hosts the student portal SPA (entry page → student
+			// area). Naming the portal lets the auth stack scope the refresh
+			// cookie per portal so an admin tab in the SAME browser never
+			// rotates this tab's refresh token (and vice versa).
+			window.APP_PORTAL = 'student';
 		</script>
 
 			<!-- Legacy Bridge — must load synchronously (defines globals used by getSocket) -->

@@ -393,6 +393,11 @@
 	function clearStoredSession() {
 		sessionStorage.removeItem(SESSION_STORAGE_KEY);
 		localStorage.removeItem(SESSION_REMEMBER_KEY);
+		// Also drop the role-scoped copies so a logout leaves no stale
+		// identity for either portal to rehydrate from.
+		['admin', 'teacher', 'student', 'super_admin', 'user'].forEach((role) => {
+			localStorage.removeItem(`${SESSION_STORAGE_KEY}:${role}`);
+		});
 	}
 
 	function loadSession(allowedRoles) {
@@ -415,12 +420,42 @@
 		}
 
 		if (Array.isArray(allowedRoles) && allowedRoles.length > 0) {
-			if (!allowedRoles.includes(getEffectiveUserRole(user))) {
+			const role = getEffectiveUserRole(user);
+			if (!allowedRoles.includes(role)) {
+				// This tab holds no session of its own. Before giving up, try
+				// the role-scoped copy for the roles this page allows — the
+				// shared keys may be owned by the OTHER portal's tab in this
+				// same browser (admin + student workspace open together).
+				const scopedSession = loadScopedSession(allowedRoles, users);
+				if (scopedSession) return scopedSession;
 				return null;
 			}
 		}
 
 		return { session, user };
+	}
+
+	// Role-scoped fallback: quizSession:<role> keys are written at login so
+	// each portal keeps its own identity even when a different portal's tab
+	// logged in last in this browser. The scoped session still has to pass
+	// the same user/expiry/role validation as the primary one.
+	function loadScopedSession(allowedRoles, users) {
+		for (const role of allowedRoles) {
+			const raw = localStorage.getItem(`${SESSION_STORAGE_KEY}:${role}`);
+			const session = safeJsonParse(raw, null);
+			if (!session) continue;
+			if (session.expiresAt && Date.now() > session.expiresAt) {
+				localStorage.removeItem(`${SESSION_STORAGE_KEY}:${role}`);
+				continue;
+			}
+			const user = getUserById(users, session.userId);
+			if (!user || user.status === 'disabled') continue;
+			if (!allowedRoles.includes(getEffectiveUserRole(user))) continue;
+			// Adopt it as THIS tab's session so the workspace owns it.
+			sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+			return { session, user };
+		}
+		return null;
 	}
 
 	function setCurrentUser(user, session) {

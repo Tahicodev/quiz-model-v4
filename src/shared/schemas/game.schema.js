@@ -4,9 +4,32 @@ import { GAME_TYPES, GAME_STATUS } from '../constants.js';
 const typeValues   = Object.values(GAME_TYPES);
 const statusValues = Object.values(GAME_STATUS);
 
+// The Game.type column is a free-form string shared by two vocabularies:
+// the SaaS GAME_TYPES enum (quiz/flashcard/memory/speed/battle) and the
+// legacy realtime engine types (race, sprint-race, cards, cards-draw,
+// hot-potato, last-survivor) that the admin panel writes and game-server.cjs
+// normalizes at runtime. The DB already stores both (bulk writes do the
+// same passthrough), so rejecting legacy types here made every legacy-panel
+// game save fail with "Invalid option: expected one of ...".
+const LEGACY_ENGINE_TYPES = [
+  'race',
+  'sprint-race',
+  'cards',
+  'cards-draw',
+  'hot-potato',
+  'last-survivor',
+];
+
+const gameTypeSchema = z
+  .string()
+  .min(1)
+  .refine((value) => typeValues.includes(value) || LEGACY_ENGINE_TYPES.includes(value), {
+    message: `Invalid option: expected a game type (${[...typeValues, ...LEGACY_ENGINE_TYPES].join(', ')})`,
+  });
+
 export const GameCreateSchema = z.object({
   name:          z.string().min(1).max(200),
-  type:          z.enum(typeValues).default('quiz'),
+  type:          gameTypeSchema.default('quiz'),
   settings_json: z.string().optional().nullable(), // JSON: time per question, max players, etc.
   question_ids:  z.array(z.string().uuid()).min(1),
 });
@@ -19,7 +42,7 @@ export const GameUpdateSchema = z.object({
 });
 
 export const GameFilterSchema = z.object({
-  type:      z.enum(typeValues).optional(),
+  type:      gameTypeSchema.optional(),
   status:    z.enum(statusValues).optional(),
   search:    z.string().optional(),
   limit:     z.coerce.number().int().min(1).max(200).default(50),

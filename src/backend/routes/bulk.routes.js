@@ -32,6 +32,23 @@ import { logger } from '../logger.js';
 
 const router = Router();
 
+// ── Duplicate-write suppression state ─────────────────────────────────────────
+// Key: "<actor>:<school>:<table>:<rowCount>:<length>:<hash>" → last-applied ms.
+// See the dedupe block in POST /:table for the rationale.
+const bulkWriteDedupe = new Map();
+
+// Fast, stable, non-crypto string hash (FNV-1a 32-bit). Only used to compare
+// consecutive payload identity — not for security.
+function simpleHash(rows) {
+  let h = 0x811c9dc5;
+  const serialized = JSON.stringify(rows);
+  for (let i = 0; i < serialized.length; i += 1) {
+    h ^= serialized.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
 // Bulk remains an admin API by default. The legacy student workspace needs
 // one compatibility write for locally-computed training results; keep that
 // exception explicit and deny every other table before it reaches Prisma.
@@ -1192,6 +1209,40 @@ router.post('/:table', async (req, res, next) => {
         table,
         sample: droppedPerRow[0],
       });
+    }
+
+    // ── Duplicate-write suppression ────────────────────────────────────────────
+    // The legacy client mirrors ENTIRE tables on every sync (not deltas), and
+    // a cached page stuck in a sync loop can re-send the same payload many
+    // times per second. An identical write (same actor, same table, same
+    // cleaned rows) applied twice is a no-op — short-circuit it instead of
+    // hammering Prisma and drowning the request log. The in-memory cache is
+    // per-process and window-bounded; content changes produce a new hash and
+    // pass straight through.
+    const dedupeKey = `${req.user?.id ?? 'anon'}:${req.schoolId ?? '-'}:${table}:${scoped.length}:${scoped
+      .map((row) => {
+        try {
+          return JSON.stringify(row);
+        } catch {
+          return 'unserializable-row';
+        }
+      })
+      .join('|')
+      .length}:${simpleHash(scoped)}`;
+    const dedupeWindowMs = 60_000;
+    const now = Date.now();
+    const lastSeen = bulkWriteDedupe.get(dedupeKey);
+    if (lastSeen && now - lastSeen < dedupeWindowMs) {
+      return res.status(201).json({ count: 0, skipped: 0, deduped: true });
+    }
+    bulkWriteDedupe.set(dedupeKey, now);
+    // Bound the cache: the legacy tables are few, but a pathological client
+    // cycling content variants must not grow it without limit.
+    if (bulkWriteDedupe.size > 5000) {
+      const cutoff = now - dedupeWindowMs;
+      for (const [k, t] of bulkWriteDedupe) {
+        if (t < cutoff) bulkWriteDedupe.delete(k);
+      }
     }
 
     // The legacy UI sends the entire array each time (not just new rows), so

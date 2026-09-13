@@ -29,6 +29,9 @@
 		try {
 			var stores = [
 				sessionStorage.getItem('quizSession'),
+				// Role-scoped copy — this student tab keeps its identity even
+				// when an admin tab in this same browser logged in last.
+				localStorage.getItem('quizSession:student'),
 				localStorage.getItem('quizSessionRemember'),
 				localStorage.getItem('quizSession'),
 			];
@@ -38,7 +41,12 @@
 				if (parsed && parsed.token) return parsed.token;
 			}
 		} catch (e) {}
-		return window.__authToken || localStorage.getItem('quizAuthToken') || '';
+		return (
+			window.__authToken ||
+			localStorage.getItem('quizAuthToken:student') ||
+			localStorage.getItem('quizAuthToken') ||
+			''
+		);
 	}
 	function createSocket() {
 		if (!window.io) return null;
@@ -137,14 +145,23 @@
 		const history = Array.isArray(payload.quizTournamentsHistory)
 			? payload.quizTournamentsHistory
 			: [];
+		// NOTE: syncedAt is intentionally excluded — the server stamps a
+		// fresh one on every broadcast, so including it made every payload
+		// unique and the duplicate-suppression below never fired. The key
+		// must capture CONTENT only (config, active tournament, history
+		// shape); identical content means nothing new to apply.
+		const historySample = history
+			.slice(0, 5)
+			.map((h) => String(h?.id || h?.name || ''))
+			.join(',');
 		return [
-			payload.syncedAt || '',
 			Number(cfg.expPerCorrect) || 0,
 			Number(cfg.expPerWin) || 0,
 			cfg.autoAwardBadges === false ? '0' : '1',
 			active?.id || '',
 			active?.status || '',
 			history.length,
+			historySample,
 		].join('::');
 	}
 

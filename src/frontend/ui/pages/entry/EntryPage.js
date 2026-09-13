@@ -269,24 +269,33 @@ function persistLegacySession(payload, remember) {
   };
 
   try {
-    // Session keys the legacy code reads on load. Write to BOTH
-    // sessionStorage and localStorage so whichever the legacy page reads first
-    // finds it (admin.html uses sessionStorage + localStorage remember key).
+    // Session keys the legacy code reads on load. sessionStorage is per-tab
+    // and always safe. The localStorage copies are SHARED with every other
+    // tab of this browser (the admin portal writes the same keys) — only
+    // overwrite the shared unscoped keys when they are absent or already
+    // belong to this user, otherwise the other portal's tab owns them.
     sessionStorage.setItem('quizSession', JSON.stringify(session));
-    localStorage.setItem('quizSession', JSON.stringify(session));
-    if (remember) {
-      localStorage.setItem('quizSessionRemember', JSON.stringify(session));
-    } else {
-      localStorage.removeItem('quizSessionRemember');
-    }
+
+    const role = String(user.role || '').toLowerCase();
+    localStorage.setItem(`quizSession:${role || 'user'}`, JSON.stringify(session));
     if (token) {
-      localStorage.setItem('quizAuthToken', token);
+      localStorage.setItem(`quizAuthToken:${role || 'user'}`, token);
     }
 
-    // Seed quizCurrentUser + quizUsers so legacy pages that rehydrate from
-    // localStorage find the user synchronously before the legacy-bridge
-    // async preload completes.
-    if (user && user.id) {
+    let sharedSession = null;
+    try {
+      sharedSession = JSON.parse(localStorage.getItem('quizSession') || 'null');
+    } catch { /* ignore */ }
+    const sharedMatches = sharedSession &&
+      String(sharedSession.userId || '') === String(session.userId || '') &&
+      String(sharedSession.role || '').toLowerCase() === role;
+    const thisTabBefore = sessionStorage.getItem('quizSession');
+
+    if (!localStorage.getItem('quizSession') || sharedMatches || thisTabBefore === null) {
+      localStorage.setItem('quizSession', JSON.stringify(session));
+      if (token) {
+        localStorage.setItem('quizAuthToken', token);
+      }
       const currentUser = {
         id: user.id,
         username: user.username,
@@ -299,7 +308,41 @@ function persistLegacySession(payload, remember) {
         status: 'active',
       };
       localStorage.setItem('quizCurrentUser', JSON.stringify(currentUser));
+      if (remember) {
+        localStorage.setItem('quizSessionRemember', JSON.stringify(session));
+      } else {
+        localStorage.removeItem('quizSessionRemember');
+      }
+    } else {
+      // The shared identity belongs to the other portal's tab — mirror this
+      // session's user in the role-scoped slot instead.
+      localStorage.setItem(`quizCurrentUser:${role || 'user'}`, JSON.stringify({
+        id: user.id,
+        username: user.username,
+        name: user.name || user.username,
+        role: user.role,
+        numero: user.numero || user.studentNumber || '',
+        studentNumber: user.studentNumber || user.numero || '',
+        classId: user.class_id || user.classId || '',
+        className: user.class_name || user.className || '',
+        status: 'active',
+      }));
+    }
 
+    // Seed quizUsers so legacy pages that rehydrate from localStorage find
+    // the user synchronously before the legacy-bridge async preload completes.
+    const seedUser = {
+      id: user.id,
+      username: user.username,
+      name: user.name || user.username,
+      role: user.role,
+      numero: user.numero || user.studentNumber || '',
+      studentNumber: user.studentNumber || user.numero || '',
+      classId: user.class_id || user.classId || '',
+      className: user.class_name || user.className || '',
+      status: 'active',
+    };
+    if (user && user.id) {
       let users = [];
       try {
         users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
@@ -309,13 +352,13 @@ function persistLegacySession(payload, remember) {
       if (!Array.isArray(users)) users = [];
       let found = false;
       users = users.map((u) => {
-        if (u && u.id === currentUser.id) {
+        if (u && u.id === seedUser.id) {
           found = true;
-          return Object.assign({}, u, currentUser);
+          return Object.assign({}, u, seedUser);
         }
         return u;
       });
-      if (!found) users.push(currentUser);
+      if (!found) users.push(seedUser);
       localStorage.setItem('quizUsers', JSON.stringify(users));
     }
     window.__authToken = token;

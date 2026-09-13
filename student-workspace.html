@@ -16,6 +16,11 @@
 					apiUrl: '/api/v1',
 					socketUrl: '/',
 				};
+				// This page is the student surface. Naming the portal lets the
+				// auth stack scope the refresh cookie per portal, so an admin
+				// tab in the SAME browser never rotates this tab's refresh
+				// token (and vice versa).
+				window.APP_PORTAL = 'student';
 			</script>
 				<!-- Legacy Bridge — must load synchronously -->
 					<script src="legacy-bridge.js?v=2026-09-09-realtime-r6"></script>
@@ -44,10 +49,10 @@
 						var readToken = function() {
 							if (keeper) { var kt = keeper.getActiveToken(); if (kt) return kt; }
 							try {
-								var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
+								var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession:student') || localStorage.getItem('quizSession') || 'null');
 								if (s && s.token) return s.token;
 							} catch (e) {}
-							return window.__authToken || localStorage.getItem('quizAuthToken') || '';
+							return window.__authToken || localStorage.getItem('quizAuthToken:student') || localStorage.getItem('quizAuthToken') || '';
 						};
 						var token = readToken();
 						// SaaS sockets always require auth — when anonymous, keep polling

@@ -302,7 +302,11 @@ var QuizAdmin = (() => {
             try {
               const res = await fetch(this.#url("/auth/refresh"), {
                 method: "POST",
-                credentials: "include"
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                // Name this SPA's portal so the server rotates the matching refresh
+                // cookie — admin and student tabs of one browser each keep their own.
+                body: JSON.stringify({ portal: window.APP_PORTAL || void 0 })
               });
               if (!res.ok) return false;
               const { accessToken } = await res.json();
@@ -15553,7 +15557,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         SUPER_ADMIN: "super_admin",
         // SaaS platform admin (manages schools)
         ADMIN: "admin",
-        // School admin / teacher
+        // School admin
+        TEACHER: "teacher",
+        // Teacher / content author
         STUDENT: "student"
       });
       QUESTION_TYPES = Object.freeze({
@@ -15725,7 +15731,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       LoginSchema = external_exports.object({
         username: external_exports.string().min(1),
         password: external_exports.string().min(1),
-        schoolSlug: external_exports.string().optional()
+        schoolSlug: external_exports.string().optional(),
+        // Which surface is signing in ("admin" | "student"). The admin portal and
+        // the student workspace can be open in two tabs of the SAME browser — the
+        // refresh cookie is scoped per portal so one tab's refresh never rotates
+        // (or mints a wrong-identity token for) the other tab's session.
+        portal: external_exports.enum(["admin", "student"]).optional()
       });
     }
   });
@@ -15785,7 +15796,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify(parsed.data)
+            // Name this SPA's portal so the server scopes the refresh cookie —
+            // admin and student tabs of the same browser each keep their own.
+            body: JSON.stringify({ ...parsed.data, portal: window.APP_PORTAL || void 0 })
           });
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -15796,6 +15809,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           this.#user = this.#stripSensitive(body.user || body);
           this.#persistSession(this.#user);
           window.__AUTH_REFRESH_CALLBACK__ = (newToken) => {
+            if (!newToken || !this.#user) return;
+            try {
+              const parts = String(newToken).split(".");
+              const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+              const payload = JSON.parse(atob(encoded));
+              if (payload && this.#user.id && String(payload.id || "") !== String(this.#user.id)) {
+                return;
+              }
+            } catch {
+            }
             this.#token = newToken;
           };
           return { user: this.#user, token: this.#token };
@@ -16190,7 +16213,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return { total: all.length, byType, byDifficulty };
         }
         #requireAdmin(user) {
-          if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+          if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
             throw new ForbiddenError();
           }
         }
@@ -16421,7 +16444,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return this.#repo.query("exam.availableForStudent", { userId });
         }
         #requireAdmin(user) {
-          if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) throw new ForbiddenError();
+          if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) throw new ForbiddenError();
         }
       };
     }
@@ -16724,7 +16747,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           });
         }
         #requireAdmin(user) {
-          if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+          if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
             throw new ForbiddenError();
           }
         }
@@ -16844,7 +16867,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return this.#repo.update("questions", questionId, { category_id: newCategoryId });
         }
         #requireAdmin(user) {
-          if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+          if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
             throw new ForbiddenError();
           }
         }
@@ -16853,16 +16876,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   });
 
   // src/shared/schemas/game.schema.js
-  var typeValues2, statusValues2, GameCreateSchema, GameUpdateSchema, GameFilterSchema, GameJoinSchema, GameAnswerSchema;
+  var typeValues2, statusValues2, LEGACY_ENGINE_TYPES, gameTypeSchema, GameCreateSchema, GameUpdateSchema, GameFilterSchema, GameJoinSchema, GameAnswerSchema;
   var init_game_schema = __esm({
     "src/shared/schemas/game.schema.js"() {
       init_zod();
       init_constants();
       typeValues2 = Object.values(GAME_TYPES);
       statusValues2 = Object.values(GAME_STATUS);
+      LEGACY_ENGINE_TYPES = [
+        "race",
+        "sprint-race",
+        "cards",
+        "cards-draw",
+        "hot-potato",
+        "last-survivor"
+      ];
+      gameTypeSchema = external_exports.string().min(1).refine((value) => typeValues2.includes(value) || LEGACY_ENGINE_TYPES.includes(value), {
+        message: `Invalid option: expected a game type (${[...typeValues2, ...LEGACY_ENGINE_TYPES].join(", ")})`
+      });
       GameCreateSchema = external_exports.object({
         name: external_exports.string().min(1).max(200),
-        type: external_exports.enum(typeValues2).default("quiz"),
+        type: gameTypeSchema.default("quiz"),
         settings_json: external_exports.string().optional().nullable(),
         // JSON: time per question, max players, etc.
         question_ids: external_exports.array(external_exports.string().uuid()).min(1)
@@ -16874,7 +16908,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         question_ids: external_exports.array(external_exports.string().uuid()).optional()
       });
       GameFilterSchema = external_exports.object({
-        type: external_exports.enum(typeValues2).optional(),
+        type: gameTypeSchema.optional(),
         status: external_exports.enum(statusValues2).optional(),
         search: external_exports.string().optional(),
         limit: external_exports.coerce.number().int().min(1).max(200).default(50),
@@ -16966,13 +17000,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
           await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
           const joinCode = await this.#generateJoinCode();
-          return this.#repo.create("games", {
+          const created = await this.#repo.create("games", {
             ...parsed.data,
+            question_ids: JSON.stringify(parsed.data.question_ids),
             school_id: currentUser?.school_id,
             creator_id: currentUser?.id ?? null,
             status: GAME_STATUS.WAITING,
             join_code: joinCode
           });
+          return { ...created, question_ids: JSON.parse(created.question_ids ?? "[]") };
         }
         async update(id, data, currentUser) {
           this.#requireAdmin(currentUser);
@@ -16985,7 +17021,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (parsed.data.question_ids) {
             await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
           }
-          return this.#repo.update("games", id, parsed.data);
+          const updated = await this.#repo.update("games", id, {
+            ...parsed.data,
+            ...parsed.data.question_ids && {
+              question_ids: JSON.stringify(parsed.data.question_ids)
+            }
+          });
+          return { ...updated, question_ids: JSON.parse(updated.question_ids ?? "[]") };
         }
         async joinGame({ gameId, joinCode, userId, schoolId = null }) {
           const parsed = GameJoinSchema.safeParse({ game_id: gameId, join_code: joinCode });
@@ -17210,7 +17252,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           await this.#repo.delete("games", id);
         }
         #requireAdmin(user) {
-          if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+          if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
             throw new ForbiddenError();
           }
         }
@@ -17465,7 +17507,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           await this.#repo.delete("tournaments", id);
         }
         #requireAdmin(user) {
-          if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+          if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
             throw new ForbiddenError();
           }
         }

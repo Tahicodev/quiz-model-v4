@@ -80,15 +80,18 @@ export class GameService {
     await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
     const joinCode = await this.#generateJoinCode();
 
-    // Keep question_ids as an array at the service/API boundary. The backend
-    // service is the only layer that serializes it for Prisma.
-    return this.#repo.create('games', {
+    // question_ids stays an array at the service/API boundary; this service is
+    // also the layer that serializes it for the Prisma `String` column (the
+    // repository is a generic passthrough and does no field encoding).
+    const created = await this.#repo.create('games', {
       ...parsed.data,
+      question_ids: JSON.stringify(parsed.data.question_ids),
       school_id: currentUser?.school_id,
       creator_id: currentUser?.id ?? null,
       status: GAME_STATUS.WAITING,
       join_code: joinCode,
     });
+    return { ...created, question_ids: JSON.parse(created.question_ids ?? '[]') };
   }
 
   async update(id, data, currentUser) {
@@ -105,7 +108,13 @@ export class GameService {
       await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
     }
 
-    return this.#repo.update('games', id, parsed.data);
+    const updated = await this.#repo.update('games', id, {
+      ...parsed.data,
+      ...(parsed.data.question_ids && {
+        question_ids: JSON.stringify(parsed.data.question_ids),
+      }),
+    });
+    return { ...updated, question_ids: JSON.parse(updated.question_ids ?? '[]') };
   }
 
   async joinGame({ gameId, joinCode, userId, schoolId = null }) {

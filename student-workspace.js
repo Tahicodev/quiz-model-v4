@@ -27,6 +27,7 @@
 		selectedReminderRules: {},
 		multiSelectSelections: {},
 		lastRealtimeWarningAt: 0,
+		liveGameJoinAttemptAt: 0,
 		lastViewerScores: {},
 	};
 	const DEBUG_GAME_STAGE = localStorage.getItem('debugGameStage') === 'true';
@@ -455,8 +456,17 @@
 		}
 		if (!user) {
 			try {
-				user = JSON.parse(localStorage.getItem('quizCurrentUser') || 'null');
-			} catch (_) {}
+				// Role-scoped copy first — an admin tab in this same browser
+				// may own the shared quizCurrentUser key.
+				user = JSON.parse(
+					localStorage.getItem('quizCurrentUser:student') || 'null',
+				);
+				if (!user || !user.id) {
+					user = JSON.parse(
+						localStorage.getItem('quizCurrentUser') || 'null',
+					);
+				}
+			} catch (e) {}
 		}
 		if (!user) return null;
 
@@ -7040,11 +7050,25 @@
 		const session = ensureSession(game);
 		const viewerParticipant = getParticipant(session, context.user.id);
 		if (String(game.status || '').toLowerCase() === 'live' && !viewerParticipant) {
+			// The match already started without this student in the lobby.
+			// Race-like games accept late joiners on the server, so actively
+			// (re)join instead of dead-ending on a sync screen forever.
+			const now = Date.now();
+			const lastAttemptAt = Number(state.liveGameJoinAttemptAt || 0);
+			if (now - lastAttemptAt > 5000) {
+				state.liveGameJoinAttemptAt = now;
+				joinGame(game.id, context).then((response) => {
+					if (response && !response.error) {
+						requestGameSync(game.id, context, 0);
+						renderGameStage(context);
+					}
+				});
+			}
 			requestGameSync(game.id, context, 0);
 			stage.innerHTML = `
 				<div class="empty-state">
-					<h3>Preparing your match...</h3>
-					<p>We are syncing the latest lobby state before opening the game.</p>
+					<h3>Joining the live match...</h3>
+					<p>The match already started. We are adding you to the race now — this takes a moment.</p>
 					<button class="workspace-btn small" data-action="leave-stage">Close</button>
 				</div>
 			`;

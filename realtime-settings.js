@@ -10,7 +10,19 @@
 	let userSyncInProgress = false;
 	let lastUsersSyncFingerprint = '';
 	let lastUsersSyncAt = 0;
-	const USERS_SYNC_COOLDOWN_MS = 5000;
+	// Identical user data doesn't need to be re-broadcast more than once a
+	// minute — page loads and socket reconnects stack up quickly otherwise.
+	const USERS_SYNC_COOLDOWN_MS = 60000;
+
+	// Gamification/tournament state rarely changes; identical payloads were
+	// re-broadcast on every reconnect and re-applied via cross-tab storage
+	// events, each triggering bulk POSTs through the legacy bridge. Only
+	// re-emit when the content (minus the always-fresh syncedAt stamp)
+	// actually differs, or the cooldown has elapsed.
+	let gamificationSyncInProgress = false;
+	let lastGamificationSyncFingerprint = '';
+	let lastGamificationSyncAt = 0;
+	const GAMIFICATION_SYNC_COOLDOWN_MS = 60000;
 
 	// Initialize realtime settings UI on document load
 	document.addEventListener('DOMContentLoaded', () => {
@@ -1150,17 +1162,29 @@
 
 		const emitSync = (socketInstance, isTemp = false) => {
 			socketInstance.emit('admin:syncUsers', payload);
+			// Same data as the previous broadcast → this is a redundant refresh
+			// (page load, socket reconnect, student request). The server already
+			// dedupes the broadcast; don't spam the console/toast about it.
+			const isDuplicate = usersFingerprint === lastUsersSyncFingerprint;
 			lastUsersSyncFingerprint = usersFingerprint;
 			lastUsersSyncAt = Date.now();
-			showRealtimeStatus(
-				`Synced ${users.length} user accounts (${scopeLabel})`,
-				'success',
-			);
-			logDeviceActivity(
-				'sync_users',
-				`Synced ${users.length} user accounts (${scopeLabel})`,
-				isTemp ? 'Temp connection used (realtime toggle off)' : 'Admins excluded from sync',
-			);
+			if (!isDuplicate) {
+				showRealtimeStatus(
+					`Synced ${users.length} user accounts (${scopeLabel})`,
+					'success',
+				);
+			} else {
+				console.debug(
+					`[Realtime] user sync unchanged (${users.length} accounts) — skipped noisy toast`,
+				);
+			}
+			if (!isDuplicate) {
+				logDeviceActivity(
+					'sync_users',
+					`Synced ${users.length} user accounts (${scopeLabel})`,
+					isTemp ? 'Temp connection used (realtime toggle off)' : 'Admins excluded from sync',
+				);
+			}
 		};
 
 		if (realtimeSocket && realtimeSocket.connected) {
@@ -1410,6 +1434,28 @@
 		}
 
 		const payload = buildGamificationSyncPayload(configOverride);
+
+		// Same content as the previous broadcast within the cooldown window →
+		// skip. Reconnects, identify, and cross-tab storage echoes used to
+		// re-emit this on every cycle, and each application re-wrote the
+		// shared localStorage keys (bulk POSTs via the legacy bridge) in a
+		// self-sustaining loop. syncedAt is excluded because it is fresh on
+		// every build — the fingerprint must capture content only.
+		const gamificationFingerprint = JSON.stringify([
+			payload.quizGamification,
+			payload.quizTournamentActive,
+			payload.quizTournamentsHistory,
+		]);
+		const now = Date.now();
+		if (
+			gamificationFingerprint === lastGamificationSyncFingerprint &&
+			now - lastGamificationSyncAt < GAMIFICATION_SYNC_COOLDOWN_MS
+		) {
+			return;
+		}
+		if (gamificationSyncInProgress) return;
+		gamificationSyncInProgress = true;
+
 		const activeLabel = payload.quizTournamentActive?.name
 			? `"${payload.quizTournamentActive.name}"`
 			: 'No active tournament';
@@ -1418,6 +1464,8 @@
 			: 0;
 
 		const emitSync = (socketInstance, isTemp = false) => {
+			lastGamificationSyncFingerprint = gamificationFingerprint;
+			lastGamificationSyncAt = Date.now();
 			socketInstance.emit('admin:syncGamification', payload);
 			localStorage.setItem('quizGamificationSyncedAt', payload.syncedAt);
 			window.dispatchEvent(new CustomEvent('quiz:gamification-updated'));
@@ -1437,12 +1485,14 @@
 
 		if (realtimeSocket && realtimeSocket.connected) {
 			emitSync(realtimeSocket, false);
+			gamificationSyncInProgress = false;
 			return;
 		}
 
 		const serverHost = getServerHost();
 		if (typeof io === 'undefined') {
 			showRealtimeStatus('Socket.IO not loaded', 'error');
+			gamificationSyncInProgress = false;
 			return;
 		}
 
@@ -1450,22 +1500,63 @@
 		const tempSocket = window.getSocket();
 		if (!tempSocket) {
 			showRealtimeStatus('Sign in before syncing gamification settings', 'error');
+			gamificationSyncInProgress = false;
 			return;
 		}
 		let done = false;
+
+		const finishTempSync = () => {
+			if (done) return;
+			done = true;
+			gamificationSyncInProgress = false;
+		};
+
+		// getSocket() returns the CACHED shared socket when it exists — never
+		// disconnect it (the page's realtime connection depends on it, and the
+		// keeper would revive it only to re-fire every 'connect' listener,
+		// re-emitting stale payloads). Only a truly fresh socket is torn down.
+		const isCachedSocket = tempSocket === window.__QUIZ_LEGACY_SOCKET__;
+		const teardownTempSocket = () => {
+			if (!isCachedSocket) tempSocket.disconnect();
+		};
 
 		tempSocket.on('connect', () => {
 			tempSocket.emit('identify', getAdminIdentifyPayload());
 			emitSync(tempSocket, true);
 			done = true;
-			setTimeout(() => tempSocket.disconnect(), 500);
+			gamificationSyncInProgress = false;
+			setTimeout(teardownTempSocket, 500);
 		});
 
 		tempSocket.on('connect_error', (error) => {
 			if (done) return;
 			console.warn('[Realtime] Temp sync gamification connection failed (server may be offline):', error && error.message);
-			tempSocket.disconnect();
+			finishTempSync();
+			teardownTempSocket();
 		});
+
+		tempSocket.on('disconnect', () => {
+			if (!done) gamificationSyncInProgress = false;
+		});
+
+		// If the socket is already connected the 'connect' event will never
+		// fire again and the in-progress flag would stay latched forever,
+		// blocking all future syncs. Emit immediately in that case (mirrors
+		// the realtimeSocket branch above), and always release the flag after
+		// a grace window.
+		if (tempSocket.connected) {
+			tempSocket.emit('identify', getAdminIdentifyPayload());
+			emitSync(tempSocket, true);
+			done = true;
+			gamificationSyncInProgress = false;
+			return;
+		}
+		setTimeout(() => {
+			if (!done) {
+				done = true;
+				gamificationSyncInProgress = false;
+			}
+		}, 5000);
 	};
 
 	/**

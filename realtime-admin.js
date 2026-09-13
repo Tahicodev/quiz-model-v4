@@ -3,13 +3,24 @@
 	try {
 		const raw =
 			sessionStorage.getItem('quizSession') ||
+			// Role-scoped copies written at login — the admin tab keeps its
+			// identity even when a student tab in this same browser logged
+			// in last (the shared key would hold the student's session).
+			localStorage.getItem('quizSession:admin') ||
+			localStorage.getItem('quizSession:teacher') ||
+			localStorage.getItem('quizSession:super_admin') ||
 			localStorage.getItem('quizSessionRemember');
 		session = raw ? JSON.parse(raw) : null;
 	} catch (e) {
 		session = null;
 	}
 
-	if (!session || (session.role !== 'admin' && session.role !== 'teacher')) {
+	if (
+		!session ||
+		(session.role !== 'admin' &&
+			session.role !== 'teacher' &&
+			session.role !== 'super_admin')
+	) {
 		return;
 	}
 
