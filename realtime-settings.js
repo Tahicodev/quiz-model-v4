@@ -200,6 +200,28 @@
 				window.dispatchEvent(new Event('storage'));
 			});
 
+			// Another tab ran Settings → Data → Reset Data: this socket also
+			// holds stale caches; mirror the same cleanup the other realtime
+			// scripts do (drop mirrors without syncing, then re-bootstrap).
+			realtimeSocket.on('school:data-reset', (payload = {}) => {
+				console.log(
+					'[realtime-settings] School data was reset by',
+					payload.by || 'an admin',
+					'- clearing local caches',
+				);
+				try {
+					if (typeof window.__legacyBridgeResetCache === 'function') {
+						window.__legacyBridgeResetCache();
+					}
+					try {
+						localStorage.removeItem('quizSetupComplete');
+						localStorage.removeItem('quizQuickStartDismissedAt');
+					} catch (_) {}
+				} catch (err) {
+					console.warn('[realtime-settings] school:data-reset handler failed', err);
+				}
+			});
+
 			realtimeSocket.on('admin:syncGames', (payload = {}) => {
 				if (!Array.isArray(payload.quizGames)) return;
 				window.__DI_CONTAINER__.repo.setAll_sync('games', payload.quizGames);

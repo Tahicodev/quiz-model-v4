@@ -185,6 +185,13 @@ function hydrateLegacyPayload(data) {
     classId: user.classId || user.class_id || '',
     className: user.className || user.class_name || '',
     number: user.number || user.numero || '',
+    // Teacher/staff contacts: spread snake_case + parse subjects_json into a
+    // plain array so the legacy UI's user modal can pre-fill them.
+    email: user.email ?? null,
+    phone: user.phone ?? null,
+    subjects: Array.isArray(user.subjects)
+      ? user.subjects
+      : parseJson(user.subjects_json, []),
   }));
 
   const questions = (data.questions || []).map((question) => {
@@ -359,6 +366,17 @@ function hydrateLegacyPayload(data) {
     const classIds = Array.isArray(settings.classIds)
       ? settings.classIds.map((id) => String(id || '').trim()).filter(Boolean)
       : [];
+    // Tournament-only instances pack their tournamentContext the same way;
+    // without restoring it, a server restart + DB re-hydration strips every
+    // instance of its context — isTournamentManagedGame() then reports false,
+    // the instances leak into the public game list, and stopTournament's
+    // fallback winner can no longer find the round's matches.
+    const tournamentContext =
+      settings.tournamentContext &&
+      typeof settings.tournamentContext === 'object' &&
+      String(settings.tournamentContext.tournamentId || '').trim()
+        ? settings.tournamentContext
+        : null;
     const questions = materializeGameQuestions(game, questionsById);
     const settingsSession = { ...(settings.session || {}), participants };
     return {
@@ -370,6 +388,10 @@ function hydrateLegacyPayload(data) {
       questions,
       settings: { ...settings, classIds, session: settingsSession },
       session: settingsSession,
+      ...(tournamentContext && {
+        tournamentContext,
+        tournament_context: tournamentContext,
+      }),
     };
   });
 

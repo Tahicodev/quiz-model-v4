@@ -7506,6 +7506,49 @@ tr:last-child td{
 	justify-content: center;
 }
 
+/* The Quick Start wizard re-appends itself to the end of <body> on open
+   (openQuickStart → document.body.appendChild), which puts it AFTER every
+   entity modal in DOM order. "FORCE MODAL VISIBILITY FIX" below forces
+   z-index:99999 !important on every modal opened via style.display='flex',
+   so with equal stacking the wizard's overlay would paint on top and
+   swallow clicks aimed at the create-modals it opens (Add Class / Add
+   teacher…). !important is required to win that arm-wrestle; keep the
+   wizard below the standard modal stack so any modal opened from it
+   stays clickable, and dim the wizard while a child modal is up. */
+#quickStartModal[style*='flex']{
+	z-index: 2900 !important;
+}
+
+#quickStartModal:has(+ .modal[style*='flex']){
+	/* A sibling entity modal is open right after the wizard in DOM order —
+	   dim the wizard so the focused modal stands out. */
+	filter: brightness(0.92) saturate(0.9);
+}
+
+/* Smooth entrance: the wizard opens with a gentle scale-up + fade instead
+   of a hard pop. Keyed off [style*='flex'] so it plays exactly when JS
+   opens the modal. */
+#quickStartModal .modal-content{
+	animation: qs-enter 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes qs-enter{
+	from{
+		opacity: 0;
+		transform: translateY(14px) scale(0.97);
+	}
+	to{
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@media (prefers-reduced-motion: reduce){
+	#quickStartModal .modal-content{
+		animation: none;
+	}
+}
+
 .modal-content{
 	background-color: var(--bg-surface);
 	margin: var(--space-md) auto;
@@ -8404,34 +8447,11 @@ textarea{
 	font-size: var(--text-sm);
 }
 
-/* Expandable Row Indicator */
+/* Expandable Row Indicator — retired: mobile cards now show labeled
+   options/answer/image directly and no longer expand into a detail row */
 @media (max-width: 768px){
 	#question-list tr:not(.detail-row) {
-		cursor: pointer;
-		position: relative;
-	}
-
-	#question-list tr:not(.detail-row)::after {
-		content: '';
-		position: absolute;
-		right: var(--space-md);
-		top: 50%;
-		transform: translateY(-50%);
-		width: 8px;
-		height: 8px;
-		border-right: 2px solid var(--text-muted);
-		border-bottom: 2px solid var(--text-muted);
-		transform: translateY(-60%) rotate(45deg);
-		transition: transform var(--transition-fast);
-	}
-
-	#question-list tr.expanded::after {
-		transform: translateY(-30%) rotate(225deg);
-		border-color: var(--primary);
-	}
-
-	#question-list tr.expanded {
-		background-color: var(--bg-surface-alt);
+		cursor: default;
 	}
 }
 
@@ -25680,6 +25700,11 @@ tr[data-id],
 		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 	}
 
+	/* No expandable detail rows on mobile — the card cells carry the labels */
+	#question-list-table tbody tr.detail-row {
+		display: none !important;
+	}
+
 	#question-list-table tbody tr.question-table-row::after {
 		display: none;
 	}
@@ -25832,6 +25857,27 @@ tr[data-id],
 		display: block !important;
 		padding-top: 8px;
 		border-top: 1px solid #f1f5f9;
+	}
+
+	/* Labels on the card cells (the single source of truth on mobile) */
+	#question-list-table tbody tr.question-table-row > .options-cell::before,
+	#question-list-table tbody tr.question-table-row > .answer-cell::before,
+	#question-list-table tbody tr.question-table-row > .image-cell::before {
+		content: attr(data-label);
+		display: block;
+		margin-bottom: 4px;
+		color: #64748b;
+		font-size: 0.64rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		line-height: 1.1;
+		text-transform: uppercase;
+	}
+
+	/* Hide the Points cell on the card — it duplicates the badge shown in the
+	   question meta and is not part of the mobile card layout */
+	#question-list-table tbody tr.question-table-row > .points-cell {
+		display: none !important;
 	}
 
 	#question-list-table tbody tr.question-table-row > .options-cell {
@@ -30187,6 +30233,8 @@ body.student-workspace .game-pill.completed{ background: #eef2ff; color: #4338ca
 
 #games .game-badge.game-code-badge{ background: #eaf2ff; border-color: #bfdbfe; color: #1d4ed8; }
 
+#games .game-badge.tournament-badge{ background: #fdf4e7; border-color: #f3d5a8; color: #92600a; }
+
 #games .game-lobby-share-code{ background: #eff6ff; border-color: #cfe0fb; }
 
 #games .game-lobby-share-code strong{ color: #1d4ed8; }
@@ -34270,121 +34318,245 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	}
 }
 
-/* ─── Quick Start wizard ──────────────────────────────────────────────── */
-.quick-start-layout{
-	display: flex;
-	min-height: 420px;
-}
+/* ─── Quick Start wizard — premium design ──────────────────────────────── */
+/* All wizard styles are scoped under #quickStartModal: the wizard re-appends
+   itself to the end of <body> on open, so descendant selectors from generic
+   .modal contexts can be unreliable. Everything uses the app's design tokens
+   (--primary, --radius-lg, --shadow-*) so it stays in the family language. */
 
-.quick-start-steps{
-	flex: 0 0 230px;
-	border-right: 1px solid rgba(15, 23, 42, 0.08);
-	padding: 18px 12px;
+#quickStartModal .modal-content{
+	max-width: 860px;
+	max-height: 88vh;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	background: rgba(241, 245, 249, 0.6);
+	border-radius: var(--radius-lg);
+	overflow: hidden;
+	box-shadow: 0 24px 64px -12px rgba(15, 23, 42, 0.35);
+}
+
+#quickStartModal .modal-header{
+	background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #3b82f6 100%);
+	color: #fff;
+	border-bottom: none;
+	padding: 18px 24px;
+}
+
+#quickStartModal .modal-header h2{
+	color: #fff;
+	font-size: var(--text-lg);
+	font-weight: 800;
+	letter-spacing: 0.01em;
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+}
+
+#quickStartModal .modal-header .modal-close,
+#quickStartModal .modal-header .close{
+	color: rgba(255, 255, 255, 0.85);
+	font-size: 1.5rem;
+	line-height: 1;
+	opacity: 1;
+	transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+#quickStartModal .modal-header .modal-close:hover,
+#quickStartModal .modal-header .close:hover{
+	color: #fff;
+	transform: rotate(90deg);
+}
+
+#quickStartModal .modal-body{
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+#quickStartModal .modal-footer{
+	background: var(--bg-surface-alt);
+	border-top: 1px solid var(--border-color);
+	padding: 14px 22px;
+	justify-content: space-between;
+}
+
+.quickStartFooterEnd{
+	display: flex;
+	gap: 10px;
+	margin-left: auto;
+}
+
+#quickStartModal .modal-footer .btn{
+	border-radius: var(--radius-md);
+	font-weight: 700;
+	padding: 10px 18px;
+	box-shadow: var(--shadow-sm);
+	transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+#quickStartModal .modal-footer .btn:hover{
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md);
+}
+
+#quickStartModal .modal-footer .btn-primary{
+	background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+}
+
+.quick-start-layout{
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 420px;
+	max-height: calc(88vh - 160px); /* shell 88vh minus header + footer */
+}
+
+/* ── Step rail (left) ───────────────────────────────────────────────────── */
+.quick-start-steps{
+	flex: 0 0 248px;
+	border-right: 1px solid var(--border-color);
+	padding: 18px 14px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	background:
+		linear-gradient(180deg, rgba(241, 245, 249, 0.9), rgba(248, 250, 252, 0.65));
+	overflow-y: auto;
 }
 
 .qs-step{
+	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	padding: 10px 12px;
-	border-radius: 10px;
+	gap: 10px;
+	padding: 9px 12px;
+	border-radius: var(--radius-md);
 	cursor: pointer;
-	transition: background 150ms ease;
-	font-size: 0.9rem;
-	color: #475569;
+	transition: background var(--transition-fast), color var(--transition-fast),
+		box-shadow var(--transition-fast);
+	font-size: 0.88rem;
+	font-weight: 600;
+	color: var(--text-secondary);
+	border: 1px solid transparent;
 }
 
 .qs-step:hover{
 	background: rgba(59, 130, 246, 0.08);
+	color: var(--primary-dark);
 }
 
 .qs-step.active{
-	background: linear-gradient(135deg, #3b82f6, #2563eb);
-	color: white;
-	font-weight: 700;
-	box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
+	background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+	color: #fff;
+	border-color: rgba(37, 99, 235, 0.4);
+	box-shadow: 0 8px 20px -6px rgba(37, 99, 235, 0.45);
 }
 
-.qs-step.visited{
-	color: #059669;
+.qs-step.visited:not(.active){
+	color: #047857;
+	background: rgba(16, 185, 129, 0.07);
 }
 
 .qs-step-num{
-	flex: 0 0 22px;
-	height: 22px;
+	flex: 0 0 24px;
+	height: 24px;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 50%;
-	background: rgba(15, 23, 42, 0.08);
-	font-size: 0.72rem;
-	font-weight: 700;
+	border-radius: var(--radius-full);
+	background: rgba(15, 23, 42, 0.07);
+	font-size: 0.7rem;
+	font-weight: 800;
+	color: var(--text-secondary);
+	transition: all var(--transition-fast);
+}
+
+.qs-step.visited:not(.active) .qs-step-num{
+	background: rgba(16, 185, 129, 0.16);
+	color: #047857;
 }
 
 .qs-step.active .qs-step-num{
 	background: rgba(255, 255, 255, 0.25);
+	color: #fff;
 }
 
 .qs-step-icon{
 	flex: 0 0 auto;
+	font-size: 1rem;
+	line-height: 1;
 }
 
 .qs-step-label{
 	flex: 1 1 auto;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .qs-count{
-	font-size: 0.68rem;
-	font-weight: 700;
-	padding: 2px 7px;
-	border-radius: 999px;
+	flex: 0 0 auto;
+	font-size: 0.66rem;
+	font-weight: 800;
+	padding: 3px 8px;
+	border-radius: var(--radius-full);
 	background: rgba(15, 23, 42, 0.06);
-	color: #64748b;
+	color: var(--text-muted);
+	letter-spacing: 0.02em;
 }
 
 .qs-count.done{
-	background: rgba(16, 185, 129, 0.15);
-	color: #059669;
+	background: rgba(16, 185, 129, 0.16);
+	color: #047857;
 }
 
 .qs-step.active .qs-count{
-	background: rgba(255, 255, 255, 0.2);
-	color: white;
+	background: rgba(255, 255, 255, 0.22);
+	color: #fff;
 }
 
+/* ── Content panel (right) ──────────────────────────────────────────────── */
 .quick-start-panel{
 	flex: 1 1 auto;
 	padding: 26px 30px;
 	overflow-y: auto;
+	scrollbar-width: thin;
 }
 
 .qs-title{
 	margin: 0 0 10px;
-	font-size: 1.3rem;
+	font-size: 1.35rem;
+	font-weight: 800;
+	color: var(--text-main);
+	letter-spacing: -0.01em;
 }
 
 .qs-desc{
-	color: #64748b;
-	line-height: 1.6;
-	margin-bottom: 16px;
+	color: var(--text-secondary);
+	line-height: 1.65;
+	margin-bottom: 18px;
+	font-size: 0.92rem;
 }
 
 .qs-status{
-	padding: 10px 14px;
-	border-radius: 10px;
-	background: rgba(241, 245, 249, 0.9);
-	color: #64748b;
+	padding: 11px 16px;
+	border-radius: var(--radius-md);
+	background: var(--bg-surface-alt);
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
 	font-size: 0.88rem;
 	margin-bottom: 18px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
 .qs-status.ok{
-	background: rgba(16, 185, 129, 0.1);
-	color: #059669;
+	background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.05));
+	border-color: rgba(16, 185, 129, 0.35);
+	color: #047857;
+	font-weight: 600;
 }
 
 .qs-actions{
@@ -34394,8 +34566,21 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	margin-bottom: 22px;
 }
 
+#quickStartModal .qs-actions .btn{
+	border-radius: var(--radius-md);
+	font-weight: 700;
+	padding: 10px 18px;
+	box-shadow: var(--shadow-sm);
+	transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+#quickStartModal .qs-actions .btn:hover{
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md);
+}
+
 .qs-load{
-	border-top: 1px dashed rgba(15, 23, 42, 0.12);
+	border-top: 1px dashed var(--border-color);
 	padding-top: 16px;
 }
 
@@ -34406,21 +34591,275 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 
 .qs-summary{
 	margin: 0 0 0 20px;
-	line-height: 1.9;
-	color: #475569;
+	line-height: 2;
+	color: var(--text-secondary);
+	font-size: 0.92rem;
+}
+
+.qs-summary strong{
+	color: var(--text-main);
+}
+
+/* ── Security step (School & Security) ─────────────────────────────────── */
+.qs-security{
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.qs-section-title{
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.98rem;
+	font-weight: 800;
+	color: var(--text-main);
+	margin: 20px 0 12px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--border-color);
+	letter-spacing: 0.01em;
+}
+
+.qs-security .qs-section-title:first-child{
+	margin-top: 4px;
+}
+
+.qs-form-grid{
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 14px 16px;
+}
+
+.qs-field{
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.qs-field label{
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+#quickStartModal .qs-field .form-control{
+	width: 100%;
+	padding: 10px 14px;
+	font-size: 0.92rem;
+	border: 1.5px solid var(--border-color);
+	border-radius: var(--radius-md);
+	background: var(--bg-surface);
+	color: var(--text-main);
+	transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
+		background var(--transition-fast);
+}
+
+#quickStartModal .qs-field .form-control::placeholder{
+	color: var(--text-muted);
+}
+
+#quickStartModal .qs-field .form-control:focus{
+	outline: none;
+	border-color: var(--border-focus);
+	background: #fff;
+	box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
+}
+
+#quickStartModal .qs-field select.form-control{
+	appearance: none;
+	background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 14px center;
+	padding-right: 38px;
+	cursor: pointer;
+}
+
+.qs-field-full{
+	grid-column: 1 / -1;
+}
+
+/* Logo uploader */
+.qs-logo-row{
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 12px;
+	border: 1.5px dashed var(--border-color);
+	border-radius: var(--radius-md);
+	background: rgba(241, 245, 249, 0.5);
+	transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.qs-logo-row:hover{
+	border-color: rgba(59, 130, 246, 0.5);
+	background: rgba(59, 130, 246, 0.04);
+}
+
+.qs-logo-preview{
+	width: 68px;
+	height: 68px;
+	flex: 0 0 68px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: var(--radius-md);
+	border: 1.5px dashed rgba(15, 23, 42, 0.18);
+	background: var(--bg-surface);
+	font-size: 1.7rem;
+	overflow: hidden;
+	box-shadow: var(--shadow-sm);
+}
+
+.qs-logo-preview img{
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+	border-radius: calc(var(--radius-md) - 2px);
+}
+
+.qs-logo-actions{
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+.qs-logo-actions small{
+	font-size: 0.76rem;
+	color: var(--text-muted);
+	line-height: 1.5;
+}
+
+#quickStartModal .qs-logo-actions .btn{
+	align-self: flex-start;
+	padding: 7px 14px;
+	font-size: 0.82rem;
+	border-radius: var(--radius-md);
+	font-weight: 700;
+}
+
+.qs-logo-clear{
+	align-self: flex-start;
+}
+
+/* Credential cards */
+.qs-cred-grid{
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+
+.qs-cred-card{
+	position: relative;
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-lg);
+	padding: 18px;
+	background:
+		linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.55)),
+		var(--bg-surface);
+	box-shadow: var(--shadow-sm);
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	overflow: hidden;
+}
+
+.qs-cred-card::before{
+	content: '';
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: 4px;
+	border-radius: 4px 0 0 4px;
+	background: linear-gradient(180deg, var(--primary), #60a5fa);
+}
+
+.qs-cred-card:nth-child(2)::before{
+	background: linear-gradient(180deg, #059669, #34d399);
+}
+
+.qs-cred-card h5{
+	font-size: 0.95rem;
+	font-weight: 800;
+	color: var(--text-main);
+	margin: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.qs-cred-note{
+	font-size: 0.8rem;
+	margin: 0;
+	color: var(--text-secondary);
+	line-height: 1.55;
+}
+
+#quickStartModal .qs-cred-card .btn{
+	align-self: flex-start;
+	border-radius: var(--radius-md);
+	font-weight: 700;
+	padding: 9px 16px;
+	box-shadow: var(--shadow-sm);
+	transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+#quickStartModal .qs-cred-card .btn:hover{
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md);
+}
+
+.qs-cred-card small{
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	line-height: 1.5;
+}
+
+#quickStartModal .qs-cred-card .qs-field label{
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: 0.8rem;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 900px){
+	#quickStartModal .modal-content{
+		max-width: 96vw;
+	}
+
+	.quick-start-steps{
+		flex: 0 0 200px;
+	}
 }
 
 @media (max-width: 700px){
 	.quick-start-layout{
 		flex-direction: column;
+		max-height: none;
+		min-height: 0;
 	}
 
 	.quick-start-steps{
 		flex: 0 0 auto;
 		flex-direction: row;
 		overflow-x: auto;
+		overflow-y: hidden;
 		border-right: none;
-		border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+		border-bottom: 1px solid var(--border-color);
+		padding: 12px;
+		gap: 6px;
+		scrollbar-width: thin;
+	}
+
+	.qs-step{
+		flex: 0 0 auto;
+		padding: 8px 10px;
+	}
+
+	.qs-step-label{
+		white-space: nowrap;
 	}
 
 	.qs-step .qs-count{
@@ -34428,6 +34867,23 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	}
 
 	.quick-start-panel{
-		padding: 18px;
+		padding: 18px 16px;
+		overflow-y: auto;
+	}
+
+	/* Security step stacks its 2-col grids on phones. */
+	.qs-form-grid,
+	.qs-cred-grid{
+		grid-template-columns: 1fr;
+	}
+
+	.qs-logo-row{
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	#quickStartModal .modal-footer{
+		flex-wrap: wrap;
+		gap: 8px;
 	}
 }

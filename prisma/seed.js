@@ -66,6 +66,9 @@ async function main() {
 
     // System — NEVER sent to any client
     { key: 'system.backup_key', value: '', visibility: 'system' },
+    // bcrypt hash of the dashboard recovery code (set via Quick Start or the
+    // admin panel). Empty = recovery flow disabled until an admin sets a code.
+    { key: 'system.recovery_code_hash', value: '', visibility: 'system' },
   ];
 
   for (const s of settings) {

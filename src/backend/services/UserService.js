@@ -61,6 +61,10 @@ export class UserService {
       role: parsed.data.role,
       numero: parsed.data.numero,
       class_id: parsed.data.class_id,
+      email: parsed.data.email ?? null,
+      phone: parsed.data.phone ?? null,
+      // Teacher subjects live as a JSON array column (["Math","Physics"]).
+      subjects_json: parsed.data.subjects ? JSON.stringify(parsed.data.subjects) : null,
       status: parsed.data.status,
     });
 
@@ -76,7 +80,15 @@ export class UserService {
     const parsed = UserUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
-    const updated = await this.#repo.update('users', id, parsed.data);
+    // Split the validated payload into DB columns: subjects (array) goes to
+    // subjects_json; everything else maps 1:1 onto the User table.
+    const { subjects, ...columns } = parsed.data;
+    const updated = await this.#repo.update('users', id, {
+      ...columns,
+      ...(subjects !== undefined && {
+        subjects_json: subjects ? JSON.stringify(subjects) : null,
+      }),
+    });
     return this.#stripPassword(updated);
   }
 

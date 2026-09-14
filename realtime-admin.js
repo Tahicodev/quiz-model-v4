@@ -265,9 +265,48 @@
 		}
 	});
 
+	// Another admin tab ran Settings → Data → Reset Data for this school. This
+	// tab's in-memory cache + localStorage mirrors still hold the deleted rows
+	// and would re-push them on the next bulk sync (data resurrection). The
+	// bridge's reset hook drops every mirror WITHOUT syncing back, then
+	// re-bootstraps from the now-empty server. The tab that ran the reset
+	// reloads itself, so this fires for the other tabs.
+	socket.on('school:data-reset', (payload = {}) => {
+		console.log(
+			'[realtime-admin] School data was reset by',
+			payload.by || 'an admin',
+			'- clearing local caches',
+		);
+		try {
+			if (typeof window.__legacyBridgeResetCache === 'function') {
+				window.__legacyBridgeResetCache();
+			} else {
+				persistAdminGames([], new Date().toISOString());
+			}
+			try {
+				localStorage.removeItem('quizSetupComplete');
+				localStorage.removeItem('quizQuickStartDismissedAt');
+			} catch (_) {}
+		} catch (err) {
+			console.warn('[realtime-admin] school:data-reset handler failed', err);
+		}
+		window.dispatchEvent(new CustomEvent('quiz:games-updated'));
+	});
+
 	socket.on('admin:requestGameSync', () => {
 		if (typeof window.syncGamesToClients === 'function') {
 			window.syncGamesToClients();
+		}
+	});
+
+	// The school's profile (name/type/logo/contacts) changed in another tab —
+	// refresh the header branding live without a reload.
+	socket.on('school:profile-updated', (payload = {}) => {
+		if (payload?.profile?.name) {
+			console.log('[realtime-admin] School profile updated — refreshing branding');
+			if (window.Auth && typeof window.Auth.refreshSchoolBranding === 'function') {
+				window.Auth.refreshSchoolBranding();
+			}
 		}
 	});
 
@@ -766,7 +805,34 @@
 				}
 				persistAdminGames(mergedGames, payload.syncedAt);
 			} else {
-				persistAdminGames(payload.quizGames, payload.syncedAt);
+				// Non-game scopes used to REPLACE the whole games array with
+				// the payload — any game created locally (Games Studio, not
+				// yet pushed to the server) vanished from the admin UI on the
+				// next full sync echo. realtime-client.js already union-merges
+				// for these scopes; mirror that here: merge incoming by id
+				// over existing, then keep local-only games. True deletions
+				// still go through game:deleted / game:deletedAll.
+				let mergedGames = payload.quizGames;
+				try {
+					const existingGames = JSON.parse(
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('games')) || '[]',
+					);
+					const existingMap = new Map(
+						existingGames.map((game) => [game.id, game]),
+					);
+					mergedGames = payload.quizGames.map((incomingGame) =>
+						mergeGame(existingMap.get(incomingGame.id), incomingGame),
+					);
+					existingGames.forEach((existingGame) => {
+						if (!existingGame?.id) return;
+						if (!mergedGames.some((g) => g.id === existingGame.id)) {
+							mergedGames.push(existingGame);
+						}
+					});
+				} catch (e) {
+					mergedGames = payload.quizGames;
+				}
+				persistAdminGames(mergedGames, payload.syncedAt);
 			}
 			if (typeof window.renderGameList === 'function') {
 				window.renderGameList();

@@ -12,18 +12,24 @@ import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { validate } from '../middleware/validate.js';
 import { LoginSchema, ChangePasswordSchema } from '../../shared/schemas/user.schema.js';
+import { ROLES } from '../../shared/constants.js';
+import { requireRole } from '../middleware/role.js';
 import { getContainer } from '../container.js';
 
 const router = Router();
 
-// Stricter rate limit for auth endpoints (10 requests per 15 minutes per IP)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { code: 'RATE_LIMITED', message: 'Too many attempts, try again later' },
-});
+// Stricter rate limit for auth endpoints (10 requests per 15 minutes per IP).
+// Disabled under test (tests/setup.js pins NODE_ENV=test) — integration
+// tests make 15+ auth calls in a single file.
+const authLimiter = process.env.NODE_ENV === 'test'
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { code: 'RATE_LIMITED', message: 'Too many attempts, try again later' },
+    });
 
 // ── Public routes ────────────────────────────────────────────────────────────
 
@@ -66,6 +72,62 @@ router.post('/login', authLimiter, validate(LoginSchema), async (req, res, next)
 		// Set refresh token as httpOnly cookie (SaaS mode; in local mode it's optional)
 		res.cookie(refreshCookieName(normalizePortal(portal)), refreshToken, REFRESH_COOKIE_OPTIONS);
 		res.json({ user, accessToken });
+	} catch (err) {
+		next(err);
+	}
+});
+
+// ── Server-side recovery (cross-device) ─────────────────────────────────────
+// The recovery-code hash lives in a SYSTEM-visibility settings row and is
+// never returned by any settings GET. Verify mints a 15-min recovery ticket
+// JWT bound to ONE school; reset consumes it to change an admin password and
+// revoke all refresh tokens. Setting the code (authed admin only) bcrypts the
+// raw code server-side. Legacy client-side recovery (localStorage blob)
+// remains as an offline fallback in the browser only.
+
+// POST /api/v1/auth/recover/set  { code } — admin, sets the bcrypt hash
+router.post('/recover/set', requireAuth, enforceTenant, requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
+	try {
+		const { authSvc, auditSvc } = getContainer();
+		await authSvc.setRecoveryCode(req.schoolId, req.body?.code, req.user);
+		await auditSvc.log({
+			schoolId: req.schoolId,
+			actorId: req.user.id,
+			entityType: 'setting',
+			entityId: 'system.recovery_code_hash',
+			action: 'update',
+			ip: req.ip,
+		});
+		res.json({ message: 'Recovery code saved' });
+	} catch (err) {
+		next(err);
+	}
+});
+
+// POST /api/v1/auth/recover/verify  { code, school_id? }
+router.post('/recover/verify', authLimiter, async (req, res, next) => {
+	try {
+		const { authSvc } = getContainer();
+		const code = String(req.body?.code || '');
+		const schoolId = req.body?.school_id || process.env.DEFAULT_SCHOOL_ID || 'saas-default';
+		const { ticket } = await authSvc.verifyRecoveryCode(schoolId, code, { ip: req.ip });
+		res.json({ ticket, expiresInMinutes: 15 });
+	} catch (err) {
+		next(err);
+	}
+});
+
+// POST /api/v1/auth/recover/reset  { ticket, username, newPassword }
+router.post('/recover/reset', authLimiter, async (req, res, next) => {
+	try {
+		const { authSvc } = getContainer();
+		const { ticket, username, newPassword } = req.body || {};
+		const result = await authSvc.resetPasswordWithTicket({
+			ticket,
+			username,
+			newPassword,
+		});
+		res.json({ message: 'Password reset successfully', username: result.username });
 	} catch (err) {
 		next(err);
 	}

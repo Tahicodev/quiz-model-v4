@@ -18,6 +18,7 @@ import { ROLES } from '../../shared/constants.js';
 import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 import { logger } from '../logger.js';
+import { getIO } from '../realtime/socket.server.js';
 import { createRequire } from 'module';
 
 const require2 = createRequire(import.meta.url);
@@ -38,6 +39,12 @@ const SEED_SETTINGS = [
   { key: 'game.max_players', value: '30', visibility: 'teacher' },
   { key: 'auth.allow_student_register', value: 'false', visibility: 'admin' },
   { key: 'auth.registration_code', value: '', visibility: 'admin' },
+  // system.recovery_code_hash is wiped with the settings table above and NOT
+  // re-seeded here — by design. A factory reset returns the school to a clean
+  // first-setup state where the admin must (re)set the recovery code through
+  // the Quick Start Security step. The School row itself is never touched:
+  // the school's name/type/address/contacts/logo survive the reset so each
+  // tenant keeps its identity across a data wipe.
 ];
 
 const DEFAULT_GAME_PRESETS = [
@@ -197,6 +204,25 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
       clearedGames = engine.resetActiveGames ? engine.resetActiveGames() : 0;
     } catch (e) {
       logger.warn('admin.routes: engine reset failed (continuing)', {
+        error: e?.message,
+      });
+    }
+
+    // Broadcast the wipe to every connected client of THIS school. Any other
+    // open tab still holds its own in-memory cache of the deleted rows and
+    // would re-push them on its next bulk sync (data resurrection). The
+    // client handler drops all local mirrors + caches and re-bootstraps from
+    // the now-empty server, so every tab converges on the reset state.
+    try {
+      const io = getIO();
+      io.to(`school:${schoolId}`).emit('school:data-reset', {
+        schoolId,
+        resetAt: new Date().toISOString(),
+        by: req.user.username,
+      });
+      logger.info('admin.routes: data-reset broadcast sent', { schoolId });
+    } catch (e) {
+      logger.warn('admin.routes: data-reset broadcast failed (continuing)', {
         error: e?.message,
       });
     }

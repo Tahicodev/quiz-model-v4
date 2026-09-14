@@ -10,6 +10,7 @@
 		lastStartError: '',
 		gamesStudioTab: 'games-studio',
 		tournamentStudioTab: 'planner',
+		tournamentModalsDelegated: false,
 		tournamentRoundDraft: [],
 		tournamentRoundSearch: {},
 		tournamentPlannerHistoryMode: false,
@@ -476,6 +477,11 @@
 			...(cloned.settings || {}),
 			expectedPlayers: initialTournamentTarget,
 			tournamentExpectedPlayers: initialTournamentTarget,
+			// Round matches should start themselves the moment every player
+			// is ready — inheriting the template's autoStart:false left each
+			// round waiting for a manual admin "Start Match" from the Round
+			// Monitor, the only UI that could see these instances.
+			autoStart: true,
 		};
 		cloned.tournamentContext = {
 			tournamentId: String(tournamentMeta.id || '').trim(),
@@ -2536,6 +2542,12 @@
 					showToast(response.error, 'error');
 				} else {
 					showToast('Lobby is now open', 'success');
+					// The engine may have rotated the lobby (fresh session on
+					// a completed game — Lobby #N+1) and re-derived the join
+					// code. Pull the authoritative list so the admin card
+					// shows the code students will actually use, instead of
+					// keeping the pre-open snapshot until the next sync.
+					requestAuthoritativeGameList();
 				}
 			});
 			// Optimistic update handled by socket listener
@@ -3160,9 +3172,18 @@
 		const container = byId('gameList');
 		if (!container) return;
 		const games = GameCore.getQuizGames();
-		const visibleGames = (Array.isArray(games) ? games : []).filter(
-			(game) => !isTournamentManagedGame(game),
-		);
+		// Tournament instances are no longer hidden: they are real lobbies
+		// students join by code, and hiding them left the Round Monitor as the
+		// only path to Start/Watch a round match. Sort them after the
+		// templates and badge them with their round so the library stays
+		// readable while every match stays reachable.
+		const visibleGames = (Array.isArray(games) ? games : [])
+			.slice()
+			.sort((a, b) => {
+				const aTournament = isTournamentManagedGame(a) ? 1 : 0;
+				const bTournament = isTournamentManagedGame(b) ? 1 : 0;
+				return aTournament - bTournament;
+			});
 		if (!visibleGames.length) {
 			container.innerHTML =
 				'<div class="empty-state">No games created yet.</div>';
@@ -3184,6 +3205,12 @@
 					game.settings?.gameRules?.customGameType ||
 					'';
 				const typeLabel = presetLabel || getGameTypeLabel(game.type);
+				const tournamentRoundBadge = isTournamentManagedGame(game)
+					? `<span class="game-badge tournament-badge" title="Tournament-only copy — managed by Tournament Studio">R${Math.max(
+							Number(game.tournamentContext?.round) || 1,
+							1,
+						)} Tournament</span>`
+					: '';
 				const watchable =
 					status === 'open' ||
 					status === 'live' ||
@@ -3205,6 +3232,7 @@
 								<span class="game-badge">${escapeHtml(typeLabel)}</span>
 								<span class="game-badge">${game.mode === 'team' ? 'Team vs Team' : '1 vs 1'}</span>
 								<span class="game-badge ghost">${escapeHtml(lobbyLabel)}</span>
+								${tournamentRoundBadge}
 								<span class="game-badge game-code-badge" title="Share this code with students">Code ${escapeHtml(game.joinCode || game.join_code || '------')}</span>
 							</div>
 						</div>
@@ -5961,6 +5989,25 @@
 		if (normalized === 'history' || normalized === 'recent')
 			activeTab = 'history';
 		else if (normalized === 'gamification') activeTab = 'gamification';
+		// The dashboard panel (Tournament Lifecycle + Round Monitor + Start
+		// Match) has no tab button in the markup — startTournament() switches
+		// to it programmatically after launching an event. Accept it here so
+		// the panel actually becomes visible instead of falling back to the
+		// planner and hiding the only UI that can start round matches.
+		else if (normalized === 'dashboard') activeTab = 'dashboard';
+
+		// With a live event running, the "Tournaments" tab should land on the
+		// dashboard (lifecycle + round monitor) rather than the catalog —
+		// after a page reload the admin otherwise has no way back to the only
+		// UI that can start/advance round matches. Choosing a draft to edit or
+		// pausing the event returns to the catalog via the same tab.
+		if (
+			activeTab === 'planner' &&
+			normalized === 'planner' &&
+			getActiveTournament()?.status === 'active'
+		) {
+			activeTab = 'dashboard';
+		}
 
 		document
 			.querySelectorAll('[data-tournament-studio-tab]')
@@ -5991,7 +6038,8 @@
 		state.tournamentStudioTab = activeTab;
 
 		if (activeTab === 'planner') renderTournamentCatalog();
-		if (activeTab === 'history') renderTournamentPanels();
+		if (activeTab === 'dashboard' || activeTab === 'history')
+			renderTournamentPanels();
 	}
 
 	function initTournamentStudioTabs() {
@@ -6295,6 +6343,57 @@
 				if (id === 'tournamentAssignmentsModal') closeTournamentAssignmentsModal();
 				if (id === 'tournamentWatchModal') closeTournamentWatchModal();
 			});
+		});
+	}
+
+	/**
+	 * Delegated tournament-modal bindings. bindArenaTournamentModals()
+	 * attaches listeners to the live elements, but any code path that
+	 * re-renders the surrounding panel markup (studio tab switches,
+	 * renderTournamentCatalog churn) recreates those elements without the
+	 * dataset.bound flag and without re-calling the binder — the "Add
+	 * tournament" button then went dead mid-session. A document-level
+	 * delegation survives every re-render; installed exactly once via
+	 * state.tournamentModalsDelegated.
+	 */
+	function delegateTournamentModalBindings() {
+		if (state.tournamentModalsDelegated) return;
+		state.tournamentModalsDelegated = true;
+		const buttonActions = {
+			addTournamentBtn: openTournamentPlannerModal,
+			closeTournamentPlannerBtn: closeTournamentPlannerModal,
+			closeTournamentAssignmentsBtn: closeTournamentAssignmentsModal,
+			closeTournamentAssignmentsFooterBtn: closeTournamentAssignmentsModal,
+			closeTournamentWatchBtn: closeTournamentWatchModal,
+		};
+		const backdropActions = {
+			tournamentPlannerModal: closeTournamentPlannerModal,
+			tournamentAssignmentsModal: closeTournamentAssignmentsModal,
+			tournamentWatchModal: closeTournamentWatchModal,
+		};
+		document.addEventListener('click', (event) => {
+			const target = event.target;
+			if (!(target instanceof Element)) return;
+			const button = target.closest(
+				Object.keys(buttonActions)
+					.map((id) => `#${id}`)
+					.join(','),
+			);
+			if (button) {
+				const action = buttonActions[button.id];
+				if (action) action();
+				return;
+			}
+			const modal = target.closest(
+				Object.keys(backdropActions)
+					.map((id) => `#${id}`)
+					.join(','),
+			);
+			// Only close when the click landed on the modal backdrop itself.
+			if (modal && event.target === modal) {
+				const action = backdropActions[modal.id];
+				if (action) action();
+			}
 		});
 	}
 
@@ -9275,6 +9374,7 @@
 
 	function loadGamificationUI() {
 		bindArenaTournamentModals();
+		delegateTournamentModalBindings();
 		bindTournamentHistoryActions();
 		const config = getGamificationConfig();
 		if (byId('expPerCorrect'))
@@ -9704,6 +9804,90 @@
 		};
 	}
 
+	/**
+	 * Fallback champion when the points leaderboard is empty (every match
+	 * ended 0–0, e.g. all answers timed out). The per-match results modal
+	 * already crowns a winner via the score-then-fastest-time tiebreak
+	 * (buildResults); stopTournament must agree with it or the tournament
+	 * archives with "No winner" and the champion's badge/EXP are never
+	 * awarded. Reads the last round's completed instances — the engine
+	 * stores winners on game.results (finalizeGame) and participants on
+	 * game.session — and applies the same tiebreak locally as a fallback.
+	 */
+	function resolveTournamentFinalMatchWinner(activeTournament) {
+		if (!activeTournament?.id) return null;
+		const rounds = Array.isArray(activeTournament.roundAssignments)
+			? activeTournament.roundAssignments
+			: [];
+		if (!rounds.length) return null;
+		const gamesLookup = buildTournamentGamesLookup();
+		const lastRound = rounds[rounds.length - 1] || {};
+		const details = Array.isArray(lastRound.gameDetails)
+			? lastRound.gameDetails
+			: [];
+		if (!details.length) return null;
+
+		const candidates = [];
+		details.forEach((entry) => {
+			const instanceId = String(entry?.instanceId || '').trim();
+			const gameId = instanceId || String(entry?.id || '').trim();
+			const game = gameId ? gamesLookup.get(gameId) : null;
+			if (!game) return;
+			const engineWinner =
+				game.results?.winners && game.results.winners.length
+					? game.results.winners[0]
+					: null;
+			if (
+				engineWinner &&
+				(String(engineWinner.userId || engineWinner.id || '').trim() ||
+					engineWinner.name)
+			) {
+				candidates.push({
+					id: String(
+						engineWinner.userId || engineWinner.id || '',
+					).trim(),
+					name:
+						String(
+							engineWinner.name ||
+								engineWinner.userName ||
+								engineWinner.id ||
+								'',
+						).trim() || 'Champion',
+					points: Math.max(Number(engineWinner.score) || 0, 0),
+				});
+				return;
+			}
+			// No stored winners (unfinished snapshot / team summary): apply
+			// the same score-then-fastest-time tiebreak over participants.
+			const participants = Array.isArray(game.session?.participants)
+				? game.session.participants
+						.map((p) => ({ ...p }))
+						.filter((p) => String(p?.userId || '').trim())
+				: [];
+			if (!participants.length) return;
+			participants.sort((a, b) => {
+				if ((b.score || 0) !== (a.score || 0))
+					return (b.score || 0) - (a.score || 0);
+				return (a.timeSpent || 0) - (b.timeSpent || 0);
+			});
+			const best = participants[0];
+			candidates.push({
+				id: String(best.userId).trim(),
+				name: String(best.name || best.userName || 'Champion').trim(),
+				points: Math.max(Number(best.score) || 0, 0),
+			});
+		});
+
+		if (!candidates.length) return null;
+		// Multiple final matches: best points, then fastest name order for
+		// determinism (single-match case — the common one — is just [0]).
+		candidates.sort((a, b) => {
+			if (b.points !== a.points) return b.points - a.points;
+			return String(a.name).localeCompare(String(b.name));
+		});
+		return candidates[0];
+	}
+
 	function stopTournament() {
 		clearTournamentPlannerHistoryMode();
 		const active = getActiveTournament();
@@ -9715,14 +9899,60 @@
 		const finalStandings = getTournamentLeaderboard(active, {
 			includeZero: false,
 		});
-		const winner = finalStandings[0] || null;
+		let winner = finalStandings[0] || null;
+		if (!winner) {
+			// All scores were zero: the leaderboard filters those students
+			// out, but the final round's matches still crowned a champion
+			// (fastest time). Fall back to the match results so the
+			// tournament records the same winner the players saw.
+			const fallbackWinner = resolveTournamentFinalMatchWinner(active);
+			if (fallbackWinner?.id) {
+				winner = { ...fallbackWinner, exp: 0, className: '' };
+				const participants = Array.isArray(active.participants)
+					? active.participants
+					: [];
+				const match = participants.find(
+					(p) =>
+						String(p?.userId || p?.id || '').trim() ===
+						String(winner.id).trim(),
+				);
+				if (match) {
+					winner.name = match.name || winner.name;
+					winner.className = match.className || match.class || '';
+				}
+				// Keep a visible standings list in the archived history:
+				// every participant, ordered points-first then the same
+				// fastest-time preference via the fallback winner.
+				active.finalStandings = participants
+					.map((p) => ({
+						id: String(p?.userId || p?.id || '').trim(),
+						name: String(p?.name || 'Student'),
+						className: p?.className || p?.class || '',
+						points: 0,
+						exp: 0,
+					}))
+					.filter((entry) => entry.id)
+					.sort((a, b) => {
+						if (String(a.id) === String(winner.id)) return -1;
+						if (String(b.id) === String(winner.id)) return 1;
+						return String(a.name).localeCompare(String(b.name));
+					})
+					.map((entry, index) => ({ ...entry, rank: index + 1 }));
+			}
+		}
 		active.status = 'completed';
 		active.endedAt = new Date().toISOString();
-		active.participantCount = finalStandings.length;
+		active.participantCount = Array.isArray(active.participants)
+			? active.participants.length
+			: finalStandings.length;
 		active.winnerId = winner?.id || '';
 		active.winnerName = winner?.name || '';
 		active.winnerPoints = winner?.points || 0;
-		active.finalStandings = finalStandings.slice(0, 20);
+		// finalStandings was already populated by the zero-score fallback
+		// above; only overwrite it when the normal leaderboard produced it.
+		if (!active.finalStandings) {
+			active.finalStandings = finalStandings.slice(0, 20);
+		}
 		const finalReward = applyTournamentFinalRewards(active, winner);
 		if (finalReward) {
 			active.finalReward = finalReward;
@@ -9800,15 +10030,14 @@
 
 			socket.on('game:stateUpdate', (gameSnapshot) => {
 				if (gameSnapshot && gameSnapshot.id) {
-					// Update local game data
-					const games = GameCore.getQuizGames();
-					const idx = games.findIndex((g) => g.id === gameSnapshot.id);
-					if (idx >= 0) {
-						games[idx] = gameSnapshot;
-					} else {
-						games.push(gameSnapshot);
-					}
-					GameCore.saveQuizGames(games);
+					// Update local game data. The engine snapshot is
+					// authoritative for what it carries, but a broadcast can
+					// race a local write (fresh lobby, edited questions) —
+					// upsertAuthoritativeGameSnapshot merges by id instead of
+					// blind-replacing the record, so the card keeps fields
+					// the snapshot doesn't carry and never regresses to a
+					// stale join code after a match completes.
+					upsertAuthoritativeGameSnapshot(gameSnapshot);
 
 					// If this game just completed & is a tournament game, apply scores
 					if (

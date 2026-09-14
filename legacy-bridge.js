@@ -348,6 +348,11 @@
           } catch (reconcileErr) {
             console.warn('[legacy-bridge] games reconciliation failed:', reconcileErr);
           }
+          // Timestamp the successful bootstrap. Deferred scripts (e.g. the
+          // Quick Start wizard) may not have registered their event listener
+          // yet when the fetch resolves — this lets them detect a bootstrap
+          // that already landed before they were ready.
+          window.__legacyBridgeBootstrappedAt = Date.now();
           try {
             window.dispatchEvent(new CustomEvent('quiz:bootstrap-ready', {
               detail: { schoolId: payload && payload.school_id },
@@ -675,6 +680,27 @@
     // rejected (expired/wrong-identity token from a shared-localStorage
     // socket), it refreshes the access token through here.
     window.__legacyBridgeRefresh = refreshAccessToken;
+    // Hard cache reset for the school:data-reset broadcast: another tab wiped
+    // the server data, so this tab's in-memory cache + localStorage mirrors
+    // are now stale. Clearing them here MUST NOT go through the normal write
+    // path (it would re-push the deleted rows back to the server — data
+    // resurrection); we drop everything locally, then re-bootstrap from the
+    // now-empty server.
+    window.__legacyBridgeResetCache = function () {
+      var keys = [];
+      for (var entity in STORE_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(STORE_KEYS, entity)) {
+          keys.push(STORE_KEYS[entity]);
+          cache[entity] = Array.isArray(cache[entity]) ? [] : null;
+        }
+      }
+      keys.forEach(function (key) {
+        try { _origRemoveItem.call(localStorage, key); } catch (_) {}
+      });
+      // The generic repo read falls back to localStorage; empty arrays are
+      // the honest "server has nothing" answer until the bootstrap lands.
+      fetchAll();
+    };
 
     return {
       getAll_sync: function (table) {

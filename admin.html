@@ -39,7 +39,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-09-realtime-r6" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-15-r1" />
 
 			<!-- APP_CONFIG injected by server.js in SaaS mode -->
 			<script>
@@ -57,7 +57,7 @@
 			</script>
 
 			<!-- Legacy Bridge — MUST load synchronously before all management scripts -->
-			<script src="legacy-bridge.js?v=2026-09-09-realtime-r6"></script>
+			<script src="legacy-bridge.js?v=2026-09-13-r8"></script>
 
 			<!-- Socket auth keeper — heals sockets whose token expired or was
 			     replaced by another tab's login (shared localStorage), e.g. a
@@ -112,8 +112,8 @@
 
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
-		<script src="api-client.js" defer></script>
-		<script src="auth.js" defer></script>
+		<script src="api-client.js?v=2026-09-15-r1" defer></script>
+		<script src="auth.js?v=2026-09-15-r2" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="settings.js" defer></script>
 
@@ -121,7 +121,7 @@
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
 
 		<!-- Register admin panel with realtime server -->
-		<script src="realtime-admin.js" defer></script>
+		<script src="realtime-admin.js?v=2026-09-15-r1" defer></script>
 
 		<!-- Admin page scripts -->
 		<script src="category-management.js" defer></script>
@@ -131,11 +131,11 @@
 		<script src="results-management.js" defer></script>
 		<script src="overview-dashboard.js" defer></script>
 		<script src="global-search.js" defer></script>
-		<script src="realtime-settings.js" defer></script>
+		<script src="realtime-settings.js?v=2026-09-13-r2" defer></script>
 		<script src="quiz-presets.js" defer></script>
-		<script src="games-management.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="quick-start.js?v=2026-09-13-r4" defer></script>
-			<script src="admin-main.js" defer></script>
+		<script src="games-management.js?v=2026-09-15-r3" defer></script>
+		<script src="quick-start.js?v=2026-09-14-r1" defer></script>
+			<script src="admin-main.js?v=2026-09-13-r3" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -5133,6 +5133,26 @@
 						</div>
 
 						<div id="teacherFields" class="settings-group" style="display: none;">
+							<h4 style="margin-bottom: 10px;">Teacher Profile</h4>
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="teacherNumeroField">Teacher Numero</label>
+									<input type="text" id="teacherNumeroField" class="form-control" placeholder="e.g. T-1042" />
+								</div>
+								<div class="form-group half">
+									<label for="teacherPhoneField">Phone Number</label>
+									<input type="tel" id="teacherPhoneField" class="form-control" placeholder="+212 6 12 34 56 78" />
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="teacherEmailField">Email</label>
+								<input type="email" id="teacherEmailField" class="form-control" placeholder="teacher@school.com" />
+							</div>
+							<div class="form-group">
+								<label for="teacherSubjectsField">Subjects</label>
+								<input type="text" id="teacherSubjectsField" class="form-control" placeholder="Math, Physics, Informatics" />
+								<small class="text-muted">Comma-separated list of subjects this teacher covers.</small>
+							</div>
 							<h4 style="margin-bottom: 10px;">Assign Classes</h4>
 							<div id="teacherClassList" class="checkbox-list"></div>
 							<small class="text-muted">Teachers can only manage assigned classes and their content.</small>
@@ -6868,14 +6888,14 @@
 			</div>
 		</div>
 
-		<!-- Quick Start wizard modal -->
+		<!-- Quick Start wizard modal — layout/width handled by #quickStartModal CSS -->
 		<div id="quickStartModal" class="modal">
-			<div class="modal-content" style="max-width: 780px;">
+			<div class="modal-content">
 				<div class="modal-header">
 					<h2>🚀 Quick Start Setup</h2>
 					<button type="button" class="modal-close" onclick="window.dismissQuickStart('later')">&times;</button>
 				</div>
-				<div class="modal-body" style="padding: 0;">
+				<div class="modal-body">
 					<div class="quick-start-layout">
 						<div class="quick-start-steps" id="quickStartSteps"></div>
 						<div class="quick-start-panel">
@@ -6883,9 +6903,9 @@
 						</div>
 					</div>
 				</div>
-				<div class="modal-footer" style="justify-content: space-between;">
+				<div class="modal-footer">
 					<button type="button" class="btn btn-secondary" id="quickStartBackBtn" onclick="window.quickStartGo(-1)">Back</button>
-					<div style="display: flex; gap: 10px;">
+					<div class="quickStartFooterEnd">
 						<button type="button" class="btn btn-secondary" onclick="window.dismissQuickStart('later')">Later</button>
 						<button type="button" class="btn btn-primary" id="quickStartNextBtn" onclick="window.quickStartGo(1)">Next</button>
 					</div>

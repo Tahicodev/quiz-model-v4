@@ -27,6 +27,7 @@ import gamesRoutes from '../../../src/backend/routes/games.routes.js';
 import tournamentsRoutes from '../../../src/backend/routes/tournaments.routes.js';
 import sessionsRoutes from '../../../src/backend/routes/sessions.routes.js';
 import settingsRoutes from '../../../src/backend/routes/settings.routes.js';
+import schoolRoutes from '../../../src/backend/routes/school.routes.js';
 import bootstrapRoutes from '../../../src/backend/routes/bootstrap.routes.js';
 import bulkRoutes from '../../../src/backend/routes/bulk.routes.js';
 
@@ -59,6 +60,7 @@ app.use('/api/v1/games',       gamesRoutes);
 app.use('/api/v1/tournaments', tournamentsRoutes);
 app.use('/api/v1/sessions',    sessionsRoutes);
 app.use('/api/v1/settings',    settingsRoutes);
+app.use('/api/v1/school',     schoolRoutes);
 app.use('/api/v1/bootstrap',   bootstrapRoutes);
 app.use('/api/v1/bulk',        bulkRoutes);
 

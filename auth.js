@@ -24,6 +24,10 @@
 	let currentSession = null;
 	let selectedUserIds = new Set();
 	let recoveryUnlockedUntil = 0;
+	// Server-issued recovery ticket (JWT, 15 min). When present it replaces the
+	// client-side timestamp gate — the reset then goes through the server and
+	// works from any device, not just this browser's localStorage.
+	let recoveryTicket = null;
 
 	function safeJsonParse(value, fallback) {
 		try {
@@ -134,6 +138,13 @@
 			studentNumber: user.studentNumber || user.numero || '',
 			classId: user.classId || '',
 			className: user.className || '',
+			// Teacher/staff contacts (kept in the local cache so the user modal
+			// can pre-fill them between bootstraps).
+			email: user.email || '',
+			phone: user.phone || '',
+			subjects: Array.isArray(user.subjects)
+				? user.subjects
+				: [],
 			createdAt: user.createdAt || now,
 			updatedAt: now,
 		};
@@ -255,20 +266,72 @@
 
 	async function verifyRecoveryCodeFromForm(formEl) {
 		const code = formEl?.querySelector('[data-recovery="code"]')?.value || '';
+		if (!code || !String(code).trim()) {
+			recoveryUnlockedUntil = 0;
+			recoveryTicket = null;
+			setRecoveryPanelMode('open');
+			setRecoveryStatus('Enter your recovery code.', 'error');
+			return;
+		}
+
+		// Server-side verification first (bcrypt against the school's
+		// system.recovery_code_hash). The raw code never leaves the browser in
+		// the fallback path either — only here, to the verify endpoint.
+		if (window.API && typeof window.API.raw === 'function') {
+			try {
+				const result = await window.API.raw('POST', '/auth/recover/verify', {
+					code: String(code).trim(),
+				});
+				if (result && result.ticket) {
+					recoveryTicket = result.ticket;
+					recoveryUnlockedUntil =
+						Date.now() + (result.expiresInMinutes || 15) * 60 * 1000;
+					setRecoveryPanelMode('reset');
+					setRecoveryStatus(
+						'Recovery verified. You can reset the admin password for 15 minutes.',
+						'success',
+					);
+					return;
+				}
+			} catch (err) {
+				// Distinguish "code wrong/unset" from "server unreachable": a
+				// 401/403/422 means the server answered and rejected the code —
+				// surface that and stop. Network-level failures fall through to
+				// the legacy local verification.
+				const status = err && err.status;
+				if (status) {
+					recoveryUnlockedUntil = 0;
+					recoveryTicket = null;
+					setRecoveryPanelMode('open');
+					setRecoveryStatus(
+						err?.message || 'Recovery code is incorrect',
+						'error',
+					);
+					return;
+				}
+				console.warn('[auth] server recovery verify unreachable — falling back to local', err);
+			}
+		}
+
+		// Legacy local fallback (offline / server down): hash-compare against
+		// the localStorage settings blob or the factory default code.
 		const ok = await verifyRecoveryCodeValue(code);
 		if (!ok) {
 			recoveryUnlockedUntil = 0;
+			recoveryTicket = null;
 			setRecoveryPanelMode('open');
 			setRecoveryStatus('Recovery code is incorrect', 'error');
 			return;
 		}
+		recoveryTicket = null;
 		recoveryUnlockedUntil = Date.now() + RECOVERY_UNLOCK_TTL_MS;
 		setRecoveryPanelMode('reset');
 		setRecoveryStatus('Recovery verified. You can reset the dashboard password for 15 minutes.', 'success');
 	}
 
 	async function resetDashboardPasswordFromForm(formEl) {
-		if (Date.now() >= recoveryUnlockedUntil) {
+		const unlocked = recoveryTicket || Date.now() < recoveryUnlockedUntil;
+		if (!unlocked) {
 			setRecoveryPanelMode('open');
 			setRecoveryStatus('Recovery verification expired. Verify the code again.', 'error');
 			return;
@@ -283,6 +346,42 @@
 			setRecoveryStatus('Enter a username and a password with at least 6 characters.', 'error');
 			return;
 		}
+
+		// Server-side reset when we hold a server ticket — updates the real DB
+		// and revokes every refresh token (assumed-compromised account).
+		if (recoveryTicket && window.API && typeof window.API.raw === 'function') {
+			try {
+				await window.API.raw('POST', '/auth/recover/reset', {
+					ticket: recoveryTicket,
+					username,
+					newPassword: password,
+				});
+				recoveryTicket = null;
+				recoveryUnlockedUntil = 0;
+				setRecoveryPanelMode('closed');
+				if (formEl) formEl.reset();
+				setRecoveryStatus('Admin password reset. Sign in with the new password.', 'success');
+				return;
+			} catch (err) {
+				const status = err && err.status;
+				if (status) {
+					// 401 = ticket expired/rejected → back to code entry.
+					if (status === 401) {
+						recoveryTicket = null;
+						recoveryUnlockedUntil = 0;
+						setRecoveryPanelMode('open');
+					}
+					setRecoveryStatus(
+						err?.message || 'Password reset failed',
+						'error',
+					);
+					return;
+				}
+				console.warn('[auth] server recovery reset unreachable — falling back to local', err);
+			}
+		}
+
+		// Legacy localStorage-only fallback (offline).
 		const users = await ensureDefaultAdmin();
 		let user = findUserByUsername(users, username);
 		if (!user) {
@@ -400,7 +499,10 @@
 		});
 	}
 
-	function loadSession(allowedRoles) {
+	function loadSession(allowedRoles, options = {}) {
+		const onWrongRole = typeof options.onWrongRole === 'function'
+			? options.onWrongRole
+			: null;
 		const raw =
 			sessionStorage.getItem(SESSION_STORAGE_KEY) ||
 			localStorage.getItem(SESSION_REMEMBER_KEY);
@@ -428,6 +530,18 @@
 				// same browser (admin + student workspace open together).
 				const scopedSession = loadScopedSession(allowedRoles, users);
 				if (scopedSession) return scopedSession;
+				// No portal-owned session exists: the sessionStorage copy holds
+				// ANOTHER portal's identity (this tab was reused across
+				// portals). Drop it so it can never leak into this page or
+				// resurface after a reload — each portal adopts only its own
+				// role; the user re-logs in cleanly. Report the rejected role
+				// so the caller (e.g. the admin portal) can bounce the
+				// student to their own surface instead of showing a login
+				// modal over exposed chrome.
+				if (sessionStorage.getItem(SESSION_STORAGE_KEY)) {
+					sessionStorage.removeItem(SESSION_STORAGE_KEY);
+				}
+				if (onWrongRole) onWrongRole(role);
 				return null;
 			}
 		}
@@ -854,6 +968,60 @@
 			});
 	}
 
+	// ── School branding ───────────────────────────────────────────────────────
+	// Pulls the school's name + logo from the public profile endpoint and swaps
+	// the header branding (SVG placeholder → logo image, title → school name).
+	// Cached per session; refreshed live via the school:profile-updated socket
+	// event (see realtime-admin.js).
+	var schoolBrandingCache = { loaded: false, profile: null };
+
+	function applySchoolBranding() {
+		var titleEl = document.getElementById('dashboardTitle');
+		var logoBox = document.querySelector('.header-branding .brand-logo');
+		if (!titleEl && !logoBox) return;
+
+		var apply = function (profile) {
+			if (!profile) return;
+			var isTeacher = currentUser && currentUser.role === ROLE_TEACHER;
+			if (titleEl && profile.name) {
+				titleEl.textContent = isTeacher
+					? profile.name + ' — Teachers'
+					: profile.name;
+			}
+			if (logoBox && profile.logo_url) {
+				logoBox.innerHTML =
+					'<img src="' + profile.logo_url + '" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+			}
+		};
+
+		if (schoolBrandingCache.loaded) {
+			apply(schoolBrandingCache.profile);
+			return;
+		}
+
+		// The full profile needs auth; fall back to the public subset
+		// (name/type/city/logo) which is enough for branding.
+		var finish = function (profile) {
+			schoolBrandingCache.loaded = true;
+			schoolBrandingCache.profile = profile || {};
+			apply(schoolBrandingCache.profile);
+		};
+		if (window.API && typeof window.API.raw === 'function') {
+			window.API
+				.raw('GET', '/school/profile')
+				.then(finish)
+				.catch(function () {
+					finish(null);
+				});
+		}
+	}
+
+	// Live refresh hook for the realtime handler.
+	function refreshSchoolBranding() {
+		schoolBrandingCache.loaded = false;
+		applySchoolBranding();
+	}
+
 	function applyRolePermissions() {
 		if (!currentUser) return;
 		applyRoleVisibility();
@@ -888,6 +1056,8 @@
 					? 'Teacher Dashboard'
 					: 'Admin Dashboard';
 		}
+
+		applySchoolBranding();
 
 		const navButtons = Array.from(document.querySelectorAll('.nav-tab'));
 		const allowedButtons = navButtons.filter((btn) => {
@@ -2601,6 +2771,18 @@
 		if (studentNumberInput)
 			studentNumberInput.value = user?.studentNumber || '';
 
+		// Teacher/staff contacts (numero doubles as the teacher staff number).
+		const teacherNumeroInput = document.getElementById('teacherNumeroField');
+		const teacherPhoneInput = document.getElementById('teacherPhoneField');
+		const teacherEmailInput = document.getElementById('teacherEmailField');
+		const teacherSubjectsInput = document.getElementById('teacherSubjectsField');
+		if (teacherNumeroInput)
+			teacherNumeroInput.value = user?.numero || user?.studentNumber || '';
+		if (teacherPhoneInput) teacherPhoneInput.value = user?.phone || '';
+		if (teacherEmailInput) teacherEmailInput.value = user?.email || '';
+		if (teacherSubjectsInput)
+			teacherSubjectsInput.value = (user?.subjects || []).join(', ');
+
 		if (studentClassSelect) {
 			const classes = safeJsonParse(
 				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
@@ -2763,8 +2945,26 @@
 				).map((el) => el.value);
 				updatedUser.classIds = selected;
 			}
+
+			// Teacher/staff profile: numero, phone, email, subjects.
+			const numeroInput = document.getElementById('teacherNumeroField');
+			const phoneInput = document.getElementById('teacherPhoneField');
+			const emailInput = document.getElementById('teacherEmailField');
+			const subjectsInput = document.getElementById('teacherSubjectsField');
+			updatedUser.numero = numeroInput ? numeroInput.value.trim() : '';
+			updatedUser.studentNumber = updatedUser.numero;
+			updatedUser.phone = phoneInput ? phoneInput.value.trim() : '';
+			updatedUser.email = emailInput ? emailInput.value.trim() : '';
+			updatedUser.subjects = (subjectsInput ? subjectsInput.value : '')
+				.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean);
 		} else {
 			updatedUser.classIds = [];
+			updatedUser.numero = '';
+			updatedUser.phone = '';
+			updatedUser.email = '';
+			updatedUser.subjects = [];
 		}
 
 		if (role === ROLE_STUDENT) {
@@ -2800,7 +3000,9 @@
 			const classMatch = classes.find((c) => c.id === classId);
 			updatedUser.className = classMatch ? classMatch.name : '';
 		} else {
-			updatedUser.studentNumber = '';
+			// Teachers keep their staff numero (set in the teacher branch
+			// above); only the student-specific class linkage is cleared.
+			updatedUser.studentNumber = role === ROLE_TEACHER ? updatedUser.numero : '';
 			updatedUser.classId = '';
 			updatedUser.className = '';
 		}
@@ -2830,6 +3032,11 @@
 			if (password) payload.password = password;
 			if (updatedUser.classId) payload.class_id = updatedUser.classId;
 			if (updatedUser.studentNumber) payload.numero = updatedUser.studentNumber;
+			// Teacher/staff contacts — sent for every role (null clears them
+			// server-side; students/admins simply have no values).
+			payload.email = updatedUser.email || null;
+			payload.phone = updatedUser.phone || null;
+			payload.subjects = updatedUser.subjects || [];
 
 			let savedToServer = false;
 			if (window.API && typeof window.API.create === 'function') {
@@ -2846,6 +3053,11 @@
 						updatedUser.id = serverUser.id;
 						updatedUser.classId = serverUser.class_id || updatedUser.classId || '';
 						updatedUser.studentNumber = serverUser.numero || updatedUser.studentNumber || '';
+						updatedUser.email = serverUser.email || '';
+						updatedUser.phone = serverUser.phone || '';
+						updatedUser.subjects = Array.isArray(serverUser.subjects)
+							? serverUser.subjects
+							: updatedUser.subjects || [];
 						updatedUser.createdAt = serverUser.created_at || updatedUser.createdAt;
 						updatedUser.updatedAt = serverUser.updated_at || updatedUser.updatedAt;
 						// Replace any local stub with the server-authoritative row.
@@ -4033,10 +4245,36 @@
 
 	async function checkAuthState() {
 		await ensureDefaultAdmin();
-		const result = loadSession([ROLE_ADMIN, ROLE_TEACHER]);
+		let wrongRoleDetected = null;
+		const result = loadSession([ROLE_ADMIN, ROLE_TEACHER], {
+			onWrongRole: (role) => {
+				wrongRoleDetected = role;
+			},
+		});
 		if (!result) {
 			sessionStorage.removeItem('adminLoggedIn');
+			// Hard role gate: a student session on the admin portal must not
+			// linger here. loadSession already dropped the wrong-role session
+			// store; bounce the student to the landing page (their workspace
+			// link lives there) instead of parking them on a login modal over
+			// admin chrome.
+			if (wrongRoleDetected === ROLE_STUDENT) {
+				setCurrentUser(null, null);
+				window.location.replace('index.html');
+				return;
+			}
 			showAuthModal();
+			return;
+		}
+
+		// Defense in depth: loadSession can still resolve to a student via a
+		// student-like role normalized to ROLE_STUDENT (e.g. 'learner').
+		const effectiveRole = getEffectiveUserRole(result.user);
+		if (effectiveRole === ROLE_STUDENT) {
+			sessionStorage.removeItem(SESSION_STORAGE_KEY);
+			sessionStorage.removeItem('adminLoggedIn');
+			setCurrentUser(null, null);
+			window.location.replace('index.html');
 			return;
 		}
 
@@ -4261,6 +4499,8 @@
 		ensureOwnershipDefaults,
 		setCurrentUser,
 		applyRolePermissions,
+		applySchoolBranding,
+		refreshSchoolBranding,
 		canAccessTab,
 		canAccessSettingsTab,
 		updateUserById,

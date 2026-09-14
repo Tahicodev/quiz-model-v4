@@ -15069,6 +15069,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
   // src/shared/schemas/user.schema.js
   var roleValues = Object.values(ROLES);
+  var optionalContact = (max) => external_exports.string().max(max).optional().nullable().transform((v) => v == null || v.trim() === "" ? null : v.trim());
+  var subjectsField = external_exports.array(external_exports.string().max(100)).max(20).optional().nullable().transform((v) => v == null ? null : v.map((s) => s.trim()).filter(Boolean));
   var UserCreateSchema = external_exports.object({
     username: external_exports.string().min(2).max(50),
     password: external_exports.string().min(6).max(100),
@@ -15076,6 +15078,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     role: external_exports.enum(roleValues).default("student"),
     class_id: external_exports.string().min(1).max(100).optional().nullable(),
     numero: external_exports.string().max(50).optional().nullable(),
+    // Teacher/staff contact fields (safe for students/admins — they stay null).
+    email: external_exports.string().max(255).optional().nullable().transform((v) => v == null || v.trim() === "" ? null : v.trim()).refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+      message: "Invalid email address"
+    }),
+    phone: optionalContact(50),
+    subjects: subjectsField,
     status: external_exports.enum(["active", "inactive", "suspended"]).default("active")
   });
   var UserUpdateSchema = external_exports.object({
@@ -15083,6 +15091,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     role: external_exports.enum(roleValues).optional(),
     class_id: external_exports.string().min(1).max(100).optional().nullable(),
     numero: external_exports.string().max(50).optional().nullable(),
+    email: external_exports.string().max(255).optional().nullable().transform((v) => v == null || v.trim() === "" ? null : v.trim()).refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+      message: "Invalid email address"
+    }),
+    phone: optionalContact(50),
+    subjects: subjectsField,
     status: external_exports.enum(["active", "inactive", "suspended"]).optional()
   });
   var UserFilterSchema = external_exports.object({
@@ -17415,6 +17428,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       bindNow();
     }
     try {
+      const base = window.APP_CONFIG && window.APP_CONFIG.apiUrl || "/api/v1";
+      fetch(base + "/school/profile").then((r) => r.ok ? r.json() : null).then((profile) => {
+        if (!profile || !profile.name) return;
+        const title = document.getElementById("entry-auth-title");
+        if (title) title.textContent = "Welcome to " + profile.name;
+        document.title = profile.name + " \u2014 Quiz Portal";
+        const mark = document.getElementById("entryAuthMark");
+        if (mark && profile.logo_url) {
+          mark.innerHTML = '<img src="' + profile.logo_url + '" alt="' + profile.name + ' logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+        }
+      }).catch(() => {
+      });
+    } catch (_) {
+    }
+    try {
       const raw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSessionRemember");
       if (raw) {
         const session = JSON.parse(raw);
@@ -17924,6 +17952,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (u.class_id) out.class_id = u.class_id;
         if (u.studentNumber) out.numero = u.studentNumber;
         if (u.numero) out.numero = u.numero;
+        if (u.email !== void 0) out.email = u.email || null;
+        if (u.phone !== void 0) out.phone = u.phone || null;
+        if (u.subjects !== void 0) out.subjects = Array.isArray(u.subjects) ? u.subjects : null;
         return out;
       },
       classes: function(c) {
@@ -18215,6 +18246,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     let currentSession = null;
     let selectedUserIds = /* @__PURE__ */ new Set();
     let recoveryUnlockedUntil = 0;
+    let recoveryTicket = null;
     function safeJsonParse(value, fallback) {
       try {
         return value ? JSON.parse(value) : fallback;
@@ -18301,6 +18333,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         studentNumber: user.studentNumber || user.numero || "",
         classId: user.classId || "",
         className: user.className || "",
+        // Teacher/staff contacts (kept in the local cache so the user modal
+        // can pre-fill them between bootstraps).
+        email: user.email || "",
+        phone: user.phone || "",
+        subjects: Array.isArray(user.subjects) ? user.subjects : [],
         createdAt: user.createdAt || now,
         updatedAt: now
       };
@@ -18400,19 +18437,59 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async function verifyRecoveryCodeFromForm(formEl) {
       const code = formEl?.querySelector('[data-recovery="code"]')?.value || "";
+      if (!code || !String(code).trim()) {
+        recoveryUnlockedUntil = 0;
+        recoveryTicket = null;
+        setRecoveryPanelMode("open");
+        setRecoveryStatus("Enter your recovery code.", "error");
+        return;
+      }
+      if (window.API && typeof window.API.raw === "function") {
+        try {
+          const result = await window.API.raw("POST", "/auth/recover/verify", {
+            code: String(code).trim()
+          });
+          if (result && result.ticket) {
+            recoveryTicket = result.ticket;
+            recoveryUnlockedUntil = Date.now() + (result.expiresInMinutes || 15) * 60 * 1e3;
+            setRecoveryPanelMode("reset");
+            setRecoveryStatus(
+              "Recovery verified. You can reset the admin password for 15 minutes.",
+              "success"
+            );
+            return;
+          }
+        } catch (err) {
+          const status = err && err.status;
+          if (status) {
+            recoveryUnlockedUntil = 0;
+            recoveryTicket = null;
+            setRecoveryPanelMode("open");
+            setRecoveryStatus(
+              err?.message || "Recovery code is incorrect",
+              "error"
+            );
+            return;
+          }
+          console.warn("[auth] server recovery verify unreachable \u2014 falling back to local", err);
+        }
+      }
       const ok = await verifyRecoveryCodeValue(code);
       if (!ok) {
         recoveryUnlockedUntil = 0;
+        recoveryTicket = null;
         setRecoveryPanelMode("open");
         setRecoveryStatus("Recovery code is incorrect", "error");
         return;
       }
+      recoveryTicket = null;
       recoveryUnlockedUntil = Date.now() + RECOVERY_UNLOCK_TTL_MS;
       setRecoveryPanelMode("reset");
       setRecoveryStatus("Recovery verified. You can reset the dashboard password for 15 minutes.", "success");
     }
     async function resetDashboardPasswordFromForm(formEl) {
-      if (Date.now() >= recoveryUnlockedUntil) {
+      const unlocked = recoveryTicket || Date.now() < recoveryUnlockedUntil;
+      if (!unlocked) {
         setRecoveryPanelMode("open");
         setRecoveryStatus("Recovery verification expired. Verify the code again.", "error");
         return;
@@ -18426,6 +18503,36 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!username || password.length < 6) {
         setRecoveryStatus("Enter a username and a password with at least 6 characters.", "error");
         return;
+      }
+      if (recoveryTicket && window.API && typeof window.API.raw === "function") {
+        try {
+          await window.API.raw("POST", "/auth/recover/reset", {
+            ticket: recoveryTicket,
+            username,
+            newPassword: password
+          });
+          recoveryTicket = null;
+          recoveryUnlockedUntil = 0;
+          setRecoveryPanelMode("closed");
+          if (formEl) formEl.reset();
+          setRecoveryStatus("Admin password reset. Sign in with the new password.", "success");
+          return;
+        } catch (err) {
+          const status = err && err.status;
+          if (status) {
+            if (status === 401) {
+              recoveryTicket = null;
+              recoveryUnlockedUntil = 0;
+              setRecoveryPanelMode("open");
+            }
+            setRecoveryStatus(
+              err?.message || "Password reset failed",
+              "error"
+            );
+            return;
+          }
+          console.warn("[auth] server recovery reset unreachable \u2014 falling back to local", err);
+        }
       }
       const users = await ensureDefaultAdmin();
       let user = findUserByUsername(users, username);
@@ -18875,6 +18982,40 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
       });
     }
+    var schoolBrandingCache = { loaded: false, profile: null };
+    function applySchoolBranding() {
+      var titleEl = document.getElementById("dashboardTitle");
+      var logoBox = document.querySelector(".header-branding .brand-logo");
+      if (!titleEl && !logoBox) return;
+      var apply = function(profile) {
+        if (!profile) return;
+        var isTeacher2 = currentUser && currentUser.role === ROLE_TEACHER;
+        if (titleEl && profile.name) {
+          titleEl.textContent = isTeacher2 ? profile.name + " \u2014 Teachers" : profile.name;
+        }
+        if (logoBox && profile.logo_url) {
+          logoBox.innerHTML = '<img src="' + profile.logo_url + '" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+        }
+      };
+      if (schoolBrandingCache.loaded) {
+        apply(schoolBrandingCache.profile);
+        return;
+      }
+      var finish = function(profile) {
+        schoolBrandingCache.loaded = true;
+        schoolBrandingCache.profile = profile || {};
+        apply(schoolBrandingCache.profile);
+      };
+      if (window.API && typeof window.API.raw === "function") {
+        window.API.raw("GET", "/school/profile").then(finish).catch(function() {
+          finish(null);
+        });
+      }
+    }
+    function refreshSchoolBranding() {
+      schoolBrandingCache.loaded = false;
+      applySchoolBranding();
+    }
     function applyRolePermissions() {
       if (!currentUser) return;
       applyRoleVisibility();
@@ -18901,6 +19042,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (titleEl) {
         titleEl.textContent = currentUser.role === ROLE_TEACHER ? "Teacher Dashboard" : "Admin Dashboard";
       }
+      applySchoolBranding();
       const navButtons = Array.from(document.querySelectorAll(".nav-tab"));
       const allowedButtons = navButtons.filter((btn) => {
         const tabName = btn.dataset.tab || "";
@@ -20308,6 +20450,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (statusSelect) statusSelect.value = user?.status || "active";
       if (studentNumberInput)
         studentNumberInput.value = user?.studentNumber || "";
+      const teacherNumeroInput = document.getElementById("teacherNumeroField");
+      const teacherPhoneInput = document.getElementById("teacherPhoneField");
+      const teacherEmailInput = document.getElementById("teacherEmailField");
+      const teacherSubjectsInput = document.getElementById("teacherSubjectsField");
+      if (teacherNumeroInput)
+        teacherNumeroInput.value = user?.numero || user?.studentNumber || "";
+      if (teacherPhoneInput) teacherPhoneInput.value = user?.phone || "";
+      if (teacherEmailInput) teacherEmailInput.value = user?.email || "";
+      if (teacherSubjectsInput)
+        teacherSubjectsInput.value = (user?.subjects || []).join(", ");
       if (studentClassSelect) {
         const classes = safeJsonParse(
           JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
@@ -20437,8 +20589,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           ).map((el) => el.value);
           updatedUser.classIds = selected;
         }
+        const numeroInput = document.getElementById("teacherNumeroField");
+        const phoneInput = document.getElementById("teacherPhoneField");
+        const emailInput = document.getElementById("teacherEmailField");
+        const subjectsInput = document.getElementById("teacherSubjectsField");
+        updatedUser.numero = numeroInput ? numeroInput.value.trim() : "";
+        updatedUser.studentNumber = updatedUser.numero;
+        updatedUser.phone = phoneInput ? phoneInput.value.trim() : "";
+        updatedUser.email = emailInput ? emailInput.value.trim() : "";
+        updatedUser.subjects = (subjectsInput ? subjectsInput.value : "").split(",").map((s) => s.trim()).filter(Boolean);
       } else {
         updatedUser.classIds = [];
+        updatedUser.numero = "";
+        updatedUser.phone = "";
+        updatedUser.email = "";
+        updatedUser.subjects = [];
       }
       if (role === ROLE_STUDENT) {
         const studentNumberInput = document.getElementById("studentNumberField");
@@ -20465,7 +20630,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const classMatch = classes.find((c) => c.id === classId);
         updatedUser.className = classMatch ? classMatch.name : "";
       } else {
-        updatedUser.studentNumber = "";
+        updatedUser.studentNumber = role === ROLE_TEACHER ? updatedUser.numero : "";
         updatedUser.classId = "";
         updatedUser.className = "";
       }
@@ -20488,6 +20653,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (password) payload.password = password;
       if (updatedUser.classId) payload.class_id = updatedUser.classId;
       if (updatedUser.studentNumber) payload.numero = updatedUser.studentNumber;
+      payload.email = updatedUser.email || null;
+      payload.phone = updatedUser.phone || null;
+      payload.subjects = updatedUser.subjects || [];
       let savedToServer = false;
       if (window.API && typeof window.API.create === "function") {
         try {
@@ -20501,6 +20669,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             updatedUser.id = serverUser.id;
             updatedUser.classId = serverUser.class_id || updatedUser.classId || "";
             updatedUser.studentNumber = serverUser.numero || updatedUser.studentNumber || "";
+            updatedUser.email = serverUser.email || "";
+            updatedUser.phone = serverUser.phone || "";
+            updatedUser.subjects = Array.isArray(serverUser.subjects) ? serverUser.subjects : updatedUser.subjects || [];
             updatedUser.createdAt = serverUser.created_at || updatedUser.createdAt;
             updatedUser.updatedAt = serverUser.updated_at || updatedUser.updatedAt;
             const i = users.findIndex((u) => u.id === updatedUser.id || u.username === updatedUser.username);
@@ -21710,6 +21881,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       ensureOwnershipDefaults,
       setCurrentUser,
       applyRolePermissions,
+      applySchoolBranding,
+      refreshSchoolBranding,
       canAccessTab,
       canAccessSettingsTab,
       updateUserById,
@@ -27568,6 +27741,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           console.warn("[realtime-client] game:deletedAll handler failed", err);
         }
         window.dispatchEvent(new CustomEvent("quiz:games-updated"));
+      });
+      socket.on("school:data-reset", (payload = {}) => {
+        console.log(
+          "[realtime-client] School data was reset by",
+          payload.by || "an admin",
+          "- clearing local caches"
+        );
+        try {
+          if (typeof window.__legacyBridgeResetCache === "function") {
+            window.__legacyBridgeResetCache();
+          } else {
+            if (window.GameCore?.saveQuizGames) window.GameCore.saveQuizGames([]);
+            localStorage.setItem("quizGames", JSON.stringify([]));
+          }
+          try {
+            localStorage.removeItem("quizSetupComplete");
+            localStorage.removeItem("quizQuickStartDismissedAt");
+          } catch (_) {
+          }
+        } catch (err) {
+          console.warn("[realtime-client] school:data-reset handler failed", err);
+        }
+        window.dispatchEvent(new CustomEvent("quiz:games-updated"));
+      });
+      socket.on("school:profile-updated", (payload = {}) => {
+        if (payload?.profile?.name) {
+          console.log("[realtime-client] School profile updated \u2014 refreshing branding");
+          if (window.Auth && typeof window.Auth.refreshSchoolBranding === "function") {
+            window.Auth.refreshSchoolBranding();
+          }
+        }
       });
       socket.on("game:stateUpdate", (game) => {
         if (!game || !game.id) return;

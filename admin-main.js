@@ -1148,73 +1148,15 @@ function initResponsiveTables() {
 		const row = e.target.closest('tr');
 		if (!row || row.classList.contains('detail-row')) return;
 
-		// Toggle expansion
-		if (row.classList.contains('expanded')) {
-			row.classList.remove('expanded');
-			const nextRow = row.nextElementSibling;
-			if (nextRow && nextRow.classList.contains('detail-row')) {
-				nextRow.remove();
-			}
-			// Update bulk buttons to show/hide edit button
-			if (typeof updateBulkDeleteButtons === 'function') {
-				updateBulkDeleteButtons();
-			}
-		} else {
-			// Close other expanded rows (optional, but cleaner)
-			const expandedRows = tableBody.querySelectorAll('tr.expanded');
-			expandedRows.forEach((r) => {
-				r.classList.remove('expanded');
-				const next = r.nextElementSibling;
-				if (next && next.classList.contains('detail-row')) {
-					next.remove();
-				}
-			});
+		// Mobile cards show labeled options/answer/image cells directly, so
+		// tapping a row no longer expands a duplicate detail section. Just
+		// clean up any stale detail rows left behind (e.g. after a resize).
+		const staleDetail = tableBody.querySelectorAll('tr.detail-row');
+		staleDetail.forEach((d) => d.remove());
+		row.classList.remove('expanded');
 
-			row.classList.add('expanded');
-
-			// Create detail row
-			const detailRow = document.createElement('tr');
-			detailRow.className = 'detail-row';
-
-			// Get data from columns
-			// cells[0] = checkbox, cells[1] = #, cells[2] = Question, cells[3] = Options, cells[4] = Image, cells[5] = Answer, cells[6] = Actions
-			const options = row.cells[3].innerHTML;
-			const image = row.cells[4].innerHTML;
-			const answer = row.cells[5].innerHTML;
-
-			detailRow.innerHTML = `
-                <td colspan="100%">
-                    <div class="row-details">
-                        <div class="detail-group">
-                            <strong>Options:</strong>
-                            <div class="detail-content">${options}</div>
-                        </div>
-                        <div class="detail-group">
-                            <strong>Correct Answer:</strong>
-                            <div class="detail-content">${answer}</div>
-                        </div>
-                        ${
-													image &&
-													image !== '-' &&
-													!image.includes('text-muted')
-														? `
-                        <div class="detail-group">
-                            <strong>Image:</strong>
-                            <div class="detail-content">${image}</div>
-                        </div>
-                        `
-														: ''
-												}
-                    </div>
-                </td>
-            `;
-
-			row.parentNode.insertBefore(detailRow, row.nextSibling);
-
-			// Update bulk buttons to hide edit button when row is expanded
-			if (typeof updateBulkDeleteButtons === 'function') {
-				updateBulkDeleteButtons();
-			}
+		if (typeof updateBulkDeleteButtons === 'function') {
+			updateBulkDeleteButtons();
 		}
 	});
 }

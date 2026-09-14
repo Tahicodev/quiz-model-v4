@@ -1401,6 +1401,51 @@
 		window.dispatchEvent(new CustomEvent('quiz:games-updated'));
 	});
 
+	// Another tab ran Settings → Data → Reset Data for this school. This tab
+	// still holds the deleted rows in its in-memory cache + localStorage
+	// mirrors, and its periodic bulk sync would re-push them to the server
+	// (data resurrection). The bridge's reset hook drops every mirror WITHOUT
+	// syncing anything back, then re-bootstraps from the now-empty server.
+	// The admin tab that ran the reset reloads itself, so this handler only
+	// fires for the *other* tabs of the school.
+	socket.on('school:data-reset', (payload = {}) => {
+		console.log(
+			'[realtime-client] School data was reset by',
+			payload.by || 'an admin',
+			'- clearing local caches',
+		);
+		try {
+			if (typeof window.__legacyBridgeResetCache === 'function') {
+				window.__legacyBridgeResetCache();
+			} else {
+				// Bridge not present (shouldn't happen on these pages) — at
+				// least clear the games mirror, the most-synced entity.
+				if (window.GameCore?.saveQuizGames) window.GameCore.saveQuizGames([]);
+				localStorage.setItem('quizGames', JSON.stringify([]));
+			}
+			// Clear the wizard-dismissal markers so the first-setup wizard can
+			// auto-show again on this (now empty) instance if appropriate.
+			try {
+				localStorage.removeItem('quizSetupComplete');
+				localStorage.removeItem('quizQuickStartDismissedAt');
+			} catch (_) {}
+		} catch (err) {
+			console.warn('[realtime-client] school:data-reset handler failed', err);
+		}
+		window.dispatchEvent(new CustomEvent('quiz:games-updated'));
+	});
+
+	// School profile changed by an admin — refresh branding on student-facing
+	// pages too (auth.js is loaded here for login/recovery).
+	socket.on('school:profile-updated', (payload = {}) => {
+		if (payload?.profile?.name) {
+			console.log('[realtime-client] School profile updated — refreshing branding');
+			if (window.Auth && typeof window.Auth.refreshSchoolBranding === 'function') {
+				window.Auth.refreshSchoolBranding();
+			}
+		}
+	});
+
 	// Server-authoritative game state updates
 	socket.on('game:stateUpdate', (game) => {
 		if (!game || !game.id) return;

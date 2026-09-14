@@ -173,6 +173,12 @@ const SANITIZERS = {
       name: pickStr(row.name) || pickStr(row.username) || 'Unknown',
       ...(row.numero != null && { numero: pickStr(row.numero) }),
       ...(row.studentNumber != null && { numero: pickStr(row.studentNumber) }),
+      // Teacher/staff contacts (legacy UI may send them camelCase or snake).
+      ...(row.email != null && { email: pickStr(row.email) || null }),
+      ...(row.phone != null && { phone: pickStr(row.phone) || null }),
+      ...((row.subjects != null || row.subjects_json != null) && {
+        subjects_json: row.subjects_json ?? (Array.isArray(row.subjects) ? JSON.stringify(row.subjects) : null),
+      }),
       status: pickStr(row.status) || 'active',
       ...(row.last_login && { last_login: pickDate(row.last_login) }),
       ...(row.lastLogin && { last_login: pickDate(row.lastLogin) }),

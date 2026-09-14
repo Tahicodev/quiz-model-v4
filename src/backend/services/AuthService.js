@@ -14,6 +14,7 @@ import { config } from '../config.js';
 import { logger, securityLog } from '../logger.js';
 import { UnauthorizedError, NotFoundError, ValidationError, ForbiddenError } from '../../shared/errors.js';
 import { LoginSchema, ChangePasswordSchema } from '../../shared/schemas/user.schema.js';
+import { ROLES } from '../../shared/constants.js';
 
 /** SHA-256 hash of a raw token — what we persist. Raw tokens are never stored. */
 function hashToken(rawToken) {
@@ -36,6 +37,7 @@ function durationToSeconds(d) {
 
 export class AuthService {
   #repo;
+  #lastIp = null;
 
   /** @param {import('../../frontend/infrastructure/IStorageRepository.js').IStorageRepository} repo */
   constructor(repo) {
@@ -202,6 +204,136 @@ export class AuthService {
     }
 
     logger.info({ userId }, 'Password changed; all sessions revoked');
+  }
+
+  // ── Recovery-code password reset (server-side, cross-device) ────────────────
+  // The recovery code hash lives in a SYSTEM-visibility Setting row
+  // (`system.recovery_code_hash`) so no settings GET can ever return it.
+  // Verify mints a short-lived recovery ticket JWT; reset consumes it.
+
+  /**
+   * Admin sets/updates the school's recovery code. The raw code only ever
+   * travels inside an authenticated admin session (same trust level as a
+   * password change); only its bcrypt hash is persisted, in a SYSTEM-visibility
+   * settings row that no settings GET can return.
+   * @param {{ schoolId: string, code: string, actor?: object }} input
+   */
+  async setRecoveryCode(schoolId, code, actor = null) {
+    if (!code || typeof code !== 'string' || code.trim().length < 4) {
+      throw new ValidationError({ code: ['Recovery code must be at least 4 characters'] });
+    }
+    const hash = await bcrypt.hash(code.trim(), config.bcryptRounds);
+    const { data: rows } = await this.#repo.getAll('settings', {
+      filters: { school_id: schoolId, key: 'system.recovery_code_hash' },
+      limit: 1,
+    });
+    if (rows[0]) {
+      await this.#repo.update('settings', rows[0].id, {
+        value: hash,
+        visibility: 'system',
+      });
+    } else {
+      await this.#repo.create('settings', {
+        school_id: schoolId,
+        key: 'system.recovery_code_hash',
+        value: hash,
+        visibility: 'system',
+      });
+    }
+    securityLog('recovery_code_set', { schoolId, actorId: actor?.id ?? null });
+    logger.info({ schoolId, actorId: actor?.id ?? null }, 'Recovery code set');
+    return { set: true };
+  }
+
+  /**
+   * Verify a recovery code and mint a 15-minute recovery ticket.
+   * @returns {Promise<{ ticket: string, schoolId: string }>}
+   */
+  async verifyRecoveryCode(schoolId, code, { ip = null } = {}) {
+    this.#lastIp = ip;
+    if (!code || typeof code !== 'string') {
+      throw new ValidationError({ code: ['Recovery code is required'] });
+    }
+    const hash = await this.#getSystemSetting(schoolId, 'system.recovery_code_hash');
+    if (!hash) {
+      throw new ForbiddenError('No recovery code has been set up for this school');
+    }
+    const matches = await bcrypt.compare(String(code).trim(), hash);
+    if (!matches) {
+      securityLog('recovery_code_failure', { schoolId, reason: 'bad_code', ip: this.#lastIp });
+      throw new UnauthorizedError('Invalid recovery code');
+    }
+
+    const ticket = jwt.sign(
+      { type: 'recovery', schoolId },
+      config.jwtSecret,
+      { expiresIn: '15m' },
+    );
+    securityLog('recovery_code_verified', { schoolId });
+    return { ticket, schoolId };
+  }
+
+  /**
+   * Reset an admin's password with a recovery ticket.
+   * @param {{ ticket: string, username: string, newPassword: string, schoolId?: string }} input
+   */
+  async resetPasswordWithTicket({ ticket, username, newPassword, schoolId }) {
+    let payload;
+    try {
+      payload = jwt.verify(String(ticket || ''), config.jwtSecret);
+    } catch {
+      throw new UnauthorizedError('Recovery ticket is invalid or expired');
+    }
+    if (payload.type !== 'recovery' || !payload.schoolId) {
+      throw new UnauthorizedError('Recovery ticket is invalid or expired');
+    }
+    // The ticket is bound to one school — never reset a user of another tenant.
+    const targetSchoolId = payload.schoolId;
+
+    if (!username || typeof username !== 'string' || !newPassword || newPassword.length < 6) {
+      throw new ValidationError({
+        ...(username ? {} : { username: ['Username is required'] }),
+        ...(newPassword && newPassword.length < 6 ? { newPassword: ['Minimum 6 characters'] } : {}),
+      });
+    }
+
+    const { data: users } = await this.#repo.getAll('users', {
+      filters: { school_id: targetSchoolId, username: String(username).trim() },
+    });
+    const user = users[0];
+    if (!user) {
+      securityLog('recovery_reset_failure', { schoolId: targetSchoolId, username, reason: 'unknown_user' });
+      throw new UnauthorizedError('Invalid username or password reset failed');
+    }
+    // Only admins can be recovered through the dashboard recovery flow — a
+    // recovery code that unlocks student accounts would be an escalation path.
+    if (![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+      securityLog('recovery_reset_failure', { schoolId: targetSchoolId, userId: user.id, reason: 'not_admin' });
+      throw new ForbiddenError('Recovery can only reset administrator accounts');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, config.bcryptRounds);
+    await this.#repo.update('users', user.id, { password_hash: passwordHash });
+
+    // Revoke every refresh token — the account is assumed compromised.
+    const { data: tokens } = await this.#repo.getAll('refresh_tokens', {
+      filters: { user_id: user.id, revoked: false },
+    });
+    for (const t of tokens) {
+      await this.#repo.update('refresh_tokens', t.id, { revoked: true });
+    }
+
+    securityLog('recovery_reset_success', { schoolId: targetSchoolId, userId: user.id });
+    logger.info({ userId: user.id, schoolId: targetSchoolId }, 'Password reset via recovery code');
+    return { username: user.username, schoolId: targetSchoolId };
+  }
+
+  async #getSystemSetting(schoolId, key) {
+    const { data: rows } = await this.#repo.getAll('settings', {
+      filters: { school_id: schoolId, key },
+      limit: 1,
+    });
+    return rows[0]?.value || null;
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────

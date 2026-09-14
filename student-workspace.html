@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
-		<link rel="stylesheet" href="styles.css?v=2026-09-09-realtime-r6" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-15-r1" />
 		<link
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -23,7 +23,7 @@
 				window.APP_PORTAL = 'student';
 			</script>
 				<!-- Legacy Bridge — must load synchronously -->
-					<script src="legacy-bridge.js?v=2026-09-09-realtime-r6"></script>
+					<script src="legacy-bridge.js?v=2026-09-13-r8"></script>
 				<!-- Socket auth keeper — heals sockets whose token expired or was
 				     replaced by another tab's login (shared localStorage). Load
 				     right after the bridge so getSocket can consult it. -->
@@ -73,10 +73,10 @@
 					};
 				</script>
 				<script src="utils.js" defer></script>
-				<script src="api-client.js" defer></script>
-			<script src="auth.js" defer></script>
+				<script src="api-client.js?v=2026-09-15-r1" defer></script>
+			<script src="auth.js?v=2026-09-15-r2" defer></script>
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
-		<script src="realtime-client.js" defer></script>
+		<script src="realtime-client.js?v=2026-09-14-r1" defer></script>
 				<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 					<script src="student-workspace.js?v=2026-09-09-realtime-r6" defer></script>

@@ -21,6 +21,12 @@ model School {
   slug         String   @unique // myschool.yourdomain.com
   plan         String   @default("free") // free | pro | enterprise
   max_students Int      @default(100)
+  school_type  String   @default("primaire") // primaire | college | lycee
+  address      String?
+  city         String?
+  phone        String?
+  email        String?
+  logo_url     String? // base64 data-URL school logo
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
@@ -57,7 +63,10 @@ model User {
   password_hash String
   role          String    @default("student") // ROLES constant
   name          String
-  numero        String? // student registration number
+  numero        String? // student registration / teacher staff number
+  email         String? // contact email (teachers, admins)
+  phone         String? // contact phone
+  subjects_json String? // JSON array of subject names (teachers)
   status        String    @default("active") // active | inactive | suspended
   last_login    DateTime?
   created_at    DateTime  @default(now())

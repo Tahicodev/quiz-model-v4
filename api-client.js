@@ -112,6 +112,12 @@
 
   var refreshing = null;
   var authUnavailable = false;
+  // 429 backoff: when the auth limiter trips, retrying immediately just
+  // feeds it more hits and keeps the whole IP locked out for the full
+  // 15-minute window. Pause refresh attempts (shared across this tab's
+  // requests via the Retry-After header, or 60s when absent) and let the
+  // user re-login instead of hammering the endpoint.
+  var refreshBackoffUntil = 0;
 
   function invalidateAuthSession() {
     authUnavailable = true;
@@ -139,6 +145,11 @@
       blocked.status = 401;
       return Promise.reject(blocked);
     }
+    if (Date.now() < refreshBackoffUntil) {
+      var cooldown = new Error('Auth endpoint cooling down after rate limit');
+      cooldown.status = 429;
+      return Promise.reject(cooldown);
+    }
     refreshing = fetch(getBaseUrl() + '/auth/refresh', {
       method: 'POST',
       credentials: 'include',
@@ -148,6 +159,14 @@
       body: JSON.stringify({ portal: window.APP_PORTAL || undefined }),
     })
       .then(function (r) {
+        if (r.status === 429) {
+          // Honor the limiter's Retry-After (seconds); fall back to 60s.
+          var retryAfter = Number(r.headers.get('Retry-After'));
+          refreshBackoffUntil = Date.now() + Math.max(retryAfter || 0, 60) * 1000;
+          var limited = new Error('Refresh rate-limited');
+          limited.status = 429;
+          throw limited;
+        }
         if (!r.ok) {
           var err = new Error('Refresh failed (' + r.status + ')');
           err.status = r.status;
@@ -251,6 +270,11 @@
       if (u.class_id) out.class_id = u.class_id;
       if (u.studentNumber) out.numero = u.studentNumber;
       if (u.numero) out.numero = u.numero;
+      // Teacher/staff contacts — optional pass-throughs (null clears them
+      // server-side via the zod transform).
+      if (u.email !== undefined) out.email = u.email || null;
+      if (u.phone !== undefined) out.phone = u.phone || null;
+      if (u.subjects !== undefined) out.subjects = Array.isArray(u.subjects) ? u.subjects : null;
       return out;
     },
 

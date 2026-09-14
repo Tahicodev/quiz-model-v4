@@ -623,6 +623,29 @@ export function initEntryPage(container) {
     bindNow();
   }
 
+  // School branding — fetch the public profile (no auth) and swap the gate's
+  // generic "Quiz Portal" title/mark for the school's name + logo. Falls back
+  // silently to the default branding when the endpoint is unreachable.
+  try {
+    const base = (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
+    fetch(base + '/school/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((profile) => {
+        if (!profile || !profile.name) return;
+        const title = document.getElementById('entry-auth-title');
+        if (title) title.textContent = 'Welcome to ' + profile.name;
+        document.title = profile.name + ' — Quiz Portal';
+        const mark = document.getElementById('entryAuthMark');
+        if (mark && profile.logo_url) {
+          mark.innerHTML =
+            '<img src="' + profile.logo_url + '" alt="' + profile.name + ' logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+        }
+      })
+      .catch(() => {});
+  } catch (_) {
+    /* branding is cosmetic — never block the gate */
+  }
+
   // NOTE: We deliberately do NOT hook window-level 'error' events here. The
   // quiz runtime (script.js) and the realtime client emit a number of
   // non-fatal runtime events during page bootstrap (missing DOM references
