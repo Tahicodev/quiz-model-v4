@@ -15310,6 +15310,13 @@
 		scheduleGameUiRefresh(context);
 	});
 
+	// An admin pushed an exam to this device (session:receive → realtime-client
+	// re-bootstraps the repo cache). Re-render so the new exam card appears
+	// without a manual page reload.
+	window.addEventListener('quiz:exams-updated', () => {
+		renderWorkspace();
+	});
+
 	window.addEventListener('storage', (event) => {
 		const key = event?.key || '';
 		if (
@@ -15318,6 +15325,7 @@
 			key === 'quizUsers' ||
 			key === 'quizProfileRequests' ||
 			key === 'quizResults' ||
+			key === 'quizExams' ||
 			key === 'examResults' ||
 			key === 'quizGamification' ||
 			key === 'quizTournamentActive' ||

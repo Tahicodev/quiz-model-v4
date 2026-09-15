@@ -164,8 +164,8 @@ var QuizStudent = (() => {
     }
   };
   var ForbiddenError = class extends AppError {
-    constructor() {
-      super("FORBIDDEN", "Access denied", 403);
+    constructor(msg = "Access denied") {
+      super("FORBIDDEN", msg, 403);
     }
   };
   var ValidationError = class extends AppError {
@@ -17830,6 +17830,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     var refreshing = null;
     var authUnavailable = false;
+    var refreshBackoffUntil = 0;
     function invalidateAuthSession() {
       authUnavailable = true;
       window.__authToken = "";
@@ -17858,6 +17859,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         blocked.status = 401;
         return Promise.reject(blocked);
       }
+      if (Date.now() < refreshBackoffUntil) {
+        var cooldown = new Error("Auth endpoint cooling down after rate limit");
+        cooldown.status = 429;
+        return Promise.reject(cooldown);
+      }
       refreshing = fetch(getBaseUrl() + "/auth/refresh", {
         method: "POST",
         credentials: "include",
@@ -17866,6 +17872,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         // (admin and student tabs of one browser each keep their own).
         body: JSON.stringify({ portal: window.APP_PORTAL || void 0 })
       }).then(function(r) {
+        if (r.status === 429) {
+          var retryAfter = Number(r.headers.get("Retry-After"));
+          refreshBackoffUntil = Date.now() + Math.max(retryAfter || 0, 60) * 1e3;
+          var limited = new Error("Refresh rate-limited");
+          limited.status = 429;
+          throw limited;
+        }
         if (!r.ok) {
           var err = new Error("Refresh failed (" + r.status + ")");
           err.status = r.status;
@@ -17901,6 +17914,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return body || "HTTP " + res.status;
       }
     }
+    var PUBLIC_AUTH_PATHS = [
+      "/auth/login",
+      "/auth/refresh",
+      "/auth/recover/verify",
+      "/auth/recover/reset"
+    ];
+    function isPublicAuthPath(path) {
+      return PUBLIC_AUTH_PATHS.some(function(p) {
+        return path === p || path.indexOf(p + "?") === 0;
+      });
+    }
     function request(method, path, body, _retried) {
       var url2 = getBaseUrl() + path;
       var init = {
@@ -17915,7 +17939,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         init.body = JSON.stringify(body);
       }
       return fetch(url2, init).then(function(res) {
-        if (res.status === 401 && !_retried) {
+        if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
           return refreshAccessToken().then(function() {
             return request(method, path, body, true);
           }).catch(function(err) {
@@ -18626,7 +18650,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         localStorage.removeItem(`${SESSION_STORAGE_KEY}:${role}`);
       });
     }
-    function loadSession(allowedRoles) {
+    function loadSession(allowedRoles, options = {}) {
+      const onWrongRole = typeof options.onWrongRole === "function" ? options.onWrongRole : null;
       const raw = sessionStorage.getItem(SESSION_STORAGE_KEY) || localStorage.getItem(SESSION_REMEMBER_KEY);
       const session = safeJsonParse(raw, null);
       if (!session) return null;
@@ -18645,6 +18670,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (!allowedRoles.includes(role)) {
           const scopedSession = loadScopedSession(allowedRoles, users);
           if (scopedSession) return scopedSession;
+          if (sessionStorage.getItem(SESSION_STORAGE_KEY)) {
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
+          }
+          if (onWrongRole) onWrongRole(role);
           return null;
         }
       }
@@ -20254,6 +20283,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								<div class="user-actions">
 									${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openUserModal('${escapeHtml(u.id)}')">Edit</button>` : ""}
 									${canManage ? `<button class="btn btn-sm ${statusClass}" onclick="toggleUserStatus('${escapeHtml(u.id)}')">${statusAction}</button>` : ""}
+									${canManage && isAdmin() ? `<button class="btn btn-sm btn-secondary-soft" title="Generate a new temporary password for this user" onclick="resetUserPassword('${escapeHtml(u.id)}')">Reset password</button>` : ""}
 									${canManage ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${escapeHtml(u.id)}')">Delete</button>` : ""}
 				</div>
             </td>
@@ -20829,6 +20859,100 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         renderUsersTable();
         showToast2("User deleted", "success");
       }
+    }
+    function generateTempPassword(length = 10) {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+      const bytes = new Uint32Array(length);
+      (crypto && crypto.getRandomValues ? crypto.getRandomValues(bytes) : null) || bytes.fill(Math.floor(Math.random() * 4294967295));
+      return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+    }
+    async function copyTempPassword(value) {
+      const text = String(value || "");
+      if (!text) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const helper = document.createElement("textarea");
+          helper.value = text;
+          helper.setAttribute("readonly", "");
+          helper.style.position = "fixed";
+          helper.style.opacity = "0";
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand("copy");
+          helper.remove();
+        }
+        showToast2("Password copied to clipboard", "success");
+      } catch (_) {
+        showToast2("Copy failed \u2014 select the password text manually", "warning");
+      }
+    }
+    async function resetUserPassword(userId) {
+      if (!userId) return;
+      const users = getUsers();
+      const user = users.find((u) => u.id === userId);
+      if (!user) return;
+      if (!canManageUser(user) && !isAdmin()) {
+        showToast2("Access denied", "error");
+        return;
+      }
+      if (!isAdmin()) {
+        showToast2("Only admins can reset passwords", "error");
+        return;
+      }
+      const label = user.name || user.username || "this user";
+      if (!confirm(
+        `Reset the password for "${label}"?
+
+A new temporary password will be generated and shown to you once so you can share it with the user.`
+      )) {
+        return;
+      }
+      const newPassword = generateTempPassword(10);
+      if (window.API && typeof window.API.raw === "function") {
+        try {
+          await window.API.raw(
+            "POST",
+            "/users/" + encodeURIComponent(userId) + "/reset-password",
+            { newPassword }
+          );
+        } catch (apiErr) {
+          console.warn("[auth] API reset password failed:", apiErr);
+          showToast2(
+            "Failed to reset password on server: " + (apiErr?.message || "network error"),
+            "error"
+          );
+          return;
+        }
+      } else {
+        showToast2("Server connection unavailable", "error");
+        return;
+      }
+      const modal = document.getElementById("resetPasswordModal");
+      const labelEl = document.getElementById("resetPasswordUser");
+      const valueEl = document.getElementById("resetPasswordValue");
+      if (!modal || !labelEl || !valueEl) {
+        showToast2(
+          `Password for "${label}" reset to: ${newPassword} (save it now \u2014 it won't be shown again)`,
+          "warning"
+        );
+        return;
+      }
+      labelEl.textContent = label;
+      valueEl.textContent = newPassword;
+      modal.style.display = "flex";
+      setTimeout(() => modal.classList.add("active"), 10);
+    }
+    function closeResetPasswordModal() {
+      const modal = document.getElementById("resetPasswordModal");
+      if (!modal) return;
+      modal.style.display = "none";
+      modal.classList.remove("active");
+      const labelEl = document.getElementById("resetPasswordUser");
+      const valueEl = document.getElementById("resetPasswordValue");
+      if (labelEl) labelEl.textContent = "";
+      if (valueEl) valueEl.textContent = "";
     }
     function getPendingImports() {
       var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
@@ -21681,10 +21805,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async function checkAuthState() {
       await ensureDefaultAdmin();
-      const result = loadSession([ROLE_ADMIN, ROLE_TEACHER]);
+      let wrongRoleDetected = null;
+      const result = loadSession([ROLE_ADMIN, ROLE_TEACHER], {
+        onWrongRole: (role) => {
+          wrongRoleDetected = role;
+        }
+      });
       if (!result) {
         sessionStorage.removeItem("adminLoggedIn");
+        if (wrongRoleDetected === ROLE_STUDENT) {
+          setCurrentUser(null, null);
+          window.location.replace("index.html");
+          return;
+        }
         showAuthModal();
+        return;
+      }
+      const effectiveRole = getEffectiveUserRole(result.user);
+      if (effectiveRole === ROLE_STUDENT) {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        sessionStorage.removeItem("adminLoggedIn");
+        setCurrentUser(null, null);
+        window.location.replace("index.html");
         return;
       }
       setCurrentUser(result.user, result.session);
@@ -21921,6 +22063,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     window.saveUserForm = saveUserForm;
     window.deleteUser = deleteUser;
     window.toggleUserStatus = toggleUserStatus;
+    window.resetUserPassword = resetUserPassword;
+    window.copyTempPassword = copyTempPassword;
+    window.closeResetPasswordModal = closeResetPasswordModal;
     window.renderUsersTable = renderUsersTable;
     window.renderProfileRequests = renderProfileRequests;
     window.renderPendingImports = renderPendingImports;
@@ -27155,6 +27300,22 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             );
           }
           showSessionNotification(sessionPackage);
+          if (window.location.pathname.includes("student-workspace")) {
+            try {
+              if (typeof window.__legacyBridgeBootstrap === "function") {
+                window.__legacyBridgeBootstrap().then(() => {
+                  window.dispatchEvent(new CustomEvent("quiz:exams-updated"));
+                }).catch(() => {
+                  window.dispatchEvent(new CustomEvent("quiz:exams-updated"));
+                });
+              } else {
+                window.dispatchEvent(new CustomEvent("quiz:exams-updated"));
+              }
+            } catch (err) {
+              console.warn("[realtime-client] exam session refresh failed", err);
+              window.dispatchEvent(new CustomEvent("quiz:exams-updated"));
+            }
+          }
           if (window.location.pathname.includes("index.html") || window.location.pathname === "/") {
             console.log("Reloading page in 1.5 seconds to load exam...");
             setTimeout(() => {

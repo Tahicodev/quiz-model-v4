@@ -216,21 +216,37 @@
     }
   }
 
-  function request(method, path, body, _retried) {
-    var url = getBaseUrl() + path;
-    var init = {
-      method: method,
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
-      },
-    };
-    if (body !== undefined && body !== null) {
-      init.body = JSON.stringify(body);
+    // Public auth endpoints answer 401 themselves (bad credentials, invalid
+    // recovery code…) — those are *answers*, not expired-session signals. The
+    // generic retry below would try a token refresh (which fails when nobody
+    // is signed in) and rewrite the real message as "Session expired".
+    var PUBLIC_AUTH_PATHS = [
+      '/auth/login',
+      '/auth/refresh',
+      '/auth/recover/verify',
+      '/auth/recover/reset',
+    ];
+    function isPublicAuthPath(path) {
+      return PUBLIC_AUTH_PATHS.some(function (p) {
+        return path === p || path.indexOf(p + '?') === 0;
+      });
     }
-    return fetch(url, init).then(function (res) {
-      if (res.status === 401 && !_retried) {
+
+    function request(method, path, body, _retried) {
+      var url = getBaseUrl() + path;
+      var init = {
+        method: method,
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+        },
+      };
+      if (body !== undefined && body !== null) {
+        init.body = JSON.stringify(body);
+      }
+      return fetch(url, init).then(function (res) {
+        if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
         return refreshAccessToken()
           .then(function () { return request(method, path, body, true); })
           .catch(function (err) {

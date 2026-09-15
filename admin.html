@@ -39,7 +39,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-15-r1" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-15-r2" />
 
 			<!-- APP_CONFIG injected by server.js in SaaS mode -->
 			<script>
@@ -112,10 +112,10 @@
 
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
-		<script src="api-client.js?v=2026-09-15-r1" defer></script>
-		<script src="auth.js?v=2026-09-15-r2" defer></script>
+		<script src="api-client.js?v=2026-09-15-r2" defer></script>
+		<script src="auth.js?v=2026-09-15-r3" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js" defer></script>
+		<script src="settings.js?v=2026-09-15-r1" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
@@ -126,7 +126,7 @@
 		<!-- Admin page scripts -->
 		<script src="category-management.js" defer></script>
 		<script src="questions-management.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="exam-management.js" defer></script>
+		<script src="exam-management.js?v=2026-09-15-r1" defer></script>
 		<script src="class-management.js" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="overview-dashboard.js" defer></script>
@@ -4351,7 +4351,7 @@
 										autocomplete="new-password"
 										style="padding: 10px;"
 									/>
-									<small class="text-muted">Used only for the local dashboard password reset panel. It is saved as a hash; leave blank to keep the existing code.</small>
+									<small class="text-muted">Used by the "Forgot password" panel on the sign-in page. It is saved securely as a server-side hash; leave blank to keep the existing code.</small>
 								</div>
 							</div>
 
@@ -5176,6 +5176,57 @@
 							<button type="submit" class="btn btn-primary">Save User</button>
 						</div>
 					</form>
+				</div>
+			</div>
+		</div>
+		<!-- One-time temporary password modal (admin password reset) -->
+		<div id="resetPasswordModal" class="modal">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-violet">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="22"
+								height="22"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<rect x="3" y="11" width="18" height="11" rx="2"></rect>
+								<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+							</svg>
+						</div>
+						<div class="modal-header-text">
+							<h2>Password Reset</h2>
+							<p class="modal-header-subtitle">
+								New temporary password for <strong id="resetPasswordUser"></strong>
+							</p>
+						</div>
+					</div>
+					<span class="close" onclick="closeResetPasswordModal()">&times;</span>
+				</div>
+				<div class="modal-body">
+					<p class="text-muted" style="margin-bottom: 12px;">
+						Share this password with the user — it is shown <strong>only once</strong> and
+						cannot be recovered later. The user should change it after signing in.
+					</p>
+					<div class="temp-password-display">
+						<code id="resetPasswordValue" class="temp-password-value"></code>
+						<button
+							type="button"
+							class="btn btn-secondary btn-sm"
+							onclick="copyTempPassword(document.getElementById('resetPasswordValue').textContent)"
+						>
+							Copy
+						</button>
+					</div>
+					<div class="form-actions">
+						<button type="button" class="btn btn-primary" onclick="closeResetPasswordModal()">
+							Done
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>

@@ -2546,6 +2546,11 @@
 											: ''
 									}
 									${
+										canManage && isAdmin()
+											? `<button class="btn btn-sm btn-secondary-soft" title="Generate a new temporary password for this user" onclick="resetUserPassword('${escapeHtml(u.id)}')">Reset password</button>`
+											: ''
+									}
+									${
 										canManage
 											? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${escapeHtml(u.id)}')">Delete</button>`
 											: ''
@@ -3244,6 +3249,122 @@
 				renderUsersTable();
 				showToast('User deleted', 'success');
 			}
+		}
+
+		// ── Admin-initiated password reset ────────────────────────────────────
+		// Passwords are one-way bcrypt hashes and can never be shown back. When a
+		// user forgets theirs, the admin generates a NEW temporary password, the
+		// server replaces the hash (POST /users/:id/reset-password), and the
+		// plaintext is displayed exactly once here so the admin can hand it to
+		// the user — it is never stored or logged client-side.
+		function generateTempPassword(length = 10) {
+			const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+			const bytes = new Uint32Array(length);
+			(crypto && crypto.getRandomValues
+				? crypto.getRandomValues(bytes)
+				: null) || bytes.fill(Math.floor(Math.random() * 0xffffffff));
+			return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+		}
+
+		async function copyTempPassword(value) {
+			const text = String(value || '');
+			if (!text) return;
+			try {
+				if (navigator.clipboard && navigator.clipboard.writeText) {
+					await navigator.clipboard.writeText(text);
+				} else {
+					const helper = document.createElement('textarea');
+					helper.value = text;
+					helper.setAttribute('readonly', '');
+					helper.style.position = 'fixed';
+					helper.style.opacity = '0';
+					document.body.appendChild(helper);
+					helper.select();
+					document.execCommand('copy');
+					helper.remove();
+				}
+				showToast('Password copied to clipboard', 'success');
+			} catch (_) {
+				showToast('Copy failed — select the password text manually', 'warning');
+			}
+		}
+
+		async function resetUserPassword(userId) {
+			if (!userId) return;
+			const users = getUsers();
+			const user = users.find((u) => u.id === userId);
+			if (!user) return;
+			if (!canManageUser(user) && !isAdmin()) {
+				showToast('Access denied', 'error');
+				return;
+			}
+			// The backend endpoint is admin-only; a teacher pressing this would
+			// just get a 403, so stop them earlier with a clear message.
+			if (!isAdmin()) {
+				showToast('Only admins can reset passwords', 'error');
+				return;
+			}
+
+			const label = user.name || user.username || 'this user';
+			if (
+				!confirm(
+					`Reset the password for "${label}"?\n\nA new temporary password will be generated and shown to you once so you can share it with the user.`,
+				)
+			) {
+				return;
+			}
+
+			const newPassword = generateTempPassword(10);
+			if (window.API && typeof window.API.raw === 'function') {
+				try {
+					await window.API.raw(
+						'POST',
+						'/users/' + encodeURIComponent(userId) + '/reset-password',
+						{ newPassword },
+					);
+				} catch (apiErr) {
+					console.warn('[auth] API reset password failed:', apiErr);
+					showToast(
+						'Failed to reset password on server: ' +
+							(apiErr?.message || 'network error'),
+						'error',
+					);
+					return;
+				}
+			} else {
+				showToast('Server connection unavailable', 'error');
+				return;
+			}
+
+			// One-time display. The value lives only in this DOM node until the
+			// modal closes; nothing is persisted or logged.
+			const modal = document.getElementById('resetPasswordModal');
+			const labelEl = document.getElementById('resetPasswordUser');
+			const valueEl = document.getElementById('resetPasswordValue');
+			if (!modal || !labelEl || !valueEl) {
+				showToast(
+					`Password for "${label}" reset to: ${newPassword} (save it now — it won't be shown again)`,
+					'warning',
+				);
+				return;
+			}
+			labelEl.textContent = label;
+			valueEl.textContent = newPassword;
+			modal.style.display = 'flex';
+			setTimeout(() => modal.classList.add('active'), 10);
+		}
+
+		function closeResetPasswordModal() {
+			const modal = document.getElementById('resetPasswordModal');
+			if (!modal) return;
+			modal.style.display = 'none';
+			modal.classList.remove('active');
+			// Clear the plaintext immediately on close — the copy is gone for
+			// good, by design.
+			const labelEl = document.getElementById('resetPasswordUser');
+			const valueEl = document.getElementById('resetPasswordValue');
+			if (labelEl) labelEl.textContent = '';
+			if (valueEl) valueEl.textContent = '';
 		}
 
 		// ── Pending student imports (teacher-staged, admin-confirmed) ───────────
@@ -4546,6 +4667,9 @@
 	window.saveUserForm = saveUserForm;
 	window.deleteUser = deleteUser;
 	window.toggleUserStatus = toggleUserStatus;
+	window.resetUserPassword = resetUserPassword;
+	window.copyTempPassword = copyTempPassword;
+	window.closeResetPasswordModal = closeResetPasswordModal;
 	window.renderUsersTable = renderUsersTable;
 	window.renderProfileRequests = renderProfileRequests;
 	window.renderPendingImports = renderPendingImports;

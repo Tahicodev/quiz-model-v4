@@ -7183,6 +7183,31 @@ h2{
 	white-space: nowrap;
 }
 
+/* One-time temporary password display (admin reset) */
+.temp-password-display{
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px;
+	background: var(--bg-surface-alt, #f6f8fb);
+	border: 1px dashed var(--border-color, #d5dbe5);
+	border-radius: var(--radius-md, 8px);
+	margin-bottom: 14px;
+}
+
+.temp-password-value{
+	font-family: var(--font-mono, monospace);
+	font-size: 1.15rem;
+	font-weight: 700;
+	letter-spacing: 1px;
+	padding: 6px 12px;
+	background: var(--bg-surface, #fff);
+	border: 1px solid var(--border-color, #d5dbe5);
+	border-radius: var(--radius-sm, 6px);
+	user-select: all;
+	flex: 1;
+}
+
 .btn-icon{
 	padding: var(--space-xs);
 	border-radius: var(--radius-sm);

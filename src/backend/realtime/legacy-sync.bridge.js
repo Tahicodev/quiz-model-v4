@@ -10,6 +10,8 @@
  *                       list from the engine's activeGames map.
  *   - `admin:syncGames`/`admin:syncUsers`/`admin:syncGamification` → admin
  *                       panels could not push data snapshots to students.
+ *   - `admin:pushSession`/`admin:clearSession`/`admin:stopExam` → "Push to
+ *                       Devices" for exams vanished silently (no handler).
  *
  * Auth model: sockets arrive pre-authenticated by socket.auth.js (JWT only),
  * which stamps `socket.data.user`. `identify` keeps the legacy shape
@@ -39,7 +41,7 @@ function isClientSocket(socket) {
 export function registerLegacySyncHandlers(io) {
   // School-scoped sync cache so students connecting between pushes still get
   // the last snapshot without a full bootstrap round trip.
-  const syncCache = new Map(); // schoolId -> { games?, users?, gamification? }
+  const syncCache = new Map(); // schoolId -> { games?, users?, gamification?, session? }
 
   io.on('connection', (socket) => {
     // ── identify ────────────────────────────────────────────────────────────
@@ -72,6 +74,10 @@ export function registerLegacySyncHandlers(io) {
           if (cache?.users) socket.emit('admin:syncUsers', cache.users);
           if (cache?.games) socket.emit('admin:syncGames', cache.games);
           if (cache?.gamification) socket.emit('admin:syncGamification', cache.gamification);
+          // Replay the last pushed exam session so a device that (re)connects
+          // after the push still receives it — mirrors the root server's
+          // lastPushedSession behavior.
+          if (cache?.session) socket.emit('session:receive', cache.session);
         }
       }
     });
@@ -141,6 +147,52 @@ export function registerLegacySyncHandlers(io) {
         io.to(`school:${schoolId}`).emit('admin:syncGamification', payload);
       } else {
         io.emit('admin:syncGamification', payload);
+      }
+    });
+
+    // ── Exam session push relays ─────────────────────────────────────────────
+    // The legacy admin panels push exam/training sessions to student devices
+    // through these events (root server.js:302-347 owns the original shape).
+    // Under the SaaS server they were never registered, so "Push to Devices"
+    // vanished silently. Relay them school-scoped and cache the last session
+    // per school so late-joining devices get it replayed on identify.
+
+    socket.on('admin:pushSession', (sessionPackage = {}) => {
+      if (!isAdminSocket(socket)) return;
+      if (!sessionPackage || typeof sessionPackage !== 'object') return;
+      const schoolId = schoolIdOf();
+      if (schoolId) {
+        const cache = syncCache.get(schoolId) || {};
+        cache.session = sessionPackage;
+        syncCache.set(schoolId, cache);
+        // Everyone in the school room except the admin tab that pushed —
+        // the pusher's own realtime-client would otherwise save the session
+        // into its (admin) localStorage too.
+        io.to(`school:${schoolId}`).except(socket.id).emit('session:receive', sessionPackage);
+        logger.info(
+          { schoolId, examId: sessionPackage?.examId, examName: sessionPackage?.examName },
+          'legacy bridge: exam session pushed to devices',
+        );
+      }
+    });
+
+    socket.on('admin:clearSession', () => {
+      if (!isAdminSocket(socket)) return;
+      const schoolId = schoolIdOf();
+      if (schoolId) {
+        const cache = syncCache.get(schoolId) || {};
+        delete cache.session;
+        syncCache.set(schoolId, cache);
+        io.to(`school:${schoolId}`).except(socket.id).emit('session:clear');
+      }
+    });
+
+    socket.on('admin:stopExam', () => {
+      if (!isAdminSocket(socket)) return;
+      const schoolId = schoolIdOf();
+      if (schoolId) {
+        // Stop only the active session broadcast — keep settings/questions.
+        io.to(`school:${schoolId}`).except(socket.id).emit('session:stop');
       }
     });
 

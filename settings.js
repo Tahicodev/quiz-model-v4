@@ -709,6 +709,27 @@ async function saveSettingsForm(options = {}) {
 		recoveryCodeInput?.value || '',
 	).trim();
 	if (recoveryCode) {
+		// The server-side hash (Setting system.recovery_code_hash) is what the
+		// sign-in page's recovery panel actually verifies against. POST it while
+		// the admin is signed in — the localStorage SHA-256 below stays as the
+		// offline fallback. Raw code only travels inside this authenticated
+		// session; only its bcrypt hash is persisted server-side.
+		if (window.Auth?.isAdmin?.() && window.API?.raw && recoveryCode.length >= 4) {
+			try {
+				await window.API.raw('POST', '/auth/recover/set', { code: recoveryCode });
+				if (typeof showToast === 'function') {
+					showToast('Recovery code saved to the server — store it somewhere safe 🔐', 'success');
+				}
+			} catch (err) {
+				console.warn('[settings] recovery code server save failed:', err);
+				if (typeof showToast === 'function') {
+					showToast(
+						'Recovery code NOT saved on server: ' + (err?.message || 'error'),
+						'error',
+					);
+				}
+			}
+		}
 		if (window.Auth?.hashText) {
 			recoveryCodeHash = await window.Auth.hashText(recoveryCode);
 		}

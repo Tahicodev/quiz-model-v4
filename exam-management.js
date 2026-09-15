@@ -1733,6 +1733,10 @@ async function saveExamForm() {
 				}
 			: (existingExam?.presetSnapshot || null),
 		questions: selectedQuestions,
+		// Students only ever see active exams (the bootstrap filter drops
+		// anything else), so a saved exam is immediately usable — archiving
+		// via the archive action is the one path back to hidden.
+		status: currentExamId ? (existingExam?.status === 'archived' ? 'active' : (existingExam?.status || 'active')) : 'active',
 		// Preserve class assignments when an exam is edited from the exam modal.
 		classes: Array.isArray(existingExam?.classes) ? [...existingExam.classes] : [],
 		dateCreated: existingExam?.dateCreated || new Date().toISOString(),
@@ -1755,6 +1759,7 @@ async function saveExamForm() {
 				name: examData.name,
 				duration: examData.duration,
 				passingScore: examData.passingScore,
+				status: examData.status || 'active',
 				questions: examData.questions,
 				classes: examData.classes,
 				presetId: examData.presetId,

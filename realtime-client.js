@@ -649,6 +649,29 @@
 			// Show notification to user
 			showSessionNotification(sessionPackage);
 
+			// The student workspace renders its exam list from the repo cache,
+			// not from examActiveSession — a socket push doesn't touch that
+			// cache (same-tab localStorage writes fire no `storage` event
+			// either). Re-bootstrap the bridge cache from the server (the
+			// pushed exam must already be status:'active' there) and tell the
+			// workspace to re-render its exam cards.
+			if (window.location.pathname.includes('student-workspace')) {
+				try {
+					if (typeof window.__legacyBridgeBootstrap === 'function') {
+						window.__legacyBridgeBootstrap().then(() => {
+							window.dispatchEvent(new CustomEvent('quiz:exams-updated'));
+						}).catch(() => {
+							window.dispatchEvent(new CustomEvent('quiz:exams-updated'));
+						});
+					} else {
+						window.dispatchEvent(new CustomEvent('quiz:exams-updated'));
+					}
+				} catch (err) {
+					console.warn('[realtime-client] exam session refresh failed', err);
+					window.dispatchEvent(new CustomEvent('quiz:exams-updated'));
+				}
+			}
+
 			// Reload page if on quiz interface to pick up new session
 			if (
 				window.location.pathname.includes('index.html') ||
