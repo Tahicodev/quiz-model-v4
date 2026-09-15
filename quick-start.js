@@ -18,6 +18,19 @@
 	var state = {
 		currentStep: 0,
 		open: false,
+		securitySubTab: 'school',
+	};
+
+	// Backup keys that belong to each wizard step. The picker stays scoped so
+	// restoring one section cannot accidentally overwrite unrelated data.
+	var STEP_IMPORT_KEYS = {
+		classes: ['classes'],
+		students: ['users'],
+		categories: ['categories'],
+		questions: ['questions', 'categories'],
+		exams: ['exams', 'exam_questions', 'exam_classes'],
+		games: ['games', 'game_presets'],
+		done: null,
 	};
 
 	// Step definitions — id, title, icon, live count getter, "Add" action.
@@ -238,14 +251,14 @@
 				(count > 0 ? '✓ ' + count + ' ' + escapeHtml(step.title.toLowerCase()) + ' already added' : 'Nothing added yet — that\'s fine, you can also skip this step.') +
 				'</div>' +
 				'<div class="qs-actions">' +
-				(step.add ? '<button type="button" class="btn btn-primary" onclick="window.quickStartAdd()">' + stepBadge(count).replace('added', '→ Add ' + escapeHtml(step.title.toLowerCase())) + ' ' + step.title + '</button>' : '') +
-				(step.alt ? '<button type="button" class="btn btn-secondary" onclick="window.quickStartAlt()">' + escapeHtml(step.alt.label) + '</button>' : '') +
+				(step.add ? '<button type="button" class="btn btn-primary" onclick="window.quickStartAdd()">➕ ' + (count > 0 ? 'Add more ' : 'Add ') + escapeHtml(step.title.toLowerCase()) + '</button>' : '') +
+				(step.alt ? '<button type="button" class="btn btn-secondary" onclick="window.quickStartAlt()">🤖 ' + escapeHtml(step.alt.label) + '</button>' : '') +
 				'</div>' +
-				'<div class="qs-load">' +
-				'<p class="text-muted">Prefer loading everything at once? Restore a backup file exported from another instance:</p>' +
-				'<button type="button" class="btn btn-secondary" onclick="document.getElementById(\'quickStartLoadInput\').click()">📂 Load backup file</button>' +
-				'<input type="file" id="quickStartLoadInput" accept=".json" style="display:none" onchange="window.quickStartLoadBackup(this)" />' +
-				'</div>';
+			'<div class="qs-load">' +
+			'<p class="text-muted">Prefer loading only this section? Restore a scoped backup file exported from another instance:</p>' +
+			'<button type="button" class="btn btn-secondary" onclick="document.getElementById(\'quickStartLoadInput\').click()">📂 Load only ' + escapeHtml(step.title.toLowerCase()) + ' from backup</button>' +
+			'<input type="file" id="quickStartLoadInput" accept=".json" style="display:none" onchange="window.quickStartLoadBackup(this)" />' +
+			'</div>';
 		}
 
 		var backBtn = document.getElementById('quickStartBackBtn');
@@ -269,13 +282,43 @@
 
 	// ─── Security step (index 0) ──────────────────────────────────────────────
 
+	function switchSecuritySubTab(event, tabName) {
+		if (event && event.preventDefault) event.preventDefault();
+		var safeTab = tabName === 'credentials' || tabName === 'teachers' ? tabName : 'school';
+		state.securitySubTab = safeTab;
+
+		var content = document.getElementById('quickStartStepContent');
+		if (!content) return;
+		content.querySelectorAll('.qs-subtab-panel').forEach(function (panel) {
+			panel.classList.toggle('hidden', panel.dataset.sectab !== safeTab);
+		});
+		content.querySelectorAll('.qs-subtab-btn').forEach(function (button) {
+			var active = button.dataset.sectab === safeTab;
+			button.classList.toggle('active', active);
+			button.setAttribute('aria-selected', active ? 'true' : 'false');
+			button.tabIndex = active ? 0 : -1;
+		});
+	}
+
 	function renderSecurityContent(panel) {
 		var profile = schoolProfileCache.profile || {};
 		var teachers = teacherCount();
+		var activeSubTab = state.securitySubTab === 'credentials' || state.securitySubTab === 'teachers' ? state.securitySubTab : 'school';
+		var subTabButton = function (tabName, icon, label) {
+			var active = activeSubTab === tabName ? ' active' : '';
+			return '<button type="button" class="qs-subtab-btn' + active + '" data-sectab="' + tabName + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" tabindex="' + (active ? '0' : '-1') + '" onclick="window.switchSecuritySubTab(event, \'' + tabName + '\')">' + icon + ' ' + label + '</button>';
+		};
+
 		panel.innerHTML =
 			'<h3 class="qs-title">🔐 School & Security</h3>' +
 			'<p class="qs-desc">Each school has its own identity, credentials, and staff. Fill this in once — it powers the login page branding, per-school data, and password recovery.</p>' +
+			'<div class="qs-subtabs" role="tablist" aria-label="School and security sections">' +
+			subTabButton('school', '🏫', 'School Information') +
+			subTabButton('credentials', '🔑', 'Admin Credentials') +
+			subTabButton('teachers', '🧑‍🏫', 'Teachers') +
+			'</div>' +
 
+			'<div class="qs-subtab-panel' + (activeSubTab === 'school' ? '' : ' hidden') + '" data-sectab="school" role="tabpanel">' +
 			'<div class="qs-security">' +
 			'<h4 class="qs-section-title">🏫 School Information</h4>' +
 			'<div class="qs-form-grid">' +
@@ -305,41 +348,57 @@
 			'</div></div>' +
 			'<input type="file" id="qsLogoInput" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" style="display:none" onchange="window.quickStartPickLogo(this)">' +
 			'</div>' +
+			'</div>' +
 			'<div class="qs-actions">' +
 			'<button type="button" class="btn btn-primary" onclick="window.quickStartSaveSchool()">💾 Save School Info</button>' +
 			'</div>' +
+			'</div>' +
+			'</div>' +
 
+			'<div class="qs-subtab-panel' + (activeSubTab === 'credentials' ? '' : ' hidden') + '" data-sectab="credentials" role="tabpanel">' +
+			'<div class="qs-security">' +
 			'<h4 class="qs-section-title">🔑 Admin Credentials</h4>' +
 			'<div class="qs-cred-grid">' +
-			'<div class="qs-cred-card">' +
-			'<h5>Change Admin Password</h5>' +
+			'<div class="qs-cred-card qs-cred-card-password">' +
+			'<div class="qs-cred-ico qs-cred-ico-password" aria-hidden="true">🛡️</div>' +
+			'<div class="qs-cred-card-heading"><h5>Change Admin Password</h5><span>Protect the account that manages this school</span></div>' +
 			'<div class="qs-field"><label for="qsCurrentPassword">Current Password</label>' +
 			'<input type="password" id="qsCurrentPassword" class="form-control" autocomplete="current-password"></div>' +
 			'<div class="qs-field"><label for="qsNewPassword">New Password</label>' +
 			'<input type="password" id="qsNewPassword" class="form-control" autocomplete="new-password" placeholder="Min 6 characters"></div>' +
 			'<div class="qs-field"><label for="qsConfirmPassword">Confirm New Password</label>' +
 			'<input type="password" id="qsConfirmPassword" class="form-control" autocomplete="new-password"></div>' +
-			'<button type="button" class="btn btn-secondary" onclick="window.quickStartChangePassword()">Update Password</button>' +
+			'<div class="qs-actions">' +
+			'<button type="button" class="btn btn-primary" onclick="window.quickStartChangePassword()">🛡️ Update Password</button>' +
+			'</div>' +
 			'<small class="text-muted">Changing it keeps your session alive on this device.</small>' +
 			'</div>' +
-			'<div class="qs-cred-card">' +
-			'<h5>Recovery Code</h5>' +
+			'<div class="qs-cred-card qs-cred-card-recovery">' +
+			'<div class="qs-cred-ico qs-cred-ico-recovery" aria-hidden="true">🔑</div>' +
+			'<div class="qs-cred-card-heading"><h5>Recovery Code</h5><span>A safe way back in if you forget the password</span></div>' +
 			'<p class="text-muted qs-cred-note">If you ever forget the admin password, this code unlocks a reset — from any device, not just this browser.</p>' +
 			'<div class="qs-field"><label for="qsRecoveryCode">Recovery Code</label>' +
 			'<input type="text" id="qsRecoveryCode" class="form-control" placeholder="e.g. SAFETY-2026-XYZ" autocomplete="off"></div>' +
 			'<div class="qs-field"><label for="qsRecoveryCodeConfirm">Confirm Code</label>' +
 			'<input type="text" id="qsRecoveryCodeConfirm" class="form-control" placeholder="Repeat the code" autocomplete="off"></div>' +
-			'<button type="button" class="btn btn-secondary" onclick="window.quickStartSaveRecovery()">Set Recovery Code</button>' +
+			'<div class="qs-actions">' +
+			'<button type="button" class="btn btn-primary" onclick="window.quickStartSaveRecovery()">🔑 Set Recovery Code</button>' +
+			'</div>' +
 			'<small class="text-muted">Stored as a bcrypt hash on the server — write it down somewhere safe.</small>' +
 			'</div>' +
 			'</div>' +
+			'</div>' +
+			'</div>' +
 
+			'<div class="qs-subtab-panel' + (activeSubTab === 'teachers' ? '' : ' hidden') + '" data-sectab="teachers" role="tabpanel">' +
+			'<div class="qs-security">' +
 			'<h4 class="qs-section-title">🧑‍🏫 Teachers</h4>' +
 			'<div class="qs-status ' + (teachers > 0 ? 'ok' : '') + '">' +
 			(teachers > 0 ? '✓ ' + teachers + ' teacher(s) already added' : 'No teachers yet — add their accounts with full profiles (numero, phone, email, subjects, classes).') +
 			'</div>' +
 			'<div class="qs-actions">' +
 			'<button type="button" class="btn btn-primary" onclick="window.quickStartAddTeacher()">➕ Add teacher</button>' +
+			'</div>' +
 			'</div>' +
 			'</div>';
 
@@ -528,6 +587,7 @@
 		if (!manual && getSetupComplete()) return;
 		if (manual) setSetupComplete(true); // opened deliberately — never auto-show again
 		state.currentStep = 0;
+		state.securitySubTab = 'school';
 		state.open = true;
 		if (modal.parentElement && modal.parentElement !== document.body) {
 			document.body.appendChild(modal);
@@ -591,9 +651,11 @@
 
 	function quickStartLoadBackup(input) {
 		if (!input || !input.files || !input.files[0]) return;
-		// Reuse the full backup importer from settings.js.
+		// Reuse the backup importer from settings.js. Non-finish steps pass a
+		// scoped allow-list so the picker cannot overwrite unrelated stores.
 		if (window.importAllData) {
-			window.importAllData(input);
+			var keys = STEP_IMPORT_KEYS[STEPS[state.currentStep] && STEPS[state.currentStep].id] || null;
+			window.importAllData(input, keys);
 		} else if (typeof showToast === 'function') {
 			showToast('Backup import is unavailable on this page.', 'error');
 		}
@@ -697,6 +759,7 @@
 
 	// ─── Exports ───────────────────────────────────────────────────────────────
 
+	window.switchSecuritySubTab = switchSecuritySubTab;
 	window.openQuickStart = openQuickStart;
 	window.dismissQuickStart = dismissQuickStart;
 	window.quickStartGo = quickStartGo;

@@ -39,7 +39,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-15-r2" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-16-r1" />
 
 			<!-- APP_CONFIG injected by server.js in SaaS mode -->
 			<script>
@@ -115,7 +115,7 @@
 		<script src="api-client.js?v=2026-09-15-r2" defer></script>
 		<script src="auth.js?v=2026-09-15-r3" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-09-15-r1" defer></script>
+		<script src="settings.js?v=2026-09-15-r3" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
@@ -134,7 +134,7 @@
 		<script src="realtime-settings.js?v=2026-09-13-r2" defer></script>
 		<script src="quiz-presets.js" defer></script>
 		<script src="games-management.js?v=2026-09-15-r3" defer></script>
-		<script src="quick-start.js?v=2026-09-14-r1" defer></script>
+		<script src="quick-start.js?v=2026-09-15-r3" defer></script>
 			<script src="admin-main.js?v=2026-09-13-r3" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -4204,14 +4204,14 @@
 									<h3 style="margin: 0; font-size: 1.1rem;">Export Data</h3>
 								</div>
 								
-								<p class="text-muted" style="margin-bottom: 20px;">
-									Download a complete backup of the application data: users, classes, categories, questions, exams, results, games, tournaments, sessions, presets, settings, notifications, messages and activity — everything the app stores.
-								</p>
-								
-								<button type="button" class="btn btn-primary" onclick="window.exportAllData()">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-									Export All Data
-								</button>
+									<p class="text-muted" style="margin-bottom: 20px;">
+										Download a backup of the application data. Choose everything or select only the sections you need, such as questions, classes, exams, games, settings or activity.
+									</p>
+									
+									<button type="button" class="btn btn-primary" onclick="window.openExportPicker()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+										Export Data
+									</button>
 							</div>
 
 							<div class="settings-group">
@@ -4222,9 +4222,9 @@
 									<h3 style="margin: 0; font-size: 1.1rem;">Import Data</h3>
 								</div>
 								
-								<p class="text-muted" style="margin-bottom: 20px;">
-									Restore data from a backup file. <strong style="color: #ef4444">Warning: This will replace your current data!</strong>
-								</p>
+									<p class="text-muted" style="margin-bottom: 20px;">
+										Restore data from a backup file and choose exactly what to import. <strong style="color: #ef4444">Warning: Each selected section replaces its current data!</strong>
+									</p>
 								
 								<button type="button" class="btn btn-secondary" onclick="document.getElementById('importDataInput').click()" style="border-color: #fecaca; color: #dc2626; background: #fff;">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -6907,6 +6907,21 @@
 							</button>
 						</div>
 					</div>
+			</div>
+		</div>
+
+		<!-- Personalized backup picker modal -->
+		<div id="backupPickerModal" class="modal">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h2>📦 Personalized Backup</h2>
+					<button type="button" class="modal-close" onclick="window.closeBackupPickerModal()" aria-label="Close backup picker">&times;</button>
+				</div>
+				<div class="modal-body" id="backupPickerBody"></div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" onclick="window.closeBackupPickerModal()">Cancel</button>
+					<button type="button" class="btn btn-primary" id="backupPickerActionBtn" onclick="window.performCustomExport()">Export selected</button>
+				</div>
 			</div>
 		</div>
 

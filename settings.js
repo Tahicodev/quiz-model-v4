@@ -173,7 +173,9 @@ function openSettingsModal() {
 		currentSettings.welcomeMessage;
 
 	// Populate training preset dropdown
-	window.refreshTrainingPresetDropdown();
+	if (typeof window.refreshTrainingPresetDropdown === 'function') {
+		window.refreshTrainingPresetDropdown();
+	}
 
 	// Populate realtime settings
 	const serverHostInput = document.getElementById('setting-serverHost');
@@ -870,155 +872,383 @@ function __set(entity, data) {
 // IMPORT / EXPORT DATA FUNCTIONALITY
 // ==========================================
 
-/**
- * Exports all application data to a JSON file
- */
-	/**
-	 * Collects every application store for the backup payload. Reads all entity
-	 * tables plus the extra admin stores the bootstrap keeps in localStorage, so
-	 * "Export All Data" really exports ALL data.
-	 */
-	function collectAllStores() {
-		const arrayStores = {
-			users: 'quizUsers',
-			classes: 'quizClasses',
-			categories: 'quizCategories',
-			questions: 'quizQuestions',
-			exams: 'quizExams',
-			results: 'quizResults',
-			games: 'quizGames',
-			tournaments: 'quizTournaments',
-			exam_sessions: 'quizExamSessions',
-			exam_questions: 'quizExamQuestions',
-			exam_classes: 'quizExamClasses',
-			game_sessions: 'quizGameSessions',
-			tournament_entries: 'quizTournamentEntries',
-			tournament_history: 'quizTournamentsHistory',
-			game_presets: 'gamePresets',
-			profile_requests: 'quizProfileRequests',
-			account_requests: 'quizAccountRequests',
-			notifications: 'adminNotifications',
-			teacher_messages: 'teacherMessages',
-			teacher_assignments: 'teacherAssignments',
+const BACKUP_GROUPS = [
+	{
+		id: 'core',
+		title: 'Core Content',
+		description: 'The building blocks used to run classes, question banks, and exams.',
+		stores: ['classes', 'users', 'categories', 'questions', 'exams', 'exam_questions', 'exam_classes', 'exam_sessions'],
+	},
+	{
+		id: 'games',
+		title: 'Games & Tournaments',
+		description: 'Live games, presets, tournaments, entries, history, and game sessions.',
+		stores: ['games', 'game_presets', 'tournaments', 'tournament_entries', 'tournament_history', 'game_sessions'],
+	},
+	{
+		id: 'history',
+		title: 'History & Requests',
+		description: 'Results, activity, requests, notifications, and teacher collaboration data.',
+		stores: ['results', 'activity', 'profile_requests', 'account_requests', 'notifications', 'teacher_messages', 'teacher_assignments'],
+	},
+	{
+		id: 'configuration',
+		title: 'Configuration',
+		description: 'Application settings and gamification configuration.',
+		stores: ['settings', 'gamification'],
+	},
+];
+
+const BACKUP_STORE_LABELS = {
+	classes: 'Classes',
+	users: 'Students & teachers',
+	categories: 'Categories',
+	questions: 'Questions',
+	exams: 'Exams',
+	exam_questions: 'Exam questions',
+	exam_classes: 'Exam classes',
+	games: 'Games',
+	game_presets: 'Game presets',
+	tournaments: 'Tournaments',
+	tournament_entries: 'Tournament entries',
+	tournament_history: 'Tournament history',
+	game_sessions: 'Game sessions',
+	exam_sessions: 'Exam sessions',
+	results: 'Results',
+	activity: 'Activity log',
+	profile_requests: 'Profile requests',
+	account_requests: 'Account requests',
+	notifications: 'Notifications',
+	teacher_messages: 'Teacher messages',
+	teacher_assignments: 'Teacher assignments',
+	settings: 'Settings',
+	gamification: 'Gamification',
+};
+
+const BACKUP_STORE_KEYS = Object.keys(BACKUP_STORE_LABELS);
+
+// Keep the picker state in one place so export and import can share the same UI.
+const pendingBackupPicker = {
+	mode: null,
+	data: null,
+	availableKeys: [],
+	allowedKeys: null,
+	input: null,
+};
+
+function getBackupStoreValue(data, key) {
+	if (key === 'activity') {
+		return Object.prototype.hasOwnProperty.call(data, 'activity') ? data.activity : data.activityLog;
+	}
+	return data[key];
+}
+
+function getBackupStoreKeys(data) {
+	return BACKUP_STORE_KEYS.filter(function (key) {
+		return Object.prototype.hasOwnProperty.call(data, key) || (key === 'activity' && Object.prototype.hasOwnProperty.call(data, 'activityLog'));
+	});
+}
+
+function getBackupStoreCount(data, key) {
+	const value = getBackupStoreValue(data, key);
+	if (Array.isArray(value)) return value.length;
+	if (value && typeof value === 'object') return Object.keys(value).length;
+	return value == null ? 0 : 1;
+}
+
+function downloadBackupFile(exportData, fileName) {
+	const dataStr = JSON.stringify(exportData, null, 2);
+	const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+	const linkElement = document.createElement('a');
+	linkElement.setAttribute('href', dataUri);
+	linkElement.setAttribute('download', fileName);
+	linkElement.click();
+}
+
+function recordBackupActivity(type, name, color) {
+	try {
+		const timestamp = new Date().toISOString();
+		const activity = {
+			type: type,
+			name: name,
+			date: timestamp,
+			author: 'Admin',
+			isValid: true,
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+			color: color,
 		};
-		const collected = {};
-		// Entity tables go through the repository shim (server-backed).
-		for (const [entity, lsKey] of Object.entries(arrayStores)) {
-			try {
-				if (entity === 'game_presets') {
-					// game presets are stored as an object map, not an array
-					collected[entity] = safeReadLS(lsKey, {});
-				} else {
-					collected[entity] = safeReadLS(lsKey, []);
-				}
-			} catch (e) {
-				collected[entity] = [];
-			}
-		}
-		// The repository shim already mirrors these through STORE_KEYS, but read
-		// them through it anyway so exported values match what the app displays.
-		collected.activity = __get('activity', []);
-		try {
-			collected.gamification = JSON.parse(
-				localStorage.getItem('quizGamification') || '{}',
-			);
-		} catch (e) {
-			collected.gamification = {};
-		}
-		try {
-			collected.settings = __get('settings', {});
-		} catch (e) {
-			collected.settings = {};
-		}
-		return collected;
+		const activities = __get('activity', []);
+		activities.unshift(activity);
+		__set('activity', activities);
+	} catch (e) {
+		console.warn('Could not record backup activity:', e);
+	}
+}
+
+function renderBackupPicker(options) {
+	const modal = document.getElementById('backupPickerModal');
+	const body = document.getElementById('backupPickerBody');
+	if (!modal || !body) return;
+	if (modal.parentElement && modal.parentElement !== document.body) document.body.appendChild(modal);
+
+	const isImport = options.mode === 'import';
+	const availableKeys = options.availableKeys || BACKUP_STORE_KEYS.slice();
+	const selectedKeys = options.selectedKeys || availableKeys.slice();
+	const introTitle = isImport ? 'Choose exactly what to restore' : 'Choose exactly what to export';
+	const introText = isImport
+		? 'Only stores present in this backup are listed. Every selected store will replace the matching data already on this device.'
+		: 'Every store starts selected. Deselect anything you do not want in this backup file.';
+	const groups = BACKUP_GROUPS
+		.map(function (group) {
+			const stores = group.stores.filter(function (key) { return availableKeys.indexOf(key) !== -1; });
+			return stores.length ? { ...group, stores: stores } : null;
+		})
+		.filter(Boolean);
+
+	let groupsHtml = '';
+	if (!groups.length) {
+		groupsHtml = '<div class="bkp-empty">No supported backup data was found in this file.</div>';
+	} else {
+		groupsHtml = '<div class="bkp-groups">' + groups.map(function (group) {
+			const allSelected = group.stores.every(function (key) { return selectedKeys.indexOf(key) !== -1; });
+			const count = group.stores.reduce(function (total, key) { return total + getBackupStoreCount(options.data || {}, key); }, 0);
+			return '<div class="bkp-group">' +
+				'<div class="bkp-group-header">' +
+				'<label><input type="checkbox" data-bkp-group="' + group.id + '" ' + (allSelected ? 'checked' : '') + ' onchange="window.switchBackupGroup(\'' + group.id + '\', this.checked)"> ' + group.title + '</label>' +
+				'<span class="bkp-count">' + count + '</span>' +
+				'</div>' +
+				'<div class="bkp-items">' + group.stores.map(function (key) {
+					const checked = selectedKeys.indexOf(key) !== -1 ? ' checked' : '';
+					return '<div class="bkp-item"><label><input type="checkbox" data-bkp-store="' + key + '"' + checked + '> <span>' + (BACKUP_STORE_LABELS[key] || key) + '<small>Replaces current ' + (BACKUP_STORE_LABELS[key] || key).toLowerCase() + ' data</small></span></label></div>';
+				}).join('') + '</div>' +
+				'</div>';
+		}).join('') + '</div>';
 	}
 
-	// Safe JSON read from localStorage with fallback (used by backups/imports).
-	function safeReadLS(key, fallback) {
-		try {
-			const raw = localStorage.getItem(key);
-			if (raw === null || raw === undefined) return fallback;
-			const parsed = JSON.parse(raw);
-			if (Array.isArray(fallback)) return Array.isArray(parsed) ? parsed : fallback;
-			return parsed && typeof parsed === 'object' ? parsed : fallback;
-		} catch (e) {
-			return fallback;
-		}
+	body.innerHTML =
+		'<p class="bkp-picker-intro"><strong>' + introTitle + '</strong><br>' + introText + '</p>' +
+		'<div class="bkp-picker-controls"><strong>' + selectedKeys.length + ' of ' + availableKeys.length + ' stores selected</strong><div class="bkp-picker-actions">' +
+		'<button type="button" class="btn btn-secondary" onclick="window.setAllBackupSelection(true)">Select all</button>' +
+		'<button type="button" class="btn btn-secondary" onclick="window.setAllBackupSelection(false)">Deselect all</button>' +
+		'</div></div>' + groupsHtml;
+
+	const actionBtn = document.getElementById('backupPickerActionBtn');
+	if (actionBtn) {
+		actionBtn.textContent = isImport ? 'Import selected' : 'Export selected';
+		actionBtn.setAttribute('onclick', isImport ? 'window.performCustomImport()' : 'window.performCustomExport()');
 	}
 
-	function exportAllData() {
-		try {
-			const timestamp = new Date().toISOString();
-			const collected = collectAllStores();
-			const exportData = {
-				version: '2.0',
-				timestamp: timestamp,
-				type: 'quiz-app-backup',
-				data: {
-						...collected,
-						// Legacy key kept so old imports and tooling keep working
-						activityLog: collected.activity,
-					},
-			};
+	modal.style.display = 'flex';
+}
 
-		const dataStr = JSON.stringify(exportData, null, 2);
-		const dataUri =
-			'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+function exportAllData() {
+	try {
+		const timestamp = new Date().toISOString();
+		const collected = collectAllStores();
+		const exportData = {
+			version: '2.0',
+			timestamp: timestamp,
+			type: 'quiz-app-backup',
+			data: {
+				...collected,
+				// Legacy key kept so old imports and tooling keep working
+				activityLog: collected.activity,
+			},
+		};
 
-		const fileName = `quiz-app-backup-${new Date()
-			.toISOString()
-			.slice(0, 10)}.json`;
-
-		const linkElement = document.createElement('a');
-		linkElement.setAttribute('href', dataUri);
-		linkElement.setAttribute('download', fileName);
-		linkElement.click();
-
+		const fileName = 'quiz-app-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+		downloadBackupFile(exportData, fileName);
+		recordBackupActivity('export', 'Exported backup ' + fileName, 'icon-rose');
 		showToast('Backup created successfully!');
-
-		try {
-			const author = 'Admin';
-			const activity = {
-				type: 'export',
-				name: `Exported backup ${fileName}`,
-				date: timestamp,
-				author: author,
-				isValid: true,
-				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
-				color: 'icon-rose',
-			};
-				const activities = __get('activity', []);
-				activities.unshift(activity);
-				__set('activity', activities);
-			} catch (e) {
-				console.warn('Could not record export activity:', e);
-		}
 	} catch (error) {
 		console.error('Export failed:', error);
 		showToast('Failed to export data: ' + error.message, 'error');
 	}
 }
 
-/**
- * Imports application data from a JSON file
- * @param {HTMLInputElement} inputElement - The file input element
- */
-function importAllData(inputElement) {
-	const file = inputElement.files[0];
-	if (!file) return;
+function openExportPicker() {
+	try {
+		const collected = collectAllStores();
+		pendingBackupPicker.mode = 'export';
+		pendingBackupPicker.data = collected;
+		pendingBackupPicker.availableKeys = BACKUP_STORE_KEYS.slice();
+		pendingBackupPicker.allowedKeys = null;
+		pendingBackupPicker.input = null;
+		renderBackupPicker({
+			mode: 'export',
+			data: collected,
+			availableKeys: pendingBackupPicker.availableKeys,
+			selectedKeys: BACKUP_STORE_KEYS.slice(),
+		});
+	} catch (error) {
+		console.error('Backup picker failed:', error);
+		showToast('Failed to prepare backup picker: ' + error.message, 'error');
+	}
+}
 
-	// Confirm with user before proceeding
-	if (
-		!confirm(
-			'WARNING: This will replace ALL existing data (questions, exams, classes, etc.) with the data from the backup file.\n\nThis action cannot be undone.\n\nDo you want to proceed?',
-		)
-	) {
-		inputElement.value = ''; // Reset input
+function openImportPicker(inputElement, data, allowedKeys) {
+	const availableKeys = getBackupStoreKeys(data).filter(function (key) {
+		return !allowedKeys || allowedKeys.indexOf(key) !== -1;
+	});
+	if (!availableKeys.length) throw new Error('This backup does not contain any supported stores for this import.');
+
+	pendingBackupPicker.mode = 'import';
+	pendingBackupPicker.data = data;
+	pendingBackupPicker.availableKeys = availableKeys;
+	pendingBackupPicker.allowedKeys = allowedKeys || null;
+	pendingBackupPicker.input = inputElement || null;
+	renderBackupPicker({
+		mode: 'import',
+		data: data,
+		availableKeys: availableKeys,
+		selectedKeys: availableKeys.slice(),
+	});
+}
+
+function closeBackupPickerModal() {
+	const modal = document.getElementById('backupPickerModal');
+	if (modal) modal.style.display = 'none';
+	if (pendingBackupPicker.mode === 'import' && pendingBackupPicker.input) pendingBackupPicker.input.value = '';
+	pendingBackupPicker.mode = null;
+	pendingBackupPicker.data = null;
+	pendingBackupPicker.availableKeys = [];
+	pendingBackupPicker.allowedKeys = null;
+	pendingBackupPicker.input = null;
+}
+
+function setAllBackupSelection(checked) {
+	document.querySelectorAll('#backupPickerModal [data-bkp-store]').forEach(function (checkbox) {
+		checkbox.checked = !!checked;
+	});
+	document.querySelectorAll('#backupPickerModal [data-bkp-group]').forEach(function (checkbox) {
+		checkbox.checked = !!checked;
+	});
+}
+
+function switchBackupGroup(groupId, checked) {
+	const group = BACKUP_GROUPS.find(function (item) { return item.id === groupId; });
+	if (!group) return;
+	document.querySelectorAll('#backupPickerModal [data-bkp-store]').forEach(function (checkbox) {
+		if (group.stores.indexOf(checkbox.dataset.bkpStore) !== -1) checkbox.checked = !!checked;
+	});
+}
+
+function performCustomExport() {
+	const selectedKeys = Array.from(document.querySelectorAll('#backupPickerModal [data-bkp-store]:checked')).map(function (checkbox) { return checkbox.dataset.bkpStore; });
+	if (!selectedKeys.length) {
+		showToast('Select at least one store to export.', 'error');
 		return;
 	}
 
-	const reader = new FileReader();
+	try {
+		const collected = collectAllStores();
+		const exportData = {
+			version: '2.0',
+			timestamp: new Date().toISOString(),
+			type: 'quiz-app-backup',
+			data: {},
+		};
+		selectedKeys.forEach(function (key) {
+			exportData.data[key] = getBackupStoreValue(collected, key);
+		});
+		if (selectedKeys.indexOf('activity') !== -1) exportData.data.activityLog = collected.activity;
 
+		const allSelected = selectedKeys.length === BACKUP_STORE_KEYS.length;
+		const fileName = 'quiz-app-backup-' + (allSelected ? 'all' : 'custom') + '-' + new Date().toISOString().slice(0, 10) + '.json';
+		downloadBackupFile(exportData, fileName);
+		recordBackupActivity('export', 'Exported ' + (allSelected ? 'all data' : selectedKeys.length + ' selected stores') + ' (' + fileName + ')', 'icon-rose');
+		showToast('Backup created successfully: ' + fileName, 'success');
+		closeBackupPickerModal();
+	} catch (error) {
+		console.error('Custom export failed:', error);
+		showToast('Failed to export data: ' + error.message, 'error');
+	}
+}
+
+function performCustomImport() {
+	const selectedKeys = Array.from(document.querySelectorAll('#backupPickerModal [data-bkp-store]:checked')).map(function (checkbox) { return checkbox.dataset.bkpStore; });
+	if (!selectedKeys.length) {
+		showToast('Select at least one store to import.', 'error');
+		return;
+	}
+
+	try {
+		applyBackupStores(pendingBackupPicker.data || {}, selectedKeys);
+		const scope = pendingBackupPicker.allowedKeys ? 'selected wizard section' : selectedKeys.length + ' selected stores';
+		recordBackupActivity('import', 'Imported ' + scope, 'icon-indigo');
+		showToast('Data imported successfully! Reloading...', 'success');
+		closeBackupPickerModal();
+		setTimeout(function () { window.location.reload(); }, 1000);
+	} catch (error) {
+		console.error('Custom import failed:', error);
+		showToast('Failed to import data: ' + error.message, 'error');
+	}
+}
+
+function applyBackupStores(data, selectedKeys) {
+	const has = function (key) { return selectedKeys.indexOf(key) !== -1; };
+
+	// Keep the existing import behavior, including date normalization and the
+	// raw-data fallbacks, while applying only the stores selected in the picker.
+	if (has('settings') && data.settings) __set('settings', data.settings);
+
+	if (has('questions') && data.questions) {
+		try {
+			const processedQuestions = data.questions.map(function (q) {
+				const dateFrom = q.dateCreated || q.createdAt || q.date || q.created || null;
+				return { ...q, dateCreated: dateFrom || new Date().toISOString() };
+			});
+			__set('questions', processedQuestions);
+		} catch (e) {
+			__set('questions', data.questions);
+		}
+	}
+
+	if (has('categories') && data.categories) __set('categories', data.categories);
+	if (has('exams') && data.exams) __set('exams', data.exams);
+	if (has('classes') && data.classes) __set('classes', data.classes);
+
+	if (has('users') && data.users && Array.isArray(data.users)) __set('users', data.users);
+	if (has('games') && data.games && Array.isArray(data.games)) __set('games', data.games);
+	if (has('tournaments') && data.tournaments && Array.isArray(data.tournaments)) __set('tournaments', data.tournaments);
+	if (has('exam_sessions') && data.exam_sessions && Array.isArray(data.exam_sessions)) __set('exam_sessions', data.exam_sessions);
+	if (has('exam_questions') && data.exam_questions && Array.isArray(data.exam_questions)) __set('exam_questions', data.exam_questions);
+	if (has('exam_classes') && data.exam_classes && Array.isArray(data.exam_classes)) __set('exam_classes', data.exam_classes);
+	if (has('game_sessions') && data.game_sessions && Array.isArray(data.game_sessions)) __set('game_sessions', data.game_sessions);
+	if (has('tournament_entries') && data.tournament_entries && Array.isArray(data.tournament_entries)) __set('tournament_entries', data.tournament_entries);
+	if (has('tournament_history') && data.tournament_history && Array.isArray(data.tournament_history)) __set('tournament_history', data.tournament_history);
+	if (has('profile_requests') && data.profile_requests && Array.isArray(data.profile_requests)) __set('profile_requests', data.profile_requests);
+	if (has('account_requests') && data.account_requests && Array.isArray(data.account_requests)) __set('account_requests', data.account_requests);
+	if (has('notifications') && data.notifications && Array.isArray(data.notifications)) __set('notifications', data.notifications);
+	if (has('teacher_messages') && data.teacher_messages && Array.isArray(data.teacher_messages)) __set('teacher_messages', data.teacher_messages);
+	if (has('teacher_assignments') && data.teacher_assignments && Array.isArray(data.teacher_assignments)) __set('teacher_assignments', data.teacher_assignments);
+	if (has('gamification') && data.gamification && typeof data.gamification === 'object') __set('gamification', data.gamification);
+	if (has('game_presets') && data.game_presets && typeof data.game_presets === 'object') __set('game_presets', data.game_presets);
+
+	if (has('results') && data.results) {
+		try {
+			const processedResults = data.results.map(function (r) {
+				const dateFrom = r.dateTaken || r.takenAt || r.date || r.createdAt || r.created || null;
+				return { ...r, dateTaken: dateFrom || new Date().toISOString() };
+			});
+			__set('results', processedResults);
+		} catch (e) {
+			__set('results', data.results);
+		}
+	}
+	if (has('activity') && (data.activityLog || data.activity)) __set('activity', data.activityLog || data.activity);
+}
+
+/**
+ * Imports application data from a JSON file
+ * @param {HTMLInputElement} inputElement - The file input element
+ * @param {string[]|null} allowedKeys - Optional wizard-scoped store allow-list
+ */
+function importAllData(inputElement, allowedKeys) {
+	const file = inputElement && inputElement.files ? inputElement.files[0] : null;
+	if (!file) return;
+
+	const reader = new FileReader();
 	reader.onload = function (e) {
 		try {
 			const content = e.target.result;
@@ -1027,7 +1257,7 @@ function importAllData(inputElement) {
 			// Basic validation
 			if (
 				!parsedData.type ||
-				parsedData.type !== 'quiz-app-backup' ||
+				parsedData.type != 'quiz-app-backup' ||
 				!parsedData.data
 			) {
 				// Try to determine if it's a valid structure anyway (legacy or manual creation)
@@ -1037,157 +1267,41 @@ function importAllData(inputElement) {
 			}
 
 			const data = parsedData.data || parsedData; // Handle both wrapped and unwrapped data
-
-				// Update LocalStorage with imported data
-				if (data.settings)
-					__set('settings', data.settings);
-
-				// Ensure imported questions have a dateCreated field so activity shows proper dates
-				if (data.questions) {
-					try {
-						const processedQuestions = data.questions.map((q) => {
-							const dateFrom =
-								q.dateCreated || q.createdAt || q.date || q.created || null;
-							return {
-								...q,
-								dateCreated: dateFrom || new Date().toISOString(),
-							};
-						});
-						__set('questions', processedQuestions);
-					} catch (e) {
-						// Fallback to raw data if something goes wrong
-						__set('questions', data.questions);
-					}
-				}
-
-				if (data.categories)
-					__set('categories', data.categories);
-				if (data.exams)
-					__set('exams', data.exams);
-				if (data.classes)
-					__set('classes', data.classes);
-
-				// Full-backup stores (v2 backups): every entity table the app
-				// keeps, restored only when present so legacy backups stay valid.
-				if (data.users && Array.isArray(data.users))
-					__set('users', data.users);
-				if (data.games && Array.isArray(data.games))
-					__set('games', data.games);
-				if (data.tournaments && Array.isArray(data.tournaments))
-					__set('tournaments', data.tournaments);
-				if (data.exam_sessions && Array.isArray(data.exam_sessions))
-					__set('exam_sessions', data.exam_sessions);
-				if (data.exam_questions && Array.isArray(data.exam_questions))
-					__set('exam_questions', data.exam_questions);
-				if (data.exam_classes && Array.isArray(data.exam_classes))
-					__set('exam_classes', data.exam_classes);
-				if (data.game_sessions && Array.isArray(data.game_sessions))
-					__set('game_sessions', data.game_sessions);
-				if (data.tournament_entries && Array.isArray(data.tournament_entries))
-					__set('tournament_entries', data.tournament_entries);
-				if (data.tournament_history && Array.isArray(data.tournament_history))
-					__set('tournament_history', data.tournament_history);
-				if (data.profile_requests && Array.isArray(data.profile_requests))
-					__set('profile_requests', data.profile_requests);
-				if (data.account_requests && Array.isArray(data.account_requests))
-					__set('account_requests', data.account_requests);
-				if (data.notifications && Array.isArray(data.notifications))
-					__set('notifications', data.notifications);
-				if (data.teacher_messages && Array.isArray(data.teacher_messages))
-					__set('teacher_messages', data.teacher_messages);
-				if (data.teacher_assignments && Array.isArray(data.teacher_assignments))
-					__set('teacher_assignments', data.teacher_assignments);
-				if (data.gamification && typeof data.gamification === 'object')
-					__set('gamification', data.gamification);
-				if (data.game_presets && typeof data.game_presets === 'object')
-					__set('game_presets', data.game_presets);
-
-				if (data.results) {
-					try {
-						const processedResults = data.results.map((r) => {
-							const dateFrom =
-								r.dateTaken ||
-								r.takenAt ||
-								r.date ||
-								r.createdAt ||
-								r.created ||
-								null;
-							return {
-								...r,
-								dateTaken: dateFrom || new Date().toISOString(),
-							};
-						});
-						__set('results', processedResults);
-					} catch (e) {
-						// Fallback to raw data if processing fails
-						__set('results', data.results);
-					}
-				}
-				if (data.activityLog)
-					__set('activity', data.activityLog);
-
-			showToast('Data imported successfully! Reloading...');
-
-			try {
-				const author = 'Admin';
-				const timestampImport = new Date().toISOString();
-				const qCount = data.questions ? data.questions.length : 0;
-				const cCount = data.categories ? data.categories.length : 0;
-				const eCount = data.exams ? data.exams.length : 0;
-				const clCount = data.classes ? data.classes.length : 0;
-				const rCount = data.results ? data.results.length : 0;
-
-				const parts = [];
-				if (qCount) parts.push(`${qCount} questions`);
-				if (cCount) parts.push(`${cCount} categories`);
-				if (eCount) parts.push(`${eCount} exams`);
-				if (clCount) parts.push(`${clCount} classes`);
-				if (rCount) parts.push(`${rCount} results`);
-
-				const summary = parts.length
-					? `Imported backup (${parts.join(', ')})`
-					: 'Imported backup';
-
-				const activity = {
-					type: 'import',
-					name: summary,
-					date: timestampImport,
-					author: author,
-					isValid: true,
-					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
-					color: 'icon-indigo',
-				};
-
-				const activities = __get('activity', []);
-				activities.unshift(activity);
-				__set('activity', activities);
-			} catch (e) {
-				console.warn('Could not record import activity:', e);
-			}
-
-			// Reload page to apply changes
-			setTimeout(() => {
-				window.location.reload();
-			}, 1000);
+			openImportPicker(inputElement, data, allowedKeys || null);
 		} catch (error) {
 			console.error('Import failed:', error);
 			showToast('Failed to import data: ' + error.message, 'error');
-			inputElement.value = ''; // Reset input
+			if (inputElement) inputElement.value = '';
 		}
 	};
 
 	reader.onerror = function () {
 		showToast('Error reading file', 'error');
-		inputElement.value = '';
+		if (inputElement) inputElement.value = '';
 	};
 
 	reader.readAsText(file);
+}
+
+function safeReadLS(key, fallback) {
+	try {
+		const val = localStorage.getItem(key);
+		return val ? JSON.parse(val) : fallback;
+	} catch (e) {
+		return fallback;
+	}
 }
 
 // Make globally available
 window.exportAllData = exportAllData;
 window.importAllData = importAllData;
 window.safeReadLS = safeReadLS; // used by importDeviceData result mapping
+window.openExportPicker = openExportPicker;
+window.closeBackupPickerModal = closeBackupPickerModal;
+window.setAllBackupSelection = setAllBackupSelection;
+window.switchBackupGroup = switchBackupGroup;
+window.performCustomExport = performCustomExport;
+window.performCustomImport = performCustomImport;
 
 /**
  * Imports device data from a JSON file (data downloaded from device)
@@ -1433,7 +1547,7 @@ window.importDeviceData = importDeviceData;
 /**
  * Refresh the "Training Preset" dropdown in General settings
  */
-window.refreshTrainingPresetDropdown = function () {
+function refreshTrainingPresetDropdown() {
 	console.log('Refreshing training preset dropdown...');
 	const trainingPresetSelect = document.getElementById(
 		'setting-trainingPreset',
@@ -1465,7 +1579,9 @@ window.refreshTrainingPresetDropdown = function () {
 	} else {
 		console.warn('Cannot refresh preset dropdown: Select element or getAllPresets missing');
 	}
-};
+}
+
+window.refreshTrainingPresetDropdown = refreshTrainingPresetDropdown;
 
 // ─── Reset Data (Settings → Data tab) ────────────────────────────────────────
 // Wipes the school back to first-setup state via POST /api/v1/admin/reset-data
