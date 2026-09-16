@@ -85,7 +85,8 @@
 		const next = {
 			...current,
 			...partial,
-			onlineDevices: Number(partial.onlineDevices ?? current.onlineDevices) || 0,
+			onlineDevices:
+				Number(partial.onlineDevices ?? current.onlineDevices) || 0,
 			deviceCount: Number(partial.deviceCount ?? current.deviceCount) || 0,
 			connected: partial.connected === true,
 			updatedAt: new Date().toISOString(),
@@ -115,7 +116,9 @@
 
 		// Back off from reconnecting after repeated auth failures
 		if (_reconnectBlockedUntil > Date.now()) {
-			console.warn(`[Realtime] Skipping reconnect — blocked until ${new Date(_reconnectBlockedUntil).toLocaleTimeString()}`);
+			console.warn(
+				`[Realtime] Skipping reconnect — blocked until ${new Date(_reconnectBlockedUntil).toLocaleTimeString()}`,
+			);
 			return;
 		}
 
@@ -142,8 +145,7 @@
 				);
 				updateRealtimeStatus('connected');
 				const canSyncUsers =
-					typeof window.Auth?.isAdmin === 'function' &&
-					window.Auth.isAdmin();
+					typeof window.Auth?.isAdmin === 'function' && window.Auth.isAdmin();
 				if (canSyncUsers) {
 					if (typeof window.syncUsersToClients === 'function') {
 						setTimeout(() => window.syncUsersToClients(), 500);
@@ -174,7 +176,10 @@
 				const msg = (error && error.message) || 'Unknown error';
 				// Auth failures are expected when the server is unreachable or token expired — log once, then back off
 				if (/unauthorized|invalid.*token|expired.*token/i.test(msg)) {
-					console.warn('[Realtime] Connection auth error (server may be offline):', msg);
+					console.warn(
+						'[Realtime] Connection auth error (server may be offline):',
+						msg,
+					);
 					_reconnectBlockedUntil = Date.now() + 30_000; // back off 30s
 				} else {
 					console.warn('[Realtime] Connection error:', msg);
@@ -218,7 +223,10 @@
 						localStorage.removeItem('quizQuickStartDismissedAt');
 					} catch (_) {}
 				} catch (err) {
-					console.warn('[realtime-settings] school:data-reset handler failed', err);
+					console.warn(
+						'[realtime-settings] school:data-reset handler failed',
+						err,
+					);
 				}
 			});
 
@@ -239,7 +247,12 @@
 							JSON.stringify(payload.quizGamification),
 						);
 					}
-					if (Object.prototype.hasOwnProperty.call(payload, 'quizTournamentActive')) {
+					if (
+						Object.prototype.hasOwnProperty.call(
+							payload,
+							'quizTournamentActive',
+						)
+					) {
 						if (payload.quizTournamentActive) {
 							localStorage.setItem(
 								'quizTournamentActive',
@@ -504,35 +517,54 @@
 			return;
 		}
 
-		const timeoutId = setTimeout(() => {
-			testSocket.disconnect();
-			showRealtimeStatus('Connection test timed out', 'error');
-		}, 5000);
-
-		testSocket.on('connect', () => {
+		let settled = false;
+		let timeoutId;
+		const cleanup = () => {
 			clearTimeout(timeoutId);
+			testSocket.off('connect', onConnect);
+			testSocket.off('admin:auth:error', onAuthError);
+			testSocket.off('connect_error', onConnectError);
+		};
+		const onConnect = () => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			if (!testSocket.connected) return;
 			testSocket.emit('identify', getAdminIdentifyPayload());
 			showRealtimeStatus(`Successfully connected to ${serverHost}`, 'success');
-			testSocket.disconnect();
-		});
-
-		testSocket.on('admin:auth:error', (payload = {}) => {
-			clearTimeout(timeoutId);
+		};
+		const onAuthError = (payload = {}) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
 			showRealtimeStatus(
 				payload.message ||
 					'Connected, but admin access was rejected — sign in with an admin or teacher account',
 				'error',
 			);
-			testSocket.disconnect();
-		});
-
-		testSocket.on('connect_error', (error) => {
-			clearTimeout(timeoutId);
+		};
+		const onConnectError = (error) => {
+			if (settled) return;
+			settled = true;
+			cleanup();
 			showRealtimeStatus(
 				`Failed to connect: ${error.message || 'Unknown error'}`,
 				'error',
 			);
-		});
+		};
+
+		testSocket.once('connect', onConnect);
+		testSocket.once('admin:auth:error', onAuthError);
+		testSocket.once('connect_error', onConnectError);
+		timeoutId = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			cleanup();
+			showRealtimeStatus('Connection test timed out', 'error');
+		}, 5000);
+
+		if (testSocket.connected) onConnect();
+		else testSocket.connect();
 	};
 
 	/**
@@ -636,9 +668,13 @@
 				) {
 					const sessionInfo = device.data.examActiveSession;
 					const studentInfo = sessionInfo.studentInfo || {};
-					const completedAt = sessionInfo.completedAt || new Date().toISOString();
+					const completedAt =
+						sessionInfo.completedAt || new Date().toISOString();
 					const resultId = `${sessionInfo.examId}-${
-						studentInfo.numero || device.data.deviceId || device.deviceId || 'unknown'
+						studentInfo.numero ||
+						device.data.deviceId ||
+						device.deviceId ||
+						'unknown'
 					}-${completedAt}`;
 
 					const sessionResult = {
@@ -699,7 +735,8 @@
 		// Update localStorage with merged data
 		if (allDeviceData.data.quizResults) {
 			const existingResults = JSON.parse(
-				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) ||
+					'[]',
 			);
 			const mergedResults = [
 				...existingResults,
@@ -743,7 +780,8 @@
 		const deviceIp = device?.ip || '';
 
 		const existingResults = JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) ||
+				'[]',
 		);
 		let resultsChanged = false;
 		let totalAdded = 0;
@@ -755,10 +793,14 @@
 		) {
 			data.examActiveSession.completedResults.forEach((res) => {
 				const completedAt =
-					res.completedAt || res.date || res.dateTaken || new Date().toISOString();
+					res.completedAt ||
+					res.date ||
+					res.dateTaken ||
+					new Date().toISOString();
 				const studentInfo = res.studentInfo || {};
 				const resultId =
-					res.id || `${res.examId}-${studentInfo.numero || 'anon'}-${completedAt}`;
+					res.id ||
+					`${res.examId}-${studentInfo.numero || 'anon'}-${completedAt}`;
 
 				if (!existingResults.some((r) => r.id === resultId)) {
 					const normalized = {
@@ -776,7 +818,8 @@
 						className: studentInfo.class || res.className || '',
 						score: res.results?.score ?? res.score ?? 0,
 						totalPoints: res.results?.totalPoints ?? res.totalPoints ?? 0,
-						totalQuestions: res.results?.totalQuestions ?? res.totalQuestions ?? 0,
+						totalQuestions:
+							res.results?.totalQuestions ?? res.totalQuestions ?? 0,
 						answers: res.results?.answers ?? res.answers ?? [],
 						timeSpent: res.results?.timeSpent ?? res.timeSpent ?? 0,
 						date: completedAt,
@@ -860,15 +903,15 @@
 					new Date().toISOString();
 				normalized.date = fallbackDate;
 				normalized.dateTaken = normalized.dateTaken || fallbackDate;
-				normalized.name = normalized.name || normalized.studentName || 'Unknown';
+				normalized.name =
+					normalized.name || normalized.studentName || 'Unknown';
 				normalized.studentName =
 					normalized.studentName || normalized.name || 'Unknown';
 				normalized.numero = normalized.numero || normalized.studentNumber || '';
 				normalized.studentNumber =
 					normalized.studentNumber || normalized.numero || '';
 				normalized.class = normalized.class || normalized.className || '';
-				normalized.className =
-					normalized.className || normalized.class || '';
+				normalized.className = normalized.className || normalized.class || '';
 				normalized.examTitle =
 					normalized.examTitle || normalized.examName || normalized.exam;
 
@@ -895,7 +938,11 @@
 
 		if (resultsChanged) {
 			window.__DI_CONTAINER__.repo.setAll_sync('results', existingResults);
-			if (!silent) showRealtimeStatus(`Loaded ${totalAdded} results from ${deviceName}`, 'success');
+			if (!silent)
+				showRealtimeStatus(
+					`Loaded ${totalAdded} results from ${deviceName}`,
+					'success',
+				);
 			// Update UI if on results tab
 			if (window.loadResults) window.loadResults();
 		}
@@ -903,28 +950,36 @@
 		// 4. Merge quizActivity from device
 		if (data && data.quizActivity && Array.isArray(data.quizActivity)) {
 			try {
-				const existingActivity = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
+				const existingActivity =
+					window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 				let activityAdded = 0;
-				
-				data.quizActivity.forEach(activity => {
+
+				data.quizActivity.forEach((activity) => {
 					// Filter out 'noisy' or redundant activities
 					// 'result' is now dynamically merged from quizResults in the UI
-					if (activity.type === 'quiz_started' || activity.type === 'answer_submitted' || activity.type === 'result') return;
+					if (
+						activity.type === 'quiz_started' ||
+						activity.type === 'answer_submitted' ||
+						activity.type === 'result'
+					)
+						return;
 
 					// Handle different date field names and ensure string format for comparison
 					const activityDate = activity.date || activity.timestamp || '';
-					
+
 					// De-duplicate by type, date, and studentNumber
-					const isDuplicate = existingActivity.some(a => 
-						a.type === activity.type && 
-						(a.date || a.timestamp || '') === activityDate &&
-						a.studentNumber === activity.studentNumber &&
-						a.name === activity.name
+					const isDuplicate = existingActivity.some(
+						(a) =>
+							a.type === activity.type &&
+							(a.date || a.timestamp || '') === activityDate &&
+							a.studentNumber === activity.studentNumber &&
+							a.name === activity.name,
 					);
 
 					if (!isDuplicate) {
 						// Add device context if missing
-						if (!activity.deviceName && deviceName) activity.deviceName = deviceName;
+						if (!activity.deviceName && deviceName)
+							activity.deviceName = deviceName;
 						if (!activity.deviceIp && deviceIp) activity.deviceIp = deviceIp;
 						existingActivity.unshift(activity);
 						activityAdded++;
@@ -938,15 +993,17 @@
 						const dateB = new Date(b.date || b.timestamp || 0);
 						return dateB - dateA;
 					});
-					
+
 					// Limit to 1000 entries
 					const finalActivity = existingActivity.slice(0, 1000);
 					window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', finalActivity);
 					console.log(`Merged ${activityAdded} activities from ${deviceName}`);
-					
+
 					// Refresh activity UI if available
-					if (typeof window.renderRecentActivity === 'function') window.renderRecentActivity();
-					if (typeof window.filterActivityTable === 'function') window.filterActivityTable();
+					if (typeof window.renderRecentActivity === 'function')
+						window.renderRecentActivity();
+					if (typeof window.filterActivityTable === 'function')
+						window.filterActivityTable();
 				}
 			} catch (e) {
 				console.warn('Error merging quizActivity:', e);
@@ -957,12 +1014,19 @@
 	/**
 	 * Log device activity to quizActivity
 	 */
-	function logDeviceActivity(action, name, details, deviceName = null, meta = {}) {
+	function logDeviceActivity(
+		action,
+		name,
+		details,
+		deviceName = null,
+		meta = {},
+	) {
 		try {
 			const activities = window.__DI_CONTAINER__.repo.getAll_sync('audit_logs');
 			const nameText = typeof name === 'string' ? name.trim() : '';
 			const detailsText = typeof details === 'string' ? details.trim() : '';
-			const deviceLabel = typeof deviceName === 'string' ? deviceName.trim() : '';
+			const deviceLabel =
+				typeof deviceName === 'string' ? deviceName.trim() : '';
 
 			if (!nameText && !detailsText) {
 				return;
@@ -1008,7 +1072,7 @@
 				author: 'Admin',
 				isValid: true,
 				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>',
-				color: 'icon-cyan'
+				color: 'icon-cyan',
 			};
 			activities.unshift(activity);
 			window.__DI_CONTAINER__.repo.setAll_sync('audit_logs', activities);
@@ -1031,7 +1095,9 @@
 		const appSettings = window.getAppSettings ? window.getAppSettings() : {};
 
 		// Check if a preset is selected and apply its values
-		const selectedPresetId = document.getElementById('setting-trainingPreset')?.value;
+		const selectedPresetId = document.getElementById(
+			'setting-trainingPreset',
+		)?.value;
 		let presetOverrides = {};
 		let presetName = null;
 		if (selectedPresetId && window.getPresetById) {
@@ -1067,10 +1133,11 @@
 				appSettings.timeLimit ||
 				300,
 			penalty:
-				presetOverrides.penalty !== undefined ? presetOverrides.penalty :
-				(parseInt(document.getElementById('setting-penalty')?.value) ||
-				appSettings.penalty ||
-				0),
+				presetOverrides.penalty !== undefined
+					? presetOverrides.penalty
+					: parseInt(document.getElementById('setting-penalty')?.value) ||
+						appSettings.penalty ||
+						0,
 			welcomeTitle:
 				presetOverrides.welcomeTitle ||
 				document.getElementById('setting-welcomeTitle')?.value ||
@@ -1085,7 +1152,8 @@
 
 		// Get uncategorized questions for training mode
 		const allQuestions = JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+				'[]',
 		);
 
 		// Filter for uncategorized questions (use 'category' field, not 'categoryId')
@@ -1113,14 +1181,18 @@
 			settings: settings,
 		});
 		realtimeSocket.emit('admin:pushSettings', payload);
-		
-		const message = presetName 
+
+		const message = presetName
 			? `Pushed preset "${presetName}" + ${trainingQuestions.length} questions to devices`
 			: `Pushed settings + ${trainingQuestions.length} questions to devices`;
 		showRealtimeStatus(message, 'success');
-		
+
 		// Log activity
-		logDeviceActivity('push_settings', message, `Time: ${settings.timeLimit}s, Penalty: ${settings.penalty}pts`);
+		logDeviceActivity(
+			'push_settings',
+			message,
+			`Time: ${settings.timeLimit}s, Penalty: ${settings.penalty}pts`,
+		);
 	};
 
 	/**
@@ -1142,9 +1214,7 @@
 			users = [];
 		}
 		users = users
-			.filter(
-				(user) => String(user?.role || '').toLowerCase() !== 'admin',
-			)
+			.filter((user) => String(user?.role || '').toLowerCase() !== 'admin')
 			.map((user) => ({ ...user }));
 		const scopeLabel = 'all students and teachers';
 		const usersFingerprint = users
@@ -1204,7 +1274,9 @@
 				logDeviceActivity(
 					'sync_users',
 					`Synced ${users.length} user accounts (${scopeLabel})`,
-					isTemp ? 'Temp connection used (realtime toggle off)' : 'Admins excluded from sync',
+					isTemp
+						? 'Temp connection used (realtime toggle off)'
+						: 'Admins excluded from sync',
 				);
 			}
 		};
@@ -1250,7 +1322,10 @@
 
 		tempSocket.on('connect_error', (error) => {
 			if (done) return;
-			console.warn('[Realtime] Temp sync connection failed (server may be offline):', error && error.message);
+			console.warn(
+				'[Realtime] Temp sync connection failed (server may be offline):',
+				error && error.message,
+			);
 			finishTempSync();
 		});
 
@@ -1259,13 +1334,13 @@
 				userSyncInProgress = false;
 			}
 		});
-		};
+	};
 
-		/**
-		 * Sync games to all connected clients
-		 */
-		window.syncGamesToClients = function () {
-			const isAdmin =
+	/**
+	 * Sync games to all connected clients
+	 */
+	window.syncGamesToClients = function () {
+		const isAdmin =
 			typeof window.Auth?.isAdmin === 'function' && window.Auth.isAdmin();
 		const isTeacher =
 			typeof window.Auth?.isTeacher === 'function' && window.Auth.isTeacher();
@@ -1387,7 +1462,10 @@
 
 		tempSocket.on('connect_error', (error) => {
 			if (done) return;
-			console.warn('[Realtime] Temp sync games connection failed (server may be offline):', error && error.message);
+			console.warn(
+				'[Realtime] Temp sync games connection failed (server may be offline):',
+				error && error.message,
+			);
 			tempSocket.disconnect();
 		});
 	};
@@ -1395,7 +1473,9 @@
 	function buildGamificationSyncPayload(configOverride = null) {
 		let storedConfig = {};
 		try {
-			storedConfig = JSON.parse(localStorage.getItem('quizGamification') || '{}');
+			storedConfig = JSON.parse(
+				localStorage.getItem('quizGamification') || '{}',
+			);
 		} catch (e) {
 			storedConfig = {};
 		}
@@ -1422,8 +1502,7 @@
 			const parsed = JSON.parse(
 				localStorage.getItem('quizTournamentActive') || 'null',
 			);
-			activeTournament =
-				parsed && typeof parsed === 'object' ? parsed : null;
+			activeTournament = parsed && typeof parsed === 'object' ? parsed : null;
 		} catch (e) {
 			activeTournament = null;
 		}
@@ -1491,7 +1570,10 @@
 			socketInstance.emit('admin:syncGamification', payload);
 			localStorage.setItem('quizGamificationSyncedAt', payload.syncedAt);
 			window.dispatchEvent(new CustomEvent('quiz:gamification-updated'));
-			showRealtimeStatus('Synced gamification and tournament settings', 'success');
+			showRealtimeStatus(
+				'Synced gamification and tournament settings',
+				'success',
+			);
 			logDeviceActivity(
 				'sync_gamification',
 				'Synced gamification settings',
@@ -1521,7 +1603,10 @@
 		showRealtimeStatus('Connecting to sync gamification settings...', 'info');
 		const tempSocket = window.getSocket();
 		if (!tempSocket) {
-			showRealtimeStatus('Sign in before syncing gamification settings', 'error');
+			showRealtimeStatus(
+				'Sign in before syncing gamification settings',
+				'error',
+			);
 			gamificationSyncInProgress = false;
 			return;
 		}
@@ -1552,7 +1637,10 @@
 
 		tempSocket.on('connect_error', (error) => {
 			if (done) return;
-			console.warn('[Realtime] Temp sync gamification connection failed (server may be offline):', error && error.message);
+			console.warn(
+				'[Realtime] Temp sync gamification connection failed (server may be offline):',
+				error && error.message,
+			);
 			finishTempSync();
 			teardownTempSocket();
 		});
@@ -1597,53 +1685,67 @@
 
 		realtimeSocket.emit('admin:clearSession');
 		showRealtimeStatus('Sent clear command to all devices', 'success');
-		
+
 		// Log activity
-		logDeviceActivity('clear_session', 'Cleared all remote device data', 'Removed quizSettings, quizQuestions, and examActiveSession');
+		logDeviceActivity(
+			'clear_session',
+			'Cleared all remote device data',
+			'Removed quizSettings, quizQuestions, and examActiveSession',
+		);
 	};
 
-		// Sync Debounce Timer
-		let syncDebounceTimer = null;
+	// Sync Debounce Timer
+	let syncDebounceTimer = null;
 
-		/**
-		 * Sync training questions and active exam to all connected clients
-		 */
-		let _lastSyncWarningAt = 0;
-		window.syncQuestionsToClients = function () {
-			// Check if Realtime is actually enabled
-			const realtimeEnabled = document.getElementById('setting-realtimeEnabled')?.checked;
-			
-			// Basic Connection check
-			if (!realtimeSocket || !realtimeSocket.connected) {
-				// Throttle warning to once per 30s to avoid spam on every settings change
-				const now = Date.now();
-				if (realtimeEnabled && (now - _lastSyncWarningAt > 30_000)) {
-					_lastSyncWarningAt = now;
-					console.warn('Cannot sync: Realtime enabled but not connected to server');
-					showRealtimeStatus('Sync failed: Not connected', 'error');
-				}
-				return;
+	/**
+	 * Sync training questions and active exam to all connected clients
+	 */
+	let _lastSyncWarningAt = 0;
+	window.syncQuestionsToClients = function () {
+		// Check if Realtime is actually enabled
+		const realtimeEnabled = document.getElementById(
+			'setting-realtimeEnabled',
+		)?.checked;
+
+		// Basic Connection check
+		if (!realtimeSocket || !realtimeSocket.connected) {
+			// Throttle warning to once per 30s to avoid spam on every settings change
+			const now = Date.now();
+			if (realtimeEnabled && now - _lastSyncWarningAt > 30_000) {
+				_lastSyncWarningAt = now;
+				console.warn(
+					'Cannot sync: Realtime enabled but not connected to server',
+				);
+				showRealtimeStatus('Sync failed: Not connected', 'error');
 			}
+			return;
+		}
 
 		// Use debounce to prevent spamming during bulk updates
 		if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
-		
+
 		syncDebounceTimer = setTimeout(() => {
 			console.log('Running Refined Broadcast Updates...');
 
 			// 1. TRAINING SYNC: Settings + ONLY Uncategorized Questions
-			const settings = window.getAppSettings ? window.getAppSettings() : (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
-			const allQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
+			const settings = window.getAppSettings
+				? window.getAppSettings()
+				: window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {};
+			const allQuestions =
+				window.__DI_CONTAINER__.repo.getAll_sync('questions');
 			const trainingQuestions = allQuestions.filter(
-				(q) => !q.category && !q.categoryId
+				(q) => !q.category && !q.categoryId,
 			);
-			
+
 			const trainingPayload = {
 				quizSettings: settings,
 				quizQuestions: trainingQuestions,
 			};
-			
-			console.log('Syncing training data (Uncategorized only):', trainingQuestions.length);
+
+			console.log(
+				'Syncing training data (Uncategorized only):',
+				trainingQuestions.length,
+			);
 			realtimeSocket.emit('admin:pushSettings', trainingPayload);
 
 			// 2. ACTIVE EXAM SYNC: If an exam ID is tracked as active
@@ -1705,7 +1807,9 @@
 	 */
 	function updateDeviceHistory(onlineClients) {
 		const allClients = Array.isArray(onlineClients) ? onlineClients : [];
-		connectedDevices = allClients.filter((client) => client.status === 'online');
+		connectedDevices = allClients.filter(
+			(client) => client.status === 'online',
+		);
 		const now = new Date().toISOString();
 
 		// 1. Mark all existing devices as offline initially (unless we want to preserve 'offline' status)
@@ -1752,7 +1856,8 @@
 		});
 
 		// Auto-sync logic
-		const autoSyncEnabled = document.getElementById('setting-autoSync')?.checked;
+		const autoSyncEnabled =
+			document.getElementById('setting-autoSync')?.checked;
 		if (autoSyncEnabled) {
 			connectedDevices.forEach((client) => {
 				if (client.data) {

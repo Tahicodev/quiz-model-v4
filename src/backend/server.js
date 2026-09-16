@@ -6,75 +6,112 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { logger } from './logger.js';
+import { recordRequest } from './server-metrics.js';
 import { errorHandler } from './middleware/error.js';
 import { initSocketServer } from './realtime/socket.server.js';
 
 const app = express();
 
 // ── Security headers ────────────────────────────────────────────────────────
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        'https://cdn.socket.io',
-        'https://cdn.jsdelivr.net',
-        'https://cdnjs.cloudflare.com',
-        'https://cdn.sheetjs.com',
-      ],
-      scriptSrcAttr: ["'unsafe-inline'"],
-      styleSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        'https://cdnjs.cloudflare.com',
-        'https://fonts.googleapis.com',
-        'https://cdn.jsdelivr.net',
-      ],
-      imgSrc: ["'self'", 'data:', 'blob:'],
-      connectSrc: ["'self'", 'ws:', 'wss:', 'https://cdn.socket.io', 'https://cdn.jsdelivr.net', 'https://cdnjs.cloudflare.com', 'https://cdn.sheetjs.com', 'https://generativelanguage.googleapis.com', 'https://api.openai.com', 'https://api.anthropic.com'],
-      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      workerSrc: ["'self'", 'blob:'],
-    },
-  },
-}));
+app.use(
+	helmet({
+		contentSecurityPolicy: {
+			directives: {
+				defaultSrc: ["'self'"],
+				scriptSrc: [
+					"'self'",
+					"'unsafe-inline'",
+					"'unsafe-eval'",
+					'https://cdn.socket.io',
+					'https://cdn.jsdelivr.net',
+					'https://cdnjs.cloudflare.com',
+					'https://cdn.sheetjs.com',
+				],
+				scriptSrcAttr: ["'unsafe-inline'"],
+				styleSrc: [
+					"'self'",
+					"'unsafe-inline'",
+					'https://cdnjs.cloudflare.com',
+					'https://fonts.googleapis.com',
+					'https://cdn.jsdelivr.net',
+				],
+				imgSrc: ["'self'", 'data:', 'blob:'],
+				connectSrc: [
+					"'self'",
+					'ws:',
+					'wss:',
+					'https://cdn.socket.io',
+					'https://cdn.jsdelivr.net',
+					'https://cdnjs.cloudflare.com',
+					'https://cdn.sheetjs.com',
+					'https://generativelanguage.googleapis.com',
+					'https://api.openai.com',
+					'https://api.anthropic.com',
+				],
+				fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+				workerSrc: ["'self'", 'blob:'],
+			},
+		},
+	}),
+);
 
 // CORS: allow the configured origin AND any same-host / LAN origin. Because
 // the admin UI is served from the same Express instance, its Origin header
 // is the same host the user typed in the address bar (localhost, 127.0.0.1,
 // the LAN IP, etc.). Reflecting the request origin is safe here — this is a
 // self-hosted LAN app, not a public API.
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // same-origin / curl
-    if (origin === config.corsOrigin) return callback(null, true);
-    // Allow any localhost / LAN origin (private IP ranges + *.local).
-    if (
-      /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|(\d{1,3}\.){3}\d{1,3})(:\d+)?$/i.test(origin) ||
-      /^https?:\/\/[a-z0-9-]+\.local(:\d+)?$/i.test(origin)
-    ) {
-      return callback(null, true);
-    }
-    // Log and otherwise allow — admin panel is internal-only.
-    logger.warn({ origin }, 'CORS: allowing unexpected origin');
-    return callback(null, true);
-  },
-  credentials: true,
-}));
+app.use(
+	cors({
+		origin: (origin, callback) => {
+			if (!origin) return callback(null, true); // same-origin / curl
+			if (origin === config.corsOrigin) return callback(null, true);
+			// Allow any localhost / LAN origin (private IP ranges + *.local).
+			if (
+				/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|192\.168\.\d+\.\d+|(\d{1,3}\.){3}\d{1,3})(:\d+)?$/i.test(
+					origin,
+				) ||
+				/^https?:\/\/[a-z0-9-]+\.local(:\d+)?$/i.test(origin)
+			) {
+				return callback(null, true);
+			}
+			// Log and otherwise allow — admin panel is internal-only.
+			logger.warn({ origin }, 'CORS: allowing unexpected origin');
+			return callback(null, true);
+		},
+		credentials: true,
+	}),
+);
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' }));
 
 // ── Request logging ─────────────────────────────────────────────────────────
 app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const ms = Date.now() - start;
-    const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'debug';
-    logger[level]({ method: req.method, path: req.path, status: res.statusCode, ms, userId: req.user?.id });
-  });
-  next();
+	const start = Date.now();
+	res.on('finish', () => {
+		const ms = Date.now() - start;
+		if (req.path.startsWith('/api/')) {
+			recordRequest({
+				method: req.method,
+				path: req.path,
+				status: res.statusCode,
+				ms,
+			});
+		}
+		const level =
+			res.statusCode >= 500
+				? 'error'
+				: res.statusCode >= 400
+					? 'warn'
+					: 'debug';
+		logger[level]({
+			method: req.method,
+			path: req.path,
+			status: res.statusCode,
+			ms,
+			userId: req.user?.id,
+		});
+	});
+	next();
 });
 
 // ── Auth middleware imports ─────────────────────────────────────────────────
@@ -84,26 +121,29 @@ import { ROLES } from '../shared/constants.js';
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { code: 'RATE_LIMITED', message: 'Too many requests' },
+	windowMs: 60 * 1000, // 1 minute
+	max: 300,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { code: 'RATE_LIMITED', message: 'Too many requests' },
 });
 app.use('/api/', apiLimiter);
 
 // Stricter rate limit for auth endpoints (login, register, refresh)
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { code: 'RATE_LIMITED', message: 'Too many authentication attempts. Try again later.' },
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 20,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: {
+		code: 'RATE_LIMITED',
+		message: 'Too many authentication attempts. Try again later.',
+	},
 });
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+	res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // ── API Routes ───────────────────────────────────────────────────────────────
@@ -143,38 +183,43 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtmlPath = resolve(__dirname, '../../index.html');
 const adminHtmlPath = resolve(__dirname, '../../admin.html');
-const studentWorkspaceHtmlPath = resolve(__dirname, '../../student-workspace.html');
+const studentWorkspaceHtmlPath = resolve(
+	__dirname,
+	'../../student-workspace.html',
+);
 
 // Read entry HTML on each request in development so an already-running local
 // server cannot keep serving a stale page after a layout or cache-bust change.
 function readEntryHtml(filePath) {
-  return readFileSync(filePath, 'utf8');
+	return readFileSync(filePath, 'utf8');
 }
 
 function injectAppConfig(html) {
-  return html.replace(
-    '</head>',
-    `<script>
+	return html.replace(
+		'</head>',
+		`<script>
 window.APP_CONFIG = ${JSON.stringify({
-    mode: 'saas',
-    apiUrl: '/api/v1',
-    socketUrl: '/',
-  })};
+			mode: 'saas',
+			apiUrl: '/api/v1',
+			socketUrl: '/',
+		})};
 </script>
-</head>`
-  );
+</head>`,
+	);
 }
 
 app.get('/', (req, res) => {
-  res.type('html').send(injectAppConfig(readEntryHtml(indexHtmlPath)));
+	res.type('html').send(injectAppConfig(readEntryHtml(indexHtmlPath)));
 });
 
 app.get('/admin.html', (req, res) => {
-  res.type('html').send(injectAppConfig(readEntryHtml(adminHtmlPath)));
+	res.type('html').send(injectAppConfig(readEntryHtml(adminHtmlPath)));
 });
 
 app.get('/student-workspace.html', (req, res) => {
-  res.type('html').send(injectAppConfig(readEntryHtml(studentWorkspaceHtmlPath)));
+	res
+		.type('html')
+		.send(injectAppConfig(readEntryHtml(studentWorkspaceHtmlPath)));
 });
 
 app.use('/api/v1/auth', authLimiter, authRoutes);
@@ -207,19 +252,19 @@ app.use('/api/v1/teacher-assignments', teacherAssignmentRoutes);
 // immediately — express.static's default ETag/If-None-Match cache was holding
 // onto stale bundles in the dev browser.
 const noCacheOpts = {
-  etag: false,
-  lastModified: false,
-  setHeaders: (res, filePath) => {
-    if (/\.(html|js|css)$/i.test(filePath)) {
-      res.setHeader(
-        'Cache-Control',
-        'no-store, no-cache, must-revalidate, proxy-revalidate',
-      );
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.setHeader('Surrogate-Control', 'no-store');
-    }
-  },
+	etag: false,
+	lastModified: false,
+	setHeaders: (res, filePath) => {
+		if (/\.(html|js|css)$/i.test(filePath)) {
+			res.setHeader(
+				'Cache-Control',
+				'no-store, no-cache, must-revalidate, proxy-revalidate',
+			);
+			res.setHeader('Pragma', 'no-cache');
+			res.setHeader('Expires', '0');
+			res.setHeader('Surrogate-Control', 'no-store');
+		}
+	},
 };
 app.use(express.static('public', noCacheOpts));
 // Serve root-level dev files (admin.html, admin.css, styles.css)
@@ -227,7 +272,7 @@ app.use(express.static('./', noCacheOpts));
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  res.status(404).json({ code: 'NOT_FOUND', message: 'Endpoint not found' });
+	res.status(404).json({ code: 'NOT_FOUND', message: 'Endpoint not found' });
 });
 
 // ── Global Error Handler ─────────────────────────────────────────────────────
@@ -243,26 +288,33 @@ const container = createContainer();
 const { sessionSvc, gameSvc, tournamentSvc } = container;
 
 // Expired session cleanup (every 5 minutes)
-setInterval(async () => {
-  try {
-    const count = await sessionSvc.cleanupExpiredSessions();
-    if (count > 0) logger.info({ count }, 'Expired sessions cleaned up');
-  } catch (err) {
-    logger.error({ err }, 'Session cleanup job failed');
-  }
-}, 5 * 60 * 1000);
+setInterval(
+	async () => {
+		try {
+			const count = await sessionSvc.cleanupExpiredSessions();
+			if (count > 0) logger.info({ count }, 'Expired sessions cleaned up');
+		} catch (err) {
+			logger.error({ err }, 'Session cleanup job failed');
+		}
+	},
+	5 * 60 * 1000,
+);
 
 // Refresh token cleanup (every hour)
-setInterval(async () => {
-  try {
-    const result = await prisma.refreshToken.deleteMany({
-      where: { OR: [{ revoked: true }, { expires_at: { lt: new Date() } }] },
-    });
-    if (result.count > 0) logger.info({ count: result.count }, 'Expired refresh tokens purged');
-  } catch (err) {
-    logger.error({ err }, 'Refresh token cleanup job failed');
-  }
-}, 60 * 60 * 1000);
+setInterval(
+	async () => {
+		try {
+			const result = await prisma.refreshToken.deleteMany({
+				where: { OR: [{ revoked: true }, { expires_at: { lt: new Date() } }] },
+			});
+			if (result.count > 0)
+				logger.info({ count: result.count }, 'Expired refresh tokens purged');
+		} catch (err) {
+			logger.error({ err }, 'Refresh token cleanup job failed');
+		}
+	},
+	60 * 60 * 1000,
+);
 
 // ── HTTP + Socket.io Server ───────────────────────────────────────────────────
 const httpServer = http.createServer(app);
@@ -271,31 +323,34 @@ const httpServer = http.createServer(app);
 // Uses an async IIFE so a failure here fails fast with a logged error rather
 // than starting a half-initialized server.
 (async () => {
-  try {
-	    await initSocketServer(httpServer, {
-	      gameService:       gameSvc,
-	      tournamentService:  tournamentSvc,
-	      sessionService:     sessionSvc,
-	    });
-    httpServer.listen(config.port, '0.0.0.0', () => {
-      logger.info({ port: config.port, host: '0.0.0.0' }, 'Backend server started (SaaS) — reachable on LAN');
-    });
-  } catch (err) {
-    logger.error({ err }, 'Failed to initialize socket server');
-    process.exit(1);
-  }
+	try {
+		await initSocketServer(httpServer, {
+			gameService: gameSvc,
+			tournamentService: tournamentSvc,
+			sessionService: sessionSvc,
+		});
+		httpServer.listen(config.port, '0.0.0.0', () => {
+			logger.info(
+				{ port: config.port, host: '0.0.0.0' },
+				'Backend server started (SaaS) — reachable on LAN',
+			);
+		});
+	} catch (err) {
+		logger.error({ err }, 'Failed to initialize socket server');
+		process.exit(1);
+	}
 })();
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 async function shutdown(signal) {
-  logger.info({ signal }, 'Shutdown signal received');
-  await prisma.$disconnect();
-  // httpServer.close stops accepting connections AND drains existing ones;
-  // this also disconnects the attached Socket.io server cleanly.
-  httpServer.close(() => {
-    logger.info('Server closed');
-    process.exit(0);
-  });
+	logger.info({ signal }, 'Shutdown signal received');
+	await prisma.$disconnect();
+	// httpServer.close stops accepting connections AND drains existing ones;
+	// this also disconnects the attached Socket.io server cleanly.
+	httpServer.close(() => {
+		logger.info('Server closed');
+		process.exit(0);
+	});
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

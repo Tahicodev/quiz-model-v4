@@ -131,7 +131,8 @@
 		<script src="results-management.js" defer></script>
 		<script src="overview-dashboard.js" defer></script>
 		<script src="global-search.js" defer></script>
-		<script src="realtime-settings.js?v=2026-09-13-r2" defer></script>
+		<script src="realtime-settings.js?v=2026-09-16-r3" defer></script>
+		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js" defer></script>
 		<script src="games-management.js?v=2026-09-15-r3" defer></script>
 		<script src="quick-start.js?v=2026-09-15-r3" defer></script>
@@ -438,6 +439,17 @@
 								<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
 							</svg>
 							Activity Log
+						</button>
+						<button
+							class="nav-tab"
+							data-tab="monitoring"
+							data-roles="admin"
+							onclick="openTab(event, 'monitoring'); if(window.loadServerMonitoring) window.loadServerMonitoring()"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="3 12 7 12 10 3 14 21 17 12 21 12"></polyline>
+							</svg>
+							Monitoring
 						</button>
 					</nav>
 				</div>
@@ -1136,6 +1148,50 @@
 								<!-- Activity rows will be populated here -->
 							</tbody>
 						</table>
+					</div>
+				</section>
+
+				<!-- Server Monitoring Tab -->
+				<section id="monitoring" class="tab-content" data-roles="admin">
+					<div class="content-header monitoring-header">
+						<div>
+							<h1>Server Monitoring</h1>
+							<p class="text-muted">Request volume, response health, and repeated server messages.</p>
+						</div>
+						<div class="header-actions monitoring-controls">
+							<label for="monitoringWindow">Window</label>
+							<select id="monitoringWindow" class="form-control">
+								<option value="5">Last 5 minutes</option>
+								<option value="15">Last 15 minutes</option>
+								<option value="60" selected>Last hour</option>
+								<option value="360">Last 6 hours</option>
+								<option value="1440">Last 24 hours</option>
+							</select>
+							<label class="monitoring-toggle"><input type="checkbox" id="monitoringAutoRefresh"> Auto refresh</label>
+							<button type="button" class="btn btn-secondary" id="monitoringRefresh">Refresh</button>
+						</div>
+					</div>
+					<div class="monitoring-status" id="monitoringUpdated"></div>
+					<div class="monitoring-kpis">
+						<div class="monitoring-kpi"><span>API calls</span><strong id="monitoringApiCalls">-</strong></div>
+						<div class="monitoring-kpi"><span>API errors</span><strong id="monitoringApiErrors">-</strong></div>
+						<div class="monitoring-kpi"><span>Warnings</span><strong id="monitoringWarnings">-</strong></div>
+						<div class="monitoring-kpi"><span>Server errors</span><strong id="monitoringErrors">-</strong></div>
+						<div class="monitoring-kpi"><span>Average response</span><strong id="monitoringLatency">-</strong></div>
+					</div>
+					<div class="monitoring-grid">
+						<div class="dashboard-panel">
+							<div class="panel-header"><h3>Most called API endpoints</h3></div>
+							<div class="table-container"><table class="data-table"><thead><tr><th>Method</th><th>Path</th><th>Calls</th><th>Errors</th><th>Avg. time</th></tr></thead><tbody id="monitoringApiBody"></tbody></table></div>
+						</div>
+						<div class="dashboard-panel">
+							<div class="panel-header"><h3>Repeated log messages</h3></div>
+							<div class="table-container"><table class="data-table"><thead><tr><th>Level</th><th>Message</th><th>Count</th><th>Last seen</th></tr></thead><tbody id="monitoringLogBody"></tbody></table></div>
+						</div>
+					</div>
+					<div class="dashboard-panel monitoring-recent-panel">
+						<div class="panel-header"><h3>Recent server logs</h3></div>
+						<div class="table-container"><table class="data-table"><thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead><tbody id="monitoringRecentBody"></tbody></table></div>
 					</div>
 				</section>
 

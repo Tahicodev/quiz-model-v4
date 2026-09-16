@@ -30,177 +30,312 @@ let port;
 
 // Generate a valid JWT for the test user
 const VALID_TOKEN = jwt.sign(
-  { id: 'test-user-id', username: 'test', role: 'admin', school_id: 'school-test' },
-  config.jwtSecret,
-  { expiresIn: '15m' }
+	{
+		id: 'test-user-id',
+		username: 'test',
+		role: 'admin',
+		school_id: 'school-test',
+	},
+	config.jwtSecret,
+	{ expiresIn: '15m' },
 );
 
 const EXPIRED_TOKEN = jwt.sign(
-  { id: 'test-user-id', username: 'test', role: 'admin', school_id: 'school-test' },
-  config.jwtSecret,
-  { expiresIn: '0s' }
+	{
+		id: 'test-user-id',
+		username: 'test',
+		role: 'admin',
+		school_id: 'school-test',
+	},
+	config.jwtSecret,
+	{ expiresIn: '0s' },
 );
 
 // Mock services for the socket server — no DB needed
 const mockServices = {
-  gameService: {
-    joinGame: async ({ gameId, userId }) => ({ game_id: gameId, id: 'session-1' }),
-    getClientState: async () => ({ id: 'game-1', name: 'Test Game', type: 'quiz', status: 'waiting', settings_json: '{}' }),
-    getScores: async () => [{ userId: 'test-user-id', score: 0 }],
-    markPlayerDisconnected: async () => {},
-  },
-  tournamentService: {
-    register: async () => {},
-    getLeaderboard: async () => [],
-    recordAnswer: async () => ({ correct: true, points: 1, score: 1, showAnswer: false, correctAnswer: null }),
-  },
-  sessionService: {
-    heartbeat: async () => {},
-  },
+	gameService: {
+		joinGame: async ({ gameId, userId }) => ({
+			game_id: gameId,
+			id: 'session-1',
+		}),
+		getClientState: async () => ({
+			id: 'game-1',
+			name: 'Test Game',
+			type: 'quiz',
+			status: 'waiting',
+			settings_json: '{}',
+		}),
+		getScores: async () => [{ userId: 'test-user-id', score: 0 }],
+		markPlayerDisconnected: async () => {},
+	},
+	tournamentService: {
+		register: async () => {},
+		getLeaderboard: async () => [],
+		recordAnswer: async () => ({
+			correct: true,
+			points: 1,
+			score: 1,
+			showAnswer: false,
+			correctAnswer: null,
+		}),
+	},
+	sessionService: {
+		heartbeat: async () => {},
+	},
 };
 
 beforeAll(async () => {
-  httpServer = http.createServer();
-  ioServer = await initSocketServer(httpServer, mockServices);
+	httpServer = http.createServer();
+	ioServer = await initSocketServer(httpServer, mockServices);
 
-  return new Promise((resolve) => {
-    httpServer.listen(0, () => {
-      port = httpServer.address().port;
-      resolve();
-    });
-  });
+	return new Promise((resolve) => {
+		httpServer.listen(0, () => {
+			port = httpServer.address().port;
+			resolve();
+		});
+	});
 });
 
 afterAll(() => {
-  ioServer.close();
-  httpServer.close();
+	ioServer.close();
+	httpServer.close();
 });
 
 describe('Socket.io handshake', () => {
-  it('connects with a valid JWT and receives the connect event', async () => {
-    const socket = ioc(`http://localhost:${port}`, {
-      auth: { token: VALID_TOKEN },
-      transports: ['websocket'],
-      autoConnect: false,
-      timeout: 3000,
-    });
+	it('connects with a valid JWT and receives the connect event', async () => {
+		const socket = ioc(`http://localhost:${port}`, {
+			auth: { token: VALID_TOKEN },
+			transports: ['websocket'],
+			autoConnect: false,
+			timeout: 3000,
+		});
 
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Connection timeout')), 3000);
-      socket.on('connect', () => {
-        clearTimeout(timeout);
-        expect(socket.connected).toBe(true);
-        socket.disconnect();
-        resolve();
-      });
-      socket.on('connect_error', (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-      socket.connect();
-    });
-  });
+		await new Promise((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error('Connection timeout')),
+				3000,
+			);
+			socket.on('connect', () => {
+				clearTimeout(timeout);
+				expect(socket.connected).toBe(true);
+				socket.disconnect();
+				resolve();
+			});
+			socket.on('connect_error', (err) => {
+				clearTimeout(timeout);
+				reject(err);
+			});
+			socket.connect();
+		});
+	});
 
-  it('rejects a connection without a token', async () => {
-    const socket = ioc(`http://localhost:${port}`, {
-      transports: ['websocket'],
-      autoConnect: false,
-      timeout: 3000,
-    });
+	it('rejects a connection without a token', async () => {
+		const socket = ioc(`http://localhost:${port}`, {
+			transports: ['websocket'],
+			autoConnect: false,
+			timeout: 3000,
+		});
 
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Connection timeout')), 3000);
-      socket.on('connect', () => {
-        clearTimeout(timeout);
-        reject(new Error('Should not have connected without a token'));
-      });
-      socket.on('connect_error', (err) => {
-        clearTimeout(timeout);
-        expect(err.message).toContain('UNAUTHORIZED');
-        socket.disconnect();
-        resolve();
-      });
-      socket.connect();
-    });
-  });
+		await new Promise((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error('Connection timeout')),
+				3000,
+			);
+			socket.on('connect', () => {
+				clearTimeout(timeout);
+				reject(new Error('Should not have connected without a token'));
+			});
+			socket.on('connect_error', (err) => {
+				clearTimeout(timeout);
+				expect(err.message).toContain('UNAUTHORIZED');
+				socket.disconnect();
+				resolve();
+			});
+			socket.connect();
+		});
+	});
 
-  it('rejects a connection with an expired token', async () => {
-    const socket = ioc(`http://localhost:${port}`, {
-      auth: { token: EXPIRED_TOKEN },
-      transports: ['websocket'],
-      autoConnect: false,
-      timeout: 3000,
-    });
+	it('rejects a connection with an expired token', async () => {
+		const socket = ioc(`http://localhost:${port}`, {
+			auth: { token: EXPIRED_TOKEN },
+			transports: ['websocket'],
+			autoConnect: false,
+			timeout: 3000,
+		});
 
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Connection timeout')), 3000);
-      socket.on('connect', () => {
-        clearTimeout(timeout);
-        reject(new Error('Should not have connected with expired token'));
-      });
-      socket.on('connect_error', (err) => {
-        clearTimeout(timeout);
-        expect(err.message).toContain('UNAUTHORIZED');
-        socket.disconnect();
-        resolve();
-      });
-      socket.connect();
-    });
-  });
+		await new Promise((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error('Connection timeout')),
+				3000,
+			);
+			socket.on('connect', () => {
+				clearTimeout(timeout);
+				reject(new Error('Should not have connected with expired token'));
+			});
+			socket.on('connect_error', (err) => {
+				clearTimeout(timeout);
+				expect(err.message).toContain('UNAUTHORIZED');
+				socket.disconnect();
+				resolve();
+			});
+			socket.connect();
+		});
+	});
 
-  it('GAME_JOIN targets a game room and broadcasts player:joined to other room members', async () => {
-    const GAME_ID = 'test-game-1';
+	it('publishes student presence and relays pushed exam sessions to the school', async () => {
+		const admin = ioc(`http://localhost:${port}`, {
+			auth: { token: VALID_TOKEN },
+			transports: ['websocket'],
+			autoConnect: false,
+			timeout: 3000,
+		});
+		const student = ioc(`http://localhost:${port}`, {
+			auth: {
+				token: jwt.sign(
+					{
+						id: 'student-1',
+						username: 'student',
+						role: 'student',
+						school_id: 'school-test',
+					},
+					config.jwtSecret,
+					{ expiresIn: '15m' },
+				),
+			},
+			transports: ['websocket'],
+			autoConnect: false,
+			timeout: 3000,
+		});
 
-    // Two client sockets
-    const socket1 = ioc(`http://localhost:${port}`, {
-      auth: { token: VALID_TOKEN },
-      transports: ['websocket'],
-      autoConnect: false,
-      timeout: 3000,
-    });
+		await Promise.all([
+			new Promise((resolve) => {
+				admin.on('connect', resolve);
+				admin.connect();
+			}),
+			new Promise((resolve) => {
+				student.on('connect', resolve);
+				student.connect();
+			}),
+		]);
 
-    const socket2 = ioc(`http://localhost:${port}`, {
-      auth: { token: jwt.sign(
-        { id: 'user-2', username: 'player2', role: 'student', school_id: 'school-test' },
-        config.jwtSecret,
-        { expiresIn: '15m' }
-      )},
-      transports: ['websocket'],
-      autoConnect: false,
-      timeout: 3000,
-    });
+		const presencePromise = new Promise((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error('clients:update timeout')),
+				3000,
+			);
+			admin.on('clients:update', (clients) => {
+				const device = clients.find((client) => client.userId === 'student-1');
+				if (!device) return;
+				clearTimeout(timeout);
+				expect(device.status).toBe('online');
+				resolve(device);
+			});
+		});
 
-    // Connect both sockets
-    await Promise.all([
-      new Promise((resolve) => { socket1.on('connect', () => resolve()); socket1.connect(); }),
-      new Promise((resolve) => { socket2.on('connect', () => resolve()); socket2.connect(); }),
-    ]);
+		admin.emit('identify', { role: 'admin' });
+		student.emit('identify', { role: 'client' });
+		student.emit('register', {
+			deviceId: 'student-browser-1',
+			name: 'Student browser',
+		});
+		await presencePromise;
 
-    // Both join the same game room
-    await Promise.all([
-      new Promise((resolve) => { socket1.on('game:state_update', () => resolve()); socket1.emit('game:join', { gameId: GAME_ID }); }),
-      new Promise((resolve) => { socket2.on('game:state_update', () => resolve()); socket2.emit('game:join', { gameId: GAME_ID }); }),
-    ]);
+		const sessionPromise = new Promise((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error('session:receive timeout')),
+				3000,
+			);
+			student.on('session:receive', (session) => {
+				clearTimeout(timeout);
+				expect(session.examId).toBe('exam-1');
+				resolve(session);
+			});
+		});
+		admin.emit('admin:pushSession', {
+			examId: 'exam-1',
+			examName: 'Presence test',
+		});
+		await sessionPromise;
 
-    // Now that both are in the room, socket2 listens for player:joined.
-    // Socket1 joins again (mocked joinGame returns the existing session,
-    // so the handler will still emit player:joined to the room).
-    const joinedPromise = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('player:joined timeout')), 3000);
-      socket2.on('player:joined', (data) => {
-        clearTimeout(timeout);
-        expect(data.userId).toBe('test-user-id');
-        resolve(data);
-      });
-    });
+		admin.disconnect();
+		student.disconnect();
+	});
 
-    // Socket1 emits join again — the mock handler will still trigger player:joined
-    socket1.emit('game:join', { gameId: GAME_ID });
+	it('GAME_JOIN targets a game room and broadcasts player:joined to other room members', async () => {
+		const GAME_ID = 'test-game-1';
 
-    const joinedData = await joinedPromise;
-    expect(joinedData.username).toBe('test');
+		// Two client sockets
+		const socket1 = ioc(`http://localhost:${port}`, {
+			auth: { token: VALID_TOKEN },
+			transports: ['websocket'],
+			autoConnect: false,
+			timeout: 3000,
+		});
 
-    socket1.disconnect();
-    socket2.disconnect();
-  });
+		const socket2 = ioc(`http://localhost:${port}`, {
+			auth: {
+				token: jwt.sign(
+					{
+						id: 'user-2',
+						username: 'player2',
+						role: 'student',
+						school_id: 'school-test',
+					},
+					config.jwtSecret,
+					{ expiresIn: '15m' },
+				),
+			},
+			transports: ['websocket'],
+			autoConnect: false,
+			timeout: 3000,
+		});
+
+		// Connect both sockets
+		await Promise.all([
+			new Promise((resolve) => {
+				socket1.on('connect', () => resolve());
+				socket1.connect();
+			}),
+			new Promise((resolve) => {
+				socket2.on('connect', () => resolve());
+				socket2.connect();
+			}),
+		]);
+
+		// Both join the same game room
+		await Promise.all([
+			new Promise((resolve) => {
+				socket1.on('game:state_update', () => resolve());
+				socket1.emit('game:join', { gameId: GAME_ID });
+			}),
+			new Promise((resolve) => {
+				socket2.on('game:state_update', () => resolve());
+				socket2.emit('game:join', { gameId: GAME_ID });
+			}),
+		]);
+
+		// Now that both are in the room, socket2 listens for player:joined.
+		// Socket1 joins again (mocked joinGame returns the existing session,
+		// so the handler will still emit player:joined to the room).
+		const joinedPromise = new Promise((resolve, reject) => {
+			const timeout = setTimeout(
+				() => reject(new Error('player:joined timeout')),
+				3000,
+			);
+			socket2.on('player:joined', (data) => {
+				clearTimeout(timeout);
+				expect(data.userId).toBe('test-user-id');
+				resolve(data);
+			});
+		});
+
+		// Socket1 emits join again — the mock handler will still trigger player:joined
+		socket1.emit('game:join', { gameId: GAME_ID });
+
+		const joinedData = await joinedPromise;
+		expect(joinedData.username).toBe('test');
+
+		socket1.disconnect();
+		socket2.disconnect();
+	});
 });

@@ -14,22 +14,33 @@
 
 import pino from 'pino';
 import { config } from './config.js';
+import { recordLog } from './server-metrics.js';
 
 const isProduction = config.nodeEnv === 'production';
 
 export const logger = pino({
-  level: config.logLevel,
-  base: { service: 'quiz-app' },
-  ...(isProduction
-    ? // Raw JSON, no transport — fastest, ideal for log aggregators.
-      {}
-    : {
-        transport: {
-          target: 'pino-pretty',
-          options: { colorize: true, translateTime: 'HH:MM:ss' },
-        },
-      }),
+	level: config.logLevel,
+	base: { service: 'quiz-app' },
+	...(isProduction
+		? // Raw JSON, no transport — fastest, ideal for log aggregators.
+			{}
+		: {
+				transport: {
+					target: 'pino-pretty',
+					options: { colorize: true, translateTime: 'HH:MM:ss' },
+				},
+			}),
 });
+
+// Keep a small in-memory diagnostic stream for the admin monitoring panel.
+// The normal Pino output remains the authoritative server log destination.
+for (const level of ['trace', 'debug', 'info', 'warn', 'error', 'fatal']) {
+	const write = logger[level].bind(logger);
+	logger[level] = (...args) => {
+		recordLog(level, args);
+		return write(...args);
+	};
+}
 
 /**
  * Security-specific log helper. Always written at WARN level regardless of the
@@ -39,5 +50,5 @@ export const logger = pino({
  * @param {object} details  Additional structured context (never include passwords/tokens).
  */
 export function securityLog(event, details = {}) {
-  logger.warn({ type: 'SECURITY', event, ...details });
+	logger.warn({ type: 'SECURITY', event, ...details });
 }
