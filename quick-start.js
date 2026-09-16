@@ -19,6 +19,7 @@
 		currentStep: 0,
 		open: false,
 		securitySubTab: 'school',
+		credentialsSubTab: 'password',
 	};
 
 	// Backup keys that belong to each wizard step. The picker stays scoped so
@@ -207,6 +208,19 @@
 		return '<span class="qs-count">0</span>';
 	}
 
+	function qsButtonIcon(name) {
+		var icons = {
+			plus: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>',
+			robot: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="11" rx="2"></rect><path d="M12 8V4"></path><path d="M8 4h8"></path><path d="M9 13h.01"></path><path d="M15 13h.01"></path><path d="M9 17h6"></path></svg>',
+			folder: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>',
+			save: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path></svg>',
+			shield: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>',
+			key: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 2-2 2 4 4-2 2-4-4 2-2z"></path><path d="m16 7 2 2"></path><path d="M14 10 4 20"></path><path d="M7 17l3 3"></path></svg>',
+			userPlus: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><path d="M20 8v6"></path><path d="M23 11h-6"></path></svg>',
+		};
+		return '<span class="qs-icon" aria-hidden="true">' + (icons[name] || '') + '</span>';
+	}
+
 	function renderSteps() {
 		var container = document.getElementById('quickStartSteps');
 		if (!container) return;
@@ -251,12 +265,12 @@
 				(count > 0 ? '✓ ' + count + ' ' + escapeHtml(step.title.toLowerCase()) + ' already added' : 'Nothing added yet — that\'s fine, you can also skip this step.') +
 				'</div>' +
 				'<div class="qs-actions">' +
-				(step.add ? '<button type="button" class="btn btn-primary" onclick="window.quickStartAdd()">➕ ' + (count > 0 ? 'Add more ' : 'Add ') + escapeHtml(step.title.toLowerCase()) + '</button>' : '') +
-				(step.alt ? '<button type="button" class="btn btn-secondary" onclick="window.quickStartAlt()">🤖 ' + escapeHtml(step.alt.label) + '</button>' : '') +
+				(step.add ? '<button type="button" class="btn btn-primary" onclick="window.quickStartAdd()">' + qsButtonIcon('plus') + '<span>' + (count > 0 ? 'Add more ' : 'Add ') + escapeHtml(step.title.toLowerCase()) + '</span></button>' : '') +
+				(step.alt ? '<button type="button" class="btn btn-secondary" onclick="window.quickStartAlt()">' + qsButtonIcon('robot') + '<span>' + escapeHtml(step.alt.label) + '</span></button>' : '') +
 				'</div>' +
 			'<div class="qs-load">' +
 			'<p class="text-muted">Prefer loading only this section? Restore a scoped backup file exported from another instance:</p>' +
-			'<button type="button" class="btn btn-secondary" onclick="document.getElementById(\'quickStartLoadInput\').click()">📂 Load only ' + escapeHtml(step.title.toLowerCase()) + ' from backup</button>' +
+			'<button type="button" class="btn btn-secondary" onclick="document.getElementById(\'quickStartLoadInput\').click()">' + qsButtonIcon('folder') + '<span>Load only ' + escapeHtml(step.title.toLowerCase()) + ' from backup</span></button>' +
 			'<input type="file" id="quickStartLoadInput" accept=".json" style="display:none" onchange="window.quickStartLoadBackup(this)" />' +
 			'</div>';
 		}
@@ -300,13 +314,36 @@
 		});
 	}
 
+	function switchCredentialsSubTab(event, tabName) {
+		if (event && event.preventDefault) event.preventDefault();
+		var safeTab = tabName === 'recovery' ? 'recovery' : 'password';
+		state.credentialsSubTab = safeTab;
+
+		var content = document.getElementById('quickStartStepContent');
+		if (!content) return;
+		content.querySelectorAll('.qs-cred-subtab-panel').forEach(function (panel) {
+			panel.classList.toggle('hidden', panel.dataset.credtab !== safeTab);
+		});
+		content.querySelectorAll('.qs-cred-subtab-btn').forEach(function (button) {
+			var active = button.dataset.credtab === safeTab;
+			button.classList.toggle('active', active);
+			button.setAttribute('aria-selected', active ? 'true' : 'false');
+			button.tabIndex = active ? 0 : -1;
+		});
+	}
+
 	function renderSecurityContent(panel) {
 		var profile = schoolProfileCache.profile || {};
 		var teachers = teacherCount();
 		var activeSubTab = state.securitySubTab === 'credentials' || state.securitySubTab === 'teachers' ? state.securitySubTab : 'school';
+		var activeCredentialsTab = state.credentialsSubTab === 'recovery' ? 'recovery' : 'password';
 		var subTabButton = function (tabName, icon, label) {
 			var active = activeSubTab === tabName ? ' active' : '';
-			return '<button type="button" class="qs-subtab-btn' + active + '" data-sectab="' + tabName + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" tabindex="' + (active ? '0' : '-1') + '" onclick="window.switchSecuritySubTab(event, \'' + tabName + '\')">' + icon + ' ' + label + '</button>';
+			return '<button type="button" class="qs-subtab-btn' + active + '" data-sectab="' + tabName + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" tabindex="' + (active ? '0' : '-1') + '" onclick="window.switchSecuritySubTab(event, \'' + tabName + '\')"><span class="qs-tab-icon" aria-hidden="true">' + icon + '</span><span>' + label + '</span></button>';
+		};
+		var credentialsSubTabButton = function (tabName, icon, label) {
+			var active = activeCredentialsTab === tabName ? ' active' : '';
+			return '<button type="button" class="qs-cred-subtab-btn' + active + '" data-credtab="' + tabName + '" role="tab" aria-selected="' + (active ? 'true' : 'false') + '" tabindex="' + (active ? '0' : '-1') + '" onclick="window.switchCredentialsSubTab(event, \'' + tabName + '\')">' + qsButtonIcon(icon) + '<span>' + label + '</span></button>';
 		};
 
 		panel.innerHTML =
@@ -350,7 +387,7 @@
 			'</div>' +
 			'</div>' +
 			'<div class="qs-actions">' +
-			'<button type="button" class="btn btn-primary" onclick="window.quickStartSaveSchool()">💾 Save School Info</button>' +
+			'<button type="button" class="btn btn-primary" onclick="window.quickStartSaveSchool()">' + qsButtonIcon('save') + '<span>Save School Info</span></button>' +
 			'</div>' +
 			'</div>' +
 			'</div>' +
@@ -358,10 +395,13 @@
 			'<div class="qs-subtab-panel' + (activeSubTab === 'credentials' ? '' : ' hidden') + '" data-sectab="credentials" role="tabpanel">' +
 			'<div class="qs-security">' +
 			'<h4 class="qs-section-title">🔑 Admin Credentials</h4>' +
-			'<div class="qs-cred-grid">' +
-			'<div class="qs-cred-card qs-cred-card-password">' +
-			'<div class="qs-cred-ico qs-cred-ico-password" aria-hidden="true">🛡️</div>' +
-			'<div class="qs-cred-card-heading"><h5>Change Admin Password</h5><span>Protect the account that manages this school</span></div>' +
+			'<div class="qs-cred-subtabs" role="tablist" aria-label="Admin credential actions">' +
+			credentialsSubTabButton('password', 'shield', 'Change Admin Password') +
+			credentialsSubTabButton('recovery', 'key', 'Recovery Code') +
+			'</div>' +
+			'<div class="qs-cred-subtab-panel' + (activeCredentialsTab === 'password' ? '' : ' hidden') + '" data-credtab="password" role="tabpanel">' +
+			'<div class="qs-cred-panel">' +
+			'<p class="qs-cred-note">Protect the account that manages this school. Use a strong password that is different from your previous one.</p>' +
 			'<div class="qs-field"><label for="qsCurrentPassword">Current Password</label>' +
 			'<input type="password" id="qsCurrentPassword" class="form-control" autocomplete="current-password"></div>' +
 			'<div class="qs-field"><label for="qsNewPassword">New Password</label>' +
@@ -369,20 +409,20 @@
 			'<div class="qs-field"><label for="qsConfirmPassword">Confirm New Password</label>' +
 			'<input type="password" id="qsConfirmPassword" class="form-control" autocomplete="new-password"></div>' +
 			'<div class="qs-actions">' +
-			'<button type="button" class="btn btn-primary" onclick="window.quickStartChangePassword()">🛡️ Update Password</button>' +
+			'<button type="button" class="btn btn-primary" onclick="window.quickStartChangePassword()">' + qsButtonIcon('shield') + '<span>Update Password</span></button>' +
 			'</div>' +
 			'<small class="text-muted">Changing it keeps your session alive on this device.</small>' +
 			'</div>' +
-			'<div class="qs-cred-card qs-cred-card-recovery">' +
-			'<div class="qs-cred-ico qs-cred-ico-recovery" aria-hidden="true">🔑</div>' +
-			'<div class="qs-cred-card-heading"><h5>Recovery Code</h5><span>A safe way back in if you forget the password</span></div>' +
-			'<p class="text-muted qs-cred-note">If you ever forget the admin password, this code unlocks a reset — from any device, not just this browser.</p>' +
+			'</div>' +
+			'<div class="qs-cred-subtab-panel' + (activeCredentialsTab === 'recovery' ? '' : ' hidden') + '" data-credtab="recovery" role="tabpanel">' +
+			'<div class="qs-cred-panel">' +
+			'<p class="qs-cred-note">If you ever forget the admin password, this code unlocks a reset — from any device, not just this browser.</p>' +
 			'<div class="qs-field"><label for="qsRecoveryCode">Recovery Code</label>' +
 			'<input type="text" id="qsRecoveryCode" class="form-control" placeholder="e.g. SAFETY-2026-XYZ" autocomplete="off"></div>' +
 			'<div class="qs-field"><label for="qsRecoveryCodeConfirm">Confirm Code</label>' +
 			'<input type="text" id="qsRecoveryCodeConfirm" class="form-control" placeholder="Repeat the code" autocomplete="off"></div>' +
 			'<div class="qs-actions">' +
-			'<button type="button" class="btn btn-primary" onclick="window.quickStartSaveRecovery()">🔑 Set Recovery Code</button>' +
+			'<button type="button" class="btn btn-primary" onclick="window.quickStartSaveRecovery()">' + qsButtonIcon('key') + '<span>Set Recovery Code</span></button>' +
 			'</div>' +
 			'<small class="text-muted">Stored as a bcrypt hash on the server — write it down somewhere safe.</small>' +
 			'</div>' +
@@ -397,7 +437,7 @@
 			(teachers > 0 ? '✓ ' + teachers + ' teacher(s) already added' : 'No teachers yet — add their accounts with full profiles (numero, phone, email, subjects, classes).') +
 			'</div>' +
 			'<div class="qs-actions">' +
-			'<button type="button" class="btn btn-primary" onclick="window.quickStartAddTeacher()">➕ Add teacher</button>' +
+			'<button type="button" class="btn btn-primary" onclick="window.quickStartAddTeacher()">' + qsButtonIcon('userPlus') + '<span>Add teacher</span></button>' +
 			'</div>' +
 			'</div>' +
 			'</div>';
@@ -410,6 +450,8 @@
 			});
 		}
 	}
+
+	window.switchCredentialsSubTab = switchCredentialsSubTab;
 
 	window.quickStartPickLogo = function (input) {
 		if (!input || !input.files || !input.files[0]) return;
@@ -588,6 +630,7 @@
 		if (manual) setSetupComplete(true); // opened deliberately — never auto-show again
 		state.currentStep = 0;
 		state.securitySubTab = 'school';
+		state.credentialsSubTab = 'password';
 		state.open = true;
 		if (modal.parentElement && modal.parentElement !== document.body) {
 			document.body.appendChild(modal);
@@ -760,6 +803,7 @@
 	// ─── Exports ───────────────────────────────────────────────────────────────
 
 	window.switchSecuritySubTab = switchSecuritySubTab;
+	window.switchCredentialsSubTab = switchCredentialsSubTab;
 	window.openQuickStart = openQuickStart;
 	window.dismissQuickStart = dismissQuickStart;
 	window.quickStartGo = quickStartGo;

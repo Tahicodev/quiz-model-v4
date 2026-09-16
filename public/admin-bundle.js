@@ -207,8 +207,8 @@ var QuizAdmin = (() => {
         }
       };
       ForbiddenError = class extends AppError {
-        constructor() {
-          super("FORBIDDEN", "Access denied", 403);
+        constructor(msg = "Access denied") {
+          super("FORBIDDEN", msg, 403);
         }
       };
       ValidationError = class extends AppError {
@@ -15692,12 +15692,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   });
 
   // src/shared/schemas/user.schema.js
-  var roleValues, UserCreateSchema, UserUpdateSchema, UserFilterSchema, ChangePasswordSchema, LoginSchema;
+  var roleValues, optionalContact, subjectsField, UserCreateSchema, UserUpdateSchema, UserFilterSchema, ChangePasswordSchema, LoginSchema;
   var init_user_schema = __esm({
     "src/shared/schemas/user.schema.js"() {
       init_zod();
       init_constants();
       roleValues = Object.values(ROLES);
+      optionalContact = (max) => external_exports.string().max(max).optional().nullable().transform((v) => v == null || v.trim() === "" ? null : v.trim());
+      subjectsField = external_exports.array(external_exports.string().max(100)).max(20).optional().nullable().transform((v) => v == null ? null : v.map((s) => s.trim()).filter(Boolean));
       UserCreateSchema = external_exports.object({
         username: external_exports.string().min(2).max(50),
         password: external_exports.string().min(6).max(100),
@@ -15705,6 +15707,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         role: external_exports.enum(roleValues).default("student"),
         class_id: external_exports.string().min(1).max(100).optional().nullable(),
         numero: external_exports.string().max(50).optional().nullable(),
+        // Teacher/staff contact fields (safe for students/admins — they stay null).
+        email: external_exports.string().max(255).optional().nullable().transform((v) => v == null || v.trim() === "" ? null : v.trim()).refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+          message: "Invalid email address"
+        }),
+        phone: optionalContact(50),
+        subjects: subjectsField,
         status: external_exports.enum(["active", "inactive", "suspended"]).default("active")
       });
       UserUpdateSchema = external_exports.object({
@@ -15712,6 +15720,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         role: external_exports.enum(roleValues).optional(),
         class_id: external_exports.string().min(1).max(100).optional().nullable(),
         numero: external_exports.string().max(50).optional().nullable(),
+        email: external_exports.string().max(255).optional().nullable().transform((v) => v == null || v.trim() === "" ? null : v.trim()).refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+          message: "Invalid email address"
+        }),
+        phone: optionalContact(50),
+        subjects: subjectsField,
         status: external_exports.enum(["active", "inactive", "suspended"]).optional()
       });
       UserFilterSchema = external_exports.object({

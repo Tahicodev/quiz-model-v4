@@ -34636,6 +34636,48 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	box-shadow: var(--shadow-md);
 }
 
+#quickStartModal .btn-primary{
+	color: #ffffff;
+}
+
+#quickStartModal .btn-secondary{
+	color: #334155;
+}
+
+.qs-icon{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 1.15em;
+	height: 1.15em;
+	line-height: 1;
+	color: currentColor;
+}
+
+.qs-icon svg{
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.qs-tab-icon{
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 1.15em;
+	height: 1.15em;
+	line-height: 1;
+	color: currentColor;
+}
+
+.qs-subtab-btn .qs-icon,
+.qs-cred-subtab-btn .qs-icon{
+	width: 1.05em;
+	height: 1.05em;
+}
+
 .qs-load{
 	border-top: 1px dashed var(--border-color);
 	padding-top: 16px;
@@ -34846,95 +34888,85 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	align-self: flex-start;
 }
 
-/* Credential cards */
-.qs-cred-grid{
+/* Credential tabs and panels */
+.qs-cred-subtabs{
 	display: grid;
 	grid-template-columns: 1fr 1fr;
-	gap: 16px;
+	gap: 8px;
+	margin: 0 0 18px;
+	padding: 5px;
+	border: 1px solid #dbe4ef;
+	border-radius: 12px;
+	background: #f8fafc;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
-.qs-cred-card{
-	position: relative;
+.qs-cred-subtab-btn{
+	min-height: 44px;
+	padding: 8px 10px;
+	border: 1px solid transparent;
+	border-radius: 9px;
+	background: transparent;
+	color: #475569;
+	font-size: 0.82rem;
+	font-weight: 800;
+	line-height: 1.25;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.qs-cred-subtab-btn:hover,
+.qs-cred-subtab-btn:focus-visible{
+	background: #ffffff;
+	color: #0f172a;
+	border-color: #dbe4ef;
+	box-shadow: 0 5px 14px rgba(15, 23, 42, 0.06);
+	outline: none;
+}
+
+.qs-cred-subtab-btn.active[data-credtab="password"]{
+	background: linear-gradient(135deg, #eff6ff, #dbeafe);
+	color: #1d4ed8;
+	border-color: rgba(147, 197, 253, 0.9);
+	box-shadow: 0 6px 16px rgba(37, 99, 235, 0.12);
+}
+
+.qs-cred-subtab-btn.active[data-credtab="recovery"]{
+	background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+	color: #047857;
+	border-color: rgba(110, 231, 183, 0.9);
+	box-shadow: 0 6px 16px rgba(5, 150, 105, 0.12);
+}
+
+.qs-cred-subtab-panel.hidden{
+	display: none !important;
+}
+
+.qs-cred-panel{
 	border: 1px solid var(--border-color);
 	border-radius: var(--radius-lg);
 	padding: 18px;
 	background:
-		linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(241, 245, 249, 0.55)),
+		linear-gradient(160deg, rgba(255, 255, 255, 0.95), rgba(241, 245, 249, 0.65)),
 		var(--bg-surface);
 	box-shadow: var(--shadow-sm);
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
-	overflow: hidden;
-}
-
-.qs-cred-card::before{
-	content: '';
-	position: absolute;
-	inset: 0 auto 0 0;
-	width: 4px;
-	border-radius: 4px 0 0 4px;
-	background: linear-gradient(180deg, var(--primary), #60a5fa);
-}
-
-.qs-cred-card:nth-child(2)::before{
-	background: linear-gradient(180deg, #059669, #34d399);
-}
-
-.qs-cred-ico{
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 42px;
-	height: 42px;
-	flex: 0 0 42px;
-	border-radius: 12px;
-	font-size: 1.25rem;
-	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
-}
-
-.qs-cred-ico-password{
-	background: linear-gradient(135deg, #2563eb, #60a5fa);
-}
-
-.qs-cred-ico-recovery{
-	background: linear-gradient(135deg, #059669, #34d399);
-}
-
-.qs-cred-card-heading{
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-}
-
-.qs-cred-card-heading h5{
-	margin: 0;
-}
-
-.qs-cred-card-heading span{
-	color: var(--text-muted);
-	font-size: 0.76rem;
-	line-height: 1.35;
-}
-
-.qs-cred-card h5{
-	font-size: 0.95rem;
-	font-weight: 800;
-	color: var(--text-main);
-	margin: 0;
-	display: flex;
-	align-items: center;
-	gap: 8px;
 }
 
 .qs-cred-note{
-	font-size: 0.8rem;
+	font-size: 0.82rem;
 	margin: 0;
 	color: var(--text-secondary);
 	line-height: 1.55;
 }
 
-#quickStartModal .qs-cred-card .btn{
+#quickStartModal .qs-cred-panel .btn{
 	align-self: flex-start;
 	border-radius: var(--radius-md);
 	font-weight: 700;
@@ -34943,18 +34975,18 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-#quickStartModal .qs-cred-card .btn:hover{
+#quickStartModal .qs-cred-panel .btn:hover{
 	transform: translateY(-1px);
 	box-shadow: var(--shadow-md);
 }
 
-.qs-cred-card small{
+.qs-cred-panel small{
 	font-size: 0.75rem;
 	color: var(--text-muted);
 	line-height: 1.5;
 }
 
-#quickStartModal .qs-cred-card .qs-field label{
+#quickStartModal .qs-cred-panel .qs-field label{
 	text-transform: none;
 	letter-spacing: 0;
 	font-size: 0.8rem;
@@ -35173,7 +35205,8 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 		display: none;
 	}
 
-	.qs-subtabs{
+	.qs-subtabs,
+	.qs-cred-subtabs{
 		grid-template-columns: 1fr;
 	}
 
@@ -35187,8 +35220,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover{
 	}
 
 	/* Security step stacks its 2-col grids on phones. */
-	.qs-form-grid,
-	.qs-cred-grid{
+	.qs-form-grid{
 		grid-template-columns: 1fr;
 	}
 
