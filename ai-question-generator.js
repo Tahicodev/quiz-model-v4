@@ -1,7 +1,7 @@
 /**
  * AI Question Generator Module
  * Professional multi-provider AI integration for quiz question generation
- * 
+ *
  * Features:
  * - Multi-provider support (OpenRouter, Anthropic, OpenAI, Google AI)
  * - Exponential backoff rate limiting
@@ -26,31 +26,47 @@ const AI_PROVIDERS = {
 				// Free OpenRouter models — auto-refreshed live via the API when a
 				// key is present; these are fallbacks for offline/no-key use.
 				{ id: 'google/gemini-2.5-flash:free', name: 'Gemini 2.5 Flash (Free)' },
-				{ id: 'meta-llama/llama-3.3-70b-instruct:free', name: 'Llama 3.3 70B Instruct (Free)' },
-				{ id: 'deepseek/deepseek-chat-v3-0324:free', name: 'DeepSeek V3 (Free)' },
+				{
+					id: 'meta-llama/llama-3.3-70b-instruct:free',
+					name: 'Llama 3.3 70B Instruct (Free)',
+				},
+				{
+					id: 'deepseek/deepseek-chat-v3-0324:free',
+					name: 'DeepSeek V3 (Free)',
+				},
 				{ id: 'qwen/qwen3-coder:free', name: 'Qwen 3 Coder (Free)' },
-				{ id: 'mistralai/mistral-small-3.2-24b-instruct:free', name: 'Mistral Small 3.2 (Free)' }
+				{
+					id: 'mistralai/mistral-small-3.2-24b-instruct:free',
+					name: 'Mistral Small 3.2 (Free)',
+				},
 			],
 			premium: [
-				{ id: 'anthropic/claude-sonnet-4.5', name: 'Claude Sonnet 4.5 (Best JSON)' },
+				{
+					id: 'anthropic/claude-sonnet-4.5',
+					name: 'Claude Sonnet 4.5 (Best JSON)',
+				},
 				{ id: 'openai/gpt-5.2', name: 'GPT-5.2' },
 				{ id: 'openai/gpt-5-mini', name: 'GPT-5 Mini (Cheap + Reliable)' },
 				{ id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
 				{ id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (Fast)' },
-				{ id: 'deepseek/deepseek-chat-v3.1', name: 'DeepSeek V3.1 (Very Cheap)' }
-			]
+				{
+					id: 'deepseek/deepseek-chat-v3.1',
+					name: 'DeepSeek V3.1 (Very Cheap)',
+				},
+			],
 		},
 		headers: (apiKey) => {
-			const origin = window.location.origin && window.location.origin !== 'null' 
-				? window.location.origin 
-				: 'http://localhost:3000';
+			const origin =
+				window.location.origin && window.location.origin !== 'null'
+					? window.location.origin
+					: 'http://localhost:3000';
 			return {
-				'Authorization': `Bearer ${apiKey}`,
+				Authorization: `Bearer ${apiKey}`,
 				'Content-Type': 'application/json',
 				'HTTP-Referer': origin,
-				'X-Title': 'Quiz Admin Generator'
+				'X-Title': 'Quiz Admin Generator',
 			};
-		}
+		},
 	},
 	anthropic: {
 		name: 'Anthropic',
@@ -60,14 +76,17 @@ const AI_PROVIDERS = {
 			premium: [
 				{ id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5 (Recommended)' },
 				{ id: 'claude-opus-4-1', name: 'Claude Opus 4.1 (Most Capable)' },
-				{ id: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku (Fast + Cheap)' }
-			]
+				{
+					id: 'claude-3-5-haiku-latest',
+					name: 'Claude 3.5 Haiku (Fast + Cheap)',
+				},
+			],
 		},
 		headers: (apiKey) => ({
 			'x-api-key': apiKey,
 			'Content-Type': 'application/json',
-			'anthropic-version': '2023-06-01'
-		})
+			'anthropic-version': '2023-06-01',
+		}),
 	},
 	openai: {
 		name: 'OpenAI',
@@ -79,13 +98,13 @@ const AI_PROVIDERS = {
 				{ id: 'gpt-5.2', name: 'GPT-5.2 (Recommended)' },
 				{ id: 'gpt-5.1', name: 'GPT-5.1' },
 				{ id: 'gpt-5-mini', name: 'GPT-5 Mini (Cheap + Reliable)' },
-				{ id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini (Cheap)' }
-			]
+				{ id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini (Cheap)' },
+			],
 		},
 		headers: (apiKey) => ({
-			'Authorization': `Bearer ${apiKey}`,
-			'Content-Type': 'application/json'
-		})
+			Authorization: `Bearer ${apiKey}`,
+			'Content-Type': 'application/json',
+		}),
 	},
 	google: {
 		name: 'Google AI (Gemini)',
@@ -95,19 +114,25 @@ const AI_PROVIDERS = {
 		models: {
 			free: [
 				// Gemini API has a generous free tier — see AI Studio for limits
-				{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Free Tier — Recommended)' },
-				{ id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite (Free Tier — Fastest)' },
-				{ id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Free Tier)' }
+				{
+					id: 'gemini-2.5-flash',
+					name: 'Gemini 2.5 Flash (Free Tier — Recommended)',
+				},
+				{
+					id: 'gemini-2.5-flash-lite',
+					name: 'Gemini 2.5 Flash-Lite (Free Tier — Fastest)',
+				},
+				{ id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Free Tier)' },
 			],
 			premium: [
 				{ id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview' },
 				{ id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' },
-				{ id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' }
-			]
+				{ id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+			],
 		},
 		headers: (apiKey) => ({
-			'Content-Type': 'application/json'
-		})
+			'Content-Type': 'application/json',
+		}),
 	},
 	deepseek: {
 		name: 'DeepSeek',
@@ -117,15 +142,18 @@ const AI_PROVIDERS = {
 			free: [
 				// DeepSeek's API is among the cheapest paid APIs — no free tier,
 				// but a small credit lasts a long time for question generation.
-				{ id: 'deepseek-chat', name: 'DeepSeek V3.2 (Very Cheap — Recommended)' },
-				{ id: 'deepseek-reasoner', name: 'DeepSeek R1 (Reasoner)' }
+				{
+					id: 'deepseek-chat',
+					name: 'DeepSeek V3.2 (Very Cheap — Recommended)',
+				},
+				{ id: 'deepseek-reasoner', name: 'DeepSeek R1 (Reasoner)' },
 			],
-			premium: []
+			premium: [],
 		},
 		headers: (apiKey) => ({
-			'Authorization': `Bearer ${apiKey}`,
-			'Content-Type': 'application/json'
-		})
+			Authorization: `Bearer ${apiKey}`,
+			'Content-Type': 'application/json',
+		}),
 	},
 	custom: {
 		// Any OpenAI-compatible endpoint works: Ollama, LM Studio, vLLM,
@@ -139,18 +167,21 @@ const AI_PROVIDERS = {
 			free: [
 				{ id: 'llama3.1:8b', name: 'Llama 3.1 8B (Ollama)' },
 				{ id: 'qwen2.5:7b', name: 'Qwen 2.5 7B (Ollama)' },
-				{ id: 'qwen2.5-coder:7b', name: 'Qwen 2.5 Coder 7B (Ollama — code questions)' },
+				{
+					id: 'qwen2.5-coder:7b',
+					name: 'Qwen 2.5 Coder 7B (Ollama — code questions)',
+				},
 				{ id: 'mistral', name: 'Mistral (Ollama)' },
-				{ id: 'deepseek-r1:8b', name: 'DeepSeek R1 8B (Ollama)' }
+				{ id: 'deepseek-r1:8b', name: 'DeepSeek R1 8B (Ollama)' },
 			],
-			premium: []
+			premium: [],
 		},
 		headers: (apiKey) => {
 			const headers = { 'Content-Type': 'application/json' };
 			if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 			return headers;
-		}
-	}
+		},
+	},
 };
 
 // ============================================
@@ -165,7 +196,7 @@ const DEFAULT_AI_CONFIG = {
 		openai: '',
 		google: '',
 		deepseek: '',
-		custom: ''
+		custom: '',
 	},
 	model: 'google/gemini-2.5-flash:free', // Current-gen free model with strong JSON adherence
 	customModel: '',
@@ -177,7 +208,7 @@ const DEFAULT_AI_CONFIG = {
 	presencePenalty: 0.3,
 	cooldownSeconds: 10,
 	timeoutSeconds: 120, // Increased timeout for longer responses
-	debugMode: true // Enable debug by default for now
+	debugMode: true, // Enable debug by default for now
 };
 
 const AI_GENERATOR_CODE_MODES = [
@@ -277,7 +308,10 @@ function normalizeAICodeAnswerMode(rawMode, fallback = 'multiple-choice') {
 		? fallback
 		: 'multiple-choice';
 	const key = normalizeAIKey(rawMode);
-	if (!key || ['undefined', 'null', 'none', 'na', 'nan', 'code'].includes(key)) {
+	if (
+		!key ||
+		['undefined', 'null', 'none', 'na', 'nan', 'code'].includes(key)
+	) {
 		return fallbackMode;
 	}
 
@@ -286,7 +320,11 @@ function normalizeAICodeAnswerMode(rawMode, fallback = 'multiple-choice') {
 	if (key.includes('choice')) return 'multiple-choice';
 	if (key.includes('blank')) return 'fill-blank';
 	if (key.includes('odd')) return 'odd-one-out';
-	if (key.includes('drag') || key.includes('order') || key.includes('sequence')) {
+	if (
+		key.includes('drag') ||
+		key.includes('order') ||
+		key.includes('sequence')
+	) {
 		return 'draggable';
 	}
 	if (key.includes('match') || key.includes('pair')) return 'matching-pairs';
@@ -296,7 +334,9 @@ function normalizeAICodeAnswerMode(rawMode, fallback = 'multiple-choice') {
 
 function getAIOptionText(entry) {
 	if (entry && typeof entry === 'object') {
-		return String(entry.text || entry.label || entry.value || entry.answer || '').trim();
+		return String(
+			entry.text || entry.label || entry.value || entry.answer || '',
+		).trim();
 	}
 	return String(entry || '').trim();
 }
@@ -309,11 +349,12 @@ class AIQuestionGenerator {
 		this.isGenerating = false;
 		this.cooldownEndTime = 0;
 		this.abortController = null;
-		
+
 		// Ensure valid referer for OpenRouter
-		this.siteUrl = window.location.origin && window.location.origin !== 'null' 
-			? window.location.origin 
-			: 'http://localhost:3000';
+		this.siteUrl =
+			window.location.origin && window.location.origin !== 'null'
+				? window.location.origin
+				: 'http://localhost:3000';
 		this.siteName = 'Quiz Admin Generator';
 	}
 
@@ -371,7 +412,9 @@ class AIQuestionGenerator {
 	async fetchAvailableModels() {
 		const provider = this.getProviderConfig();
 		if (!provider || !provider.modelsUrl) {
-			console.log('Provider does not support dynamic model fetching or URL not set');
+			console.log(
+				'Provider does not support dynamic model fetching or URL not set',
+			);
 			return this.getAvailableModels(); // Fallback to static list
 		}
 
@@ -425,8 +468,14 @@ class AIQuestionGenerator {
 							success = true;
 						}
 					} catch (e) {
-						if (/failed to fetch|network|err_name_not_resolved|load failed/i.test(String(e?.message || ''))) {
-							this.log(`Google AI model discovery unavailable (${ver}); using cached models.`);
+						if (
+							/failed to fetch|network|err_name_not_resolved|load failed/i.test(
+								String(e?.message || ''),
+							)
+						) {
+							this.log(
+								`Google AI model discovery unavailable (${ver}); using cached models.`,
+							);
 						} else {
 							console.warn(`Fetch models failed for Google AI ${ver}:`, e);
 						}
@@ -455,28 +504,29 @@ class AIQuestionGenerator {
 			const headers = provider.headers(apiKey);
 			const response = await fetch(provider.modelsUrl, {
 				method: 'GET',
-				headers: headers
+				headers: headers,
 			});
 
-			if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-			
+			if (!response.ok)
+				throw new Error(`HTTP error! status: ${response.status}`);
+
 			const data = await response.json();
 			let fetchedModels = [];
 
 			if (this.config.provider === 'openrouter') {
-				fetchedModels = data.data.map(m => ({
+				fetchedModels = data.data.map((m) => ({
 					id: m.id,
 					name: m.name || m.id,
 					isFree: m.id.endsWith(':free'),
-					pricing: m.pricing
+					pricing: m.pricing,
 				}));
 			} else if (this.config.provider === 'openai') {
 				fetchedModels = data.data
-					.filter(m => m.id.includes('gpt'))
-					.map(m => ({
+					.filter((m) => m.id.includes('gpt'))
+					.map((m) => ({
 						id: m.id,
 						name: m.id,
-						isFree: false
+						isFree: false,
 					}));
 			}
 
@@ -495,10 +545,14 @@ class AIQuestionGenerator {
 		if (!provider) return [];
 		const allModels = [];
 		if (provider.models.free) {
-			allModels.push(...provider.models.free.map(m => ({ ...m, tier: 'free' })));
+			allModels.push(
+				...provider.models.free.map((m) => ({ ...m, tier: 'free' })),
+			);
 		}
 		if (provider.models.premium) {
-			allModels.push(...provider.models.premium.map(m => ({ ...m, tier: 'premium' })));
+			allModels.push(
+				...provider.models.premium.map((m) => ({ ...m, tier: 'premium' })),
+			);
 		}
 		return allModels;
 	}
@@ -516,18 +570,18 @@ class AIQuestionGenerator {
 
 	// Start cooldown period
 	startCooldown() {
-		this.cooldownEndTime = Date.now() + (this.config.cooldownSeconds * 1000);
+		this.cooldownEndTime = Date.now() + this.config.cooldownSeconds * 1000;
 	}
 
 	// Sleep utility
 	sleep(ms) {
-		return new Promise(resolve => setTimeout(resolve, ms));
+		return new Promise((resolve) => setTimeout(resolve, ms));
 	}
 
 	// Exponential backoff retry wrapper
 	async executeWithRetry(fn, maxRetries = 3, baseDelay = 2000) {
 		let lastError;
-		
+
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			try {
 				return await fn();
@@ -545,37 +599,51 @@ class AIQuestionGenerator {
 						String(error?.message || ''),
 					);
 				if (isNetworkError) throw error;
-				
+
 				// Check if rate limited (429) or server error (5xx)
 				const isRateLimit = error.status === 429;
 				const isServerErr = error.status >= 500 && error.status < 600;
-				
+
 				// Don't retry if it's a client error (400-403) or known refusal
-				if (!isRateLimit && !isServerErr && error.status && error.status < 500) {
+				if (
+					!isRateLimit &&
+					!isServerErr &&
+					error.status &&
+					error.status < 500
+				) {
 					throw error;
 				}
-				
+
 				if (attempt === maxRetries) {
-					console.warn(`Max retries (${maxRetries}) reached. Last error:`, error);
+					console.warn(
+						`Max retries (${maxRetries}) reached. Last error:`,
+						error,
+					);
 					break;
 				}
-				
+
 				// Calculate delay: longer for rate limits
 				let delay = baseDelay * Math.pow(2, attempt) + Math.random() * 500;
 				if (isRateLimit) {
 					delay *= 2; // Double delay for rate limits
-					this.log(`Rate limit hit (429). Waiting ${Math.round(delay/1000)}s before retry ${attempt + 1}...`);
+					this.log(
+						`Rate limit hit (429). Waiting ${Math.round(delay / 1000)}s before retry ${attempt + 1}...`,
+					);
 				} else {
-					this.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms`);
+					this.log(
+						`Retry attempt ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms`,
+					);
 				}
-				
+
 				await this.sleep(delay);
 			}
 		}
-		
+
 		// If we're here, we failed all retries
 		if (lastError.status === 429) {
-			throw new Error('Rate limit exceeded. Please try a different model or wait a moment.');
+			throw new Error(
+				'Rate limit exceeded. Please try a different model or wait a moment.',
+			);
 		}
 		throw lastError;
 	}
@@ -588,9 +656,10 @@ class AIQuestionGenerator {
 	buildOfflineFallbackQuestions(options = {}) {
 		const topic = String(options.topic || 'this topic').trim() || 'this topic';
 		const requested = this.getRequestedCount(options) || 1;
-		const counts = options.typeCounts && typeof options.typeCounts === 'object'
-			? options.typeCounts
-			: { 'multiple-choice': requested };
+		const counts =
+			options.typeCounts && typeof options.typeCounts === 'object'
+				? options.typeCounts
+				: { 'multiple-choice': requested };
 		const types = Object.entries(counts).flatMap(([type, count]) =>
 			Array.from({ length: Math.max(0, Number(count) || 0) }, () => type),
 		);
@@ -599,23 +668,37 @@ class AIQuestionGenerator {
 		const templates = {
 			'multiple-choice': (index) => ({
 				question: `Which statement is a useful starting point when studying ${safeTopic}?`,
-				options: [`Define the key terms in ${safeTopic}`, 'Skip the examples', 'Ignore the context', 'Use unrelated facts'],
+				options: [
+					`Define the key terms in ${safeTopic}`,
+					'Skip the examples',
+					'Ignore the context',
+					'Use unrelated facts',
+				],
 				answer: `Define the key terms in ${safeTopic}`,
-				explanation: 'Start with the vocabulary and core ideas before moving to advanced applications.',
+				explanation:
+					'Start with the vocabulary and core ideas before moving to advanced applications.',
 			}),
 			'true-false': () => ({
 				question: `A clear definition helps explain ${safeTopic}.`,
-				options: ['True', 'False'], answer: 'True',
+				options: ['True', 'False'],
+				answer: 'True',
 				explanation: 'Definitions give learners a shared reference point.',
 			}),
 			'fill-blank': () => ({
 				question: `A good revision plan for ${safeTopic} starts by reviewing the ___ concepts.`,
-				options: ['core', 'random', 'unrelated', 'hidden'], answer: 'core',
-				explanation: 'Core concepts provide the foundation for later questions.',
+				options: ['core', 'random', 'unrelated', 'hidden'],
+				answer: 'core',
+				explanation:
+					'Core concepts provide the foundation for later questions.',
 			}),
 			'odd-one-out': () => ({
 				question: `Choose the item that does not belong with ${safeTopic}.`,
-				options: [`A key idea in ${safeTopic}`, `An example of ${safeTopic}`, 'A definition', 'A random unrelated fact'],
+				options: [
+					`A key idea in ${safeTopic}`,
+					`An example of ${safeTopic}`,
+					'A definition',
+					'A random unrelated fact',
+				],
 				answer: 'A random unrelated fact',
 				explanation: 'The unrelated fact is the only item outside the topic.',
 			}),
@@ -623,28 +706,43 @@ class AIQuestionGenerator {
 				question: `Put these study steps for ${safeTopic} in the best order.`,
 				options: ['Review examples', 'Learn definitions', 'Apply the idea'],
 				answer: 'Learn definitions,Review examples,Apply the idea',
-				explanation: 'Learn the terms, inspect examples, then apply the concept.',
+				explanation:
+					'Learn the terms, inspect examples, then apply the concept.',
 				isDraggable: true,
 			}),
 			'matching-pairs': () => ({
 				question: `Match each learning action for ${safeTopic} with its purpose.`,
-				options: ['Define-->Build a shared vocabulary', 'Practice-->Strengthen recall', 'Apply-->Use the idea in context'],
-				answer: 'Define-->Build a shared vocabulary|Practice-->Strengthen recall|Apply-->Use the idea in context',
+				options: [
+					'Define-->Build a shared vocabulary',
+					'Practice-->Strengthen recall',
+					'Apply-->Use the idea in context',
+				],
+				answer:
+					'Define-->Build a shared vocabulary|Practice-->Strengthen recall|Apply-->Use the idea in context',
 				explanation: 'Each action supports a different part of learning.',
 			}),
 			code: () => ({
 				question: `What is the safest first step when writing code related to ${safeTopic}?`,
-				options: ['Clarify the input and expected output', 'Delete all tests', 'Ignore edge cases', 'Copy code blindly'],
+				options: [
+					'Clarify the input and expected output',
+					'Delete all tests',
+					'Ignore edge cases',
+					'Copy code blindly',
+				],
 				answer: 'Clarify the input and expected output',
-				explanation: 'A precise contract makes implementation and testing reliable.',
-				codeSnippet: '// Add the implementation here', codeLanguage: 'javascript', codeAnswerMode: 'multiple-choice',
+				explanation:
+					'A precise contract makes implementation and testing reliable.',
+				codeSnippet: '// Add the implementation here',
+				codeLanguage: 'javascript',
+				codeAnswerMode: 'multiple-choice',
 			}),
 		};
 		return types.slice(0, requested).map((type, index) => {
 			const canonical = normalizeAIQuestionType(type);
 			const template = templates[canonical] || templates['multiple-choice'];
 			const question = this.normalizeQuestion(template(index), index);
-			if (index > 0) question.question = `${question.question} (Practice ${index + 1})`;
+			if (index > 0)
+				question.question = `${question.question} (Practice ${index + 1})`;
 			question.offlineFallback = true;
 			question.aiGenerated = true;
 			return question;
@@ -655,7 +753,7 @@ class AIQuestionGenerator {
 	async testConnection() {
 		const provider = this.getProviderConfig();
 		const apiKey = this.config.apiKeys[this.config.provider];
-		
+
 		if (!apiKey) {
 			throw new Error('API key not configured');
 		}
@@ -666,9 +764,9 @@ class AIQuestionGenerator {
 			// Send a minimal request to verify API key
 			const response = await this.makeAPIRequest({
 				messages: [{ role: 'user', content: 'Say "OK"' }],
-				maxTokens: 10
+				maxTokens: 10,
 			});
-			
+
 			this.log('Connection test successful');
 			return { success: true, message: `Connected to ${provider.name}` };
 		} catch (error) {
@@ -690,9 +788,12 @@ class AIQuestionGenerator {
 
 		// Create abort controller for timeout
 		this.abortController = new AbortController();
-		const timeoutId = setTimeout(() => {
-			if (this.abortController) this.abortController.abort();
-		}, (options.timeoutSeconds || this.config.timeoutSeconds) * 1000);
+		const timeoutId = setTimeout(
+			() => {
+				if (this.abortController) this.abortController.abort();
+			},
+			(options.timeoutSeconds || this.config.timeoutSeconds) * 1000,
+		);
 
 		try {
 			let url = provider.baseUrl;
@@ -703,47 +804,58 @@ class AIQuestionGenerator {
 			if (this.config.provider === 'google') {
 				// Intelligent endpoint switching for Google AI
 				const model = this.config.model || 'gemini-1.5-flash';
-				const isBetaModel = model.includes('preview') || model.includes('exp') || model.includes('gemini-3') || model.includes('2.5');
+				const isBetaModel =
+					model.includes('preview') ||
+					model.includes('exp') ||
+					model.includes('gemini-3') ||
+					model.includes('2.5');
 				const apiVersion = isBetaModel ? 'v1beta' : 'v1';
-				
+
 				url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent?key=${apiKey}`;
-				
+
 				// Standardize messages to Google's content format
-				const userMsg = options.messages.find(m => m.role === 'user')?.content || '';
-				const systemMsg = options.messages.find(m => m.role === 'system')?.content || '';
+				const userMsg =
+					options.messages.find((m) => m.role === 'user')?.content || '';
+				const systemMsg =
+					options.messages.find((m) => m.role === 'system')?.content || '';
 				const fullPrompt = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
 
 				body = {
 					contents: [{ parts: [{ text: fullPrompt }] }],
 					generationConfig: {
 						temperature: options.temperature || this.config.temperature,
-						maxOutputTokens: options.maxTokens || this.config.maxTokens
-					}
+						maxOutputTokens: options.maxTokens || this.config.maxTokens,
+					},
 				};
 			} else if (this.config.provider === 'anthropic') {
 				url = provider.baseUrl;
-				const systemMsg = options.messages.find(m => m.role === 'system')?.content;
-				const userMessages = options.messages.filter(m => m.role !== 'system');
-				
+				const systemMsg = options.messages.find(
+					(m) => m.role === 'system',
+				)?.content;
+				const userMessages = options.messages.filter(
+					(m) => m.role !== 'system',
+				);
+
 				body = {
 					model: this.config.model,
 					max_tokens: options.maxTokens || this.config.maxTokens,
 					temperature: options.temperature || this.config.temperature,
-					messages: userMessages
+					messages: userMessages,
 				};
 				if (systemMsg) body.system = systemMsg;
 			} else {
 				// OpenRouter, OpenAI, DeepSeek, Custom (OpenAI-compatible)
-				url = (this.config.provider === 'custom' && this.config.customBaseUrl) 
-					? this.config.customBaseUrl 
-					: provider.baseUrl;
-				
+				url =
+					this.config.provider === 'custom' && this.config.customBaseUrl
+						? this.config.customBaseUrl
+						: provider.baseUrl;
+
 				body = {
 					model: this.config.model,
 					messages: options.messages,
 					temperature: options.temperature || this.config.temperature,
 					max_tokens: options.maxTokens || this.config.maxTokens,
-					top_p: options.topP || this.config.topP
+					top_p: options.topP || this.config.topP,
 				};
 
 				// Add extra params for specific providers if needed
@@ -758,7 +870,7 @@ class AIQuestionGenerator {
 				method: 'POST',
 				headers: headers,
 				body: JSON.stringify(body),
-				signal: this.abortController.signal
+				signal: this.abortController.signal,
 			});
 
 			clearTimeout(timeoutId);
@@ -771,10 +883,13 @@ class AIQuestionGenerator {
 				} catch (e) {
 					errorData = { error: { message: responseText } };
 				}
-				
-				const errorMessage = errorData.error?.message || errorData.message || `HTTP ${response.status} ${response.statusText}`;
+
+				const errorMessage =
+					errorData.error?.message ||
+					errorData.message ||
+					`HTTP ${response.status} ${response.statusText}`;
 				this.log('API Error Response:', errorData);
-				
+
 				const error = new Error(`${provider.name} Error: ${errorMessage}`);
 				error.status = response.status;
 				error.details = errorData;
@@ -782,7 +897,7 @@ class AIQuestionGenerator {
 			}
 
 			const data = await response.json();
-			
+
 			// Extract content based on provider
 			let content = '';
 			if (this.config.provider === 'google') {
@@ -800,13 +915,13 @@ class AIQuestionGenerator {
 		} catch (error) {
 			clearTimeout(timeoutId);
 			if (error.name === 'AbortError') {
-				throw new Error(`Request timed out after ${this.config.timeoutSeconds} seconds`);
+				throw new Error(
+					`Request timed out after ${this.config.timeoutSeconds} seconds`,
+				);
 			}
 			throw error;
 		}
 	}
-
-
 
 	// ============================================
 	// PROMPT BUILDER
@@ -827,7 +942,7 @@ class AIQuestionGenerator {
 			category = '',
 			codeTypeCounts = {},
 			language = 'fr',
-			extraInstruction = ''
+			extraInstruction = '',
 		} = options;
 
 		// Build per-type distribution instructions
@@ -839,7 +954,7 @@ class AIQuestionGenerator {
 				if (qty > 0) parts.push(`  - ${qty}x "${type}"`);
 			}
 			typeDistribution = `\nEXACT TYPE DISTRIBUTION (follow strictly):\n${parts.join('\n')}`;
-			
+
 			if (types.includes('code') && Object.keys(codeTypeCounts).length > 0) {
 				const codeParts = [];
 				for (const st of AI_GENERATOR_CODE_MODES) {
@@ -987,9 +1102,10 @@ class AIQuestionGenerator {
   - codeAnswerMode "matching-pairs": answer uses "Key1-->Value1|Key2-->Value2"; options contains all keys and values.`);
 		}
 
-		const langInstruction = language === 'fr'
-			? 'LANGUAGE: All question content, explanations, and options MUST be in professional, academic French.'
-			: 'LANGUAGE: All question content, explanations, and options should be in English.';
+		const langInstruction =
+			language === 'fr'
+				? 'LANGUAGE: All question content, explanations, and options MUST be in professional, academic French.'
+				: 'LANGUAGE: All question content, explanations, and options should be in English.';
 
 		return `CRITICAL: Generate EXACTLY ${count} quiz questions about "${topic}".
 All questions MUST be at the "${difficulty}" difficulty level.
@@ -1026,13 +1142,15 @@ STRICT JSON RULES:
 	// Parse AI response to extract questions
 	parseResponse(content) {
 		this.log('Parsing response length:', content.length);
-		
+
 		// 1. Initial cleanup
 		let jsonContent = content.trim();
-		
+
 		// 2. Remove markdown code blocks if present
-		jsonContent = jsonContent.replace(/```json\s*/gi, '').replace(/```\s*/g, '');
-		
+		jsonContent = jsonContent
+			.replace(/```json\s*/gi, '')
+			.replace(/```\s*/g, '');
+
 		// 3. Try to find the first [ and the last ] to extract just the array
 		// Look for the first [ that is likely the start of our array. Do not
 		// fall back to an options array inside a single question object.
@@ -1040,20 +1158,29 @@ STRICT JSON RULES:
 		const startsWithArray = jsonContent.trimStart().startsWith('[');
 		const firstBracket = arrayMatch
 			? arrayMatch.index
-			: (startsWithArray ? jsonContent.indexOf('[') : -1);
+			: startsWithArray
+				? jsonContent.indexOf('[')
+				: -1;
 		const lastBracket = jsonContent.lastIndexOf(']');
-		
-		if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+
+		if (
+			firstBracket !== -1 &&
+			lastBracket !== -1 &&
+			lastBracket > firstBracket
+		) {
 			jsonContent = jsonContent.substring(firstBracket, lastBracket + 1);
 		}
-		
+
 		// A. Remove comments (// or /* */) safely (ignoring strings/URLs)
 		// This regex matches strings first to skip them, then matches comments
-		jsonContent = jsonContent.replace(/("(?:\\"|[^"])*")|(\/\/.*|\/\*[\s\S]*?\*\/)/g, (m, str, comm) => comm ? "" : m);
+		jsonContent = jsonContent.replace(
+			/("(?:\\"|[^"])*")|(\/\/.*|\/\*[\s\S]*?\*\/)/g,
+			(m, str, comm) => (comm ? '' : m),
+		);
 
 		// B. Fix missing commas between objects: } {  ->  }, {
 		jsonContent = jsonContent.replace(/\}\s*\{/g, '}, {');
-		
+
 		// C. Fix trailing commas in arrays/objects: [1, 2,] -> [1, 2]
 		jsonContent = jsonContent.replace(/,\s*(?=[\]\}])/g, '');
 
@@ -1065,10 +1192,10 @@ STRICT JSON RULES:
 		let inString = false;
 		let expectingProperty = false;
 		let contextStack = []; // Stack to track { or [
-		
+
 		for (let i = 0; i < jsonContent.length; i++) {
 			let char = jsonContent[i];
-			
+
 			// Track structure to know if we expect a property or value
 			if (!inString) {
 				if (char === '{') {
@@ -1080,19 +1207,19 @@ STRICT JSON RULES:
 				} else if (char === '}') {
 					contextStack.pop();
 					// If we are back in an object, the comma after this will set it to true
-					expectingProperty = false; 
+					expectingProperty = false;
 				} else if (char === ']') {
 					contextStack.pop();
 					expectingProperty = false;
 				} else if (char === ',') {
 					// In object, comma precedes property name. In array, it precedes value.
-					expectingProperty = (contextStack[contextStack.length - 1] === '{');
+					expectingProperty = contextStack[contextStack.length - 1] === '{';
 				} else if (char === ':') {
 					expectingProperty = false;
 				}
 			}
-			
-			if (char === '"' && jsonContent[i-1] !== '\\') {
+
+			if (char === '"' && jsonContent[i - 1] !== '\\') {
 				if (!inString) {
 					inString = true;
 					repaired += char;
@@ -1101,18 +1228,20 @@ STRICT JSON RULES:
 					let isTerminal = false;
 					for (let j = i + 1; j < jsonContent.length; j++) {
 						const next = jsonContent[j];
-						if (next === ' ' || next === '\t' || next === '\n' || next === '\r') continue;
-						
+						if (next === ' ' || next === '\t' || next === '\n' || next === '\r')
+							continue;
+
 						if (expectingProperty) {
 							// Property names must be followed by ':'
 							if (next === ':') isTerminal = true;
 						} else {
 							// Values must be followed by ',' or '}' or ']'
-							if (next === ',' || next === '}' || next === ']') isTerminal = true;
+							if (next === ',' || next === '}' || next === ']')
+								isTerminal = true;
 						}
 						break;
 					}
-					
+
 					if (isTerminal) {
 						inString = false;
 						repaired += char;
@@ -1127,7 +1256,7 @@ STRICT JSON RULES:
 				repaired += char;
 			}
 		}
-		
+
 		if (inString) repaired += '"';
 		jsonContent = repaired;
 
@@ -1136,7 +1265,7 @@ STRICT JSON RULES:
 		let closedBrackets = (jsonContent.match(/\]/g) || []).length;
 		let openBraces = (jsonContent.match(/\{/g) || []).length;
 		let closedBraces = (jsonContent.match(/\}/g) || []).length;
-		
+
 		// If we are mid-object, try to close it and the array
 		if (openBraces > closedBraces) {
 			while (openBraces > closedBraces) {
@@ -1153,26 +1282,32 @@ STRICT JSON RULES:
 		// This must run AFTER balancing to catch commas created by truncation
 		jsonContent = this.repairCommonJSONIssues(jsonContent);
 		jsonContent = jsonContent.replace(/,\s*(?=[\]\}])/g, '');
-		
+
 		try {
 			const questions = JSON.parse(jsonContent);
-			
+
 			if (!Array.isArray(questions)) {
 				// If AI returned an object containing the array (e.g. { "questions": [...] })
 				if (typeof questions === 'object' && questions !== null) {
-					const possibleArray = questions.questions || questions.data || questions.items || Object.values(questions).find(val => Array.isArray(val));
+					const possibleArray =
+						questions.questions ||
+						questions.data ||
+						questions.items ||
+						Object.values(questions).find((val) => Array.isArray(val));
 					if (Array.isArray(possibleArray)) {
 						this.log('Extracted array from wrapper object');
-						return possibleArray.map((q, i) => this.normalizeQuestion(q, i)).filter(Boolean);
+						return possibleArray
+							.map((q, i) => this.normalizeQuestion(q, i))
+							.filter(Boolean);
 					}
-					
+
 					// If just a single object, wrap it
 					this.log('AI returned single object instead of array, wrapping...');
 					return [this.normalizeQuestion(questions, 0)];
 				}
 				throw new Error('Response is not an array');
 			}
-			
+
 			// Validate and normalize each question
 			return questions
 				.map((q, index) => {
@@ -1186,22 +1321,27 @@ STRICT JSON RULES:
 				.filter(Boolean);
 		} catch (e) {
 			this.log('Initial parse error:', e.message);
-			
+
 			// RESCUE MODE: Try to extract all object-like structures independently
 			try {
 				this.log('Entering Rescue Mode: Extracting individual objects...');
 				for (const source of [jsonContent, content]) {
 					const extracted = this.extractJSONObjects(source);
 					if (extracted && extracted.length > 0) {
-						this.log(`Rescue successful: Extracted ${extracted.length} objects.`);
+						this.log(
+							`Rescue successful: Extracted ${extracted.length} objects.`,
+						);
 						// Filter for objects that look like questions
 						const questions = extracted
-							.filter(obj => obj && (obj.question || obj.text))
+							.filter((obj) => obj && (obj.question || obj.text))
 							.map((q, i) => {
 								try {
 									return this.normalizeQuestion(q, i);
 								} catch (normalErr) {
-									this.log(`Skipping rescued invalid question ${i}:`, normalErr.message);
+									this.log(
+										`Skipping rescued invalid question ${i}:`,
+										normalErr.message,
+									);
 									return null;
 								}
 							})
@@ -1214,7 +1354,10 @@ STRICT JSON RULES:
 				this.log('Rescue Mode failed:', rescueErr.message);
 			}
 
-			this.log('Cleaned content snippet:', jsonContent.substring(0, 200) + '...');
+			this.log(
+				'Cleaned content snippet:',
+				jsonContent.substring(0, 200) + '...',
+			);
 			throw new Error(`Failed to parse AI response: ${e.message}`);
 		}
 	}
@@ -1238,7 +1381,10 @@ STRICT JSON RULES:
 			// Missing comma between adjacent quoted array values.
 			.replace(/"\s+(?="[^"]+"\s*(?:[,}\]]))/g, '", ')
 			// Missing comma after numbers/booleans/null before a quoted array value.
-			.replace(/\b(true|false|null|-?\d+(?:\.\d+)?)\s+(?="[^"]+"\s*(?:[,}\]]))/g, '$1, ')
+			.replace(
+				/\b(true|false|null|-?\d+(?:\.\d+)?)\s+(?="[^"]+"\s*(?:[,}\]]))/g,
+				'$1, ',
+			)
 			// Trailing commas remain the most common final cleanup.
 			.replace(/,\s*(?=[\]\}])/g, '');
 
@@ -1254,23 +1400,24 @@ STRICT JSON RULES:
 		let braceCount = 0;
 		let startIdx = -1;
 		let inString = false;
-		
+
 		// Clean markdown blocks
 		let cleanText = this.repairCommonJSONIssues(
 			text.replace(/```json\s*/gi, '').replace(/```\s*/g, ''),
 		);
-		
+
 		for (let i = 0; i < cleanText.length; i++) {
 			const char = cleanText[i];
-			
+
 			// More robust quote tracking for Rescue Mode
-			if (char === '"' && cleanText[i-1] !== '\\') {
+			if (char === '"' && cleanText[i - 1] !== '\\') {
 				// If we think we're ending a string, check if it's actually followed by JSON delimiters
 				if (inString) {
 					let isActualEnd = false;
 					for (let j = i + 1; j < Math.min(i + 10, cleanText.length); j++) {
 						const next = cleanText[j];
-						if (next === ' ' || next === '\t' || next === '\n' || next === '\r') continue;
+						if (next === ' ' || next === '\t' || next === '\n' || next === '\r')
+							continue;
 						if (next === ':' || next === ',' || next === '}' || next === ']') {
 							isActualEnd = true;
 						}
@@ -1281,7 +1428,7 @@ STRICT JSON RULES:
 					inString = true;
 				}
 			}
-			
+
 			if (!inString) {
 				if (char === '{') {
 					if (braceCount === 0) startIdx = i;
@@ -1306,12 +1453,16 @@ STRICT JSON RULES:
 				}
 			}
 		}
-		
+
 		// If we found objects nested in a top-level object, the above might only find the top-level one.
 		// If we only found 1 object and it's large, check if it contains a questions array.
 		if (objects.length === 1) {
 			const obj = objects[0];
-			const possibleArray = obj.questions || obj.data || obj.items || Object.values(obj).find(val => Array.isArray(val));
+			const possibleArray =
+				obj.questions ||
+				obj.data ||
+				obj.items ||
+				Object.values(obj).find((val) => Array.isArray(val));
 			if (Array.isArray(possibleArray)) return possibleArray;
 		}
 
@@ -1322,13 +1473,13 @@ STRICT JSON RULES:
 	 * Aggressively attempt to repair a malformed JSON object string
 	 */
 	attemptManualRepair(jsonStr) {
-		if (!jsonStr) return "";
-		
+		if (!jsonStr) return '';
+
 		let repaired = this.repairCommonJSONIssues(jsonStr.trim());
-		
+
 		// 1. Remove trailing commas
 		repaired = repaired.replace(/,\s*(?=[\]\}])/g, '');
-		
+
 		// 2. Fix unescaped newlines in values
 		// We look for newlines that are not preceded by a quote and followed by a property name or closing brace
 		// Actually, simpler: just replace all raw newlines with \n if they are between quotes
@@ -1336,8 +1487,8 @@ STRICT JSON RULES:
 		let result = '';
 		for (let i = 0; i < repaired.length; i++) {
 			const char = repaired[i];
-			if (char === '"' && repaired[i-1] !== '\\') inString = !inString;
-			
+			if (char === '"' && repaired[i - 1] !== '\\') inString = !inString;
+
 			if (inString && (char === '\n' || char === '\r')) {
 				result += '\\n';
 			} else {
@@ -1353,27 +1504,28 @@ STRICT JSON RULES:
 		result = '';
 		for (let i = 0; i < repaired.length; i++) {
 			const char = repaired[i];
-			if (char === '"' && repaired[i-1] !== '\\') {
+			if (char === '"' && repaired[i - 1] !== '\\') {
 				// Potential structural quote. Check surroundings.
 				let isStructural = false;
-				
+
 				// Case A: Start of object or after comma (start of key)
 				const prev = repaired.substring(0, i).trim();
 				if (prev.endsWith('{') || prev.endsWith(',')) isStructural = true;
-				
+
 				// Case B: End of key (followed by :)
 				// Case C: End of value (followed by , or } or ])
 				if (!isStructural) {
 					for (let j = i + 1; j < Math.min(i + 15, repaired.length); j++) {
 						const next = repaired[j];
-						if (next === ' ' || next === '\t' || next === '\n' || next === '\r') continue;
+						if (next === ' ' || next === '\t' || next === '\n' || next === '\r')
+							continue;
 						if (next === ':' || next === ',' || next === '}' || next === ']') {
 							isStructural = true;
 						}
 						break;
 					}
 				}
-				
+
 				if (isStructural) {
 					inString = !inString;
 					result += char;
@@ -1393,12 +1545,12 @@ STRICT JSON RULES:
 	// Normalize question to match application format
 	normalizeQuestion(rawQuestion, index) {
 		const q = { ...rawQuestion };
-		
+
 		// Ensure required fields
 		if (!q.question) {
 			throw new Error(`Question ${index + 1} missing question text`);
 		}
-		
+
 		// Set defaults based on type
 		const rawTypeValue = q.type || q.questionType || '';
 		const rawType = normalizeAIKey(rawTypeValue);
@@ -1411,9 +1563,7 @@ STRICT JSON RULES:
 			);
 		}
 		q.options = Array.isArray(q.options)
-			? q.options
-					.map((entry) => getAIOptionText(entry))
-					.filter(Boolean)
+			? q.options.map((entry) => getAIOptionText(entry)).filter(Boolean)
 			: [];
 		q.answer = q.answer || '';
 		q.explanation = q.explanation || '';
@@ -1457,9 +1607,7 @@ STRICT JSON RULES:
 
 			return token;
 		};
-		const effectiveAnswerType = q.type === 'code'
-			? q.codeAnswerMode
-			: q.type;
+		const effectiveAnswerType = q.type === 'code' ? q.codeAnswerMode : q.type;
 		if (
 			(effectiveAnswerType === 'multiple-choice' ||
 				effectiveAnswerType === 'odd-one-out' ||
@@ -1497,7 +1645,7 @@ STRICT JSON RULES:
 				q.allowMultipleAnswers = true;
 			}
 		}
-		
+
 		// Type-specific normalization
 		switch (q.type) {
 			case 'draggable':
@@ -1514,9 +1662,14 @@ STRICT JSON RULES:
 				// order. Models sometimes return a bare word ("word") or a
 				// word list ("w1,w2") — renumber them so training/games
 				// grading (which parses "id:value" pairs) can match them.
-				const blankCount = (String(q.question || '').match(/_{3,}/g) || []).length;
+				const blankCount = (String(q.question || '').match(/_{3,}/g) || [])
+					.length;
 				const answerStr = String(q.answer || '').trim();
-				if (answerStr && !answerStr.includes('|') && !/^\d+\s*:/.test(answerStr)) {
+				if (
+					answerStr &&
+					!answerStr.includes('|') &&
+					!/^\d+\s*:/.test(answerStr)
+				) {
 					const answerWords = answerStr
 						.split(',')
 						.map((token) => token.trim())
@@ -1552,22 +1705,25 @@ STRICT JSON RULES:
 			number: '',
 		}));
 		q.questionType = q.type;
-		
+
 		// Generate unique ID
 		q.id = this.generateUUID();
 		q.dateCreated = new Date().toISOString();
 		q.aiGenerated = true;
-		
+
 		return q;
 	}
 
 	// Generate UUID
 	generateUUID() {
-		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-			const r = Math.random() * 16 | 0;
-			const v = c === 'x' ? r : (r & 0x3 | 0x8);
-			return v.toString(16);
-		});
+		return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+			/[xy]/g,
+			function (c) {
+				const r = (Math.random() * 16) | 0;
+				const v = c === 'x' ? r : (r & 0x3) | 0x8;
+				return v.toString(16);
+			},
+		);
 	}
 
 	getRequestedCount(options = {}) {
@@ -1593,8 +1749,8 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 						role: 'system',
 						content: this.getGenerationSystemPrompt(options),
 					},
-					{ role: 'user', content: prompt }
-				]
+					{ role: 'user', content: prompt },
+				],
 			});
 		});
 
@@ -1633,7 +1789,9 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 
 	isTrueFalseQuestion(question = {}) {
 		const options = Array.isArray(question.options) ? question.options : [];
-		const normalizedOptions = new Set(options.map((option) => normalizeAIKey(option)));
+		const normalizedOptions = new Set(
+			options.map((option) => normalizeAIKey(option)),
+		);
 		return (
 			(normalizedOptions.has('vrai') && normalizedOptions.has('faux')) ||
 			(normalizedOptions.has('true') && normalizedOptions.has('false'))
@@ -1641,7 +1799,8 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 	}
 
 	getQuestionTypeDistributionKey(question = {}, remainingCounts = {}) {
-		const hasRemaining = (key) => (Number.parseInt(remainingCounts[key], 10) || 0) > 0;
+		const hasRemaining = (key) =>
+			(Number.parseInt(remainingCounts[key], 10) || 0) > 0;
 		const normalizedType = normalizeAIQuestionType(
 			question.type || question.questionType,
 			question,
@@ -1652,7 +1811,10 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 		}
 
 		if (normalizedType === 'multiple-choice') {
-			if (question.allowMultipleAnswers && hasRemaining('multiple-choice-multi')) {
+			if (
+				question.allowMultipleAnswers &&
+				hasRemaining('multiple-choice-multi')
+			) {
 				return 'multiple-choice-multi';
 			}
 			if (this.isTrueFalseQuestion(question) && hasRemaining('true-false')) {
@@ -1665,12 +1827,14 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 
 		if (hasRemaining(normalizedType)) return normalizedType;
 
-		return Object.keys(remainingCounts).find((key) => {
-			return (
-				hasRemaining(key) &&
-				normalizeAIQuestionType(key, {}) === normalizedType
-			);
-		}) || '';
+		return (
+			Object.keys(remainingCounts).find((key) => {
+				return (
+					hasRemaining(key) &&
+					normalizeAIQuestionType(key, {}) === normalizedType
+				);
+			}) || ''
+		);
 	}
 
 	decrementFulfilledCodeMode(question = {}, remainingCodeTypeCounts = {}) {
@@ -1678,11 +1842,13 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 			question.codeAnswerMode,
 			'multiple-choice',
 		);
-		const targetMode = (Number.parseInt(remainingCodeTypeCounts[preferredMode], 10) || 0) > 0
-			? preferredMode
-			: AI_GENERATOR_CODE_MODES.find(
-				(mode) => (Number.parseInt(remainingCodeTypeCounts[mode], 10) || 0) > 0,
-			);
+		const targetMode =
+			(Number.parseInt(remainingCodeTypeCounts[preferredMode], 10) || 0) > 0
+				? preferredMode
+				: AI_GENERATOR_CODE_MODES.find(
+						(mode) =>
+							(Number.parseInt(remainingCodeTypeCounts[mode], 10) || 0) > 0,
+					);
 
 		if (targetMode) {
 			remainingCodeTypeCounts[targetMode] =
@@ -1701,7 +1867,9 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 		let total = Object.values(balanced).reduce((sum, value) => sum + value, 0);
 
 		while (total > targetTotal) {
-			const key = [...Object.keys(balanced)].reverse().find((entry) => balanced[entry] > 0);
+			const key = [...Object.keys(balanced)]
+				.reverse()
+				.find((entry) => balanced[entry] > 0);
 			if (!key) break;
 			balanced[key] -= 1;
 			if (balanced[key] <= 0) delete balanced[key];
@@ -1719,7 +1887,10 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 
 	getRemainingGenerationOptions(baseOptions, currentQuestions) {
 		const requestedCount = this.getRequestedCount(baseOptions);
-		const remainingCount = Math.max(0, requestedCount - currentQuestions.length);
+		const remainingCount = Math.max(
+			0,
+			requestedCount - currentQuestions.length,
+		);
 		if (remainingCount <= 0) return null;
 
 		const nextOptions = {
@@ -1745,10 +1916,14 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 			}
 
 			currentQuestions.forEach((question) => {
-				const typeKey = this.getQuestionTypeDistributionKey(question, remainingTypeCounts);
+				const typeKey = this.getQuestionTypeDistributionKey(
+					question,
+					remainingTypeCounts,
+				);
 				if (!typeKey) return;
 				remainingTypeCounts[typeKey] -= 1;
-				if (remainingTypeCounts[typeKey] <= 0) delete remainingTypeCounts[typeKey];
+				if (remainingTypeCounts[typeKey] <= 0)
+					delete remainingTypeCounts[typeKey];
 				if (typeKey === 'code') {
 					this.decrementFulfilledCodeMode(question, remainingCodeTypeCounts);
 				}
@@ -1764,7 +1939,8 @@ Do not stop until the task is 100% complete. $200 bonus for perfect adherence.`;
 			);
 			nextOptions.types = Object.keys(nextOptions.typeCounts);
 
-			const remainingCodeCount = Number.parseInt(nextOptions.typeCounts.code, 10) || 0;
+			const remainingCodeCount =
+				Number.parseInt(nextOptions.typeCounts.code, 10) || 0;
 			if (remainingCodeCount > 0) {
 				nextOptions.codeTypeCounts = this.balanceCountsToTotal(
 					remainingCodeTypeCounts,
@@ -1836,7 +2012,10 @@ Every key and every string value must use double quotes.`;
 
 	async fillMissingQuestions(options, initialQuestions) {
 		const requestedCount = this.getRequestedCount(options);
-		let questions = this.dedupeQuestionBatch([], initialQuestions).slice(0, requestedCount);
+		let questions = this.dedupeQuestionBatch([], initialQuestions).slice(
+			0,
+			requestedCount,
+		);
 		const maxTopUpAttempts = Math.min(Math.max(requestedCount, 2), 8);
 
 		for (
@@ -1844,7 +2023,10 @@ Every key and every string value must use double quotes.`;
 			questions.length < requestedCount && attempt <= maxTopUpAttempts;
 			attempt++
 		) {
-			const remainingOptions = this.getRemainingGenerationOptions(options, questions);
+			const remainingOptions = this.getRemainingGenerationOptions(
+				options,
+				questions,
+			);
 			if (!remainingOptions || remainingOptions.count <= 0) break;
 
 			remainingOptions.extraInstruction = this.buildTopUpInstruction(
@@ -1882,7 +2064,10 @@ Every key and every string value must use double quotes.`;
 					continue;
 				}
 			}
-			const uniqueQuestions = this.dedupeQuestionBatch(questions, topUpQuestions);
+			const uniqueQuestions = this.dedupeQuestionBatch(
+				questions,
+				topUpQuestions,
+			);
 			if (uniqueQuestions.length === 0) {
 				this.log(`Top-up attempt ${attempt} returned no unique questions.`);
 				continue;
@@ -1900,12 +2085,15 @@ Every key and every string value must use double quotes.`;
 			throw new Error('Generation already in progress');
 		}
 
-		this.log('Generation started with options:', JSON.stringify({
-			topic: options.topic,
-			count: options.count,
-			types: options.types,
-			codeTypeCounts: options.codeTypeCounts
-		}));
+		this.log(
+			'Generation started with options:',
+			JSON.stringify({
+				topic: options.topic,
+				count: options.count,
+				types: options.types,
+				codeTypeCounts: options.codeTypeCounts,
+			}),
+		);
 
 		if (this.isInCooldown()) {
 			throw new Error(`Please wait ${this.getCooldownRemaining()} seconds`);
@@ -1913,11 +2101,13 @@ Every key and every string value must use double quotes.`;
 
 		const apiKey = this.config.apiKeys[this.config.provider];
 		if (!apiKey) {
-			throw new Error(`Please configure your ${this.getProviderConfig().name} API key in Settings`);
+			throw new Error(
+				`Please configure your ${this.getProviderConfig().name} API key in Settings`,
+			);
 		}
 
 		this.isGenerating = true;
-		
+
 		try {
 			const requestedCount = this.getRequestedCount(options);
 			let questions;
@@ -1933,24 +2123,31 @@ Every key and every string value must use double quotes.`;
 					);
 				if (!isNetworkError) throw error;
 				this.lastGenerationMode = 'offline';
-				this.log('AI provider unavailable; using local starter questions.', error);
+				this.log(
+					'AI provider unavailable; using local starter questions.',
+					error,
+				);
 				questions = this.buildOfflineFallbackQuestions(options);
 			}
-			
+
 			// Safety: Filter and Slice to ensure exactly the requested count
 			if (questions.length > requestedCount) {
-				this.log(`AI over-generated (${questions.length} vs ${requestedCount}). Slicing array.`);
+				this.log(
+					`AI over-generated (${questions.length} vs ${requestedCount}). Slicing array.`,
+				);
 				questions = questions.slice(0, requestedCount);
 			} else if (questions.length < requestedCount) {
 				questions = await this.fillMissingQuestions(options, questions);
 			}
 
 			if (questions.length < requestedCount) {
-				this.log(`AI still under-generated (${questions.length} vs ${requestedCount}) after top-up attempts.`);
+				this.log(
+					`AI still under-generated (${questions.length} vs ${requestedCount}) after top-up attempts.`,
+				);
 			}
-			
+
 			// Post-processing: Ensure difficulty and category are set correctly
-			questions.forEach(q => {
+			questions.forEach((q) => {
 				q.difficulty = options.difficulty || q.difficulty || 'medium';
 				if (options.category) q.category = options.category;
 				q.aiGenerated = true;
@@ -1958,7 +2155,7 @@ Every key and every string value must use double quotes.`;
 
 			this.startCooldown();
 			this.log('Final questions produced:', questions.length);
-			
+
 			return questions;
 		} finally {
 			this.isGenerating = false;

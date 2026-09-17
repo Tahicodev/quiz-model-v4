@@ -540,12 +540,17 @@ function initializeDOM() {
 function showQuizInterface() {
 	const welcomePage = document.getElementById('welcome-page');
 	const quizContent = document.querySelector('.quiz-content');
+	const runtime = document.getElementById('quiz-container');
 
 	if (welcomePage) {
 		welcomePage.style.display = 'none';
 	}
 	if (quizContent) {
 		quizContent.style.display = 'block';
+	}
+	if (runtime?.classList.contains('exam-training-modal')) {
+		runtime.style.display = 'flex';
+		runtime.setAttribute('aria-hidden', 'false');
 	}
 
 	return Boolean(quizContent);
@@ -2539,8 +2544,22 @@ document.addEventListener('DOMContentLoaded', () => {
 				}
 			}
 		} else {
-			window.addEventListener('quiz:bootstrap-ready', () => window.location.reload(), { once: true });
-			console.warn('Exam ID not found in database:', examId);
+			const bootstrap = window.__legacyBridgeBootstrap;
+			if (typeof bootstrap === 'function') {
+				Promise.resolve(bootstrap())
+					.then(() => {
+						const refreshedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams') || [];
+						if (refreshedExams.some((entry) => String(entry.id) === String(examId))) {
+							window.location.reload();
+							return;
+						}
+						console.warn('Exam ID not found after bootstrap:', examId);
+					})
+					.catch(() => console.warn('Unable to refresh exam data for:', examId));
+			} else {
+				window.addEventListener('quiz:bootstrap-ready', () => window.location.reload(), { once: true });
+				console.warn('Exam ID not found in database:', examId);
+			}
 		}
 	}
 

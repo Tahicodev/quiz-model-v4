@@ -2,6 +2,7 @@
 	'use strict';
 
 	let refreshTimer = null;
+	let latestMetrics = null;
 
 	function escapeHtml(value) {
 		return String(value ?? '')
@@ -65,6 +66,38 @@
 			: '<tr><td colspan="3" class="empty-state-small">No recent server logs</td></tr>';
 	}
 
+	function csvCell(value) {
+		return `"${String(value ?? '').replace(/"/g, '""')}"`;
+	}
+
+	function exportMonitoringCsv() {
+		if (!latestMetrics) {
+			if (typeof showToast === 'function') showToast('Refresh monitoring data before exporting', 'error');
+			return;
+		}
+
+		const rows = [['Section', 'Method', 'Path', 'Calls', 'Errors', 'Average response', 'Level', 'Message', 'Count', 'Last seen', 'Time']];
+		(latestMetrics.apiCalls || []).forEach((item) => {
+			rows.push(['API endpoints', item.method, item.path, item.calls, item.errors, `${item.averageMs} ms`, '', '', '', '', '']);
+		});
+		(latestMetrics.repeatedLogs || []).forEach((item) => {
+			rows.push(['Repeated logs', '', '', '', '', '', item.level, item.message, item.count, formatTime(item.lastAt), '']);
+		});
+		(latestMetrics.recentLogs || []).forEach((item) => {
+			rows.push(['Recent logs', '', '', '', '', '', item.level, item.message, '', '', formatTime(item.at)]);
+		});
+
+		const csv = rows.map((row) => row.map(csvCell).join(',')).join('\n');
+		const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `server-monitoring-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.csv`;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
+
 	async function loadMonitoring() {
 		const select = document.getElementById('monitoringWindow');
 		if (!select || !window.API?.raw) return;
@@ -76,6 +109,7 @@
 				`/admin/metrics?minutes=${encodeURIComponent(select.value)}`,
 			);
 			const metrics = response?.data || {};
+			latestMetrics = metrics;
 			const summary = metrics.summary || {};
 			setText('monitoringApiCalls', formatNumber(summary.apiCalls));
 			setText('monitoringApiErrors', formatNumber(summary.apiErrors));
@@ -123,7 +157,9 @@
 	document.addEventListener('DOMContentLoaded', () => {
 		const refreshButton = document.getElementById('monitoringRefresh');
 		const select = document.getElementById('monitoringWindow');
+		const exportButton = document.getElementById('monitoringExport');
 		if (refreshButton) refreshButton.addEventListener('click', loadMonitoring);
 		if (select) select.addEventListener('change', loadMonitoring);
+		if (exportButton) exportButton.addEventListener('click', exportMonitoringCsv);
 	});
 })();

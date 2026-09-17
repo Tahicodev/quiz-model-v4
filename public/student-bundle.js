@@ -17074,11 +17074,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
     -->
     <div
-      class="quiz-container"
+      class="modal exam-training-modal"
       id="quiz-container"
       style="display: none"
       aria-hidden="true"
     >
+      <div class="modal-content training-modal-content">
+        <div class="modal-header training-modal-header">
+          <h3 id="examModalTitle">Exam</h3>
+          <div class="training-header-meta">
+            <span class="training-counter">Exam mode</span>
+          </div>
+        </div>
+
       <div class="welcome-page" id="welcome-page" style="display: none"></div>
 
       <div class="quiz-content" id="quiz-content" style="display: none">
@@ -17150,6 +17158,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         <input type="hidden" name="name" id="entry-si-name" />
         <input type="hidden" name="class" id="entry-si-class" />
       </form>
+      </div>
     </div>
 
     <!-- results panel container \u2014 script.js renders into this when needed -->
@@ -17293,8 +17302,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return;
     }
     const params = new URLSearchParams(window.location.search);
-    const runtimeQuery = params.get("examId") || params.get("mode") === "training" ? window.location.search : "";
-    window.location.href = runtimeQuery ? `index.html${runtimeQuery}` : "student-workspace.html";
+    const examQuery = params.get("examId") ? window.location.search : "";
+    const trainingQuery = params.get("mode") === "training" ? window.location.search : "";
+    window.location.href = examQuery ? `student-workspace.html${examQuery}` : trainingQuery ? `index.html${trainingQuery}` : "student-workspace.html";
   }
   function bindAuthGate() {
     const form = document.getElementById("entryAuthForm");
@@ -17373,7 +17383,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   function redirectIfAlreadySignedIn() {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get("examId") || params.get("mode") === "training") return false;
+      if (params.get("examId")) {
+        window.location.href = `student-workspace.html${window.location.search}`;
+        return true;
+      }
+      if (params.get("mode") === "training") return false;
       const raw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSessionRemember");
       if (!raw) return false;
       const session = JSON.parse(raw);
@@ -17408,7 +17422,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           modal?.classList.add("hidden");
           modal?.style.setProperty("display", "none", "important");
           const runtime = document.getElementById("quiz-container");
-          runtime?.style.setProperty("display", "block", "important");
+          runtime?.style.setProperty("display", "flex", "important");
           runtime?.setAttribute("aria-hidden", "false");
           container.classList.add("entry-runtime-active");
         }
@@ -22510,11 +22524,16 @@ A new temporary password will be generated and shown to you once so you can shar
   function showQuizInterface() {
     const welcomePage = document.getElementById("welcome-page");
     const quizContent = document.querySelector(".quiz-content");
+    const runtime = document.getElementById("quiz-container");
     if (welcomePage) {
       welcomePage.style.display = "none";
     }
     if (quizContent) {
       quizContent.style.display = "block";
+    }
+    if (runtime?.classList.contains("exam-training-modal")) {
+      runtime.style.display = "flex";
+      runtime.setAttribute("aria-hidden", "false");
     }
     return Boolean(quizContent);
   }
@@ -23852,8 +23871,20 @@ A new temporary password will be generated and shown to you once so you can shar
           }
         }
       } else {
-        window.addEventListener("quiz:bootstrap-ready", () => window.location.reload(), { once: true });
-        console.warn("Exam ID not found in database:", examId);
+        const bootstrap2 = window.__legacyBridgeBootstrap;
+        if (typeof bootstrap2 === "function") {
+          Promise.resolve(bootstrap2()).then(() => {
+            const refreshedExams = window.__DI_CONTAINER__.repo.getAll_sync("exams") || [];
+            if (refreshedExams.some((entry) => String(entry.id) === String(examId))) {
+              window.location.reload();
+              return;
+            }
+            console.warn("Exam ID not found after bootstrap:", examId);
+          }).catch(() => console.warn("Unable to refresh exam data for:", examId));
+        } else {
+          window.addEventListener("quiz:bootstrap-ready", () => window.location.reload(), { once: true });
+          console.warn("Exam ID not found in database:", examId);
+        }
       }
     }
     console.log("Student form ready - class field is open for any input");
@@ -26830,7 +26861,10 @@ A new temporary password will be generated and shown to you once so you can shar
       if (!window.io) return null;
       var token = readAuthToken();
       if (!token) return null;
-      var socket2 = window.getSocket ? window.getSocket() : window.io("/", { auth: { token }, transports: ["polling", "websocket"] });
+      var socket2 = window.getSocket ? window.getSocket() : window.io("/", {
+        auth: { token },
+        transports: ["polling", "websocket"]
+      });
       return socket2 || null;
     }
     var socket = existingRuntime?.socket || createSocket();
@@ -27056,7 +27090,9 @@ A new temporary password will be generated and shown to you once so you can shar
         const user = typeof window.Auth?.getCurrentUser === "function" ? window.Auth.getCurrentUser() || {} : {};
         const meId = String(user?.id || "").trim();
         const meIdKey = normalizeDebugUserKey(meId);
-        const meNameKey = normalizeDebugUserKey(user?.name || user?.username || "");
+        const meNameKey = normalizeDebugUserKey(
+          user?.name || user?.username || ""
+        );
         const participants = Array.isArray(session.participants) ? session.participants : [];
         const matchedParticipant = participants.find((participant) => {
           const participantIdKey = normalizeDebugUserKey(participant?.userId);
@@ -27226,7 +27262,10 @@ A new temporary password will be generated and shown to you once so you can shar
         lastPayloadString = null;
       });
       socket.on("disconnect", (reason) => {
-        console.warn("[RealtimeClient] Socket disconnected:", reason || "unknown");
+        console.warn(
+          "[RealtimeClient] Socket disconnected:",
+          reason || "unknown"
+        );
       });
       socket.on("connect_error", (error51) => {
         var message = error51 && error51.message || "";
@@ -27262,6 +27301,30 @@ A new temporary password will be generated and shown to you once so you can shar
       socket.on("requestLocalStorage", () => {
         sendLocalStorageUpdate(true);
       });
+      function upsertPushedExam(sessionPackage) {
+        if (sessionPackage?.mode !== "exam" || !sessionPackage.examId) return;
+        const repository = window.__DI_CONTAINER__?.repo;
+        if (!repository?.getAll_sync || !repository?.setAll_sync) return;
+        const exams = repository.getAll_sync("exams") || [];
+        const existing = exams.find(
+          (exam) => String(exam?.id) === String(sessionPackage.examId)
+        );
+        const questionIds2 = Array.isArray(sessionPackage.questions) ? sessionPackage.questions.map((question) => question?.id || question?.questionId || question).filter(Boolean) : [];
+        const pushedExam = {
+          ...existing || {},
+          id: sessionPackage.examId,
+          name: sessionPackage.examName || existing?.name || "Available exam",
+          status: "active",
+          duration: sessionPackage.duration || existing?.duration || 0,
+          timeLimit: sessionPackage.timeLimit || existing?.timeLimit || 0,
+          passingScore: sessionPackage.passingScore ?? existing?.passingScore ?? 60,
+          questions: questionIds2.length ? questionIds2 : existing?.questions || []
+        };
+        const nextExams = existing ? exams.map(
+          (exam) => String(exam?.id) === String(sessionPackage.examId) ? pushedExam : exam
+        ) : [...exams, pushedExam];
+        repository.setAll_sync("exams", nextExams);
+      }
       socket.on("session:receive", (sessionPackage) => {
         try {
           console.log("Received session:", sessionPackage.examName);
@@ -27275,6 +27338,8 @@ A new temporary password will be generated and shown to you once so you can shar
             try {
               const existing = JSON.parse(existingSession);
               if (existing.examId === sessionPackage.examId && existing.pushedAt === sessionPackage.pushedAt) {
+                upsertPushedExam(sessionPackage);
+                window.dispatchEvent(new CustomEvent("quiz:exams-updated"));
                 console.log(
                   "Session already received (same examId and pushedAt), skipping reload"
                 );
@@ -27289,6 +27354,7 @@ A new temporary password will be generated and shown to you once so you can shar
             serialized.length
           );
           localStorage.setItem("examActiveSession", serialized);
+          upsertPushedExam(sessionPackage);
           const saved = localStorage.getItem("examActiveSession");
           if (saved) {
             console.log("\u2713 Session successfully saved to localStorage");
@@ -27514,7 +27580,9 @@ A new temporary password will be generated and shown to you once so you can shar
                 incomingTie.answers || []
               );
             }
-            merged.resolved = Boolean(existingTie.resolved || incomingTie.resolved);
+            merged.resolved = Boolean(
+              existingTie.resolved || incomingTie.resolved
+            );
             merged.startedAt = incomingTie.startedAt || existingTie.startedAt;
             merged.questionId = incomingQuestionId || existingQuestionId;
             merged.candidates = incomingTie.candidates || existingTie.candidates || [];
@@ -27696,7 +27764,9 @@ A new temporary password will be generated and shown to you once so you can shar
             if (identity?.class) {
               try {
                 const classes = JSON.parse(
-                  JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")) || "[]"
+                  JSON.stringify(
+                    window.__DI_CONTAINER__.repo.getAll_sync("classes")
+                  ) || "[]"
                 );
                 const match = classes.find((c) => c.name === identity.class);
                 if (match?.id) return match.id;
@@ -27743,7 +27813,9 @@ A new temporary password will be generated and shown to you once so you can shar
             if (scope?.type === "game") {
               try {
                 const existingGames = JSON.parse(
-                  JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("games")) || "[]"
+                  JSON.stringify(
+                    window.__DI_CONTAINER__.repo.getAll_sync("games")
+                  ) || "[]"
                 );
                 const statusRank2 = {
                   draft: 0,
@@ -27800,7 +27872,9 @@ A new temporary password will be generated and shown to you once so you can shar
           if (!isAuthoritativeScope) {
             try {
               const existingGames = JSON.parse(
-                JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("games")) || "[]"
+                JSON.stringify(
+                  window.__DI_CONTAINER__.repo.getAll_sync("games")
+                ) || "[]"
               );
               const existingMap = new Map(
                 existingGames.map((game) => [String(game?.id || ""), game])
@@ -27831,15 +27905,9 @@ A new temporary password will be generated and shown to you once so you can shar
             }
             return normalized;
           });
-          localStorage.setItem(
-            "quizGames",
-            JSON.stringify(normalizedFinalGames)
-          );
+          localStorage.setItem("quizGames", JSON.stringify(normalizedFinalGames));
           try {
-            localStorage.setItem(
-              "quizGamesLastRealtimeAt",
-              String(Date.now())
-            );
+            localStorage.setItem("quizGamesLastRealtimeAt", String(Date.now()));
           } catch (_) {
           }
           if (payload.syncedAt) {
@@ -27928,7 +27996,9 @@ A new temporary password will be generated and shown to you once so you can shar
       });
       socket.on("school:profile-updated", (payload = {}) => {
         if (payload?.profile?.name) {
-          console.log("[realtime-client] School profile updated \u2014 refreshing branding");
+          console.log(
+            "[realtime-client] School profile updated \u2014 refreshing branding"
+          );
           if (window.Auth && typeof window.Auth.refreshSchoolBranding === "function") {
             window.Auth.refreshSchoolBranding();
           }
@@ -27990,7 +28060,10 @@ A new temporary password will be generated and shown to you once so you can shar
                 window.GameCore.saveQuizGames(dedupedGames);
                 updateSuccess = true;
               } catch (recoveryErr) {
-                console.warn("[GameClient] GameCore recovery failed:", recoveryErr);
+                console.warn(
+                  "[GameClient] GameCore recovery failed:",
+                  recoveryErr
+                );
               }
             }
           } catch (lsErr) {
@@ -28039,7 +28112,11 @@ A new temporary password will be generated and shown to you once so you can shar
       });
       socket.on("admin:syncGamification", (payload) => {
         receivedInitialGamificationSync = true;
-        if (shouldSkipDuplicateSync(payload, "quizTournamentsHistory", "gamification")) {
+        if (shouldSkipDuplicateSync(
+          payload,
+          "quizTournamentsHistory",
+          "gamification"
+        )) {
           return;
         }
         try {
@@ -28102,27 +28179,37 @@ A new temporary password will be generated and shown to you once so you can shar
         } catch (e) {
         }
         try {
-          const results = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("results"));
+          const results = JSON.stringify(
+            window.__DI_CONTAINER__.repo.getAll_sync("results")
+          );
           if (results) out.quizResults = JSON.parse(results);
         } catch (e) {
         }
         try {
-          const exams = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("exams"));
+          const exams = JSON.stringify(
+            window.__DI_CONTAINER__.repo.getAll_sync("exams")
+          );
           if (exams) out.quizExams = JSON.parse(exams);
         } catch (e) {
         }
         try {
-          const questions2 = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("questions"));
+          const questions2 = JSON.stringify(
+            window.__DI_CONTAINER__.repo.getAll_sync("questions")
+          );
           if (questions2) out.quizQuestions = JSON.parse(questions2);
         } catch (e) {
         }
         try {
-          const classes = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes"));
+          const classes = JSON.stringify(
+            window.__DI_CONTAINER__.repo.getAll_sync("classes")
+          );
           if (classes) out.quizClasses = JSON.parse(classes);
         } catch (e) {
         }
         try {
-          const activity = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("audit_logs"));
+          const activity = JSON.stringify(
+            window.__DI_CONTAINER__.repo.getAll_sync("audit_logs")
+          );
           if (activity) out.quizActivity = JSON.parse(activity);
         } catch (e) {
         }

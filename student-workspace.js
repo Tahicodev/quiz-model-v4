@@ -13085,7 +13085,7 @@
 
 	window.openExam = function (examId) {
 		if (!examId) return;
-		window.location.href = `index.html?examId=${examId}`;
+		window.location.href = `student-workspace.html?examId=${encodeURIComponent(examId)}`;
 	};
 
 	// ────────────────────────────────────────────────────────────────────────
@@ -13102,7 +13102,9 @@
 
 	let trainingState = {
 		active: false,
+		mode: 'training',
 		examId: null,
+		examName: 'Training Practice Test',
 		questions: [],
 		currentIndex: 0,
 		userAnswers: {},
@@ -13390,7 +13392,9 @@
 		const shuffled = [...questions].sort(() => 0.5 - Math.random());
 		trainingState = {
 			active: true,
+			mode: 'training',
 			examId: examId || null,
+			examName: 'Training Practice Test',
 			questions: shuffled,
 			currentIndex: 0,
 			userAnswers: {},
@@ -13427,6 +13431,45 @@
 		startTrainingTimer(trainingState.timeLimitSec || 0);
 		renderTrainingQuestion();
 	};
+
+	function startExamModal(exam) {
+		const questionBank = window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		const questions = (Array.isArray(exam?.questions) ? exam.questions : [])
+			.map((entry) => {
+				if (entry && typeof entry === 'object') return entry;
+				return questionBank.find((question) => String(question?.id) === String(entry));
+			})
+			.filter(Boolean);
+		if (!questions.length) {
+			showToast('This exam has no questions available.', 'warning');
+			return;
+		}
+
+		trainingState = {
+			active: true,
+			mode: 'exam',
+			examId: exam.id,
+			examName: exam.name || 'Exam',
+			questions,
+			currentIndex: 0,
+			userAnswers: {},
+			score: 0,
+			startTime: Date.now(),
+			endTime: null,
+			completed: false,
+			showCorrections: false,
+			perQuestion: [],
+			questionOptions: questions.map(getTrainingOptionsForQuestion),
+			timerHandle: null,
+			timeLimitSec: Math.max(0, Number(exam.timeLimit || exam.duration || 0) * 60),
+		};
+
+		clearTrainingStorage();
+		const modal = byId('studentTrainingModal');
+		if (modal) modal.classList.add('active');
+		startTrainingTimer(trainingState.timeLimitSec || 0);
+		renderTrainingQuestion();
+	}
 
 	window.closeTrainingModal = function () {
 		const modal = byId('studentTrainingModal');
@@ -14404,6 +14447,12 @@
 
 		const q = trainingState.questions[trainingState.currentIndex];
 		if (!q) return;
+		const modalTitle = byId('trainingModalTitle');
+		if (modalTitle) {
+			modalTitle.textContent = trainingState.mode === 'exam'
+				? trainingState.examName
+				: 'Training Practice Test';
+		}
 
 		const total = trainingState.questions.length;
 		const currentNum = trainingState.currentIndex + 1;
@@ -14732,7 +14781,7 @@
 		const passed = isPassingGrade20(grade);
 
 		const newResult = {
-			id: 'training-' + Date.now(),
+			id: `${trainingState.mode}-${trainingState.examId || 'practice'}-${Date.now()}`,
 			userId: context?.user?.id || 'guest',
 			user_id: context?.user?.id || 'guest',
 			studentNumber: context?.identity?.numero || '1',
@@ -14740,8 +14789,8 @@
 			classId: context?.identity?.classId || '',
 			className: context?.identity?.class || 'Class',
 			examId: trainingState.examId || 'training-practice',
-			examTitle: 'Training Practice',
-			mode: 'training',
+			examTitle: trainingState.examName,
+			mode: trainingState.mode,
 			// /20 scale everywhere (score = grade out of 20, e.g. 12.5)
 			score: grade,
 			totalQuestions: totalQuestions,
@@ -15068,6 +15117,18 @@
 	// (same pattern as the admin panel's toggleMobileNav).
 	window.toggleMobileNav = toggleMobileNav;
 
+	function openExamFromQuery() {
+		const examId = new URLSearchParams(window.location.search).get('examId');
+		if (!examId) return;
+		const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
+		const exam = exams.find((entry) => String(entry?.id) === String(examId));
+		if (exam) {
+			startExamModal(exam);
+			return;
+		}
+		window.addEventListener('quiz:bootstrap-ready', openExamFromQuery, { once: true });
+	}
+
 	document.addEventListener('DOMContentLoaded', () => {
 		bindWorkspaceTabs();
 		attachFilters();
@@ -15083,6 +15144,7 @@
 		if (loginBtn) loginBtn.addEventListener('click', showAuthModal);
 
 		renderWorkspace();
+		openExamFromQuery();
 		queueStickyProfileDockUpdate();
 	});
 

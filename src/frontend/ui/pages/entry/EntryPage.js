@@ -135,11 +135,19 @@ const ENTRY_HTML = `
       ══════════════════════════════════════════════════════════════════════
     -->
     <div
-      class="quiz-container"
+      class="modal exam-training-modal"
       id="quiz-container"
       style="display: none"
       aria-hidden="true"
     >
+      <div class="modal-content training-modal-content">
+        <div class="modal-header training-modal-header">
+          <h3 id="examModalTitle">Exam</h3>
+          <div class="training-header-meta">
+            <span class="training-counter">Exam mode</span>
+          </div>
+        </div>
+
       <div class="welcome-page" id="welcome-page" style="display: none"></div>
 
       <div class="quiz-content" id="quiz-content" style="display: none">
@@ -211,6 +219,7 @@ const ENTRY_HTML = `
         <input type="hidden" name="name" id="entry-si-name" />
         <input type="hidden" name="class" id="entry-si-class" />
       </form>
+      </div>
     </div>
 
     <!-- results panel container — script.js renders into this when needed -->
@@ -414,12 +423,13 @@ function redirectAfterLogin(role) {
   // the student workspace where the Auth check + student-workspace.js flow
   // takes over.
   const params = new URLSearchParams(window.location.search);
-  const runtimeQuery = params.get('examId') || params.get('mode') === 'training'
-    ? window.location.search
-    : '';
-  window.location.href = runtimeQuery
-    ? `index.html${runtimeQuery}`
-    : 'student-workspace.html';
+  const examQuery = params.get('examId') ? window.location.search : '';
+  const trainingQuery = params.get('mode') === 'training' ? window.location.search : '';
+  window.location.href = examQuery
+    ? `student-workspace.html${examQuery}`
+    : trainingQuery
+      ? `index.html${trainingQuery}`
+      : 'student-workspace.html';
 }
 
 /**
@@ -531,7 +541,11 @@ function redirectIfAlreadySignedIn() {
     // bounce them back to the workspace, otherwise every Start button loops
     // between index.html and student-workspace.html.
     const params = new URLSearchParams(window.location.search);
-    if (params.get('examId') || params.get('mode') === 'training') return false;
+    if (params.get('examId')) {
+      window.location.href = `student-workspace.html${window.location.search}`;
+      return true;
+    }
+    if (params.get('mode') === 'training') return false;
     const raw =
       sessionStorage.getItem('quizSession') ||
       localStorage.getItem('quizSessionRemember');
@@ -592,7 +606,7 @@ export function initEntryPage(container) {
         // a signed-in student returns to a runtime URL.
         modal?.style.setProperty('display', 'none', 'important');
         const runtime = document.getElementById('quiz-container');
-        runtime?.style.setProperty('display', 'block', 'important');
+        runtime?.style.setProperty('display', 'flex', 'important');
         runtime?.setAttribute('aria-hidden', 'false');
         container.classList.add('entry-runtime-active');
       }

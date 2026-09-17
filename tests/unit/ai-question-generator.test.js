@@ -42,7 +42,9 @@ async function loadGenerator() {
 	const source = await import('node:fs').then((fs) =>
 		fs.promises.readFile('ai-question-generator.js', 'utf8'),
 	);
-	const moduleUrl = new URL(`data:text/javascript,${encodeURIComponent(`(function(window){${source}\n})`)}`);
+	const moduleUrl = new URL(
+		`data:text/javascript,${encodeURIComponent(`(function(window){${source}\n})`)}`,
+	);
 	// Execute via a Function constructor with our fake window.
 	new Function('window', source)(window);
 	return window.AIQuestionGenerator;
