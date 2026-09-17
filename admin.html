@@ -114,9 +114,9 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
 		<script src="api-client.js?v=2026-09-15-r2" defer></script>
-		<script src="auth.js?v=2026-09-15-r3" defer></script>
+		<script src="auth.js?v=2026-09-17-r4" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-09-15-r3" defer></script>
+		<script src="settings.js?v=2026-09-17-r4" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
@@ -125,10 +125,10 @@
 		<script src="realtime-admin.js?v=2026-09-15-r1" defer></script>
 
 		<!-- Admin page scripts -->
-		<script src="category-management.js" defer></script>
+		<script src="category-management.js?v=2026-09-17-r1" defer></script>
 		<script src="questions-management.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="exam-management.js?v=2026-09-15-r1" defer></script>
-		<script src="class-management.js" defer></script>
+		<script src="exam-management.js?v=2026-09-17-r2" defer></script>
+		<script src="class-management.js?v=2026-09-17-r1" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="overview-dashboard.js" defer></script>
 		<script src="global-search.js" defer></script>
@@ -137,7 +137,7 @@
 		<script src="quiz-presets.js" defer></script>
 		<script src="games-management.js?v=2026-09-15-r3" defer></script>
 		<script src="quick-start.js?v=2026-09-15-r3" defer></script>
-			<script src="admin-main.js?v=2026-09-13-r3" defer></script>
+			<script src="admin-main.js?v=2026-09-17-r4" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -444,7 +444,7 @@
 						<button
 							class="nav-tab"
 							data-tab="monitoring"
-							data-roles="admin"
+							data-roles="admin,teacher"
 							onclick="openTab(event, 'monitoring'); if(window.loadServerMonitoring) window.loadServerMonitoring()"
 						>
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1153,7 +1153,7 @@
 				</section>
 
 				<!-- Server Monitoring Tab -->
-				<section id="monitoring" class="tab-content" data-roles="admin">
+				<section id="monitoring" class="tab-content" data-roles="admin,teacher">
 					<div class="content-header monitoring-header">
 						<div>
 							<h1>Server Monitoring</h1>
@@ -4936,6 +4936,13 @@
 									<span class="switch-text">Activity Log</span>
 									<div class="switch-container">
 										<input type="checkbox" id="teacher-access-activity" class="switch-checkbox" />
+										<span class="switch-slider"></span>
+									</div>
+								</label>
+								<label class="switch-label">
+									<span class="switch-text">Monitoring</span>
+									<div class="switch-container">
+										<input type="checkbox" id="teacher-access-monitoring" class="switch-checkbox" />
 										<span class="switch-slider"></span>
 									</div>
 								</label>

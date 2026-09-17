@@ -233,7 +233,7 @@ const ENTRY_HTML = `
  * login endpoint is always hit regardless of how the page was reached.
  */
 function getApiBase() {
-  return (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
+	return (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
 }
 
 /**
@@ -241,10 +241,10 @@ function getApiBase() {
  * Reuses the .auth-recovery-status styles from the legacy modal.
  */
 function setAuthStatus(message, type) {
-  const el = document.getElementById('entryAuthStatus');
-  if (!el) return;
-  el.textContent = message || '';
-  el.className = 'auth-recovery-status' + (type ? ' ' + type : '');
+	const el = document.getElementById('entryAuthStatus');
+	if (!el) return;
+	el.textContent = message || '';
+	el.className = 'auth-recovery-status' + (type ? ' ' + type : '');
 }
 
 /**
@@ -258,150 +258,163 @@ function setAuthStatus(message, type) {
  * @param {boolean} remember - Whether the user ticked "remember me".
  */
 function persistLegacySession(payload, remember) {
-  const user = payload.user || payload;
-  const token = payload.accessToken || payload.token || '';
-  const now = new Date();
-  const ttlDays = remember ? 30 : 1;
-  const expires = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
-  const session = {
-    userId: user.id,
-    username: user.username,
-    name: user.name,
-    role: user.role,
-    numero: user.numero || user.studentNumber || '',
-    classId: user.class_id || user.classId || '',
-    className: user.class_name || user.className || '',
-    token,
-    expiresAt: expires.toISOString(),
-    createdAt: now.toISOString(),
-    lastActivity: now.toISOString(),
-  };
+	const user = payload.user || payload;
+	const token = payload.accessToken || payload.token || '';
+	const now = new Date();
+	const ttlDays = remember ? 30 : 1;
+	const expires = new Date(now.getTime() + ttlDays * 24 * 60 * 60 * 1000);
+	const session = {
+		userId: user.id,
+		username: user.username,
+		name: user.name,
+		role: user.role,
+		numero: user.numero || user.studentNumber || '',
+		classId: user.class_id || user.classId || '',
+		className: user.class_name || user.className || '',
+		token,
+		expiresAt: expires.toISOString(),
+		createdAt: now.toISOString(),
+		lastActivity: now.toISOString(),
+	};
 
-  try {
-    // Session keys the legacy code reads on load. sessionStorage is per-tab
-    // and always safe. The localStorage copies are SHARED with every other
-    // tab of this browser (the admin portal writes the same keys) — only
-    // overwrite the shared unscoped keys when they are absent or already
-    // belong to this user, otherwise the other portal's tab owns them.
-    sessionStorage.setItem('quizSession', JSON.stringify(session));
+	try {
+		// Session keys the legacy code reads on load. sessionStorage is per-tab
+		// and always safe. The localStorage copies are SHARED with every other
+		// tab of this browser (the admin portal writes the same keys) — only
+		// overwrite the shared unscoped keys when they are absent or already
+		// belong to this user, otherwise the other portal's tab owns them.
+		sessionStorage.setItem('quizSession', JSON.stringify(session));
 
-    const role = String(user.role || '').toLowerCase();
-    localStorage.setItem(`quizSession:${role || 'user'}`, JSON.stringify(session));
-    if (token) {
-      localStorage.setItem(`quizAuthToken:${role || 'user'}`, token);
-    }
+		const role = String(user.role || '').toLowerCase();
+		localStorage.setItem(
+			`quizSession:${role || 'user'}`,
+			JSON.stringify(session),
+		);
+		if (token) {
+			localStorage.setItem(`quizAuthToken:${role || 'user'}`, token);
+		}
 
-    let sharedSession = null;
-    try {
-      sharedSession = JSON.parse(localStorage.getItem('quizSession') || 'null');
-    } catch { /* ignore */ }
-    const sharedMatches = sharedSession &&
-      String(sharedSession.userId || '') === String(session.userId || '') &&
-      String(sharedSession.role || '').toLowerCase() === role;
-    const thisTabBefore = sessionStorage.getItem('quizSession');
+		let sharedSession = null;
+		try {
+			sharedSession = JSON.parse(localStorage.getItem('quizSession') || 'null');
+		} catch {
+			/* ignore */
+		}
+		const sharedMatches =
+			sharedSession &&
+			String(sharedSession.userId || '') === String(session.userId || '') &&
+			String(sharedSession.role || '').toLowerCase() === role;
+		const thisTabBefore = sessionStorage.getItem('quizSession');
 
-    if (!localStorage.getItem('quizSession') || sharedMatches || thisTabBefore === null) {
-      localStorage.setItem('quizSession', JSON.stringify(session));
-      if (token) {
-        localStorage.setItem('quizAuthToken', token);
-      }
-      const currentUser = {
-        id: user.id,
-        username: user.username,
-        name: user.name || user.username,
-        role: user.role,
-        numero: user.numero || user.studentNumber || '',
-        studentNumber: user.studentNumber || user.numero || '',
-        classId: user.class_id || user.classId || '',
-        className: user.class_name || user.className || '',
-        status: 'active',
-      };
-      localStorage.setItem('quizCurrentUser', JSON.stringify(currentUser));
-      if (remember) {
-        localStorage.setItem('quizSessionRemember', JSON.stringify(session));
-      } else {
-        localStorage.removeItem('quizSessionRemember');
-      }
-    } else {
-      // The shared identity belongs to the other portal's tab — mirror this
-      // session's user in the role-scoped slot instead.
-      localStorage.setItem(`quizCurrentUser:${role || 'user'}`, JSON.stringify({
-        id: user.id,
-        username: user.username,
-        name: user.name || user.username,
-        role: user.role,
-        numero: user.numero || user.studentNumber || '',
-        studentNumber: user.studentNumber || user.numero || '',
-        classId: user.class_id || user.classId || '',
-        className: user.class_name || user.className || '',
-        status: 'active',
-      }));
-    }
+		if (
+			!localStorage.getItem('quizSession') ||
+			sharedMatches ||
+			thisTabBefore === null
+		) {
+			localStorage.setItem('quizSession', JSON.stringify(session));
+			if (token) {
+				localStorage.setItem('quizAuthToken', token);
+			}
+			const currentUser = {
+				id: user.id,
+				username: user.username,
+				name: user.name || user.username,
+				role: user.role,
+				numero: user.numero || user.studentNumber || '',
+				studentNumber: user.studentNumber || user.numero || '',
+				classId: user.class_id || user.classId || '',
+				className: user.class_name || user.className || '',
+				status: 'active',
+			};
+			localStorage.setItem('quizCurrentUser', JSON.stringify(currentUser));
+			if (remember) {
+				localStorage.setItem('quizSessionRemember', JSON.stringify(session));
+			} else {
+				localStorage.removeItem('quizSessionRemember');
+			}
+		} else {
+			// The shared identity belongs to the other portal's tab — mirror this
+			// session's user in the role-scoped slot instead.
+			localStorage.setItem(
+				`quizCurrentUser:${role || 'user'}`,
+				JSON.stringify({
+					id: user.id,
+					username: user.username,
+					name: user.name || user.username,
+					role: user.role,
+					numero: user.numero || user.studentNumber || '',
+					studentNumber: user.studentNumber || user.numero || '',
+					classId: user.class_id || user.classId || '',
+					className: user.class_name || user.className || '',
+					status: 'active',
+				}),
+			);
+		}
 
-    // Seed quizUsers so legacy pages that rehydrate from localStorage find
-    // the user synchronously before the legacy-bridge async preload completes.
-    const seedUser = {
-      id: user.id,
-      username: user.username,
-      name: user.name || user.username,
-      role: user.role,
-      numero: user.numero || user.studentNumber || '',
-      studentNumber: user.studentNumber || user.numero || '',
-      classId: user.class_id || user.classId || '',
-      className: user.class_name || user.className || '',
-      status: 'active',
-    };
-    if (user && user.id) {
-      let users = [];
-      try {
-        users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
-      } catch (_) {
-        /* ignore */
-      }
-      if (!Array.isArray(users)) users = [];
-      let found = false;
-      users = users.map((u) => {
-        if (u && u.id === seedUser.id) {
-          found = true;
-          return Object.assign({}, u, seedUser);
-        }
-        return u;
-      });
-      if (!found) users.push(seedUser);
-      localStorage.setItem('quizUsers', JSON.stringify(users));
-    }
-    window.__authToken = token;
+		// Seed quizUsers so legacy pages that rehydrate from localStorage find
+		// the user synchronously before the legacy-bridge async preload completes.
+		const seedUser = {
+			id: user.id,
+			username: user.username,
+			name: user.name || user.username,
+			role: user.role,
+			numero: user.numero || user.studentNumber || '',
+			studentNumber: user.studentNumber || user.numero || '',
+			classId: user.class_id || user.classId || '',
+			className: user.class_name || user.className || '',
+			status: 'active',
+		};
+		if (user && user.id) {
+			let users = [];
+			try {
+				users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			} catch (_) {
+				/* ignore */
+			}
+			if (!Array.isArray(users)) users = [];
+			let found = false;
+			users = users.map((u) => {
+				if (u && u.id === seedUser.id) {
+					found = true;
+					return Object.assign({}, u, seedUser);
+				}
+				return u;
+			});
+			if (!found) users.push(seedUser);
+			localStorage.setItem('quizUsers', JSON.stringify(users));
+		}
+		window.__authToken = token;
 
-    // For a student, also seed sessionStorage.studentInfo so script.js's
-    // validateForm() and startExam() pick it up without prompting.
-    if (String(user.role || '').toLowerCase() === 'student') {
-      try {
-        sessionStorage.setItem(
-          'studentInfo',
-          JSON.stringify({
-            numero: user.studentNumber || user.numero || '',
-            name: user.name || user.username,
-            class:
-              user.className ||
-              user.class_name ||
-              user.classId ||
-              user.class_id ||
-              '',
-            classId: user.classId || user.class_id || '',
-            avatar: user.avatar || '',
-          }),
-        );
-      } catch (_) {
-        /* ignore */
-      }
-    } else {
-      sessionStorage.removeItem('studentInfo');
-    }
-  } catch (err) {
-    console.warn('[entry-auth] session persist failed:', err);
-  }
+		// For a student, also seed sessionStorage.studentInfo so script.js's
+		// validateForm() and startExam() pick it up without prompting.
+		if (String(user.role || '').toLowerCase() === 'student') {
+			try {
+				sessionStorage.setItem(
+					'studentInfo',
+					JSON.stringify({
+						numero: user.studentNumber || user.numero || '',
+						name: user.name || user.username,
+						class:
+							user.className ||
+							user.class_name ||
+							user.classId ||
+							user.class_id ||
+							'',
+						classId: user.classId || user.class_id || '',
+						avatar: user.avatar || '',
+					}),
+				);
+			} catch (_) {
+				/* ignore */
+			}
+		} else {
+			sessionStorage.removeItem('studentInfo');
+		}
+	} catch (err) {
+		console.warn('[entry-auth] session persist failed:', err);
+	}
 
-  return session;
+	return session;
 }
 
 /**
@@ -410,26 +423,27 @@ function persistLegacySession(payload, remember) {
  * @param {Object} sessionPayload - The full login response (carries token).
  */
 function redirectAfterLogin(role) {
-  const normalized = String(role || '').toLowerCase();
-  if (
-    normalized === 'admin' ||
-    normalized === 'super_admin' ||
-    normalized === 'teacher'
-  ) {
-    window.location.href = 'admin.html';
-    return;
-  }
-  // Default — students (and anything unrecognized, treated as student) go to
-  // the student workspace where the Auth check + student-workspace.js flow
-  // takes over.
-  const params = new URLSearchParams(window.location.search);
-  const examQuery = params.get('examId') ? window.location.search : '';
-  const trainingQuery = params.get('mode') === 'training' ? window.location.search : '';
-  window.location.href = examQuery
-    ? `student-workspace.html${examQuery}`
-    : trainingQuery
-      ? `index.html${trainingQuery}`
-      : 'student-workspace.html';
+	const normalized = String(role || '').toLowerCase();
+	if (
+		normalized === 'admin' ||
+		normalized === 'super_admin' ||
+		normalized === 'teacher'
+	) {
+		window.location.href = 'admin.html';
+		return;
+	}
+	// Default — students (and anything unrecognized, treated as student) go to
+	// the student workspace where the Auth check + student-workspace.js flow
+	// takes over.
+	const params = new URLSearchParams(window.location.search);
+	const examQuery = params.get('examId') ? window.location.search : '';
+	const trainingQuery =
+		params.get('mode') === 'training' ? window.location.search : '';
+	window.location.href = examQuery
+		? `student-workspace.html${examQuery}`
+		: trainingQuery
+			? `index.html${trainingQuery}`
+			: 'student-workspace.html';
 }
 
 /**
@@ -439,96 +453,109 @@ function redirectAfterLogin(role) {
  * interactive — esbuild's IIFE bundle executes after parse).
  */
 function bindAuthGate() {
-  const form = document.getElementById('entryAuthForm');
-  if (!form || form.dataset.bridgeBound === 'true') return;
-  form.dataset.bridgeBound = 'true';
+	const form = document.getElementById('entryAuthForm');
+	if (!form || form.dataset.bridgeBound === 'true') return;
+	form.dataset.bridgeBound = 'true';
 
-  // Wire the show/hide password toggle.
-  const toggle = form.querySelector('.auth-toggle-password');
-  if (toggle) {
-    toggle.addEventListener('click', () => {
-      const input = document.getElementById(toggle.dataset.target);
-      if (!input) return;
-      const reveal = input.type === 'password';
-      input.type = reveal ? 'text' : 'password';
-      toggle.textContent = reveal ? 'Hide' : 'Show';
-      toggle.setAttribute('aria-pressed', reveal ? 'true' : 'false');
-      toggle.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
-    });
-  }
+	// Wire the show/hide password toggle.
+	const toggle = form.querySelector('.auth-toggle-password');
+	if (toggle) {
+		toggle.addEventListener('click', () => {
+			const input = document.getElementById(toggle.dataset.target);
+			if (!input) return;
+			const reveal = input.type === 'password';
+			input.type = reveal ? 'text' : 'password';
+			toggle.textContent = reveal ? 'Hide' : 'Show';
+			toggle.setAttribute('aria-pressed', reveal ? 'true' : 'false');
+			toggle.setAttribute(
+				'aria-label',
+				reveal ? 'Hide password' : 'Show password',
+			);
+		});
+	}
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    e.stopImmediatePropagation();
+	form.addEventListener(
+		'submit',
+		async (e) => {
+			e.preventDefault();
+			e.stopImmediatePropagation();
 
-    const username = (form.querySelector('[data-auth="username"]') || {}).value || '';
-    const password = (form.querySelector('[data-auth="password"]') || {}).value || '';
-    const remember = Boolean(
-      (form.querySelector('[data-auth="remember"]') || {}).checked,
-    );
+			const username =
+				(form.querySelector('[data-auth="username"]') || {}).value || '';
+			const password =
+				(form.querySelector('[data-auth="password"]') || {}).value || '';
+			const remember = Boolean(
+				(form.querySelector('[data-auth="remember"]') || {}).checked,
+			);
 
-    if (!username.trim() || !password) {
-      setAuthStatus('Please enter both your username and password.', 'error');
-      return;
-    }
+			if (!username.trim() || !password) {
+				setAuthStatus('Please enter both your username and password.', 'error');
+				return;
+			}
 
-    const submitBtn = document.getElementById('entryAuthSubmitBtn');
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Signing in…';
-    }
-    setAuthStatus('', '');
+			const submitBtn = document.getElementById('entryAuthSubmitBtn');
+			if (submitBtn) {
+				submitBtn.disabled = true;
+				submitBtn.textContent = 'Signing in…';
+			}
+			setAuthStatus('', '');
 
-    try {
-      const res = await fetch(getApiBase() + '/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password }),
-        credentials: 'include',
-      });
+			try {
+				const res = await fetch(getApiBase() + '/auth/login', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ username: username.trim(), password }),
+					credentials: 'include',
+				});
 
-      const data = await res.json().catch(() => ({}));
+				const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        const msg =
-          (data && data.error && data.error.message) ||
-          (data && data.message) ||
-          'Invalid username or password.';
-        setAuthStatus(msg, 'error');
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = 'Sign In';
-        }
-        return;
-      }
+				if (!res.ok) {
+					const msg =
+						(data && data.error && data.error.message) ||
+						(data && data.message) ||
+						'Invalid username or password.';
+					setAuthStatus(msg, 'error');
+					if (submitBtn) {
+						submitBtn.disabled = false;
+						submitBtn.innerHTML = 'Sign In';
+					}
+					return;
+				}
 
-      const payload = data && (data.user || data.data) ? data : { user: data };
-      const user = payload.user || payload;
-      const token = payload.accessToken || payload.token || '';
+				const payload =
+					data && (data.user || data.data) ? data : { user: data };
+				const user = payload.user || payload;
+				const token = payload.accessToken || payload.token || '';
 
-      // Persist in the legacy shape so downstream pages (admin.html,
-      // student-workspace.html) instantly recognise the session.
-      persistLegacySession({ ...payload, user, accessToken: token }, remember);
-      sessionStorage.setItem(
-        user.role === 'student' ? 'studentLoggedIn' : 'adminLoggedIn',
-        'true',
-      );
+				// Persist in the legacy shape so downstream pages (admin.html,
+				// student-workspace.html) instantly recognise the session.
+				persistLegacySession(
+					{ ...payload, user, accessToken: token },
+					remember,
+				);
+				sessionStorage.setItem(
+					user.role === 'student' ? 'studentLoggedIn' : 'adminLoggedIn',
+					'true',
+				);
 
-      setAuthStatus('Signed in — redirecting…', 'success');
-      // Small delay so the user sees the success state before the redirect.
-      setTimeout(() => redirectAfterLogin(user.role), 300);
-    } catch (err) {
-      console.error('[entry-auth] login request failed:', err);
-      setAuthStatus(
-        'Could not reach the server — check your connection and try again.',
-        'error',
-      );
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = 'Sign In';
-      }
-    }
-  }, { capture: true }); // capture=true so we win if auth.js also bound first
+				setAuthStatus('Signed in — redirecting…', 'success');
+				// Small delay so the user sees the success state before the redirect.
+				setTimeout(() => redirectAfterLogin(user.role), 300);
+			} catch (err) {
+				console.error('[entry-auth] login request failed:', err);
+				setAuthStatus(
+					'Could not reach the server — check your connection and try again.',
+					'error',
+				);
+				if (submitBtn) {
+					submitBtn.disabled = false;
+					submitBtn.innerHTML = 'Sign In';
+				}
+			}
+		},
+		{ capture: true },
+	); // capture=true so we win if auth.js also bound first
 }
 
 /**
@@ -536,32 +563,32 @@ function bindAuthGate() {
  * Returns true when a redirect was issued.
  */
 function redirectIfAlreadySignedIn() {
-  try {
-    // Exam/training links are a real authenticated runtime route. Do not
-    // bounce them back to the workspace, otherwise every Start button loops
-    // between index.html and student-workspace.html.
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('examId')) {
-      window.location.href = `student-workspace.html${window.location.search}`;
-      return true;
-    }
-    if (params.get('mode') === 'training') return false;
-    const raw =
-      sessionStorage.getItem('quizSession') ||
-      localStorage.getItem('quizSessionRemember');
-    if (!raw) return false;
-    const session = JSON.parse(raw);
-    if (!session || !session.role) return false;
-    if (session.expiresAt && Date.now() > Date.parse(session.expiresAt)) {
-      sessionStorage.removeItem('quizSession');
-      localStorage.removeItem('quizSessionRemember');
-      return false;
-    }
-    redirectAfterLogin(session.role);
-    return true;
-  } catch (_) {
-    return false;
-  }
+	try {
+		// Exam/training links are a real authenticated runtime route. Do not
+		// bounce them back to the workspace, otherwise every Start button loops
+		// between index.html and student-workspace.html.
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('examId')) {
+			window.location.href = `student-workspace.html${window.location.search}`;
+			return true;
+		}
+		if (params.get('mode') === 'training') return false;
+		const raw =
+			sessionStorage.getItem('quizSession') ||
+			localStorage.getItem('quizSessionRemember');
+		if (!raw) return false;
+		const session = JSON.parse(raw);
+		if (!session || !session.role) return false;
+		if (session.expiresAt && Date.now() > Date.parse(session.expiresAt)) {
+			sessionStorage.removeItem('quizSession');
+			localStorage.removeItem('quizSessionRemember');
+			return false;
+		}
+		redirectAfterLogin(session.role);
+		return true;
+	} catch (_) {
+		return false;
+	}
 }
 
 /**
@@ -572,125 +599,129 @@ function redirectIfAlreadySignedIn() {
  * @param {HTMLElement} container - the <main id="app"></main> shell host.
  */
 export function initEntryPage(container) {
-  if (!container) return;
+	if (!container) return;
 
-  // Already signed in? Skip the gate entirely — redirect before paint.
-  // Check both the canonical localStorage remember key and any existing
-  // sessionStorage session so admins hitting / with a remembered session
-  // go straight to admin.html (same for students → workspace).
-  if (redirectIfAlreadySignedIn()) return;
+	// Already signed in? Skip the gate entirely — redirect before paint.
+	// Check both the canonical localStorage remember key and any existing
+	// sessionStorage session so admins hitting / with a remembered session
+	// go straight to admin.html (same for students → workspace).
+	if (redirectIfAlreadySignedIn()) return;
 
-  // Paint the gate + the hidden exam runtime markup.
-  const tpl = document.createElement('template');
-  tpl.innerHTML = ENTRY_HTML.trim();
-  container.replaceChildren(tpl.content.cloneNode(true));
+	// Paint the gate + the hidden exam runtime markup.
+	const tpl = document.createElement('template');
+	tpl.innerHTML = ENTRY_HTML.trim();
+	container.replaceChildren(tpl.content.cloneNode(true));
 
-  // Direct exam/training links use this page as the runtime host after an
-  // authenticated student arrives. Avoid leaving the quiz container hidden.
-  const runtimeParams = new URLSearchParams(window.location.search);
-  const isRuntimeRoute = Boolean(
-    runtimeParams.get('examId') || runtimeParams.get('mode') === 'training',
-  );
-  if (isRuntimeRoute) {
-    try {
-      const raw =
-        sessionStorage.getItem('quizSession') ||
-        localStorage.getItem('quizSessionRemember') ||
-        localStorage.getItem('quizSession');
-      const session = raw ? JSON.parse(raw) : null;
-      if (String(session?.role || '').toLowerCase() === 'student') {
-        const modal = document.getElementById('entryAuthModal');
-        modal?.classList.add('hidden');
-        // The entry-gate CSS intentionally uses !important so the modal is
-        // visible on the anonymous landing page. Override it explicitly once
-        // a signed-in student returns to a runtime URL.
-        modal?.style.setProperty('display', 'none', 'important');
-        const runtime = document.getElementById('quiz-container');
-        runtime?.style.setProperty('display', 'flex', 'important');
-        runtime?.setAttribute('aria-hidden', 'false');
-        container.classList.add('entry-runtime-active');
-      }
-    } catch (_) {
-      /* Keep the visible auth gate when the session cannot be read. */
-    }
-  }
+	// Direct exam/training links use this page as the runtime host after an
+	// authenticated student arrives. Avoid leaving the quiz container hidden.
+	const runtimeParams = new URLSearchParams(window.location.search);
+	const isRuntimeRoute = Boolean(
+		runtimeParams.get('examId') || runtimeParams.get('mode') === 'training',
+	);
+	if (isRuntimeRoute) {
+		try {
+			const raw =
+				sessionStorage.getItem('quizSession') ||
+				localStorage.getItem('quizSessionRemember') ||
+				localStorage.getItem('quizSession');
+			const session = raw ? JSON.parse(raw) : null;
+			if (String(session?.role || '').toLowerCase() === 'student') {
+				const modal = document.getElementById('entryAuthModal');
+				modal?.classList.add('hidden');
+				// The entry-gate CSS intentionally uses !important so the modal is
+				// visible on the anonymous landing page. Override it explicitly once
+				// a signed-in student returns to a runtime URL.
+				modal?.style.setProperty('display', 'none', 'important');
+				const runtime = document.getElementById('quiz-container');
+				runtime?.style.setProperty('display', 'flex', 'important');
+				runtime?.setAttribute('aria-hidden', 'false');
+				container.classList.add('entry-runtime-active');
+			}
+		} catch (_) {
+			/* Keep the visible auth gate when the session cannot be read. */
+		}
+	}
 
-  // Apply the legacy gating CSS so the backdrop + gating scroll-lock CSS rules
-  // hide any potential flash-of-content. We deliberately do NOT toggle the
-  // `auth-pending` class here: that class sets `pointer-events:none` on
-  // `.app-container` (used by admin.html to block interaction with the
-  // dashboard), and because our gate itself lives INSIDE `.app-container`
-  // doing so would make the login form un-clickable. Instead we rely on the
-  // modal's own backdrop + z-index to gate the page.
+	// Apply the legacy gating CSS so the backdrop + gating scroll-lock CSS rules
+	// hide any potential flash-of-content. We deliberately do NOT toggle the
+	// `auth-pending` class here: that class sets `pointer-events:none` on
+	// `.app-container` (used by admin.html to block interaction with the
+	// dashboard), and because our gate itself lives INSIDE `.app-container`
+	// doing so would make the login form un-clickable. Instead we rely on the
+	// modal's own backdrop + z-index to gate the page.
 
-  // Bind the auth form.
-  const bindNow = () => {
-    try {
-      bindAuthGate();
-    } catch (err) {
-      console.error('[entry-auth] failed to bind:', err);
-    }
-  };
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bindNow, { once: true });
-  } else {
-    bindNow();
-  }
+	// Bind the auth form.
+	const bindNow = () => {
+		try {
+			bindAuthGate();
+		} catch (err) {
+			console.error('[entry-auth] failed to bind:', err);
+		}
+	};
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', bindNow, { once: true });
+	} else {
+		bindNow();
+	}
 
-  // School branding — fetch the public profile (no auth) and swap the gate's
-  // generic "Quiz Portal" title/mark for the school's name + logo. Falls back
-  // silently to the default branding when the endpoint is unreachable.
-  try {
-    const base = (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
-    fetch(base + '/school/profile')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((profile) => {
-        if (!profile || !profile.name) return;
-        const title = document.getElementById('entry-auth-title');
-        if (title) title.textContent = 'Welcome to ' + profile.name;
-        document.title = profile.name + ' — Quiz Portal';
-        const mark = document.getElementById('entryAuthMark');
-        if (mark && profile.logo_url) {
-          mark.innerHTML =
-            '<img src="' + profile.logo_url + '" alt="' + profile.name + ' logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
-        }
-      })
-      .catch(() => {});
-  } catch (_) {
-    /* branding is cosmetic — never block the gate */
-  }
+	// School branding — fetch the public profile (no auth) and swap the gate's
+	// generic "Quiz Portal" title/mark for the school's name + logo. Falls back
+	// silently to the default branding when the endpoint is unreachable.
+	try {
+		const base = (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
+		fetch(base + '/school/profile')
+			.then((r) => (r.ok ? r.json() : null))
+			.then((profile) => {
+				if (!profile || !profile.name) return;
+				const title = document.getElementById('entry-auth-title');
+				if (title) title.textContent = 'Welcome to ' + profile.name;
+				document.title = profile.name + ' — Quiz Portal';
+				const mark = document.getElementById('entryAuthMark');
+				if (mark && profile.logo_url) {
+					mark.innerHTML =
+						'<img src="' +
+						profile.logo_url +
+						'" alt="' +
+						profile.name +
+						' logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+				}
+			})
+			.catch(() => {});
+	} catch (_) {
+		/* branding is cosmetic — never block the gate */
+	}
 
-  // NOTE: We deliberately do NOT hook window-level 'error' events here. The
-  // quiz runtime (script.js) and the realtime client emit a number of
-  // non-fatal runtime events during page bootstrap (missing DOM references
-  // for hidden exam paths, etc.) — listening to 'error' at the document root
-  // used to surface those as misleading "exam failed" messages on the login
-  // card before the user had a chance to sign in. Exam-flow errors surface
-  // naturally once the user is authenticated and the quiz is actually running.
+	// NOTE: We deliberately do NOT hook window-level 'error' events here. The
+	// quiz runtime (script.js) and the realtime client emit a number of
+	// non-fatal runtime events during page bootstrap (missing DOM references
+	// for hidden exam paths, etc.) — listening to 'error' at the document root
+	// used to surface those as misleading "exam failed" messages on the login
+	// card before the user had a chance to sign in. Exam-flow errors surface
+	// naturally once the user is authenticated and the quiz is actually running.
 
-  // Seed the hidden student-info fields from an already-authenticated session
-  // (e.g. first hit with a remembered session and ?examId — after redirect
-  // we'd be gone, but on the rare page where redirect is delayed we must
-  // not leave them blank, otherwise script.js's validateForm() fails. These
-  // are populated here purely for robustness.
-  try {
-    const raw =
-      sessionStorage.getItem('quizSession') ||
-      localStorage.getItem('quizSessionRemember');
-    if (raw) {
-      const session = JSON.parse(raw);
-      const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
-      const user = users.find((u) => u && u.id === session.userId);
-      if (user) {
-        const numero = document.getElementById('entry-si-numero');
-        const name = document.getElementById('entry-si-name');
-        const cls = document.getElementById('entry-si-class');
-        if (numero) numero.value = user.studentNumber || '';
-        if (name) name.value = user.name || user.username || '';
-        if (cls) cls.value = user.className || '';
-      }
-    }
-  } catch (_) {
-    /* best-effort seed */
-  }
+	// Seed the hidden student-info fields from an already-authenticated session
+	// (e.g. first hit with a remembered session and ?examId — after redirect
+	// we'd be gone, but on the rare page where redirect is delayed we must
+	// not leave them blank, otherwise script.js's validateForm() fails. These
+	// are populated here purely for robustness.
+	try {
+		const raw =
+			sessionStorage.getItem('quizSession') ||
+			localStorage.getItem('quizSessionRemember');
+		if (raw) {
+			const session = JSON.parse(raw);
+			const users = JSON.parse(localStorage.getItem('quizUsers') || '[]');
+			const user = users.find((u) => u && u.id === session.userId);
+			if (user) {
+				const numero = document.getElementById('entry-si-numero');
+				const name = document.getElementById('entry-si-name');
+				const cls = document.getElementById('entry-si-class');
+				if (numero) numero.value = user.studentNumber || '';
+				if (name) name.value = user.name || user.username || '';
+				if (cls) cls.value = user.className || '';
+			}
+		}
+	} catch (_) {
+		/* best-effort seed */
+	}
 }

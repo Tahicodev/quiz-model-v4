@@ -84,7 +84,9 @@
 	border: 1px solid #e2e8f0;
 	border-radius: 0.65rem;
 	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-	transition: transform 150ms ease, box-shadow 150ms ease;
+	transition:
+		transform 150ms ease,
+		box-shadow 150ms ease;
 }
 .monitoring-kpi::before {
 	position: absolute;

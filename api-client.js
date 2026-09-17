@@ -139,6 +139,11 @@
   }
 
   function refreshAccessToken() {
+    // Use the legacy bridge's single-flight refresh when available. The
+    // bridge also updates the active tab token and scoped session storage.
+    if (typeof window.__legacyBridgeRefresh === 'function') {
+      return window.__legacyBridgeRefresh();
+    }
     if (refreshing) return refreshing;
     if (authUnavailable) {
       var blocked = new Error('Session expired');

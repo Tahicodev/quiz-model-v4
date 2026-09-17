@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS = {
 			games: true,
 			results: true,
 			activity: true,
+			monitoring: true,
 		},
 		settings: true,
 		settingsTabs: {
@@ -99,14 +100,16 @@ function applySettings() {
 		'#welcome-title, .welcome-title, .welcome-page h1, [data-setting="welcomeTitle"]',
 	);
 	welcomeTitleNodes.forEach((node) => {
-		if (currentSettings.welcomeTitle) node.textContent = currentSettings.welcomeTitle;
+		if (currentSettings.welcomeTitle)
+			node.textContent = currentSettings.welcomeTitle;
 	});
 
 	const welcomeMessageNodes = document.querySelectorAll(
 		'#welcome-message, .welcome-message, [data-setting="welcomeMessage"]',
 	);
 	welcomeMessageNodes.forEach((node) => {
-		if (currentSettings.welcomeMessage) node.textContent = currentSettings.welcomeMessage;
+		if (currentSettings.welcomeMessage)
+			node.textContent = currentSettings.welcomeMessage;
 	});
 
 	// You might want to update other theme variables derived from these
@@ -335,7 +338,8 @@ function syncSettingsColorInputs(changedTarget = null) {
 function shouldAutoSaveSettingsTarget(target, eventType) {
 	if (!target?.matches?.('input, select, textarea')) return false;
 	if (target.matches('[type="file"], [data-no-autosave]')) return false;
-	if (target.id === 'setting-recoveryCode' && eventType === 'input') return false;
+	if (target.id === 'setting-recoveryCode' && eventType === 'input')
+		return false;
 	return Boolean(target.closest('#settingsForm'));
 }
 
@@ -361,7 +365,10 @@ function bindSettingsAutoSave() {
 	});
 }
 
-function scheduleSettingsAutoSave(changedTarget = null, delay = SETTINGS_AUTOSAVE_DELAY_MS) {
+function scheduleSettingsAutoSave(
+	changedTarget = null,
+	delay = SETTINGS_AUTOSAVE_DELAY_MS,
+) {
 	syncSettingsColorInputs(changedTarget);
 	settingsAutoSaveDirty = true;
 	if (settingsAutoSaveTimer) clearTimeout(settingsAutoSaveTimer);
@@ -405,7 +412,7 @@ async function flushSettingsAutoSave() {
 function isMobileSettingsViewport() {
 	return Boolean(
 		window.matchMedia?.('(max-width: 760px)').matches ||
-			window.innerWidth <= 760,
+		window.innerWidth <= 760,
 	);
 }
 
@@ -450,7 +457,8 @@ function toggleSettingsSidebar(forceCollapsed) {
 }
 
 function populateTeacherAccessForm() {
-	const access = currentSettings.teacherAccess || DEFAULT_SETTINGS.teacherAccess;
+	const access =
+		currentSettings.teacherAccess || DEFAULT_SETTINGS.teacherAccess;
 	const tabMap = {
 		overview: 'teacher-access-overview',
 		questions: 'teacher-access-questions',
@@ -458,6 +466,7 @@ function populateTeacherAccessForm() {
 		exams: 'teacher-access-exams',
 		classes: 'teacher-access-classes',
 		games: 'teacher-access-games',
+		monitoring: 'teacher-access-monitoring',
 		results: 'teacher-access-results',
 		activity: 'teacher-access-activity',
 	};
@@ -498,7 +507,8 @@ function populateTeacherAccessForm() {
 }
 
 function readTeacherAccessForm() {
-	const access = currentSettings.teacherAccess || DEFAULT_SETTINGS.teacherAccess;
+	const access =
+		currentSettings.teacherAccess || DEFAULT_SETTINGS.teacherAccess;
 	const tabMap = {
 		overview: 'teacher-access-overview',
 		questions: 'teacher-access-questions',
@@ -508,6 +518,7 @@ function readTeacherAccessForm() {
 		games: 'teacher-access-games',
 		results: 'teacher-access-results',
 		activity: 'teacher-access-activity',
+		monitoring: 'teacher-access-monitoring',
 	};
 	const settingsMap = {
 		general: 'teacher-access-settings-general',
@@ -628,7 +639,9 @@ function switchUsersSettingsTab(event, tabName) {
 
 	// The imports review queue is admin-only: hide its tab from teachers
 	// (staged imports wait for admin confirmation).
-	const importsTab = scope.querySelector('.user-settings-tab-btn[data-user-tab="imports"]');
+	const importsTab = scope.querySelector(
+		'.user-settings-tab-btn[data-user-tab="imports"]',
+	);
 	if (importsTab) {
 		const isAdmin =
 			window.Auth && typeof window.Auth.isAdmin === 'function'
@@ -655,13 +668,22 @@ function switchUsersSettingsTab(event, tabName) {
 		btn.tabIndex = active ? 0 : -1;
 	});
 
-	if (safeTab === 'management' && typeof window.renderUsersTable === 'function') {
+	if (
+		safeTab === 'management' &&
+		typeof window.renderUsersTable === 'function'
+	) {
 		window.renderUsersTable();
 	}
-	if (safeTab === 'imports' && typeof window.renderPendingImports === 'function') {
+	if (
+		safeTab === 'imports' &&
+		typeof window.renderPendingImports === 'function'
+	) {
 		window.renderPendingImports();
 	}
-	if (safeTab === 'requests' && typeof window.renderProfileRequests === 'function') {
+	if (
+		safeTab === 'requests' &&
+		typeof window.renderProfileRequests === 'function'
+	) {
 		window.renderProfileRequests();
 	}
 }
@@ -707,20 +729,27 @@ async function saveSettingsForm(options = {}) {
 
 	let recoveryCodeHash = currentSettings.recoveryCodeHash || '';
 	const recoveryCodeInput = document.getElementById('setting-recoveryCode');
-	const recoveryCode = String(
-		recoveryCodeInput?.value || '',
-	).trim();
+	const recoveryCode = String(recoveryCodeInput?.value || '').trim();
 	if (recoveryCode) {
 		// The server-side hash (Setting system.recovery_code_hash) is what the
 		// sign-in page's recovery panel actually verifies against. POST it while
 		// the admin is signed in — the localStorage SHA-256 below stays as the
 		// offline fallback. Raw code only travels inside this authenticated
 		// session; only its bcrypt hash is persisted server-side.
-		if (window.Auth?.isAdmin?.() && window.API?.raw && recoveryCode.length >= 4) {
+		if (
+			window.Auth?.isAdmin?.() &&
+			window.API?.raw &&
+			recoveryCode.length >= 4
+		) {
 			try {
-				await window.API.raw('POST', '/auth/recover/set', { code: recoveryCode });
+				await window.API.raw('POST', '/auth/recover/set', {
+					code: recoveryCode,
+				});
 				if (typeof showToast === 'function') {
-					showToast('Recovery code saved to the server — store it somewhere safe 🔐', 'success');
+					showToast(
+						'Recovery code saved to the server — store it somewhere safe 🔐',
+						'success',
+					);
 				}
 			} catch (err) {
 				console.warn('[settings] recovery code server save failed:', err);
@@ -794,7 +823,9 @@ async function saveSettingsForm(options = {}) {
 	// Clean up any Admin Secret left over from the old shared-secret flow —
 	// realtime auth now rides on the login JWT instead.
 	localStorage.removeItem('quizAdminSecret');
-	window.dispatchEvent(new CustomEvent('quiz:settings-applied', { detail: currentSettings }));
+	window.dispatchEvent(
+		new CustomEvent('quiz:settings-applied', { detail: currentSettings }),
+	);
 
 	// Apply
 	applySettings();
@@ -823,7 +854,9 @@ async function saveSettingsForm(options = {}) {
 
 	// Broadcast Updates if enabled
 	if (newSettings.broadcastUpdates) {
-		console.log('Broadcast Updates enabled, triggering sync after settings change...');
+		console.log(
+			'Broadcast Updates enabled, triggering sync after settings change...',
+		);
 		if (window.syncQuestionsToClients) window.syncQuestionsToClients();
 	}
 }
@@ -853,18 +886,45 @@ window.getAppSettings = () => currentSettings; // Helper for other files
 // ── Storage repo shim for export/import/activity flows ─────────────────────
 // Routes localStorage calls through the synchronous bridge so they traverse
 // the repository layer (cache + API sync) rather than raw localStorage.
-function __repo()   { return (window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo) || null; }
+function __repo() {
+	return (window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo) || null;
+}
 function __get(entity, fallback) {
-  var r = __repo(); var fb = arguments.length >= 2 ? fallback : (entity === 'settings' || entity === 'gamification' ? {} : []);
-  if (!r) { try { return JSON.parse(localStorage.getItem(entity) || JSON.stringify(fb)); } catch(e) { return fb; } }
-  if (entity === 'settings' || entity === 'gamification') { return r.getValue_sync ? r.getValue_sync(entity, fb) : r.getAll_sync(entity); }
-  return r.getAll_sync(entity);
+	var r = __repo();
+	var fb =
+		arguments.length >= 2
+			? fallback
+			: entity === 'settings' || entity === 'gamification'
+				? {}
+				: [];
+	if (!r) {
+		try {
+			return JSON.parse(localStorage.getItem(entity) || JSON.stringify(fb));
+		} catch (e) {
+			return fb;
+		}
+	}
+	if (entity === 'settings' || entity === 'gamification') {
+		return r.getValue_sync
+			? r.getValue_sync(entity, fb)
+			: r.getAll_sync(entity);
+	}
+	return r.getAll_sync(entity);
 }
 function __set(entity, data) {
-  var r = __repo();
-  if (!r) { try { localStorage.setItem(entity, JSON.stringify(data)); } catch(e) {} return; }
-  if (entity === 'settings' || entity === 'gamification') { if (r.setValue_sync) r.setValue_sync(entity, data); else r.setAll_sync(entity, data); }
-  else { r.setAll_sync(entity, data); }
+	var r = __repo();
+	if (!r) {
+		try {
+			localStorage.setItem(entity, JSON.stringify(data));
+		} catch (e) {}
+		return;
+	}
+	if (entity === 'settings' || entity === 'gamification') {
+		if (r.setValue_sync) r.setValue_sync(entity, data);
+		else r.setAll_sync(entity, data);
+	} else {
+		r.setAll_sync(entity, data);
+	}
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -876,20 +936,47 @@ const BACKUP_GROUPS = [
 	{
 		id: 'core',
 		title: 'Core Content',
-		description: 'The building blocks used to run classes, question banks, and exams.',
-		stores: ['classes', 'users', 'categories', 'questions', 'exams', 'exam_questions', 'exam_classes', 'exam_sessions'],
+		description:
+			'The building blocks used to run classes, question banks, and exams.',
+		stores: [
+			'classes',
+			'users',
+			'categories',
+			'questions',
+			'exams',
+			'exam_questions',
+			'exam_classes',
+			'exam_sessions',
+		],
 	},
 	{
 		id: 'games',
 		title: 'Games & Tournaments',
-		description: 'Live games, presets, tournaments, entries, history, and game sessions.',
-		stores: ['games', 'game_presets', 'tournaments', 'tournament_entries', 'tournament_history', 'game_sessions'],
+		description:
+			'Live games, presets, tournaments, entries, history, and game sessions.',
+		stores: [
+			'games',
+			'game_presets',
+			'tournaments',
+			'tournament_entries',
+			'tournament_history',
+			'game_sessions',
+		],
 	},
 	{
 		id: 'history',
 		title: 'History & Requests',
-		description: 'Results, activity, requests, notifications, and teacher collaboration data.',
-		stores: ['results', 'activity', 'profile_requests', 'account_requests', 'notifications', 'teacher_messages', 'teacher_assignments'],
+		description:
+			'Results, activity, requests, notifications, and teacher collaboration data.',
+		stores: [
+			'results',
+			'activity',
+			'profile_requests',
+			'account_requests',
+			'notifications',
+			'teacher_messages',
+			'teacher_assignments',
+		],
 	},
 	{
 		id: 'configuration',
@@ -938,14 +1025,20 @@ const pendingBackupPicker = {
 
 function getBackupStoreValue(data, key) {
 	if (key === 'activity') {
-		return Object.prototype.hasOwnProperty.call(data, 'activity') ? data.activity : data.activityLog;
+		return Object.prototype.hasOwnProperty.call(data, 'activity')
+			? data.activity
+			: data.activityLog;
 	}
 	return data[key];
 }
 
 function getBackupStoreKeys(data) {
 	return BACKUP_STORE_KEYS.filter(function (key) {
-		return Object.prototype.hasOwnProperty.call(data, key) || (key === 'activity' && Object.prototype.hasOwnProperty.call(data, 'activityLog'));
+		return (
+			Object.prototype.hasOwnProperty.call(data, key) ||
+			(key === 'activity' &&
+				Object.prototype.hasOwnProperty.call(data, 'activityLog'))
+		);
 	});
 }
 
@@ -958,7 +1051,8 @@ function getBackupStoreCount(data, key) {
 
 function downloadBackupFile(exportData, fileName) {
 	const dataStr = JSON.stringify(exportData, null, 2);
-	const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+	const dataUri =
+		'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
 	const linkElement = document.createElement('a');
 	linkElement.setAttribute('href', dataUri);
 	linkElement.setAttribute('download', fileName);
@@ -989,53 +1083,107 @@ function renderBackupPicker(options) {
 	const modal = document.getElementById('backupPickerModal');
 	const body = document.getElementById('backupPickerBody');
 	if (!modal || !body) return;
-	if (modal.parentElement && modal.parentElement !== document.body) document.body.appendChild(modal);
+	if (modal.parentElement && modal.parentElement !== document.body)
+		document.body.appendChild(modal);
 
 	const isImport = options.mode === 'import';
 	const availableKeys = options.availableKeys || BACKUP_STORE_KEYS.slice();
 	const selectedKeys = options.selectedKeys || availableKeys.slice();
-	const introTitle = isImport ? 'Choose exactly what to restore' : 'Choose exactly what to export';
+	const introTitle = isImport
+		? 'Choose exactly what to restore'
+		: 'Choose exactly what to export';
 	const introText = isImport
 		? 'Only stores present in this backup are listed. Every selected store will replace the matching data already on this device.'
 		: 'Every store starts selected. Deselect anything you do not want in this backup file.';
-	const groups = BACKUP_GROUPS
-		.map(function (group) {
-			const stores = group.stores.filter(function (key) { return availableKeys.indexOf(key) !== -1; });
-			return stores.length ? { ...group, stores: stores } : null;
-		})
-		.filter(Boolean);
+	const groups = BACKUP_GROUPS.map(function (group) {
+		const stores = group.stores.filter(function (key) {
+			return availableKeys.indexOf(key) !== -1;
+		});
+		return stores.length ? { ...group, stores: stores } : null;
+	}).filter(Boolean);
 
 	let groupsHtml = '';
 	if (!groups.length) {
-		groupsHtml = '<div class="bkp-empty">No supported backup data was found in this file.</div>';
+		groupsHtml =
+			'<div class="bkp-empty">No supported backup data was found in this file.</div>';
 	} else {
-		groupsHtml = '<div class="bkp-groups">' + groups.map(function (group) {
-			const allSelected = group.stores.every(function (key) { return selectedKeys.indexOf(key) !== -1; });
-			const count = group.stores.reduce(function (total, key) { return total + getBackupStoreCount(options.data || {}, key); }, 0);
-			return '<div class="bkp-group">' +
-				'<div class="bkp-group-header">' +
-				'<label><input type="checkbox" data-bkp-group="' + group.id + '" ' + (allSelected ? 'checked' : '') + ' onchange="window.switchBackupGroup(\'' + group.id + '\', this.checked)"> ' + group.title + '</label>' +
-				'<span class="bkp-count">' + count + '</span>' +
-				'</div>' +
-				'<div class="bkp-items">' + group.stores.map(function (key) {
-					const checked = selectedKeys.indexOf(key) !== -1 ? ' checked' : '';
-					return '<div class="bkp-item"><label><input type="checkbox" data-bkp-store="' + key + '"' + checked + '> <span>' + (BACKUP_STORE_LABELS[key] || key) + '<small>Replaces current ' + (BACKUP_STORE_LABELS[key] || key).toLowerCase() + ' data</small></span></label></div>';
-				}).join('') + '</div>' +
-				'</div>';
-		}).join('') + '</div>';
+		groupsHtml =
+			'<div class="bkp-groups">' +
+			groups
+				.map(function (group) {
+					const allSelected = group.stores.every(function (key) {
+						return selectedKeys.indexOf(key) !== -1;
+					});
+					const count = group.stores.reduce(function (total, key) {
+						return total + getBackupStoreCount(options.data || {}, key);
+					}, 0);
+					return (
+						'<div class="bkp-group">' +
+						'<div class="bkp-group-header">' +
+						'<label><input type="checkbox" data-bkp-group="' +
+						group.id +
+						'" ' +
+						(allSelected ? 'checked' : '') +
+						' onchange="window.switchBackupGroup(\'' +
+						group.id +
+						'\', this.checked)"> ' +
+						group.title +
+						'</label>' +
+						'<span class="bkp-count">' +
+						count +
+						'</span>' +
+						'</div>' +
+						'<div class="bkp-items">' +
+						group.stores
+							.map(function (key) {
+								const checked =
+									selectedKeys.indexOf(key) !== -1 ? ' checked' : '';
+								return (
+									'<div class="bkp-item"><label><input type="checkbox" data-bkp-store="' +
+									key +
+									'"' +
+									checked +
+									'> <span>' +
+									(BACKUP_STORE_LABELS[key] || key) +
+									'<small>Replaces current ' +
+									(BACKUP_STORE_LABELS[key] || key).toLowerCase() +
+									' data</small></span></label></div>'
+								);
+							})
+							.join('') +
+						'</div>' +
+						'</div>'
+					);
+				})
+				.join('') +
+			'</div>';
 	}
 
 	body.innerHTML =
-		'<p class="bkp-picker-intro"><strong>' + introTitle + '</strong><br>' + introText + '</p>' +
-		'<div class="bkp-picker-controls"><strong>' + selectedKeys.length + ' of ' + availableKeys.length + ' stores selected</strong><div class="bkp-picker-actions">' +
+		'<p class="bkp-picker-intro"><strong>' +
+		introTitle +
+		'</strong><br>' +
+		introText +
+		'</p>' +
+		'<div class="bkp-picker-controls"><strong>' +
+		selectedKeys.length +
+		' of ' +
+		availableKeys.length +
+		' stores selected</strong><div class="bkp-picker-actions">' +
 		'<button type="button" class="btn btn-secondary" onclick="window.setAllBackupSelection(true)">Select all</button>' +
 		'<button type="button" class="btn btn-secondary" onclick="window.setAllBackupSelection(false)">Deselect all</button>' +
-		'</div></div>' + groupsHtml;
+		'</div></div>' +
+		groupsHtml;
 
 	const actionBtn = document.getElementById('backupPickerActionBtn');
 	if (actionBtn) {
 		actionBtn.textContent = isImport ? 'Import selected' : 'Export selected';
-		actionBtn.setAttribute('onclick', isImport ? 'window.performCustomImport()' : 'window.performCustomExport()');
+		actionBtn.setAttribute(
+			'onclick',
+			isImport
+				? 'window.performCustomImport()'
+				: 'window.performCustomExport()',
+		);
 	}
 
 	modal.style.display = 'flex';
@@ -1056,7 +1204,8 @@ function exportAllData() {
 			},
 		};
 
-		const fileName = 'quiz-app-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+		const fileName =
+			'quiz-app-backup-' + new Date().toISOString().slice(0, 10) + '.json';
 		downloadBackupFile(exportData, fileName);
 		recordBackupActivity('export', 'Exported backup ' + fileName, 'icon-rose');
 		showToast('Backup created successfully!');
@@ -1090,7 +1239,10 @@ function openImportPicker(inputElement, data, allowedKeys) {
 	const availableKeys = getBackupStoreKeys(data).filter(function (key) {
 		return !allowedKeys || allowedKeys.indexOf(key) !== -1;
 	});
-	if (!availableKeys.length) throw new Error('This backup does not contain any supported stores for this import.');
+	if (!availableKeys.length)
+		throw new Error(
+			'This backup does not contain any supported stores for this import.',
+		);
 
 	pendingBackupPicker.mode = 'import';
 	pendingBackupPicker.data = data;
@@ -1108,7 +1260,8 @@ function openImportPicker(inputElement, data, allowedKeys) {
 function closeBackupPickerModal() {
 	const modal = document.getElementById('backupPickerModal');
 	if (modal) modal.style.display = 'none';
-	if (pendingBackupPicker.mode === 'import' && pendingBackupPicker.input) pendingBackupPicker.input.value = '';
+	if (pendingBackupPicker.mode === 'import' && pendingBackupPicker.input)
+		pendingBackupPicker.input.value = '';
 	pendingBackupPicker.mode = null;
 	pendingBackupPicker.data = null;
 	pendingBackupPicker.availableKeys = [];
@@ -1117,24 +1270,37 @@ function closeBackupPickerModal() {
 }
 
 function setAllBackupSelection(checked) {
-	document.querySelectorAll('#backupPickerModal [data-bkp-store]').forEach(function (checkbox) {
-		checkbox.checked = !!checked;
-	});
-	document.querySelectorAll('#backupPickerModal [data-bkp-group]').forEach(function (checkbox) {
-		checkbox.checked = !!checked;
-	});
+	document
+		.querySelectorAll('#backupPickerModal [data-bkp-store]')
+		.forEach(function (checkbox) {
+			checkbox.checked = !!checked;
+		});
+	document
+		.querySelectorAll('#backupPickerModal [data-bkp-group]')
+		.forEach(function (checkbox) {
+			checkbox.checked = !!checked;
+		});
 }
 
 function switchBackupGroup(groupId, checked) {
-	const group = BACKUP_GROUPS.find(function (item) { return item.id === groupId; });
-	if (!group) return;
-	document.querySelectorAll('#backupPickerModal [data-bkp-store]').forEach(function (checkbox) {
-		if (group.stores.indexOf(checkbox.dataset.bkpStore) !== -1) checkbox.checked = !!checked;
+	const group = BACKUP_GROUPS.find(function (item) {
+		return item.id === groupId;
 	});
+	if (!group) return;
+	document
+		.querySelectorAll('#backupPickerModal [data-bkp-store]')
+		.forEach(function (checkbox) {
+			if (group.stores.indexOf(checkbox.dataset.bkpStore) !== -1)
+				checkbox.checked = !!checked;
+		});
 }
 
 function performCustomExport() {
-	const selectedKeys = Array.from(document.querySelectorAll('#backupPickerModal [data-bkp-store]:checked')).map(function (checkbox) { return checkbox.dataset.bkpStore; });
+	const selectedKeys = Array.from(
+		document.querySelectorAll('#backupPickerModal [data-bkp-store]:checked'),
+	).map(function (checkbox) {
+		return checkbox.dataset.bkpStore;
+	});
 	if (!selectedKeys.length) {
 		showToast('Select at least one store to export.', 'error');
 		return;
@@ -1151,12 +1317,26 @@ function performCustomExport() {
 		selectedKeys.forEach(function (key) {
 			exportData.data[key] = getBackupStoreValue(collected, key);
 		});
-		if (selectedKeys.indexOf('activity') !== -1) exportData.data.activityLog = collected.activity;
+		if (selectedKeys.indexOf('activity') !== -1)
+			exportData.data.activityLog = collected.activity;
 
 		const allSelected = selectedKeys.length === BACKUP_STORE_KEYS.length;
-		const fileName = 'quiz-app-backup-' + (allSelected ? 'all' : 'custom') + '-' + new Date().toISOString().slice(0, 10) + '.json';
+		const fileName =
+			'quiz-app-backup-' +
+			(allSelected ? 'all' : 'custom') +
+			'-' +
+			new Date().toISOString().slice(0, 10) +
+			'.json';
 		downloadBackupFile(exportData, fileName);
-		recordBackupActivity('export', 'Exported ' + (allSelected ? 'all data' : selectedKeys.length + ' selected stores') + ' (' + fileName + ')', 'icon-rose');
+		recordBackupActivity(
+			'export',
+			'Exported ' +
+				(allSelected ? 'all data' : selectedKeys.length + ' selected stores') +
+				' (' +
+				fileName +
+				')',
+			'icon-rose',
+		);
 		showToast('Backup created successfully: ' + fileName, 'success');
 		closeBackupPickerModal();
 	} catch (error) {
@@ -1166,7 +1346,11 @@ function performCustomExport() {
 }
 
 function performCustomImport() {
-	const selectedKeys = Array.from(document.querySelectorAll('#backupPickerModal [data-bkp-store]:checked')).map(function (checkbox) { return checkbox.dataset.bkpStore; });
+	const selectedKeys = Array.from(
+		document.querySelectorAll('#backupPickerModal [data-bkp-store]:checked'),
+	).map(function (checkbox) {
+		return checkbox.dataset.bkpStore;
+	});
 	if (!selectedKeys.length) {
 		showToast('Select at least one store to import.', 'error');
 		return;
@@ -1174,11 +1358,15 @@ function performCustomImport() {
 
 	try {
 		applyBackupStores(pendingBackupPicker.data || {}, selectedKeys);
-		const scope = pendingBackupPicker.allowedKeys ? 'selected wizard section' : selectedKeys.length + ' selected stores';
+		const scope = pendingBackupPicker.allowedKeys
+			? 'selected wizard section'
+			: selectedKeys.length + ' selected stores';
 		recordBackupActivity('import', 'Imported ' + scope, 'icon-indigo');
 		showToast('Data imported successfully! Reloading...', 'success');
 		closeBackupPickerModal();
-		setTimeout(function () { window.location.reload(); }, 1000);
+		setTimeout(function () {
+			window.location.reload();
+		}, 1000);
 	} catch (error) {
 		console.error('Custom import failed:', error);
 		showToast('Failed to import data: ' + error.message, 'error');
@@ -1186,7 +1374,9 @@ function performCustomImport() {
 }
 
 function applyBackupStores(data, selectedKeys) {
-	const has = function (key) { return selectedKeys.indexOf(key) !== -1; };
+	const has = function (key) {
+		return selectedKeys.indexOf(key) !== -1;
+	};
 
 	// Keep the existing import behavior, including date normalization and the
 	// raw-data fallbacks, while applying only the stores selected in the picker.
@@ -1195,7 +1385,8 @@ function applyBackupStores(data, selectedKeys) {
 	if (has('questions') && data.questions) {
 		try {
 			const processedQuestions = data.questions.map(function (q) {
-				const dateFrom = q.dateCreated || q.createdAt || q.date || q.created || null;
+				const dateFrom =
+					q.dateCreated || q.createdAt || q.date || q.created || null;
 				return { ...q, dateCreated: dateFrom || new Date().toISOString() };
 			});
 			__set('questions', processedQuestions);
@@ -1204,31 +1395,106 @@ function applyBackupStores(data, selectedKeys) {
 		}
 	}
 
-	if (has('categories') && data.categories) __set('categories', data.categories);
+	if (has('categories') && data.categories)
+		__set('categories', data.categories);
 	if (has('exams') && data.exams) __set('exams', data.exams);
 	if (has('classes') && data.classes) __set('classes', data.classes);
 
-	if (has('users') && data.users && Array.isArray(data.users)) __set('users', data.users);
-	if (has('games') && data.games && Array.isArray(data.games)) __set('games', data.games);
-	if (has('tournaments') && data.tournaments && Array.isArray(data.tournaments)) __set('tournaments', data.tournaments);
-	if (has('exam_sessions') && data.exam_sessions && Array.isArray(data.exam_sessions)) __set('exam_sessions', data.exam_sessions);
-	if (has('exam_questions') && data.exam_questions && Array.isArray(data.exam_questions)) __set('exam_questions', data.exam_questions);
-	if (has('exam_classes') && data.exam_classes && Array.isArray(data.exam_classes)) __set('exam_classes', data.exam_classes);
-	if (has('game_sessions') && data.game_sessions && Array.isArray(data.game_sessions)) __set('game_sessions', data.game_sessions);
-	if (has('tournament_entries') && data.tournament_entries && Array.isArray(data.tournament_entries)) __set('tournament_entries', data.tournament_entries);
-	if (has('tournament_history') && data.tournament_history && Array.isArray(data.tournament_history)) __set('tournament_history', data.tournament_history);
-	if (has('profile_requests') && data.profile_requests && Array.isArray(data.profile_requests)) __set('profile_requests', data.profile_requests);
-	if (has('account_requests') && data.account_requests && Array.isArray(data.account_requests)) __set('account_requests', data.account_requests);
-	if (has('notifications') && data.notifications && Array.isArray(data.notifications)) __set('notifications', data.notifications);
-	if (has('teacher_messages') && data.teacher_messages && Array.isArray(data.teacher_messages)) __set('teacher_messages', data.teacher_messages);
-	if (has('teacher_assignments') && data.teacher_assignments && Array.isArray(data.teacher_assignments)) __set('teacher_assignments', data.teacher_assignments);
-	if (has('gamification') && data.gamification && typeof data.gamification === 'object') __set('gamification', data.gamification);
-	if (has('game_presets') && data.game_presets && typeof data.game_presets === 'object') __set('game_presets', data.game_presets);
+	if (has('users') && data.users && Array.isArray(data.users))
+		__set('users', data.users);
+	if (has('games') && data.games && Array.isArray(data.games))
+		__set('games', data.games);
+	if (has('tournaments') && data.tournaments && Array.isArray(data.tournaments))
+		__set('tournaments', data.tournaments);
+	if (
+		has('exam_sessions') &&
+		data.exam_sessions &&
+		Array.isArray(data.exam_sessions)
+	)
+		__set('exam_sessions', data.exam_sessions);
+	if (
+		has('exam_questions') &&
+		data.exam_questions &&
+		Array.isArray(data.exam_questions)
+	)
+		__set('exam_questions', data.exam_questions);
+	if (
+		has('exam_classes') &&
+		data.exam_classes &&
+		Array.isArray(data.exam_classes)
+	)
+		__set('exam_classes', data.exam_classes);
+	if (
+		has('game_sessions') &&
+		data.game_sessions &&
+		Array.isArray(data.game_sessions)
+	)
+		__set('game_sessions', data.game_sessions);
+	if (
+		has('tournament_entries') &&
+		data.tournament_entries &&
+		Array.isArray(data.tournament_entries)
+	)
+		__set('tournament_entries', data.tournament_entries);
+	if (
+		has('tournament_history') &&
+		data.tournament_history &&
+		Array.isArray(data.tournament_history)
+	)
+		__set('tournament_history', data.tournament_history);
+	if (
+		has('profile_requests') &&
+		data.profile_requests &&
+		Array.isArray(data.profile_requests)
+	)
+		__set('profile_requests', data.profile_requests);
+	if (
+		has('account_requests') &&
+		data.account_requests &&
+		Array.isArray(data.account_requests)
+	)
+		__set('account_requests', data.account_requests);
+	if (
+		has('notifications') &&
+		data.notifications &&
+		Array.isArray(data.notifications)
+	)
+		__set('notifications', data.notifications);
+	if (
+		has('teacher_messages') &&
+		data.teacher_messages &&
+		Array.isArray(data.teacher_messages)
+	)
+		__set('teacher_messages', data.teacher_messages);
+	if (
+		has('teacher_assignments') &&
+		data.teacher_assignments &&
+		Array.isArray(data.teacher_assignments)
+	)
+		__set('teacher_assignments', data.teacher_assignments);
+	if (
+		has('gamification') &&
+		data.gamification &&
+		typeof data.gamification === 'object'
+	)
+		__set('gamification', data.gamification);
+	if (
+		has('game_presets') &&
+		data.game_presets &&
+		typeof data.game_presets === 'object'
+	)
+		__set('game_presets', data.game_presets);
 
 	if (has('results') && data.results) {
 		try {
 			const processedResults = data.results.map(function (r) {
-				const dateFrom = r.dateTaken || r.takenAt || r.date || r.createdAt || r.created || null;
+				const dateFrom =
+					r.dateTaken ||
+					r.takenAt ||
+					r.date ||
+					r.createdAt ||
+					r.created ||
+					null;
 				return { ...r, dateTaken: dateFrom || new Date().toISOString() };
 			});
 			__set('results', processedResults);
@@ -1236,7 +1502,8 @@ function applyBackupStores(data, selectedKeys) {
 			__set('results', data.results);
 		}
 	}
-	if (has('activity') && (data.activityLog || data.activity)) __set('activity', data.activityLog || data.activity);
+	if (has('activity') && (data.activityLog || data.activity))
+		__set('activity', data.activityLog || data.activity);
 }
 
 /**
@@ -1245,7 +1512,8 @@ function applyBackupStores(data, selectedKeys) {
  * @param {string[]|null} allowedKeys - Optional wizard-scoped store allow-list
  */
 function importAllData(inputElement, allowedKeys) {
-	const file = inputElement && inputElement.files ? inputElement.files[0] : null;
+	const file =
+		inputElement && inputElement.files ? inputElement.files[0] : null;
 	if (!file) return;
 
 	const reader = new FileReader();
@@ -1368,140 +1636,147 @@ function importDeviceData(inputElement) {
 			const existingResults = __get('results', []);
 			const pushUniqueResult = (candidate) => {
 				if (!candidate || !candidate.examId) return;
-				if (existingResults.some((r) => String(r.id) === String(candidate.id))) return;
+				if (existingResults.some((r) => String(r.id) === String(candidate.id)))
+					return;
 				existingResults.push(candidate);
 				resultsImported++;
 			};
 
-				// Handle examActiveSession — legacy single result
-				if (examSession?.results) {
-					pushUniqueResult(
-						mapSessionResult(
-							{
-								...examSession,
-								// legacy root shape has no id — synthesize one
-								id: `${examSession.examId}-${fileData.deviceId || 'imported'}`,
-							},
-							'active-session',
-						),
-					);
-				}
+			// Handle examActiveSession — legacy single result
+			if (examSession?.results) {
+				pushUniqueResult(
+					mapSessionResult(
+						{
+							...examSession,
+							// legacy root shape has no id — synthesize one
+							id: `${examSession.examId}-${fileData.deviceId || 'imported'}`,
+						},
+						'active-session',
+					),
+				);
+			}
 
-				// Handle examActiveSession.completedResults (shared-device list)
-				if (Array.isArray(examSession?.completedResults)) {
-					examSession.completedResults.forEach((entry) =>
-						pushUniqueResult(mapSessionResult(entry, 'completed')),
-					);
-				}
+			// Handle examActiveSession.completedResults (shared-device list)
+			if (Array.isArray(examSession?.completedResults)) {
+				examSession.completedResults.forEach((entry) =>
+					pushUniqueResult(mapSessionResult(entry, 'completed')),
+				);
+			}
 
+			if (resultsImported > 0) {
+				__set('results', existingResults);
+			}
+
+			// Handle quizResults array
+			if (deviceData.quizResults && Array.isArray(deviceData.quizResults)) {
+				deviceData.quizResults.forEach((result) => {
+					if (
+						!existingResults.some((r) => String(r.id) === String(result.id))
+					) {
+						// Result records come from the repo and use various field
+						// spellings (user_id/userId, date_taken/date) depending on
+						// which side wrote them. Keep the record as-is — it is
+						// already the app's canonical shape — only stamp the
+						// device provenance if missing.
+						const stamped = { ...result };
+						if (!stamped.deviceId && fileData.deviceId)
+							stamped.deviceId = fileData.deviceId;
+						if (!stamped.deviceName && fileData.deviceName)
+							stamped.deviceName = fileData.deviceName;
+						existingResults.push(stamped);
+						resultsImported++;
+					}
+				});
 				if (resultsImported > 0) {
 					__set('results', existingResults);
 				}
+			}
 
-				// Handle quizResults array
-				if (deviceData.quizResults && Array.isArray(deviceData.quizResults)) {
-					deviceData.quizResults.forEach((result) => {
-						if (
-							!existingResults.some(
-								(r) => String(r.id) === String(result.id),
-							)
-						) {
-							// Result records come from the repo and use various field
-							// spellings (user_id/userId, date_taken/date) depending on
-							// which side wrote them. Keep the record as-is — it is
-							// already the app's canonical shape — only stamp the
-							// device provenance if missing.
-							const stamped = { ...result };
-							if (!stamped.deviceId && fileData.deviceId)
-								stamped.deviceId = fileData.deviceId;
-							if (!stamped.deviceName && fileData.deviceName)
-								stamped.deviceName = fileData.deviceName;
-							existingResults.push(stamped);
-							resultsImported++;
-						}
-					});
-					if (resultsImported > 0) {
-						__set('results', existingResults);
+			// Handle quizExams
+			if (deviceData.quizExams && Array.isArray(deviceData.quizExams)) {
+				const existingExams = __get('exams', []);
+				deviceData.quizExams.forEach((exam) => {
+					if (!existingExams.some((e) => String(e.id) === String(exam.id))) {
+						existingExams.push(exam);
+						examsImported++;
 					}
+				});
+				if (examsImported > 0) {
+					__set('exams', existingExams);
 				}
+			}
 
-				// Handle quizExams
-				if (deviceData.quizExams && Array.isArray(deviceData.quizExams)) {
-					const existingExams = __get('exams', []);
-					deviceData.quizExams.forEach((exam) => {
-						if (!existingExams.some((e) => String(e.id) === String(exam.id))) {
-							existingExams.push(exam);
-							examsImported++;
-						}
-					});
-					if (examsImported > 0) {
-						__set('exams', existingExams);
+			// Handle quizQuestions
+			if (deviceData.quizQuestions && Array.isArray(deviceData.quizQuestions)) {
+				const existingQuestions = __get('questions', []);
+				deviceData.quizQuestions.forEach((q) => {
+					if (!existingQuestions.some((eq) => String(eq.id) === String(q.id))) {
+						existingQuestions.push(q);
+						questionsImported++;
 					}
+				});
+				if (questionsImported > 0) {
+					__set('questions', existingQuestions);
 				}
+			}
 
-				// Handle quizQuestions
-				if (deviceData.quizQuestions && Array.isArray(deviceData.quizQuestions)) {
-					const existingQuestions = __get('questions', []);
-					deviceData.quizQuestions.forEach((q) => {
-						if (!existingQuestions.some((eq) => String(eq.id) === String(q.id))) {
-							existingQuestions.push(q);
-							questionsImported++;
-						}
-					});
-					if (questionsImported > 0) {
-						__set('questions', existingQuestions);
+			// Handle quizClasses
+			if (deviceData.quizClasses && Array.isArray(deviceData.quizClasses)) {
+				const existingClasses = __get('classes', []);
+				deviceData.quizClasses.forEach((cls) => {
+					if (!existingClasses.some((ec) => String(ec.id) === String(cls.id))) {
+						existingClasses.push(cls);
+						classesImported++;
+						studentsImported += cls.students?.length || 0;
 					}
+				});
+				if (classesImported > 0) {
+					__set('classes', existingClasses);
 				}
+			}
 
-				// Handle quizClasses
-				if (deviceData.quizClasses && Array.isArray(deviceData.quizClasses)) {
-					const existingClasses = __get('classes', []);
-					deviceData.quizClasses.forEach((cls) => {
-						if (!existingClasses.some((ec) => String(ec.id) === String(cls.id))) {
-							existingClasses.push(cls);
-							classesImported++;
-							studentsImported += cls.students?.length || 0;
-						}
-					});
-					if (classesImported > 0) {
-						__set('classes', existingClasses);
-					}
-				}
+			// Handle quizActivity
+			if (deviceData.quizActivity && Array.isArray(deviceData.quizActivity)) {
+				const existingActivity = __get('activity', []);
 
-				// Handle quizActivity
-				if (deviceData.quizActivity && Array.isArray(deviceData.quizActivity)) {
-					const existingActivity = __get('activity', []);
+				deviceData.quizActivity.forEach((activity) => {
+					// Filter out 'noisy' or redundant activities
+					if (
+						activity.type === 'quiz_started' ||
+						activity.type === 'answer_submitted' ||
+						activity.type === 'result'
+					)
+						return;
 
-					deviceData.quizActivity.forEach(activity => {
-						// Filter out 'noisy' or redundant activities
-						if (activity.type === 'quiz_started' || activity.type === 'answer_submitted' || activity.type === 'result') return;
-
-						const activityDate = activity.date || activity.timestamp || '';
-						const isDuplicate = existingActivity.some(a =>
+					const activityDate = activity.date || activity.timestamp || '';
+					const isDuplicate = existingActivity.some(
+						(a) =>
 							a.type === activity.type &&
 							(a.date || a.timestamp || '') === activityDate &&
 							a.studentNumber === activity.studentNumber &&
-							a.name === activity.name
-						);
+							a.name === activity.name,
+					);
 
-						if (!isDuplicate) {
-							// Add device context if missing from the import source if available
-							if (!activity.deviceName && fileData.deviceName) activity.deviceName = fileData.deviceName;
-							if (!activity.deviceIp && fileData.ip) activity.deviceIp = fileData.ip;
-							existingActivity.unshift(activity);
-							activityImported++;
-						}
-					});
-
-					if (activityImported > 0) {
-						existingActivity.sort((a, b) => {
-							const dateA = new Date(a.date || a.timestamp || 0);
-							const dateB = new Date(b.date || b.timestamp || 0);
-							return dateB - dateA;
-						});
-						__set('activity', existingActivity.slice(0, 1000));
+					if (!isDuplicate) {
+						// Add device context if missing from the import source if available
+						if (!activity.deviceName && fileData.deviceName)
+							activity.deviceName = fileData.deviceName;
+						if (!activity.deviceIp && fileData.ip)
+							activity.deviceIp = fileData.ip;
+						existingActivity.unshift(activity);
+						activityImported++;
 					}
+				});
+
+				if (activityImported > 0) {
+					existingActivity.sort((a, b) => {
+						const dateA = new Date(a.date || a.timestamp || 0);
+						const dateB = new Date(b.date || b.timestamp || 0);
+						return dateB - dateA;
+					});
+					__set('activity', existingActivity.slice(0, 1000));
 				}
+			}
 
 			// Summary
 			const totalImported =
@@ -1510,18 +1785,25 @@ function importDeviceData(inputElement) {
 				const summary = [];
 				if (resultsImported > 0) summary.push(`${resultsImported} result(s)`);
 				if (examsImported > 0) summary.push(`${examsImported} exam(s)`);
-				if (questionsImported > 0) summary.push(`${questionsImported} question(s)`);
+				if (questionsImported > 0)
+					summary.push(`${questionsImported} question(s)`);
 				if (classesImported > 0) summary.push(`${classesImported} class(es)`);
-				if (studentsImported > 0) summary.push(`${studentsImported} student(s)`);
-				if (activityImported > 0) summary.push(`${activityImported} activities`);
+				if (studentsImported > 0)
+					summary.push(`${studentsImported} student(s)`);
+				if (activityImported > 0)
+					summary.push(`${activityImported} activities`);
 				showToast(`✅ Imported: ${summary.join(', ')}`, 'success');
 
 				// Refresh UIs
 				if (window.loadResults) window.loadResults();
-				if (typeof window.renderRecentActivity === 'function') window.renderRecentActivity();
-				if (typeof window.updateExamList === 'function') window.updateExamList();
-				if (typeof window.updateQuestionList === 'function') window.updateQuestionList();
-				if (typeof window.updateClassList === 'function') window.updateClassList();
+				if (typeof window.renderRecentActivity === 'function')
+					window.renderRecentActivity();
+				if (typeof window.updateExamList === 'function')
+					window.updateExamList();
+				if (typeof window.updateQuestionList === 'function')
+					window.updateQuestionList();
+				if (typeof window.updateClassList === 'function')
+					window.updateClassList();
 			} else {
 				showToast('ℹ️ No new data to import', 'info');
 			}
@@ -1555,10 +1837,12 @@ function refreshTrainingPresetDropdown() {
 	if (trainingPresetSelect && window.getAllPresets) {
 		const presets = window.getAllPresets();
 		const currentVal = trainingPresetSelect.value;
-		
+
 		// Re-read settings from storage to avoid using stale global variable if needed
-		const latestSettings = JSON.parse(localStorage.getItem('quizSettings') || '{}');
-		
+		const latestSettings = JSON.parse(
+			localStorage.getItem('quizSettings') || '{}',
+		);
+
 		trainingPresetSelect.innerHTML =
 			'<option value="">-- Use Default Settings --</option>';
 		presets.forEach((preset) => {
@@ -1567,17 +1851,22 @@ function refreshTrainingPresetDropdown() {
 			option.textContent = preset.name;
 			trainingPresetSelect.appendChild(option);
 		});
-		
+
 		console.log(`Dropdown refreshed with ${presets.length} presets.`);
 
 		// Restore previous selection if still valid, otherwise use settings value
-		if (currentVal && [...trainingPresetSelect.options].some(o => o.value === currentVal)) {
+		if (
+			currentVal &&
+			[...trainingPresetSelect.options].some((o) => o.value === currentVal)
+		) {
 			trainingPresetSelect.value = currentVal;
 		} else {
 			trainingPresetSelect.value = latestSettings.trainingPresetId || '';
 		}
 	} else {
-		console.warn('Cannot refresh preset dropdown: Select element or getAllPresets missing');
+		console.warn(
+			'Cannot refresh preset dropdown: Select element or getAllPresets missing',
+		);
 	}
 }
 
@@ -1589,13 +1878,32 @@ window.refreshTrainingPresetDropdown = refreshTrainingPresetDropdown;
 // clean server state instead of re-uploading the cached rows.
 
 const RESET_DATA_MIRROR_KEYS = [
-	'quizUsers', 'quizClasses', 'quizCategories', 'quizQuestions', 'quizExams',
-	'quizResults', 'quizGames', 'quizTournaments', 'quizTournamentsHistory',
-	'quizExamSessions', 'quizExamQuestions', 'quizExamClasses', 'quizGameSessions',
-	'quizTournamentEntries', 'quizAuditLogs', 'quizSettings', 'quizActivity',
-	'quizGamification', 'quizProfileRequests', 'quizAccountRequests',
-	'adminNotifications', 'teacherMessages', 'teacherAssignments',
-	'gamePresets', 'gamePresetsInitialized', 'adminProfileRequests',
+	'quizUsers',
+	'quizClasses',
+	'quizCategories',
+	'quizQuestions',
+	'quizExams',
+	'quizResults',
+	'quizGames',
+	'quizTournaments',
+	'quizTournamentsHistory',
+	'quizExamSessions',
+	'quizExamQuestions',
+	'quizExamClasses',
+	'quizGameSessions',
+	'quizTournamentEntries',
+	'quizAuditLogs',
+	'quizSettings',
+	'quizActivity',
+	'quizGamification',
+	'quizProfileRequests',
+	'quizAccountRequests',
+	'adminNotifications',
+	'teacherMessages',
+	'teacherAssignments',
+	'gamePresets',
+	'gamePresetsInitialized',
+	'adminProfileRequests',
 ];
 
 function openResetDataModal() {
@@ -1628,7 +1936,12 @@ function updateResetDataButtonState() {
 async function resetAllData() {
 	const btn = document.getElementById('resetDataConfirmBtn');
 	if (btn?.disabled) return;
-	if (String(document.getElementById('resetDataConfirmInput')?.value || '').trim() !== 'RESET') return;
+	if (
+		String(
+			document.getElementById('resetDataConfirmInput')?.value || '',
+		).trim() !== 'RESET'
+	)
+		return;
 
 	const originalText = btn.textContent;
 	btn.disabled = true;
@@ -1648,10 +1961,16 @@ async function resetAllData() {
 		// genuine first setup. Auth/session keys are untouched — the admin
 		// stays logged in.
 		RESET_DATA_MIRROR_KEYS.forEach((key) => {
-			try { localStorage.removeItem(key); } catch (_) {}
+			try {
+				localStorage.removeItem(key);
+			} catch (_) {}
 		});
-		try { localStorage.removeItem('quizSetupComplete'); } catch (_) {}
-		try { localStorage.removeItem('quizQuickStartDismissedAt'); } catch (_) {}
+		try {
+			localStorage.removeItem('quizSetupComplete');
+		} catch (_) {}
+		try {
+			localStorage.removeItem('quizQuickStartDismissedAt');
+		} catch (_) {}
 
 		setTimeout(() => window.location.reload(), 800);
 	} catch (err) {
@@ -1690,24 +2009,42 @@ function importAIQuestions(inputElement) {
 				// Tolerant parse: pull out top-level {...} objects.
 				const matches = rawText.match(/\{[\s\S]*?\}/g) || [];
 				const candidates = matches
-					.map((m) => { try { return JSON.parse(m); } catch (_) { return null; } })
+					.map((m) => {
+						try {
+							return JSON.parse(m);
+						} catch (_) {
+							return null;
+						}
+					})
 					.filter((o) => o && (o.question || o.text));
 				if (candidates.length) questions = candidates;
 			}
 
 			if (!questions || !questions.length) {
-				showToast('No questions found in that file — expected the JSON structure from the copy-prompt step.', 'error');
+				showToast(
+					'No questions found in that file — expected the JSON structure from the copy-prompt step.',
+					'error',
+				);
 				return;
 			}
 
 			const normalized = questions
 				.map((q) => {
-					try { return window.normalizeImportedAIQuestion ? window.normalizeImportedAIQuestion(q) : q; } catch (_) { return null; }
+					try {
+						return window.normalizeImportedAIQuestion
+							? window.normalizeImportedAIQuestion(q)
+							: q;
+					} catch (_) {
+						return null;
+					}
 				})
 				.filter(Boolean);
 
 			if (!normalized.length) {
-				showToast('The file contained rows, but none matched the question structure.', 'error');
+				showToast(
+					'The file contained rows, but none matched the question structure.',
+					'error',
+				);
 				return;
 			}
 
@@ -1726,9 +2063,13 @@ function importAIQuestions(inputElement) {
 						console.warn('AI question import row failed:', err);
 					}
 				}
-				showToast(`Imported ${imported}/${normalized.length} questions.`, imported ? 'success' : 'error');
+				showToast(
+					`Imported ${imported}/${normalized.length} questions.`,
+					imported ? 'success' : 'error',
+				);
 				if (window.refreshQuestionsList) window.refreshQuestionsList();
-				if (imported && window.updateQuickStartCounts) window.updateQuickStartCounts();
+				if (imported && window.updateQuickStartCounts)
+					window.updateQuickStartCounts();
 			})();
 		} catch (err) {
 			console.error('AI questions import failed:', err);

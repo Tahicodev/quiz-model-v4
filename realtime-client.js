@@ -630,8 +630,10 @@
 			};
 			const nextExams = existing
 				? exams.map((exam) =>
-					String(exam?.id) === String(sessionPackage.examId) ? pushedExam : exam,
-				)
+						String(exam?.id) === String(sessionPackage.examId)
+							? pushedExam
+							: exam,
+					)
 				: [...exams, pushedExam];
 			repository.setAll_sync('exams', nextExams);
 		}

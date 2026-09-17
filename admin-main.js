@@ -121,6 +121,18 @@ function legacyAsJson(value, fallback) {
 	}
 }
 
+function legacyCreatedAt(row) {
+	return (
+		row.created_at ||
+		row.createdAt ||
+		row.dateCreated ||
+		row.date_created ||
+		row.created ||
+		row.date ||
+		null
+	);
+}
+
 function legacyNormalizeQuestionType(row) {
 	const raw = String(row.type || row.questionType || '').toLowerCase();
 	if (raw === 'multiple-choice' || raw === 'multiple_choice' || raw === 'code')
@@ -157,7 +169,8 @@ function legacyNormalizeQuestion(row) {
 			: 'medium',
 		tags: row.tags == null ? null : String(row.tags),
 		media_url: row.media_url || row.image || null,
-		created_at: row.created_at || row.createdAt,
+		created_at: legacyCreatedAt(row),
+		dateCreated: legacyCreatedAt(row),
 		updated_at: row.updated_at || row.updatedAt,
 	};
 }
@@ -180,7 +193,8 @@ function legacyNormalizeUser(row) {
 		numero: row.numero || row.studentNumber || null,
 		class_id: legacyAsId(row.class_id || row.classId) || null,
 		status: row.status === 'disabled' ? 'inactive' : row.status || 'active',
-		created_at: row.created_at || row.createdAt,
+		created_at: legacyCreatedAt(row),
+		dateCreated: legacyCreatedAt(row),
 		updated_at: row.updated_at || row.updatedAt,
 	};
 }
@@ -190,7 +204,8 @@ function legacyNormalizeClass(row) {
 		id: legacyAsId(row.id),
 		name: String(row.name || 'Migrated class'),
 		description: row.description == null ? null : String(row.description),
-		created_at: row.created_at || row.dateCreated,
+		created_at: legacyCreatedAt(row),
+		dateCreated: legacyCreatedAt(row),
 		updated_at: row.updated_at || row.updatedAt,
 	};
 }
@@ -202,7 +217,8 @@ function legacyNormalizeCategory(row) {
 		parent_id: legacyAsId(row.parent_id || row.parentId) || null,
 		icon: row.icon || null,
 		color: row.color || null,
-		created_at: row.created_at || row.createdAt,
+		created_at: legacyCreatedAt(row),
+		dateCreated: legacyCreatedAt(row),
 		updated_at: row.updated_at || row.updatedAt,
 	};
 }
@@ -225,7 +241,8 @@ function legacyNormalizeExam(row, currentUserId) {
 		),
 		randomize: legacyAsBoolean(row.randomize),
 		max_attempts: legacyAsNumber(row.max_attempts ?? row.maxAttempts, null),
-		created_at: row.created_at || row.dateCreated,
+		created_at: legacyCreatedAt(row),
+		dateCreated: legacyCreatedAt(row),
 		updated_at: row.updated_at || row.updatedAt,
 	};
 }
@@ -1434,7 +1451,10 @@ async function deleteSelectedQuestions() {
 	);
 
 	if (!window.API || typeof window.API.remove !== 'function') {
-		showToast('Question API is unavailable. Reload the page and try again.', 'error');
+		showToast(
+			'Question API is unavailable. Reload the page and try again.',
+			'error',
+		);
 		return;
 	}
 
@@ -1482,7 +1502,8 @@ async function deleteSelectedQuestions() {
 			if (q) {
 				const text = String(q.question || q.text || '');
 				metadata.text = text.length > 50 ? text.substring(0, 50) + '...' : text;
-				metadata.type = q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
+				metadata.type =
+					q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
 			}
 		}
 		logActivity('question', logName, 'deleted', metadata);

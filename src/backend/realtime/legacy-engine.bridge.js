@@ -28,15 +28,15 @@ const require = createRequire(import.meta.url);
  * @returns {Map<string, object>} the engine's activeGames map (for inspection/tests)
  */
 export function mountLegacyGameEngine(io) {
-  // NOTE: this file lives at src/backend/realtime/, so the project root (where
-  // game-server.cjs sits) is three levels up — ../../../game-server.cjs.
-  const engine = require('../../../game-server.cjs');
-  engine.registerGameEngine(io);
-  logger.info('Legacy game engine mounted on SaaS socket server');
+	// NOTE: this file lives at src/backend/realtime/, so the project root (where
+	// game-server.cjs sits) is three levels up — ../../../game-server.cjs.
+	const engine = require('../../../game-server.cjs');
+	engine.registerGameEngine(io);
+	logger.info('Legacy game engine mounted on SaaS socket server');
 
-  // Legacy client ↔ admin relay surface (identify / game:list /
-  // admin:syncGames fan-out) previously owned by the unwired root server.js.
-  registerLegacySyncHandlers(io);
+	// Legacy client ↔ admin relay surface (identify / game:list /
+	// admin:syncGames fan-out) previously owned by the unwired root server.js.
+	registerLegacySyncHandlers(io);
 
-  return engine.activeGames;
+	return engine.activeGames;
 }

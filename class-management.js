@@ -17,7 +17,9 @@ function initClassManagement() {
 }
 
 function loadClasses() {
-	const savedClasses = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes'));
+	const savedClasses = JSON.stringify(
+		window.__DI_CONTAINER__.repo.getAll_sync('classes'),
+	);
 	classes = savedClasses ? JSON.parse(savedClasses) : [];
 }
 
@@ -191,14 +193,14 @@ function loadAvailableExams() {
 
 			return `
             <div class="${examClass}" data-exam-id="${
-				exam.id
-			}" onclick="toggleExamSelection(this)">
+							exam.id
+						}" onclick="toggleExamSelection(this)">
                 <div class="exam-item-details">
                     <div class="exam-name">${escapeHtml(exam.name)}</div>
                     <div class="exam-info">
                         Questions: ${validQuestionCount}/${questionCount} | Duration: ${
-				exam.duration || 0
-			}min
+													exam.duration || 0
+												}min
                     </div>
                     ${
 											!hasValidQuestions
@@ -248,7 +250,7 @@ function addStudent() {
 function normalizeStudentEntry(entry) {
 	if (!entry) return null;
 	const number = String(
-		entry.number || entry.studentNumber || entry.numero || ''
+		entry.number || entry.studentNumber || entry.numero || '',
 	).trim();
 	const name = String(entry.name || entry.fullName || '').trim();
 	if (!number) return null;
@@ -282,8 +284,7 @@ function getStudentsFromUsers(classId) {
 	return users
 		.filter(
 			(u) =>
-				u.role === 'student' &&
-				String(u.classId || '') === String(classId),
+				u.role === 'student' && String(u.classId || '') === String(classId),
 		)
 		.map((u) => ({
 			number: String(u.studentNumber || ''),
@@ -395,7 +396,9 @@ function populateStudentClassFilterOptions(users = getStudentUsersForPicker()) {
 		)
 		.join('');
 
-	window.safeSetHTML ? window.safeSetHTML(filterSelect, optionsHtml, true) : (filterSelect.innerHTML = optionsHtml);
+	window.safeSetHTML
+		? window.safeSetHTML(filterSelect, optionsHtml, true)
+		: (filterSelect.innerHTML = optionsHtml);
 
 	const hasCurrentValue = Array.from(filterSelect.options).some(
 		(option) => String(option.value) === currentValue,
@@ -445,7 +448,9 @@ function populateStudentUserPicker() {
 	const classById = getClassLookupMap();
 	const selectedNumbers = getSelectedStudentNumbers();
 	const availableUsers = users
-		.filter((user) => !selectedNumbers.has(String(user.studentNumber || '').trim()))
+		.filter(
+			(user) => !selectedNumbers.has(String(user.studentNumber || '').trim()),
+		)
 		.map((user) => {
 			const classMeta = getUserClassMeta(user, classById);
 			const classLabel = ` (${classMeta.classLabel})`;
@@ -456,7 +461,8 @@ function populateStudentUserPicker() {
 		});
 
 	if (!availableUsers.length) {
-		picker.innerHTML = '<option value="" disabled>No student users available</option>';
+		picker.innerHTML =
+			'<option value="" disabled>No student users available</option>';
 		enableStudentPickerClickSelection(picker);
 		return;
 	}
@@ -530,7 +536,8 @@ function addAllStudentsFromUsers() {
 	const availableUsers = getFilteredStudentUsersForPicker(
 		getStudentUsersForPicker(),
 	).filter(
-		(user) => !getSelectedStudentNumbers().has(String(user.studentNumber || '').trim()),
+		(user) =>
+			!getSelectedStudentNumbers().has(String(user.studentNumber || '').trim()),
 	);
 	if (!availableUsers.length) {
 		showToast('No available students to add', 'info');
@@ -624,7 +631,8 @@ function renderStudentRosterTable() {
 		tbody.innerHTML = '';
 		if (emptyState) {
 			emptyState.classList.remove('hidden');
-			emptyState.textContent = 'No students in this class yet — add them from the picker above.';
+			emptyState.textContent =
+				'No students in this class yet — add them from the picker above.';
 		}
 		return;
 	}
@@ -670,7 +678,9 @@ function renderStudentRosterTable() {
 		})
 		.join('');
 
-	window.safeSetHTML ? window.safeSetHTML(tbody, html) : (tbody.innerHTML = html);
+	window.safeSetHTML
+		? window.safeSetHTML(tbody, html)
+		: (tbody.innerHTML = html);
 
 	if (emptyState) emptyState.classList.add('hidden');
 	// Re-apply the client-side search/status filters to the fresh rows.
@@ -680,7 +690,9 @@ function renderStudentRosterTable() {
 function filterStudentRosterTable() {
 	const searchInput = document.getElementById('studentRosterSearch');
 	const statusFilter = document.getElementById('studentRosterStatusFilter');
-	const term = String(searchInput?.value || '').trim().toLowerCase();
+	const term = String(searchInput?.value || '')
+		.trim()
+		.toLowerCase();
 	const statusValue = String(statusFilter?.value || 'all');
 
 	const rows = document.querySelectorAll(
@@ -691,8 +703,7 @@ function filterStudentRosterTable() {
 	rows.forEach((row) => {
 		const number = String(row.dataset.number || '').toLowerCase();
 		const name = String(row.dataset.name || '').toLowerCase();
-		const matchesSearch =
-			!term || number.includes(term) || name.includes(term);
+		const matchesSearch = !term || number.includes(term) || name.includes(term);
 
 		// Status is computed from the matched student user.
 		let rowStatus = 'no-account';
@@ -701,14 +712,14 @@ function filterStudentRosterTable() {
 		} else {
 			const account = getRosterAccountInfo(row.dataset.number);
 			if (account) {
-				rowStatus = String(account.status || 'active').toLowerCase() === 'disabled'
-					? 'disabled'
-					: 'active';
+				rowStatus =
+					String(account.status || 'active').toLowerCase() === 'disabled'
+						? 'disabled'
+						: 'active';
 				row.dataset.accountStatus = rowStatus; // cache for this pass
 			}
 		}
-		const matchesStatus =
-			statusValue === 'all' || rowStatus === statusValue;
+		const matchesStatus = statusValue === 'all' || rowStatus === statusValue;
 
 		const visible = matchesSearch && matchesStatus;
 		row.style.display = visible ? '' : 'none';
@@ -823,13 +834,16 @@ async function saveClassForm() {
 				// Adopt the server id so subsequent updates/deletes hit the
 				// right row instead of creating orphans.
 				classData.id = saved.id;
-				const i = classes.findIndex((c) => c.id === currentClassId || c.name === classData.name);
+				const i = classes.findIndex(
+					(c) => c.id === currentClassId || c.name === classData.name,
+				);
 				if (i !== -1) classes[i] = classData;
 			}
 		} catch (apiErr) {
 			console.warn('[classes] API save failed:', apiErr);
 			showToast(
-				'Failed to save class on server: ' + (apiErr?.message || 'network error'),
+				'Failed to save class on server: ' +
+					(apiErr?.message || 'network error'),
 				'error',
 			);
 			return; // don't update localStorage either — keep both sides aligned
@@ -845,7 +859,7 @@ async function saveClassForm() {
 			{
 				id: classData.id,
 				studentCount: students.length,
-			}
+			},
 		);
 	}
 
@@ -968,9 +982,7 @@ async function saveAssignClassStudents() {
 	// their dataset — rendered by renderStudentRosterTable).
 	const students = mergeStudentEntries(
 		Array.from(
-			document.querySelectorAll(
-				'#selectedStudentsList .selected-student-item',
-			),
+			document.querySelectorAll('#selectedStudentsList .selected-student-item'),
 		).map((el) => ({
 			number: String(el.dataset.number || '').trim(),
 			name: String(el.dataset.name || '').trim(),
@@ -982,8 +994,7 @@ async function saveAssignClassStudents() {
 	// would create/move student accounts without review. Diff against the
 	// current roster and hand the change set to the admin confirmation queue
 	// (same flow as Users → Pending Imports). Admins keep the direct save.
-	const isTeacherSession =
-		window.Auth?.isTeacher && window.Auth.isTeacher();
+	const isTeacherSession = window.Auth?.isTeacher && window.Auth.isTeacher();
 	if (isTeacherSession) {
 		const currentNumbers = new Set(
 			(classData.students || []).map((s) => String(s.number || '').trim()),
@@ -1041,7 +1052,10 @@ async function saveAssignClassStudents() {
 	}
 
 	closeAssignClassStudents();
-	showToast(`${students.length} student(s) assigned to "${classData.name}"!`, 'success');
+	showToast(
+		`${students.length} student(s) assigned to "${classData.name}"!`,
+		'success',
+	);
 
 	if (typeof logActivity === 'function') {
 		logActivity('class', classData.name, 'assigned students', {
@@ -1127,7 +1141,7 @@ async function saveAssignClassExams() {
 	}
 
 	const selectedExams = Array.from(
-		document.querySelectorAll('#availableExams .exam-item.selected')
+		document.querySelectorAll('#availableExams .exam-item.selected'),
 	).map((el) => el.dataset.examId);
 
 	// Mirror the assignment into every exam's classes array (local cache)
@@ -1199,7 +1213,8 @@ async function deleteClass(classId) {
 			} catch (apiErr) {
 				console.warn('[classes] API delete failed:', apiErr);
 				showToast(
-					'Failed to delete class on server: ' + (apiErr?.message || 'network error'),
+					'Failed to delete class on server: ' +
+						(apiErr?.message || 'network error'),
 					'error',
 				);
 				return;
@@ -1239,15 +1254,23 @@ async function deleteClass(classId) {
 }
 
 function filterClasses() {
-	const searchTerm = (document.getElementById('classSearch').value || '').toLowerCase();
+	const searchTerm = (
+		document.getElementById('classSearch').value || ''
+	).toLowerCase();
 	const filteredClasses = classes.filter(
 		(c) =>
-			String(c.name || '').toLowerCase().includes(searchTerm) ||
+			String(c.name || '')
+				.toLowerCase()
+				.includes(searchTerm) ||
 			(Array.isArray(c.students) ? c.students : []).some(
 				(s) =>
-					String(s && s.name || '').toLowerCase().includes(searchTerm) ||
-					String(s && (s.number ?? s.numero) || '').toLowerCase().includes(searchTerm)
-			)
+					String((s && s.name) || '')
+						.toLowerCase()
+						.includes(searchTerm) ||
+					String((s && (s.number ?? s.numero)) || '')
+						.toLowerCase()
+						.includes(searchTerm),
+			),
 	);
 	updateClassList(filteredClasses);
 }
@@ -1400,7 +1423,9 @@ function updateClassList(classesList = classes) {
 		const assignedExams = exams
 			.filter((e) => e.classes?.includes(cls.id))
 			.filter((e) =>
-				window.Auth?.canAccessItem ? window.Auth.canAccessItem('exam', e) : true,
+				window.Auth?.canAccessItem
+					? window.Auth.canAccessItem('exam', e)
+					: true,
 			)
 			.map((e) => e.name);
 		const examCount = assignedExams.length;
@@ -1408,9 +1433,13 @@ function updateClassList(classesList = classes) {
 		// It would need to be calculated or stored if desired.
 		const averageScore = '-'; // Placeholder as it's not available in classData
 
-		const dateCreated = cls.dateCreated
-			? new Date(cls.dateCreated).toLocaleDateString()
-			: '-';
+		const rawCreatedAt =
+			cls.dateCreated || cls.created_at || cls.createdAt || cls.date_created;
+		const parsedCreatedAt = rawCreatedAt ? new Date(rawCreatedAt) : null;
+		const dateCreated =
+			parsedCreatedAt && !Number.isNaN(parsedCreatedAt.getTime())
+				? parsedCreatedAt.toLocaleDateString()
+				: '-';
 
 		row.innerHTML = `
             <td>${escapeHtml(cls.name)}</td>
@@ -1481,14 +1510,14 @@ function renderExamItem(exam) {
 
 	return `
         <div class="${examClass}" onclick="toggleExamSelection(this)" data-exam-id="${
-		exam.id
-	}">
+					exam.id
+				}">
             <div class="exam-item-details">
                 <div class="exam-name">${escapeHtml(exam.name)}</div>
                 <div class="exam-info">
                     Questions: ${validQuestionCount}/${questionCount} | Duration: ${
-		exam.duration || 0
-	}min
+											exam.duration || 0
+										}min
                 </div>
                 ${
 									!hasValidQuestions
@@ -1513,7 +1542,7 @@ function toggleExamSelection(element) {
 
 function getSelectedExams() {
 	return Array.from(document.querySelectorAll('.exam-item.selected')).map(
-		(item) => item.dataset.examId
+		(item) => item.dataset.examId,
 	);
 }
 
@@ -1558,7 +1587,8 @@ function importClasses() {
 				}
 
 				// Merge with existing classes, avoiding duplicates
-				const existingClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes');
+				const existingClasses =
+					window.__DI_CONTAINER__.repo.getAll_sync('classes');
 				const mergedClasses = mergeClasses(existingClasses, newClasses);
 
 				window.__DI_CONTAINER__.repo.setAll_sync('classes', mergedClasses);
@@ -1600,7 +1630,7 @@ function mergeClasses(existing, imported) {
 function exportStudentsLegacy() {
 	// Get students from the selected students list in the modal
 	const students = Array.from(
-		document.querySelectorAll('#selectedStudentsList .selected-student-item')
+		document.querySelectorAll('#selectedStudentsList .selected-student-item'),
 	).map((el) => {
 		const text = el.querySelector('span').textContent;
 		const [number, name] = text.split(' - ');
@@ -1729,9 +1759,12 @@ window.updateAssignClassExamsCount = updateAssignClassExamsCount;
 // teachers hand the parsed roster to the admin confirmation queue instead
 // (same gate as saveAssignClassStudents).
 function appendImportedStudent(number, name) {
-	const isTeacherSession =
-		window.Auth?.isTeacher && window.Auth.isTeacher();
-	if (isTeacherSession && window.Auth?.stagePendingImport && assignClassStudentsId) {
+	const isTeacherSession = window.Auth?.isTeacher && window.Auth.isTeacher();
+	if (
+		isTeacherSession &&
+		window.Auth?.stagePendingImport &&
+		assignClassStudentsId
+	) {
 		const staged = window.Auth.stagePendingImport({
 			classId: assignClassStudentsId,
 			students: [{ number, name }],
@@ -1776,7 +1809,7 @@ function exportStudents() {
 	link.setAttribute('href', url);
 	link.setAttribute(
 		'download',
-		`${className}_students_${new Date().toISOString().split('T')[0]}.csv`
+		`${className}_students_${new Date().toISOString().split('T')[0]}.csv`,
 	);
 	link.click();
 	showToast('Students exported successfully', 'success');
@@ -1830,7 +1863,7 @@ function importStudents() {
 					renderStudentRosterTable();
 					showToast(
 						`Imported ${importedCount} student(s) successfully`,
-						'success'
+						'success',
 					);
 				} else {
 					showToast('No valid students found in file', 'warning');

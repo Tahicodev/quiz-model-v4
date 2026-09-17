@@ -29,6 +29,11 @@ const router = Router();
 router.use(requireAuth, enforceTenant);
 
 const adminOnly = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
+const monitoringAccess = requireRole([
+	ROLES.ADMIN,
+	ROLES.SUPER_ADMIN,
+	ROLES.TEACHER,
+]);
 
 /**
  * GET /api/v1/admin/metrics?minutes=60
@@ -36,7 +41,7 @@ const adminOnly = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
  * The collector is intentionally in-memory: it is diagnostic, bounded, and
  * reset when the server restarts rather than becoming an audit datastore.
  */
-router.get('/metrics', adminOnly, (req, res) => {
+router.get('/metrics', monitoringAccess, (req, res) => {
 	res.json({ data: getServerMetrics(req.query.minutes) });
 });
 

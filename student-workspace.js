@@ -174,10 +174,20 @@
 	}
 
 	function getSocket() {
-		return window.clientSocket || null;
+		const socket = window.clientSocket || window.__QUIZ_LEGACY_SOCKET__ || null;
+		if (socket && !socket.connected) {
+			try {
+				window.__QUIZ_SOCKET_AUTH_KEEPER__?.reviveCachedSocket?.();
+			} catch (_) {}
+		}
+		return socket;
 	}
 
 	function notifyRealtimeDisconnected() {
+		if (window.__AUTH_SESSION_EXPIRED__) {
+			showToast('Your session expired. Please sign in again.', 'warning');
+			return;
+		}
 		const now = Date.now();
 		const lastAt = Number(state.lastRealtimeWarningAt || 0);
 		if (now - lastAt < 3000) return;
@@ -187,6 +197,10 @@
 			'warning',
 		);
 	}
+
+	window.addEventListener('quiz:auth-expired', () => {
+		showToast('Your session expired. Please sign in again.', 'warning');
+	});
 
 	function hasStudentRestApi() {
 		return typeof window.API?.raw === 'function' && Boolean(window.__authToken);
@@ -204,8 +218,12 @@
 					updateGameStore(
 						gameId,
 						(game) => {
-							const participant = getParticipant(ensureSession(game), context.user.id);
-							if (participant) participant.score = Number(participant.score || 0) + points;
+							const participant = getParticipant(
+								ensureSession(game),
+								context.user.id,
+							);
+							if (participant)
+								participant.score = Number(participant.score || 0) + points;
 							return game;
 						},
 						{ scope: 'student-rest-answer' },
@@ -213,7 +231,9 @@
 				}
 				renderGameStage(context);
 			})
-			.catch((error) => showToast(error?.message || 'Could not save your answer.', 'error'));
+			.catch((error) =>
+				showToast(error?.message || 'Could not save your answer.', 'error'),
+			);
 		return true;
 	}
 
@@ -296,7 +316,8 @@
 		);
 		if (!tabsBar || !tabsDock || !dropdown || !headerActions) return;
 
-		const scrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+		const scrollY =
+			window.pageYOffset || document.documentElement.scrollTop || 0;
 		const isScrolled = scrollY > 40;
 		document.body.classList.toggle('workspace-scrolled', isScrolled);
 
@@ -449,7 +470,9 @@
 			try {
 				const parts = window.__authToken.split('.');
 				if (parts.length === 3) {
-					const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+					const payload = JSON.parse(
+						atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')),
+					);
 					if (payload && payload.id) user = payload;
 				}
 			} catch (_) {}
@@ -462,9 +485,7 @@
 					localStorage.getItem('quizCurrentUser:student') || 'null',
 				);
 				if (!user || !user.id) {
-					user = JSON.parse(
-						localStorage.getItem('quizCurrentUser') || 'null',
-					);
+					user = JSON.parse(localStorage.getItem('quizCurrentUser') || 'null');
 				}
 			} catch (e) {}
 		}
@@ -480,7 +501,12 @@
 				const role = String(candidate?.role || '')
 					.trim()
 					.toLowerCase();
-				return !role || role === 'student' || role === 'learner' || role === 'participant';
+				return (
+					!role ||
+					role === 'student' ||
+					role === 'learner' ||
+					role === 'participant'
+				);
 			});
 		if (!roleCheck(user)) {
 			return null;
@@ -510,7 +536,10 @@
 			classRecord = classes.find((c) => c.id === identity.classId) || null;
 		}
 		if (!classRecord && identity.class) {
-			classRecord = classes.find((c) => c.name === identity.class || c.id === identity.class) || null;
+			classRecord =
+				classes.find(
+					(c) => c.name === identity.class || c.id === identity.class,
+				) || null;
 		}
 		if (!classRecord && classes.length > 0) {
 			classRecord = classes[0];
@@ -703,7 +732,7 @@
 		socket.on('game:stateUpdate', (game) => {
 			if (game && game.id) {
 				mergeServerGameSnapshot(game);
-				// The realtime-client handles localStorage syncing, but this guarantees 
+				// The realtime-client handles localStorage syncing, but this guarantees
 				// the student workspace's isolated serverGames map is instantly updated.
 				window.dispatchEvent(new CustomEvent('quiz:games-updated'));
 			}
@@ -762,20 +791,41 @@
 		// the workspace summary so a fresh device still shows completed exams;
 		// the legacy local snapshot above remains useful while a write is syncing.
 		try {
-			const currentUserId = String(window.Auth?.getCurrentUser?.()?.id || '').trim();
-			const dbResults = window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
+			const currentUserId = String(
+				window.Auth?.getCurrentUser?.()?.id || '',
+			).trim();
+			const examNames = new Map(
+				(window.__DI_CONTAINER__.repo.getAll_sync('exams') || []).map(
+					(exam) => [String(exam?.id || ''), String(exam?.name || '')],
+				),
+			);
+			const dbResults =
+				window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
 			dbResults.forEach((entry) => {
-				if (!entry || String(entry.mode || '').toLowerCase() === 'training') return;
+				if (!entry || String(entry.mode || '').toLowerCase() === 'training')
+					return;
 				const examId = entry.examId || entry.exam_id;
 				if (!examId) return;
-				const sameUser = currentUserId && String(entry.userId || entry.user_id || '') === currentUserId;
-				const sameStudent = String(entry.numero || '').trim() === String(identity.numero || '').trim();
+				const sameUser =
+					currentUserId &&
+					String(entry.userId || entry.user_id || '') === currentUserId;
+				const sameStudent =
+					String(entry.numero || '').trim() ===
+					String(identity.numero || '').trim();
 				if (!sameUser && !sameStudent) return;
 				results.push({
 					examId,
-					examName: entry.examName || entry.examTitle || 'Exam',
-					score: Number(entry.earnedPoints ?? entry.earned_points ?? entry.score ?? 0),
-					totalQuestions: Number(entry.totalQuestions ?? entry.total_points ?? 0),
+					examName:
+						entry.examName ||
+						entry.examTitle ||
+						examNames.get(String(examId)) ||
+						'Exam',
+					score: Number(
+						entry.earnedPoints ?? entry.earned_points ?? entry.score ?? 0,
+					),
+					totalQuestions: Number(
+						entry.totalQuestions ?? entry.total_points ?? 0,
+					),
 					timeSpent: Number(entry.timeSpent ?? entry.time_spent ?? 0),
 					date: entry.date || entry.dateTaken || entry.date_taken || '',
 				});
@@ -784,7 +834,30 @@
 			/* Cached legacy results remain available if the API cache is absent. */
 		}
 
-		return results;
+		const examNames = new Map(
+			(window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || []).map(
+				(exam) => [String(exam?.id || ''), String(exam?.name || '')],
+			),
+		);
+		const latestByExam = new Map();
+		results.forEach((result) => {
+			if (!result?.examId) return;
+			const existing = latestByExam.get(String(result.examId));
+			if (
+				!existing ||
+				new Date(result.date || 0) >= new Date(existing.date || 0)
+			) {
+				latestByExam.set(String(result.examId), result);
+			}
+		});
+		return Array.from(latestByExam.values()).map((result) => ({
+			...result,
+			examName:
+				result.examName || examNames.get(String(result.examId)) || 'Exam',
+			grade20: Number.isFinite(Number(result.grade20))
+				? Number(result.grade20)
+				: grade20(result.score, result.totalQuestions),
+		}));
 	}
 
 	function buildResultsMap(results) {
@@ -810,9 +883,22 @@
 		if (!exams.length) return [];
 		return exams.filter((exam) => {
 			if (!exam) return false;
-			if (exam.status && exam.status !== 'active' && exam.status !== 'published') return false;
-			if (!classRecord || !Array.isArray(exam.classes) || exam.classes.length === 0) return true;
-			return exam.classes.includes(classRecord.id) || exam.classes.includes(classRecord.name);
+			if (
+				exam.status &&
+				exam.status !== 'active' &&
+				exam.status !== 'published'
+			)
+				return false;
+			if (
+				!classRecord ||
+				!Array.isArray(exam.classes) ||
+				exam.classes.length === 0
+			)
+				return true;
+			return (
+				exam.classes.includes(classRecord.id) ||
+				exam.classes.includes(classRecord.name)
+			);
 		});
 	}
 
@@ -833,9 +919,7 @@
 		let fallback = null;
 		if (exam.presetId) {
 			try {
-				const presets = JSON.parse(
-					localStorage.getItem('quizPresets') || '[]',
-				);
+				const presets = JSON.parse(localStorage.getItem('quizPresets') || '[]');
 				fallback = Array.isArray(presets)
 					? presets.find((p) => String(p.id) === String(exam.presetId)) || null
 					: null;
@@ -905,11 +989,16 @@
 			},
 			{
 				label: 'Pass mark',
-				value: preset.passingScore != null ? `${preset.passingScore}%` : `${exam.passingScore || 60}%`,
+				value:
+					preset.passingScore != null
+						? `${preset.passingScore}%`
+						: `${exam.passingScore || 60}%`,
 			},
 		];
-		if (preset.shuffleQuestions) chips.push({ label: 'Questions', value: 'Shuffled' });
-		if (preset.showExplanations) chips.push({ label: 'Explanations', value: 'Shown' });
+		if (preset.shuffleQuestions)
+			chips.push({ label: 'Questions', value: 'Shuffled' });
+		if (preset.showExplanations)
+			chips.push({ label: 'Explanations', value: 'Shown' });
 
 		const chipsHtml = chips
 			.map(
@@ -971,9 +1060,7 @@
 			game?.settings?.gameRules && typeof game.settings.gameRules === 'object'
 				? game.settings.gameRules
 				: {};
-		const presetName = String(
-			game?.settings?.gamePresetName || '',
-		).trim();
+		const presetName = String(game?.settings?.gamePresetName || '').trim();
 
 		const activeRules = Object.keys(GAME_RULE_LABELS).filter(
 			(key) => rules[key] === true,
@@ -1004,15 +1091,19 @@
 				<div class="exam-preset-head">
 					${presetName ? `<span class="exam-preset-tag">${escapeHtml(presetName)}</span>` : '<span class="exam-preset-tag">Game Rules</span>'}
 				</div>
-			${chips.length ? `<div class="exam-preset-chips">${chips
-				.map(
-					(chip) => `
+			${
+				chips.length
+					? `<div class="exam-preset-chips">${chips
+							.map(
+								(chip) => `
 						<span class="exam-preset-chip">
 							<span class="exam-preset-chip-value">${escapeHtml(String(chip))}</span>
 						</span>
 					`,
-				)
-				.join('')}</div>` : ''}
+							)
+							.join('')}</div>`
+					: ''
+			}
 		</div>
 	`;
 	}
@@ -1033,13 +1124,10 @@
 		let preset = null;
 		if (trainingPresetId) {
 			try {
-				const presets = JSON.parse(
-					localStorage.getItem('quizPresets') || '[]',
-				);
-				preset =
-					Array.isArray(presets)
-						? presets.find((p) => String(p.id) === trainingPresetId) || null
-						: null;
+				const presets = JSON.parse(localStorage.getItem('quizPresets') || '[]');
+				preset = Array.isArray(presets)
+					? presets.find((p) => String(p.id) === trainingPresetId) || null
+					: null;
 			} catch (_) {
 				preset = null;
 			}
@@ -1052,14 +1140,14 @@
 		const message = String(
 			preset?.welcomeMessage || source.welcomeMessage || '',
 		).trim();
-		const timeLimit = Number(
-			preset?.timeLimit ?? source.timeLimit ?? 300,
-		);
+		const timeLimit = Number(preset?.timeLimit ?? source.timeLimit ?? 300);
 		const penalty = Number(preset?.penalty ?? source.penalty ?? 0);
 		const passingScore = Number(
 			preset?.passingScore ?? source.passingScore ?? 50,
 		);
-		const shuffle = Boolean(preset?.shuffleQuestions ?? source.shuffleQuestions ?? true);
+		const shuffle = Boolean(
+			preset?.shuffleQuestions ?? source.shuffleQuestions ?? true,
+		);
 		const explanations = Boolean(
 			preset?.showExplanations ?? source.showExplanations ?? true,
 		);
@@ -1134,9 +1222,14 @@
 				// earned/total point counts; freshly saved local rows keep
 				// the /20 grade on `grade20`. Derive the /20 grade from
 				// whichever source is available.
-				const earned = Number(result.earnedPoints ?? result.earned_points ?? result.score);
+				const earned = Number(
+					result.earnedPoints ?? result.earned_points ?? result.score,
+				);
 				const totalQuestions = Number(
-					result.totalQuestions || result.totalPoints || result.total_points || 0,
+					result.totalQuestions ||
+						result.totalPoints ||
+						result.total_points ||
+						0,
 				);
 				const score = Number.isFinite(earned) ? earned : 0;
 				// Prefer an explicit /20 grade; fall back to counts, then
@@ -1215,7 +1308,9 @@
 		};
 		const parts = [
 			`<span class="training-attempt-count">${count} attempt${count === 1 ? '' : 's'}</span>`,
-			count > 1 ? `<span class="training-best-score">Best ${best.toFixed(2).replace('.', ',')}/20</span>` : '',
+			count > 1
+				? `<span class="training-best-score">Best ${best.toFixed(2).replace('.', ',')}/20</span>`
+				: '',
 			`<span class="training-trend training-trend--${trend}">${trendLabels[trend]}</span>`,
 		];
 		return parts.filter(Boolean).join('');
@@ -1437,10 +1532,15 @@
 		toggleMobileNav(false);
 	}
 
-		function getProfileRequestsForUser(userId) {
-			const requests = window.Auth?.getProfileRequests
-				? window.Auth.getProfileRequests()
-				: (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('profile_requests', []) : JSON.parse(localStorage.getItem('quizProfileRequests') || '[]'); })();
+	function getProfileRequestsForUser(userId) {
+		const requests = window.Auth?.getProfileRequests
+			? window.Auth.getProfileRequests()
+			: (function () {
+					var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+					return r
+						? r.getValue_sync('profile_requests', [])
+						: JSON.parse(localStorage.getItem('quizProfileRequests') || '[]');
+				})();
 		return requests
 			.filter((req) => req.userId === userId)
 			.sort((a, b) => {
@@ -1495,13 +1595,18 @@
 		);
 		const totalSessions = myResults.length;
 		const wins = myResults.filter(
-			(entry) => String(entry?.label || '').trim().toLowerCase() === 'winner',
+			(entry) =>
+				String(entry?.label || '')
+					.trim()
+					.toLowerCase() === 'winner',
 		).length;
 		const totalScore = myResults.reduce(
 			(sum, entry) => sum + Math.max(Number(entry?.score) || 0, 0),
 			0,
 		);
-		const averageScore = totalSessions ? Math.round(totalScore / totalSessions) : 0;
+		const averageScore = totalSessions
+			? Math.round(totalScore / totalSessions)
+			: 0;
 		const expValue = Math.max(Number(context?.user?.exp) || 0, 0);
 		const level = Math.floor(expValue / 200) + 1;
 		const nextLevelFloor = 200;
@@ -1538,8 +1643,7 @@
 			wins,
 			averageScore,
 			latestBadge,
-			winRate:
-				totalSessions > 0 ? Math.round((wins / totalSessions) * 100) : 0,
+			winRate: totalSessions > 0 ? Math.round((wins / totalSessions) * 100) : 0,
 		};
 	}
 
@@ -1549,8 +1653,14 @@
 			const el = byId(id);
 			if (el) el.textContent = value;
 		};
-		setText('studentProfileLevelValue', formatCompactProfileMetric(stats.level));
-		setText('studentProfileExpValue', formatCompactProfileMetric(stats.expValue));
+		setText(
+			'studentProfileLevelValue',
+			formatCompactProfileMetric(stats.level),
+		);
+		setText(
+			'studentProfileExpValue',
+			formatCompactProfileMetric(stats.expValue),
+		);
 		setText(
 			'studentProfileTournamentPointsValue',
 			formatCompactProfileMetric(stats.tournamentPoints),
@@ -1928,7 +2038,7 @@
 				const totalQuestions =
 					result?.totalQuestions || exam.questions?.length || 0;
 				const scorePercent = result?.totalQuestions
-					? Math.round((result.score / result.totalQuestions) * 100)
+					? Math.round((result.grade20 / 20) * 100)
 					: 0;
 
 				return `
@@ -1943,18 +2053,12 @@
 						}</p>
 						${renderExamPresetChips(exam)}
 						<div class="exam-performance">
-							<div class="score-display">${
-								completed
-									? `${result.score}/${result.totalQuestions}`
-									: 'Not taken'
-							}</div>
+							<div class="score-display">${completed ? formatGrade20(result.grade20) : 'Not taken'}</div>
 							<div class="performance-bar">
 								<span style="width: ${completed ? scorePercent : 0}%"></span>
 							</div>
 						</div>
-						<button class="workspace-btn small" onclick="openExam('${exam.id}')">
-							${completed ? 'Open Exam' : 'Start Exam'}
-						</button>
+						${completed ? '<span class="exam-completed-note">Exam completed</span>' : `<button class="workspace-btn small" onclick="openExam('${exam.id}')">Start Exam</button>`}
 					</div>
 				`;
 			})
@@ -2024,13 +2128,15 @@
 				? Number(item.grade)
 				: grade20(Number(item.score) || 0, Number(item.totalQuestions) || 0),
 		);
-		const average =
-			grades.length
-				? Math.round((grades.reduce((sum, value) => sum + value, 0) / grades.length) * 100) / 100
-				: 0;
+		const average = grades.length
+			? Math.round(
+					(grades.reduce((sum, value) => sum + value, 0) / grades.length) * 100,
+				) / 100
+			: 0;
 		const best = grades.length ? Math.max(...grades) : 0;
 		const recent = grades.length ? grades[0] : 0;
-		const lastDelta = grades.length > 1 ? Math.round((recent - grades[1]) * 100) / 100 : 0;
+		const lastDelta =
+			grades.length > 1 ? Math.round((recent - grades[1]) * 100) / 100 : 0;
 		const deltaLabel =
 			grades.length > 1
 				? `${lastDelta > 0 ? '+' : ''}${lastDelta.toFixed(2).replace('.', ',')}/20 vs previous`
@@ -2114,13 +2220,20 @@
 			? `<div class="training-attempts-block">${attemptsRows}</div>`
 			: '';
 
-		window.safeSetHTML ? window.safeSetHTML(container, summaryRows + attemptsBlock, true) : (container.innerHTML = summaryRows + attemptsBlock);
+		window.safeSetHTML
+			? window.safeSetHTML(container, summaryRows + attemptsBlock, true)
+			: (container.innerHTML = summaryRows + attemptsBlock);
 	}
 
 	function renderMessages(context) {
 		const container = byId('studentMessages');
 		if (!container) return;
-			const messages = (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('teacher_messages', []) : JSON.parse(localStorage.getItem('teacherMessages') || '[]'); })();
+		const messages = (function () {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			return r
+				? r.getValue_sync('teacher_messages', [])
+				: JSON.parse(localStorage.getItem('teacherMessages') || '[]');
+		})();
 		const filtered = messages.filter((message) => {
 			if (!message) return false;
 			if (!context.classRecord) return false;
@@ -2158,7 +2271,12 @@
 		const container = byId('studentAssignments');
 		if (!container) return;
 
-			const assignments = (function() { var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return r ? r.getValue_sync('teacher_assignments', []) : JSON.parse(localStorage.getItem('teacherAssignments') || '[]'); })();
+		const assignments = (function () {
+			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			return r
+				? r.getValue_sync('teacher_assignments', [])
+				: JSON.parse(localStorage.getItem('teacherAssignments') || '[]');
+		})();
 
 		if (assignments.length > 0) {
 			container.innerHTML = assignments
@@ -2328,7 +2446,8 @@
 			})),
 			...examResults.map((r) => ({
 				type: r.examName || 'Exam',
-				score: `${r.score}/${r.totalQuestions}`,
+				score: formatGrade20(r.grade20),
+				passed: Number(r.grade20) > 10,
 				date: r.date,
 				kind: 'exam',
 			})),
@@ -2356,12 +2475,17 @@
 				if (result.kind === 'training') {
 					// /20 grades: green above 10, red below
 					const grade = parseFloat(scoreText.replace(',', '.'));
-					scoreTone = Number.isFinite(grade) && grade > 10 ? 'passed' : 'failed';
+					scoreTone =
+						Number.isFinite(grade) && grade > 10 ? 'passed' : 'failed';
+				} else if (result.kind === 'exam') {
+					scoreTone = result.passed ? 'passed' : 'failed';
 				} else {
 					// Game summaries carry "pts"; exam scores are "score/total".
 					const isRatio = /\d+\s*\/\s*\d+/.test(scoreText);
 					if (isRatio) {
-						const [score, total] = scoreText.split('/').map((part) => Number(part.trim()));
+						const [score, total] = scoreText
+							.split('/')
+							.map((part) => Number(part.trim()));
 						if (Number.isFinite(score) && Number.isFinite(total) && total > 0) {
 							const percent = Math.round((score / total) * 100);
 							scoreTone = percent >= 50 ? 'passed' : 'failed';
@@ -2437,7 +2561,8 @@
 		if (!classKeys.size) return false;
 		if (
 			getParticipant(game?.session || {}, context?.user?.id) ||
-			String(game?.ownerId || '').trim() === String(context?.user?.id || '').trim()
+			String(game?.ownerId || '').trim() ===
+				String(context?.user?.id || '').trim()
 		) {
 			return true;
 		}
@@ -2451,9 +2576,20 @@
 		return getGamesStore().filter((game) => {
 			if (!game || !game.id) return false;
 			if (isTournamentManagedGame(game)) return false;
-			// Draft games are still being authored by the teacher — they are
-			// admin-only until the lobby is opened. Students must not see them.
-			if (String(game.status || 'draft').toLowerCase() === 'draft') return false;
+			const status = String(game.status || 'draft').toLowerCase();
+			const participant = getParticipant(game.session || {}, context?.user?.id);
+			// Students see only a lobby explicitly opened by staff. A live or
+			// completed game remains visible only when this student participated.
+			if (status === 'open') {
+				const lobbyStatus = String(game.session?.status || '').toLowerCase();
+				if (lobbyStatus && lobbyStatus !== 'open' && !participant) return false;
+			} else if (status === 'live') {
+				if (!participant) return false;
+			} else if (status === 'completed') {
+				if (!participant) return false;
+			} else {
+				return false;
+			}
 			return gameMatchesStudentClass(game, context);
 		});
 	}
@@ -4118,7 +4254,9 @@
 	}
 
 	function normalizeImageOptionToken(value) {
-		const normalized = normalizeAnswerToken(String(value || '').replace(/[_-]+/g, ' '));
+		const normalized = normalizeAnswerToken(
+			String(value || '').replace(/[_-]+/g, ' '),
+		);
 		const imageMatch = normalized.match(/^(?:image|img)\s*(\d+)$/i);
 		if (!imageMatch) return normalized;
 		return `image ${imageMatch[1]}`;
@@ -4175,9 +4313,7 @@
 				imageIndex >= 0 &&
 				imageIndex < optionEntries.length
 			) {
-				return (
-					String(optionEntries[imageIndex]?.text || token).trim() || token
-				);
+				return String(optionEntries[imageIndex]?.text || token).trim() || token;
 			}
 			if (
 				Number.isFinite(imageIndex) &&
@@ -4991,9 +5127,9 @@
 						image: optionImage,
 						isImageOnly: Boolean(
 							entry.isImageOnly ||
-								(optionImage &&
-									(!normalizedText ||
-										/^(?:image|img)[-_\s]*\d+$/i.test(normalizedText))),
+							(optionImage &&
+								(!normalizedText ||
+									/^(?:image|img)[-_\s]*\d+$/i.test(normalizedText))),
 						),
 						id: String(
 							entry.id || entry.imageId || `opt_${index + textIndex + 1}`,
@@ -5013,7 +5149,9 @@
 			const imageTokenMatch = rawText.match(/^img_(\d+)$/i);
 			if (imageTokenMatch) {
 				const rawIndex = Number.parseInt(imageTokenMatch[1], 10);
-				const imageNumber = Number.isFinite(rawIndex) ? rawIndex + 1 : index + 1;
+				const imageNumber = Number.isFinite(rawIndex)
+					? rawIndex + 1
+					: index + 1;
 				options.push({
 					text: `Image ${imageNumber}`,
 					image: '',
@@ -5286,9 +5424,7 @@
 		}
 
 		if (type === 'multiple-choice') {
-			const optionTexts = optionPool.map(
-				(option) => option.text,
-			);
+			const optionTexts = optionPool.map((option) => option.text);
 			const optionTokens = new Set(
 				optionTexts
 					.map((option) => normalizeAnswerToken(option))
@@ -5337,7 +5473,8 @@
 			optionPool,
 		);
 		return (
-			normalizeAnswerToken(mappedProvided) === normalizeAnswerToken(mappedExpected)
+			normalizeAnswerToken(mappedProvided) ===
+			normalizeAnswerToken(mappedExpected)
 		);
 	}
 
@@ -5500,10 +5637,15 @@
 
 		const isFillBlank = questionType === 'fill-blank';
 		const fillData = isFillBlank ? prepareFillBlankQuestion(question) : null;
-		const displayPromptText = isFillBlank ? (fillData?.questionMarkup || text) : text;
-		
+		const displayPromptText = isFillBlank
+			? fillData?.questionMarkup || text
+			: text;
+
 		let codeSnippetHtml = '';
-		if ((question?.type === 'code' || question?.questionType === 'code') && question?.codeSnippet) {
+		if (
+			(question?.type === 'code' || question?.questionType === 'code') &&
+			question?.codeSnippet
+		) {
 			codeSnippetHtml = `
 			  <div class="code-snippet-block">
 				<div class="code-snippet-header">
@@ -5577,11 +5719,7 @@
 										? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}"></div>`
 										: ''
 								}
-								${
-									showLabel
-										? `<div class="option-label">${escapeHtml(optionValue)}</div>`
-										: ''
-								}
+								${showLabel ? `<div class="option-label">${escapeHtml(optionValue)}</div>` : ''}
 							</div>
 						`;
 							})
@@ -5733,11 +5871,7 @@
 									? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}"></div>`
 									: ''
 							}
-							${
-								showLabel
-									? `<div class="option-label">${escapeHtml(optionValue)}</div>`
-									: ''
-							}
+							${showLabel ? `<div class="option-label">${escapeHtml(optionValue)}</div>` : ''}
 						</button>
 					`;
 						})
@@ -5792,11 +5926,7 @@
 									? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}"></div>`
 									: ''
 							}
-							${
-								showLabel
-									? `<div class="option-label">${escapeHtml(optionValue)}</div>`
-									: ''
-							}
+							${showLabel ? `<div class="option-label">${escapeHtml(optionValue)}</div>` : ''}
 						</button>
 					`;
 						})
@@ -5984,7 +6114,9 @@
 		});
 
 		if (pairContainer) {
-			window.safeSetHTML ? window.safeSetHTML(pairContainer, rows.join(''), true) : (pairContainer.innerHTML = rows.join(''));
+			window.safeSetHTML
+				? window.safeSetHTML(pairContainer, rows.join(''), true)
+				: (pairContainer.innerHTML = rows.join(''));
 		}
 		if (countEl) {
 			countEl.textContent = String((pairs || []).length);
@@ -6240,19 +6372,9 @@
 					},
 					(response) => {
 						if (response?.error) {
-							// A local/offline game may not exist on the realtime server
-							// yet. Keep the classroom workflow usable and join the local
-							// snapshot while the server reconnects.
-							if (localGame) {
-								updateGameStore(gameId, (game) => {
-									ensureParticipantForGame(game, context, teamId);
-									return game;
-								}, { scope: 'student-local-join' });
-								showToast('Joined the local game lobby. Realtime will sync when available.', 'warning');
-								resolve({ ok: true, game: localGame, local: true });
-								return;
-							}
 							showToast(response.error, 'error');
+							resolve({ error: response.error });
+							return;
 						}
 						resolve(response || null);
 					},
@@ -6280,11 +6402,18 @@
 			}
 			notifyRealtimeDisconnected();
 			if (localGame) {
-				updateGameStore(gameId, (game) => {
-					ensureParticipantForGame(game, context, teamId);
-					return game;
-				}, { scope: 'student-local-join' });
-				showToast('Joined the local game lobby. Realtime will sync when available.', 'warning');
+				updateGameStore(
+					gameId,
+					(game) => {
+						ensureParticipantForGame(game, context, teamId);
+						return game;
+					},
+					{ scope: 'student-local-join' },
+				);
+				showToast(
+					'Joined the local game lobby. Realtime will sync when available.',
+					'warning',
+				);
 				resolve({ ok: true, game: localGame, local: true });
 				return;
 			}
@@ -6293,23 +6422,33 @@
 	}
 
 	function findGameByJoinCode(code) {
-		const normalized = String(code || '').trim().toUpperCase();
+		const normalized = String(code || '')
+			.trim()
+			.toUpperCase();
 		if (!normalized) return null;
-		return getGamesStore().find((game) => {
-			const values = [
-				game?.joinCode,
-				game?.join_code,
-				game?.lobbyCode,
-				game?.session?.joinCode,
-				game?.session?.lobbyId,
-				game?.id,
-			].map((value) => String(value || '').trim().toUpperCase());
-			return values.includes(normalized);
-		}) || null;
+		return (
+			getGamesStore().find((game) => {
+				const values = [
+					game?.joinCode,
+					game?.join_code,
+					game?.lobbyCode,
+					game?.session?.joinCode,
+					game?.session?.lobbyId,
+					game?.id,
+				].map((value) =>
+					String(value || '')
+						.trim()
+						.toUpperCase(),
+				);
+				return values.includes(normalized);
+			}) || null
+		);
 	}
 
 	async function joinGameByCode(rawCode, context) {
-		const code = String(rawCode || '').replace(/[^a-z0-9]/gi, '').toUpperCase();
+		const code = String(rawCode || '')
+			.replace(/[^a-z0-9]/gi, '')
+			.toUpperCase();
 		if (code.length < 4) {
 			showToast('Enter the game code shared by your teacher.', 'error');
 			return;
@@ -6327,32 +6466,48 @@
 
 		const socket = getSocket();
 		if (socket?.connected) {
-			socket.emit('game:join', {
-				joinCode: code,
-				userId: context.user.id,
-				userName: context.user.name || context.user.username || 'Student',
-				classId: context.user.classId || context.identity?.classId || '',
-			}, (response) => {
-				if (response?.error) {
-					showToast(response.error, 'error');
-					return;
-				}
-				const gameId = response?.game_id || response?.gameId || response?.session?.game_id;
-				if (gameId) {
-					showToast('Joined. Open the lobby from the Games tab after the next sync.', 'success');
-				} else {
-					showToast('Joined the lobby. Waiting for the game snapshot.', 'success');
-				}
-			});
+			socket.emit(
+				'game:join',
+				{
+					joinCode: code,
+					userId: context.user.id,
+					userName: context.user.name || context.user.username || 'Student',
+					classId: context.user.classId || context.identity?.classId || '',
+				},
+				(response) => {
+					if (response?.error) {
+						showToast(response.error, 'error');
+						return;
+					}
+					const gameId =
+						response?.game_id || response?.gameId || response?.session?.game_id;
+					if (gameId) {
+						showToast(
+							'Joined. Open the lobby from the Games tab after the next sync.',
+							'success',
+						);
+					} else {
+						showToast(
+							'Joined the lobby. Waiting for the game snapshot.',
+							'success',
+						);
+					}
+				},
+			);
 			return;
 		}
 
 		if (hasStudentRestApi()) {
 			try {
-				const session = await window.API.raw('POST', '/games/join', { join_code: code });
+				const session = await window.API.raw('POST', '/games/join', {
+					join_code: code,
+				});
 				const gameId = session?.game_id || session?.gameId;
 				if (gameId) {
-					const game = await window.API.raw('GET', `/games/${encodeURIComponent(gameId)}`);
+					const game = await window.API.raw(
+						'GET',
+						`/games/${encodeURIComponent(gameId)}`,
+					);
 					if (game) mergeServerGameSnapshot(game);
 				}
 				showToast('Joined the game lobby.', 'success');
@@ -6362,11 +6517,17 @@
 					renderGameStage(context);
 				}
 			} catch (error) {
-				showToast(error?.message || 'No game was found for that code.', 'error');
+				showToast(
+					error?.message || 'No game was found for that code.',
+					'error',
+				);
 			}
 			return;
 		}
-		showToast('No matching game found. Ask your teacher to sync the lobby and try again.', 'warning');
+		showToast(
+			'No matching game found. Ask your teacher to sync the lobby and try again.',
+			'warning',
+		);
 	}
 
 	function openGameStageForStudent(gameId, context) {
@@ -6381,9 +6542,9 @@
 		if (!normalizedGameId || !context?.user?.id) return;
 		if (isReadyTogglePending(normalizedGameId)) return;
 		const socket = getSocket();
-		if (socket && socket.connected) {
+		const emitReady = (activeSocket, allowRejoin = true) => {
 			setReadyTogglePending(normalizedGameId);
-			socket.emit(
+			activeSocket.emit(
 				'game:ready',
 				{
 					gameId: normalizedGameId,
@@ -6392,6 +6553,18 @@
 				(response) => {
 					clearReadyTogglePending(normalizedGameId);
 					if (response?.error) {
+						if (allowRejoin && response.error === 'Not a participant') {
+							clearReadyTogglePending(normalizedGameId);
+							joinGame(normalizedGameId, context).then((joinResponse) => {
+								if (joinResponse?.error) {
+									showToast(joinResponse.error, 'error');
+									return;
+								}
+								if (activeSocket.connected) emitReady(activeSocket, false);
+								else notifyRealtimeDisconnected();
+							});
+							return;
+						}
 						showToast(response.error, 'error');
 						syncGameStateNow(normalizedGameId, context).finally(() => {
 							window.dispatchEvent(new CustomEvent('quiz:games-updated'));
@@ -6408,6 +6581,29 @@
 					});
 				},
 			);
+		};
+		if (socket?.connected) {
+			emitReady(socket);
+			return;
+		}
+		if (socket) {
+			let settled = false;
+			const finishWait = () => {
+				if (settled) return;
+				settled = true;
+				try { socket.off('connect', onConnect); } catch (_) {}
+				clearTimeout(timeoutId);
+			};
+			const onConnect = () => {
+				finishWait();
+				emitReady(socket);
+			};
+			const timeoutId = setTimeout(() => {
+				finishWait();
+				notifyRealtimeDisconnected();
+			}, 5000);
+			socket.once('connect', onConnect);
+			try { window.__QUIZ_SOCKET_AUTH_KEEPER__?.reviveCachedSocket?.(); } catch (_) {}
 			return;
 		}
 		notifyRealtimeDisconnected();
@@ -6415,8 +6611,13 @@
 
 	function forfeitLiveGame(gameId, context, reason = 'left-stage') {
 		const activeGame =
-			getGameByIdResolved(gameId) || getCachedGame(gameId) || getGameById(gameId);
-		if (!activeGame || String(activeGame?.status || '').toLowerCase() !== 'live') {
+			getGameByIdResolved(gameId) ||
+			getCachedGame(gameId) ||
+			getGameById(gameId);
+		if (
+			!activeGame ||
+			String(activeGame?.status || '').toLowerCase() !== 'live'
+		) {
 			return false;
 		}
 		if (!getParticipant(ensureSession(activeGame), context?.user?.id)) {
@@ -6436,7 +6637,9 @@
 
 	function leaveLobbyGame(gameId, context) {
 		const activeGame =
-			getGameByIdResolved(gameId) || getCachedGame(gameId) || getGameById(gameId);
+			getGameByIdResolved(gameId) ||
+			getCachedGame(gameId) ||
+			getGameById(gameId);
 		const status = String(activeGame?.status || '').toLowerCase();
 		if (!activeGame || (status !== 'open' && status !== 'draft')) {
 			return false;
@@ -6495,7 +6698,10 @@
 				'warning',
 			);
 		} else if (leftLobby) {
-			showToast('You left the lobby and everyone sees the update in real time.', 'info');
+			showToast(
+				'You left the lobby and everyone sees the update in real time.',
+				'info',
+			);
 		}
 		if (context) renderGamesPanel(context);
 	}
@@ -6513,7 +6719,9 @@
 			if (!el) return;
 			const previous = htmlByElementCache.get(id);
 			if (previous === html) return;
-			window.safeSetHTML ? window.safeSetHTML(el, html, true) : (el.innerHTML = html);
+			window.safeSetHTML
+				? window.safeSetHTML(el, html, true)
+				: (el.innerHTML = html);
 			htmlByElementCache.set(id, html);
 		});
 	}
@@ -6836,14 +7044,14 @@
 		games.forEach(cacheGameSnapshot);
 		renderGameStats(games, context);
 		renderGameResultsPanel(games, context);
-			const filtered = games.filter((game) => {
-				const viewModel = getStudentGameViewModel(game, context);
-				// Filter by status
-				let matchesStatus = false;
-				if (state.gameFilter === 'open')
-					matchesStatus = viewModel.displayStatus === 'open';
-				else if (state.gameFilter === 'live')
-					matchesStatus = viewModel.displayStatus === 'live';
+		const filtered = games.filter((game) => {
+			const viewModel = getStudentGameViewModel(game, context);
+			// Filter by status
+			let matchesStatus = false;
+			if (state.gameFilter === 'open')
+				matchesStatus = viewModel.displayStatus === 'open';
+			else if (state.gameFilter === 'live')
+				matchesStatus = viewModel.displayStatus === 'live';
 			else if (state.gameFilter === 'completed')
 				matchesStatus =
 					viewModel.displayStatus === 'completed' ||
@@ -6989,8 +7197,7 @@
 							joined
 								? `
 								<button class="workspace-btn small" data-action="enter-game" data-game-id="${game.id}" ${
-									globalStatus === 'live' &&
-									(isForfeited || isEliminated)
+									globalStatus === 'live' && (isForfeited || isEliminated)
 										? 'disabled'
 										: ''
 								}>
@@ -7057,7 +7264,10 @@
 		cacheGameSnapshot(game);
 		const session = ensureSession(game);
 		const viewerParticipant = getParticipant(session, context.user.id);
-		if (String(game.status || '').toLowerCase() === 'live' && !viewerParticipant) {
+		if (
+			String(game.status || '').toLowerCase() === 'live' &&
+			!viewerParticipant
+		) {
 			// The match already started without this student in the lobby.
 			// Race-like games accept late joiners on the server, so actively
 			// (re)join instead of dead-ending on a sync screen forever.
@@ -7223,13 +7433,7 @@
 							? `<button class="workspace-btn" data-action="toggle-ready" data-game-id="${game.id}" ${
 									readyPending ? 'disabled' : ''
 								}>
-								${
-									readyPending
-										? 'Updating...'
-										: participant.ready
-											? 'Ready'
-											: 'Mark Ready'
-								}
+								${readyPending ? 'Updating...' : participant.ready ? 'Ready' : 'Mark Ready'}
 							</button>`
 							: ''
 					}
@@ -7581,10 +7785,8 @@
 						: totalQuestions
 							? `Q ${Math.min(index + 1, totalQuestions)}/${totalQuestions}`
 							: 'Waiting';
-				const effectiveStatusClass =
-					inactiveStatus?.statusClass || statusClass;
-				const effectiveStatusLabel =
-					inactiveStatus?.statusLabel || statusLabel;
+				const effectiveStatusClass = inactiveStatus?.statusClass || statusClass;
+				const effectiveStatusLabel = inactiveStatus?.statusLabel || statusLabel;
 				return `
 					<div class="score-row">
 						<div>
@@ -8262,40 +8464,39 @@
 			turnLabel,
 		});
 		const headerRows = session.participants
-			.map(
-				(p) => {
-					const inactiveStatus = getInactiveParticipantStatusMeta(p);
-					const statusClass = inactiveStatus
-						? inactiveStatus.statusClass
-						: pending
-							? sameUserIdValue(p.userId, pending?.targetId)
-								? 'answering'
-								: sameUserIdValue(p.userId, pending?.pickerId || pickerUserId)
-									? 'turn'
-									: sameUserIdValue(p.userId, pending?.ownerId)
-										? 'waiting'
-										: 'waiting'
-							: sameUserIdValue(p.userId, pickerUserId)
+			.map((p) => {
+				const inactiveStatus = getInactiveParticipantStatusMeta(p);
+				const statusClass = inactiveStatus
+					? inactiveStatus.statusClass
+					: pending
+						? sameUserIdValue(p.userId, pending?.targetId)
+							? 'answering'
+							: sameUserIdValue(p.userId, pending?.pickerId || pickerUserId)
 								? 'turn'
-								: 'waiting';
-					const statusLabel = inactiveStatus
-						? inactiveStatus.statusLabel
-						: pending
-							? sameUserIdValue(p.userId, pending?.targetId)
-								? 'Answering'
-								: sameUserIdValue(p.userId, pending?.pickerId || pickerUserId)
-									? 'Picked'
-									: sameUserIdValue(p.userId, pending?.ownerId)
-										? 'Deck Used'
-										: 'Waiting'
-							: sameUserIdValue(p.userId, pickerUserId)
-								? sameUserIdValue(p.userId, context?.user?.id)
-									? 'Your Turn'
-									: 'Picking'
-								: sameUserIdValue(p.userId, sourceOwnerId)
-									? 'Defending'
-									: 'Waiting';
-					return `
+								: sameUserIdValue(p.userId, pending?.ownerId)
+									? 'waiting'
+									: 'waiting'
+						: sameUserIdValue(p.userId, pickerUserId)
+							? 'turn'
+							: 'waiting';
+				const statusLabel = inactiveStatus
+					? inactiveStatus.statusLabel
+					: pending
+						? sameUserIdValue(p.userId, pending?.targetId)
+							? 'Answering'
+							: sameUserIdValue(p.userId, pending?.pickerId || pickerUserId)
+								? 'Picked'
+								: sameUserIdValue(p.userId, pending?.ownerId)
+									? 'Deck Used'
+									: 'Waiting'
+						: sameUserIdValue(p.userId, pickerUserId)
+							? sameUserIdValue(p.userId, context?.user?.id)
+								? 'Your Turn'
+								: 'Picking'
+							: sameUserIdValue(p.userId, sourceOwnerId)
+								? 'Defending'
+								: 'Waiting';
+				return `
 						<div class="score-row">
 							<div>
 								<div class="score-name">${(p.winningStreak || 0) >= 3 ? 'HOT ' : ''}${escapeHtml(p.name)}</div>
@@ -8304,8 +8505,7 @@
 							<span class="status-pill ${statusClass}">${statusLabel}</span>
 						</div>
 					`;
-				},
-			)
+			})
 			.join('');
 
 		const cardModeTitle = isDrawMode ? 'Card Draw Battle' : 'Card Battle';
@@ -9526,15 +9726,16 @@
 					}
 					requestGameSync(gameId, context, 0);
 				},
-				);
-				return;
-			}
-			const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
-		const questionId =
-				game?.session?.round?.questionId || game?.questions?.[Number(questionIndex)]?.id;
-			if (submitGameAnswerViaApi(gameId, context, answer, questionId)) return;
-			notifyRealtimeDisconnected();
+			);
 			return;
+		}
+		const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
+		const questionId =
+			game?.session?.round?.questionId ||
+			game?.questions?.[Number(questionIndex)]?.id;
+		if (submitGameAnswerViaApi(gameId, context, answer, questionId)) return;
+		notifyRealtimeDisconnected();
+		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
 		updateGameStore(
@@ -9629,11 +9830,11 @@
 					}
 					requestGameSync(gameId, context, 0);
 				},
-				);
-				return;
-			}
-			notifyRealtimeDisconnected();
+			);
 			return;
+		}
+		notifyRealtimeDisconnected();
+		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
 		updateGameStore(
@@ -9862,13 +10063,13 @@
 					}
 					requestGameSync(gameId, context, 0);
 				},
-				);
-				return;
-			}
-			const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
-			const questionId = game?.session?.card?.pendingCard?.questionId;
+			);
+			return;
+		}
+		const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
+		const questionId = game?.session?.card?.pendingCard?.questionId;
 		if (submitGameAnswerViaApi(gameId, context, answer, questionId)) return;
-			notifyRealtimeDisconnected();
+		notifyRealtimeDisconnected();
 		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
@@ -9929,7 +10130,7 @@
 		const game = getGameByIdResolved(gameId) || getCachedGame(gameId);
 		const questionId = game?.session?.tieBreak?.questionId;
 		if (submitGameAnswerViaApi(gameId, context, answer, questionId)) return;
-			notifyRealtimeDisconnected();
+		notifyRealtimeDisconnected();
 		return;
 		// Fallback: local
 		const scope = buildGameScope(getGameById(gameId), context);
@@ -10075,7 +10276,11 @@
 		return 'Single Elimination';
 	}
 
-	function normalizeTournamentModeValue(mode, fallback = 'any', allowEmpty = false) {
+	function normalizeTournamentModeValue(
+		mode,
+		fallback = 'any',
+		allowEmpty = false,
+	) {
 		const normalized = String(mode ?? '')
 			.trim()
 			.toLowerCase();
@@ -10094,10 +10299,14 @@
 	}
 
 	function getNormalizedTournamentRoundAssignments(tournament) {
-		const globalMode = normalizeTournamentModeValue(tournament?.targetMode, 'any');
-		return (Array.isArray(tournament?.roundAssignments)
-			? tournament.roundAssignments
-			: []
+		const globalMode = normalizeTournamentModeValue(
+			tournament?.targetMode,
+			'any',
+		);
+		return (
+			Array.isArray(tournament?.roundAssignments)
+				? tournament.roundAssignments
+				: []
 		)
 			.map((assignment) => {
 				const round = Number(assignment?.round);
@@ -10138,8 +10347,12 @@
 		const sourceGameId = String(
 			gameSnapshot?.tournamentContext?.sourceGameId || '',
 		).trim();
-		const globalMode = normalizeTournamentModeValue(tournament?.targetMode, 'any');
-		const roundAssignments = getNormalizedTournamentRoundAssignments(tournament);
+		const globalMode = normalizeTournamentModeValue(
+			tournament?.targetMode,
+			'any',
+		);
+		const roundAssignments =
+			getNormalizedTournamentRoundAssignments(tournament);
 		if (!roundAssignments.length) {
 			return {
 				eligible: isTournamentModeMatch(globalMode, gameType),
@@ -10208,7 +10421,9 @@
 		} else if (/(third|3rd|bronze|semi)/.test(badgeText)) {
 			tier = 'bronze';
 			label = 'Bronze Medal';
-		} else if (/(tournament|arena|streak|win|battle|challenge)/.test(badgeText)) {
+		} else if (
+			/(tournament|arena|streak|win|battle|challenge)/.test(badgeText)
+		) {
 			tier = 'emerald';
 			label = 'Arena Medal';
 		}
@@ -10225,7 +10440,8 @@
 				localStorage.getItem('quizTournamentActive') || 'null',
 			);
 			if (parsed && typeof parsed === 'object') return parsed;
-			const tournaments = window.__DI_CONTAINER__.repo.getAll_sync('tournaments') || [];
+			const tournaments =
+				window.__DI_CONTAINER__.repo.getAll_sync('tournaments') || [];
 			const serverTournament = tournaments.find((entry) =>
 				['active', 'open'].includes(String(entry?.status || '').toLowerCase()),
 			);
@@ -10233,7 +10449,10 @@
 			return {
 				...serverTournament,
 				...(serverTournament.settings || {}),
-				participants: serverTournament.participants || serverTournament.settings?.participants || [],
+				participants:
+					serverTournament.participants ||
+					serverTournament.settings?.participants ||
+					[],
 			};
 		} catch (e) {
 			return null;
@@ -10525,14 +10744,23 @@
 
 		const activeTournament = getActiveTournamentRecord();
 		try {
-			const entries = window.__DI_CONTAINER__.repo.getAll_sync('tournament_entries') || [];
+			const entries =
+				window.__DI_CONTAINER__.repo.getAll_sync('tournament_entries') || [];
 			const usersById = new Map(
-				(window.__DI_CONTAINER__.repo.getAll_sync('users') || []).map((user) => [String(user.id), user]),
+				(window.__DI_CONTAINER__.repo.getAll_sync('users') || []).map(
+					(user) => [String(user.id), user],
+				),
 			);
 			const dbEntries = entries
-				.filter((entry) => String(entry?.tournament_id || entry?.tournamentId || '') === String(tournamentId))
+				.filter(
+					(entry) =>
+						String(entry?.tournament_id || entry?.tournamentId || '') ===
+						String(tournamentId),
+				)
 				.map((entry) => {
-					const user = usersById.get(String(entry.user_id || entry.userId || ''));
+					const user = usersById.get(
+						String(entry.user_id || entry.userId || ''),
+					);
 					return {
 						id: entry.user_id || entry.userId || '',
 						name: user?.name || user?.username || 'Player',
@@ -10617,7 +10845,8 @@
 			? game.session.participants
 			: [];
 		return (
-			participants.find((entry) => sameUserIdValue(entry?.userId, userId)) || null
+			participants.find((entry) => sameUserIdValue(entry?.userId, userId)) ||
+			null
 		);
 	}
 
@@ -10651,7 +10880,10 @@
 
 	function getFocusedTournamentRoundView(roundViews, tournament) {
 		const views = Array.isArray(roundViews) ? roundViews : [];
-		const currentRoundNumber = Math.max(Number(tournament?.currentRound) || 1, 1);
+		const currentRoundNumber = Math.max(
+			Number(tournament?.currentRound) || 1,
+			1,
+		);
 		const currentRoundView =
 			views.find((view) => view.round === currentRoundNumber) || null;
 		const nextRoundView =
@@ -10700,9 +10932,13 @@
 	}
 
 	function getTournamentRoundViews(tournament, context) {
-		const currentRoundNumber = Math.max(Number(tournament?.currentRound) || 1, 1);
+		const currentRoundNumber = Math.max(
+			Number(tournament?.currentRound) || 1,
+			1,
+		);
 		const assignments =
-			Array.isArray(tournament?.roundAssignments) && tournament.roundAssignments.length
+			Array.isArray(tournament?.roundAssignments) &&
+			tournament.roundAssignments.length
 				? tournament.roundAssignments
 				: getNormalizedTournamentRoundAssignments(tournament);
 		const tournamentStatus = String(tournament?.status || '').toLowerCase();
@@ -10934,7 +11170,10 @@
 		if (!participantId) {
 			return { label: 'Unknown', tone: 'muted', detail: '' };
 		}
-		const currentRoundNumber = Math.max(Number(tournament?.currentRound) || 1, 1);
+		const currentRoundNumber = Math.max(
+			Number(tournament?.currentRound) || 1,
+			1,
+		);
 		const currentRoundView =
 			roundViews.find((view) => view.round === currentRoundNumber) || null;
 
@@ -10956,7 +11195,10 @@
 		let joinedGames = 0;
 		let finishedGames = 0;
 		for (const game of currentRoundView.games) {
-			const joinedGame = getTournamentParticipantEntry(game.actualGame, participantId);
+			const joinedGame = getTournamentParticipantEntry(
+				game.actualGame,
+				participantId,
+			);
 			const participantState = String(joinedGame?.state || '').toLowerCase();
 			if (!joinedGame) continue;
 			joinedGames += 1;
@@ -11062,7 +11304,8 @@
 			title = 'Tournament paused';
 			copy =
 				'The teacher paused this tournament. Stay here and wait for the next live update.';
-			note = 'Your current match will appear again when the tournament resumes.';
+			note =
+				'Your current match will appear again when the tournament resumes.';
 		} else if (!currentRoundView) {
 			tone = 'waiting';
 			title = 'Round loading';
@@ -11164,26 +11407,16 @@
 								? new Date(Number(badge.earnedAt)).toLocaleDateString()
 								: '';
 						return `
-							<article class="student-badge-card tier-${escapeHtml(
-								visualMeta.tier,
-							)}">
+							<article class="student-badge-card tier-${escapeHtml(visualMeta.tier)}">
 								<div class="student-badge-medal" aria-hidden="true">
 									<span class="student-badge-ribbon left"></span>
 									<span class="student-badge-ribbon right"></span>
-									<div class="student-badge-icon">${escapeHtml(
-										visualMeta.icon,
-									)}</div>
+									<div class="student-badge-icon">${escapeHtml(visualMeta.icon)}</div>
 								</div>
 								<div class="student-badge-body">
-									<div class="student-badge-pill">${escapeHtml(
-										visualMeta.label,
-									)}</div>
-									<div class="student-badge-title">${escapeHtml(
-										badge?.name || 'Badge',
-									)}</div>
-									<div class="student-badge-desc">${escapeHtml(
-										badge?.desc || '',
-									)}</div>
+									<div class="student-badge-pill">${escapeHtml(visualMeta.label)}</div>
+									<div class="student-badge-title">${escapeHtml(badge?.name || 'Badge')}</div>
+									<div class="student-badge-desc">${escapeHtml(badge?.desc || '')}</div>
 									${
 										earnedAt
 											? `<div class="student-badge-date">Earned ${escapeHtml(
@@ -11263,7 +11496,10 @@
 					leaderboard.map((entry) => [String(entry?.id || '').trim(), entry]),
 				);
 				const roundViews = getTournamentRoundViews(activeTournament, context);
-				const currentRoundNumber = Math.max(Number(activeTournament.currentRound) || 1, 1);
+				const currentRoundNumber = Math.max(
+					Number(activeTournament.currentRound) || 1,
+					1,
+				);
 				const focusedRoundMeta = getFocusedTournamentRoundView(
 					roundViews,
 					activeTournament,
@@ -11274,8 +11510,7 @@
 					null;
 				const focusedRoundView = focusedRoundMeta.view || currentRoundView;
 				const focusMode = focusedRoundMeta.mode || 'current';
-				const primaryActionGame =
-					focusedRoundView?.preferredActionGame || null;
+				const primaryActionGame = focusedRoundView?.preferredActionGame || null;
 				const roundProgressLabel = focusedRoundView
 					? focusedRoundView.isFuture
 						? 'Locked'
@@ -11288,7 +11523,7 @@
 					String(activeTournament.status || '').toLowerCase() === 'paused';
 				const statusLabel = isPaused ? 'Paused' : 'Active';
 				const statusClass = isPaused ? 'warning' : 'active';
-				
+
 				if (tDesc) {
 					tDesc.textContent = `${activeTournament.name} - ${statusLabel}`;
 				}
@@ -11333,7 +11568,10 @@
 					else if (!focusedRoundView) playLabel = 'Waiting for round';
 					else if (focusMode === 'next' || focusedRoundView.isFuture)
 						playLabel = 'Waiting for next round';
-					else if (focusMode === 'finished' || focusedRoundView.viewerRoundFinished)
+					else if (
+						focusMode === 'finished' ||
+						focusedRoundView.viewerRoundFinished
+					)
 						playLabel = 'Match finished';
 					else if (focusedRoundView.allCompleted) playLabel = 'Round completed';
 					else if (!primaryActionGame && currentRoundView?.liveCount > 0)
@@ -11378,11 +11616,7 @@
 								? '<button type="button" class="workspace-btn small ghost" onclick="leaveActiveTournament()">Leave Tournament</button>'
 								: ''
 						}
-						${
-							isPaused
-								? '<div class="tournament-paused-mini">Tournament Paused</div>'
-								: ''
-						}
+						${isPaused ? '<div class="tournament-paused-mini">Tournament Paused</div>' : ''}
 					`;
 				}
 				if (journeyEl) {
@@ -11403,8 +11637,7 @@
 							'<div class="empty-state-small">Your current round will appear here as soon as it is ready.</div>';
 					} else {
 						const roundView = focusedRoundView;
-						const isUpcomingFocus =
-							focusMode === 'next' || roundView.isFuture;
+						const isUpcomingFocus = focusMode === 'next' || roundView.isFuture;
 						const roundCardClasses = [
 							'student-tournament-round-card',
 							isUpcomingFocus ? 'is-upcoming' : 'is-current',
@@ -11420,11 +11653,11 @@
 									? 'Your current match is finished. The next round stays here and unlocks automatically when the teacher advances the tournament.'
 									: focusMode === 'finished'
 										? 'Your current tournament match is finished. Stay here for the final standings or the next update.'
-								: roundView.allCompleted
-									? 'This round is finished. Stay here and wait for the next round to open.'
-									: isUpcomingFocus
-										? 'This next round is prepared but still locked until the current round closes.'
-									: 'Only the current round is shown here so you can focus on the match in front of you.';
+										: roundView.allCompleted
+											? 'This round is finished. Stay here and wait for the next round to open.'
+											: isUpcomingFocus
+												? 'This next round is prepared but still locked until the current round closes.'
+												: 'Only the current round is shown here so you can focus on the match in front of you.';
 						const gamesGridHtml = roundView.games.length
 							? `<div class="student-tournament-game-grid">
 								${roundView.games
@@ -11489,22 +11722,15 @@
 												.map((value) => escapeHtml(value))
 												.join(' ')}">
 												<div>
-													<div class="student-tournament-game-title">${escapeHtml(
-														game.name,
-													)}</div>
+													<div class="student-tournament-game-title">${escapeHtml(game.name)}</div>
 													<div class="student-tournament-game-meta">${escapeHtml(
 														getTournamentModeDisplay(game.mode || game.type),
 													)}</div>
 												</div>
 												<div class="student-tournament-game-meta">
-													${renderStudentTournamentStatusPill(
-														game.myStatusLabel,
-														game.myStatusTone,
-													)}
+													${renderStudentTournamentStatusPill(game.myStatusLabel, game.myStatusTone)}
 												</div>
-												<div class="student-tournament-inline-note">${escapeHtml(
-													inlineNote,
-												)}</div>
+												<div class="student-tournament-inline-note">${escapeHtml(inlineNote)}</div>
 												<div class="student-tournament-game-actions">
 													<button type="button" class="workspace-btn small" ${
 														!hasJoined && !isPaused
@@ -11543,9 +11769,7 @@
 													? `Round ${roundView.round} Finished`
 													: `Current Round ${roundView.round}`,
 										)}</div>
-										<div class="student-tournament-round-copy">${escapeHtml(
-											roundCopy,
-										)}</div>
+										<div class="student-tournament-round-copy">${escapeHtml(roundCopy)}</div>
 									</div>
 									${renderStudentTournamentStatusPill(
 										roundView.statusLabel,
@@ -11617,11 +11841,11 @@
 								? 'Your current match is finished. The next round will unlock here automatically when the tournament advances.'
 								: focusMode === 'finished'
 									? 'Your current match is finished. Stay here for final standings or the next tournament update.'
-							: currentRoundView?.allCompleted
-								? 'Your current round is finished. Stay here for the next round update.'
-								: primaryActionGame
-									? 'Use the main play button when your match is ready. Ready, leave, start, and answer updates should appear here in real time.'
-									: 'Stay on this page. Your current round will update here automatically.';
+									: currentRoundView?.allCompleted
+										? 'Your current round is finished. Stay here for the next round update.'
+										: primaryActionGame
+											? 'Use the main play button when your match is ready. Ready, leave, start, and answer updates should appear here in real time.'
+											: 'Stay on this page. Your current round will update here automatically.';
 					howItWorksEl.innerHTML = `
 						<div class="student-tournament-benefits-title">Current Focus</div>
 						<p>${escapeHtml(focusText)}</p>
@@ -11646,14 +11870,14 @@
 									Number(leaderboardByUser.get(rightId)?.points) || 0;
 								return (
 									rightPoints - leftPoints ||
-									String(left?.name || '').localeCompare(String(right?.name || ''))
+									String(left?.name || '').localeCompare(
+										String(right?.name || ''),
+									)
 								);
 							});
 						participantsEl.innerHTML = sortedParticipants
 							.map((participant) => {
-								const participantId = String(
-									participant?.userId || '',
-								).trim();
+								const participantId = String(participant?.userId || '').trim();
 								const points =
 									Number(leaderboardByUser.get(participantId)?.points) || 0;
 								const status = getTournamentParticipantStatusSummary(
@@ -11663,9 +11887,7 @@
 								);
 								const isSelf = sameUserIdValue(participantId, userId);
 								return `
-									<div class="student-tournament-participant-row ${
-										isSelf ? 'is-self' : ''
-									}">
+									<div class="student-tournament-participant-row ${isSelf ? 'is-self' : ''}">
 										<div class="student-tournament-participant-main">
 											<div class="student-tournament-participant-name">${escapeHtml(
 												participant?.name || 'Student',
@@ -11674,10 +11896,7 @@
 												status.detail || 'Waiting for round data.',
 											)} - ${escapeHtml(String(points))} pts</div>
 										</div>
-										${renderStudentTournamentStatusPill(
-											status.label,
-											status.tone,
-										)}
+										${renderStudentTournamentStatusPill(status.label, status.tone)}
 									</div>
 								`;
 							})
@@ -13140,8 +13359,7 @@
 
 	// French-style decimal comma for display: 12,50 / 20
 	function formatGrade20(grade) {
-		const fixed = (Number(grade) || 0).toFixed(2).replace('.', ',');
-		return `${fixed} / 20`;
+		return `${(Number(grade) || 0).toFixed(2)} / 20`;
 	}
 
 	// Human-readable duration: seconds → "1h 05m", "12m 30s", "45s".
@@ -13158,42 +13376,44 @@
 	}
 
 	const TRAINING_QUESTION_TYPE_ALIASES = {
-		'mcq': 'multiple-choice',
-		'multiple': 'multiple-choice',
-		'multiplechoice': 'multiple-choice',
-		'single': 'multiple-choice',
-		'multi': 'multiple-choice-multi',
+		mcq: 'multiple-choice',
+		multiple: 'multiple-choice',
+		multiplechoice: 'multiple-choice',
+		single: 'multiple-choice',
+		multi: 'multiple-choice-multi',
 		'multiple-choice-multi': 'multiple-choice-multi',
-		'allowmultipleanswers': 'multiple-choice-multi',
-		'multiselect': 'multiple-choice-multi',
+		allowmultipleanswers: 'multiple-choice-multi',
+		multiselect: 'multiple-choice-multi',
 		'multi-select': 'multiple-choice-multi',
-		'multi_select': 'multiple-choice-multi',
+		multi_select: 'multiple-choice-multi',
 		'true-false': 'true-false',
-		'truefalse': 'true-false',
-		'boolean': 'true-false',
+		truefalse: 'true-false',
+		boolean: 'true-false',
 		'true-or-false': 'true-false',
 		'fill-blank': 'fill-blank',
-		'fillblank': 'fill-blank',
-		'cloze': 'fill-blank',
-		'fill': 'fill-blank',
-		'draggable': 'draggable',
+		fillblank: 'fill-blank',
+		cloze: 'fill-blank',
+		fill: 'fill-blank',
+		draggable: 'draggable',
 		'drag-drop': 'draggable',
-		'order': 'draggable',
-		'sequence': 'draggable',
+		order: 'draggable',
+		sequence: 'draggable',
 		'odd-one-out': 'odd-one-out',
-		'odd': 'odd-one-out',
-		'oddoneout': 'odd-one-out',
+		odd: 'odd-one-out',
+		oddoneout: 'odd-one-out',
 		'matching-pairs': 'matching-pairs',
-		'match': 'matching-pairs',
-		'pairs': 'matching-pairs',
-		'matching': 'matching-pairs',
-		'code': 'code',
-		'programming': 'code',
-		'coding': 'code',
+		match: 'matching-pairs',
+		pairs: 'matching-pairs',
+		matching: 'matching-pairs',
+		code: 'code',
+		programming: 'code',
+		coding: 'code',
 	};
 
 	function normalizeTrainingQuestionType(q) {
-		const raw = String(q?.type || '').toLowerCase().trim();
+		const raw = String(q?.type || '')
+			.toLowerCase()
+			.trim();
 		if (TRAINING_QUESTION_TYPE_ALIASES[raw]) {
 			return TRAINING_QUESTION_TYPE_ALIASES[raw];
 		}
@@ -13236,13 +13456,23 @@
 					}
 				});
 			} else if (Array.isArray(q?.answer)) {
-				q.answer.forEach((a) => addToken(typeof a === 'object' ? a.text || a.value : a));
+				q.answer.forEach((a) =>
+					addToken(typeof a === 'object' ? a.text || a.value : a),
+				);
 			}
 			// 2. Extract from distractors, wordBank, and options
-			const pools = [q?.distractors, q?.wordBank, q?.options, q?.optionData, raw];
+			const pools = [
+				q?.distractors,
+				q?.wordBank,
+				q?.options,
+				q?.optionData,
+				raw,
+			];
 			pools.forEach((pool) => {
 				if (Array.isArray(pool)) {
-					pool.forEach((it) => addToken(typeof it === 'object' ? it.text || it.value : it));
+					pool.forEach((it) =>
+						addToken(typeof it === 'object' ? it.text || it.value : it),
+					);
 				}
 			});
 			if (tokens.length > 0) {
@@ -13259,7 +13489,8 @@
 			}
 		}
 		return raw.map((o) => {
-			if (typeof o === 'string') return { text: o, image: '', isImageOnly: false };
+			if (typeof o === 'string')
+				return { text: o, image: '', isImageOnly: false };
 			return {
 				text: o?.text || '',
 				image: o?.image || '',
@@ -13344,7 +13575,10 @@
 				if (remaining <= 0) {
 					stopTrainingTimer();
 					if (typeof window.nextTrainingQuestion === 'function') {
-						if (trainingState.currentIndex < trainingState.questions.length - 1) {
+						if (
+							trainingState.currentIndex <
+							trainingState.questions.length - 1
+						) {
 							trainingState.currentIndex = trainingState.questions.length - 1;
 						}
 						finishTrainingTest();
@@ -13376,7 +13610,8 @@
 
 	// ── Public API ──────────────────────────────────────────────────────────
 	window.openTrainingMode = function (examId) {
-		let questions = window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		let questions =
+			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
 		if (examId) {
 			const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
 			const exam = exams.find((e) => e.id === examId);
@@ -13395,6 +13630,7 @@
 			mode: 'training',
 			examId: examId || null,
 			examName: 'Training Practice Test',
+			allowCorrections: true,
 			questions: shuffled,
 			currentIndex: 0,
 			userAnswers: {},
@@ -13414,8 +13650,9 @@
 		// previous behaviour for students who set a long test.
 		try {
 			if (examId) {
-				const exam = (window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [])
-					.find((e) => e.id === examId);
+				const exam = (
+					window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || []
+				).find((e) => e.id === examId);
 				const limit = Number(exam?.timeLimit || exam?.duration || 0);
 				if (limit > 0) trainingState.timeLimitSec = limit * 60;
 			}
@@ -13433,11 +13670,24 @@
 	};
 
 	function startExamModal(exam) {
-		const questionBank = window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		const context = getStudentContext();
+		if (
+			context &&
+			collectExamResults(context.identity).some(
+				(result) => String(result.examId) === String(exam?.id),
+			)
+		) {
+			showToast('This exam has already been completed.', 'info');
+			return;
+		}
+		const questionBank =
+			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
 		const questions = (Array.isArray(exam?.questions) ? exam.questions : [])
 			.map((entry) => {
 				if (entry && typeof entry === 'object') return entry;
-				return questionBank.find((question) => String(question?.id) === String(entry));
+				return questionBank.find(
+					(question) => String(question?.id) === String(entry),
+				);
 			})
 			.filter(Boolean);
 		if (!questions.length) {
@@ -13445,6 +13695,7 @@
 			return;
 		}
 
+		const preset = getExamPresetInfo(exam);
 		trainingState = {
 			active: true,
 			mode: 'exam',
@@ -13458,10 +13709,14 @@
 			endTime: null,
 			completed: false,
 			showCorrections: false,
+			allowCorrections: preset?.showExplanations === true,
 			perQuestion: [],
 			questionOptions: questions.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
-			timeLimitSec: Math.max(0, Number(exam.timeLimit || exam.duration || 0) * 60),
+			timeLimitSec: Math.max(
+				0,
+				Number(exam.timeLimit || exam.duration || 0) * 60,
+			),
 		};
 
 		clearTrainingStorage();
@@ -13594,7 +13849,7 @@
 						.split('|')
 						.map((s) => s.trim())
 						.filter(Boolean),
-			  )
+				)
 			: new Set();
 		const selectedSingle = !isMulti ? currentAnswer : '';
 
@@ -13645,9 +13900,11 @@
 
 		return `
 			<div class="training-options ${isMulti ? 'is-multi' : 'is-single'}" data-multi="${isMulti}" data-render-text="${isMulti ? 'true' : 'false'}">
-				${q.text || q.question
-					? `<div class="training-option-question">${escapeHtml(q.text || q.question || '')}</div>`
-					: ''}
+				${
+					q.text || q.question
+						? `<div class="training-option-question">${escapeHtml(q.text || q.question || '')}</div>`
+						: ''
+				}
 				${buttons}
 			</div>
 		`;
@@ -13656,7 +13913,10 @@
 	function renderTrainingTrueFalse(q) {
 		const options = getTrainingOptionsForQuestion(q).length
 			? getTrainingOptionsForQuestion(q)
-			: [{ text: 'True', image: '', isImageOnly: false }, { text: 'False', image: '', isImageOnly: false }];
+			: [
+					{ text: 'True', image: '', isImageOnly: false },
+					{ text: 'False', image: '', isImageOnly: false },
+				];
 		return renderTrainingMcq(q, options, false);
 	}
 
@@ -13693,10 +13953,20 @@
 		const idx = trainingState.currentIndex;
 		// Determine starting order. If the user has already answered, restore
 		// their last ordering; otherwise use the question's natural option order.
-		const saved = String(trainingState.userAnswers[idx] || '').split(',').map((s) => s.trim()).filter(Boolean);
+		const saved = String(trainingState.userAnswers[idx] || '')
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean);
 		const orderedOptions = saved.length
 			? saved
-					.map((text) => options.find((o) => o.text === text) || { text, image: '', isImageOnly: false })
+					.map(
+						(text) =>
+							options.find((o) => o.text === text) || {
+								text,
+								image: '',
+								isImageOnly: false,
+							},
+					)
 					.concat(options.filter((o) => !saved.includes(o.text)))
 			: options;
 		const items = orderedOptions
@@ -13732,9 +14002,12 @@
 		const pairs = (answer.includes('|') ? answer.split('|') : answer.split(','))
 			.map((pair) => {
 				let left, right;
-				if (pair.includes('→')) [left, right] = pair.split('→').map((s) => s.trim());
-				else if (pair.includes('-->')) [left, right] = pair.split('-->').map((s) => s.trim());
-				else if (pair.includes(':')) [left, right] = pair.split(':').map((s) => s.trim());
+				if (pair.includes('→'))
+					[left, right] = pair.split('→').map((s) => s.trim());
+				else if (pair.includes('-->'))
+					[left, right] = pair.split('-->').map((s) => s.trim());
+				else if (pair.includes(':'))
+					[left, right] = pair.split(':').map((s) => s.trim());
 				else [left, right] = [pair.trim(), ''];
 				return { left, right };
 			})
@@ -13821,7 +14094,7 @@
 			if (!blanks.find((b) => b.id === id)) blanks.push({ id });
 		}
 		// Word bank is enabled if useWordBank is not explicitly false, or if options exist
-		const useWordBank = q.useWordBank !== false && (q.showOptions !== false);
+		const useWordBank = q.useWordBank !== false && q.showOptions !== false;
 		const idx = trainingState.currentIndex;
 		const savedRaw = String(trainingState.userAnswers[idx] || '');
 		const saved = new Map();
@@ -13833,7 +14106,8 @@
 		});
 
 		// Build the word bank from the options (unique, shuffled).
-		let wordBankSource = Array.isArray(options) && options.length ? options : [];
+		let wordBankSource =
+			Array.isArray(options) && options.length ? options : [];
 		if (!wordBankSource.length) {
 			const tokens = [];
 			const seenT = new Set();
@@ -13850,15 +14124,23 @@
 					if (val) val.split(',').forEach(addT);
 				});
 			} else if (Array.isArray(q?.answer)) {
-				q.answer.forEach((a) => addT(typeof a === 'object' ? a.text || a.value : a));
+				q.answer.forEach((a) =>
+					addT(typeof a === 'object' ? a.text || a.value : a),
+				);
 			}
 			const pools = [q?.distractors, q?.wordBank, q?.options, q?.optionData];
 			pools.forEach((pool) => {
 				if (Array.isArray(pool)) {
-					pool.forEach((it) => addT(typeof it === 'object' ? it.text || it.value : it));
+					pool.forEach((it) =>
+						addT(typeof it === 'object' ? it.text || it.value : it),
+					);
 				}
 			});
-			wordBankSource = tokens.map((t) => ({ text: t, image: '', isImageOnly: false }));
+			wordBankSource = tokens.map((t) => ({
+				text: t,
+				image: '',
+				isImageOnly: false,
+			}));
 		}
 		const uniqueWords = [];
 		const seen = new Set();
@@ -13936,7 +14218,9 @@
 				<pre><code>${escapeHtml(snippet)}</code></pre>
 			</div>
 			${questionText ? `<div class="training-option-question">${questionText}</div>` : ''}`;
-		const answerMode = String(q.codeAnswerMode || 'multiple-choice').toLowerCase();
+		const answerMode = String(
+			q.codeAnswerMode || 'multiple-choice',
+		).toLowerCase();
 		let sub = '';
 		if (answerMode === 'true-false' || answerMode === 'boolean') {
 			sub = renderTrainingTrueFalse(q);
@@ -14020,7 +14304,9 @@
 			optionsContainer.dataset.mcqBound = '1';
 			optionsContainer.addEventListener('click', (e) => {
 				// Single-select: a button with data-option-text.
-				const btn = e.target.closest('button.training-option[data-option-text]');
+				const btn = e.target.closest(
+					'button.training-option[data-option-text]',
+				);
 				if (btn) {
 					e.preventDefault();
 					window.selectTrainingOption(btn.dataset.optionText);
@@ -14081,12 +14367,10 @@
 			input.addEventListener('input', () => {
 				const idx = trainingState.currentIndex;
 				const parts = [];
-				container
-					.querySelectorAll('.fill-blank-input')
-					.forEach((inp) => {
-						const id = inp.getAttribute('data-blank-id');
-						parts.push(`${id}:${inp.value || ''}`);
-					});
+				container.querySelectorAll('.fill-blank-input').forEach((inp) => {
+					const id = inp.getAttribute('data-blank-id');
+					parts.push(`${id}:${inp.value || ''}`);
+				});
 				trainingState.userAnswers[idx] = parts.join('|');
 				persistTrainingAnswers();
 				updateTrainingNextButtonState();
@@ -14147,9 +14431,7 @@
 		// zone to return the word to the bank.
 		container.querySelectorAll('.fill-blank-drop-zone').forEach((zone) => {
 			zone.addEventListener('click', (e) => {
-				const selected = container.querySelector(
-					'.word-bank-chip.is-selected',
-				);
+				const selected = container.querySelector('.word-bank-chip.is-selected');
 				if (selected) {
 					fillBlankDropZone(zone, selected.dataset.word);
 					selected.classList.remove('is-selected');
@@ -14167,11 +14449,9 @@
 					delete zone.dataset.value;
 					zone.classList.remove('is-filled');
 					// Mark the corresponding chip in the bank as available.
-					container
-						.querySelectorAll('.word-bank-chip')
-						.forEach((c) => {
-							if (c.dataset.word === value) c.classList.remove('is-used');
-						});
+					container.querySelectorAll('.word-bank-chip').forEach((c) => {
+						if (c.dataset.word === value) c.classList.remove('is-used');
+					});
 					persistFillBlankAnswer();
 				}
 			});
@@ -14213,9 +14493,7 @@
 			let savedPairs = [];
 			try {
 				savedPairs = JSON.parse(
-					decodeURIComponent(
-						matchContainer.dataset.savedPairs || '[]',
-					) || '[]',
+					decodeURIComponent(matchContainer.dataset.savedPairs || '[]') || '[]',
 				);
 			} catch (_) {
 				savedPairs = [];
@@ -14229,20 +14507,14 @@
 				];
 
 			const applyPairVisuals = () => {
-				matchContainer
-					.querySelectorAll('.matching-quiz-item')
-					.forEach((el) => {
-						el.classList.remove(
-							'paired',
-							'selected',
-							'is-pending-left',
-						);
-						el.style.backgroundColor = '';
-						el.style.color = '';
-						el.style.borderColor = '';
-						const badge = el.querySelector('.pair-number-badge');
-						if (badge) badge.remove();
-					});
+				matchContainer.querySelectorAll('.matching-quiz-item').forEach((el) => {
+					el.classList.remove('paired', 'selected', 'is-pending-left');
+					el.style.backgroundColor = '';
+					el.style.color = '';
+					el.style.borderColor = '';
+					const badge = el.querySelector('.pair-number-badge');
+					if (badge) badge.remove();
+				});
 				livePairs.forEach((p, idx) => {
 					const leftEl = matchContainer.querySelector(
 						`.matching-quiz-item[data-column="left"][data-value="${cssEscape(p.left)}"]`,
@@ -14309,8 +14581,7 @@
 						});
 						const idx = livePairs.findIndex(
 							(p) =>
-								p.left === existingPair.left &&
-								p.right === existingPair.right,
+								p.left === existingPair.left && p.right === existingPair.right,
 						);
 						if (idx >= 0) livePairs.splice(idx, 1);
 						applyPairVisuals();
@@ -14332,9 +14603,7 @@
 						const dup = livePairs.findIndex((p) => p.right === value);
 						if (dup >= 0) livePairs.splice(dup, 1);
 						// Drop any existing pair where this left was already used.
-						const dupLeft = livePairs.findIndex(
-							(p) => p.left === leftValue,
-						);
+						const dupLeft = livePairs.findIndex((p) => p.left === leftValue);
 						if (dupLeft >= 0) livePairs.splice(dupLeft, 1);
 						livePairs.push({ left: leftValue, right: value });
 						selectedLeft = null;
@@ -14389,7 +14658,8 @@
 
 		const dots = [];
 		for (let i = 0; i < total; i++) {
-			const answered = trainingState.userAnswers[i] !== undefined &&
+			const answered =
+				trainingState.userAnswers[i] !== undefined &&
 				trainingState.userAnswers[i] !== null &&
 				trainingState.userAnswers[i] !== '';
 			const cls = [
@@ -14449,9 +14719,10 @@
 		if (!q) return;
 		const modalTitle = byId('trainingModalTitle');
 		if (modalTitle) {
-			modalTitle.textContent = trainingState.mode === 'exam'
-				? trainingState.examName
-				: 'Training Practice Test';
+			modalTitle.textContent =
+				trainingState.mode === 'exam'
+					? trainingState.examName
+					: 'Training Practice Test';
 		}
 
 		const total = trainingState.questions.length;
@@ -14459,20 +14730,23 @@
 		const progressPercent = Math.round((currentNum / total) * 100);
 
 		const qType = normalizeTrainingQuestionType(q);
-		const options = trainingState.questionOptions[trainingState.currentIndex] || [];
+		const options =
+			trainingState.questionOptions[trainingState.currentIndex] || [];
 		const currentAnswer = trainingState.userAnswers[trainingState.currentIndex];
 		const hasAnswer =
-			currentAnswer !== undefined && currentAnswer !== null && currentAnswer !== '';
+			currentAnswer !== undefined &&
+			currentAnswer !== null &&
+			currentAnswer !== '';
 
 		const typeBadgeMap = {
 			'multiple-choice': 'Single answer',
 			'multiple-choice-multi': 'Multiple answers',
 			'true-false': 'True / False',
 			'fill-blank': 'Fill in the blanks',
-			'draggable': 'Arrange in order',
+			draggable: 'Arrange in order',
 			'odd-one-out': 'Find the odd one out',
 			'matching-pairs': 'Match the pairs',
-			'code': 'Code question',
+			code: 'Code question',
 		};
 		// Auto-detected "Multiple answers" override: if the MCQ renderer
 		// decided this is multi-select (via `allowMultipleAnswers` or the
@@ -14574,9 +14848,7 @@
 						class="workspace-btn training-next-btn"
 						${!hasAnswer ? 'disabled' : ''}
 						onclick="nextTrainingQuestion()"
-					>${
-						currentNum === total ? 'Finish Test' : 'Next Question'
-					}</button>
+					>${currentNum === total ? 'Finish Test' : 'Next Question'}</button>
 				</div>
 			</div>
 		`;
@@ -14765,13 +15037,14 @@
 		// persisted startTime across sessions previously produced absurd
 		// values like "16232m 38s".
 		const attemptStart = trainingState.startTime || trainingState.endTime;
-		const timeSpent = Math.max(
+		const elapsedSeconds = Math.max(
 			1,
-			Math.min(
-				86400,
-				Math.round((trainingState.endTime - attemptStart) / 1000),
-			),
+			Math.round((trainingState.endTime - attemptStart) / 1000),
 		);
+		const timeSpent =
+			trainingState.mode === 'exam' && trainingState.timeLimitSec > 0
+				? Math.min(elapsedSeconds, trainingState.timeLimitSec)
+				: Math.min(elapsedSeconds, 86400);
 		const totalQuestions = trainingState.questions.length;
 
 		// /20 grading scale: normalized regardless of question count.
@@ -14781,7 +15054,10 @@
 		const passed = isPassingGrade20(grade);
 
 		const newResult = {
-			id: `${trainingState.mode}-${trainingState.examId || 'practice'}-${Date.now()}`,
+			id:
+				trainingState.mode === 'exam'
+					? `exam-${trainingState.examId}-${context?.user?.id || context?.identity?.numero || 'student'}`
+					: `training-${trainingState.examId || 'practice'}-${Date.now()}`,
 			userId: context?.user?.id || 'guest',
 			user_id: context?.user?.id || 'guest',
 			studentNumber: context?.identity?.numero || '1',
@@ -14789,6 +15065,7 @@
 			classId: context?.identity?.classId || '',
 			className: context?.identity?.class || 'Class',
 			examId: trainingState.examId || 'training-practice',
+			exam_id: trainingState.mode === 'exam' ? trainingState.examId : undefined,
 			examTitle: trainingState.examName,
 			mode: trainingState.mode,
 			// /20 scale everywhere (score = grade out of 20, e.g. 12.5)
@@ -14826,10 +15103,13 @@
 			);
 		}
 
-		// Real-time sync to the backend via the explicit REST client.
-		// Previously this 404'd because POST /api/v1/results didn't exist.
-		// The new endpoint accepts the same shape.
-		if (window.API && typeof window.API.create === 'function') {
+		// Training keeps its legacy fallback writes. Exams use the repository's
+		// single create path so one completed attempt cannot become duplicates.
+		if (
+			trainingState.mode === 'training' &&
+			window.API &&
+			typeof window.API.create === 'function'
+		) {
 			try {
 				Promise.resolve(window.API.create('results', newResult))
 					.then(() => {
@@ -14853,7 +15133,11 @@
 		// result lands in the DB even if the single-record endpoint is
 		// unavailable. The bulk route accepts the same row shape via
 		// STUDENT_BULK_TABLES.
-		if (window.API && typeof window.API.raw === 'function') {
+		if (
+			trainingState.mode === 'training' &&
+			window.API &&
+			typeof window.API.raw === 'function'
+		) {
 			try {
 				Promise.resolve(
 					window.API.raw('POST', '/bulk/results', { items: [newResult] }),
@@ -14874,7 +15158,7 @@
 		const grade = grade20(score, total);
 		const passed = isPassingGrade20(grade);
 		const percent = total > 0 ? Math.round((score / total) * 100) : 0;
-		const timeSec = Math.max(
+		const elapsedSec = Math.max(
 			0,
 			Math.round(
 				((trainingState.endTime || Date.now()) -
@@ -14882,10 +15166,14 @@
 					1000,
 			),
 		);
+		const timeSec =
+			trainingState.mode === 'exam' && trainingState.timeLimitSec > 0
+				? Math.min(elapsedSec, trainingState.timeLimitSec)
+				: elapsedSec;
 		const timeDisplay = formatTrainingDuration(timeSec);
 
 		let correctionsHtml = '';
-		if (trainingState.showCorrections) {
+		if (trainingState.allowCorrections && trainingState.showCorrections) {
 			correctionsHtml = `
 				<div class="corrections-container">
 					<h4>Answer Breakdown & Corrections</h4>
@@ -14894,7 +15182,11 @@
 							const userAns = trainingState.userAnswers[i] || '';
 							const correctAns = q.answer || '';
 							const qType = normalizeTrainingQuestionType(q);
-							const isCorrect = trainingAnswersEqual(userAns, correctAns, qType);
+							const isCorrect = trainingAnswersEqual(
+								userAns,
+								correctAns,
+								qType,
+							);
 							return `
 							<div class="correction-item ${isCorrect ? 'correct' : 'incorrect'}">
 								<div class="correction-header">
@@ -14930,8 +15222,8 @@
 		container.innerHTML = `
 			<div class="training-results-view">
 				<div class="results-header">
-					<h2>Training Test Completed!</h2>
-					<p>Great effort! Review your metrics and corrections below.</p>
+					<h2>${trainingState.mode === 'exam' ? 'Exam Finished' : 'Training Test Completed!'}</h2>
+					<p>${trainingState.mode === 'exam' ? 'Your exam has been submitted.' : 'Great effort! Review your metrics and corrections below.'}</p>
 				</div>
 
 				<div class="results-stats-grid">
@@ -14954,12 +15246,8 @@
 				</div>
 
 				<div class="results-actions">
-					<button type="button" class="workspace-btn" onclick="toggleTrainingCorrections()">
-						${trainingState.showCorrections ? 'Hide Corrections' : 'Show Corrections'}
-					</button>
-					<button type="button" class="workspace-btn secondary" onclick="retakeTrainingModal()">
-						Retake Training
-					</button>
+					${trainingState.allowCorrections ? `<button type="button" class="workspace-btn" onclick="toggleTrainingCorrections()">${trainingState.showCorrections ? 'Hide Corrections' : 'Show Corrections'}</button>` : ''}
+					${trainingState.mode === 'training' ? `<button type="button" class="workspace-btn secondary" onclick="retakeTrainingModal()">Retake Training</button>` : ''}
 					<button type="button" class="workspace-btn ghost" onclick="closeTrainingModal()">
 						Close & Return to Workspace
 					</button>
@@ -14976,6 +15264,7 @@
 	};
 
 	window.retakeTrainingModal = function () {
+		if (trainingState.mode === 'exam') return;
 		clearTrainingStorage();
 		window.openTrainingMode(trainingState.examId);
 	};
@@ -15126,7 +15415,9 @@
 			startExamModal(exam);
 			return;
 		}
-		window.addEventListener('quiz:bootstrap-ready', openExamFromQuery, { once: true });
+		window.addEventListener('quiz:bootstrap-ready', openExamFromQuery, {
+			once: true,
+		});
 	}
 
 	document.addEventListener('DOMContentLoaded', () => {
@@ -15418,7 +15709,9 @@
 			};
 			try {
 				var _r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-				var parsed = _r ? _r.getValue_sync('gamification', {}) : JSON.parse(localStorage.getItem('quizGamification') || '{}');
+				var parsed = _r
+					? _r.getValue_sync('gamification', {})
+					: JSON.parse(localStorage.getItem('quizGamification') || '{}');
 				gConfig = {
 					expPerCorrect: Number(parsed.expPerCorrect) || 10,
 					expPerWin: Number(parsed.expPerWin) || 100,
@@ -15594,7 +15887,15 @@
 			if (userIndex === -1) return;
 
 			const user = users[userIndex];
-			const gConfig = (function() { var _r2 = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo; return _r2 ? _r2.getValue_sync('gamification', {}) : JSON.parse(localStorage.getItem('quizGamification') || '{"expPerCorrect":10,"expPerWin":100,"autoAwardBadges":true}'); })();
+			const gConfig = (function () {
+				var _r2 = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+				return _r2
+					? _r2.getValue_sync('gamification', {})
+					: JSON.parse(
+							localStorage.getItem('quizGamification') ||
+								'{"expPerCorrect":10,"expPerWin":100,"autoAwardBadges":true}',
+						);
+			})();
 
 			// Init arrays
 			user.exp = user.exp || 0;

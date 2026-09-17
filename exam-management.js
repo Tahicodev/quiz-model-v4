@@ -48,7 +48,9 @@ function openExamModalOnFirstLoad() {
 }
 
 function loadExams() {
-	const savedExams = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('exams'));
+	const savedExams = JSON.stringify(
+		window.__DI_CONTAINER__.repo.getAll_sync('exams'),
+	);
 	exams = savedExams ? JSON.parse(savedExams) : [];
 	console.log('Loaded exams from localStorage:', exams);
 }
@@ -150,15 +152,25 @@ function renderExamPresetSummary() {
 		{ label: 'Time limit', value: formatTime(preset.timeLimit) },
 		{ label: 'Penalty', value: `−${preset.penalty || 0} pts` },
 		{ label: 'Pass mark', value: `${preset.passingScore || 50}%` },
-		{ label: 'Questions', value: preset.shuffleQuestions ? 'Shuffled' : 'Fixed order' },
-		{ label: 'Explanations', value: preset.showExplanations ? 'Shown' : 'Hidden' },
+		{
+			label: 'Questions',
+			value: preset.shuffleQuestions ? 'Shuffled' : 'Fixed order',
+		},
+		{
+			label: 'Explanations',
+			value: preset.showExplanations ? 'Shown' : 'Hidden',
+		},
 	];
 	const welcomeHtml =
 		preset.welcomeTitle || preset.welcomeMessage
 			? `<div class="exam-preset-welcome">${
-					preset.welcomeTitle ? `<strong>${escapeHtml(preset.welcomeTitle)}</strong>` : ''
+					preset.welcomeTitle
+						? `<strong>${escapeHtml(preset.welcomeTitle)}</strong>`
+						: ''
 				}${
-					preset.welcomeMessage ? `<span>${escapeHtml(preset.welcomeMessage)}</span>` : ''
+					preset.welcomeMessage
+						? `<span>${escapeHtml(preset.welcomeMessage)}</span>`
+						: ''
 				}</div>`
 			: '';
 
@@ -220,10 +232,13 @@ function populateCategoryFilter() {
 	if (!categoryFilter) return;
 
 	const savedCategories = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) ||
+			'[]',
 	);
 	const visibleCategories = savedCategories.filter((category) =>
-		window.Auth?.canAccessItem ? window.Auth.canAccessItem('category', category) : true,
+		window.Auth?.canAccessItem
+			? window.Auth.canAccessItem('category', category)
+			: true,
 	);
 
 	// Clear existing options except the first "All Categories" option
@@ -244,17 +259,21 @@ function populateCategoryFilter() {
 
 function loadAvailableQuestions() {
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	const questions = savedQuestions || [];
 	const container = document.getElementById('availableQuestions');
 
 	// Get categories for display
 	const savedCategories = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) ||
+			'[]',
 	);
 	const visibleCategories = savedCategories.filter((category) =>
-		window.Auth?.canAccessItem ? window.Auth.canAccessItem('category', category) : true,
+		window.Auth?.canAccessItem
+			? window.Auth.canAccessItem('category', category)
+			: true,
 	);
 
 	// Get currently selected questions from the selected list
@@ -268,7 +287,10 @@ function loadAvailableQuestions() {
 	// Group questions by category
 	const questionsByCategory = {};
 	questions.forEach((q, index) => {
-		if (window.Auth?.canAccessItem && !window.Auth.canAccessItem('question', q)) {
+		if (
+			window.Auth?.canAccessItem &&
+			!window.Auth.canAccessItem('question', q)
+		) {
 			return;
 		}
 		const categoryId = q.category || 'uncategorized';
@@ -367,7 +389,9 @@ function loadAvailableQuestions() {
         `;
 	}
 
-	window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
+	window.safeSetHTML
+		? window.safeSetHTML(container, html, true)
+		: (container.innerHTML = html);
 
 	// Update all counters after loading questions
 	updateSelectedCount();
@@ -484,23 +508,37 @@ function updateSelectedCount() {
 	if (selectedCountElement) {
 		selectedCountElement.textContent = selectedCount;
 	}
-	const selectedPointsElement = document.getElementById('selectedQuestionPoints');
-	const selectedPointsBadgeElement = document.getElementById('selectedQuestionPointsBadge');
+	const selectedPointsElement = document.getElementById(
+		'selectedQuestionPoints',
+	);
+	const selectedPointsBadgeElement = document.getElementById(
+		'selectedQuestionPointsBadge',
+	);
 	if (selectedPointsElement || selectedPointsBadgeElement) {
-		const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
+		const savedQuestions =
+			window.__DI_CONTAINER__.repo.getAll_sync('questions');
 		const totalPoints = Array.from(
 			document.querySelectorAll('#selectedQuestionsList .question-item'),
 		).reduce((sum, questionEl) => {
 			const index = Number.parseInt(questionEl.dataset.index, 10);
 			const fromData = Number.parseFloat(questionEl.dataset.points);
 			const fromStorage = Number.parseFloat(savedQuestions[index]?.points);
-			return sum + (Number.isFinite(fromData) ? fromData : Number.isFinite(fromStorage) ? fromStorage : 1);
+			return (
+				sum +
+				(Number.isFinite(fromData)
+					? fromData
+					: Number.isFinite(fromStorage)
+						? fromStorage
+						: 1)
+			);
 		}, 0);
 		const totalPointsText = Number.isInteger(totalPoints)
 			? String(totalPoints)
 			: totalPoints.toFixed(1);
-		if (selectedPointsElement) selectedPointsElement.textContent = totalPointsText;
-		if (selectedPointsBadgeElement) selectedPointsBadgeElement.textContent = totalPointsText;
+		if (selectedPointsElement)
+			selectedPointsElement.textContent = totalPointsText;
+		if (selectedPointsBadgeElement)
+			selectedPointsBadgeElement.textContent = totalPointsText;
 	}
 
 	// Calculate total available questions across ALL category folders (sum)
@@ -973,8 +1011,10 @@ function filterExamQuestionsEnhanced() {
 	const typeFilter = document.getElementById('typeFilterExam')?.value || '';
 	const difficultyFilter =
 		document.getElementById('difficultyFilterExam')?.value || '';
-	const pointFilterMin = document.getElementById('pointFilterExamMin')?.value || '';
-	const pointFilterMax = document.getElementById('pointFilterExamMax')?.value || '';
+	const pointFilterMin =
+		document.getElementById('pointFilterExamMin')?.value || '';
+	const pointFilterMax =
+		document.getElementById('pointFilterExamMax')?.value || '';
 
 	// Get all question items
 	const questions = document.querySelectorAll(
@@ -986,7 +1026,8 @@ function filterExamQuestionsEnhanced() {
 
 	// Get all questions data for filtering
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	const quizResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
 
@@ -1028,8 +1069,11 @@ function filterExamQuestionsEnhanced() {
 		let matchesPoints = true;
 		if (pointFilterMin || pointFilterMax) {
 			const minPoints = pointFilterMin ? Number.parseFloat(pointFilterMin) : 0;
-			const maxPoints = pointFilterMax ? Number.parseFloat(pointFilterMax) : Infinity;
-			matchesPoints = questionPoints >= minPoints && questionPoints <= maxPoints;
+			const maxPoints = pointFilterMax
+				? Number.parseFloat(pointFilterMax)
+				: Infinity;
+			matchesPoints =
+				questionPoints >= minPoints && questionPoints <= maxPoints;
 		}
 
 		// Apply quick filters (multiple can be active)
@@ -1163,7 +1207,9 @@ function showFilterResultsMessage(
 		if (filterType && filterType !== 'all') filters.push(`type: ${filterType}`);
 		if (categoryFilter && categoryFilter !== '') {
 			const savedCategories = JSON.parse(
-				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('categories')) || '[]',
+				JSON.stringify(
+					window.__DI_CONTAINER__.repo.getAll_sync('categories'),
+				) || '[]',
 			);
 			const categoryName =
 				savedCategories.find((c) => c.id === categoryFilter)?.name ||
@@ -1397,7 +1443,9 @@ function filterExams() {
 	const searchEl = document.getElementById('examSearch');
 	const searchTerm = searchEl ? String(searchEl.value).toLowerCase() : '';
 	const filteredExams = exams.filter((exam) =>
-		String(exam.name || '').toLowerCase().includes(searchTerm),
+		String(exam.name || '')
+			.toLowerCase()
+			.includes(searchTerm),
 	);
 	updateExamList(filteredExams);
 }
@@ -1444,7 +1492,8 @@ function toggleExamSortDirection() {
 function examHasValidQuestions(exam) {
 	// Get all questions from settings
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	const allQuestions = savedQuestions || [];
 
@@ -1474,7 +1523,16 @@ function updateExamList(examsList = exams) {
 			// Calculate stats
 			const questionCount = exam.questions ? exam.questions.length : 0;
 			const duration = exam.duration || 0;
-			const dateCreated = new Date(exam.dateCreated).toLocaleDateString();
+			const rawCreatedAt =
+				exam.dateCreated ||
+				exam.created_at ||
+				exam.createdAt ||
+				exam.date_created;
+			const parsedCreatedAt = rawCreatedAt ? new Date(rawCreatedAt) : null;
+			const dateCreated =
+				parsedCreatedAt && !Number.isNaN(parsedCreatedAt.getTime())
+					? parsedCreatedAt.toLocaleDateString()
+					: '-';
 
 			// Escape content
 			const safeName = escapeHtml(exam.name);
@@ -1496,16 +1554,16 @@ function updateExamList(examsList = exams) {
                             </svg>
                         </button>
 						<button class="exam-action-btn exam-assign-btn" onclick="openAssignExamQuestions('${
-													exam.id
-												}')" title="Assign Questions">
+							exam.id
+						}')" title="Assign Questions">
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M9 11l3 3L22 4"></path>
 								<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
 							</svg>
 						</button>
 						<button class="exam-action-btn exam-classes-btn" onclick="openAssignExamClasses('${
-													exam.id
-												}')" title="Assign to Classes">
+							exam.id
+						}')" title="Assign to Classes">
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
 								<circle cx="9" cy="7" r="4"></circle>
@@ -1514,23 +1572,23 @@ function updateExamList(examsList = exams) {
 							</svg>
 						</button>
 						<button class="exam-action-btn exam-push-btn" onclick="pushExamToDevices('${
-													exam.id
-												}')" title="Push to Devices" style="background: #10b981; color: white;">
+							exam.id
+						}')" title="Push to Devices" style="background: #10b981; color: white;">
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<path d="M22 2L11 13"></path>
 								<path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
 							</svg>
 						</button>
 						<button class="exam-action-btn exam-stop-btn" onclick="stopExamOnDevices('${
-													exam.id
-												}')" title="Stop Exam on Devices" style="background: #ef4444; color: white;">
+							exam.id
+						}')" title="Stop Exam on Devices" style="background: #ef4444; color: white;">
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
 							</svg>
 						</button>
 						<button class="exam-action-btn exam-delete-btn" onclick="deleteExam('${
-													exam.id
-												}')" title="Delete">
+							exam.id
+						}')" title="Delete">
 							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 								<polyline points="3 6 5 6 21 6"></polyline>
 								<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
@@ -1542,7 +1600,7 @@ function updateExamList(examsList = exams) {
         `;
 		})
 		.join('');
-		
+
 	// Add mobile click listeners after rows are rendered
 	visibleExams.forEach((exam) => {
 		const row = tbody.querySelector(`tr[data-id="${exam.id}"]`);
@@ -1557,36 +1615,36 @@ function updateExamList(examsList = exams) {
 					{
 						label: 'Edit Exam',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
-						onClick: () => editExam(exam.id)
+						onClick: () => editExam(exam.id),
 					},
 					{
 						label: 'Assign Questions',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
-						onClick: () => openAssignExamQuestions(exam.id)
+						onClick: () => openAssignExamQuestions(exam.id),
 					},
 					{
 						label: 'Assign to Classes',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
-						onClick: () => openAssignExamClasses(exam.id)
+						onClick: () => openAssignExamClasses(exam.id),
 					},
 					{
 						label: 'Push to Devices',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>',
 						onClick: () => pushExamToDevices(exam.id),
-						variant: 'primary'
+						variant: 'primary',
 					},
 					{
 						label: 'Stop Exam on Devices',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>',
 						onClick: () => stopExamOnDevices(exam.id),
-						variant: 'danger'
+						variant: 'danger',
 					},
 					{
 						label: 'Delete Exam',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
 						variant: 'danger',
-						onClick: () => deleteExam(exam.id)
-					}
+						onClick: () => deleteExam(exam.id),
+					},
 				]);
 			});
 		}
@@ -1684,9 +1742,10 @@ async function saveExamForm() {
 	// title/message, penalty, time limit, colors, shuffle, explanations,
 	// passing score, font) to configure their exam session. Embedding the
 	// values at save time makes the exam self-describing on any device.
-	const presetSnapshot = presetId && window.getPresetById
-		? window.getPresetById(presetId) || null
-		: null;
+	const presetSnapshot =
+		presetId && window.getPresetById
+			? window.getPresetById(presetId) || null
+			: null;
 
 	if (!examName || isNaN(duration)) {
 		showToast('Please fill in all required fields', 'error');
@@ -1731,14 +1790,20 @@ async function saveExamForm() {
 					welcomeTitle: presetSnapshot.welcomeTitle || '',
 					welcomeMessage: presetSnapshot.welcomeMessage || '',
 				}
-			: (existingExam?.presetSnapshot || null),
+			: existingExam?.presetSnapshot || null,
 		questions: selectedQuestions,
 		// Students only ever see active exams (the bootstrap filter drops
 		// anything else), so a saved exam is immediately usable — archiving
 		// via the archive action is the one path back to hidden.
-		status: currentExamId ? (existingExam?.status === 'archived' ? 'active' : (existingExam?.status || 'active')) : 'active',
+		status: currentExamId
+			? existingExam?.status === 'archived'
+				? 'active'
+				: existingExam?.status || 'active'
+			: 'active',
 		// Preserve class assignments when an exam is edited from the exam modal.
-		classes: Array.isArray(existingExam?.classes) ? [...existingExam.classes] : [],
+		classes: Array.isArray(existingExam?.classes)
+			? [...existingExam.classes]
+			: [],
 		dateCreated: existingExam?.dateCreated || new Date().toISOString(),
 		ownerId: existingExam?.ownerId || currentUserId,
 	};
@@ -1774,13 +1839,16 @@ async function saveExamForm() {
 			}
 			if (saved && saved.id) {
 				examData.id = saved.id;
-				const i = exams.findIndex((e) => e.id === currentExamId || e.name === examData.name);
+				const i = exams.findIndex(
+					(e) => e.id === currentExamId || e.name === examData.name,
+				);
 				if (i !== -1) exams[i] = examData;
 			}
 		} catch (apiErr) {
 			console.warn('[exams] API save failed:', apiErr);
 			showToast(
-				'Failed to save exam on server: ' + (apiErr?.message || 'network error'),
+				'Failed to save exam on server: ' +
+					(apiErr?.message || 'network error'),
 				'error',
 			);
 			return;
@@ -1802,13 +1870,13 @@ async function saveExamForm() {
 	}
 
 	saveExams();
-	
+
 	// Log activity
 	if (typeof logActivity === 'function') {
 		logActivity('exam', examData.name, currentExamId ? 'edited' : 'created', {
 			id: examData.id,
 			questionCount: selectedQuestions.length,
-			duration: duration
+			duration: duration,
 		});
 	}
 
@@ -1822,7 +1890,9 @@ async function saveExamForm() {
 
 	// Broadcast Updates if enabled
 	if (document.getElementById('setting-broadcastUpdates')?.checked) {
-		console.log('Broadcast Updates enabled, triggering sync after exam save...');
+		console.log(
+			'Broadcast Updates enabled, triggering sync after exam save...',
+		);
 		if (window.syncQuestionsToClients) window.syncQuestionsToClients();
 	}
 }
@@ -2007,7 +2077,8 @@ function openAssignExamClasses(examId) {
 
 	const savedClasses =
 		JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')) ||
+				'[]',
 		) || [];
 	const visibleClasses = savedClasses.filter((cls) =>
 		window.Auth?.canAccessItem ? window.Auth.canAccessItem('class', cls) : true,
@@ -2058,7 +2129,8 @@ function filterAssignExamClasses() {
 	const term = searchEl.value.trim().toLowerCase();
 	listEl.querySelectorAll('.assign-checklist__item').forEach((item) => {
 		const name = item.dataset.className || '';
-		item.style.display = !term || name.toLowerCase().includes(term) ? '' : 'none';
+		item.style.display =
+			!term || name.toLowerCase().includes(term) ? '' : 'none';
 	});
 }
 
@@ -2072,7 +2144,9 @@ async function saveAssignExamClasses() {
 	}
 
 	const selectedIds = Array.from(
-		document.querySelectorAll('#assignExamClassesList .assign-checklist__checkbox:checked'),
+		document.querySelectorAll(
+			'#assignExamClassesList .assign-checklist__checkbox:checked',
+		),
 	).map((el) => el.value);
 
 	const previousIds = new Set(Array.isArray(exam.classes) ? exam.classes : []);
@@ -2123,7 +2197,10 @@ async function saveAssignExamClasses() {
 	if (window.initDashboard) window.initDashboard();
 
 	closeAssignExamClasses();
-	showToast(`"${exam.name}" assigned to ${selectedIds.length} class(es)!`, 'success');
+	showToast(
+		`"${exam.name}" assigned to ${selectedIds.length} class(es)!`,
+		'success',
+	);
 
 	if (typeof logActivity === 'function') {
 		logActivity('exam', exam.name, 'assigned classes', {
@@ -2200,7 +2277,9 @@ async function deleteExam(examId) {
 
 		// Broadcast Updates if enabled
 		if (document.getElementById('setting-broadcastUpdates')?.checked) {
-			console.log('Broadcast Updates enabled, triggering sync after exam deletion...');
+			console.log(
+				'Broadcast Updates enabled, triggering sync after exam deletion...',
+			);
 			if (window.syncQuestionsToClients) window.syncQuestionsToClients();
 		}
 	}
@@ -2280,7 +2359,8 @@ function importExams() {
 
 				// Merge with existing exams, avoiding duplicates
 				const existingExams = JSON.parse(
-					JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('exams')) || '[]',
+					JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('exams')) ||
+						'[]',
 				);
 				const mergedExams = mergeExams(existingExams, newExams);
 
@@ -2346,7 +2426,8 @@ function escapeHtml(unsafe) {
 // Robust question type detector to handle multiple data shapes
 function detectQuestionType(q) {
 	if (!q) return 'multiple-choice';
-	if (window.QuizTypes?.normalize) return window.QuizTypes.normalize(q.type || q.questionType, q);
+	if (window.QuizTypes?.normalize)
+		return window.QuizTypes.normalize(q.type || q.questionType, q);
 	const raw = (q.type || '').toString().trim().toLowerCase();
 	if (raw) {
 		if (['draggable', 'ordering', 'arrange', 'order'].includes(raw))
@@ -2553,7 +2634,8 @@ function loadExamQuestions(exam) {
 
 	// Get all questions from settings
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	const allQuestions = savedQuestions || [];
 
@@ -2607,8 +2689,7 @@ function loadExamQuestions(exam) {
 			typeLabel =
 				'<span class="question-type-badge fill-blank">Fill in the Blank</span>';
 		} else if (qType === 'code') {
-			typeLabel =
-				'<span class="question-type-badge code">Code</span>';
+			typeLabel = '<span class="question-type-badge code">Code</span>';
 		}
 
 		// Format options based on question type
@@ -2682,8 +2763,8 @@ function loadExamQuestions(exam) {
 									question.question || '',
 								)}</p>
                 ${
-					question.type === 'code' && question.codeSnippet
-						? `<div class="code-snippet-block" style="margin-bottom: 15px;">
+									question.type === 'code' && question.codeSnippet
+										? `<div class="code-snippet-block" style="margin-bottom: 15px;">
                                <div class="code-snippet-header">
                                  <div class="code-snippet-dots">
                                    <span></span><span></span><span></span>
@@ -2692,8 +2773,8 @@ function loadExamQuestions(exam) {
                                </div>
                                <pre><code class="language-${escapeHtml(question.codeLanguage || 'javascript')}">${escapeHtml(question.codeSnippet)}</code></pre>
                              </div>`
-						: ''
-				}
+										: ''
+								}
                 <div class="question-details">
                     <p><strong>Options:</strong></p>
                     ${optionsHtml}
@@ -2741,7 +2822,9 @@ function loadExamQuestions(exam) {
 		}
 	}
 
-	window.safeSetHTML ? window.safeSetHTML(container, questionsHtml, true) : (container.innerHTML = questionsHtml);
+	window.safeSetHTML
+		? window.safeSetHTML(container, questionsHtml, true)
+		: (container.innerHTML = questionsHtml);
 }
 
 function closeTestModeModal() {
@@ -2920,7 +3003,9 @@ function createExamPackage(examId) {
 	// updated in class-management without mutating this module's in-memory `exams`.
 	const persistedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const sourceExams =
-		Array.isArray(persistedExams) && persistedExams.length ? persistedExams : exams;
+		Array.isArray(persistedExams) && persistedExams.length
+			? persistedExams
+			: exams;
 	if (Array.isArray(persistedExams) && persistedExams.length) {
 		exams = persistedExams;
 	}
@@ -2932,7 +3017,8 @@ function createExamPackage(examId) {
 
 	// Get all questions from localStorage
 	const allQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 
 	// Get only the questions for this exam (supports index, id, or object entries)
@@ -3033,7 +3119,8 @@ function createExamPackage(examId) {
 	}
 
 	// Get current app settings as fallback
-	const appSettings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
+	const appSettings =
+		window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {};
 
 	// Get allowed students from class rosters (quizClasses.students)
 	let allowedStudents = [];
@@ -3048,11 +3135,7 @@ function createExamPackage(examId) {
 		.map((ref) => {
 			if (ref && typeof ref === 'object') {
 				return (
-					ref.id ||
-					ref.classId ||
-					ref.classID ||
-					ref.name ||
-					ref.className
+					ref.id || ref.classId || ref.classID || ref.name || ref.className
 				);
 			}
 			return ref;
@@ -3119,7 +3202,9 @@ function createExamPackage(examId) {
 	// Also include users assigned to these classes (covers user-tab-only assignments)
 	if (window.Auth?.getUsers) {
 		const users = window.Auth.getUsers();
-		const classById = new Map(assignedClasses.map((cls) => [String(cls.id), cls]));
+		const classById = new Map(
+			assignedClasses.map((cls) => [String(cls.id), cls]),
+		);
 		const classByName = new Map(
 			assignedClasses.map((cls) => [String(cls.name || '').toLowerCase(), cls]),
 		);
@@ -3192,16 +3277,22 @@ function createExamPackage(examId) {
 			primaryColor:
 				presetSettings.primaryColor || appSettings.primaryColor || '#2563eb',
 			secondaryColor:
-				presetSettings.secondaryColor || appSettings.secondaryColor || '#1e40af',
+				presetSettings.secondaryColor ||
+				appSettings.secondaryColor ||
+				'#1e40af',
 			backgroundColor:
-				presetSettings.backgroundColor || appSettings.backgroundColor || '#f8fafc',
+				presetSettings.backgroundColor ||
+				appSettings.backgroundColor ||
+				'#f8fafc',
 			textColor: presetSettings.textColor || appSettings.textColor || '#1e293b',
 			inputFocusColor:
 				presetSettings.inputFocusColor ||
 				appSettings.inputFocusColor ||
 				'#3b82f6',
 			fontFamily:
-				presetSettings.fontFamily || appSettings.fontFamily || "'Segoe UI', system-ui",
+				presetSettings.fontFamily ||
+				appSettings.fontFamily ||
+				"'Segoe UI', system-ui",
 			welcomeTitle: presetSettings.welcomeTitle || exam.name,
 			welcomeMessage:
 				presetSettings.welcomeMessage ||
@@ -3223,9 +3314,11 @@ function createExamPackage(examId) {
  */
 function createTrainingPackage() {
 	const allQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
-	const appSettings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
+	const appSettings =
+		window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {};
 
 	// Get training preset if configured
 	const trainingPresetId = appSettings.trainingPresetId || '';
@@ -3264,16 +3357,22 @@ function createTrainingPackage() {
 			primaryColor:
 				presetSettings.primaryColor || appSettings.primaryColor || '#2563eb',
 			secondaryColor:
-				presetSettings.secondaryColor || appSettings.secondaryColor || '#1e40af',
+				presetSettings.secondaryColor ||
+				appSettings.secondaryColor ||
+				'#1e40af',
 			backgroundColor:
-				presetSettings.backgroundColor || appSettings.backgroundColor || '#f8fafc',
+				presetSettings.backgroundColor ||
+				appSettings.backgroundColor ||
+				'#f8fafc',
 			textColor: presetSettings.textColor || appSettings.textColor || '#1e293b',
 			inputFocusColor:
 				presetSettings.inputFocusColor ||
 				appSettings.inputFocusColor ||
 				'#3b82f6',
 			fontFamily:
-				presetSettings.fontFamily || appSettings.fontFamily || "'Segoe UI', system-ui",
+				presetSettings.fontFamily ||
+				appSettings.fontFamily ||
+				"'Segoe UI', system-ui",
 			welcomeTitle:
 				presetSettings.welcomeTitle ||
 				appSettings.welcomeTitle ||

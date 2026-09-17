@@ -124,6 +124,12 @@
 	var refreshInFlight = null;
 
 	function refreshAccessToken() {
+		// Share the legacy bridge's refresh promise with REST/bootstrap callers.
+		// Separate refresh locks can rotate the same cookie twice and make the
+		// second request fail with "Invalid refresh token".
+		if (typeof window.__legacyBridgeRefresh === 'function') {
+			return window.__legacyBridgeRefresh();
+		}
 		if (refreshInFlight) return refreshInFlight;
 		refreshInFlight = fetch(getBaseUrl() + '/auth/refresh', {
 			method: 'POST',

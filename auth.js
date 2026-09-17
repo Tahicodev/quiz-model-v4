@@ -119,7 +119,11 @@
 		// every modern browser; generateUUID is the project-wide helper.
 		const genId = () => {
 			if (typeof generateUUID === 'function') return generateUUID();
-			if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+			if (
+				typeof crypto !== 'undefined' &&
+				typeof crypto.randomUUID === 'function'
+			)
+				return crypto.randomUUID();
 			// Ancient-browser fallback: RFC-4122 uuid v4 pattern via Math.random.
 			return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
 				const r = (Math.random() * 16) | 0;
@@ -142,9 +146,7 @@
 			// can pre-fill them between bootstraps).
 			email: user.email || '',
 			phone: user.phone || '',
-			subjects: Array.isArray(user.subjects)
-				? user.subjects
-				: [],
+			subjects: Array.isArray(user.subjects) ? user.subjects : [],
 			createdAt: user.createdAt || now,
 			updatedAt: now,
 		};
@@ -201,7 +203,10 @@
 		const entered = String(code || '').trim();
 		if (!entered) return false;
 		const enteredHash = await hashPassword(entered);
-		const settings = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')), {});
+		const settings = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')),
+			{},
+		);
 		const savedHash = String(settings.recoveryCodeHash || '').trim();
 		const defaultHash = await hashPassword(DEFAULT_RECOVERY_CODE);
 		if (savedHash && enteredHash === savedHash) return true;
@@ -247,13 +252,17 @@
 		if (mode === 'open') {
 			requestAnimationFrame(() => {
 				unlockPanel?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-				document.getElementById('authRecoveryCode')?.focus({ preventScroll: true });
+				document
+					.getElementById('authRecoveryCode')
+					?.focus({ preventScroll: true });
 			});
 		}
 		if (mode === 'reset') {
 			requestAnimationFrame(() => {
 				resetPanel?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-				document.getElementById('authRecoveryUsername')?.focus({ preventScroll: true });
+				document
+					.getElementById('authRecoveryUsername')
+					?.focus({ preventScroll: true });
 			});
 		}
 	}
@@ -309,7 +318,10 @@
 					);
 					return;
 				}
-				console.warn('[auth] server recovery verify unreachable — falling back to local', err);
+				console.warn(
+					'[auth] server recovery verify unreachable — falling back to local',
+					err,
+				);
 			}
 		}
 
@@ -326,14 +338,20 @@
 		recoveryTicket = null;
 		recoveryUnlockedUntil = Date.now() + RECOVERY_UNLOCK_TTL_MS;
 		setRecoveryPanelMode('reset');
-		setRecoveryStatus('Recovery verified. You can reset the dashboard password for 15 minutes.', 'success');
+		setRecoveryStatus(
+			'Recovery verified. You can reset the dashboard password for 15 minutes.',
+			'success',
+		);
 	}
 
 	async function resetDashboardPasswordFromForm(formEl) {
 		const unlocked = recoveryTicket || Date.now() < recoveryUnlockedUntil;
 		if (!unlocked) {
 			setRecoveryPanelMode('open');
-			setRecoveryStatus('Recovery verification expired. Verify the code again.', 'error');
+			setRecoveryStatus(
+				'Recovery verification expired. Verify the code again.',
+				'error',
+			);
 			return;
 		}
 		const username = String(
@@ -343,7 +361,10 @@
 			formEl?.querySelector('[data-recovery="password"]')?.value || '',
 		);
 		if (!username || password.length < 6) {
-			setRecoveryStatus('Enter a username and a password with at least 6 characters.', 'error');
+			setRecoveryStatus(
+				'Enter a username and a password with at least 6 characters.',
+				'error',
+			);
 			return;
 		}
 
@@ -360,7 +381,10 @@
 				recoveryUnlockedUntil = 0;
 				setRecoveryPanelMode('closed');
 				if (formEl) formEl.reset();
-				setRecoveryStatus('Admin password reset. Sign in with the new password.', 'success');
+				setRecoveryStatus(
+					'Admin password reset. Sign in with the new password.',
+					'success',
+				);
 				return;
 			} catch (err) {
 				const status = err && err.status;
@@ -371,13 +395,13 @@
 						recoveryUnlockedUntil = 0;
 						setRecoveryPanelMode('open');
 					}
-					setRecoveryStatus(
-						err?.message || 'Password reset failed',
-						'error',
-					);
+					setRecoveryStatus(err?.message || 'Password reset failed', 'error');
 					return;
 				}
-				console.warn('[auth] server recovery reset unreachable — falling back to local', err);
+				console.warn(
+					'[auth] server recovery reset unreachable — falling back to local',
+					err,
+				);
 			}
 		}
 
@@ -386,7 +410,9 @@
 		let user = findUserByUsername(users, username);
 		if (!user) {
 			user =
-				users.find((entry) => String(entry.role || '').toLowerCase() === ROLE_ADMIN) ||
+				users.find(
+					(entry) => String(entry.role || '').toLowerCase() === ROLE_ADMIN,
+				) ||
 				normalizeUser({
 					name: 'Administrator',
 					username,
@@ -406,7 +432,10 @@
 		recoveryUnlockedUntil = 0;
 		setRecoveryPanelMode('closed');
 		if (formEl) formEl.reset();
-		setRecoveryStatus('Dashboard password reset. Sign in with the new password.', 'success');
+		setRecoveryStatus(
+			'Dashboard password reset. Sign in with the new password.',
+			'success',
+		);
 	}
 
 	function findUserByUsername(users, username) {
@@ -500,9 +529,8 @@
 	}
 
 	function loadSession(allowedRoles, options = {}) {
-		const onWrongRole = typeof options.onWrongRole === 'function'
-			? options.onWrongRole
-			: null;
+		const onWrongRole =
+			typeof options.onWrongRole === 'function' ? options.onWrongRole : null;
 		const raw =
 			sessionStorage.getItem(SESSION_STORAGE_KEY) ||
 			localStorage.getItem(SESSION_REMEMBER_KEY);
@@ -645,7 +673,10 @@
 	}
 
 	function getAccessibleClasses() {
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		if (isTeacher()) {
 			const teacherClassIds = getTeacherClassIds();
 			return classes.filter((cls) => teacherClassIds.includes(cls.id));
@@ -699,7 +730,10 @@
 
 		let className = user.className;
 		if (!className && user.classId) {
-			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+			const classes = safeJsonParse(
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+				[],
+			);
 			const match = classes.find((c) => c.id === user.classId);
 			if (match) className = match.name;
 		}
@@ -723,6 +757,7 @@
 			games: true,
 			results: true,
 			activity: true,
+			monitoring: true,
 		},
 		settings: true,
 		settingsTabs: {
@@ -738,7 +773,10 @@
 	};
 
 	function getTeacherAccessSettings() {
-		const settings = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')), {});
+		const settings = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')),
+			{},
+		);
 		const stored = settings.teacherAccess || {};
 		return {
 			tabs: { ...DEFAULT_TEACHER_ACCESS.tabs, ...(stored.tabs || {}) },
@@ -776,7 +814,10 @@
 
 				const className = item.class || item.className || '';
 				if (!className) return false;
-				const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+				const classes = safeJsonParse(
+					JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+					[],
+				);
 				const match = classes.find((c) => c.name === className);
 				return Boolean(match && classIds.includes(match.id));
 			}
@@ -990,7 +1031,9 @@
 			}
 			if (logoBox && profile.logo_url) {
 				logoBox.innerHTML =
-					'<img src="' + profile.logo_url + '" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+					'<img src="' +
+					profile.logo_url +
+					'" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
 			}
 		};
 
@@ -1007,8 +1050,7 @@
 			apply(schoolBrandingCache.profile);
 		};
 		if (window.API && typeof window.API.raw === 'function') {
-			window.API
-				.raw('GET', '/school/profile')
+			window.API.raw('GET', '/school/profile')
 				.then(finish)
 				.catch(function () {
 					finish(null);
@@ -1165,14 +1207,14 @@
 		document.body.classList.add('auth-locked');
 	}
 
-		function hideAuthModal() {
-			const modal = document.getElementById('authModal');
-			if (!modal) return;
-			modal.style.display = 'none';
-			modal.classList.remove('active');
-			document.body.classList.remove('auth-locked');
-			document.documentElement.classList.remove('auth-pending', 'auth-ready');
-		}
+	function hideAuthModal() {
+		const modal = document.getElementById('authModal');
+		if (!modal) return;
+		modal.style.display = 'none';
+		modal.classList.remove('active');
+		document.body.classList.remove('auth-locked');
+		document.documentElement.classList.remove('auth-pending', 'auth-ready');
+	}
 
 	function showStudentAuthModal() {
 		const modal = document.getElementById('studentAuthModal');
@@ -1206,7 +1248,10 @@
 	function populateStudentAccountRequestClassSelect() {
 		const classSelect = document.getElementById('student-request-class');
 		if (!classSelect) return;
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		const options = classes
 			.filter((cls) => cls && cls.id && cls.name)
 			.map(
@@ -1327,7 +1372,10 @@
 
 	function syncStudentToClasses(user, previousUser) {
 		if (!isStudentLikeUser(user)) return;
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		let changed = false;
 
 		if (
@@ -1667,7 +1715,10 @@
 			return;
 		}
 		const scope = getSelectedUserClassScope();
-		const allClasses = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const allClasses = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		const accessibleClasses = isTeacher() ? getAccessibleClasses() : allClasses;
 		const classMap = buildClassNameMap(allClasses);
 		const filteredUsers = getFilteredUsers(getUsers()).filter((u) => {
@@ -1774,7 +1825,10 @@
 			return;
 		}
 		const scope = getSelectedUserClassScope();
-		const allClasses = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const allClasses = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		const classMap = buildClassNameMap(allClasses);
 		const filteredUsers = getFilteredUsers(getUsers()).filter(
 			(u) => u.role !== ROLE_ADMIN,
@@ -1926,7 +1980,10 @@
 			return;
 		}
 		const scope = getSelectedUserClassScope();
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		const classMap = buildClassNameMap(classes);
 		let teachers = getFilteredUsers(getUsers()).filter(
 			(u) => u.role === ROLE_TEACHER,
@@ -2443,7 +2500,10 @@
 		if (!tableBody) return;
 		refreshUserClassFilter();
 
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		const classMap = buildClassNameMap(classes);
 		const rosterNameMap = new Map();
 		classes.forEach((cls) => {
@@ -2688,7 +2748,10 @@
 		}
 
 		let adminCount = users.filter((u) => u.role === ROLE_ADMIN).length;
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		let classesChanged = false;
 		let deleted = 0;
 		let skipped = 0;
@@ -2780,7 +2843,9 @@
 		const teacherNumeroInput = document.getElementById('teacherNumeroField');
 		const teacherPhoneInput = document.getElementById('teacherPhoneField');
 		const teacherEmailInput = document.getElementById('teacherEmailField');
-		const teacherSubjectsInput = document.getElementById('teacherSubjectsField');
+		const teacherSubjectsInput = document.getElementById(
+			'teacherSubjectsField',
+		);
 		if (teacherNumeroInput)
 			teacherNumeroInput.value = user?.numero || user?.studentNumber || '';
 		if (teacherPhoneInput) teacherPhoneInput.value = user?.phone || '';
@@ -2813,7 +2878,10 @@
 
 		const teacherClassList = document.getElementById('teacherClassList');
 		if (teacherClassList) {
-			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+			const classes = safeJsonParse(
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+				[],
+			);
 			// Use the app-wide custom checkbox pattern (.custom-checkbox +
 			// .custom-checkmark from styles.css) so the box is actually visible.
 			// The native input stays zero-sized and is toggled by the
@@ -3001,148 +3069,161 @@
 			updatedUser.studentNumber = studentNumber;
 			updatedUser.classId = classId;
 
-			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+			const classes = safeJsonParse(
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+				[],
+			);
 			const classMatch = classes.find((c) => c.id === classId);
 			updatedUser.className = classMatch ? classMatch.name : '';
 		} else {
 			// Teachers keep their staff numero (set in the teacher branch
 			// above); only the student-specific class linkage is cleared.
-			updatedUser.studentNumber = role === ROLE_TEACHER ? updatedUser.numero : '';
+			updatedUser.studentNumber =
+				role === ROLE_TEACHER ? updatedUser.numero : '';
 			updatedUser.classId = '';
 			updatedUser.className = '';
 		}
 
 		if (existingUser) {
-				const idx = users.findIndex((u) => u.id === existingUserId);
-				if (idx !== -1 && !canManageUser(users[idx]) && !isAdmin()) {
-					showToast('Access denied', 'error');
-					return;
-				}
-				users[idx] = updatedUser;
-			} else {
-				users.push(updatedUser);
+			const idx = users.findIndex((u) => u.id === existingUserId);
+			if (idx !== -1 && !canManageUser(users[idx]) && !isAdmin()) {
+				showToast('Access denied', 'error');
+				return;
 			}
-
-			// ── Persist to the backend FIRST, then mirror locally ───────────────
-			// The legacy path used to write only localStorage via saveUsers(); the
-			// DB never saw the new user, so a student login afterwards wouldn't
-			// find the account. We now hit POST/PATCH /api/v1/users directly and
-			// only fall back to localStorage on explicit network failure.
-			const payload = {
-				username: updatedUser.username,
-				name: updatedUser.name,
-				role: updatedUser.role,
-				status: updatedUser.status || 'active',
-			};
-			if (password) payload.password = password;
-			if (updatedUser.classId) payload.class_id = updatedUser.classId;
-			if (updatedUser.studentNumber) payload.numero = updatedUser.studentNumber;
-			// Teacher/staff contacts — sent for every role (null clears them
-			// server-side; students/admins simply have no values).
-			payload.email = updatedUser.email || null;
-			payload.phone = updatedUser.phone || null;
-			payload.subjects = updatedUser.subjects || [];
-
-			let savedToServer = false;
-			if (window.API && typeof window.API.create === 'function') {
-				try {
-					let serverUser = null;
-					if (existingUser) {
-						serverUser = await window.API.update('users', existingUserId, payload);
-					} else {
-						serverUser = await window.API.create('users', payload);
-					}
-					if (serverUser && serverUser.id) {
-						// Adopt the server's canonical shape (snake_case) so the
-						// local cache matches what bootstrap will return next time.
-						updatedUser.id = serverUser.id;
-						updatedUser.classId = serverUser.class_id || updatedUser.classId || '';
-						updatedUser.studentNumber = serverUser.numero || updatedUser.studentNumber || '';
-						updatedUser.email = serverUser.email || '';
-						updatedUser.phone = serverUser.phone || '';
-						updatedUser.subjects = Array.isArray(serverUser.subjects)
-							? serverUser.subjects
-							: updatedUser.subjects || [];
-						updatedUser.createdAt = serverUser.created_at || updatedUser.createdAt;
-						updatedUser.updatedAt = serverUser.updated_at || updatedUser.updatedAt;
-						// Replace any local stub with the server-authoritative row.
-						const i = users.findIndex((u) => u.id === updatedUser.id || u.username === updatedUser.username);
-						if (i !== -1) users[i] = updatedUser;
-						savedToServer = true;
-					}
-
-					// Teacher class assignments have no User column — persist
-					// them through the settings table so they survive a DB
-					// round trip (bootstrap rehydrates user.classIds from the
-					// same key). Only admins reach here: teachers can't edit
-					// teacher rows.
-					if (role === ROLE_TEACHER && Array.isArray(updatedUser.classIds)) {
-						try {
-							const settingsRepo =
-								window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-							let assignments = {};
-							if (settingsRepo && settingsRepo.getValue_sync) {
-								const raw = settingsRepo.getValue_sync('settings', {});
-								const row = Array.isArray(raw?.settings)
-									? raw.settings.find(
-											(s) => s && s.key === 'teacherClassAssignments',
-										)
-									: null;
-								if (row?.value) {
-									try {
-										assignments = JSON.parse(row.value) || {};
-									} catch (_) {}
-								}
-							}
-							assignments[updatedUser.id] = updatedUser.classIds;
-							const serialized = JSON.stringify(assignments);
-							if (window.API && typeof window.API.update === 'function') {
-								// PATCH /settings/teacherClassAssignments — value is a
-								// string per SettingUpdateSchema.
-								await window.API.update(
-									'settings',
-									'teacherClassAssignments',
-									{
-										key: 'teacherClassAssignments',
-										value: serialized,
-										visibility: 'admin',
-									},
-								);
-							}
-							// Mirror locally so the modal shows the right state
-							// before the next bootstrap.
-							localStorage.setItem(
-								'quizTeacherClassAssignments',
-								serialized,
-							);
-						} catch (assignmentErr) {
-							console.warn(
-								'[auth] teacher class assignments save failed:',
-								assignmentErr,
-							);
-						}
-					}
-				} catch (apiErr) {
-					console.warn('[auth] API save user failed:', apiErr);
-					showToast(
-						'Failed to save user to server: ' + (apiErr?.message || 'network error'),
-						'error',
-					);
-					// Do NOT save to localStorage on API failure — that would be a
-					// lie the user only discovers later when the data isn't there.
-					return;
-				}
-			}
-
-			saveUsers(users);
-			syncStudentToClasses(updatedUser, existingUser);
-			if (savedToServer && typeof window.syncUsersToClients === 'function' && isAdmin()) {
-				window.syncUsersToClients();
-			}
-			closeUserModal();
-			renderUsersTable();
-			showToast('User saved successfully', 'success');
+			users[idx] = updatedUser;
+		} else {
+			users.push(updatedUser);
 		}
+
+		// ── Persist to the backend FIRST, then mirror locally ───────────────
+		// The legacy path used to write only localStorage via saveUsers(); the
+		// DB never saw the new user, so a student login afterwards wouldn't
+		// find the account. We now hit POST/PATCH /api/v1/users directly and
+		// only fall back to localStorage on explicit network failure.
+		const payload = {
+			username: updatedUser.username,
+			name: updatedUser.name,
+			role: updatedUser.role,
+			status: updatedUser.status || 'active',
+		};
+		if (password) payload.password = password;
+		if (updatedUser.classId) payload.class_id = updatedUser.classId;
+		if (updatedUser.studentNumber) payload.numero = updatedUser.studentNumber;
+		// Teacher/staff contacts — sent for every role (null clears them
+		// server-side; students/admins simply have no values).
+		payload.email = updatedUser.email || null;
+		payload.phone = updatedUser.phone || null;
+		payload.subjects = updatedUser.subjects || [];
+
+		let savedToServer = false;
+		if (window.API && typeof window.API.create === 'function') {
+			try {
+				let serverUser = null;
+				if (existingUser) {
+					serverUser = await window.API.update(
+						'users',
+						existingUserId,
+						payload,
+					);
+				} else {
+					serverUser = await window.API.create('users', payload);
+				}
+				if (serverUser && serverUser.id) {
+					// Adopt the server's canonical shape (snake_case) so the
+					// local cache matches what bootstrap will return next time.
+					updatedUser.id = serverUser.id;
+					updatedUser.classId =
+						serverUser.class_id || updatedUser.classId || '';
+					updatedUser.studentNumber =
+						serverUser.numero || updatedUser.studentNumber || '';
+					updatedUser.email = serverUser.email || '';
+					updatedUser.phone = serverUser.phone || '';
+					updatedUser.subjects = Array.isArray(serverUser.subjects)
+						? serverUser.subjects
+						: updatedUser.subjects || [];
+					updatedUser.createdAt =
+						serverUser.created_at || updatedUser.createdAt;
+					updatedUser.updatedAt =
+						serverUser.updated_at || updatedUser.updatedAt;
+					// Replace any local stub with the server-authoritative row.
+					const i = users.findIndex(
+						(u) =>
+							u.id === updatedUser.id || u.username === updatedUser.username,
+					);
+					if (i !== -1) users[i] = updatedUser;
+					savedToServer = true;
+				}
+
+				// Teacher class assignments have no User column — persist
+				// them through the settings table so they survive a DB
+				// round trip (bootstrap rehydrates user.classIds from the
+				// same key). Only admins reach here: teachers can't edit
+				// teacher rows.
+				if (role === ROLE_TEACHER && Array.isArray(updatedUser.classIds)) {
+					try {
+						const settingsRepo =
+							window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+						let assignments = {};
+						if (settingsRepo && settingsRepo.getValue_sync) {
+							const raw = settingsRepo.getValue_sync('settings', {});
+							const row = Array.isArray(raw?.settings)
+								? raw.settings.find(
+										(s) => s && s.key === 'teacherClassAssignments',
+									)
+								: null;
+							if (row?.value) {
+								try {
+									assignments = JSON.parse(row.value) || {};
+								} catch (_) {}
+							}
+						}
+						assignments[updatedUser.id] = updatedUser.classIds;
+						const serialized = JSON.stringify(assignments);
+						if (window.API && typeof window.API.update === 'function') {
+							// PATCH /settings/teacherClassAssignments — value is a
+							// string per SettingUpdateSchema.
+							await window.API.update('settings', 'teacherClassAssignments', {
+								key: 'teacherClassAssignments',
+								value: serialized,
+								visibility: 'admin',
+							});
+						}
+						// Mirror locally so the modal shows the right state
+						// before the next bootstrap.
+						localStorage.setItem('quizTeacherClassAssignments', serialized);
+					} catch (assignmentErr) {
+						console.warn(
+							'[auth] teacher class assignments save failed:',
+							assignmentErr,
+						);
+					}
+				}
+			} catch (apiErr) {
+				console.warn('[auth] API save user failed:', apiErr);
+				showToast(
+					'Failed to save user to server: ' +
+						(apiErr?.message || 'network error'),
+					'error',
+				);
+				// Do NOT save to localStorage on API failure — that would be a
+				// lie the user only discovers later when the data isn't there.
+				return;
+			}
+		}
+
+		saveUsers(users);
+		syncStudentToClasses(updatedUser, existingUser);
+		if (
+			savedToServer &&
+			typeof window.syncUsersToClients === 'function' &&
+			isAdmin()
+		) {
+			window.syncUsersToClients();
+		}
+		closeUserModal();
+		renderUsersTable();
+		showToast('User saved successfully', 'success');
+	}
 
 	async function toggleUserStatus(userId) {
 		if (!userId) return;
@@ -3163,211 +3244,215 @@
 		}
 
 		user.status = user.status === 'disabled' ? 'active' : 'disabled';
-			user.updatedAt = new Date().toISOString();
+		user.updatedAt = new Date().toISOString();
 
-			// Persist the status flip to the backend. The backend User.status
-			// enum is {active, inactive, suspended}; the legacy UI uses 'disabled',
-			// so translate before sending.
-			if (window.API && typeof window.API.update === 'function') {
-				try {
-					const apiStatus = user.status === 'disabled' ? 'suspended' : 'active';
-					await window.API.update('users', userId, { status: apiStatus });
-				} catch (apiErr) {
-					console.warn('[auth] API toggle status failed:', apiErr);
-					showToast(
-						'Failed to update status on server: ' + (apiErr?.message || 'network error'),
-						'error',
-					);
-					return; // don't touch localStorage either — keep the two in sync
-				}
-			}
-
-			saveUsers(users);
-			if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
-				window.syncUsersToClients();
-			}
-			renderUsersTable();
-			showToast(
-				`User ${user.status === 'disabled' ? 'suspended' : 'activated'}`,
-				'success',
-			);
-		}
-
-		async function deleteUser(userId) {
-			if (!userId) return;
-			const users = getUsers();
-			const user = users.find((u) => u.id === userId);
-			if (!user) return;
-			if (!canManageUser(user) && !isAdmin()) {
-				showToast('Access denied', 'error');
-				return;
-			}
-			if (user.role === ROLE_ADMIN) {
-				const adminCount = users.filter((u) => u.role === ROLE_ADMIN).length;
-				if (adminCount <= 1) {
-					showToast('At least one admin account is required', 'error');
-					return;
-				}
-			}
-
-			if (confirm(`Delete user "${user.name || user.username}"?`)) {
-				// Persist the delete to the backend first; only drop local state
-				// after the server has confirmed the row is gone.
-				if (window.API && typeof window.API.remove === 'function') {
-					try {
-						await window.API.remove('users', userId);
-					} catch (apiErr) {
-						console.warn('[auth] API delete user failed:', apiErr);
-						showToast(
-							'Failed to delete user on server: ' + (apiErr?.message || 'network error'),
-							'error',
-						);
-						return;
-					}
-				}
-
-				const filtered = users.filter((u) => u.id !== userId);
-				saveUsers(filtered);
-				if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
-					window.syncUsersToClients();
-				}
-				if (user.role === ROLE_STUDENT && user.classId) {
-					const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
-					let changed = false;
-					const target = classes.find((c) => c.id === user.classId);
-					if (target && Array.isArray(target.students)) {
-						const before = target.students.length;
-						target.students = target.students.filter(
-							(s) => String(s.number) !== String(user.studentNumber),
-						);
-						if (before !== target.students.length) changed = true;
-					}
-					if (changed) {
-						window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
-					}
-				}
-				renderUsersTable();
-				showToast('User deleted', 'success');
-			}
-		}
-
-		// ── Admin-initiated password reset ────────────────────────────────────
-		// Passwords are one-way bcrypt hashes and can never be shown back. When a
-		// user forgets theirs, the admin generates a NEW temporary password, the
-		// server replaces the hash (POST /users/:id/reset-password), and the
-		// plaintext is displayed exactly once here so the admin can hand it to
-		// the user — it is never stored or logged client-side.
-		function generateTempPassword(length = 10) {
-			const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-			const bytes = new Uint32Array(length);
-			(crypto && crypto.getRandomValues
-				? crypto.getRandomValues(bytes)
-				: null) || bytes.fill(Math.floor(Math.random() * 0xffffffff));
-			return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
-		}
-
-		async function copyTempPassword(value) {
-			const text = String(value || '');
-			if (!text) return;
+		// Persist the status flip to the backend. The backend User.status
+		// enum is {active, inactive, suspended}; the legacy UI uses 'disabled',
+		// so translate before sending.
+		if (window.API && typeof window.API.update === 'function') {
 			try {
-				if (navigator.clipboard && navigator.clipboard.writeText) {
-					await navigator.clipboard.writeText(text);
-				} else {
-					const helper = document.createElement('textarea');
-					helper.value = text;
-					helper.setAttribute('readonly', '');
-					helper.style.position = 'fixed';
-					helper.style.opacity = '0';
-					document.body.appendChild(helper);
-					helper.select();
-					document.execCommand('copy');
-					helper.remove();
-				}
-				showToast('Password copied to clipboard', 'success');
-			} catch (_) {
-				showToast('Copy failed — select the password text manually', 'warning');
+				const apiStatus = user.status === 'disabled' ? 'suspended' : 'active';
+				await window.API.update('users', userId, { status: apiStatus });
+			} catch (apiErr) {
+				console.warn('[auth] API toggle status failed:', apiErr);
+				showToast(
+					'Failed to update status on server: ' +
+						(apiErr?.message || 'network error'),
+					'error',
+				);
+				return; // don't touch localStorage either — keep the two in sync
 			}
 		}
 
-		async function resetUserPassword(userId) {
-			if (!userId) return;
-			const users = getUsers();
-			const user = users.find((u) => u.id === userId);
-			if (!user) return;
-			if (!canManageUser(user) && !isAdmin()) {
-				showToast('Access denied', 'error');
-				return;
-			}
-			// The backend endpoint is admin-only; a teacher pressing this would
-			// just get a 403, so stop them earlier with a clear message.
-			if (!isAdmin()) {
-				showToast('Only admins can reset passwords', 'error');
-				return;
-			}
+		saveUsers(users);
+		if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
+			window.syncUsersToClients();
+		}
+		renderUsersTable();
+		showToast(
+			`User ${user.status === 'disabled' ? 'suspended' : 'activated'}`,
+			'success',
+		);
+	}
 
-			const label = user.name || user.username || 'this user';
-			if (
-				!confirm(
-					`Reset the password for "${label}"?\n\nA new temporary password will be generated and shown to you once so you can share it with the user.`,
-				)
-			) {
+	async function deleteUser(userId) {
+		if (!userId) return;
+		const users = getUsers();
+		const user = users.find((u) => u.id === userId);
+		if (!user) return;
+		if (!canManageUser(user) && !isAdmin()) {
+			showToast('Access denied', 'error');
+			return;
+		}
+		if (user.role === ROLE_ADMIN) {
+			const adminCount = users.filter((u) => u.role === ROLE_ADMIN).length;
+			if (adminCount <= 1) {
+				showToast('At least one admin account is required', 'error');
 				return;
 			}
+		}
 
-			const newPassword = generateTempPassword(10);
-			if (window.API && typeof window.API.raw === 'function') {
+		if (confirm(`Delete user "${user.name || user.username}"?`)) {
+			// Persist the delete to the backend first; only drop local state
+			// after the server has confirmed the row is gone.
+			if (window.API && typeof window.API.remove === 'function') {
 				try {
-					await window.API.raw(
-						'POST',
-						'/users/' + encodeURIComponent(userId) + '/reset-password',
-						{ newPassword },
-					);
+					await window.API.remove('users', userId);
 				} catch (apiErr) {
-					console.warn('[auth] API reset password failed:', apiErr);
+					console.warn('[auth] API delete user failed:', apiErr);
 					showToast(
-						'Failed to reset password on server: ' +
+						'Failed to delete user on server: ' +
 							(apiErr?.message || 'network error'),
 						'error',
 					);
 					return;
 				}
-			} else {
-				showToast('Server connection unavailable', 'error');
-				return;
 			}
 
-			// One-time display. The value lives only in this DOM node until the
-			// modal closes; nothing is persisted or logged.
-			const modal = document.getElementById('resetPasswordModal');
-			const labelEl = document.getElementById('resetPasswordUser');
-			const valueEl = document.getElementById('resetPasswordValue');
-			if (!modal || !labelEl || !valueEl) {
+			const filtered = users.filter((u) => u.id !== userId);
+			saveUsers(filtered);
+			if (typeof window.syncUsersToClients === 'function' && isAdmin()) {
+				window.syncUsersToClients();
+			}
+			if (user.role === ROLE_STUDENT && user.classId) {
+				const classes = safeJsonParse(
+					JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+					[],
+				);
+				let changed = false;
+				const target = classes.find((c) => c.id === user.classId);
+				if (target && Array.isArray(target.students)) {
+					const before = target.students.length;
+					target.students = target.students.filter(
+						(s) => String(s.number) !== String(user.studentNumber),
+					);
+					if (before !== target.students.length) changed = true;
+				}
+				if (changed) {
+					window.__DI_CONTAINER__.repo.setAll_sync('classes', classes);
+				}
+			}
+			renderUsersTable();
+			showToast('User deleted', 'success');
+		}
+	}
+
+	// ── Admin-initiated password reset ────────────────────────────────────
+	// Passwords are one-way bcrypt hashes and can never be shown back. When a
+	// user forgets theirs, the admin generates a NEW temporary password, the
+	// server replaces the hash (POST /users/:id/reset-password), and the
+	// plaintext is displayed exactly once here so the admin can hand it to
+	// the user — it is never stored or logged client-side.
+	function generateTempPassword(length = 10) {
+		const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+		const bytes = new Uint32Array(length);
+		(crypto && crypto.getRandomValues ? crypto.getRandomValues(bytes) : null) ||
+			bytes.fill(Math.floor(Math.random() * 0xffffffff));
+		return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+	}
+
+	async function copyTempPassword(value) {
+		const text = String(value || '');
+		if (!text) return;
+		try {
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				await navigator.clipboard.writeText(text);
+			} else {
+				const helper = document.createElement('textarea');
+				helper.value = text;
+				helper.setAttribute('readonly', '');
+				helper.style.position = 'fixed';
+				helper.style.opacity = '0';
+				document.body.appendChild(helper);
+				helper.select();
+				document.execCommand('copy');
+				helper.remove();
+			}
+			showToast('Password copied to clipboard', 'success');
+		} catch (_) {
+			showToast('Copy failed — select the password text manually', 'warning');
+		}
+	}
+
+	async function resetUserPassword(userId) {
+		if (!userId) return;
+		const users = getUsers();
+		const user = users.find((u) => u.id === userId);
+		if (!user) return;
+		if (!canManageUser(user) && !isAdmin()) {
+			showToast('Access denied', 'error');
+			return;
+		}
+		// The backend endpoint is admin-only; a teacher pressing this would
+		// just get a 403, so stop them earlier with a clear message.
+		if (!isAdmin()) {
+			showToast('Only admins can reset passwords', 'error');
+			return;
+		}
+
+		const label = user.name || user.username || 'this user';
+		if (
+			!confirm(
+				`Reset the password for "${label}"?\n\nA new temporary password will be generated and shown to you once so you can share it with the user.`,
+			)
+		) {
+			return;
+		}
+
+		const newPassword = generateTempPassword(10);
+		if (window.API && typeof window.API.raw === 'function') {
+			try {
+				await window.API.raw(
+					'POST',
+					'/users/' + encodeURIComponent(userId) + '/reset-password',
+					{ newPassword },
+				);
+			} catch (apiErr) {
+				console.warn('[auth] API reset password failed:', apiErr);
 				showToast(
-					`Password for "${label}" reset to: ${newPassword} (save it now — it won't be shown again)`,
-					'warning',
+					'Failed to reset password on server: ' +
+						(apiErr?.message || 'network error'),
+					'error',
 				);
 				return;
 			}
-			labelEl.textContent = label;
-			valueEl.textContent = newPassword;
-			modal.style.display = 'flex';
-			setTimeout(() => modal.classList.add('active'), 10);
+		} else {
+			showToast('Server connection unavailable', 'error');
+			return;
 		}
 
-		function closeResetPasswordModal() {
-			const modal = document.getElementById('resetPasswordModal');
-			if (!modal) return;
-			modal.style.display = 'none';
-			modal.classList.remove('active');
-			// Clear the plaintext immediately on close — the copy is gone for
-			// good, by design.
-			const labelEl = document.getElementById('resetPasswordUser');
-			const valueEl = document.getElementById('resetPasswordValue');
-			if (labelEl) labelEl.textContent = '';
-			if (valueEl) valueEl.textContent = '';
+		// One-time display. The value lives only in this DOM node until the
+		// modal closes; nothing is persisted or logged.
+		const modal = document.getElementById('resetPasswordModal');
+		const labelEl = document.getElementById('resetPasswordUser');
+		const valueEl = document.getElementById('resetPasswordValue');
+		if (!modal || !labelEl || !valueEl) {
+			showToast(
+				`Password for "${label}" reset to: ${newPassword} (save it now — it won't be shown again)`,
+				'warning',
+			);
+			return;
 		}
+		labelEl.textContent = label;
+		valueEl.textContent = newPassword;
+		modal.style.display = 'flex';
+		setTimeout(() => modal.classList.add('active'), 10);
+	}
 
-		// ── Pending student imports (teacher-staged, admin-confirmed) ───────────
+	function closeResetPasswordModal() {
+		const modal = document.getElementById('resetPasswordModal');
+		if (!modal) return;
+		modal.style.display = 'none';
+		modal.classList.remove('active');
+		// Clear the plaintext immediately on close — the copy is gone for
+		// good, by design.
+		const labelEl = document.getElementById('resetPasswordUser');
+		const valueEl = document.getElementById('resetPasswordValue');
+		if (labelEl) labelEl.textContent = '';
+		if (valueEl) valueEl.textContent = '';
+	}
+
+	// ── Pending student imports (teacher-staged, admin-confirmed) ───────────
 	// Teachers can prepare CSV/JSON student imports for their own classes, but
 	// nothing materializes until an admin confirms the request — mirroring the
 	// account-requests review flow.
@@ -3574,8 +3659,8 @@
 								)} — ${escapeHtml(String(req.studentCount || 0))} student(s)</div>
 								<div class="pending-import-meta">
 									By ${escapeHtml(req.teacherName || 'Teacher')} · ${new Date(
-									req.createdAt,
-								).toLocaleString()}
+										req.createdAt,
+									).toLocaleString()}
 									${req.sourceFileName ? ` · ${escapeHtml(req.sourceFileName)}` : ''}
 								</div>
 								<div class="pending-import-roster">${rosterPreview}${
@@ -3596,28 +3681,43 @@
 	}
 
 	function getProfileRequests() {
-			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-			return r ? r.getValue_sync('profile_requests', []) : safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
-		}
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		return r
+			? r.getValue_sync('profile_requests', [])
+			: safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
+	}
 
-		function saveProfileRequests(requests) {
-			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-			if (r) { r.setAll_sync('profile_requests', requests); } else { localStorage.setItem(PROFILE_REQUESTS_KEY, JSON.stringify(requests)); }
+	function saveProfileRequests(requests) {
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		if (r) {
+			r.setAll_sync('profile_requests', requests);
+		} else {
+			localStorage.setItem(PROFILE_REQUESTS_KEY, JSON.stringify(requests));
 		}
+	}
 
-		function getAccountRequests() {
-			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-			return r ? r.getValue_sync('account_requests', []) : safeJsonParse(localStorage.getItem(ACCOUNT_REQUESTS_KEY), []);
-		}
+	function getAccountRequests() {
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		return r
+			? r.getValue_sync('account_requests', [])
+			: safeJsonParse(localStorage.getItem(ACCOUNT_REQUESTS_KEY), []);
+	}
 
-		function saveAccountRequests(requests) {
-			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-			if (r) { r.setAll_sync('account_requests', requests); } else { localStorage.setItem(ACCOUNT_REQUESTS_KEY, JSON.stringify(requests)); }
+	function saveAccountRequests(requests) {
+		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		if (r) {
+			r.setAll_sync('account_requests', requests);
+		} else {
+			localStorage.setItem(ACCOUNT_REQUESTS_KEY, JSON.stringify(requests));
 		}
+	}
 
 	function resolveClassNameById(classId) {
 		if (!classId) return '';
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		const match = classes.find((cls) => String(cls.id) === String(classId));
 		return match ? String(match.name || '') : '';
 	}
@@ -3740,7 +3840,13 @@
 						'account_request',
 						`${fullName} account request`,
 						'requested',
-						{ requestId: created.id, username, studentNumber, classId, className },
+						{
+							requestId: created.id,
+							username,
+							studentNumber,
+							classId,
+							className,
+						},
 					);
 				}
 				if (typeof window.addAdminNotification === 'function') {
@@ -3752,7 +3858,10 @@
 				}
 				return { ok: true, request: created };
 			} catch (err) {
-				return { ok: false, message: err && err.message ? err.message : 'Account request failed' };
+				return {
+					ok: false,
+					message: err && err.message ? err.message : 'Account request failed',
+				};
 			}
 		}
 
@@ -3832,19 +3941,25 @@
 		// ── Backend-first: the server materializes the User + marks approved ──
 		if (window.API && typeof window.API.raw === 'function' && request.id) {
 			try {
-				const result = await window.API.raw('POST', '/account-requests/' + encodeURIComponent(request.id) + '/approve', { note });
+				const result = await window.API.raw(
+					'POST',
+					'/account-requests/' + encodeURIComponent(request.id) + '/approve',
+					{ note },
+				);
 				const newUserId = result && result.userId;
 				request.status = 'approved';
 				request.reviewNote = note;
 				request.reviewerId = reviewerId || '';
-				request.reviewedAt = result?.request?.reviewed_at || new Date().toISOString();
+				request.reviewedAt =
+					result?.request?.reviewed_at || new Date().toISOString();
 				request.createdUserId = newUserId || '';
 				saveAccountRequests(requests);
 
 				// Mirror the new user into the local cache so the admin table refreshes.
 				if (newUserId) {
 					const classId = String(request.classId || '').trim();
-					const className = resolveClassNameById(classId) || String(request.className || '');
+					const className =
+						resolveClassNameById(classId) || String(request.className || '');
 					const newUser = normalizeUser({
 						id: newUserId,
 						name: request.fullName,
@@ -3864,18 +3979,32 @@
 				}
 
 				if (typeof logActivity === 'function') {
-					logActivity('account_request', `${request.fullName} account request`, 'approved', {
-						requestId: request.id, username: request.username,
-						studentNumber: request.studentNumber, classId: request.classId,
-						className: request.className, userId: newUserId || '',
-						reviewerId: reviewerId || '', reviewNote: note,
-					});
+					logActivity(
+						'account_request',
+						`${request.fullName} account request`,
+						'approved',
+						{
+							requestId: request.id,
+							username: request.username,
+							studentNumber: request.studentNumber,
+							classId: request.classId,
+							className: request.className,
+							userId: newUserId || '',
+							reviewerId: reviewerId || '',
+							reviewNote: note,
+						},
+					);
 				}
 				if (typeof window.addAdminNotification === 'function') {
 					window.addAdminNotification({
 						type: 'account_request',
 						message: `Account request approved for ${request.fullName}`,
-						data: { requestId: request.id, username: request.username, classId: request.classId, userId: newUserId },
+						data: {
+							requestId: request.id,
+							username: request.username,
+							classId: request.classId,
+							userId: newUserId,
+						},
 					});
 				}
 				return request;
@@ -3964,7 +4093,11 @@
 		// ── Backend-first ────────────────────────────────────────────────────
 		if (window.API && typeof window.API.raw === 'function' && request.id) {
 			try {
-				await window.API.raw('POST', '/account-requests/' + encodeURIComponent(request.id) + '/reject', { note });
+				await window.API.raw(
+					'POST',
+					'/account-requests/' + encodeURIComponent(request.id) + '/reject',
+					{ note },
+				);
 			} catch (err) {
 				showToast((err && err.message) || 'Rejection failed', 'error');
 				return null;
@@ -4037,16 +4170,33 @@
 				saveProfileRequests(requests);
 
 				let className = payload.currentSnapshot?.className || '';
-				if (!className && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
-					const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
-					const match = classes.find((c) => c.id === payload.currentSnapshot.classId);
+				if (
+					!className &&
+					payload.currentSnapshot?.classId &&
+					window.__DI_CONTAINER__?.repo
+				) {
+					const classes = safeJsonParse(
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+						[],
+					);
+					const match = classes.find(
+						(c) => c.id === payload.currentSnapshot.classId,
+					);
 					if (match) className = match.name;
 				}
 				if (typeof logActivity === 'function') {
-					logActivity('profile_request', `${displayName} profile update request`, 'requested', {
-						requestId: request.id, userId: payload.userId, studentName: displayName,
-						studentNumber: payload.currentSnapshot?.studentNumber || '', className: className,
-					});
+					logActivity(
+						'profile_request',
+						`${displayName} profile update request`,
+						'requested',
+						{
+							requestId: request.id,
+							userId: payload.userId,
+							studentName: displayName,
+							studentNumber: payload.currentSnapshot?.studentNumber || '',
+							className: className,
+						},
+					);
 				}
 				if (typeof window.addAdminNotification === 'function') {
 					window.addAdminNotification({
@@ -4057,7 +4207,10 @@
 				}
 				return request;
 			} catch (err) {
-				console.warn('[auth] profile-request API call failed, falling back to local:', err);
+				console.warn(
+					'[auth] profile-request API call failed, falling back to local:',
+					err,
+				);
 			}
 		}
 
@@ -4076,8 +4229,15 @@
 		requests.unshift(request);
 		saveProfileRequests(requests);
 		let className = payload.currentSnapshot?.className || '';
-		if (!className && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
-			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		if (
+			!className &&
+			payload.currentSnapshot?.classId &&
+			window.__DI_CONTAINER__?.repo
+		) {
+			const classes = safeJsonParse(
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+				[],
+			);
 			const match = classes.find(
 				(c) => c.id === payload.currentSnapshot.classId,
 			);
@@ -4123,9 +4283,16 @@
 			try {
 				await window.API.update('profile-requests', targetId, {
 					changes: payload.changes != null ? payload.changes : undefined,
-					avatar: Object.prototype.hasOwnProperty.call(payload, 'avatar') ? (payload.avatar || '') : undefined,
-					note: Object.prototype.hasOwnProperty.call(payload, 'note') ? (payload.note || '') : undefined,
-					snapshot: payload.currentSnapshot != null ? payload.currentSnapshot : undefined,
+					avatar: Object.prototype.hasOwnProperty.call(payload, 'avatar')
+						? payload.avatar || ''
+						: undefined,
+					note: Object.prototype.hasOwnProperty.call(payload, 'note')
+						? payload.note || ''
+						: undefined,
+					snapshot:
+						payload.currentSnapshot != null
+							? payload.currentSnapshot
+							: undefined,
 				});
 			} catch (err) {
 				console.warn('[auth] profile-request update failed:', err);
@@ -4250,7 +4417,10 @@
 		if (request.avatar) user.avatar = request.avatar;
 
 		if (user.classId) {
-			const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+			const classes = safeJsonParse(
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+				[],
+			);
 			const match = classes.find((c) => c.id === user.classId);
 			user.className = match ? match.name : user.className;
 		}
@@ -4290,7 +4460,10 @@
 		if (!container) return;
 		const requests = getProfileRequests();
 		const users = getUsers();
-		const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')), []);
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
 		const classMap = new Map(classes.map((c) => [c.id, c.name]));
 		let scopedRequests = requests;
 		if (isTeacher()) {
@@ -4446,7 +4619,11 @@
 		// Skip if legacy-auth-bridge.js has already claimed this form (it routes
 		// the login through the real backend instead of localStorage password
 		// verification).
-		if (authForm && !window.__AUTH_BRIDGE_OWNS_LOGIN__ && authForm.getAttribute('data-bridge-owned') !== 'true') {
+		if (
+			authForm &&
+			!window.__AUTH_BRIDGE_OWNS_LOGIN__ &&
+			authForm.getAttribute('data-bridge-owned') !== 'true'
+		) {
 			authForm.addEventListener('submit', (e) => {
 				e.preventDefault();
 				handleLogin(authForm);
@@ -4456,7 +4633,9 @@
 		if (recoveryToggle) {
 			recoveryToggle.addEventListener('click', toggleRecoveryPanel);
 		}
-		const recoveryUnlockForm = document.getElementById('authRecoveryUnlockForm');
+		const recoveryUnlockForm = document.getElementById(
+			'authRecoveryUnlockForm',
+		);
 		if (recoveryUnlockForm) {
 			recoveryUnlockForm.addEventListener('submit', (e) => {
 				e.preventDefault();

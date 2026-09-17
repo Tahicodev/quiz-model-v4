@@ -9,77 +9,108 @@
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
 		/>
-			<!-- APP_CONFIG for SaaS mode detection -->
-			<script>
-				window.APP_CONFIG = window.APP_CONFIG || {
-					mode: 'local',
-					apiUrl: '/api/v1',
-					socketUrl: '/',
-				};
-				// This page is the student surface. Naming the portal lets the
-				// auth stack scope the refresh cookie per portal, so an admin
-				// tab in the SAME browser never rotates this tab's refresh
-				// token (and vice versa).
-				window.APP_PORTAL = 'student';
-			</script>
-				<!-- Legacy Bridge — must load synchronously -->
-					<script src="legacy-bridge.js?v=2026-09-13-r8"></script>
-				<!-- Socket auth keeper — heals sockets whose token expired or was
+		<!-- APP_CONFIG for SaaS mode detection -->
+		<script>
+			window.APP_CONFIG = window.APP_CONFIG || {
+				mode: 'local',
+				apiUrl: '/api/v1',
+				socketUrl: '/',
+			};
+			// This page is the student surface. Naming the portal lets the
+			// auth stack scope the refresh cookie per portal, so an admin
+			// tab in the SAME browser never rotates this tab's refresh
+			// token (and vice versa).
+			window.APP_PORTAL = 'student';
+		</script>
+		<!-- Legacy Bridge — must load synchronously -->
+		<script src="legacy-bridge.js?v=2026-09-13-r8"></script>
+		<!-- Socket auth keeper — heals sockets whose token expired or was
 				     replaced by another tab's login (shared localStorage). Load
 				     right after the bridge so getSocket can consult it. -->
-				<script src="socket-auth-keeper.js?v=2026-09-09-realtime-r6" defer></script>
-				<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
-				<script>
-					window.getSocket = window.getSocket || function(url, opts) {
-						if (!window.io) { console.warn('getSocket called before Socket.IO loaded'); return null; }
-						if (window.__AUTH_SESSION_EXPIRED__) return null;
-						// Consult the keeper when the cached socket exists: it heals
-						// sockets killed by a REST 401 (manual disconnect never retries)
-						// and re-authenticates ones carrying another tab's identity,
-						// before we hand the cached object out.
-						var keeper = window.__QUIZ_SOCKET_AUTH_KEEPER__;
-						if (window.__QUIZ_LEGACY_SOCKET__ && keeper) {
-							try { keeper.reviveCachedSocket(); } catch (e) {}
-							keeper.attachSocketGuards(window.__QUIZ_LEGACY_SOCKET__);
-							return window.__QUIZ_LEGACY_SOCKET__;
+		<script src="socket-auth-keeper.js?v=2026-09-18-auth-r1" defer></script>
+		<!-- getSocket bridges io() calls → passes JWT auth token to socket.io -->
+		<script>
+			window.getSocket =
+				window.getSocket ||
+				function (url, opts) {
+					if (!window.io) {
+						console.warn('getSocket called before Socket.IO loaded');
+						return null;
+					}
+					if (window.__AUTH_SESSION_EXPIRED__) return null;
+					// Consult the keeper when the cached socket exists: it heals
+					// sockets killed by a REST 401 (manual disconnect never retries)
+					// and re-authenticates ones carrying another tab's identity,
+					// before we hand the cached object out.
+					var keeper = window.__QUIZ_SOCKET_AUTH_KEEPER__;
+					if (window.__QUIZ_LEGACY_SOCKET__ && keeper) {
+						try {
+							keeper.reviveCachedSocket();
+						} catch (e) {}
+						keeper.attachSocketGuards(window.__QUIZ_LEGACY_SOCKET__);
+						return window.__QUIZ_LEGACY_SOCKET__;
+					}
+					if (window.__QUIZ_LEGACY_SOCKET__)
+						return window.__QUIZ_LEGACY_SOCKET__;
+					// This tab's session wins over the shared localStorage copy
+					// (which may hold the admin tab's login from this browser).
+					var readToken = function () {
+						if (keeper) {
+							var kt = keeper.getActiveToken();
+							if (kt) return kt;
 						}
-						if (window.__QUIZ_LEGACY_SOCKET__) return window.__QUIZ_LEGACY_SOCKET__;
-						// This tab's session wins over the shared localStorage copy
-						// (which may hold the admin tab's login from this browser).
-						var readToken = function() {
-							if (keeper) { var kt = keeper.getActiveToken(); if (kt) return kt; }
-							try {
-								var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession:student') || localStorage.getItem('quizSession') || 'null');
-								if (s && s.token) return s.token;
-							} catch (e) {}
-							return window.__authToken || localStorage.getItem('quizAuthToken:student') || localStorage.getItem('quizAuthToken') || '';
-						};
-						var token = readToken();
-						// SaaS sockets always require auth — when anonymous, keep polling
-						// briefly in case the login (which does not reload the page) is
-						// finishing right now. Return null only once the grace window
-						// lapses, and let callers retry (getSocket re-dials next call).
-						if (!token) {
-							var startedAt = window.__GETSOCKET_ANON_AT__ || Date.now();
-							if (!window.__GETSOCKET_ANON_AT__) window.__GETSOCKET_ANON_AT__ = startedAt;
-							if (Date.now() - startedAt < 15000) return null;
-							return null;
-						}
-						window.__GETSOCKET_ANON_AT__ = 0;
-						var socket = window.io(url || '/', Object.assign({ auth: { token: token }, transports: ['polling','websocket'] }, opts || {}));
-						window.__QUIZ_LEGACY_SOCKET__ = socket;
-						if (keeper) keeper.attachSocketGuards(socket);
-						return socket;
+						try {
+							var s = JSON.parse(
+								sessionStorage.getItem('quizSession') ||
+									localStorage.getItem('quizSession:student') ||
+									localStorage.getItem('quizSession') ||
+									'null',
+							);
+							if (s && s.token) return s.token;
+						} catch (e) {}
+						return (
+							window.__authToken ||
+							localStorage.getItem('quizAuthToken:student') ||
+							localStorage.getItem('quizAuthToken') ||
+							''
+						);
 					};
-				</script>
-				<script src="utils.js" defer></script>
-				<script src="api-client.js?v=2026-09-15-r2" defer></script>
-			<script src="auth.js?v=2026-09-15-r3" defer></script>
+					var token = readToken();
+					// SaaS sockets always require auth — when anonymous, keep polling
+					// briefly in case the login (which does not reload the page) is
+					// finishing right now. Return null only once the grace window
+					// lapses, and let callers retry (getSocket re-dials next call).
+					if (!token) {
+						var startedAt = window.__GETSOCKET_ANON_AT__ || Date.now();
+						if (!window.__GETSOCKET_ANON_AT__)
+							window.__GETSOCKET_ANON_AT__ = startedAt;
+						if (Date.now() - startedAt < 15000) return null;
+						return null;
+					}
+					window.__GETSOCKET_ANON_AT__ = 0;
+					var socket = window.io(
+						url || '/',
+						Object.assign(
+							{ auth: { token: token }, transports: ['polling', 'websocket'] },
+							opts || {},
+						),
+					);
+					window.__QUIZ_LEGACY_SOCKET__ = socket;
+					if (keeper) keeper.attachSocketGuards(socket);
+					return socket;
+				};
+		</script>
+		<script src="utils.js" defer></script>
+		<script src="api-client.js?v=2026-09-18-auth-r1" defer></script>
+		<script src="auth.js?v=2026-09-15-r3" defer></script>
 		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
 		<script src="realtime-client.js?v=2026-09-15-r2" defer></script>
-				<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-			<script src="legacy-auth-bridge.js" defer></script>
-					<script src="student-workspace.js?v=2026-09-17-exam-modal-r1" defer></script>
+		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
+		<script src="legacy-auth-bridge.js" defer></script>
+		<script
+			src="student-workspace.js?v=2026-09-18-auth-r1"
+			defer
+		></script>
 	</head>
 	<body class="student-workspace">
 		<div class="workspace-shell">
@@ -107,71 +138,71 @@
 					</svg>
 				</button>
 				<div class="workspace-header-row">
-				<div class="workspace-brand">
-					<div class="workspace-logo">S</div>
-					<div>
-						<h1>Student Workspace</h1>
-						<p id="workspaceSubtitle">Track exams, progress, and feedback</p>
-					</div>
-				</div>
-				<div class="workspace-actions">
-					<button class="workspace-btn ghost" id="workspaceLoginButton">
-						Sign In
-					</button>
-					<div
-						class="workspace-dropdown workspace-profile-dropdown"
-						id="studentWorkspaceDropdown"
-					>
-						<button
-							class="workspace-profile-btn"
-							id="workspaceProfileButton"
-							type="button"
-						>
-							<div class="workspace-avatar" id="workspaceAvatar">S</div>
-							<div class="workspace-profile-info">
-								<span class="workspace-profile-name" id="workspaceUserChip"
-									>Student</span
-								>
-								<span class="workspace-profile-class" id="workspaceClassChip"
-									>Class</span
-								>
-							</div>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								class="dropdown-arrow"
-							>
-								<polyline points="6 9 12 15 18 9"></polyline>
-							</svg>
-						</button>
-						<div class="workspace-dropdown-menu" id="studentWorkspaceMenu">
-							<div class="menu-header">
-								<span class="user-email" id="workspaceMenuName">Student</span>
-								<span class="menu-meta" id="workspaceMenuMeta">Class</span>
-							</div>
-							<div class="menu-divider"></div>
-							<button
-								type="button"
-								class="menu-item"
-								id="studentDropdownSettings"
-							>
-								Account Settings
-							</button>
-							<button
-								type="button"
-								class="menu-item logout-item"
-								id="studentDropdownLogout"
-							>
-								Logout
-							</button>
+					<div class="workspace-brand">
+						<div class="workspace-logo">S</div>
+						<div>
+							<h1>Student Workspace</h1>
+							<p id="workspaceSubtitle">Track exams, progress, and feedback</p>
 						</div>
 					</div>
-				</div>
+					<div class="workspace-actions">
+						<button class="workspace-btn ghost" id="workspaceLoginButton">
+							Sign In
+						</button>
+						<div
+							class="workspace-dropdown workspace-profile-dropdown"
+							id="studentWorkspaceDropdown"
+						>
+							<button
+								class="workspace-profile-btn"
+								id="workspaceProfileButton"
+								type="button"
+							>
+								<div class="workspace-avatar" id="workspaceAvatar">S</div>
+								<div class="workspace-profile-info">
+									<span class="workspace-profile-name" id="workspaceUserChip"
+										>Student</span
+									>
+									<span class="workspace-profile-class" id="workspaceClassChip"
+										>Class</span
+									>
+								</div>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									class="dropdown-arrow"
+								>
+									<polyline points="6 9 12 15 18 9"></polyline>
+								</svg>
+							</button>
+							<div class="workspace-dropdown-menu" id="studentWorkspaceMenu">
+								<div class="menu-header">
+									<span class="user-email" id="workspaceMenuName">Student</span>
+									<span class="menu-meta" id="workspaceMenuMeta">Class</span>
+								</div>
+								<div class="menu-divider"></div>
+								<button
+									type="button"
+									class="menu-item"
+									id="studentDropdownSettings"
+								>
+									Account Settings
+								</button>
+								<button
+									type="button"
+									class="menu-item logout-item"
+									id="studentDropdownLogout"
+								>
+									Logout
+								</button>
+							</div>
+						</div>
+					</div>
 				</div>
 			</header>
 
@@ -358,18 +389,18 @@
 								class="performance-list"
 							></div>
 						</div>
-						</div>
-					</section>
-					<!-- Full-width section for game-like tabs (My Games, Tournament).
+					</div>
+				</section>
+				<!-- Full-width section for game-like tabs (My Games, Tournament).
 					     These need horizontal room for card grids and stat tiles,
 					     so they live outside the 2-col layout. -->
-					<section class="workspace-grid workspace-grid--full-width">
-						<div class="workspace-column">
-							<div
-								class="workspace-panel games-panel"
-								data-workspace-section="tournament"
-								style="margin-bottom: 2rem"
-							>
+				<section class="workspace-grid workspace-grid--full-width">
+					<div class="workspace-column">
+						<div
+							class="workspace-panel games-panel"
+							data-workspace-section="tournament"
+							style="margin-bottom: 2rem"
+						>
 							<div class="panel-header">
 								<div>
 									<h2>Tournament Arena</h2>
@@ -482,41 +513,63 @@
 									</button>
 								</div>
 							</div>
-							<div class="game-quick-join" role="region" aria-label="Join a game with a code">
+							<div
+								class="game-quick-join"
+								role="region"
+								aria-label="Join a game with a code"
+							>
 								<div class="game-quick-join-copy">
 									<strong>Have a game code?</strong>
-									<span>Enter the 6-character code shared by your teacher.</span>
+									<span
+										>Enter the 6-character code shared by your teacher.</span
+									>
 								</div>
 								<div class="game-quick-join-form">
-									<label class="sr-only" for="studentGameJoinCode">Game code</label>
-									<input id="studentGameJoinCode" class="workspace-input" type="text" inputmode="text" maxlength="6" autocomplete="off" placeholder="ABC123" />
-									<button type="button" class="workspace-btn" id="studentGameJoinCodeBtn">Join game</button>
+									<label class="sr-only" for="studentGameJoinCode"
+										>Game code</label
+									>
+									<input
+										id="studentGameJoinCode"
+										class="workspace-input"
+										type="text"
+										inputmode="text"
+										maxlength="6"
+										autocomplete="off"
+										placeholder="ABC123"
+									/>
+									<button
+										type="button"
+										class="workspace-btn"
+										id="studentGameJoinCodeBtn"
+									>
+										Join game
+									</button>
 								</div>
 							</div>
 							<div id="studentGameStatsMain" class="game-arena-stats"></div>
 							<div id="studentGameListMain" class="game-card-list"></div>
 							<div id="studentGameResultsMain" class="game-results-list"></div>
 						</div>
-						</div>
-					</section>
+					</div>
+				</section>
 
-					<section class="workspace-grid workspace-grid--full-width">
-						<div class="workspace-column">
-							<aside class="workspace-sidebar">
-								<div class="workspace-panel" data-workspace-section="results">
-									<div class="panel-header">
-										<div>
-											<h2>Recent Results</h2>
-											<p>Your latest scores and attempts</p>
-										</div>
+				<section class="workspace-grid workspace-grid--full-width">
+					<div class="workspace-column">
+						<aside class="workspace-sidebar">
+							<div class="workspace-panel" data-workspace-section="results">
+								<div class="panel-header">
+									<div>
+										<h2>Recent Results</h2>
+										<p>Your latest scores and attempts</p>
 									</div>
-									<div id="studentResults" class="results-list"></div>
 								</div>
-							</aside>
-						</div>
-					</section>
-				</main>
-			</div>
+								<div id="studentResults" class="results-list"></div>
+							</div>
+						</aside>
+					</div>
+				</section>
+			</main>
+		</div>
 
 		<div id="studentAuthModal" class="modal auth-modal">
 			<div class="modal-content small-modal auth-modal-content student-auth">
@@ -704,7 +757,11 @@
 					>
 				</div>
 				<div class="modal-body">
-					<nav class="profile-tabs profile-tabs-v2" role="tablist" aria-label="Account sections">
+					<nav
+						class="profile-tabs profile-tabs-v2"
+						role="tablist"
+						aria-label="Account sections"
+					>
 						<button
 							type="button"
 							class="profile-tab-btn active"
@@ -742,8 +799,12 @@
 								stroke="currentColor"
 								stroke-width="2"
 							>
-								<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-								<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+								<path
+									d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+								></path>
+								<path
+									d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+								></path>
 							</svg>
 							<span>Update Profile</span>
 						</button>
@@ -842,7 +903,10 @@
 						<div class="profile-insight-grid">
 							<article class="profile-insight-card accent-blue">
 								<div class="profile-insight-kicker">Level Progress</div>
-								<div class="profile-insight-value" id="studentProfileProgressValue">
+								<div
+									class="profile-insight-value"
+									id="studentProfileProgressValue"
+								>
 									0 / 200 XP to next level
 								</div>
 								<div class="profile-progress-bar">
@@ -851,7 +915,10 @@
 										id="studentProfileProgressFill"
 									></div>
 								</div>
-								<div class="profile-progress-copy" id="studentProfileSeasonSummary">
+								<div
+									class="profile-progress-copy"
+									id="studentProfileSeasonSummary"
+								>
 									Play a live game to unlock your performance summary
 								</div>
 							</article>
@@ -872,7 +939,9 @@
 								</div>
 								<div class="profile-insight-copy">
 									Latest reward:
-									<strong id="studentProfileLatestRewardValue">No reward yet</strong>
+									<strong id="studentProfileLatestRewardValue"
+										>No reward yet</strong
+									>
 								</div>
 							</article>
 						</div>
@@ -881,7 +950,10 @@
 						<div class="profile-form-card">
 							<div class="profile-form-card-header">
 								<h3>Update Profile</h3>
-								<p>Send a request to your teacher or admin to change your details.</p>
+								<p>
+									Send a request to your teacher or admin to change your
+									details.
+								</p>
 							</div>
 							<form id="studentProfileForm" class="profile-form">
 								<div class="form-row">
@@ -917,7 +989,9 @@
 								</div>
 								<div class="form-row">
 									<div class="form-group half">
-										<label for="studentProfileNumberInput">Student Number</label>
+										<label for="studentProfileNumberInput"
+											>Student Number</label
+										>
 										<input
 											type="text"
 											id="studentProfileNumberInput"
@@ -934,7 +1008,9 @@
 									</div>
 								</div>
 								<div class="form-group">
-									<label for="studentProfileNote">Request Note (optional)</label>
+									<label for="studentProfileNote"
+										>Request Note (optional)</label
+									>
 									<textarea
 										id="studentProfileNote"
 										class="form-control"
@@ -1014,16 +1090,31 @@
 				<div class="modal-header training-modal-header">
 					<h3 id="trainingModalTitle">Training Practice Test</h3>
 					<div class="training-header-meta">
-						<button type="button" class="close-modal-btn" onclick="closeTrainingModal()">&times;</button>
+						<button
+							type="button"
+							class="close-modal-btn"
+							onclick="closeTrainingModal()"
+						>
+							&times;
+						</button>
 					</div>
 				</div>
-				<div class="training-progress-strip" id="trainingProgressStrip" aria-label="Question progress"></div>
+				<div
+					class="training-progress-strip"
+					id="trainingProgressStrip"
+					aria-label="Question progress"
+				></div>
 				<div class="modal-body" id="studentTrainingStage">
 					<!-- Training questions and results render here -->
 				</div>
 			</div>
 		</div>
-		<div id="trainingImageLightbox" class="training-lightbox" hidden onclick="closeTrainingLightbox()">
+		<div
+			id="trainingImageLightbox"
+			class="training-lightbox"
+			hidden
+			onclick="closeTrainingLightbox()"
+		>
 			<img id="trainingLightboxImg" alt="preview" />
 		</div>
 	</body>

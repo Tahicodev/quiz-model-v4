@@ -36,7 +36,9 @@ function normalizeQuestionToken(value) {
 }
 
 function splitQuestionOptionText(value, answer = '') {
-	const raw = String(value || '').replace(/\r/g, '').trim();
+	const raw = String(value || '')
+		.replace(/\r/g, '')
+		.trim();
 	if (!raw) return [];
 
 	const splitBy = (regex) =>
@@ -56,7 +58,9 @@ function splitQuestionOptionText(value, answer = '') {
 		const normalizedAnswer = normalizeQuestionToken(answer);
 		const includesFullAnswer =
 			normalizedAnswer &&
-			commaParts.some((part) => normalizeQuestionToken(part) === normalizedAnswer);
+			commaParts.some(
+				(part) => normalizeQuestionToken(part) === normalizedAnswer,
+			);
 		const safeCommaList =
 			commaParts.length >= 2 &&
 			commaParts.length <= 8 &&
@@ -74,7 +78,9 @@ function splitQuestionOptionText(value, answer = '') {
 		const normalizedAnswer = normalizeQuestionToken(answer);
 		if (
 			!normalizedAnswer ||
-			camelParts.some((part) => normalizeQuestionToken(part) === normalizedAnswer)
+			camelParts.some(
+				(part) => normalizeQuestionToken(part) === normalizedAnswer,
+			)
 		) {
 			return camelParts;
 		}
@@ -115,7 +121,8 @@ function normalizeQuestionOptionEntry(entry, answer = '', fallbackIndex = 0) {
 		splitTextOptions.forEach((textValue, textIndex) => {
 			const normalizedText = String(textValue || '').trim();
 			const resolvedText =
-				normalizedText || (optionImage ? `Image ${fallbackIndex + textIndex + 1}` : '');
+				normalizedText ||
+				(optionImage ? `Image ${fallbackIndex + textIndex + 1}` : '');
 			if (!resolvedText && !optionImage) return;
 
 			normalizedEntries.push({
@@ -136,7 +143,9 @@ function normalizeQuestionOptionEntry(entry, answer = '', fallbackIndex = 0) {
 				: null;
 		if (imageData) {
 			const imageSrc =
-				typeof imageData === 'object' ? imageData.image || '' : String(imageData || '');
+				typeof imageData === 'object'
+					? imageData.image || ''
+					: String(imageData || '');
 			normalizedEntries.push({
 				text: `Image ${fallbackIndex + 1}`,
 				image: imageSrc,
@@ -217,7 +226,8 @@ function resolveQuestionReferences(rawQuestions, questionBank = []) {
 				10,
 			);
 			if (
-				(!entry.question && !entry.text) &&
+				!entry.question &&
+				!entry.text &&
 				Number.isInteger(candidateIndex) &&
 				bank[candidateIndex]
 			) {
@@ -306,12 +316,10 @@ function isQuestionMultiAnswer(question = {}) {
 }
 
 function hasExplicitOrderQuestionSignal(question = {}) {
-	const rawType = String(question.type || question.questionType || '').toLowerCase();
-	const textBlob = [
-		question.question,
-		question.text,
-		question.instruction,
-	]
+	const rawType = String(
+		question.type || question.questionType || '',
+	).toLowerCase();
+	const textBlob = [question.question, question.text, question.instruction]
 		.map((item) => String(item || '').toLowerCase())
 		.join(' ');
 	if (
@@ -397,7 +405,10 @@ function validateAndFixQuestions(questionsArray) {
 		if (question.allowMultipleAnswers === undefined) {
 			question.allowMultipleAnswers = false;
 		}
-		if (question.allowMultipleAnswers && String(question.answer || '').includes(',')) {
+		if (
+			question.allowMultipleAnswers &&
+			String(question.answer || '').includes(',')
+		) {
 			const answerTokens = String(question.answer || '')
 				.split(',')
 				.map((item) => item.trim())
@@ -417,10 +428,7 @@ function validateAndFixQuestions(questionsArray) {
 		const rawType = String(question.type || question.questionType || '')
 			.trim()
 			.toLowerCase();
-		if (
-			rawType === 'draggable' &&
-			!hasExplicitOrderQuestionSignal(question)
-		) {
+		if (rawType === 'draggable' && !hasExplicitOrderQuestionSignal(question)) {
 			question.type = 'multiple-choice';
 			question.questionType = 'multiple-choice';
 			question.isDraggable = false;
@@ -625,7 +633,8 @@ function getExamMode() {
 		'Training mode: loading from quizQuestions (default/uncategorized questions)',
 	);
 	const trainingSettings = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')) || '{}',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')) ||
+			'{}',
 	);
 
 	return {
@@ -647,7 +656,8 @@ function loadQuizMode() {
 		console.log('Setting up EXAM mode with exam:', examActiveSession.examName);
 
 		const questionBank = JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+				'[]',
 		);
 		let resolvedExamQuestions = resolveQuestionReferences(
 			examActiveSession.questions || [],
@@ -678,7 +688,7 @@ function loadQuizMode() {
 		const examSettings = examActiveSession.settings || {};
 
 		// Configure quiz with exam settings
-				Object.assign(quizConfig, {
+		Object.assign(quizConfig, {
 			totalQuestions: currentExam.questions.length,
 			timeLimit: examActiveSession.timeLimit || currentExam.duration * 60,
 			penalty: examSettings.penalty ?? examActiveSession.penalty ?? 0,
@@ -743,7 +753,8 @@ function loadQuizMode() {
 
 	// Load questions from training storage
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	questions = savedQuestions;
 
@@ -928,9 +939,7 @@ function hasStudentTakenExam(examId, studentNumber, studentClass) {
 
 function sanitizeStudentInfo(raw = {}) {
 	return {
-		numero: String(
-			raw.numero ?? raw.number ?? raw.studentNumber ?? '',
-		).trim(),
+		numero: String(raw.numero ?? raw.number ?? raw.studentNumber ?? '').trim(),
 		name: String(raw.name ?? raw.fullName ?? raw.username ?? '').trim(),
 		class: String(raw.class ?? raw.className ?? '').trim(),
 	};
@@ -957,15 +966,14 @@ function isStudentAllowedInSession(activeSession = {}, studentInfo = {}) {
 			numero: entry.number ?? entry.numero ?? entry.studentNumber ?? '',
 			class: entry.className ?? entry.class ?? entry.classId ?? '',
 		});
-		const allowedClassId = String(entry.classId ?? '').trim().toLowerCase();
+		const allowedClassId = String(entry.classId ?? '')
+			.trim()
+			.toLowerCase();
 		const studentClass = normalizedStudent.class.toLowerCase();
 		const classMatch =
 			allowed.class.toLowerCase() === studentClass ||
 			(allowedClassId && allowedClassId === studentClass);
-		return (
-			allowed.numero === normalizedStudent.numero &&
-			classMatch
-		);
+		return allowed.numero === normalizedStudent.numero && classMatch;
 	});
 }
 
@@ -1017,7 +1025,9 @@ function initQuiz() {
 				return;
 			}
 
-			const sessionStudent = sanitizeStudentInfo(activeSession.studentInfo || {});
+			const sessionStudent = sanitizeStudentInfo(
+				activeSession.studentInfo || {},
+			);
 			const formStudent = getStudentInfoFromForm();
 			const studentInfo = sessionStudent.numero ? sessionStudent : formStudent;
 
@@ -1044,7 +1054,10 @@ function initQuiz() {
 				activeSession.studentInfo = studentInfo;
 				activeSession.startedAt =
 					activeSession.startedAt || new Date().toISOString();
-				localStorage.setItem('examActiveSession', JSON.stringify(activeSession));
+				localStorage.setItem(
+					'examActiveSession',
+					JSON.stringify(activeSession),
+				);
 			}
 		} catch (error) {
 			console.error('Exam allowlist validation failed:', error);
@@ -1057,7 +1070,8 @@ function initQuiz() {
 	if (currentMode === quizModes.exam && currentExam && currentExam.questions) {
 		console.log('EXAM MODE: Using questions from examActiveSession');
 		const questionBank = JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+				'[]',
 		);
 		questions = resolveQuestionReferences(currentExam.questions, questionBank);
 
@@ -1073,7 +1087,8 @@ function initQuiz() {
 		// TRAINING MODE: Load from quizQuestions storage
 		console.log('TRAINING MODE: Using questions from quizQuestions storage');
 		const savedQuestions = JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+				'[]',
 		);
 
 		questions = savedQuestions.length > 0 ? [...savedQuestions] : [];
@@ -1100,7 +1115,8 @@ function initQuiz() {
 		if (currentMode === quizModes.exam && currentExam) {
 			console.log('Trying to load default questions for exam...');
 			const savedQuestions = JSON.parse(
-				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+				JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+					'[]',
 			);
 			if (savedQuestions && savedQuestions.length > 0) {
 				// Use the first 5 questions as a fallback and shuffle them
@@ -1242,9 +1258,9 @@ function showQuestion(index) {
 		}
   `;
 
-  // Render code snippet if it's a code question
-  if (q.type === 'code' && q.codeSnippet) {
-	const codeHtml = `
+	// Render code snippet if it's a code question
+	if (q.type === 'code' && q.codeSnippet) {
+		const codeHtml = `
 	  <div class="code-snippet-block">
         <div class="code-snippet-header">
           <div class="code-snippet-dots">
@@ -1257,14 +1273,14 @@ function showQuestion(index) {
         <pre><code class="language-${q.codeLanguage || 'javascript'}">${escapeHtml(q.codeSnippet)}</code></pre>
       </div>
 	`;
-	questionEl.innerHTML += codeHtml;
-	
-	// Trigger syntax highlighting
-	const codeBlock = questionEl.querySelector('.code-snippet-block pre code');
-	if (codeBlock && typeof hljs !== 'undefined') {
-		hljs.highlightElement(codeBlock);
+		questionEl.innerHTML += codeHtml;
+
+		// Trigger syntax highlighting
+		const codeBlock = questionEl.querySelector('.code-snippet-block pre code');
+		if (codeBlock && typeof hljs !== 'undefined') {
+			hljs.highlightElement(codeBlock);
+		}
 	}
-  }
 
 	// Get option data with images if available
 	console.log('Question options raw:', q.options);
@@ -1278,7 +1294,8 @@ function showQuestion(index) {
 		.filter(Boolean);
 
 	// Get the effective question type (delegate to sub-type if it's a code question)
-	const effectiveQuestionType = (q.type === 'code' && q.codeAnswerMode) ? q.codeAnswerMode : questionType;
+	const effectiveQuestionType =
+		q.type === 'code' && q.codeAnswerMode ? q.codeAnswerMode : questionType;
 
 	// Handle different question types
 	if (effectiveQuestionType === 'draggable') {
@@ -1360,7 +1377,9 @@ function showQuestion(index) {
 		// ... (matching pairs code remains unchanged) ...
 		// Parse the answer to get the pairs
 		const answer = q.answer || '';
-		const pairs = (answer.includes('|') ? answer.split('|') : answer.split(',')).map((pair) => {
+		const pairs = (
+			answer.includes('|') ? answer.split('|') : answer.split(',')
+		).map((pair) => {
 			// Support '→', '-->', and ':' separators
 			let left, right;
 			if (pair.includes('→')) {
@@ -1575,7 +1594,9 @@ function showQuestion(index) {
 		// but keep the structure we set up above
 		const questionTextEl = questionEl.querySelector('.question-text');
 		if (questionTextEl) {
-			window.safeSetHTML ? window.safeSetHTML(questionTextEl, questionWithInputs, true) : (questionTextEl.innerHTML = questionWithInputs);
+			window.safeSetHTML
+				? window.safeSetHTML(questionTextEl, questionWithInputs, true)
+				: (questionTextEl.innerHTML = questionWithInputs);
 			questionTextEl.classList.add('fill-blank-question');
 		}
 
@@ -1968,7 +1989,8 @@ function selectOption(selectedIndex) {
 
 function submitMultiSelect(questionIndex) {
 	const q = questions[questionIndex];
-	const questionType = q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
+	const questionType =
+		q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
 	const selected = [];
 	document
 		.querySelectorAll(`input[name="option-${questionIndex}"]:checked`)
@@ -2248,8 +2270,12 @@ function validateFillBlankAnswer() {
 }
 
 function initializeDefaultQuestions() {
-	const existingQuestions = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions'));
-	const existingSettings = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings'));
+	const existingQuestions = JSON.stringify(
+		window.__DI_CONTAINER__.repo.getAll_sync('questions'),
+	);
+	const existingSettings = JSON.stringify(
+		window.__DI_CONTAINER__.repo.getAll_sync('settings'),
+	);
 
 	// Initialize quizSettings if it doesn't exist
 	if (!existingSettings) {
@@ -2293,7 +2319,8 @@ function initializeDefaultQuestions() {
 
 	// Always load the latest questions
 	const currentQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	if (currentQuestions && Array.isArray(currentQuestions)) {
 		questions = [...currentQuestions];
@@ -2307,7 +2334,8 @@ function initializeDefaultQuestions() {
 }
 
 function ensureQuizSettings() {
-	const settings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
+	const settings =
+		window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {};
 
 	// If settings is empty or invalid, recreate it
 	if (!settings || Object.keys(settings).length === 0) {
@@ -2386,7 +2414,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		// an admin has added or removed questions.
 		if (document.getElementById('welcome-page')) {
 			const bootstrap = window.__legacyBridgeBootstrap;
-			if (typeof bootstrap === 'function' && !window.__trainingBootstrapStarted) {
+			if (
+				typeof bootstrap === 'function' &&
+				!window.__trainingBootstrapStarted
+			) {
 				window.__trainingBootstrapStarted = true;
 				Promise.resolve(bootstrap())
 					.catch(() => undefined)
@@ -2434,7 +2465,9 @@ document.addEventListener('DOMContentLoaded', () => {
 							// Set up the exam mode
 							currentMode = quizModes.exam;
 							const questionBank = JSON.parse(
-								JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+								JSON.stringify(
+									window.__DI_CONTAINER__.repo.getAll_sync('questions'),
+								) || '[]',
 							);
 							const activeSession = JSON.parse(
 								localStorage.getItem('examActiveSession') || 'null',
@@ -2473,59 +2506,69 @@ document.addEventListener('DOMContentLoaded', () => {
 								timeLimit:
 									(useSessionQuestions ? activeSession.timeLimit : 0) ||
 									currentExam.duration * 60,
-					penalty: sessionSettings.penalty ?? 0,
-				});
+								penalty: sessionSettings.penalty ?? 0,
+							});
 
-				// Create the authoritative Prisma attempt before the first question
-				// is shown. Keep the local snapshot as a resilient offline/cache
-				// fallback, but use its server id whenever the API is available.
-				const runtimeStudentInfo = JSON.parse(
-					sessionStorage.getItem('studentInfo') || 'null',
-				);
-				const signedInStudent = window.Auth?.getCurrentUser?.() || {};
-				const fallbackAllowedStudent = {
-					number:
-						runtimeStudentInfo?.numero ||
-						signedInStudent.studentNumber ||
-						signedInStudent.numero ||
-						'',
-					name: runtimeStudentInfo?.name || signedInStudent.name || signedInStudent.username || '',
-					classId:
-						runtimeStudentInfo?.classId ||
-						signedInStudent.classId ||
-						signedInStudent.class_id ||
-						'',
-					className:
-						runtimeStudentInfo?.class ||
-						signedInStudent.className ||
-						'',
-				};
-				const runtimeSession = {
-					...(activeSession || {}),
-					examId,
-					examName: currentExam.name,
-					duration: currentExam.duration,
-					timeLimit: quizConfig.timeLimit,
-					passingScore: currentExam.passing_score ?? currentExam.passingScore ?? 50,
-					questions: resolvedQuestions,
-					studentInfo: runtimeStudentInfo,
-					allowedStudents:
-						Array.isArray(activeSession?.allowedStudents) && activeSession.allowedStudents.length
-							? activeSession.allowedStudents
-							: [fallbackAllowedStudent],
-				};
-				try {
-					if (window.API?.raw && !runtimeSession.id) {
-						const created = await window.API.raw('POST', '/sessions', {
-							exam_id: examId,
-							duration_minutes: currentExam.duration || 60,
-						});
-						runtimeSession.id = created?.id || '';
-					}
-				} catch (sessionError) {
-					console.warn('Exam API session unavailable; keeping local recovery state:', sessionError);
-				}
-				localStorage.setItem('examActiveSession', JSON.stringify(runtimeSession));
+							// Create the authoritative Prisma attempt before the first question
+							// is shown. Keep the local snapshot as a resilient offline/cache
+							// fallback, but use its server id whenever the API is available.
+							const runtimeStudentInfo = JSON.parse(
+								sessionStorage.getItem('studentInfo') || 'null',
+							);
+							const signedInStudent = window.Auth?.getCurrentUser?.() || {};
+							const fallbackAllowedStudent = {
+								number:
+									runtimeStudentInfo?.numero ||
+									signedInStudent.studentNumber ||
+									signedInStudent.numero ||
+									'',
+								name:
+									runtimeStudentInfo?.name ||
+									signedInStudent.name ||
+									signedInStudent.username ||
+									'',
+								classId:
+									runtimeStudentInfo?.classId ||
+									signedInStudent.classId ||
+									signedInStudent.class_id ||
+									'',
+								className:
+									runtimeStudentInfo?.class || signedInStudent.className || '',
+							};
+							const runtimeSession = {
+								...(activeSession || {}),
+								examId,
+								examName: currentExam.name,
+								duration: currentExam.duration,
+								timeLimit: quizConfig.timeLimit,
+								passingScore:
+									currentExam.passing_score ?? currentExam.passingScore ?? 50,
+								questions: resolvedQuestions,
+								studentInfo: runtimeStudentInfo,
+								allowedStudents:
+									Array.isArray(activeSession?.allowedStudents) &&
+									activeSession.allowedStudents.length
+										? activeSession.allowedStudents
+										: [fallbackAllowedStudent],
+							};
+							try {
+								if (window.API?.raw && !runtimeSession.id) {
+									const created = await window.API.raw('POST', '/sessions', {
+										exam_id: examId,
+										duration_minutes: currentExam.duration || 60,
+									});
+									runtimeSession.id = created?.id || '';
+								}
+							} catch (sessionError) {
+								console.warn(
+									'Exam API session unavailable; keeping local recovery state:',
+									sessionError,
+								);
+							}
+							localStorage.setItem(
+								'examActiveSession',
+								JSON.stringify(runtimeSession),
+							);
 
 							// Hide welcome page and show quiz content
 							if (document.getElementById('welcome-page')) {
@@ -2548,16 +2591,27 @@ document.addEventListener('DOMContentLoaded', () => {
 			if (typeof bootstrap === 'function') {
 				Promise.resolve(bootstrap())
 					.then(() => {
-						const refreshedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams') || [];
-						if (refreshedExams.some((entry) => String(entry.id) === String(examId))) {
+						const refreshedExams =
+							window.__DI_CONTAINER__.repo.getAll_sync('exams') || [];
+						if (
+							refreshedExams.some(
+								(entry) => String(entry.id) === String(examId),
+							)
+						) {
 							window.location.reload();
 							return;
 						}
 						console.warn('Exam ID not found after bootstrap:', examId);
 					})
-					.catch(() => console.warn('Unable to refresh exam data for:', examId));
+					.catch(() =>
+						console.warn('Unable to refresh exam data for:', examId),
+					);
 			} else {
-				window.addEventListener('quiz:bootstrap-ready', () => window.location.reload(), { once: true });
+				window.addEventListener(
+					'quiz:bootstrap-ready',
+					() => window.location.reload(),
+					{ once: true },
+				);
 				console.warn('Exam ID not found in database:', examId);
 			}
 		}
@@ -2596,10 +2650,15 @@ function validateForm() {
 	}
 
 	const hasStudentAccounts = window.Auth?.getUsers
-		? window.Auth.getUsers().some((u) => u.role === 'student' && u.status !== 'disabled')
+		? window.Auth.getUsers().some(
+				(u) => u.role === 'student' && u.status !== 'disabled',
+			)
 		: false;
 
-	if (hasStudentAccounts && (!window.Auth?.isStudent || !window.Auth.isStudent())) {
+	if (
+		hasStudentAccounts &&
+		(!window.Auth?.isStudent || !window.Auth.isStudent())
+	) {
 		showToast('Please sign in to start the quiz', 'error');
 		return false;
 	}
@@ -2757,7 +2816,9 @@ function startTrainingMode() {
 	// If completion screen replaced the quiz container, restore base quiz markup.
 	const hasQuizContent = Boolean(document.querySelector('.quiz-content'));
 	if (!hasQuizContent && quizContainer && initialQuizContainerMarkup) {
-		window.safeSetHTML ? window.safeSetHTML(quizContainer, initialQuizContainerMarkup, true) : (quizContainer.innerHTML = initialQuizContainerMarkup);
+		window.safeSetHTML
+			? window.safeSetHTML(quizContainer, initialQuizContainerMarkup, true)
+			: (quizContainer.innerHTML = initialQuizContainerMarkup);
 		questionEl = null;
 		optionsEl = null;
 		timerEl = null;
@@ -2779,7 +2840,8 @@ function startTrainingMode() {
 
 	// Load all default questions from quizQuestions (not just exam questions)
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	const defaultQuestions = savedQuestions || [];
 
@@ -2848,15 +2910,24 @@ async function syncExamAttemptToApi(activeSession, answers) {
 	if (!activeSession?.id || !window.API?.raw) return null;
 	for (const entry of answers || []) {
 		if (!entry?.questionId || entry.userAnswer == null) continue;
-		await window.API.raw('POST', `/sessions/${encodeURIComponent(activeSession.id)}/answer`, {
-			session_id: activeSession.id,
-			question_id: entry.questionId,
-			answer: typeof entry.userAnswer === 'string'
-				? entry.userAnswer
-				: JSON.stringify(entry.userAnswer),
-		});
+		await window.API.raw(
+			'POST',
+			`/sessions/${encodeURIComponent(activeSession.id)}/answer`,
+			{
+				session_id: activeSession.id,
+				question_id: entry.questionId,
+				answer:
+					typeof entry.userAnswer === 'string'
+						? entry.userAnswer
+						: JSON.stringify(entry.userAnswer),
+			},
+		);
 	}
-	return window.API.raw('POST', `/sessions/${encodeURIComponent(activeSession.id)}/submit`, {});
+	return window.API.raw(
+		'POST',
+		`/sessions/${encodeURIComponent(activeSession.id)}/submit`,
+		{},
+	);
 }
 
 async function endQuiz() {
@@ -2941,29 +3012,38 @@ async function endQuiz() {
 				// shape to Result.user_id using the signed-in student's UUID/number.
 				if (!apiResult) {
 					try {
-						const dbResults = window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
+						const dbResults =
+							window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
 						const canonical = {
-						id: sessionResult.id,
-						examId: activeSession.examId,
-						examTitle: activeSession.examName,
-						userId: window.Auth?.getCurrentUser?.()?.id || '',
-						numero: studentInfo.numero,
-						name: studentInfo.name,
-						studentName: studentInfo.name,
-						class: studentInfo.class,
-						score,
-						totalPoints,
-						totalQuestions: quizConfig.totalQuestions,
-						earnedPoints: score,
-						timeSpent: quizConfig.timeLimit - timeRemaining,
-						date: sessionResult.completedAt,
-						mode: 'exam',
-						passed: sessionResult.results.passed,
+							id: sessionResult.id,
+							examId: activeSession.examId,
+							examTitle: activeSession.examName,
+							userId: window.Auth?.getCurrentUser?.()?.id || '',
+							numero: studentInfo.numero,
+							name: studentInfo.name,
+							studentName: studentInfo.name,
+							class: studentInfo.class,
+							score,
+							totalPoints,
+							totalQuestions: quizConfig.totalQuestions,
+							earnedPoints: score,
+							timeSpent: quizConfig.timeLimit - timeRemaining,
+							date: sessionResult.completedAt,
+							mode: 'exam',
+							passed: sessionResult.results.passed,
 						};
-						const withoutDuplicate = dbResults.filter((item) => String(item.id) !== String(canonical.id));
-						window.__DI_CONTAINER__.repo.setAll_sync('results', [...withoutDuplicate, canonical]);
+						const withoutDuplicate = dbResults.filter(
+							(item) => String(item.id) !== String(canonical.id),
+						);
+						window.__DI_CONTAINER__.repo.setAll_sync('results', [
+							...withoutDuplicate,
+							canonical,
+						]);
 					} catch (persistError) {
-						console.warn('Could not persist exam result to the API bridge:', persistError);
+						console.warn(
+							'Could not persist exam result to the API bridge:',
+							persistError,
+						);
 					}
 				}
 
@@ -3093,7 +3173,7 @@ async function endQuiz() {
             Go to Workspace
           </button>
         `
-			}
+				}
         <button class="action-btn" onclick="togglePreviousResults()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -3109,7 +3189,8 @@ async function endQuiz() {
 	// Verify storage after saving
 	if (currentMode === quizModes.exam) {
 		const savedResults = JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('results')) ||
+				'[]',
 		);
 		console.log('Verified quizResults in localStorage:', savedResults); // Debug log
 
@@ -3129,7 +3210,9 @@ function showCorrection() {
 	const correctionsDiv = document.getElementById('corrections');
 	const resultsDiv = document.getElementById('previous-results');
 	const correctionsButton = document.querySelector('.quiz-actions .action-btn');
-	const resultsButton = document.querySelector('.quiz-actions .action-btn:last-child');
+	const resultsButton = document.querySelector(
+		'.quiz-actions .action-btn:last-child',
+	);
 
 	if (!correctionsDiv) return;
 
@@ -3147,7 +3230,9 @@ function showCorrection() {
 
 	if (correctionsDiv.classList.contains('hidden')) {
 		const questionList = Array.isArray(questions) ? questions : [];
-		const total = quizConfig?.totalQuestions ? Math.min(questionList.length, quizConfig.totalQuestions) : questionList.length;
+		const total = quizConfig?.totalQuestions
+			? Math.min(questionList.length, quizConfig.totalQuestions)
+			: questionList.length;
 
 		correctionsDiv.innerHTML = `
       <div class="corrections-container">
@@ -3156,16 +3241,22 @@ function showCorrection() {
 					.slice(0, total)
 					.map((q, i) => {
 						const qText = q.text || q.question || 'Question';
-						const questionType = q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
-						const multiAnswer = questionType === 'multiple-choice' && isQuestionMultiAnswer(q);
-						let typeLabel = '<span class="question-type-badge">Multiple choice</span>';
+						const questionType =
+							q.type || (q.isDraggable ? 'draggable' : 'multiple-choice');
+						const multiAnswer =
+							questionType === 'multiple-choice' && isQuestionMultiAnswer(q);
+						let typeLabel =
+							'<span class="question-type-badge">Multiple choice</span>';
 
 						if (questionType === 'odd-one-out') {
-							typeLabel = '<span class="question-type-badge odd-one-out">Find the odd one out</span>';
+							typeLabel =
+								'<span class="question-type-badge odd-one-out">Find the odd one out</span>';
 						} else if (questionType === 'draggable') {
-							typeLabel = '<span class="question-type-badge draggable">Arrange in order</span>';
+							typeLabel =
+								'<span class="question-type-badge draggable">Arrange in order</span>';
 						} else if (questionType === 'matching-pairs') {
-							typeLabel = '<span class="question-type-badge matching-pairs">Match the pairs</span>';
+							typeLabel =
+								'<span class="question-type-badge matching-pairs">Match the pairs</span>';
 						}
 
 						let correctAnswerDisplay = q.answer || '';
@@ -3173,7 +3264,12 @@ function showCorrection() {
 							const answers = splitChoiceAnswerTokens(q.answer);
 							correctAnswerDisplay =
 								'<div class="answer-badges-container">' +
-								answers.map((ans) => `<span class="correct-answer-badge">${escapeHtml(ans)}</span>`).join('') +
+								answers
+									.map(
+										(ans) =>
+											`<span class="correct-answer-badge">${escapeHtml(ans)}</span>`,
+									)
+									.join('') +
 								'</div>';
 						} else {
 							correctAnswerDisplay = `<span class="correct-answer-badge">${escapeHtml(q.answer || '')}</span>`;
@@ -3259,7 +3355,9 @@ function showPreviousResults() {
     </table>
   `;
 
-	window.safeSetHTML ? window.safeSetHTML(container, resultsHtml, true) : (container.innerHTML = resultsHtml);
+	window.safeSetHTML
+		? window.safeSetHTML(container, resultsHtml, true)
+		: (container.innerHTML = resultsHtml);
 }
 
 function saveQuizResult() {
@@ -3312,7 +3410,8 @@ function saveQuizResult() {
 function applyWelcomeSettings() {
 	const savedSettings = ensureQuizSettings();
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	const welcomePage = document.getElementById('welcome-page');
 
@@ -3324,22 +3423,22 @@ function applyWelcomeSettings() {
 		}
 
 		// Update message
-			let welcomeMessage = welcomePage.querySelector('.welcome-message');
-			if (!welcomeMessage) {
-				welcomeMessage = document.createElement('p');
-				welcomeMessage.className = 'welcome-message';
-				// insertBefore requires the reference node to be a *child* of
-				// welcomePage. On the legacy exam page #student-info lives inside
-				// #welcome-page, but on the entry/auth-gate page it is a sibling,
-				// so insertBefore would throw NotFoundError there. Only use it as
-				// the anchor when it's actually a descendant; otherwise append.
-				const studentForm = welcomePage.querySelector('#student-info');
-				if (studentForm) {
-					welcomePage.insertBefore(welcomeMessage, studentForm);
-				} else {
-					welcomePage.appendChild(welcomeMessage);
-				}
+		let welcomeMessage = welcomePage.querySelector('.welcome-message');
+		if (!welcomeMessage) {
+			welcomeMessage = document.createElement('p');
+			welcomeMessage.className = 'welcome-message';
+			// insertBefore requires the reference node to be a *child* of
+			// welcomePage. On the legacy exam page #student-info lives inside
+			// #welcome-page, but on the entry/auth-gate page it is a sibling,
+			// so insertBefore would throw NotFoundError there. Only use it as
+			// the anchor when it's actually a descendant; otherwise append.
+			const studentForm = welcomePage.querySelector('#student-info');
+			if (studentForm) {
+				welcomePage.insertBefore(welcomeMessage, studentForm);
+			} else {
+				welcomePage.appendChild(welcomeMessage);
 			}
+		}
 		if (savedSettings.welcomeMessage) {
 			welcomeMessage.textContent = savedSettings.welcomeMessage;
 		}
@@ -3353,7 +3452,8 @@ document.addEventListener('DOMContentLoaded', applyWelcomeSettings);
 function applyAllSettings() {
 	const savedSettings = ensureQuizSettings();
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 
 	let settingsToUse = savedSettings;
@@ -3592,13 +3692,14 @@ function togglePreviousResults() {
 				localStorage.getItem('examResults') || '{}',
 			);
 			const currentExamData = examResults[currentExam.id];
-			const examStudents = identity && currentExamData?.students
-				? currentExamData.students.filter(
-					(r) =>
-						String(r.studentInfo.numero) === String(identity.numero) &&
-						String(r.studentInfo.class) === String(identity.class),
-				)
-				: currentExamData?.students || [];
+			const examStudents =
+				identity && currentExamData?.students
+					? currentExamData.students.filter(
+							(r) =>
+								String(r.studentInfo.numero) === String(identity.numero) &&
+								String(r.studentInfo.class) === String(identity.class),
+						)
+					: currentExamData?.students || [];
 
 			resultsDiv.innerHTML = `
                 <table class="results-table">
@@ -3761,7 +3862,8 @@ function showStudentResults() {
 				examResults.push({
 					exam: examData.examName || 'Exam',
 					score: `${student.score}/${student.totalQuestions}`,
-					time: Math.floor(student.timeSpent / 60) +
+					time:
+						Math.floor(student.timeSpent / 60) +
 						':' +
 						String(student.timeSpent % 60).padStart(2, '0'),
 					date: student.date,
@@ -3792,9 +3894,7 @@ function showStudentResults() {
 							<tr>
 								<td>Training</td>
 								<td>${r.score}/${r.totalQuestions}</td>
-								<td>${Math.floor(r.time / 60)}:${String(
-									r.time % 60,
-								).padStart(2, '0')}</td>
+								<td>${Math.floor(r.time / 60)}:${String(r.time % 60).padStart(2, '0')}</td>
 								<td>${new Date(r.date).toLocaleString()}</td>
 							</tr>
 						`,
@@ -3837,9 +3937,11 @@ window.handleDraggableNext = handleDraggableNext;
 // The old matching-pairs "Next" handler was retired when matching became
 // auto-progressing. Keep a safe global bridge for legacy inline markup so the
 // retired name can never abort the whole student bundle at load time.
-window.handleMatchingPairsNext = window.handleMatchingPairsNext || (() => {
-	if (typeof checkAllPairsMatched === 'function') checkAllPairsMatched();
-});
+window.handleMatchingPairsNext =
+	window.handleMatchingPairsNext ||
+	(() => {
+		if (typeof checkAllPairsMatched === 'function') checkAllPairsMatched();
+	});
 window.handleDropZoneClick = handleDropZoneClick;
 window.handleWordClick = handleWordClick;
 window.validateFillBlankAnswer = validateFillBlankAnswer;
@@ -4104,7 +4206,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	window.exportAllSettings = function () {
 		const settings = {
-			quizSettings: (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {}),
+			quizSettings:
+				window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {},
 			quizQuestions: window.__DI_CONTAINER__.repo.getAll_sync('questions'),
 			quizExams: window.__DI_CONTAINER__.repo.getAll_sync('exams'),
 			quizClasses: window.__DI_CONTAINER__.repo.getAll_sync('classes'),
@@ -4254,10 +4357,12 @@ document.addEventListener('DOMContentLoaded', function () {
 function refreshAllUIComponents() {
 	// Refresh quiz settings
 	const savedSettings = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')) || '{}',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')) ||
+			'{}',
 	);
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 
 	// Update colors and styles
@@ -4950,7 +5055,8 @@ function startExam(examId) {
 		const savedExams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 		const matchedExam = savedExams.find((exam) => exam.id === examId);
 		const questionBank = JSON.parse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+				'[]',
 		);
 		const activeSession = JSON.parse(
 			localStorage.getItem('examActiveSession') || 'null',
@@ -7484,7 +7590,8 @@ window.addEventListener('resize', function () {
 // Ensure all questions have difficulty field
 function ensureQuestionsHaveDifficulty() {
 	const savedQuestions = JSON.parse(
-		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) || '[]',
+		JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
+			'[]',
 	);
 	const questions = savedQuestions || [];
 
@@ -7527,7 +7634,8 @@ function testLocalStorageStructure() {
 	console.log('=== Testing localStorage structure ===');
 
 	// Test quizSettings
-	const settings = (window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {});
+	const settings =
+		window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {};
 	console.log('quizSettings:', settings);
 	console.log('quizSettings keys:', Object.keys(settings));
 	console.log('quizSettings has penalty:', settings.penalty !== undefined);
