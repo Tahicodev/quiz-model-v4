@@ -79,6 +79,9 @@
   // unauthorized tables simply skip the network sync for signed-in students.
   var STUDENT_WRITABLE_TABLES = {
     results: true,
+    users: true,
+    profile_requests: true,
+    games: true,
   };
 
   function getSessionRole() {
@@ -532,6 +535,9 @@
     // that explains the data is local-only and will retry in the background.
     var syncFailureCount = Object.create(null);
     var MAX_SYNC_FAILURES_BEFORE_TOAST = 3;
+    // Per-table debounce state for setAll_sync / setValue_sync bulk writes.
+    var syncDebounceTimers = Object.create(null);
+    var syncDebouncePending = Object.create(null);
 
     function notifySyncError(table, message) {
       var labels = {
@@ -722,7 +728,18 @@
       setAll_sync: function (table, data) {
         cache[table] = data;
         writeAll(table, data);
-        syncToApi(table, data, 'bulk');
+        // Debounce bulk syncs per table. Realtime sessions (tournaments, games)
+        // can fire setAll_sync many times per second from socket events.
+        // Without debouncing, each call becomes an immediate POST to the bulk
+        // endpoint which quickly exhausts the API rate limit (429).
+        syncDebouncePending[table] = data;
+        if (syncDebounceTimers[table]) clearTimeout(syncDebounceTimers[table]);
+        syncDebounceTimers[table] = setTimeout(function () {
+          delete syncDebounceTimers[table];
+          var latest = syncDebouncePending[table];
+          delete syncDebouncePending[table];
+          syncToApi(table, latest, 'bulk');
+        }, 800);
       },
 
       setValue_sync: function (table, value) {

@@ -129,6 +129,25 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
+// The bulk endpoint is an internal sync bus used by the legacy bridge. It is
+// called from the authenticated client on every realtime state change (games,
+// tournaments, results…). A general 300 req/min limit is far too tight for a
+// multi-player session, so give /bulk its own, higher allowance and skip the
+// general limit for those requests by mounting it before the general use().
+const bulkLimiter = rateLimit({
+	windowMs: 60 * 1000, // 1 minute
+	max: 2000,           // coalescing in the client reduces volume, but allow headroom
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { code: 'RATE_LIMITED', message: 'Too many bulk sync requests' },
+	skip: (req) => {
+		// Only apply to authenticated requests — anonymous calls fall through
+		// to the general limiter which will reject them anyway.
+		return !req.headers.authorization;
+	},
+});
+app.use('/api/v1/bulk', bulkLimiter);
+
 // Stricter rate limit for auth endpoints (login, register, refresh)
 const authLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes

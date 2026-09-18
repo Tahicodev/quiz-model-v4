@@ -192,6 +192,7 @@ function hydrateLegacyPayload(data) {
     subjects: Array.isArray(user.subjects)
       ? user.subjects
       : parseJson(user.subjects_json, []),
+    ...(user.gamification_json ? parseJson(user.gamification_json, {}) : {}),
   }));
 
   const questions = (data.questions || []).map((question) => {

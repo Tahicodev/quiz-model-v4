@@ -52,7 +52,7 @@ function simpleHash(rows) {
 // Bulk remains an admin API by default. The legacy student workspace needs
 // one compatibility write for locally-computed training results; keep that
 // exception explicit and deny every other table before it reaches Prisma.
-const STUDENT_BULK_TABLES = new Set(['results']);
+const STUDENT_BULK_TABLES = new Set(['results', 'users', 'games']);
 
 // Teachers share the realtime settings panel with admins (data-roles="admin,teacher"
 // in admin.html) so they need to be able to save their own preferences. The
@@ -180,6 +180,16 @@ const SANITIZERS = {
         subjects_json: row.subjects_json ?? (Array.isArray(row.subjects) ? JSON.stringify(row.subjects) : null),
       }),
       status: pickStr(row.status) || 'active',
+      ...(row.exp != null || row.badges != null || row.tournamentScores != null
+        ? {
+            gamification_json: JSON.stringify({
+              exp: row.exp,
+              badges: row.badges,
+              tournamentScores: row.tournamentScores,
+              lastGamificationSyncAt: row.lastGamificationSyncAt,
+            }),
+          }
+        : {}),
       ...(row.last_login && { last_login: pickDate(row.last_login) }),
       ...(row.lastLogin && { last_login: pickDate(row.lastLogin) }),
     };
@@ -1066,6 +1076,17 @@ router.post('/:table', async (req, res, next) => {
     req._bulkActorRole = req.user?.role;
 
     let { items } = req.body;
+
+    if (req.user?.role === ROLES.STUDENT) {
+      if (table === 'users' && Array.isArray(items)) {
+        // Students can only update their own user record
+        items = items.filter((u) => String(u.id) === String(req.user.id));
+      } else if (table === 'games') {
+        // Students should not bulk-update games. Return a successful no-op
+        // so the frontend's local cache synchronization is satisfied.
+        return res.status(201).json({ count: 0 });
+      }
+    }
 
     // Settings accept either {items:[{key,value}]} or {value:{k:v}} shape.
     if (table === 'settings' && !Array.isArray(items)) {

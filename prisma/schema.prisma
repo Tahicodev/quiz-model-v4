@@ -67,10 +67,11 @@ model User {
   email         String? // contact email (teachers, admins)
   phone         String? // contact phone
   subjects_json String? // JSON array of subject names (teachers)
-  status        String    @default("active") // active | inactive | suspended
-  last_login    DateTime?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  status            String    @default("active") // active | inactive | suspended
+  gamification_json String? // JSON object containing exp, badges, and tournamentScores
+  last_login        DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
 
   school                   School              @relation(fields: [school_id], references: [id], onDelete: Cascade)
   class                    Class?              @relation(fields: [class_id], references: [id], onDelete: SetNull)
