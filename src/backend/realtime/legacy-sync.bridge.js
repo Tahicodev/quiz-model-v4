@@ -110,11 +110,11 @@ export function registerLegacySyncHandlers(io) {
 
 			const schoolId = String(jwtUser.school_id || '').trim();
 			if (socket.role === 'admin') {
+				// Device list only. Replaying cached gamification here used to
+				// re-apply the same payload on every identify (including the
+				// 10s connection monitor), which wrote localStorage and POSTed
+				// /bulk/gamification in a loop until the API returned 429.
 				broadcastClients(schoolId);
-				const cache = schoolId ? syncCache.get(schoolId) : null;
-				if (cache?.gamification) {
-					socket.emit('admin:syncGamification', cache.gamification);
-				}
 			} else {
 				if (schoolId) {
 					const cache = syncCache.get(schoolId);
@@ -179,7 +179,9 @@ export function registerLegacySyncHandlers(io) {
 				const cache = syncCache.get(schoolId) || {};
 				cache.users = cleanPayload;
 				syncCache.set(schoolId, cache);
-				io.to(`school:${schoolId}`).emit('admin:syncUsers', cleanPayload);
+				io.to(`school:${schoolId}`)
+					.except(socket.id)
+					.emit('admin:syncUsers', cleanPayload);
 				logger.debug(
 					{ schoolId, count: cleanUsers.length },
 					'legacy bridge: users synced',
@@ -197,7 +199,9 @@ export function registerLegacySyncHandlers(io) {
 				const cache = syncCache.get(schoolId) || {};
 				cache.games = payload;
 				syncCache.set(schoolId, cache);
-				io.to(`school:${schoolId}`).emit('admin:syncGames', payload);
+				io.to(`school:${schoolId}`)
+					.except(socket.id)
+					.emit('admin:syncGames', payload);
 				logger.debug(
 					{ schoolId, count: payload.quizGames?.length || 0 },
 					'legacy bridge: games synced',
@@ -214,7 +218,9 @@ export function registerLegacySyncHandlers(io) {
 				const cache = syncCache.get(schoolId) || {};
 				cache.gamification = payload;
 				syncCache.set(schoolId, cache);
-				io.to(`school:${schoolId}`).emit('admin:syncGamification', payload);
+				io.to(`school:${schoolId}`)
+					.except(socket.id)
+					.emit('admin:syncGamification', payload);
 			} else {
 				io.emit('admin:syncGamification', payload);
 			}

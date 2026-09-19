@@ -120,15 +120,6 @@ import { requireRole } from './middleware/role.js';
 import { ROLES } from '../shared/constants.js';
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
-const apiLimiter = rateLimit({
-	windowMs: 60 * 1000, // 1 minute
-	max: 300,
-	standardHeaders: true,
-	legacyHeaders: false,
-	message: { code: 'RATE_LIMITED', message: 'Too many requests' },
-});
-app.use('/api/', apiLimiter);
-
 // The bulk endpoint is an internal sync bus used by the legacy bridge. It is
 // called from the authenticated client on every realtime state change (games,
 // tournaments, results…). A general 300 req/min limit is far too tight for a
@@ -140,13 +131,18 @@ const bulkLimiter = rateLimit({
 	standardHeaders: true,
 	legacyHeaders: false,
 	message: { code: 'RATE_LIMITED', message: 'Too many bulk sync requests' },
-	skip: (req) => {
-		// Only apply to authenticated requests — anonymous calls fall through
-		// to the general limiter which will reject them anyway.
-		return !req.headers.authorization;
-	},
 });
 app.use('/api/v1/bulk', bulkLimiter);
+
+const apiLimiter = rateLimit({
+	windowMs: 60 * 1000, // 1 minute
+	max: 300,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { code: 'RATE_LIMITED', message: 'Too many requests' },
+	skip: (req) => /\/api\/v1\/bulk(\/|$)/.test(req.originalUrl || req.url || ''),
+});
+app.use('/api/', apiLimiter);
 
 // Stricter rate limit for auth endpoints (login, register, refresh)
 const authLimiter = rateLimit({

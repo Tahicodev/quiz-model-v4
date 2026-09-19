@@ -538,6 +538,34 @@
     // Per-table debounce state for setAll_sync / setValue_sync bulk writes.
     var syncDebounceTimers = Object.create(null);
     var syncDebouncePending = Object.create(null);
+    var lastBulkPayload = Object.create(null);
+    var bulkRetryAfterUntil = Object.create(null);
+
+    function scheduleBulkSync(table, data) {
+      var serialized;
+      try {
+        serialized = JSON.stringify(data);
+      } catch (_) {
+        serialized = null;
+      }
+      if (serialized && lastBulkPayload[table] === serialized) {
+        return;
+      }
+      if (serialized) lastBulkPayload[table] = serialized;
+      syncDebouncePending[table] = data;
+      if (syncDebounceTimers[table]) clearTimeout(syncDebounceTimers[table]);
+      var delay = 800;
+      var retryAt = bulkRetryAfterUntil[table] || 0;
+      if (retryAt > Date.now()) {
+        delay = Math.max(delay, retryAt - Date.now());
+      }
+      syncDebounceTimers[table] = setTimeout(function () {
+        delete syncDebounceTimers[table];
+        var latest = syncDebouncePending[table];
+        delete syncDebouncePending[table];
+        syncToApi(table, latest, 'bulk');
+      }, delay);
+    }
 
     function notifySyncError(table, message) {
       var labels = {
@@ -655,6 +683,10 @@
                 var parsed = JSON.parse(body);
                 detail = parsed?.error?.message || parsed?.message || body;
               } catch (_) { /* keep raw */ }
+              if (res.status === 429) {
+                var retryAfter = Number(res.headers && res.headers.get && res.headers.get('Retry-After'));
+                bulkRetryAfterUntil[table] = Date.now() + Math.max(retryAfter || 5, 5) * 1000;
+              }
               notifySyncError(table, 'HTTP ' + res.status + ' — ' + String(detail).slice(0, 200));
             });
           }
@@ -732,20 +764,15 @@
         // can fire setAll_sync many times per second from socket events.
         // Without debouncing, each call becomes an immediate POST to the bulk
         // endpoint which quickly exhausts the API rate limit (429).
-        syncDebouncePending[table] = data;
-        if (syncDebounceTimers[table]) clearTimeout(syncDebounceTimers[table]);
-        syncDebounceTimers[table] = setTimeout(function () {
-          delete syncDebounceTimers[table];
-          var latest = syncDebouncePending[table];
-          delete syncDebouncePending[table];
-          syncToApi(table, latest, 'bulk');
-        }, 800);
+        scheduleBulkSync(table, data);
       },
 
       setValue_sync: function (table, value) {
         cache[table] = value;
         writeAll(table, value);
-        syncToApi(table, value, 'bulk');
+        // Object stores (gamification) used to POST on every localStorage
+        // write. Socket reconnects and echo handlers then stampeded /bulk.
+        scheduleBulkSync(table, value);
       },
 
       create_sync: function (table, data) {

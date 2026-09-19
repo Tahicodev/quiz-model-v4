@@ -23,6 +23,12 @@
 	let lastGamificationSyncFingerprint = '';
 	let lastGamificationSyncAt = 0;
 	const GAMIFICATION_SYNC_COOLDOWN_MS = 60000;
+	let lastAppliedGamificationFingerprint = '';
+	// Settings "Realtime" is a broadcast feature on top of the shared SaaS
+	// socket. Never disconnect that socket — games/tournaments still need it.
+	let realtimeFeatureEnabled = false;
+	let lastInitialStaffSyncAt = 0;
+	const INITIAL_STAFF_SYNC_COOLDOWN_MS = 30000;
 
 	// Initialize realtime settings UI on document load
 	document.addEventListener('DOMContentLoaded', () => {
@@ -104,17 +110,196 @@
 	 */
 	let _reconnectBlockedUntil = 0;
 
-	function connectToRealtimeServer() {
-		const serverHost = getServerHost();
+	function isSharedCachedSocket(socket) {
+		return Boolean(socket && socket === window.__QUIZ_LEGACY_SOCKET__);
+	}
 
-		// Check if Socket.IO is loaded
+	function gamificationPayloadFingerprint(payload) {
+		return JSON.stringify([
+			payload?.quizGamification || null,
+			Object.prototype.hasOwnProperty.call(payload || {}, 'quizTournamentActive')
+				? payload.quizTournamentActive
+				: null,
+			payload?.quizTournamentsHistory || null,
+		]);
+	}
+
+	function applyIncomingGamificationPayload(payload = {}) {
+		const fingerprint = gamificationPayloadFingerprint(payload);
+		if (
+			fingerprint &&
+			fingerprint === lastAppliedGamificationFingerprint
+		) {
+			return false;
+		}
+		try {
+			if (payload.quizGamification) {
+				localStorage.setItem(
+					'quizGamification',
+					JSON.stringify(payload.quizGamification),
+				);
+			}
+			if (
+				Object.prototype.hasOwnProperty.call(payload, 'quizTournamentActive')
+			) {
+				if (payload.quizTournamentActive) {
+					localStorage.setItem(
+						'quizTournamentActive',
+						JSON.stringify(payload.quizTournamentActive),
+					);
+				} else {
+					localStorage.removeItem('quizTournamentActive');
+				}
+			}
+			if (Array.isArray(payload.quizTournamentsHistory)) {
+				localStorage.setItem(
+					'quizTournamentsHistory',
+					JSON.stringify(payload.quizTournamentsHistory),
+				);
+			}
+			if (payload.syncedAt) {
+				localStorage.setItem('quizGamificationSyncedAt', payload.syncedAt);
+			}
+			lastAppliedGamificationFingerprint = fingerprint;
+			window.dispatchEvent(new CustomEvent('quiz:gamification-updated'));
+			if (typeof window.loadGamificationUI === 'function') {
+				window.loadGamificationUI();
+			}
+			return true;
+		} catch (error) {
+			console.error('Failed to apply incoming gamification sync:', error);
+			return false;
+		}
+	}
+
+	function scheduleInitialStaffSync() {
+		if (!realtimeFeatureEnabled) return;
+		const canSyncUsers =
+			typeof window.Auth?.isAdmin === 'function' && window.Auth.isAdmin();
+		if (!canSyncUsers) return;
+		const now = Date.now();
+		if (now - lastInitialStaffSyncAt < INITIAL_STAFF_SYNC_COOLDOWN_MS) {
+			return;
+		}
+		lastInitialStaffSyncAt = now;
+		if (typeof window.syncUsersToClients === 'function') {
+			setTimeout(() => window.syncUsersToClients(), 500);
+		}
+		if (typeof window.syncGamesToClients === 'function') {
+			setTimeout(() => window.syncGamesToClients(), 800);
+		}
+		if (typeof window.syncGamificationSettings === 'function') {
+			setTimeout(() => window.syncGamificationSettings(), 1100);
+		}
+	}
+
+	function bindRealtimeSocketListeners(socket) {
+		if (!socket || socket.__quizRealtimeSettingsBound) return;
+		socket.__quizRealtimeSettingsBound = true;
+
+		socket.on('connect', () => {
+			if (!realtimeFeatureEnabled) return;
+			console.log('Connected to realtime server:', getServerHost());
+			socket.emit(
+				'identify',
+				window.buildAdminIdentifyPayload
+					? window.buildAdminIdentifyPayload()
+					: { role: 'admin' },
+			);
+			updateRealtimeStatus('connected');
+			scheduleInitialStaffSync();
+		});
+
+		socket.on('clients:update', (clients) => {
+			if (!realtimeFeatureEnabled) return;
+			console.log('Received clients update:', clients);
+			updateDeviceHistory(clients);
+		});
+
+		socket.on('disconnect', () => {
+			if (!realtimeFeatureEnabled) return;
+			console.log('Disconnected from realtime server');
+			updateRealtimeStatus('disconnected');
+			updateDeviceHistory([]);
+		});
+
+		socket.on('connect_error', (error) => {
+			if (!realtimeFeatureEnabled) return;
+			const msg = (error && error.message) || 'Unknown error';
+			if (/unauthorized|invalid.*token|expired.*token/i.test(msg)) {
+				console.warn(
+					'[Realtime] Connection auth error (server may be offline):',
+					msg,
+				);
+				_reconnectBlockedUntil = Date.now() + 30_000;
+			} else {
+				console.warn('[Realtime] Connection error:', msg);
+			}
+			updateRealtimeStatus('error', msg);
+		});
+
+		socket.on('admin:auth:error', (payload = {}) => {
+			if (!realtimeFeatureEnabled) return;
+			const message =
+				payload.message ||
+				'Realtime admin access was rejected. Sign in with an admin or teacher account and retry.';
+			console.warn('[Realtime] Admin auth failed:', message);
+			updateRealtimeStatus('error', message);
+			showRealtimeStatus(message, 'error');
+		});
+
+		socket.on('admin:syncUsers', (payload = {}) => {
+			if (!Array.isArray(payload.quizUsers)) return;
+			window.__DI_CONTAINER__.repo.setAll_sync('users', payload.quizUsers);
+			if (payload.syncedAt) {
+				localStorage.setItem('quizUsersSyncedAt', payload.syncedAt);
+			}
+		});
+
+		socket.on('school:data-reset', (payload = {}) => {
+			console.log(
+				'[realtime-settings] School data was reset by',
+				payload.by || 'an admin',
+				'- clearing local caches',
+			);
+			try {
+				if (typeof window.__legacyBridgeResetCache === 'function') {
+					window.__legacyBridgeResetCache();
+				}
+				try {
+					localStorage.removeItem('quizSetupComplete');
+					localStorage.removeItem('quizQuickStartDismissedAt');
+				} catch (_) {}
+			} catch (err) {
+				console.warn(
+					'[realtime-settings] school:data-reset handler failed',
+					err,
+				);
+			}
+		});
+
+		socket.on('admin:syncGames', (payload = {}) => {
+			if (!Array.isArray(payload.quizGames)) return;
+			window.__DI_CONTAINER__.repo.setAll_sync('games', payload.quizGames);
+			if (payload.syncedAt) {
+				localStorage.setItem('quizGamesSyncedAt', payload.syncedAt);
+			}
+		});
+
+		socket.on('admin:syncGamification', (payload = {}) => {
+			applyIncomingGamificationPayload(payload);
+		});
+	}
+
+	function connectToRealtimeServer() {
+		realtimeFeatureEnabled = true;
+
 		if (typeof io === 'undefined') {
 			console.warn('Socket.IO library not loaded');
 			showRealtimeStatus('Socket.IO not loaded', 'error');
 			return;
 		}
 
-		// Back off from reconnecting after repeated auth failures
 		if (_reconnectBlockedUntil > Date.now()) {
 			console.warn(
 				`[Realtime] Skipping reconnect — blocked until ${new Date(_reconnectBlockedUntil).toLocaleTimeString()}`,
@@ -123,165 +308,26 @@
 		}
 
 		try {
-			// Disconnect previous connection if exists
-			if (realtimeSocket) {
-				realtimeSocket.disconnect();
-			}
-
-			realtimeSocket = window.getSocket();
-			if (!realtimeSocket) {
+			const socket = window.getSocket();
+			if (!socket) {
 				updateRealtimeStatus('disconnected');
 				return;
 			}
 
-			// Connection events
-			realtimeSocket.on('connect', () => {
-				console.log('Connected to realtime server:', serverHost);
-				realtimeSocket.emit(
-					'identify',
-					window.buildAdminIdentifyPayload
-						? window.buildAdminIdentifyPayload()
-						: { role: 'admin' },
-				);
-				updateRealtimeStatus('connected');
-				const canSyncUsers =
-					typeof window.Auth?.isAdmin === 'function' && window.Auth.isAdmin();
-				if (canSyncUsers) {
-					if (typeof window.syncUsersToClients === 'function') {
-						setTimeout(() => window.syncUsersToClients(), 500);
-					}
-					if (typeof window.syncGamesToClients === 'function') {
-						setTimeout(() => window.syncGamesToClients(), 800);
-					}
-					if (typeof window.syncGamificationSettings === 'function') {
-						setTimeout(() => window.syncGamificationSettings(), 1100);
-					}
-				}
-			});
+			realtimeSocket = socket;
+			bindRealtimeSocketListeners(socket);
 
-			realtimeSocket.on('clients:update', (clients) => {
-				console.log('Received clients update:', clients);
-				// Use history update logic
-				updateDeviceHistory(clients);
-			});
-
-			realtimeSocket.on('disconnect', () => {
-				console.log('Disconnected from realtime server');
-				updateRealtimeStatus('disconnected');
-				// Mark all as offline
-				updateDeviceHistory([]);
-			});
-
-			realtimeSocket.on('connect_error', (error) => {
-				const msg = (error && error.message) || 'Unknown error';
-				// Auth failures are expected when the server is unreachable or token expired — log once, then back off
-				if (/unauthorized|invalid.*token|expired.*token/i.test(msg)) {
-					console.warn(
-						'[Realtime] Connection auth error (server may be offline):',
-						msg,
-					);
-					_reconnectBlockedUntil = Date.now() + 30_000; // back off 30s
-				} else {
-					console.warn('[Realtime] Connection error:', msg);
-				}
-				updateRealtimeStatus('error', msg);
-			});
-
-			realtimeSocket.on('admin:auth:error', (payload = {}) => {
-				const message =
-					payload.message ||
-					'Realtime admin access was rejected. Sign in with an admin or teacher account and retry.';
-				console.warn('[Realtime] Admin auth failed:', message);
-				updateRealtimeStatus('error', message);
-				showRealtimeStatus(message, 'error');
-			});
-
-			realtimeSocket.on('admin:syncUsers', (payload = {}) => {
-				if (!Array.isArray(payload.quizUsers)) return;
-				window.__DI_CONTAINER__.repo.setAll_sync('users', payload.quizUsers);
-				if (payload.syncedAt) {
-					localStorage.setItem('quizUsersSyncedAt', payload.syncedAt);
-				}
-				window.dispatchEvent(new Event('storage'));
-			});
-
-			// Another tab ran Settings → Data → Reset Data: this socket also
-			// holds stale caches; mirror the same cleanup the other realtime
-			// scripts do (drop mirrors without syncing, then re-bootstrap).
-			realtimeSocket.on('school:data-reset', (payload = {}) => {
-				console.log(
-					'[realtime-settings] School data was reset by',
-					payload.by || 'an admin',
-					'- clearing local caches',
-				);
-				try {
-					if (typeof window.__legacyBridgeResetCache === 'function') {
-						window.__legacyBridgeResetCache();
-					}
-					try {
-						localStorage.removeItem('quizSetupComplete');
-						localStorage.removeItem('quizQuickStartDismissedAt');
-					} catch (_) {}
-				} catch (err) {
-					console.warn(
-						'[realtime-settings] school:data-reset handler failed',
-						err,
-					);
-				}
-			});
-
-			realtimeSocket.on('admin:syncGames', (payload = {}) => {
-				if (!Array.isArray(payload.quizGames)) return;
-				window.__DI_CONTAINER__.repo.setAll_sync('games', payload.quizGames);
-				if (payload.syncedAt) {
-					localStorage.setItem('quizGamesSyncedAt', payload.syncedAt);
-				}
-				window.dispatchEvent(new Event('storage'));
-			});
-
-			realtimeSocket.on('admin:syncGamification', (payload = {}) => {
-				try {
-					if (payload.quizGamification) {
-						localStorage.setItem(
-							'quizGamification',
-							JSON.stringify(payload.quizGamification),
-						);
-					}
-					if (
-						Object.prototype.hasOwnProperty.call(
-							payload,
-							'quizTournamentActive',
-						)
-					) {
-						if (payload.quizTournamentActive) {
-							localStorage.setItem(
-								'quizTournamentActive',
-								JSON.stringify(payload.quizTournamentActive),
-							);
-						} else {
-							localStorage.removeItem('quizTournamentActive');
-						}
-					}
-					if (Array.isArray(payload.quizTournamentsHistory)) {
-						localStorage.setItem(
-							'quizTournamentsHistory',
-							JSON.stringify(payload.quizTournamentsHistory),
-						);
-					}
-					if (payload.syncedAt) {
-						localStorage.setItem('quizGamificationSyncedAt', payload.syncedAt);
-					}
-					window.dispatchEvent(new CustomEvent('quiz:gamification-updated'));
-					window.dispatchEvent(new Event('storage'));
-				} catch (error) {
-					console.error('Failed to apply incoming gamification sync:', error);
-				}
-			});
-
-			// Store host in localStorage
 			const hostInput = document.getElementById('setting-serverHost');
 			if (hostInput && hostInput.value.trim()) {
 				localStorage.setItem('quizServerHost', hostInput.value.trim());
+			}
+
+			if (socket.connected) {
+				updateRealtimeStatus('connected');
+				socket.emit('identify', getAdminIdentifyPayload());
+				scheduleInitialStaffSync();
+			} else {
+				socket.connect();
 			}
 		} catch (error) {
 			console.error('Failed to connect to realtime server:', error);
@@ -290,15 +336,11 @@
 	}
 
 	/**
-	 * Disconnect from realtime server
+	 * Stop broadcasting from Settings without killing the shared SaaS socket.
 	 */
 	function disconnectFromRealtimeServer() {
-		if (realtimeSocket) {
-			realtimeSocket.disconnect();
-			realtimeSocket = null;
-		}
+		realtimeFeatureEnabled = false;
 		updateRealtimeStatus('disconnected');
-		// Mark all as offline
 		updateDeviceHistory([]);
 	}
 
@@ -1308,10 +1350,14 @@
 		let done = false;
 		userSyncInProgress = true;
 
+		const isCachedSocket = isSharedCachedSocket(tempSocket);
+		const teardownTempSocket = () => {
+			if (!isCachedSocket) tempSocket.disconnect();
+		};
 		const finishTempSync = () => {
 			if (!done) done = true;
 			userSyncInProgress = false;
-			tempSocket.disconnect();
+			teardownTempSocket();
 		};
 
 		tempSocket.on('connect', () => {
@@ -1328,6 +1374,14 @@
 			);
 			finishTempSync();
 		});
+
+		if (tempSocket.connected) {
+			tempSocket.emit('identify', getAdminIdentifyPayload());
+			emitSync(tempSocket, true);
+			done = true;
+			userSyncInProgress = false;
+			return;
+		}
 
 		tempSocket.on('disconnect', () => {
 			if (!done) {
@@ -1451,13 +1505,18 @@
 		}
 		let done = false;
 
+		const isCachedSocket = isSharedCachedSocket(tempSocket);
+		const teardownTempSocket = () => {
+			if (!isCachedSocket) tempSocket.disconnect();
+		};
+
 		tempSocket.on('connect', () => {
 			tempSocket.emit('identify', getAdminIdentifyPayload());
 			if (!syncWithAuthoritativeList(tempSocket, true)) {
 				emitSync(tempSocket, localGames, true);
 			}
 			done = true;
-			setTimeout(() => tempSocket.disconnect(), 500);
+			setTimeout(teardownTempSocket, 500);
 		});
 
 		tempSocket.on('connect_error', (error) => {
@@ -1466,8 +1525,17 @@
 				'[Realtime] Temp sync games connection failed (server may be offline):',
 				error && error.message,
 			);
-			tempSocket.disconnect();
+			teardownTempSocket();
 		});
+
+		if (tempSocket.connected) {
+			tempSocket.emit('identify', getAdminIdentifyPayload());
+			if (!syncWithAuthoritativeList(tempSocket, true)) {
+				emitSync(tempSocket, localGames, true);
+			}
+			done = true;
+			return;
+		}
 	};
 
 	function buildGamificationSyncPayload(configOverride = null) {
@@ -1566,6 +1634,7 @@
 
 		const emitSync = (socketInstance, isTemp = false) => {
 			lastGamificationSyncFingerprint = gamificationFingerprint;
+			lastAppliedGamificationFingerprint = gamificationFingerprint;
 			lastGamificationSyncAt = Date.now();
 			socketInstance.emit('admin:syncGamification', payload);
 			localStorage.setItem('quizGamificationSyncedAt', payload.syncedAt);
