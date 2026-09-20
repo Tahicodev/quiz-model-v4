@@ -1,10 +1,34 @@
 // Results Management
 
+// Last rendered (filtered) result rows, used by export/import helpers.
+let lastVisibleResults = [];
+
 // Initialize results on page load
 document.addEventListener('DOMContentLoaded', function () {
 	loadResultsFilters();
 	loadResults();
+	// The SaaS bridge downloads the tenant's full history asynchronously
+	// (`/api/v1/bootstrap`) and dispatches this event when it lands. The
+	// initial load above may have only seen the local cache, so re-render the
+	// table + KPIs with the authoritative server data once it arrives.
+	window.addEventListener('quiz:bootstrap-ready', refreshResultsView);
 });
+
+// Re-load results and KPIs after data arrives (or any external refresh),
+// preserving whatever filters the user currently has active.
+function refreshResultsView() {
+	const read = (id) => (document.getElementById(id) || {}).value || '';
+	const hasActiveFilters =
+		read('resultFilterExam') ||
+		read('resultFilterClass') ||
+		read('resultFilterMode') ||
+		read('resultFilterDate') ||
+		read('resultFilterScore') ||
+		read('resultSearch');
+	loadResultsFilters();
+	loadResults();
+	if (hasActiveFilters) filterResults();
+}
 
 function loadResultsFilters() {
 	// Populate exam filter
@@ -68,6 +92,7 @@ function getResultDate(result) {
 	return (
 		result.date ||
 		result.dateTaken ||
+		result.date_taken ||
 		result.completedAt ||
 		result.timestamp ||
 		''
@@ -80,17 +105,19 @@ function normalizeResultEntry(result) {
 	return {
 		...result,
 		date: normalizedDate || result.date,
-		dateTaken: result.dateTaken || normalizedDate,
+		dateTaken: result.dateTaken || result.date_taken || normalizedDate,
 		name: result.name || result.studentName || '',
 		studentName: result.studentName || result.name || '',
 		numero: result.numero || result.studentNumber || '',
 		studentNumber: result.studentNumber || result.numero || '',
 		class: result.class || result.className || result.class_name || '',
 		className: result.className || result.class || result.class_name || '',
+		examId: result.examId || result.exam_id || '',
 		examTitle: result.examTitle || result.examName || result.exam || '',
 		examName: result.examName || result.examTitle || result.exam || '',
 		userId: result.userId || result.user_id || '',
 		user_id: result.user_id || result.userId || '',
+		classId: result.classId || result.class_id || '',
 		totalPoints: result.totalPoints ?? result.total_points,
 		earnedPoints: result.earnedPoints ?? result.earned_points,
 		grade20: result.grade20 ?? result.grade_20,
@@ -228,6 +255,46 @@ function resolveGameDisplayName(result) {
 	if (gameType.includes('hot')) return 'Game: Hot Potato';
 	if (gameType.includes('survivor')) return 'Game: Last Survivor';
 	return 'Game';
+}
+
+function resolveExamDisplayName(result, exams) {
+	if (isGameResult(result)) return resolveGameDisplayName(result);
+
+	let examDisplayName = null;
+
+	if (result.examId) {
+		const exam = exams.find((e) => String(e.id) === String(result.examId));
+		if (exam) examDisplayName = exam.title || exam.name;
+	}
+
+	if (!examDisplayName && result.examTitle) {
+		if (result.examTitle === 'Training Quiz') {
+			examDisplayName = 'Training Quiz';
+		} else {
+			const exam = exams.find(
+				(e) => e.title === result.examTitle || e.name === result.examTitle,
+			);
+			examDisplayName = exam ? exam.title || exam.name : result.examTitle;
+		}
+	}
+
+	if (!examDisplayName) {
+		examDisplayName =
+			result.mode === 'training' ? 'Training Quiz' : 'Unknown Exam';
+	}
+
+	return examDisplayName;
+}
+
+function formatResultTime(result) {
+	const timeValue = result.timeTaken || result.timeSpent || result.time || 0;
+	const minutes = Math.floor(timeValue / 60);
+	const seconds = timeValue % 60;
+	return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function csvCell(value) {
+	return '"' + String(value == null ? '' : value).replace(/"/g, '""') + '"';
 }
 
 function resolveParticipantNames(result) {
@@ -482,8 +549,12 @@ function displayResults(results) {
 	if (results.length === 0) {
 		tbody.innerHTML =
 			'<tr><td colspan="7" class="text-center">No results found.</td></tr>';
+		renderResultsKpis(results);
 		return;
 	}
+
+	// Remember what is currently rendered so export/import act on the visible set.
+	lastVisibleResults = results;
 
 	// Get exams, classes and users for display names
 	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
@@ -502,45 +573,7 @@ function displayResults(results) {
 				? resolveParticipantCount(result, participantNames)
 				: 0;
 			const winnerName = gameResult ? resolveWinnerName(result) : '';
-
-			// Find exam - check by examId or examTitle, handle both title and name fields
-			let exam = null;
-			let examDisplayName = null;
-
-			if (gameResult) {
-				examDisplayName = resolveGameDisplayName(result);
-			} else {
-				if (result.examId) {
-					exam = exams.find((e) => e.id === result.examId);
-					if (exam) {
-						examDisplayName = exam.title || exam.name;
-					}
-				}
-
-				// If not found by ID, try by title/name
-				if (!examDisplayName && result.examTitle) {
-					if (result.examTitle === 'Training Quiz') {
-						examDisplayName = 'Training Quiz';
-					} else {
-						exam = exams.find(
-							(e) =>
-								e.title === result.examTitle || e.name === result.examTitle,
-						);
-						if (exam) {
-							examDisplayName = exam.title || exam.name;
-						} else {
-							// Use the stored examTitle as fallback
-							examDisplayName = result.examTitle;
-						}
-					}
-				}
-
-				// Final fallback based on mode
-				if (!examDisplayName) {
-					examDisplayName =
-						result.mode === 'training' ? 'Training Quiz' : 'Unknown Exam';
-				}
-			}
+			const examDisplayName = resolveExamDisplayName(result, exams);
 
 			// Find class - check by classId or class name, fall back to the
 			// student's registered class from the users store.
@@ -552,10 +585,7 @@ function displayResults(results) {
 			const scoreOn20 = grade.toFixed(1);
 
 			// Format time
-			const timeValue = result.timeTaken || result.timeSpent || result.time || 0;
-			const minutes = Math.floor(timeValue / 60);
-			const seconds = timeValue % 60;
-			const timeFormatted = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+			const timeFormatted = formatResultTime(result);
 
 			// Generate unique ID if not present
 			const resultDate = getResultDate(result);
@@ -675,6 +705,222 @@ function displayResults(results) {
 			});
 		}
 	});
+
+	// Refresh the KPI cards whenever the table is (re)rendered.
+	renderResultsKpis(results);
+}
+
+// ── KPI cards ─────────────────────────────────────────────────────────────────
+function renderResultsKpis(results) {
+	const grid = document.getElementById('resultsKpiGrid');
+	const elTotal = document.getElementById('kpi-results-total');
+	const elAvg = document.getElementById('kpi-results-avg');
+	const elPassRate = document.getElementById('kpi-results-pass-rate');
+	const elTopClass = document.getElementById('kpi-results-top-class');
+	if (!grid || !elTotal) return;
+
+	const total = results.length;
+	let gradeSum = 0;
+	let passed = 0;
+	const classCounts = new Map();
+	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
+
+	results.forEach((r) => {
+		const { grade } = resolveResultScore(r);
+		if (Number.isFinite(grade)) {
+			gradeSum += grade;
+			if (grade >= 10) passed++;
+		}
+		const student = resolveStudentDisplay(r, users);
+		const klass = student.class || 'Unassigned';
+		classCounts.set(klass, (classCounts.get(klass) || 0) + 1);
+	});
+
+	const avg = total > 0 ? gradeSum / total : 0;
+	const passRate = total > 0 ? (passed / total) * 100 : 0;
+
+	let topClass = '-';
+	let topCount = 0;
+	classCounts.forEach((count, name) => {
+		// Strict greater keeps the first class seen when there is a tie.
+		if (count > topCount) {
+			topCount = count;
+			topClass = name;
+		}
+	});
+
+	elTotal.textContent = total;
+	elAvg.textContent = `${avg.toFixed(1)} / 20`;
+	elPassRate.textContent = `${passRate.toFixed(1)}%`;
+	elTopClass.textContent = topClass;
+	elTopClass.title = topCount > 0 ? `${topCount} attempt(s)` : '';
+}
+
+// ── Import / Export ─────────────────────────────────────────────────────────────
+function getExportRows() {
+	const rows = lastVisibleResults || [];
+	if (!rows.length) return [];
+
+	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
+	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
+	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
+
+	return rows.map((r) => {
+		const student = resolveStudentDisplay(r, users);
+		const classData = resolveResultClass(r, classes, student);
+		const { percent, grade } = resolveResultScore(r);
+		const klass = classData
+			? classData.className || classData.name
+			: student.class;
+		const source = r.deviceName
+			? r.deviceName + (r.deviceIp ? ` (@${r.deviceIp})` : '')
+			: 'Local';
+		return {
+			date: getResultDate(r) || '',
+			numero: student.numero,
+			student: student.name,
+			class: klass,
+			exam: resolveExamDisplayName(r, exams),
+			grade: Number(grade.toFixed(2)),
+			percent: Number(percent.toFixed(1)),
+			time: formatResultTime(r),
+			source,
+			mode: r.mode || (isGameResult(r) ? 'game' : 'exam'),
+		};
+	});
+}
+
+function exportResultsCSV() {
+	const rows = getExportRows();
+	if (!rows.length) {
+		showToast('No results to export', 'warning');
+		return;
+	}
+
+	const headers = [
+		'Date',
+		'Student Number',
+		'Student Name',
+		'Class',
+		'Exam',
+		'Grade',
+		'Percentage',
+		'Time',
+		'Source',
+		'Mode',
+	];
+	let csv =
+		headers.join(',') +
+		'\n' +
+		rows
+			.map((row) =>
+				[
+					csvCell(row.date),
+					csvCell(row.numero),
+					csvCell(row.student),
+					csvCell(row.class),
+					csvCell(row.exam),
+					csvCell(row.grade),
+					csvCell(row.percent),
+					csvCell(row.time),
+					csvCell(row.source),
+					csvCell(row.mode),
+				].join(','),
+			)
+			.join('\n');
+
+	const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+	const link = document.createElement('a');
+	const url = URL.createObjectURL(blob);
+	link.setAttribute('href', url);
+	link.setAttribute(
+		'download',
+		`quiz-results-${new Date().toISOString().slice(0, 10)}.csv`,
+	);
+	link.click();
+	showToast(`Exported ${rows.length} result(s)`, 'success');
+}
+
+function exportResultsJSON() {
+	const rows = getExportRows();
+	if (!rows.length) {
+		showToast('No results to export', 'warning');
+		return;
+	}
+
+	const dataStr = JSON.stringify(rows, null, 2);
+	const dataUri =
+		'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+	const link = document.createElement('a');
+	link.setAttribute('href', dataUri);
+	link.setAttribute(
+		'download',
+		`quiz-results-${new Date().toISOString().slice(0, 10)}.json`,
+	);
+	link.click();
+	showToast(`Exported ${rows.length} result(s)`, 'success');
+}
+
+function importResultsJSON(input) {
+	if (!input || !input.files || !input.files[0]) return;
+	const file = input.files[0];
+	const reader = new FileReader();
+
+	reader.onload = (event) => {
+		try {
+			const parsed = JSON.parse(event.target.result);
+			const incoming = Array.isArray(parsed)
+				? parsed
+				: Array.isArray(parsed && parsed.results)
+				? parsed.results
+				: Array.isArray(parsed && parsed.quizResults)
+				? parsed.quizResults
+				: null;
+
+			if (!incoming || !incoming.length) {
+				showToast('No results found in the file', 'warning');
+				return;
+			}
+
+			const existing = window.__DI_CONTAINER__.repo.getAll_sync('results');
+			const seen = new Set(
+				existing.map((r) => {
+					const key = r.id || `${r.numero || 'x'}-${getResultDate(r)}`;
+					return `${key}::${getResultDate(r)}`;
+				}),
+			);
+			let added = 0;
+
+			incoming.forEach((row) => {
+				if (!row || typeof row !== 'object') return;
+				const normalized = normalizeResultEntry(row);
+				const baseKey =
+					normalized.id ||
+					`${normalized.numero || 'x'}-${getResultDate(normalized)}`;
+				const key = `${baseKey}::${getResultDate(normalized)}`;
+				if (seen.has(key)) return;
+				seen.add(key);
+				existing.push(normalized);
+				added++;
+			});
+
+			window.__DI_CONTAINER__.repo.setAll_sync('results', existing);
+
+			if (added > 0) {
+				loadResults();
+				showToast(`Imported ${added} result(s)`, 'success');
+			} else {
+				showToast('No new results to import (duplicates skipped)', 'warning');
+			}
+		} catch (error) {
+			console.error('Error importing results:', error);
+			showToast('Error importing results: ' + error.message, 'error');
+		} finally {
+			if (input) input.value = '';
+		}
+	};
+
+	reader.readAsText(file);
 }
 
 // Function to clear all filters in results section
@@ -902,3 +1148,6 @@ window.viewResultDetails = viewResultDetails;
 window.deleteResult = deleteResult;
 window.clearAllResultFilters = clearAllResultFilters;
 window.escapeHtml = escapeHtml;
+window.exportResultsCSV = exportResultsCSV;
+window.exportResultsJSON = exportResultsJSON;
+window.importResultsJSON = importResultsJSON;

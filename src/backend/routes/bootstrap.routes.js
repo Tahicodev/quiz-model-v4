@@ -218,6 +218,18 @@ function hydrateLegacyPayload(data) {
       className: payload.class || payload.className || '',
       totalQuestions: payload.totalQuestions || result.total_points || 0,
       earnedPoints: result.earned_points,
+      // Authoritative /20 grade computed by the student workspace, when the
+      // writer recorded it (may be absent on older rows).
+      grade20:
+        payload.grade20 != null
+          ? payload.grade20
+          : result.grade_20 ?? null,
+      timeSpent:
+        payload.timeSpent != null
+          ? payload.timeSpent
+          : payload.duration != null
+            ? payload.duration
+            : result.time_spent,
       date: result.date_taken,
       dateTaken: result.date_taken,
     };

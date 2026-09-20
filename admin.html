@@ -1650,6 +1650,7 @@
 										<option value="">All Modes</option>
 										<option value="exam">Exam</option>
 										<option value="training">Training</option>
+										<option value="solo">Solo Practice</option>
 										<option value="game">Games</option>
 									</select>
 								</div>
@@ -1700,7 +1701,53 @@
 									>
 										Clear All Filters
 									</button>
+									<button
+										type="button"
+										class="btn btn-secondary"
+										onclick="exportResultsCSV()"
+									>
+										Export CSV
+									</button>
+									<button
+										type="button"
+										class="btn btn-secondary"
+										onclick="exportResultsJSON()"
+									>
+										Export JSON
+									</button>
+									<button
+										type="button"
+										class="btn btn-secondary"
+										onclick="document.getElementById('importResultsInput').click()"
+									>
+										Import JSON
+									</button>
+									<input
+										type="file"
+										id="importResultsInput"
+										accept=".json"
+										style="display: none"
+										onchange="importResultsJSON(this)"
+									/>
 								</div>
+							</div>
+						</div>
+						<div class="admin-kpi-grid" id="resultsKpiGrid">
+							<div class="admin-kpi">
+								<div class="admin-kpi__value" id="kpi-results-total">0</div>
+								<div class="admin-kpi__label">Total Attempts</div>
+							</div>
+							<div class="admin-kpi">
+								<div class="admin-kpi__value" id="kpi-results-avg">0 / 20</div>
+								<div class="admin-kpi__label">Average Grade</div>
+							</div>
+							<div class="admin-kpi">
+								<div class="admin-kpi__value" id="kpi-results-pass-rate">0%</div>
+								<div class="admin-kpi__label">Pass Rate (>= 10/20)</div>
+							</div>
+							<div class="admin-kpi">
+								<div class="admin-kpi__value" id="kpi-results-top-class">-</div>
+								<div class="admin-kpi__label">Top Class</div>
 							</div>
 						</div>
 						<div class="table-container">
