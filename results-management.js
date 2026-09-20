@@ -85,10 +85,129 @@ function normalizeResultEntry(result) {
 		studentName: result.studentName || result.name || '',
 		numero: result.numero || result.studentNumber || '',
 		studentNumber: result.studentNumber || result.numero || '',
-		class: result.class || result.className || '',
-		className: result.className || result.class || '',
+		class: result.class || result.className || result.class_name || '',
+		className: result.className || result.class || result.class_name || '',
 		examTitle: result.examTitle || result.examName || result.exam || '',
+		examName: result.examName || result.examTitle || result.exam || '',
+		userId: result.userId || result.user_id || '',
+		user_id: result.user_id || result.userId || '',
+		totalPoints: result.totalPoints ?? result.total_points,
+		earnedPoints: result.earnedPoints ?? result.earned_points,
+		grade20: result.grade20 ?? result.grade_20,
+		timeSpent: result.timeSpent ?? result.time_spent,
+		totalQuestions: result.totalQuestions ?? result.total_questions,
 	};
+}
+
+/**
+ * Resolve a coherent /20 grade + percentage from a result row regardless of
+ * which schema produced it:
+ *  - DB rows (bootstrap) store `score` as a percentage (0-100) plus
+ *    `earned_points` / `total_points`;
+ *  - the student workspace stores a /20 grade on `grade20` (and `score`);
+ *  - legacy script.js training/exam rows store `score` = raw earned points
+ *    over `totalPoints` (sum of per-question points).
+ */
+function resolveResultScore(result) {
+	const num = (v) => (v == null ? NaN : Number(v));
+	const rawScore = num(result.score);
+	const earned = num(result.earnedPoints);
+	const totalPts = num(result.totalPoints);
+	const totalQ = num(result.totalQuestions);
+	const grade20 = num(result.grade20);
+	const isFiniteNum = Number.isFinite;
+
+	let percent = 0;
+	let grade = 0;
+
+	if (isFiniteNum(grade20) && grade20 >= 0 && grade20 <= 20) {
+		grade = grade20;
+		percent = (grade20 / 20) * 100;
+	} else if (isFiniteNum(earned) && isFiniteNum(totalPts) && totalPts > 0) {
+		percent = Math.max(0, Math.min(100, (earned / totalPts) * 100));
+		grade = (percent / 100) * 20;
+	} else if (
+		isFiniteNum(rawScore) &&
+		((isFiniteNum(totalPts) && totalPts > 0) ||
+			(isFiniteNum(totalQ) && totalQ > 0))
+	) {
+		const total = totalPts > 0 ? totalPts : totalQ;
+		if (rawScore >= 0 && rawScore <= total && rawScore <= 100) {
+			// Legacy count-based score (earned points over total points).
+			percent = Math.max(0, Math.min(100, (rawScore / total) * 100));
+			grade = (percent / 100) * 20;
+		} else if (rawScore >= 0 && rawScore <= 20) {
+			// Bare /20 grade.
+			grade = rawScore;
+			percent = (rawScore / 20) * 100;
+		} else {
+			percent = Math.max(0, Math.min(100, rawScore));
+			grade = (percent / 100) * 20;
+		}
+	} else if (isFiniteNum(rawScore) && rawScore >= 0 && rawScore <= 20) {
+		grade = rawScore;
+		percent = (rawScore / 20) * 100;
+	} else if (isFiniteNum(rawScore)) {
+		percent = Math.max(0, Math.min(100, rawScore));
+		grade = (percent / 100) * 20;
+	}
+
+	return { percent, grade };
+}
+
+/**
+ * Resolve the student name / numero / class for a result row. DB rows only
+ * carry `user_id`, so fall back to the users store when the row has no name.
+ */
+function resolveStudentDisplay(result, users) {
+	if (!result || typeof result !== 'object') {
+		return { name: 'Unknown', numero: '', class: '', user: null };
+	}
+	const userId = result.userId || result.user_id || '';
+	const user = userId
+		? (users || []).find((u) => String(u.id) === String(userId))
+		: null;
+	const name =
+		result.name ||
+		result.studentName ||
+		(user && (user.name || user.username)) ||
+		'Unknown';
+	const numero =
+		result.numero ||
+		result.studentNumber ||
+		(user && (user.numero || user.studentNumber || user.number)) ||
+		'';
+	const klass =
+		result.class ||
+		result.className ||
+		(user && (user.className || user.class_name || user.class)) ||
+		'';
+	return { name, numero, class: klass, user };
+}
+
+function resolveResultClass(result, classes, student) {
+	let classData = null;
+	if (result.classId) {
+		classData = classes.find((c) => String(c.id) === String(result.classId));
+	}
+	if (!classData && result.class) {
+		classData = classes.find(
+			(c) => c.className === result.class || c.name === result.class,
+		);
+	}
+	// Fall back to the student's registered class from the users store.
+	if (!classData && student && student.user) {
+		const userClassId = student.user.classId || student.user.class_id;
+		if (userClassId) {
+			classData = classes.find(
+				(c) => String(c.id) === String(userClassId),
+			);
+		}
+		if (!classData && (student.user.className || student.user.class_name)) {
+			classData = { className: student.user.className || student.user.class_name };
+		}
+	}
+	return classData;
 }
 
 function isGameResult(result) {
@@ -332,9 +451,7 @@ function filterResults() {
 
 	if (scoreFilter) {
 		results = results.filter((r) => {
-			const score = r.score || 0;
-			const total = r.totalPoints || r.totalQuestions || 1;
-			const scoreOn20 = (score / total) * 20;
+			const scoreOn20 = resolveResultScore(r).grade;
 
 			if (scoreFilter === 'lt10') return scoreOn20 < 10;
 			if (scoreFilter === 'gte10') return scoreOn20 >= 10;
@@ -368,14 +485,16 @@ function displayResults(results) {
 		return;
 	}
 
-	// Get exams and classes for display names
+	// Get exams, classes and users for display names
 	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
+	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
 	const participantIndex = buildGameParticipantIndex(results);
 
 	tbody.innerHTML = results
 		.map((result) => {
 			const gameResult = isGameResult(result);
+			const student = resolveStudentDisplay(result, users);
 			const participantNames = gameResult
 				? resolveParticipantNamesForDisplay(result, participantIndex)
 				: [];
@@ -423,27 +542,19 @@ function displayResults(results) {
 				}
 			}
 
-			// Find class - check by classId or class name
-			let classData = null;
-			if (result.classId) {
-				classData = classes.find((c) => c.id === result.classId);
-			} else if (result.class) {
-				classData = classes.find(
-					(c) => c.className === result.class || c.name === result.class
-				);
-			}
+			// Find class - check by classId or class name, fall back to the
+			// student's registered class from the users store.
+			const classData = resolveResultClass(result, classes, student);
 
-			// Calculate score
-			const score = result.score || 0;
-			const total = result.totalPoints || result.totalQuestions || 1;
-			const percentage = ((score / total) * 100).toFixed(1);
-			const scoreOn20 = ((score / total) * 20).toFixed(1);
+			// Calculate score (handles percentage, /20 grade and count-based rows)
+			const { percent, grade } = resolveResultScore(result);
+			const percentage = percent.toFixed(1);
+			const scoreOn20 = grade.toFixed(1);
 
 			// Format time
-			const minutes = Math.floor(
-				(result.timeTaken || result.timeSpent || 0) / 60
-			);
-			const seconds = (result.timeTaken || result.timeSpent || 0) % 60;
+			const timeValue = result.timeTaken || result.timeSpent || result.time || 0;
+			const minutes = Math.floor(timeValue / 60);
+			const seconds = timeValue % 60;
 			const timeFormatted = `${minutes}:${seconds.toString().padStart(2, '0')}`;
 
 			// Generate unique ID if not present
@@ -480,15 +591,13 @@ function displayResults(results) {
 									resultDate ? new Date(resultDate).toLocaleDateString() : '-'
 								}</td>
                 <td>${escapeHtml(
-									result.numero ? result.numero + ' - ' : ''
-								)}${escapeHtml(
-				result.name || result.studentName || 'Unknown'
-			)}</td>
+									student.numero ? student.numero + ' - ' : ''
+								)}${escapeHtml(student.name)}</td>
                 <td>${
 									classData
 										? escapeHtml(classData.className || classData.name)
-										: result.class
-										? escapeHtml(result.class)
+										: student.class
+										? escapeHtml(student.class)
 										: '-'
 								}</td>
                 <td>${examCell}</td>
@@ -544,7 +653,12 @@ function displayResults(results) {
 				if (e.target.closest('button')) return;
 				e.stopPropagation();
 
-				const displayName = escapeHtml(result.name || result.studentName || result.numero || 'Unknown');
+				const studentShort = resolveStudentDisplay(result, users);
+				const displayName = escapeHtml(
+					studentShort.numero
+						? `${studentShort.numero} - ${studentShort.name}`
+						: studentShort.name,
+				);
 				MobileActionSheet.open(`Result: ${displayName}`, [
 					{
 						label: 'View Details',
@@ -582,10 +696,12 @@ function viewResultDetails(resultId) {
 	const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const participantIndex = buildGameParticipantIndex(results);
 
-	const result = results.find(
-		(r) =>
-			r.id === resultId ||
-			(r.numero && `${r.numero}-${getResultDate(r)}` === resultId),
+	const result = normalizeResultEntry(
+		results.find(
+			(r) =>
+				r.id === resultId ||
+				(r.numero && `${r.numero}-${getResultDate(r)}` === resultId),
+		),
 	);
 
 	if (!result) {
@@ -595,32 +711,30 @@ function viewResultDetails(resultId) {
 
 	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
 	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
+	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
+	const student = resolveStudentDisplay(result, users);
 
 	// Find exam
 	let exam = null;
 	if (result.examId) {
-		exam = exams.find((e) => e.id === result.examId);
-	} else if (result.examTitle && result.examTitle !== 'Training Quiz') {
+		exam = exams.find((e) => String(e.id) === String(result.examId));
+	} else if ((result.examTitle || result.examName) && result.examTitle !== 'Training Quiz') {
 		exam = exams.find(
-			(e) => e.title === result.examTitle || e.name === result.examTitle
+			(e) =>
+				e.title === result.examTitle ||
+				e.name === result.examTitle ||
+				e.title === result.examName ||
+				e.name === result.examName
 		);
 	}
 
-	// Find class
-	let classData = null;
-	if (result.classId) {
-		classData = classes.find((c) => c.id === result.classId);
-	} else if (result.class) {
-		classData = classes.find(
-			(c) => c.className === result.class || c.name === result.class
-		);
-	}
+	// Find class - fall back to the student's registered class
+	const classData = resolveResultClass(result, classes, student);
 
-	// Calculate score
-	const score = result.score || 0;
-	const total = result.totalPoints || result.totalQuestions || 1;
-	const percentage = ((score / total) * 100).toFixed(1);
-	const scoreOn20 = ((score / total) * 20).toFixed(1);
+	// Calculate score (handles percentage, /20 grade and count-based rows)
+	const { percent, grade } = resolveResultScore(result);
+	const percentage = percent.toFixed(1);
+	const scoreOn20 = grade.toFixed(1);
 
 	const gameResult = isGameResult(result);
 	const participantNames = gameResult
@@ -658,16 +772,15 @@ function viewResultDetails(resultId) {
                 <div class="detail-row">
                     <span class="detail-label">Student:</span>
                     <span class="detail-value">${escapeHtml(
-											result.name ||
-												result.studentName ||
-												result.numero ||
-												'Unknown'
+											student.numero
+												? `${student.numero} - ${student.name}`
+												: student.name
 										)}</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Student ID:</span>
                     <span class="detail-value">${escapeHtml(
-											result.numero || '-'
+											student.numero || '-'
 										)}</span>
                 </div>
                 <div class="detail-row">
@@ -675,8 +788,8 @@ function viewResultDetails(resultId) {
                     <span class="detail-value">${
 											classData
 												? escapeHtml(classData.className || classData.name)
-												: result.class
-												? escapeHtml(result.class)
+												: student.class
+												? escapeHtml(student.class)
 												: '-'
 										}</span>
                 </div>

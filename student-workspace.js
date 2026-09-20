@@ -13612,9 +13612,13 @@
 	window.openTrainingMode = function (examId) {
 		let questions =
 			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		let trainingExamName = 'Training Practice Test';
 		if (examId) {
 			const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
 			const exam = exams.find((e) => e.id === examId);
+			if (exam) {
+				trainingExamName = exam.name || exam.title || trainingExamName;
+			}
 			if (exam && Array.isArray(exam.questions) && exam.questions.length > 0) {
 				questions = questions.filter((q) => exam.questions.includes(q.id));
 			}
@@ -13629,7 +13633,7 @@
 			active: true,
 			mode: 'training',
 			examId: examId || null,
-			examName: 'Training Practice Test',
+			examName: trainingExamName,
 			allowCorrections: true,
 			questions: shuffled,
 			currentIndex: 0,
@@ -15060,10 +15064,21 @@
 					: `training-${trainingState.examId || 'practice'}-${Date.now()}`,
 			userId: context?.user?.id || 'guest',
 			user_id: context?.user?.id || 'guest',
+			name:
+				context?.identity?.name ||
+				context?.user?.name ||
+				context?.user?.username ||
+				'Student',
+			studentName:
+				context?.identity?.name ||
+				context?.user?.name ||
+				context?.user?.username ||
+				'Student',
 			studentNumber: context?.identity?.numero || '1',
 			numero: context?.identity?.numero || '1',
 			classId: context?.identity?.classId || '',
 			className: context?.identity?.class || 'Class',
+			class: context?.identity?.class || '',
 			examId: trainingState.examId || 'training-practice',
 			exam_id: trainingState.mode === 'exam' ? trainingState.examId : undefined,
 			examTitle: trainingState.examName,
