@@ -919,7 +919,8 @@
 			if (
 				tabName === 'teacher-access' ||
 				tabName === 'data' ||
-				tabName === 'realtime'
+				tabName === 'realtime' ||
+				tabName === 'setup'
 			) {
 				return false;
 			}
@@ -980,7 +981,7 @@
 				if (!key) return;
 				// Admin-only sections must stay hidden for teachers regardless of
 				// the settingsTabs map (which never lists them).
-				if (key === 'teacher-access' || key === 'data' || key === 'realtime') {
+				if (key === 'teacher-access' || key === 'data' || key === 'realtime' || key === 'setup') {
 					btn.classList.add('role-hidden');
 					return;
 				}
@@ -997,7 +998,7 @@
 				const key = section.dataset.settingsTab;
 				if (!key) return;
 				// Same admin-only protection for the section panels themselves.
-				if (key === 'teacher-access' || key === 'data' || key === 'realtime') {
+				if (key === 'teacher-access' || key === 'data' || key === 'realtime' || key === 'setup') {
 					section.classList.add('role-hidden');
 					return;
 				}

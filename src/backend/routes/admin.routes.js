@@ -21,9 +21,29 @@ import { logger } from '../logger.js';
 import { getServerMetrics } from '../server-metrics.js';
 import { getIO } from '../realtime/socket.server.js';
 import { createRequire } from 'module';
+import { networkInterfaces, hostname } from 'os';
+import { statSync, existsSync } from 'fs';
+import { dirname, resolve, join } from 'path';
+import { fileURLToPath } from 'url';
+import { config } from '../config.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 const require2 = createRequire(import.meta.url);
 const engine = require2('../../../game-server.cjs');
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// roof: src/backend/routes → project root
+const PROJECT_ROOT = resolve(__dirname, '../../..');
+const SCHEMA_PATH = join(PROJECT_ROOT, 'prisma', 'schema.prisma');
+
+const CDN_PROBE_HOSTS = [
+	{ id: 'cdnjs', host: 'https://cdnjs.cloudflare.com', vendored: true },
+	{ id: 'google-fonts', host: 'https://fonts.googleapis.com' },
+	{ id: 'jsdelivr', host: 'https://cdn.jsdelivr.net', vendored: true },
+	{ id: 'sheetjs', host: 'https://cdn.sheetjs.com', vendored: true },
+	{ id: 'socket.io', host: 'https://cdn.socket.io', vendored: true },
+];
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -34,6 +54,241 @@ const monitoringAccess = requireRole([
 	ROLES.SUPER_ADMIN,
 	ROLES.TEACHER,
 ]);
+
+// ── Setup diagnostics (Settings → Setup wizard) ─────────────────────────────
+// Read-only: helps the admin prepare this PC to serve up to ~20 classroom
+// devices over the Wi-Fi LAN. Nothing here changes configuration — it reports
+// live facts (LAN addresses, listening host/port, NODE_ENV, which SQLite file
+// Prisma is using, CDN reachability) so the wizard can guide the admin.
+
+function maskDatabaseUrl(url) {
+	try {
+		if (String(url || '').startsWith('file:')) return url;
+		const u = new URL(url);
+		if (u.username) u.username = '****';
+		if (u.password) u.password = '****';
+		return u.toString();
+	} catch (_) {
+		return url;
+	}
+}
+
+function fileInfo(p) {
+	try {
+		const s = statSync(p);
+		return {
+			path: p,
+			exists: s.isFile(),
+			size: s.size,
+			mtime: s.mtime.toISOString(),
+		};
+	} catch (_) {
+		return { path: p, exists: false, size: 0, mtime: null };
+	}
+}
+
+function lanAddresses() {
+	const out = [];
+	const ifaces = networkInterfaces();
+	// Virtual / Hyper-V / WSL / Docker adapters — not suitable for classroom access
+	const VIRTUAL_RE = /veth|vEthernet|WSL|Hyper-V|Docker|Loopback|VPN|Tailscale|Hamachi|vmnet|VirtualBox|vSwitch/i;
+	for (const [name, list] of Object.entries(ifaces || {})) {
+		for (const i of list || []) {
+			if (i.family !== 'IPv4' || i.internal) continue;
+			if (/^(127\.|169\.254\.)/.test(i.address)) continue;
+			const isVirtual = VIRTUAL_RE.test(name);
+			const isPrivate = /^10\.|^172\.(1[6-9]|2\d|3[01])\.|^192\.168\./.test(i.address);
+			out.push({
+				interface: name,
+				address: i.address,
+				netmask: i.netmask || '',
+				prefixLength: i.prefixLength != null ? i.prefixLength : 24,
+				recommended: !isVirtual && isPrivate,
+				type: isVirtual ? 'virtual' : 'physical',
+			});
+		}
+	}
+	// Sort: recommended first
+	out.sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0));
+	return out;
+}
+
+function resolveDatabaseFiles() {
+	const root = PROJECT_ROOT;
+	const schemaDir = join(root, 'prisma');
+	const filePathPart = (
+		String(config.databaseUrl || '').match(/^file:(.+)$/i) || []
+	)[1];
+	const details = {
+		url: maskDatabaseUrl(config.databaseUrl),
+		schemaExists: existsSync(SCHEMA_PATH),
+		candidates: [],
+		// The two files that matter in practice: prisma/dev.db (real data) and
+		// a root ./dev.db (only present if the app was ever run with the URL
+		// "file:./dev.db" interpreted relative to the working directory).
+		expected: fileInfo(join(root, 'prisma', 'dev.db')),
+		rootDevDb: fileInfo(join(root, 'dev.db')),
+	};
+	if (filePathPart) {
+		const clean = filePathPart.split('?')[0].split('#')[0].trim();
+		const seen = new Set();
+		for (const base of [schemaDir, root]) {
+			const abs = resolve(base, clean);
+			const key = abs.toLowerCase();
+			if (seen.has(key)) continue;
+			seen.add(key);
+			details.candidates.push(fileInfo(abs));
+		}
+		// Prisma resolves sqlite relative paths against schema.prisma's folder
+		// — this is the file the running server actually reads/writes.
+		details.inferred = resolve(schemaDir, clean);
+		details.inferredInfo = fileInfo(details.inferred);
+	}
+	return details;
+}
+
+async function probeCdn() {
+	const results = [];
+	await Promise.allSettled(
+		CDN_PROBE_HOSTS.map(async ({ id, host, vendored }) => {
+			if (vendored) {
+				results.push({ id, host, ok: true, status: 200, ms: 0, vendored: true });
+				return;
+			}
+			const started = Date.now();
+			const ctrl = new AbortController();
+			const timer = setTimeout(() => ctrl.abort(), 4000);
+			try {
+				const res = await fetch(host + '/', {
+					signal: ctrl.signal,
+					redirect: 'follow',
+					headers: { 'User-Agent': 'quiz-app-diagnostics' },
+				});
+				results.push({ id, host, ok: true, status: res.status, ms: Date.now() - started });
+			} catch (e) {
+				results.push({
+					id,
+					host,
+					ok: false,
+					status: null,
+					ms: Date.now() - started,
+					error: String((e && e.message) || e).slice(0, 160),
+				});
+			} finally {
+				clearTimeout(timer);
+			}
+		}),
+	);
+	return results.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+}
+
+const execAsync = promisify(exec);
+
+/**
+ * Returns the Windows network profile category for connected adapters.
+ * Only works on Windows; returns null on other platforms.
+ */
+async function getNetworkProfile() {
+	if (process.platform !== 'win32') return null;
+	try {
+		const { stdout } = await execAsync(
+			'powershell -NoProfile -Command "Get-NetConnectionProfile | Select-Object InterfaceAlias, NetworkCategory, Name | ConvertTo-Json"',
+			{ timeout: 8000 },
+		);
+		const parsed = JSON.parse(stdout);
+		const profiles = Array.isArray(parsed) ? parsed : [parsed];
+		const CATEGORY_MAP = { 0: 'Public', 1: 'Private', 2: 'DomainAuthenticated' };
+		return profiles.map((p) => ({
+			interface: p.InterfaceAlias || '',
+			category: typeof p.NetworkCategory === 'number' ? (CATEGORY_MAP[p.NetworkCategory] || 'Unknown') : (p.NetworkCategory || 'Unknown'),
+			name: p.Name || '',
+		}));
+	} catch (e) {
+		logger.warn('getNetworkProfile failed', { error: String(e.message || e).slice(0, 200) });
+		return null;
+	}
+}
+
+/**
+ * Changes the Windows network profile category for a given interface.
+ * Requires admin privileges. Returns { ok, message }.
+ */
+async function setNetworkProfile(interfaceAlias, category) {
+	if (process.platform !== 'win32') return { ok: false, message: 'Only supported on Windows' };
+	const valid = ['Public', 'Private', 'DomainAuthenticated'];
+	if (!valid.includes(category)) return { ok: false, message: 'Invalid category. Use: Public, Private, or DomainAuthenticated' };
+	try {
+		const cmd = `powershell -NoProfile -Command "Set-NetConnectionProfile -InterfaceAlias '${interfaceAlias.replace(/'/g, "''")}' -NetworkCategory '${category}'"`;
+		await execAsync(cmd, { timeout: 8000 });
+		return { ok: true, message: `Network profile for "${interfaceAlias}" changed to ${category}` };
+	} catch (e) {
+		const msg = String(e.message || e).slice(0, 300);
+		if (msg.includes('admin') || msg.includes('elevated') || msg.includes('privilege')) {
+			return { ok: false, message: 'Insufficient privileges. Run the server as Administrator, or use the PowerShell command below.' };
+		}
+		return { ok: false, message: msg };
+	}
+}
+
+/**
+ * Reports every fact the Settings → Setup wizard needs. Exported (not just
+ * used by the route) so we can smoke-test the diagnostics outside Express.
+ */
+export async function buildSetupDiagnostics() {
+	const [cdn, networkProfile] = await Promise.all([probeCdn(), getNetworkProfile()]);
+	return {
+		hostBinding: '0.0.0.0',
+		port: config.port || 3000,
+		nodeEnv: config.nodeEnv || 'development',
+		cookieSecure: (config.nodeEnv || 'development') === 'production',
+		process: {
+			platform: process.platform,
+			hostname: hostname(),
+			uptimeSec: Math.round(process.uptime()),
+			pid: process.pid,
+			cwd: PROJECT_ROOT,
+		},
+		lan: lanAddresses(),
+		database: resolveDatabaseFiles(),
+		cdn,
+		networkProfile,
+		capacity: { maxUsers: 100, maxGamePlayers: 30 },
+	};
+}
+
+/**
+ * GET /api/v1/admin/setup/diagnostics
+ * Admin-only, read-only classroom networking report for the Setup wizard.
+ */
+router.get('/setup/diagnostics', adminOnly, async (req, res, next) => {
+	try {
+		res.json({ data: await buildSetupDiagnostics() });
+	} catch (err) {
+		next(err);
+	}
+});
+
+/**
+ * POST /api/v1/admin/setup/network-profile
+ * Changes the Windows network profile category for an interface.
+ * Body: { interfaceAlias: string, category: 'Public' | 'Private' | 'DomainAuthenticated' }
+ */
+router.post('/setup/network-profile', adminOnly, async (req, res, next) => {
+	try {
+		const { interfaceAlias, category } = req.body || {};
+		if (!interfaceAlias || !category) {
+			return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'interfaceAlias and category are required' } });
+		}
+		const result = await setNetworkProfile(interfaceAlias, category);
+		if (result.ok) {
+			res.json({ data: result });
+		} else {
+			res.status(400).json({ error: { code: 'SETUP_ERROR', message: result.message } });
+		}
+	} catch (err) {
+		next(err);
+	}
+});
 
 /**
  * GET /api/v1/admin/metrics?minutes=60

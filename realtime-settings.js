@@ -547,7 +547,7 @@
 
 		if (typeof io === 'undefined') {
 			showRealtimeStatus(
-				'Socket.IO library not loaded. Add <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>',
+				'Socket.IO library not loaded. Add <script src="vendor/socket.io.min.js"></script>',
 				'error',
 			);
 			return;

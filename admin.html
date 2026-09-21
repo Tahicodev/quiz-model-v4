@@ -119,7 +119,7 @@
 		<script src="settings.js?v=2026-09-17-r4" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
-		<script src="https://cdn.socket.io/4.5.4/socket.io.min.js" defer></script>
+		<script src="vendor/socket.io.min.js" defer></script>
 
 		<!-- Register admin panel with realtime server -->
 		<script src="realtime-admin.js?v=2026-09-15-r1" defer></script>
@@ -137,25 +137,27 @@
 		<script src="quiz-presets.js" defer></script>
 		<script src="games-management.js?v=2026-09-15-r3" defer></script>
 		<script src="quick-start.js?v=2026-09-15-r3" defer></script>
+		<script src="qrcode-generator.js" defer></script>
+		<script src="setup-wizard.js" defer></script>
 			<script src="admin-main.js?v=2026-09-17-r4" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="vendor/pdf.min.js"></script>
 
 <!-- Mammoth.js pour extraction Word (.docx) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="vendor/mammoth.browser.min.js"></script>
 
 <!-- SheetJS pour extraction Excel (.xlsx) -->
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
 
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
-<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script> -->
+<!-- <script src="vendor/jszip.min.js"></script> -->
 		<script src="ai-question-generator.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="rag.js" defer></script>
 
 		<!-- Syntax Highlighting -->
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+		<link rel="stylesheet" href="vendor/atom-one-dark.min.css">
+		<script src="vendor/highlight.min.js"></script>
 
 
 
@@ -469,7 +471,29 @@
 								</p>
 							</div>
 							<div class="date-badge">
-								<script>
+		<!-- Setup Wizard modal -->
+		<div id="setupWizardModal" class="modal">
+			<div class="modal-content" style="max-width: 720px;">
+				<div class="modal-header">
+					<h2>🌐 Classroom Setup Wizard</h2>
+					<button type="button" class="modal-close" onclick="window.closeSetupWizard()">&times;</button>
+				</div>
+				<div class="modal-body">
+					<div class="sw-layout">
+						<div class="sw-steps" id="swSteps"></div>
+						<div class="sw-panel">
+							<div id="swStepContent"></div>
+						</div>
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-secondary" id="swBackBtn" onclick="window.setupWizardBack()">Back</button>
+					<button type="button" class="btn btn-primary" id="swNextBtn" onclick="window.setupWizardNext()">Next</button>
+				</div>
+			</div>
+		</div>
+
+		<script>
 									document.write(
 										new Date().toLocaleDateString('en-US', {
 											weekday: 'long',
@@ -3623,6 +3647,10 @@
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
 									Realtime
 								</button>
+								<button type="button" class="settings-tab-btn" title="Setup" data-roles="admin" data-settings-tab="setup" onclick="switchSettingsTab(event, 'setup')">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+									Setup
+								</button>
 								<button type="button" class="settings-tab-btn" title="AI Generation" data-roles="admin,teacher" data-settings-tab="ai-generation" onclick="switchSettingsTab(event, 'ai-generation')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
 									AI Generation
@@ -4552,7 +4580,27 @@
 							</div>
 						</div>
 
-						<!-- AI Generation Settings -->
+						<!-- Setup Wizard -->
+					<div id="setup-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="setup">
+						<div class="settings-group">
+							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+								<span style="background: #ecfdf5; color: #059669; padding: 6px; border-radius: 8px;">
+									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+								</span>
+								<h3 style="margin: 0; font-size: 1.1rem;">Classroom Setup Wizard</h3>
+							</div>
+							<p class="text-muted" style="margin-bottom: 15px;">
+								Prepare this PC to serve the app to up to 20 classroom devices (PCs/phones) over the school Wi-Fi. The wizard checks your server configuration, generates a student QR code, provides firewall commands, and backs up the database.
+							</p>
+							<div id="swSetupSummary" style="margin-bottom: 15px;"></div>
+							<button type="button" class="btn btn-primary" onclick="window.openSetupWizard()" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+								Open Classroom Setup Wizard
+							</button>
+						</div>
+					</div>
+
+					<!-- AI Generation Settings -->
 						<div id="ai-generation-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="ai-generation">
 							<!-- Shared model catalog (admin: load + publish; teacher: select) -->
 							<div class="settings-group" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-color: #c084fc;">
