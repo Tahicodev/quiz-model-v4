@@ -216,6 +216,24 @@ function hydrateLegacyPayload(data) {
       studentName: payload.studentName || payload.name || '',
       classId: payload.classId || '',
       className: payload.class || payload.className || '',
+      // Game-run results are persisted with their identity inside
+      // answers_json (results.routes / bulk sanitizer keep a narrow column
+      // set). Promote the game fields back to the top level so the student
+      // workspace can list them after a reload without re-parsing.
+      gameId: payload.gameId || '',
+      sourceGameId: payload.sourceGameId || payload.gameId || '',
+      lobbyId: payload.lobbyId || '',
+      lobbyLabel: payload.lobbyLabel || '',
+      gameName: payload.gameName || '',
+      gameType: payload.gameType || payload.type || '',
+      gameMode: payload.gameMode || '',
+      rank: result.rank ?? payload.rank ?? null,
+      label: payload.label || '',
+      winnerId: payload.winnerId || '',
+      winnerName: payload.winnerName || '',
+      participantCount: payload.participantCount || 0,
+      isTournamentGame: Boolean(payload.isTournamentGame),
+      tournamentId: payload.tournamentId || '',
       totalQuestions: payload.totalQuestions || result.total_points || 0,
       earnedPoints: result.earned_points,
       // Authoritative /20 grade computed by the student workspace, when the

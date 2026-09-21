@@ -40,7 +40,7 @@
 			})();
 		</script>
 		<link rel="stylesheet" href="styles.css?v=2026-09-16-r1" />
-		<link rel="stylesheet" href="admin.css?v=2026-09-17-r1" />
+		<link rel="stylesheet" href="admin.css?v=2026-09-21-r3" />
 
 			<!-- APP_CONFIG injected by server.js in SaaS mode -->
 			<script>
@@ -135,7 +135,7 @@
 		<script src="realtime-settings.js?v=2026-09-19-r1" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js" defer></script>
-		<script src="games-management.js?v=2026-09-15-r3" defer></script>
+		<script src="games-management.js?v=2026-09-21-r4" defer></script>
 		<script src="quick-start.js?v=2026-09-15-r3" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js" defer></script>
@@ -1638,6 +1638,7 @@
 										<th>Date Created</th>
 										<th>Students</th>
 										<th>Assigned Exams</th>
+										<th>Assigned Games</th>
 										<th>Actions</th>
 									</tr>
 								</thead>
@@ -1860,6 +1861,16 @@
 								</div>
 								<form id="gameForm" class="game-form">
 									<input type="hidden" id="gameId" value="" />
+
+									<div class="arena-editor-tabs gm-tab-nav" role="tablist">
+										<button type="button" class="gm-tab-btn active" data-gm-tab="game-info">Game info</button>
+										<button type="button" class="gm-tab-btn" data-gm-tab="rules">Game Rules &amp; Features</button>
+										<button type="button" class="gm-tab-btn" data-gm-tab="classes">Assign Classes</button>
+										<button type="button" class="gm-tab-btn" data-gm-tab="main-questions">Main Questions</button>
+										<button type="button" class="gm-tab-btn" data-gm-tab="penalty-questions">Penalty Questions</button>
+									</div>
+
+									<div class="gm-tab-panel active" data-gm-panel="game-info">
 									<div class="form-group">
 										<label for="gameName">Game Name</label>
 										<input type="text" id="gameName" class="form-control" placeholder="e.g. Speed Duel - Algebra" required />
@@ -1893,14 +1904,44 @@
 											<option value="team">Team vs Team</option>
 										</select>
 									</div>
-									<div class="form-group">
-										<label>Assign Classes</label>
-										<div id="gameClassList" class="checkbox-list"></div>
+									<div id="gamePairingSection" class="game-pairing-section" hidden>
+										<h5>Team vs Team - 1v1 Opponent Pairing</h5>
+										<p class="text-muted">Each student on one team is matched with one student on the other team for the duel. Pair scores feed the team total that decides the winning team.</p>
+										<div class="form-group">
+											<label class="toggle-label">
+												<span>Students see their opponent (enable 1v1 duels)</span>
+												<div class="switch-container">
+													<input type="checkbox" id="gamePairingEnabled" class="switch-checkbox" />
+													<span class="switch-slider"></span>
+												</div>
+											</label>
+										</div>
+										<div class="form-row" id="gamePairingOptionsRow" hidden>
+											<div class="form-group half">
+												<label for="gamePairingMode">How opponents are matched</label>
+												<select id="gamePairingMode" class="form-control">
+													<option value="chosen">Students choose their opponent</option>
+													<option value="assigned">Teacher assigns opponents</option>
+													<option value="random">Random pairing (teacher triggers)</option>
+												</select>
+												<small class="text-muted">
+													Chosen: students pick one free student from the other team.<br />
+													Assigned: the teacher pairs each student in the lobby.<br />
+													Random: click Randomize Pairs in the lobby.
+												</small>
+											</div>
+											<div class="form-group half">
+												<label for="gamePairingType">Game to play in the duel</label>
+												<select id="gamePairingType" class="form-control"></select>
+												<small class="text-muted">The game type played for the pair battle. Defaults to the game type if left empty.</small>
+											</div>
+										</div>
 									</div>
+									<div id="gameManualSettingsBlock" class="game-manual-settings">
 									<div class="form-row">
 										<div class="form-group half">
 											<label for="gamePoints">Points per Correct</label>
-											<input type="number" id="gamePoints" class="form-control" min="1" value="10" />
+											<input type="number" id="gamePoints" class="form-control" min="1" max="10" value="3" />
 										</div>
 										<div class="form-group half">
 											<label for="gameExpectedPlayers">Expected Players</label>
@@ -1978,7 +2019,15 @@
 									<div class="form-group">
 										<div id="gameCreationRecommendations" class="game-recommendation-card"></div>
 									</div>
+									</div><!-- /gameManualSettingsBlock -->
+									</div><!-- /game-info tab panel -->
 
+									<div class="gm-tab-panel" data-gm-panel="rules">
+									<div id="gamePresetSummaryStrip" class="game-preset-summary" hidden>
+										<h4>Rules &amp; Features from this preset</h4>
+										<p class="text-muted">These values come from the selected preset. You can still fine-tune the individual rules below; changing them here only affects this game.</p>
+										<div id="gamePresetSummaryBody" class="game-preset-summary-body"></div>
+									</div>
 									<!-- Game Rules Configuration -->
 									<div id="gameStudioRulesSection" class="game-rules-section">
 										<h4>Game Rules & Features</h4>
@@ -2158,7 +2207,7 @@
 												</div>
 												<div class="form-group">
 													<label for="hotPotatoPoints">Points per Correct Answer</label>
-													<input type="number" id="hotPotatoPoints" class="form-control" min="5" max="100" value="20" />
+													<input type="number" id="hotPotatoPoints" class="form-control" min="1" max="10" value="5" />
 												</div>
 												<label class="switch-label">
 													<span class="switch-text">
@@ -2189,7 +2238,7 @@
 											<div class="rules-grid">
 												<div class="form-group">
 													<label for="lastSurvivorBonusPoints">Bonus Points for Last Survivor</label>
-													<input type="number" id="lastSurvivorBonusPoints" class="form-control" min="10" max="200" value="50" />
+													<input type="number" id="lastSurvivorBonusPoints" class="form-control" min="1" max="10" value="5" />
 												</div>
 												<div class="form-group">
 													<label for="lastSurvivorTimer">Question Timer (seconds)</label>
@@ -2246,7 +2295,17 @@
 											</div>
 										</div>
 									</div>
+									</div><!-- /rules tab panel -->
 
+									<div class="gm-tab-panel" data-gm-panel="classes">
+										<div class="form-group">
+											<label>Assign Classes</label>
+											<div id="gameClassList" class="checkbox-list"></div>
+											<small class="text-muted">Choose which classes can see and join this game.</small>
+										</div>
+									</div>
+
+									<div class="gm-tab-panel" data-gm-panel="main-questions">
 									<div class="game-question-block">
 										<div class="game-question-header">
 											<h4>Main Questions</h4>
@@ -2258,9 +2317,11 @@
 										<div class="game-question-bank">
 											<div class="game-question-bank-controls">
 												<div class="bank-control">
+													<label for="gameMainCategorySelect">Category</label>
 													<select id="gameMainCategorySelect" class="form-control"></select>
 												</div>
 												<div class="bank-control">
+													<label for="gameMainQuestionSearch">Search</label>
 													<input type="text" id="gameMainQuestionSearch" class="form-control" placeholder="Search questions" />
 												</div>
 												<div class="bank-filters" id="gameMainTypeFilters">
@@ -2277,7 +2338,9 @@
 										<p class="game-selection-caption">Selected main questions</p>
 										<div id="gameQuestionsList" class="game-question-list"></div>
 									</div>
+									</div><!-- /main-questions tab panel -->
 
+									<div class="gm-tab-panel" data-gm-panel="penalty-questions">
 									<div class="game-question-block">
 										<div class="game-question-header">
 											<h4>Penalty Questions</h4>
@@ -2289,9 +2352,11 @@
 										<div class="game-question-bank">
 											<div class="game-question-bank-controls">
 												<div class="bank-control">
+													<label for="gamePenaltyCategorySelect">Category</label>
 													<select id="gamePenaltyCategorySelect" class="form-control"></select>
 												</div>
 												<div class="bank-control">
+													<label for="gamePenaltyQuestionSearch">Search</label>
 													<input type="text" id="gamePenaltyQuestionSearch" class="form-control" placeholder="Search questions" />
 												</div>
 												<div class="bank-filters" id="gamePenaltyTypeFilters">
@@ -2308,6 +2373,7 @@
 										<p class="game-selection-caption">Selected penalty questions</p>
 										<div id="gamePenaltyList" class="game-question-list"></div>
 									</div>
+									</div><!-- /penalty-questions tab panel -->
 
 									<div class="form-actions">
 										<button type="button" class="btn btn-secondary" id="resetGameForm">Reset</button>
@@ -2326,6 +2392,50 @@
 									</div>
 									<div class="panel-header-actions">
 										<button type="button" class="btn btn-sm btn-danger-soft" onclick="deleteAllGames()" title="Permanently delete all games from admin and students">Clear All</button>
+									</div>
+								</div>
+								<div class="game-filters-bar" id="gameFiltersBar">
+									<div class="game-filter-row game-status-row">
+										<button type="button" class="filter-chip active" data-game-status-filter="">All</button>
+										<button type="button" class="filter-chip" data-game-status-filter="open">Open</button>
+										<button type="button" class="filter-chip" data-game-status-filter="live">Live</button>
+										<button type="button" class="filter-chip" data-game-status-filter="completed">Completed</button>
+										<button type="button" class="filter-chip" data-game-status-filter="active">Active</button>
+										<button type="button" class="filter-chip" data-game-status-filter="paused">Paused</button>
+										<button type="button" class="filter-chip" data-game-status-filter="waiting">Waiting</button>
+										<button type="button" class="filter-chip" data-game-status-filter="draft">Draft</button>
+									</div>
+									<div class="game-filter-row">
+										<div class="game-filter-search">
+											<label for="gameFilterSearch">Search</label>
+											<input
+												type="search"
+												id="gameFilterSearch"
+												class="form-control"
+												placeholder="Search games…"
+												aria-label="Search games"
+											/>
+										</div>
+										<div class="game-filter-input">
+											<label for="gameFilterClass">Class</label>
+											<select id="gameFilterClass" class="form-control">
+												<option value="">All classes</option>
+											</select>
+										</div>
+										<div class="game-filter-input">
+											<label for="gameFilterType">Game type</label>
+											<select id="gameFilterType" class="form-control">
+												<option value="">All types</option>
+											</select>
+										</div>
+										<button
+											type="button"
+											class="btn btn-sm btn-secondary"
+											id="gameFilterReset"
+											onclick="resetGameFilters()"
+										>
+											Reset
+										</button>
 									</div>
 								</div>
 								<div id="gameList" class="game-list"></div>
@@ -4058,6 +4168,33 @@
 									</div>
 								</div>
 
+								<div class="form-row">
+									<div class="form-group half">
+										<label for="game-preset-points">Points per Correct</label>
+										<input type="number" id="game-preset-points" class="form-control" min="1" max="10" value="3" />
+									</div>
+									<div class="form-group half">
+										<label for="game-preset-expected-players">Expected Players</label>
+										<input type="number" id="game-preset-expected-players" class="form-control" min="0" max="100" value="0" />
+									</div>
+								</div>
+								<div class="form-row">
+									<div class="form-group half">
+										<label for="game-preset-question-timer">Question Timer (seconds)</label>
+										<input type="number" id="game-preset-question-timer" class="form-control" min="5" max="300" value="20" />
+									</div>
+									<div class="form-group half">
+										<label class="toggle-label">
+											<span>Auto-start when all ready</span>
+											<div class="switch-container">
+												<input type="checkbox" id="game-preset-auto-start" class="switch-checkbox" />
+												<span class="switch-slider"></span>
+											</div>
+										</label>
+									</div>
+								</div>
+								<p class="text-muted" style="margin: 8px 0 0;">These game-wide values apply to every game created from this preset. Keep points within the 1–10 scale.</p>
+
 								<div id="gamePresetRulesSection" class="game-rules-section" style="margin-top: 18px;">
 									<h4>Game Rules & Features</h4>
 									<p class="text-muted">Only stable, game-safe options are shown here. These preset toggles are applied by default when creating games.</p>
@@ -4233,7 +4370,7 @@
 											</div>
 											<div class="form-group">
 												<label for="game-preset-hotPotatoPoints">Points per Correct Answer</label>
-												<input type="number" id="game-preset-hotPotatoPoints" class="form-control" min="5" max="100" value="20" />
+												<input type="number" id="game-preset-hotPotatoPoints" class="form-control" min="1" max="10" value="5" />
 											</div>
 											<label class="switch-label">
 												<span class="switch-text">
@@ -4263,7 +4400,7 @@
 										<div class="rules-grid">
 											<div class="form-group">
 												<label for="game-preset-lastSurvivorBonusPoints">Bonus Points for Last Survivor</label>
-												<input type="number" id="game-preset-lastSurvivorBonusPoints" class="form-control" min="10" max="200" value="50" />
+												<input type="number" id="game-preset-lastSurvivorBonusPoints" class="form-control" min="1" max="10" value="5" />
 											</div>
 											<div class="form-group">
 												<label for="game-preset-lastSurvivorTimer">Question Timer (seconds)</label>

@@ -2,6 +2,40 @@
 
 let adminSectionsInitialized = false;
 
+// Server account-request rows are snake_case drivers (student_number,
+// class_id, class_name, full_name, created_at, …). Normalize them to the
+// camelCase shape the admin queue UI and the approve mirror read, so the
+// review card never shows "Student #: N/A / Class: N/A" and approved users
+// keep their numero + class.
+function normalizeLegacyAccountRequest(req) {
+	if (!req || typeof req !== 'object') return req;
+	if (Array.isArray(req)) return req.map(normalizeLegacyAccountRequest);
+	const base = Object.assign({}, req);
+	if (base.full_name != null && base.fullName == null) base.fullName = base.full_name;
+	if (base.student_number != null && base.studentNumber == null) base.studentNumber = base.student_number;
+	if (base.class_id != null && base.classId == null) base.classId = base.class_id;
+	if (base.class_name != null && base.className == null) base.className = base.class_name;
+	if (base.reviewer_id != null && base.reviewerId == null) base.reviewerId = base.reviewer_id;
+	if (base.reviewed_at != null && base.reviewedAt == null) base.reviewedAt = base.reviewed_at;
+	if (base.review_note != null && base.reviewNote == null) base.reviewNote = base.review_note;
+	if (base.created_user_id != null && base.createdUserId == null) base.createdUserId = base.created_user_id;
+	if (base.created_at != null && base.createdAt == null) base.createdAt = base.created_at;
+	return base;
+}
+
+function readAccountRequestsLegacy() {
+	let raw = [];
+	if (Array.isArray(window.Auth?.getAccountRequests?.())) {
+		raw = window.Auth.getAccountRequests();
+	} else {
+		const r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+		raw = r
+			? r.getValue_sync('account_requests', [])
+			: JSON.parse(localStorage.getItem('quizAccountRequests') || '[]');
+	}
+	return normalizeLegacyAccountRequest(Array.isArray(raw) ? raw : []);
+}
+
 function initializeAdminSectionsAfterAuth() {
 	if (adminSectionsInitialized) return;
 	if (sessionStorage.getItem('adminLoggedIn') !== 'true') return;
@@ -1588,14 +1622,7 @@ function syncProfileRequestNotifications() {
 			? r.getValue_sync('profile_requests', [])
 			: JSON.parse(localStorage.getItem('quizProfileRequests') || '[]');
 	})();
-	const accountRequests = Array.isArray(window.Auth?.getAccountRequests?.())
-		? window.Auth.getAccountRequests()
-		: (function () {
-				var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-				return r
-					? r.getValue_sync('account_requests', [])
-					: JSON.parse(localStorage.getItem('quizAccountRequests') || '[]');
-			})();
+	const accountRequests = readAccountRequestsLegacy();
 	if (!profileRequests.length && !accountRequests.length) return;
 
 	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
@@ -2153,14 +2180,7 @@ function renderProfileRequests() {
 	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	const classMap = new Map(classes.map((c) => [c.id, c.name]));
 	let profileRequests = getUnifiedProfileRequests();
-	let accountRequests = Array.isArray(window.Auth?.getAccountRequests?.())
-		? window.Auth.getAccountRequests()
-		: (function () {
-				var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-				return r
-					? r.getValue_sync('account_requests', [])
-					: JSON.parse(localStorage.getItem('quizAccountRequests') || '[]');
-			})();
+	let accountRequests = readAccountRequestsLegacy();
 
 	if (window.Auth?.isTeacher?.()) {
 		const teacherClassIds = window.Auth.getTeacherClassIds

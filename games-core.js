@@ -648,6 +648,17 @@
 				a: 'Team A',
 				b: 'Team B',
 			},
+			// Team vs Team 1v1 duel pairing. When enabled, each student on one
+			// team is matched with one student on the other team; students see
+			// their opponent in the lobby (chosen by the student, assigned by
+			// the teacher, or randomized by the teacher) and the team totals
+			// decide the winner. pairs: { [userId]: { opponentId, gameType } }
+			pairing: {
+				enabled: false,
+				mode: '',
+				gameType: '',
+				pairs: {},
+			},
 			mathMin: 1,
 			mathMax: 12,
 			mathOperators: ['+', '-', '*'],
@@ -683,7 +694,7 @@
 				// Last Survivor Settings
 				lastSurvivor: {
 					eliminateOnFirstWrong: true,  // Eliminate on first wrong answer
-					bonusPoints: 50,              // Bonus points for last survivor
+					bonusPoints: 10,              // Bonus points for last survivor
 					eliminationTimer: 30,         // Time limit per question
 					showEliminationReason: true,  // Show why player was eliminated
 				},
@@ -692,7 +703,7 @@
 				hotPotato: {
 					totalTimer: 15,               // Total time per question
 					turnDuration: 3,              // Time per player's turn
-					pointsPerCorrect: 20,         // Points for correct answer
+					pointsPerCorrect: 10,         // Points for correct answer
 					autoRotate: true,             // Auto-rotate turns
 					showCountdown: true,          // Show visual countdown
 				},
@@ -890,7 +901,7 @@
 				const survivorId = session.currentQuestion.activePlayers[0];
 				const survivor = session.participants?.find(p => p.userId === survivorId);
 				if (survivor) {
-					survivor.score += settings.lastSurvivorBonusPoints || 50;
+					survivor.score += settings.lastSurvivorBonusPoints || 10;
 					survivor.state = 'active'; // Winner stays active
 				}
 				return 'question_complete';
@@ -990,7 +1001,7 @@
 		// Check if answer is correct
 		if (isCorrect) {
 			// Award points to all players
-			const points = settings.pointsPerCorrect || 20;
+			const points = settings.pointsPerCorrect || 10;
 			if (session.participants) {
 				session.participants.forEach(participant => {
 					participant.score += points;
@@ -1062,6 +1073,37 @@
 		return Math.max(0, turnDuration - turnTimeElapsed);
 	}
 
+	function getGamePairing(game = {}) {
+		const settings = game.settings || {};
+		const pairing =
+			settings.pairing && typeof settings.pairing === 'object'
+				? settings.pairing
+				: {};
+		return {
+			enabled: Boolean(pairing.enabled),
+			mode: String(pairing.mode || '').trim(),
+			gameType: String(pairing.gameType || '').trim(),
+			pairs:
+				pairing.pairs && typeof pairing.pairs === 'object'
+					? pairing.pairs
+					: {},
+		};
+	}
+
+	function isPairingEnabled(game) {
+		return getGamePairing(game).enabled;
+	}
+
+	function getPairForUser(game, userId) {
+		const pairing = getGamePairing(game);
+		if (!pairing.enabled) return null;
+		const key = String(userId || '').trim();
+		if (!key) return null;
+		const entry = pairing.pairs[key];
+		if (!entry) return null;
+		return { opponentId: entry.opponentId, gameType: entry.gameType || '' };
+	}
+
 	window.GameCore = {
 		getQuizGames,
 		saveQuizGames,
@@ -1074,6 +1116,9 @@
 		shuffleArray,
 		generateMathChallenge,
 		nowIso,
+		getGamePairing,
+		getPairForUser,
+		isPairingEnabled,
 		// Last Survivor functions
 		initializeLastSurvivorGame,
 		processLastSurvivorAnswer,

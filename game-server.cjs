@@ -4577,6 +4577,154 @@ function registerGameEngine(io) {
 			broadcastGameState(game);
 		});
 
+		// Team vs Team 1v1 duel pairing: student-controlled opponent choice.
+		// Pair data lives in game.settings.pairing.pairs and flows through the
+		// regular game:stateUpdate funnel so both lobbies re-render from it.
+		socket.on(
+			'game:chooseOpponent',
+			({ gameId, userId, opponentId }, ack) => {
+				const fail = (message) => {
+					if (typeof ack === 'function') ack({ error: message });
+				};
+				const game = getTrackedGame(gameId);
+				if (!game?.session) return fail('Game not found');
+				const config = getPairingConfig(game);
+				if (!config.enabled)
+					return fail('Opponent pairing is not enabled for this game');
+				if (config.mode !== 'chosen')
+					return fail('Students do not choose opponents in this game');
+				if (game.status !== 'open' && game.status !== 'draft')
+					return fail(
+						'Opponents can only be chosen while the lobby is open',
+					);
+				const normalizedUserId = normalizeUserId(userId);
+				const normalizedOpponentId = normalizeUserId(opponentId);
+				if (!normalizedUserId || !normalizedOpponentId)
+					return fail('Missing user id');
+				if (normalizedUserId === normalizedOpponentId)
+					return fail('You cannot choose yourself as your opponent');
+				const self = game.session.participants.find((p) =>
+					sameUserId(p?.userId, normalizedUserId),
+				);
+				const opponent = game.session.participants.find((p) =>
+					sameUserId(p?.userId, normalizedOpponentId),
+				);
+				if (!self || !opponent)
+					return fail('Both you and your opponent must be in the lobby');
+				if (isSameTeamParticipant(self, opponent))
+					return fail('Choose an opponent from the other team only');
+				if (isUserIdPaired(config, normalizedUserId))
+					return fail('You already have an opponent');
+				if (isUserIdPaired(config, normalizedOpponentId))
+					return fail('That student already has an opponent');
+				setPairOnGame(
+					game,
+					normalizedUserId,
+					normalizedOpponentId,
+					config.gameType,
+				);
+				if (typeof ack === 'function') {
+					ack({ ok: true, game: sanitizeForPlayer(game, normalizedUserId) });
+				}
+				broadcastGameState(game);
+			},
+		);
+
+		const isStaffSocket = (sock) => {
+			const legacyAdmin =
+				sock.role === 'admin' && sock.adminAuthenticated === true;
+			const saasRole = String(sock.data?.user?.role || '').toLowerCase();
+			return (
+				legacyAdmin || ['admin', 'teacher', 'super_admin'].includes(saasRole)
+			);
+		};
+
+		socket.on(
+			'game:assignOpponent',
+			({ gameId, userId, opponentId, gameType }, ack) => {
+				const fail = (message) => {
+					if (typeof ack === 'function') ack({ error: message });
+				};
+				if (!isStaffSocket(socket))
+					return fail('Admin or teacher account is required');
+				const game = getTrackedGame(gameId);
+				if (!game?.session) return fail('Game not found');
+				const config = getPairingConfig(game);
+				if (!config.enabled)
+					return fail('Opponent pairing is not enabled for this game');
+				if (game.status !== 'open' && game.status !== 'draft')
+					return fail(
+						'Opponents can only be assigned while the lobby is open',
+					);
+				const normalizedUserId = normalizeUserId(userId);
+				const normalizedOpponentId = normalizeUserId(opponentId);
+				if (!normalizedUserId || !normalizedOpponentId)
+					return fail('Missing user id');
+				if (normalizedUserId === normalizedOpponentId)
+					return fail('A student cannot be paired with themselves');
+				const self = game.session.participants.find((p) =>
+					sameUserId(p?.userId, normalizedUserId),
+				);
+				const opponent = game.session.participants.find((p) =>
+					sameUserId(p?.userId, normalizedOpponentId),
+				);
+				if (!self || !opponent)
+					return fail('Both students must be in the lobby');
+				if (isSameTeamParticipant(self, opponent))
+					return fail('Assign opponents across teams only');
+				setPairOnGame(
+					game,
+					normalizedUserId,
+					normalizedOpponentId,
+					gameType || config.gameType || '',
+				);
+				if (typeof ack === 'function')
+					ack({ ok: true, game: sanitizeForAdmin(game) });
+				broadcastGameState(game);
+			},
+		);
+
+		socket.on('game:randomizePairs', ({ gameId }, ack) => {
+			const fail = (message) => {
+				if (typeof ack === 'function') ack({ error: message });
+			};
+			if (!isStaffSocket(socket))
+				return fail('Admin or teacher account is required');
+			const game = getTrackedGame(gameId);
+			if (!game?.session) return fail('Game not found');
+			const config = getPairingConfig(game);
+			if (!config.enabled)
+				return fail('Opponent pairing is not enabled for this game');
+			if (game.status !== 'open' && game.status !== 'draft')
+				return fail(
+					'Opponents can only be randomized while the lobby is open',
+				);
+			const pairs = randomizeAllPairs(game);
+			game.settings = game.settings || {};
+			game.settings.pairing = { ...config, pairs };
+			if (typeof ack === 'function')
+				ack({ ok: true, game: sanitizeForAdmin(game) });
+			broadcastGameState(game);
+		});
+
+		socket.on('game:clearPairing', ({ gameId }, ack) => {
+			const fail = (message) => {
+				if (typeof ack === 'function') ack({ error: message });
+			};
+			if (!isStaffSocket(socket))
+				return fail('Admin or teacher account is required');
+			const game = getTrackedGame(gameId);
+			if (!game?.session) return fail('Game not found');
+			if (game.status !== 'open' && game.status !== 'draft')
+				return fail('Pairing can only be cleared while the lobby is open');
+			if (game.settings && game.settings.pairing) {
+				game.settings.pairing.pairs = {};
+			}
+			if (typeof ack === 'function')
+				ack({ ok: true, game: sanitizeForAdmin(game) });
+			broadcastGameState(game);
+		});
+
 		socket.on('game:forfeit', ({ gameId, userId, reason }, ack) => {
 			const game = getTrackedGame(gameId);
 			if (!game?.session) {
@@ -5694,6 +5842,8 @@ function initGameServer(io) {
 function startGameOnServer(game) {
 	if (game.status === 'live') return; // Already live
 
+	autoFillMissingPairs(game);
+
 	const session = game.session;
 	if (!session) return;
 	ensureLobbyIdentity(game, session);
@@ -5791,6 +5941,101 @@ function startGameOnServer(game) {
 		initializeModeRoundState(game, session);
 		session.sprint = null;
 	}
+}
+
+// Team vs Team 1v1 duel pairing helpers -----------------------------
+function getPairingConfig(game) {
+	const settings = game?.settings || {};
+	const pairing =
+		settings.pairing && typeof settings.pairing === 'object'
+			? settings.pairing
+			: {};
+	return {
+		enabled: Boolean(pairing.enabled),
+		mode: String(pairing.mode || '').trim(),
+		gameType: String(pairing.gameType || '').trim(),
+		pairs: pairing.pairs && typeof pairing.pairs === 'object' ? pairing.pairs : {},
+	};
+}
+
+function isSameTeamParticipant(a, b) {
+	const teamOf = (p) =>
+		String(p?.teamId || 'team-a') === 'team-b' ? 'team-b' : 'team-a';
+	return teamOf(a) === teamOf(b);
+}
+
+function isUserIdPaired(config, userId) {
+	const key = String(userId || '').trim();
+	return Boolean(key && config.pairs && config.pairs[key]);
+}
+
+function setPairOnGame(game, userId, opponentId, gameType) {
+	const config = getPairingConfig(game);
+	const user = String(userId || '').trim();
+	const opponent = String(opponentId || '').trim();
+	if (!user || !opponent) return false;
+	const type = gameType || config.gameType || '';
+	config.pairs[user] = { opponentId: opponent, gameType: type };
+	config.pairs[opponent] = { opponentId: user, gameType: type };
+	game.settings = game.settings || {};
+	game.settings.pairing = {
+		enabled: config.enabled,
+		mode: config.mode,
+		gameType: config.gameType,
+		pairs: config.pairs,
+	};
+	return true;
+}
+
+function randomizeAllPairs(game) {
+	const config = getPairingConfig(game);
+	const participants = game.session?.participants || [];
+	const teamOf = (p) =>
+		String(p?.teamId || 'team-a') === 'team-b' ? 'team-b' : 'team-a';
+	const byTeam = { 'team-a': [], 'team-b': [] };
+	participants.forEach((p) => {
+		byTeam[teamOf(p)].push(p);
+	});
+	const shuffledA = shuffleArray(byTeam['team-a'].slice());
+	const shuffledB = shuffleArray(byTeam['team-b'].slice());
+	const pairs = {};
+	const count = Math.min(shuffledA.length, shuffledB.length);
+	for (let i = 0; i < count; i++) {
+		const a = String(shuffledA[i].userId).trim();
+		const b = String(shuffledB[i].userId).trim();
+		if (!a || !b) continue;
+		pairs[a] = { opponentId: b, gameType: config.gameType || '' };
+		pairs[b] = { opponentId: a, gameType: config.gameType || '' };
+	}
+	return pairs;
+}
+
+function autoFillMissingPairs(game) {
+	const config = getPairingConfig(game);
+	if (!config.enabled) return 0;
+	const participants = game.session?.participants || [];
+	const teamOf = (p) =>
+		String(p?.teamId || 'team-a') === 'team-b' ? 'team-b' : 'team-a';
+	const byTeam = { 'team-a': [], 'team-b': [] };
+	participants.forEach((p) => {
+		byTeam[teamOf(p)].push(p);
+	});
+	let created = 0;
+	const used = new Set(Object.keys(config.pairs));
+	byTeam['team-a'].forEach((aUser) => {
+		const aKey = String(aUser.userId).trim();
+		if (!aKey || used.has(aKey)) return;
+		const mate = byTeam['team-b'].find((bUser) => {
+			const bKey = String(bUser.userId).trim();
+			return bKey && bKey !== aKey && !used.has(bKey);
+		});
+		if (!mate) return;
+		setPairOnGame(game, aKey, String(mate.userId).trim(), config.gameType);
+		used.add(aKey);
+		used.add(String(mate.userId).trim());
+		created += 1;
+	});
+	return created;
 }
 
 module.exports = { initGameServer, registerGameEngine, activeGames, resetActiveGames };

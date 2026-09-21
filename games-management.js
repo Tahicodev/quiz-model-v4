@@ -135,6 +135,28 @@
 		);
 	}
 
+	function switchGameEditorTab(tabName) {
+		const form = byId('gameForm');
+		if (!form) return;
+		const panels = form.querySelectorAll('.gm-tab-panel');
+		const tabs = form.querySelectorAll('.gm-tab-btn');
+		panels.forEach((panel) => {
+			panel.classList.toggle(
+				'active',
+				panel.getAttribute('data-gm-panel') === tabName,
+			);
+		});
+		tabs.forEach((tab) => {
+			tab.classList.toggle(
+				'active',
+				tab.getAttribute('data-gm-tab') === tabName,
+			);
+		});
+		if (tabName === 'classes') {
+			renderClassOptions();
+		}
+	}
+
 	function openGameEditorModal(gameId = '') {
 		if (gameId) {
 			editGame(gameId);
@@ -144,6 +166,8 @@
 		const title = byId('gameEditorTitle');
 		if (title) title.textContent = gameId ? 'Edit game' : 'Create game';
 		setArenaModal('gameEditorModal', true);
+		renderClassOptions();
+		switchGameEditorTab('game-info');
 	}
 
 	function closeGameEditorModal() {
@@ -206,9 +230,9 @@
 					lastSurvivorRaw.bonusPoints ??
 						lastSurvivorRaw.lastSurvivorBonusPoints ??
 						rules.lastSurvivorBonusPoints,
-					50,
+					5,
+					1,
 					10,
-					200,
 				),
 				eliminationTimer: parseIntInRange(
 					lastSurvivorRaw.eliminationTimer ?? rules.lastSurvivorTimer,
@@ -238,9 +262,9 @@
 				),
 				pointsPerCorrect: parseIntInRange(
 					hotPotatoRaw.pointsPerCorrect ?? rules.hotPotatoPoints,
-					20,
 					5,
-					100,
+					1,
+					10,
 				),
 				autoRotate:
 					hotPotatoRaw.autoRotate !== undefined
@@ -816,6 +840,82 @@
 			`,
 			)
 			.join('');
+	}
+
+	function getGamePairingConfig(game) {
+		try {
+			return window.GameCore.getGamePairing(game) || {};
+		} catch (e) {
+			const pairing =
+				game?.settings?.pairing && typeof game.settings.pairing === 'object'
+					? game.settings.pairing
+					: {};
+			return {
+				enabled: Boolean(pairing.enabled),
+				mode: String(pairing.mode || '').trim(),
+				gameType: String(pairing.gameType || '').trim(),
+				pairs:
+					pairing.pairs && typeof pairing.pairs === 'object'
+						? pairing.pairs
+						: {},
+			};
+		}
+	}
+
+	function setGamePairingConfig(game, config) {
+		if (!game || typeof game !== 'object') return game;
+		game.settings = game.settings || {};
+		game.settings.pairing = {
+			enabled: Boolean(config.enabled),
+			mode: String(config.mode || '').trim(),
+			gameType: String(config.gameType || '').trim(),
+			pairs:
+				config.pairs && typeof config.pairs === 'object' ? config.pairs : {},
+		};
+		return game;
+	}
+
+	function populateGamePairingTypeOptions() {
+		const select = byId('gamePairingType');
+		if (!select) return;
+		const options = [
+			{ value: '', label: 'Use the game type above' },
+			...GAME_TYPE_ORDER.map((type) => ({
+				value: type,
+				label: getGameTypeLabel(type) || type,
+			})),
+		];
+		select.innerHTML = options
+			.map(
+				(option) =>
+					`<option value="${escapeHtml(option.value)}">${escapeHtml(
+						option.label,
+					)}</option>`,
+			)
+			.join('');
+	}
+
+	function toggleGamePairingSection() {
+		const section = byId('gamePairingSection');
+		if (!section) return;
+		const mode = String(byId('gameMode')?.value || 'solo').toLowerCase();
+		const isTeam = mode === 'team';
+		section.hidden = !isTeam;
+		if (!isTeam) return;
+		const enabled = Boolean(byId('gamePairingEnabled')?.checked);
+		const optionsRow = byId('gamePairingOptionsRow');
+		if (optionsRow) {
+			if (!enabled) {
+				optionsRow.hidden = true;
+				byId('gamePairingMode')?.setAttribute('disabled', 'disabled');
+				byId('gamePairingType')?.setAttribute('disabled', 'disabled');
+			} else {
+				optionsRow.hidden = false;
+				byId('gamePairingMode')?.removeAttribute('disabled');
+				byId('gamePairingType')?.removeAttribute('disabled');
+			}
+		}
+		populateGamePairingTypeOptions();
 	}
 
 	function renderCategoryOptions(selectId) {
@@ -1497,6 +1597,39 @@
 			byId('lastSurvivorTimer').value = rules.lastSurvivor.eliminationTimer;
 		const customTypeInput = byId('customGameTypeName');
 		if (customTypeInput) customTypeInput.value = '';
+		// Game-wide preset values are carried into the (hidden while a preset is
+		// active) manual fields so the saved game inherits them.
+		if (byId('gamePoints'))
+			byId('gamePoints').value = parseIntInRange(
+				preset.pointsPerCorrect != null
+					? preset.pointsPerCorrect
+					: preset.gameRules?.pointsPerCorrect,
+				3,
+				1,
+				10,
+			);
+		if (byId('gameExpectedPlayers'))
+			byId('gameExpectedPlayers').value = parseIntInRange(
+				preset.expectedPlayers != null
+					? preset.expectedPlayers
+					: preset.gameRules?.expectedPlayers,
+				0,
+				0,
+				100,
+			);
+		if (byId('gameQuestionTimer'))
+			byId('gameQuestionTimer').value = parseIntInRange(
+				preset.questionTimeLimit != null
+					? preset.questionTimeLimit
+					: preset.gameRules?.questionTimeLimit,
+				20,
+				5,
+				300,
+			);
+		if (byId('gameAutoStart'))
+			byId('gameAutoStart').checked = Boolean(
+				preset.autoStart ?? preset.gameRules?.autoStart,
+			);
 		setGameRuleControlsDisabled(false);
 	}
 
@@ -1531,6 +1664,122 @@
 		if (mathRow)
 			mathRow.style.display = hasType && isCardType ? 'block' : 'none';
 		renderGameCreationRecommendations();
+		syncGamePresetOverrideUI();
+		toggleGamePairingSection();
+		populateGamePairingTypeOptions();
+	}
+
+	function renderGamePresetSummary(preset) {
+		const body = byId('gamePresetSummaryBody');
+		if (!body) return;
+		if (!preset) {
+			body.innerHTML = '';
+			return;
+		}
+		const rules = normalizeGameRules(preset.gameRules || {});
+		const rows = [
+			{
+				label: 'Game type',
+				value: getGameTypeLabel(preset.gameType) || preset.gameType,
+			},
+			{ label: 'Match mode', value: preset.gameMode === 'team' ? 'Team vs Team' : '1 vs 1' },
+			{
+				label: 'Points per correct',
+				value: String(
+					preset.pointsPerCorrect != null
+						? preset.pointsPerCorrect
+						: rules.pointsCorrect ?? '—',
+				),
+			},
+			{
+				label: 'Expected players',
+				value: String(
+					preset.expectedPlayers != null ? preset.expectedPlayers : '—',
+				),
+			},
+			{
+				label: 'Question timer',
+				value: String(
+					preset.questionTimeLimit != null ? preset.questionTimeLimit : '—',
+				),
+			},
+			{
+				label: 'Auto-start',
+				value:
+					preset.autoStart != null
+						? preset.autoStart
+							? 'Yes'
+							: 'No'
+						: '—',
+			},
+		];
+		const activeFeatures = [];
+		const featureLabels = [
+			['mirrorCard', 'Mirror card'],
+			['timeWarp', 'Time warp'],
+			['doubleOrNothing', 'Double or nothing'],
+			['shieldCard', 'Shield'],
+			['freezeCard', 'Freeze'],
+			['stealCard', 'Steal'],
+			['fogCard', 'Fog'],
+			['comboBreakerCard', 'Combo breaker'],
+			['overclockCard', 'Overclock'],
+			['streakMultiplier', 'On-fire streaks'],
+			['bountyBonus', 'Bounty bonus'],
+			['teamBetting', 'Team betting'],
+			['suddenDeath', 'Sudden death'],
+			['hintCost', 'Hint cost'],
+			['autoPlayTimeoutCard', 'Auto-play timeout card'],
+			['autoRotate', 'Auto-rotate turns (hot potato)'],
+			['showCountdown', 'Timer countdown (hot potato)'],
+			['eliminateOnFirstWrong', 'Eliminate on first wrong (last survivor)'],
+			['showEliminationReason', 'Show elimination reason'],
+		];
+		featureLabels.forEach(([key, label]) => {
+			if (rules[key]) activeFeatures.push(label);
+		});
+		if (
+			preset.gameType === 'sprint-race' &&
+			rules.sprint &&
+			rules.sprint.globalTimer
+		) {
+			activeFeatures.push(`Sprint timer ${rules.sprint.globalTimer}s`);
+		}
+		if (rules.hotPotato && rules.hotPotato.totalTimer)
+			activeFeatures.push(
+				`Hot potato turn ${rules.hotPotato.turnDuration}s / total ${rules.hotPotato.totalTimer}s`,
+			);
+		const summaryItems = rows
+			.map(
+				(row) =>
+					`<div class="game-preset-summary-item"><span class="game-preset-summary-label">${escapeHtml(row.label)}</span><span class="game-preset-summary-value">${escapeHtml(row.value)}</span></div>`,
+			)
+			.join('');
+		const featuresHtml = activeFeatures.length
+			? `<div class="game-preset-summary-features"><span class="game-preset-summary-label">Features</span><ul>${activeFeatures
+					.slice(0, 12)
+					.map((f) => `<li>${escapeHtml(f)}</li>`)
+					.join('')}</ul></div>`
+			: '';
+		body.innerHTML = `<div class="game-preset-summary-grid">${summaryItems}</div>${featuresHtml}`;
+	}
+
+	function syncGamePresetOverrideUI() {
+		const preset = getSelectedGamePreset();
+		const presetActive = Boolean(preset);
+		const typeSelect = byId('gameType');
+		const modeSelect = byId('gameMode');
+		const manualBlock = byId('gameManualSettingsBlock');
+		const summaryStrip = byId('gamePresetSummaryStrip');
+		if (typeSelect) typeSelect.disabled = presetActive;
+		if (modeSelect) modeSelect.disabled = presetActive;
+		if (manualBlock) {
+			manualBlock.style.display = presetActive ? 'none' : '';
+		}
+		if (summaryStrip) {
+			summaryStrip.hidden = !presetActive;
+			if (presetActive) renderGamePresetSummary(preset);
+		}
 	}
 
 	function getSelectedMainQuestionCount() {
@@ -1554,7 +1803,7 @@
 					'Enable Hint Cost to reward precision',
 				],
 				apply: {
-					pointsCorrect: 12,
+					pointsCorrect: 8,
 					questionTimeLimit: 18,
 					turnTimeLimit: 25,
 					autoPlayTurnTimeoutCard: true,
@@ -1614,11 +1863,11 @@
 				timerTarget: 'Question timer: 10-18s, sprint timer: 60-120s',
 				bestRules: [
 					'Hint Cost ON',
-					'Keep points per correct between 8 and 15',
+					'Keep points per correct between 5 and 8',
 					'Use clean question wording (no ambiguous options)',
 				],
 				apply: {
-					pointsCorrect: 12,
+					pointsCorrect: 8,
 					questionTimeLimit: 12,
 					turnTimeLimit: 25,
 					autoStart: true,
@@ -1643,17 +1892,17 @@
 				bestRules: [
 					'Auto Rotate ON',
 					'Show Countdown ON',
-					'Keep points per correct moderate (15-25)',
+					'Keep points per correct moderate (5-8)',
 				],
 				apply: {
-					pointsCorrect: 20,
+					pointsCorrect: 8,
 					questionTimeLimit: 20,
 					turnTimeLimit: 20,
 					autoStart: true,
 					hotPotato: {
 						totalTimer: 15,
 						turnDuration: 3,
-						pointsPerCorrect: 20,
+						pointsPerCorrect: 8,
 						autoRotate: true,
 						showCountdown: true,
 					},
@@ -1672,17 +1921,17 @@
 				bestRules: [
 					'Eliminate on first wrong only for advanced students',
 					'Show elimination reason ON',
-					'Bonus points between 30 and 70',
+					'Bonus points between 3 and 7',
 				],
 				apply: {
-					pointsCorrect: 12,
+					pointsCorrect: 8,
 					questionTimeLimit: 20,
 					turnTimeLimit: 25,
 					autoStart: true,
 					lastSurvivor: {
 						eliminateOnFirstWrong: false,
 						showEliminationReason: true,
-						bonusPoints: 50,
+						bonusPoints: 5,
 						eliminationTimer: 20,
 					},
 					raceRules: {
@@ -1955,6 +2204,9 @@
 		const autoStart = Boolean(byId('gameAutoStart')?.checked);
 		const teamA = byId('gameTeamA')?.value || 'Team A';
 		const teamB = byId('gameTeamB')?.value || 'Team B';
+		const pairingEnabled = Boolean(byId('gamePairingEnabled')?.checked);
+		const pairingMode = byId('gamePairingMode')?.value || '';
+		const pairingType = byId('gamePairingType')?.value || '';
 		const mathMin = parseInt(byId('gameMathMin')?.value || '1', 10);
 		const mathMax = parseInt(byId('gameMathMax')?.value || '12', 10);
 		const mathOps = Array.from(
@@ -1976,6 +2228,9 @@
 			autoStart,
 			teamA,
 			teamB,
+			pairingEnabled,
+			pairingMode,
+			pairingType,
 			mathMin,
 			mathMax,
 			mathOps,
@@ -2059,6 +2314,17 @@
 					a: form.teamA || 'Team A',
 					b: form.teamB || 'Team B',
 				},
+				pairing: {
+					enabled: form.pairingEnabled,
+					mode: form.pairingEnabled ? form.pairingMode : '',
+					gameType: form.pairingEnabled ? form.pairingType : '',
+					pairs:
+						form.pairingEnabled && state.editingId
+							? (getGamePairingConfig(
+									GameCore.getGameById(state.editingId) || {},
+								).pairs || {})
+							: {},
+				},
 				mathMin: Number.isFinite(form.mathMin) ? form.mathMin : 1,
 				mathMax: Number.isFinite(form.mathMax) ? form.mathMax : 12,
 				mathOperators: form.mathOps.length ? form.mathOps : ['+'],
@@ -2095,10 +2361,15 @@
 		byId('gamePenaltyList').innerHTML = '';
 		ensureQuestionListPlaceholder('gameQuestionsList');
 		ensureQuestionListPlaceholder('gamePenaltyList');
+		byId('gamePairingEnabled').checked = false;
+		byId('gamePairingMode').value = 'chosen';
+		byId('gamePairingType').value = '';
 		loadGamePresets();
 		toggleGameFormFields();
 		refreshGameQuestionBanks();
 		toggleGameRulesVisibility();
+		toggleGamePairingSection();
+		populateGamePairingTypeOptions();
 	}
 
 	function commitLocalGame(game) {
@@ -2207,6 +2478,105 @@
 			});
 	}
 
+	// ── Tournament → Database persistence ──────────────────────────────────
+	// Games already write through to the Prisma engine (persistGameToApi) and
+	// are reconciled DB-first on bootstrap. Tournaments previously lived only
+	// in localStorage + the realtime broadcast, so the student REST register
+	// call (POST /tournaments/:id/register) 404'd with "Tournament not found"
+	// whenever the DB had no row. Mirror the game flow: the DB is the source
+	// of truth, the legacy tournament id is kept in settings_json.legacyId,
+	// and the DB row's id is stamped back on the local object as
+	// `dbTournamentId` so student devices use it for the register call.
+
+	function toDbTournamentStatus(status) {
+		const s = String(status || '').toLowerCase();
+		if (s === 'paused') return 'active'; // DB has no paused; paused stays joinable
+		if (s === 'finished' || s === 'completed') return 'finished';
+		if (s === 'open') return 'open';
+		if (s === 'draft') return 'draft';
+		return 'active';
+	}
+
+	function buildTournamentDbPayload(tournament) {
+		return {
+			name: String(tournament?.name || '').trim() || 'Untitled tournament',
+			description:
+				String(
+					tournament?.notes || tournament?.description || '',
+				).trim() || null,
+			settings_json: JSON.stringify({
+				...tournament,
+				legacyId: String(tournament?.id || ''),
+				legacyStatus: String(tournament?.status || ''),
+			}),
+			starts_at: tournament?.startedAt || tournament?.createdAt || null,
+			status: toDbTournamentStatus(tournament?.status),
+		};
+	}
+
+	function stampTournamentDbId(tournament, dbId) {
+		if (!tournament || !dbId) return;
+		tournament.dbTournamentId = String(dbId);
+		const active = getActiveTournament();
+		if (active && String(active.id) === String(tournament.id)) {
+			localStorage.setItem('quizTournamentActive', JSON.stringify(active));
+		}
+		const history = getTournamentHistory();
+		const index = history.findIndex(
+			(t) => String(t?.id || '') === String(tournament.id),
+		);
+		if (index >= 0) {
+			history[index] = { ...history[index], dbTournamentId: String(dbId) };
+			saveTournamentHistory(history);
+		}
+	}
+
+	async function persistTournamentToApi(tournament, options = {}) {
+		if (!tournament || !tournament.id) return { ok: false };
+		if (!window.API || typeof window.API.raw !== 'function') {
+			if (!options.quiet) {
+				showToast?.(
+					'Tournament saved locally, but the API bridge is unavailable.',
+					'warning',
+				);
+			}
+			return { ok: false };
+		}
+		const payload = buildTournamentDbPayload(tournament);
+		const dbId = String(tournament.dbTournamentId || '').trim();
+		try {
+			if (dbId) {
+				if (typeof window.API.update === 'function') {
+					await window.API.update('tournaments', dbId, payload);
+					return { ok: true, dbId, created: false };
+				}
+				return { ok: false };
+			}
+			if (typeof window.API.create !== 'function') return { ok: false };
+			// The REST create forces status draft; move it to the live status
+			// so the student register/join routes can see it.
+			const created = await window.API.create('tournaments', payload);
+			const newDbId = String(created?.id || created?.dbId || '').trim();
+			if (!newDbId) throw new Error('Tournament create returned no id');
+			stampTournamentDbId(tournament, newDbId);
+			const finalStatus = toDbTournamentStatus(tournament.status);
+			if (finalStatus !== 'draft' && typeof window.API.update === 'function') {
+				await window.API.update('tournaments', newDbId, { status: finalStatus });
+			}
+			return { ok: true, dbId: newDbId, created: true };
+		} catch (error) {
+			if (!options.quiet) {
+				showToast?.(
+					`Tournament saved locally, but the database sync failed: ${
+						error?.message || 'unknown error'
+					}`,
+					'warning',
+				);
+			}
+			return { ok: false, error };
+		}
+	}
+
 	function editGame(gameId) {
 		const game = GameCore.getGameById(gameId);
 		if (!game) {
@@ -2278,6 +2648,10 @@
 		byId('gameAutoStart').checked = Boolean(game.settings?.autoStart);
 		byId('gameTeamA').value = game.settings?.teamNames?.a || 'Team A';
 		byId('gameTeamB').value = game.settings?.teamNames?.b || 'Team B';
+		const pairingConfig = getGamePairingConfig(game);
+		byId('gamePairingEnabled').checked = Boolean(pairingConfig.enabled);
+		byId('gamePairingMode').value = pairingConfig.mode || 'chosen';
+		byId('gamePairingType').value = pairingConfig.gameType || '';
 		byId('gameMathMin').value = game.settings?.mathMin ?? 1;
 		byId('gameMathMax').value = game.settings?.mathMax ?? 12;
 
@@ -2534,6 +2908,10 @@
 		}
 		const socket = window.clientSocket;
 		if (socket && socket.connected) {
+			// Persist the open state (status open -> wire waiting +
+			// settings.legacyStatus 'open') so a rehydrate after server restart
+			// keeps this lobby visible instead of regressing to a hidden draft.
+			persistGameToApi({ ...localGame, status: 'open' }, false);
 			// Get game data from localStorage to help server hydrate if needed
 			const games = window.__DI_CONTAINER__.repo.getAll_sync('games');
 			const gameData = games.find((g) => g.id === gameId);
@@ -3168,9 +3546,139 @@
 		};
 	}
 
+	let gameFilters = { search: '', status: '', classId: '', type: '' };
+
+	function getGameClassIdList(game) {
+		return [
+			...(Array.isArray(game.classIds) ? game.classIds : []),
+			...(Array.isArray(game.settings?.classIds)
+				? game.settings.classIds
+				: []),
+		].map(String);
+	}
+
+	function buildGameFilterOptions() {
+		const classSel = byId('gameFilterClass');
+		const typeSel = byId('gameFilterType');
+		const games = Array.isArray(GameCore.getQuizGames())
+			? GameCore.getQuizGames()
+			: [];
+		if (classSel) {
+			const noClassOption = classSel.querySelector(
+				'option[value="__none__"]',
+			);
+			if (!noClassOption) {
+				const noneOpt = document.createElement('option');
+				noneOpt.value = '__none__';
+				noneOpt.textContent = 'No class assigned';
+				classSel.appendChild(noneOpt);
+			}
+			const prevClass = classSel.value;
+			const classesRaw =
+				window.__DI_CONTAINER__?.repo?.getAll_sync('classes') || [];
+			const classOptions = (Array.isArray(classesRaw) ? classesRaw : [])
+				.map((cls) => ({
+					id: String(cls.id),
+					label: String(cls.name || cls.className || cls.id),
+				}))
+				.sort((a, b) => a.label.localeCompare(b.label));
+			const knownIds = new Set(classOptions.map((c) => c.id));
+			games.forEach((game) => {
+				getGameClassIdList(game).forEach((classId) => {
+					if (!knownIds.has(classId)) {
+						knownIds.add(classId);
+						classOptions.push({ id: classId, label: classId });
+					}
+				});
+			});
+			classOptions.sort((a, b) => a.label.localeCompare(b.label));
+			[...classSel.querySelectorAll('option')].forEach((opt) => {
+				if (opt.value && opt.value !== '__none__') opt.remove();
+			});
+			const classFrag = document.createDocumentFragment();
+			classOptions.forEach((entry) => {
+				const opt = document.createElement('option');
+				opt.value = entry.id;
+				opt.textContent = entry.label;
+				classFrag.appendChild(opt);
+			});
+			classSel.appendChild(classFrag);
+			classSel.value =
+				prevClass && [...classSel.options].some((o) => o.value === prevClass)
+					? prevClass
+					: '';
+		}
+		if (typeSel) {
+			const prevType = typeSel.value;
+			const typeSet = new Set(GAME_TYPE_ORDER);
+			games.forEach((game) => {
+				if (game?.type) typeSet.add(game.type);
+			});
+			const ordered = GAME_TYPE_ORDER.filter((t) => typeSet.has(t));
+			[...typeSet]
+				.filter((t) => !GAME_TYPE_ORDER.includes(t))
+				.sort()
+				.forEach((t) => ordered.push(t));
+			[...typeSel.querySelectorAll('option')].forEach((opt) => {
+				if (opt.value) opt.remove();
+			});
+			const typeFrag = document.createDocumentFragment();
+			ordered.forEach((t) => {
+				const opt = document.createElement('option');
+				opt.value = t;
+				opt.textContent = getGameTypeLabel(t);
+				typeFrag.appendChild(opt);
+			});
+			typeSel.appendChild(typeFrag);
+			typeSel.value =
+				prevType && [...typeSel.options].some((o) => o.value === prevType)
+					? prevType
+					: '';
+		}
+	}
+
+	function applyGameFilters() {
+		gameFilters.search = String(byId('gameFilterSearch')?.value || '').trim();
+		const activeStatusChip = document.querySelector(
+			'.game-status-row .filter-chip.active',
+		);
+		gameFilters.status =
+			(activeStatusChip && activeStatusChip.dataset.gameStatusFilter) ||
+			byId('gameFilterStatus')?.value ||
+			'';
+		gameFilters.classId = byId('gameFilterClass')?.value || '';
+		gameFilters.type = byId('gameFilterType')?.value || '';
+		renderGameList();
+	}
+
+	function resetGameFilters() {
+		gameFilters = { search: '', status: '', classId: '', type: '' };
+		const search = byId('gameFilterSearch');
+		if (search) search.value = '';
+		const status = byId('gameFilterStatus');
+		if (status) status.value = '';
+		document
+			.querySelectorAll('.game-status-row .filter-chip')
+			.forEach((chip) => {
+				chip.classList.toggle(
+					'active',
+					chip.dataset.gameStatusFilter === '',
+				);
+			});
+		const classSel = byId('gameFilterClass');
+		if (classSel) classSel.value = '';
+		const typeSel = byId('gameFilterType');
+		if (typeSel) typeSel.value = '';
+		renderGameList();
+		if (typeof showToast === 'function') {
+			showToast('Game filters cleared', 'info');
+		}
+	}
+
 	function renderGameList() {
 		const container = byId('gameList');
 		if (!container) return;
+		buildGameFilterOptions();
 		const games = GameCore.getQuizGames();
 		// Tournament instances are no longer hidden: they are real lobbies
 		// students join by code, and hiding them left the Round Monitor as the
@@ -3189,7 +3697,46 @@
 				'<div class="empty-state">No games created yet.</div>';
 			return;
 		}
-		container.innerHTML = visibleGames
+		const filteredGames = visibleGames.filter((game) => {
+			if (gameFilters.search) {
+				const haystack = `${String(game.name || '')} ${getGameTypeLabel(
+					game.type,
+				)}`.toLowerCase();
+				if (!haystack.includes(gameFilters.search.toLowerCase()))
+					return false;
+			}
+			if (
+				gameFilters.status &&
+				(game.status || 'draft') !== gameFilters.status
+			) {
+				return false;
+			}
+			if (gameFilters.classId) {
+				const classIds = getGameClassIdList(game);
+				if (gameFilters.classId === '__none__') {
+					if (classIds.length) return false;
+				} else if (!classIds.includes(String(gameFilters.classId))) {
+					return false;
+				}
+			}
+			if (gameFilters.type && (game.type || '') !== gameFilters.type) {
+				return false;
+			}
+			return true;
+		});
+		const filtersActive = Boolean(
+			gameFilters.search ||
+				gameFilters.status ||
+				gameFilters.classId ||
+				gameFilters.type,
+		);
+		if (!filteredGames.length) {
+			container.innerHTML = filtersActive
+				? `<div class="empty-state">No games match your filters. <button type="button" class="btn btn-sm btn-secondary" onclick="resetGameFilters()">Reset filters</button></div>`
+				: '<div class="empty-state">No games created yet.</div>';
+			return;
+		}
+		container.innerHTML = filteredGames
 			.map((game) => {
 				const status = game.status || 'draft';
 				const sessionCount = game.session?.participants?.length || 0;
@@ -3257,6 +3804,152 @@
 			`;
 			})
 			.join('');
+	}
+
+	function getGameTypeLabelText(type) {
+		try {
+			return getGameTypeLabel(type) || '';
+		} catch (e) {
+			return '';
+		}
+	}
+
+	function renderTeamPairingPanel(game) {
+		if (!game || game.mode !== 'team') return '';
+		const pairingConfig = getGamePairingConfig(game);
+		if (!pairingConfig.enabled) return '';
+		const session = GameCore.ensureGameSession(game);
+		const participants = session.participants || [];
+		if (!participants.length) return '';
+		const teamNames = game.settings?.teamNames || { a: 'Team A', b: 'Team B' };
+		const pairs = pairingConfig.pairs || {};
+		const teamOf = (p) =>
+			String(p?.teamId || 'team-a') === 'team-b' ? 'team-b' : 'team-a';
+		const byTeam = { 'team-a': [], 'team-b': [] };
+		participants.forEach((p) => {
+			byTeam[teamOf(p)].push(p);
+		});
+		const pairedIds = new Set(Object.keys(pairs));
+		const gameTypeText = getGameTypeLabelText(pairingConfig.gameType);
+		const canRandomize =
+			pairingConfig.mode === 'assigned' || pairingConfig.mode === 'random';
+		const opponentOptions = (student) => {
+			const myTeam = teamOf(student);
+			const otherTeam = myTeam === 'team-b' ? 'team-a' : 'team-b';
+			// Reassigns are allowed in teacher mode; exclude the student
+			// themselves and their own teammates so cross-team stays enforced.
+			return byTeam[otherTeam]
+				.filter((q) => String(q.userId).trim() !== String(student.userId).trim())
+				.map(
+					(q) =>
+						`<option value="${escapeHtml(q.userId)}">${escapeHtml(q.name)}</option>`,
+				)
+				.join('');
+		};
+		const assignmentRows = participants
+			.map((student) => {
+				const userId = String(student.userId).trim();
+				const myTeam = teamOf(student);
+				const myPair =
+					Object.keys(pairs).length && pairs[userId]
+						? pairs[userId]
+						: null;
+				const myOpponent = myPair
+					? participants.find((q) =>
+							String(q.userId).trim() === String(myPair.opponentId || '').trim(),
+						)
+					: null;
+				const selectHtml = `
+					<select class="form-control form-control-sm" ${
+						byTeam[myTeam === 'team-b' ? 'team-a' : 'team-b'].length
+							? ''
+							: 'disabled'
+					} onchange="adminAssignOpponent('${String(game.id).replace(/['\\]/g, '')}', '${userId.replace(/['\\]/g, '')}', this.value)">
+						<option value="">${
+							myOpponent ? `Change opponent` : 'Assign opponent'
+						}</option>
+						${opponentOptions(student)}
+					</select>`;
+				return `
+					<div class="pairing-row">
+						<div class="pairing-student">
+							<span class="pairing-team-dot ${escapeHtml(
+								myTeam === 'team-b' ? 'team-b' : 'team-a',
+							)}"></span>
+							<span>${escapeHtml(student.name)}</span>
+							<small>${
+								myTeam === 'team-b' ? teamNames.b : teamNames.a
+							}</small>
+						</div>
+						${
+							myOpponent
+								? `<div class="pairing-opponent">vs ${escapeHtml(
+										myOpponent.name || myOpponent.userId || 'Opponent',
+									)}</div>`
+								: '<div class="pairing-opponent muted">No opponent yet</div>'
+						}
+						<div class="pairing-action">${selectHtml}</div>
+					</div>`;
+			})
+			.join('');
+		const pairSummary = Object.values(pairs)
+			.map((entry) => {
+				const a = participants.find(
+					(q) => String(q.userId).trim() === String(entry.opponentId || '').trim(),
+				);
+				return a ? `${escapeHtml(a.name)} (${escapeHtml(
+					teamOf(a) === 'team-b' ? teamNames.b : teamNames.a,
+				)})` : '';
+			})
+			.filter(Boolean)
+			.join('&nbsp;&nbsp;•&nbsp;&nbsp;');
+		const currentPairCount = new Set(
+			Object.keys(pairs).map((key) => String(pairs[key]?.opponentId || '').trim()),
+		).size;
+		const maxPairs = Math.min(byTeam['team-a'].length, byTeam['team-b'].length);
+		const modeLabel = {
+			chosen: 'Students choose their opponent',
+			assigned: 'Teacher assigns opponents',
+			random: 'Random pairing',
+		}[pairingConfig.mode] || pairingConfig.mode;
+		return `
+			<div class="game-pairing-panel">
+				<h5>Team vs Team - 1v1 Pairing</h5>
+				<div class="pairing-meta">
+					<span>Mode: <strong>${escapeHtml(modeLabel)}</strong></span>
+					<span>Duel game: <strong>${
+						gameTypeText ? escapeHtml(gameTypeText) : 'Game type above'
+					}</strong></span>
+					<span>Paired: <strong>${currentPairCount} / ${maxPairs}</strong></span>
+				</div>
+				${
+					currentPairCount
+						? `<div class="pairing-summary">${pairSummary}</div>`
+						: '<div class="pairing-summary muted">No pairs yet. Use the dropdowns below to assign, or Randomize Pairs.</div>'
+				}
+				<div class="pairing-list">${assignmentRows}</div>
+				${
+					canRandomize
+						? `
+					<div class="pairing-actions">
+						<button class="btn btn-sm btn-secondary" onclick="adminRandomizePairs('${String(
+							game.id,
+						).replace(/['\\]/g, '')}')">Randomize Pairs</button>
+						<button class="btn btn-sm btn-danger-soft" onclick="adminClearPairing('${String(
+							game.id,
+						).replace(/['\\]/g, '')}')">Clear Pairs</button>
+					</div>
+				`
+						: `
+					<div class="pairing-actions">
+						<button class="btn btn-sm btn-danger-soft" onclick="adminClearPairing('${String(
+							game.id,
+						).replace(/['\\]/g, '')}')">Clear Pairs</button>
+					</div>
+				`
+				}
+			</div>
+		`;
 	}
 
 	function renderLobby() {
@@ -3357,8 +4050,14 @@
 				<button class="btn btn-info" ${watchable ? '' : 'disabled'} onclick="${
 					watchable ? `openAdminGameWatch('${game.id}')` : 'return false'
 				}">${escapeHtml(watchLabel)}</button>
+				${
+					lobbyStatus === 'live'
+						? `<button class="btn btn-success" title="End the session: tally scores, mark the game completed, and notify every player" onclick="completeGameSession('${game.id}')">End Session</button>`
+						: ''
+				}
 				<button class="btn btn-danger-soft" onclick="resetGameSession('${game.id}')">Reset Session</button>
 			</div>
+			${renderTeamPairingPanel(game)}
 			${
 				game.results
 					? `
@@ -4977,8 +5676,15 @@
 			modeSelect.addEventListener('change', () => {
 				toggleGameRulesVisibility();
 				renderGameCreationRecommendations();
+				toggleGamePairingSection();
 			});
 		}
+		const pairingEnabledInput = byId('gamePairingEnabled');
+		if (pairingEnabledInput) {
+			pairingEnabledInput.addEventListener('change', toggleGamePairingSection);
+		}
+		populateGamePairingTypeOptions();
+		toggleGamePairingSection();
 		const recommendationFieldIds = [
 			'gameExpectedPlayers',
 			'gameQuestionTimer',
@@ -5073,8 +5779,183 @@
 	window.endGameSession = endGame;
 	window.resetGameSession = resetSession;
 	window.renderGameList = renderGameList;
+	window.completeGameSession = function completeGameSession(gameId) {
+		const game = GameCore.getGameById
+			? GameCore.getGameById(gameId)
+			: window.__DI_CONTAINER__.repo.getAll_sync('games').find(
+					(g) => g.id === gameId,
+				);
+		const session = game?.session || {};
+		const status = String(session.status || game?.status || '').toLowerCase();
+		if (status === 'completed') {
+			showToast('This session is already completed.', 'warning');
+			return;
+		}
+		if (
+			!window.confirm(
+				'End this session? Scores will be tallied, the game marked completed, and every player notified.',
+			)
+		) {
+			return;
+		}
+		endGame(gameId);
+	};
+	window.applyGameFilters = applyGameFilters;
+	window.resetGameFilters = resetGameFilters;
+	window.buildGameFilterOptions = buildGameFilterOptions;
 	window.renderGameLobby = renderLobby;
 	window.copyGameJoinCode = copyGameJoinCode;
+
+	// Team vs Team 1v1 pairing admin actions (used by the lobby panel)
+	function adminAssignOpponent(gameId, userId, opponentId) {
+		const game = GameCore.getGameById
+			? GameCore.getGameById(gameId)
+			: window.__DI_CONTAINER__.repo.getAll_sync('games').find(
+					(g) => g.id === gameId,
+				);
+		if (!game) {
+			showToast('Game not found', 'error');
+			return;
+		}
+		if (!opponentId) {
+			showToast('Choose an opponent from the other team', 'error');
+			return;
+		}
+		const applyLocal = () => {
+			GameCore.setPairOnGame
+				? GameCore.setPairOnGame(game, userId, opponentId)
+				: setGamePairingConfig(game, {
+						enabled: true,
+						mode:
+							game.settings?.pairing?.mode || 'assigned',
+						gameType:
+							game.settings?.pairing?.gameType || game.type || '',
+						pairs: {
+							...((game.settings?.pairing?.pairs) || {}),
+							[userId]: {
+								opponentId,
+								gameType:
+									game.settings?.pairing?.gameType || game.type || '',
+							},
+							[opponentId]: {
+								opponentId: userId,
+								gameType:
+									game.settings?.pairing?.gameType || game.type || '',
+							},
+						},
+					});
+			renderLobby();
+		};
+		const socket = window.clientSocket;
+		if (socket && socket.connected) {
+			socket.emit(
+				'game:assignOpponent',
+				{ gameId, userId, opponentId },
+				(response) => {
+					if (response?.error) {
+						showToast(response.error, 'error');
+					} else {
+						showToast('Opponent assigned', 'success');
+						if (response?.game) {
+							upsertAuthoritativeGameSnapshot(response.game);
+						} else {
+							requestAuthoritativeGameList();
+						}
+						renderLobby();
+					}
+				},
+			);
+		} else {
+			applyLocal();
+		}
+	}
+
+	function adminRandomizePairs(gameId) {
+		const socket = window.clientSocket;
+		const after = (response) => {
+			if (response?.error) {
+				showToast(response.error, 'error');
+				return;
+			}
+			showToast('Pairs randomized', 'success');
+			if (response?.game) {
+				upsertAuthoritativeGameSnapshot(response.game);
+			} else {
+				requestAuthoritativeGameList();
+			}
+			renderLobby();
+		};
+		if (socket && socket.connected) {
+			socket.emit('game:randomizePairs', { gameId }, after);
+		} else {
+			const game = GameCore.getGameById
+				? GameCore.getGameById(gameId)
+				: window.__DI_CONTAINER__.repo.getAll_sync('games').find(
+						(g) => g.id === gameId,
+					);
+			if (!game) {
+				showToast('Game not found', 'error');
+				return;
+			}
+			const config = getGamePairingConfig(game);
+			const participants = GameCore.ensureGameSession(game).participants || [];
+			const teamOf = (p) =>
+				String(p?.teamId || 'team-a') === 'team-b' ? 'team-b' : 'team-a';
+			const byTeam = { 'team-a': [], 'team-b': [] };
+			participants.forEach((p) => byTeam[teamOf(p)].push(p));
+			const shuffledA = GameCore.shuffleArray(byTeam['team-a'].slice());
+			const shuffledB = GameCore.shuffleArray(byTeam['team-b'].slice());
+			const pairs = {};
+			const count = Math.min(shuffledA.length, shuffledB.length);
+			for (let i = 0; i < count; i++) {
+				const a = String(shuffledA[i].userId).trim();
+				const b = String(shuffledB[i].userId).trim();
+				if (!a || !b) continue;
+				pairs[a] = { opponentId: b, gameType: config.gameType || '' };
+				pairs[b] = { opponentId: a, gameType: config.gameType || '' };
+			}
+			GameCore.updateGameById(gameId, (g) => {
+				g.settings = g.settings || {};
+				g.settings.pairing = { ...config, pairs };
+				return g;
+			});
+			renderLobby();
+			showToast('Pairs randomized', 'success');
+		}
+	}
+
+	function adminClearPairing(gameId) {
+		const socket = window.clientSocket;
+		const after = (response) => {
+			if (response?.error) {
+				showToast(response.error, 'error');
+				return;
+			}
+			showToast('Pairing cleared', 'success');
+			if (response?.game) {
+				upsertAuthoritativeGameSnapshot(response.game);
+			} else {
+				requestAuthoritativeGameList();
+			}
+			renderLobby();
+		};
+		if (socket && socket.connected) {
+			socket.emit('game:clearPairing', { gameId }, after);
+		} else {
+			GameCore.updateGameById(gameId, (g) => {
+				if (g.settings?.pairing) {
+					g.settings.pairing.pairs = {};
+				}
+				return g;
+			});
+			renderLobby();
+			showToast('Pairing cleared', 'success');
+		}
+	}
+
+	window.adminAssignOpponent = adminAssignOpponent;
+	window.adminRandomizePairs = adminRandomizePairs;
+	window.adminClearPairing = adminClearPairing;
 
 	// Game Presets Management
 	const GAME_PRESETS_KEY = 'gamePresets';
@@ -5145,6 +6026,19 @@
 			? preset.gameType
 			: 'race';
 		const requestedMode = preset.gameMode === 'team' ? 'team' : 'solo';
+		const rawRules =
+			preset.gameRules && typeof preset.gameRules === 'object'
+				? preset.gameRules
+				: {};
+		// game-wide settings ride inside the same rules payload so they survive
+		// the Server round-trip (rules_json is an opaque JSON blob).
+		const sidecar =
+			preset.pointsPerCorrect != null ||
+			preset.expectedPlayers != null ||
+			preset.questionTimeLimit != null ||
+			preset.autoStart != null
+				? preset
+				: {};
 		return {
 			id:
 				String(preset.id || '').trim() ||
@@ -5155,7 +6049,26 @@
 			gameMode: supportsTeamModeForType(normalizedType)
 				? requestedMode
 				: 'solo',
-			gameRules: normalizeGameRules(preset.gameRules || {}),
+			gameRules: normalizeGameRules(rawRules),
+			pointsPerCorrect: parseIntInRange(
+				sidecar.pointsPerCorrect ?? rawRules.pointsPerCorrect,
+				3,
+				1,
+				10,
+			),
+			expectedPlayers: parseIntInRange(
+				sidecar.expectedPlayers ?? rawRules.expectedPlayers,
+				0,
+				0,
+				100,
+			),
+			questionTimeLimit: parseIntInRange(
+				sidecar.questionTimeLimit ?? rawRules.questionTimeLimit,
+				20,
+				5,
+				300,
+			),
+			autoStart: Boolean(sidecar.autoStart ?? rawRules.autoStart),
 			isDefault: Boolean(preset.isDefault),
 			createdAt: preset.createdAt || new Date().toISOString(),
 		};
@@ -5341,6 +6254,17 @@
 		toggleGameFormFields();
 		toggleGameRulesVisibility();
 		toggleGamePresetRulesVisibility();
+
+		const form = byId('gameForm');
+		if (form) {
+			form.querySelectorAll('.gm-tab-btn').forEach((btn) => {
+				if (btn.dataset.gmTabBound === 'true') return;
+				btn.dataset.gmTabBound = 'true';
+				btn.addEventListener('click', () =>
+					switchGameEditorTab(btn.getAttribute('data-gm-tab')),
+				);
+			});
+		}
 	}
 
 	function presetSelectOnchange() {
@@ -5360,6 +6284,7 @@
 		} else {
 			clearGamePresetSelection();
 		}
+		syncGamePresetOverrideUI();
 	}
 
 	function saveCurrentRulesAsPreset() {
@@ -5570,6 +6495,13 @@
 			byId('game-preset-type').disabled = false;
 		}
 		if (byId('game-preset-mode')) byId('game-preset-mode').value = 'solo';
+		if (byId('game-preset-points')) byId('game-preset-points').value = 3;
+		if (byId('game-preset-expected-players'))
+			byId('game-preset-expected-players').value = 0;
+		if (byId('game-preset-question-timer'))
+			byId('game-preset-question-timer').value = 20;
+		if (byId('game-preset-auto-start'))
+			byId('game-preset-auto-start').checked = false;
 		const ruleDefaults = [
 			'game-preset-rule-mirrorCard',
 			'game-preset-rule-timeWarp',
@@ -5611,14 +6543,29 @@
 		if (byId('game-preset-hotPotatoTurnDuration'))
 			byId('game-preset-hotPotatoTurnDuration').value = '3';
 		if (byId('game-preset-hotPotatoPoints'))
-			byId('game-preset-hotPotatoPoints').value = '20';
+			byId('game-preset-hotPotatoPoints').value = '5';
 		if (byId('game-preset-sprintGlobalTimer'))
 			byId('game-preset-sprintGlobalTimer').value = '90';
 		if (byId('game-preset-lastSurvivorBonusPoints'))
-			byId('game-preset-lastSurvivorBonusPoints').value = '50';
+			byId('game-preset-lastSurvivorBonusPoints').value = '5';
 		if (byId('game-preset-lastSurvivorTimer'))
 			byId('game-preset-lastSurvivorTimer').value = '30';
 		toggleGamePresetRulesVisibility();
+	}
+
+	function parsePresetRuleValue(preset, key, fallback) {
+		if (!preset) return fallback;
+		let value = preset[key];
+		if (
+			value == null &&
+			preset.gameRules &&
+			typeof preset.gameRules === 'object'
+		) {
+			value = preset.gameRules[key];
+		}
+		if (key === 'autoStart') return value == null ? fallback : Boolean(value);
+		const numeric = Number(value);
+		return Number.isFinite(numeric) ? numeric : fallback;
 	}
 
 	function editGamePresetSettings(presetId) {
@@ -5639,6 +6586,25 @@
 		}
 		if (byId('game-preset-mode'))
 			byId('game-preset-mode').value = preset.gameMode || 'solo';
+		if (byId('game-preset-points'))
+			byId('game-preset-points').value =
+				preset.pointsPerCorrect != null
+					? preset.pointsPerCorrect
+					: parsePresetRuleValue(preset, 'pointsPerCorrect', 3);
+		if (byId('game-preset-expected-players'))
+			byId('game-preset-expected-players').value =
+				preset.expectedPlayers != null
+					? preset.expectedPlayers
+					: parsePresetRuleValue(preset, 'expectedPlayers', 0);
+		if (byId('game-preset-question-timer'))
+			byId('game-preset-question-timer').value =
+				preset.questionTimeLimit != null
+					? preset.questionTimeLimit
+					: parsePresetRuleValue(preset, 'questionTimeLimit', 20);
+		if (byId('game-preset-auto-start'))
+			byId('game-preset-auto-start').checked = Boolean(
+				preset.autoStart ?? parsePresetRuleValue(preset, 'autoStart', false),
+			);
 		const rules = normalizeGameRules(preset.gameRules || {});
 		if (byId('game-preset-rule-mirrorCard'))
 			byId('game-preset-rule-mirrorCard').checked = Boolean(rules.mirrorCard);
@@ -5756,6 +6722,31 @@
 		}
 		const requestedMode = byId('game-preset-mode')?.value || 'solo';
 		const gameMode = supportsTeamModeForType(gameType) ? requestedMode : 'solo';
+		const pointsPerCorrect = parseIntInRange(
+			byId('game-preset-points')?.value,
+			3,
+			1,
+			10,
+		);
+		const expectedPlayers = parseIntInRange(
+			byId('game-preset-expected-players')?.value,
+			0,
+			0,
+			100,
+		);
+		const questionTimeLimit = parseIntInRange(
+			byId('game-preset-question-timer')?.value,
+			20,
+			5,
+			300,
+		);
+		const autoStart = Boolean(byId('game-preset-auto-start')?.checked);
+		const gameWideSettings = {
+			pointsPerCorrect,
+			expectedPlayers,
+			questionTimeLimit,
+			autoStart,
+		};
 		const presetRules = normalizeGameRules({
 			mirrorCard: Boolean(byId('game-preset-rule-mirrorCard')?.checked),
 			timeWarp: Boolean(byId('game-preset-rule-timeWarp')?.checked),
@@ -5809,7 +6800,7 @@
 					name,
 					gameType,
 					gameMode,
-					rules: presetRules,
+					rules: { ...presetRules, ...gameWideSettings },
 				};
 				let serverPreset;
 				if (editingId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(editingId))) {
@@ -5824,6 +6815,7 @@
 					gameType: serverPreset.game_type,
 					gameMode: serverPreset.game_mode,
 					gameRules: presetRules,
+					...gameWideSettings,
 					isDefault: !!serverPreset.is_default,
 					createdAt: serverPreset.created_at || new Date().toISOString(),
 				};
@@ -5858,6 +6850,7 @@
 			gameType,
 			gameMode,
 			gameRules: presetRules,
+			...gameWideSettings,
 			createdAt: new Date().toISOString(),
 		};
 		if (editingId) {
@@ -5957,6 +6950,11 @@
 				),
 			);
 		state.gamesStudioTab = activeTab;
+
+		if (activeTab === 'games-studio') {
+			buildGameFilterOptions();
+			renderGameList();
+		}
 
 		if (activeTab === 'tournament-studio') {
 			initTournamentStudioTabs();
@@ -9251,6 +10249,22 @@
 			clearTournamentPlannerHistoryMode();
 		}
 
+		const targetRecord = getTournamentCatalogEntry(normalizedId);
+		if (
+			targetRecord?.dbTournamentId &&
+			window.API &&
+			typeof window.API.remove === 'function'
+		) {
+			window.API.remove('tournaments', targetRecord.dbTournamentId).catch(
+				(err) => {
+					console.warn(
+						`[Tournaments] DB delete failed for ${targetRecord.dbTournamentId}:`,
+						err?.message || err,
+					);
+				},
+			);
+		}
+
 		syncGamificationState();
 		loadGamificationUI();
 		showToast('Tournament deleted', 'success');
@@ -9303,6 +10317,7 @@
 		active.status = 'paused';
 		active.pausedAt = new Date().toISOString();
 		localStorage.setItem('quizTournamentActive', JSON.stringify(active));
+		persistTournamentToApi(active);
 		syncGamificationState();
 		renderTournamentPanels(active);
 		showToast('Tournament paused', 'info');
@@ -9321,6 +10336,7 @@
 		active.status = 'active';
 		active.pausedAt = null;
 		localStorage.setItem('quizTournamentActive', JSON.stringify(active));
+		persistTournamentToApi(active);
 		syncGamificationState();
 		renderTournamentPanels(active);
 		showToast('Tournament resumed', 'success');
@@ -9359,6 +10375,7 @@
 		}
 
 		localStorage.setItem('quizTournamentActive', JSON.stringify(active));
+		persistTournamentToApi(active);
 		syncGamificationState();
 		renderTournamentPanels(active);
 		showToast(`Advanced to Round ${active.currentRound}`, 'success');
@@ -9735,6 +10752,13 @@
 		history.push(tournament);
 		saveTournamentHistory(history);
 
+		// Ensure students joining through the REST register endpoint find a
+		// real DB row. The create is async; on success re-push the gamification
+		// payload so every device learns the dbTournamentId too.
+		persistTournamentToApi(tournament).then((result) => {
+			if (result && result.ok) syncGamificationState();
+		});
+
 		if (createdTournamentGames.length) {
 			console.log(
 				`[Tournament] Created ${createdTournamentGames.length} tournament game instance(s).`,
@@ -9967,6 +10991,10 @@
 		}
 		saveTournamentHistory(history);
 
+		// Archive the finished state in the DB so the leaderboard route and
+		// student-visible finished tournaments agree with the local record.
+		persistTournamentToApi(active);
+
 		localStorage.removeItem('quizTournamentActive');
 		const winnerLabelBase = winner
 			? `Winner: ${winner.name} (${winner.points} pts)`
@@ -9987,6 +11015,243 @@
 		setTournamentStudioTab('history');
 	}
 
+	// ─── Class → Games assignment ────────────────────────────────────────────────
+	function getGamesForClass(classId) {
+		const classKey = String(classId || '').trim();
+		const store =
+			typeof GameCore.getQuizGames === 'function'
+				? GameCore.getQuizGames()
+				: [];
+		return (Array.isArray(store) ? store : []).filter((game) => {
+			if (!game || !game.id) return false;
+			const topLevel = Array.isArray(game.classIds)
+				? game.classIds.map(String)
+				: [];
+			const embedded = Array.isArray(game.settings?.classIds)
+				? game.settings.classIds.map(String)
+				: [];
+			return topLevel.includes(classKey) || embedded.includes(classKey);
+		});
+	}
+
+	function gameClassStats(game) {
+		const session =
+			game.session && typeof game.session === 'object' ? game.session : {};
+		const participants = Array.isArray(session.participants)
+			? session.participants
+			: [];
+		const results = Array.isArray(game.results) ? game.results : [];
+		const scores = [
+			...participants.map(
+				(p) => Number(p.score) || Number(p.totalScore) || 0,
+			),
+			...results.map((r) => Number(r.score) || 0),
+		].filter((score) => score > 0);
+		const avg = scores.length
+			? Math.round(
+					(scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10,
+				) / 10
+			: null;
+		return {
+			playerCount: participants.length,
+			avgScore: avg,
+			topScore: scores.length ? Math.max.apply(null, scores) : null,
+		};
+	}
+
+	function renderClassGamesCell(classId) {
+		const games = getGamesForClass(classId);
+		if (!games.length) {
+			return '<span class="text-muted">No games</span>';
+		}
+		return (
+			games
+				.slice(0, 4)
+				.map((game) => {
+					const status = String(game.status || 'draft');
+					return `<div class="class-game-chip" title="Status: ${escapeHtml(status)} • ${escapeHtml(game.name)}"><span class="class-game-name">${escapeHtml(game.name)}</span><span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span></div>`;
+				})
+				.join('') +
+			(games.length > 4
+				? `<div class="class-game-chip class-game-more">+${games.length - 4} more</div>`
+				: '')
+		);
+	}
+
+	function refreshClassGamesCell(classId) {
+		const row = document.querySelector(
+			`#classList tbody tr[data-id="${CSS.escape(String(classId))}"]`,
+		);
+		if (!row) return;
+		const cell = row.querySelector('.class-assigned-games-cell');
+		if (cell) cell.innerHTML = renderClassGamesCell(classId);
+	}
+
+	function syncGameClassAssignment(game, classId, { assign }) {
+		const classKey = String(classId || '').trim();
+		const normalizeIds = (ids) =>
+			Array.from(new Set((Array.isArray(ids) ? ids : []).map(String))).filter(
+				Boolean,
+			);
+		const current = normalizeIds(
+			Array.isArray(game.classIds) && game.classIds.length
+				? game.classIds
+				: game.settings?.classIds,
+		);
+		const settingsIds = normalizeIds(game.settings?.classIds);
+		const next = assign
+			? current.includes(classKey)
+				? current
+				: [...current, classKey]
+			: current.filter((id) => id !== classKey);
+		game.classIds = next;
+		game.settings = game.settings || {};
+		game.settings.classIds = assign
+			? Array.from(new Set([...settingsIds, ...next]))
+			: settingsIds.filter((id) => id !== classKey);
+	}
+
+	function assignGameToClass(classId, gameId) {
+		const game = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
+		if (!game) {
+			showToast?.('Game not found', 'error');
+			return false;
+		}
+		syncGameClassAssignment(game, classId, { assign: true });
+		if (!commitLocalGame(game)) return false;
+		persistGameToApi(game, false);
+		refreshClassGamesCell(classId);
+		refreshClassGamesModalList(classId);
+		showToast?.('Game assigned to class', 'success');
+		return true;
+	}
+
+	function removeGameFromClass(classId, gameId) {
+		const game = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
+		if (!game) return false;
+		syncGameClassAssignment(game, classId, { assign: false });
+		if (!commitLocalGame(game)) return false;
+		persistGameToApi(game, false);
+		refreshClassGamesCell(classId);
+		refreshClassGamesModalList(classId);
+		showToast?.('Game removed from class', 'success');
+		return true;
+	}
+
+	let classGamesModalEl = null;
+
+	function refreshClassGamesModalList(classId) {
+		if (!classGamesModalEl) return;
+		const listEl = classGamesModalEl.querySelector('.class-games-assigned');
+		const pickerSelect = classGamesModalEl.querySelector(
+			'.class-games-picker select',
+		);
+		if (!listEl) return;
+		const games = getGamesForClass(classId);
+		const allStore =
+			typeof GameCore.getQuizGames === 'function'
+				? GameCore.getQuizGames()
+				: [];
+		const allGames = Array.isArray(allStore) ? allStore : [];
+		const assignedIds = new Set(games.map((game) => game.id));
+		listEl.innerHTML = games.length
+			? games
+					.map((game) => {
+						const stats = gameClassStats(game);
+						const status = String(game.status || 'draft');
+						const statsText = [
+							`${stats.playerCount} player${stats.playerCount === 1 ? '' : 's'}`,
+							stats.avgScore != null ? `avg ${stats.avgScore}` : null,
+							stats.topScore != null ? `best ${stats.topScore}` : null,
+						]
+							.filter(Boolean)
+							.join(' • ');
+						return `<div class="class-games-row">
+							<div class="class-games-row-main">
+								<span class="class-games-name">${escapeHtml(game.name)}</span>
+								<span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
+								<span class="class-games-stats">${escapeHtml(statsText || 'No play yet')}</span>
+							</div>
+							<button type="button" class="btn btn-sm btn-danger-soft" onclick="removeGameFromClass('${escapeHtml(classId)}', '${escapeHtml(game.id)}')">Remove</button>
+						</div>`;
+					})
+					.join('')
+			: '<div class="empty-state-small">No games assigned to this class.</div>';
+		if (pickerSelect) {
+			const candidates = allGames.filter((game) => !assignedIds.has(game.id));
+			pickerSelect.innerHTML = candidates.length
+				? candidates
+						.map(
+							(game) =>
+								`<option value="${escapeHtml(game.id)}">${escapeHtml(game.name)} (${escapeHtml(game.type || 'game')})</option>`,
+						)
+						.join('')
+				: '<option value="">All games are already assigned</option>';
+		}
+	}
+
+	function closeClassGamesModal() {
+		if (classGamesModalEl) {
+			classGamesModalEl.remove();
+			classGamesModalEl = null;
+		}
+	}
+
+	function openClassGamesModal(classId) {
+		const classesStore =
+			window.__DI_CONTAINER__?.repo?.getAll_sync('classes') || [];
+		const cls = classesStore.find(
+			(candidate) => String(candidate.id) === String(classId),
+		);
+		const className = cls ? cls.name || cls.className : 'this class';
+		closeClassGamesModal();
+		const overlay = document.createElement('div');
+		overlay.className = 'modal arena-editor-modal';
+		overlay.style.display = 'flex';
+		overlay.id = 'classGamesModal';
+		overlay.innerHTML = `
+			<div class="modal-content modal-lg arena-editor-content" style="max-width: 680px;">
+				<div class="modal-header arena-editor-header">
+					<div>
+						<span class="arena-eyebrow">Class Games</span>
+						<h2>Games for ${escapeHtml(className)}</h2>
+					</div>
+					<button type="button" class="arena-modal-close" aria-label="Close">×</button>
+				</div>
+				<div class="arena-editor-body" style="padding: 1.1rem; overflow-y: auto; max-height: 60vh;">
+					<div class="class-games-picker" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+						<select class="form-control" style="flex: 1;"></select>
+						<button type="button" class="btn btn-primary" onclick="assignClassGamesPick()">Assign</button>
+					</div>
+					<div class="class-games-assigned" style="display: grid; gap: 0.5rem;"></div>
+				</div>
+			</div>
+		`;
+		document.body.appendChild(overlay);
+		classGamesModalEl = overlay;
+		overlay.querySelector('.arena-modal-close').addEventListener('click', () =>
+			closeClassGamesModal(),
+		);
+		overlay.addEventListener('click', (event) => {
+			if (event.target === overlay) closeClassGamesModal();
+		});
+		// Inline handler needs the current classId at click time.
+		window.assignClassGamesPick = function () {
+			const select = overlay.querySelector('.class-games-picker select');
+			if (!select || !select.value) return;
+			assignGameToClass(classId, select.value);
+		};
+		refreshClassGamesModalList(classId);
+	}
+
+	window.getGamesForClass = getGamesForClass;
+	window.renderClassGamesCell = renderClassGamesCell;
+	window.openClassGamesModal = openClassGamesModal;
+	window.assignGameToClass = assignGameToClass;
+	window.removeGameFromClass = removeGameFromClass;
+	window.refreshClassGamesCell = refreshClassGamesCell;
+	window.closeClassGamesModal = closeClassGamesModal;
+
 	window.saveGamificationConfig = saveGamificationConfig;
 	window.startTournament = startTournament;
 	window.stopTournament = stopTournament;
@@ -9997,6 +11262,7 @@
 	window.editTournament = editTournament;
 	window.openGameEditorModal = openGameEditorModal;
 	window.closeGameEditorModal = closeGameEditorModal;
+	window.switchGameEditorTab = switchGameEditorTab;
 	window.openTournamentPlannerModal = openTournamentPlannerModal;
 	window.closeTournamentPlannerModal = closeTournamentPlannerModal;
 	window.openTournamentAssignmentsModal = openTournamentAssignmentsModal;
@@ -10009,6 +11275,44 @@
 
 	document.addEventListener('DOMContentLoaded', () => {
 		setTimeout(loadGamificationUI, 500); // Allow DOM elements to settle
+
+		// Persist a legacy live tournament that predates the DB bridge so
+		// students registering through the REST endpoint find a real row. No
+		// toast: this runs silently on every admin load.
+		setTimeout(async () => {
+			const active = getActiveTournament();
+			if (active && !String(active.dbTournamentId || '').trim()) {
+				const result = await persistTournamentToApi(active, { quiet: true });
+				if (result && result.ok) syncGamificationState();
+			}
+		}, 1200);
+
+		const gameFilterBar = byId('gameFiltersBar');
+		if (gameFilterBar && gameFilterBar.dataset.bound !== 'true') {
+			gameFilterBar.dataset.bound = 'true';
+			['gameFilterStatus', 'gameFilterClass', 'gameFilterType'].forEach(
+				(id) => {
+					const el = byId(id);
+					if (el) el.addEventListener('change', applyGameFilters);
+				},
+			);
+			const statusChips = document.querySelectorAll(
+				'.game-status-row .filter-chip',
+			);
+			statusChips.forEach((chip) => {
+				chip.addEventListener('click', () => {
+					statusChips.forEach((c) => c.classList.remove('active'));
+					chip.classList.add('active');
+					applyGameFilters();
+				});
+			});
+			const searchInput = byId('gameFilterSearch');
+			if (searchInput) {
+				searchInput.addEventListener('input', applyGameFilters);
+			}
+		}
+		buildGameFilterOptions();
+
 		const watchModal = byId('adminGameWatchModal');
 		if (watchModal && watchModal.dataset.bound !== 'true') {
 			watchModal.dataset.bound = 'true';

@@ -2321,6 +2321,56 @@
 			.join('');
 	}
 
+	function promoteStoredGameResult(result) {
+		if (!result || typeof result !== 'object') return result;
+		if (result.gameId) return result;
+		const embedded =
+			result.answersJson ||
+			result.answers_json ||
+			result.resultDetails ||
+			result.details ||
+			'';
+		if (!embedded || typeof embedded !== 'object') return result;
+		const promoted = { ...result };
+		const FIELD_MAP = {
+			gameId: 'gameId',
+			sourceGameId: 'sourceGameId',
+			gameName: 'gameName',
+			lobbyId: 'lobbyId',
+			lobbyLabel: 'lobbyLabel',
+			gameType: 'gameType',
+			gameMode: 'gameMode',
+			rank: 'rank',
+			label: 'label',
+			winnerId: 'winnerId',
+			winnerName: 'winnerName',
+			studentName: 'studentName',
+			studentNumber: 'studentNumber',
+			classId: 'classId',
+			userId: 'userId',
+			participantCount: 'participantCount',
+			isTournamentGame: 'isTournamentGame',
+			tournamentId: 'tournamentId',
+			totalQuestions: 'totalQuestions',
+			date: 'date',
+			savedAt: 'savedAt',
+		};
+		Object.keys(FIELD_MAP).forEach((embeddedKey) => {
+			const targetKey = FIELD_MAP[embeddedKey];
+			if (
+				promoted[targetKey] === undefined ||
+				promoted[targetKey] === null ||
+				promoted[targetKey] === ''
+			) {
+				if (embedded[embeddedKey] !== undefined) {
+					promoted[targetKey] = embedded[embeddedKey];
+				}
+			}
+		});
+		if (!promoted.mode && embedded.mode) promoted.mode = embedded.mode;
+		return promoted;
+	}
+
 	function getGameResults(context) {
 		let results = [];
 		try {
@@ -2356,6 +2406,7 @@
 			.toLowerCase();
 		const byLobbyKey = new Map();
 		results.forEach((result, index) => {
+			result = promoteStoredGameResult(result);
 			if (!result || typeof result !== 'object') return;
 			const looksLikeGameResult =
 				Boolean(result.gameId) ||
@@ -6609,6 +6660,140 @@
 		notifyRealtimeDisconnected();
 	}
 
+	function chooseOpponent(gameId, opponentId, context) {
+		const normalizedGameId = String(gameId || '').trim();
+		const normalizedOpponentId = String(opponentId || '').trim();
+		if (!normalizedGameId || !normalizedOpponentId || !context?.user?.id) {
+			showToast('Choose an opponent from the other team.', 'error');
+			return;
+		}
+		const applyLocalPairing = () => {
+			const game =
+				getGameByIdResolved(normalizedGameId) || getCachedGame(normalizedGameId);
+			if (!game) {
+				showToast('Game not found.', 'error');
+				return;
+			}
+			const pairing = getPairingConfigForClient(game);
+			if (!pairing.enabled) {
+				showToast('Pairing is not enabled for this game.', 'warning');
+				return;
+			}
+			const pairs = pairing.pairs;
+			const myself = pairKeyOf(context.user.id);
+			const they = pairKeyOf(normalizedOpponentId);
+			if (pairs[myself]) {
+				showToast('You already have an opponent.', 'warning');
+				return;
+			}
+			if (pairs[they]) {
+				showToast('That student already has an opponent.', 'warning');
+				return;
+			}
+			const gameType = pairing.gameType || game.type || '';
+			pairs[myself] = { opponentId: normalizedOpponentId, gameType };
+			pairs[they] = { opponentId: String(context.user.id || '').trim(), gameType };
+			if (window.GameCore?.updateGameById) {
+				window.GameCore.updateGameById(normalizedGameId, (g) => {
+					g.settings = g.settings || {};
+					g.settings.pairing = {
+						...g.settings.pairing,
+						enabled: true,
+						mode: g.settings.pairing?.mode || pairing.mode,
+						gameType: gameType,
+						pairs: { ...pairs },
+					};
+					return g;
+				});
+			} else {
+				game.settings = game.settings || {};
+				game.settings.pairing = {
+					...game.settings.pairing,
+					pairs: { ...pairs },
+				};
+			}
+			window.dispatchEvent(new CustomEvent('quiz:games-updated'));
+			renderGameStage(context);
+			showToast('Opponent chosen', 'success');
+		};
+		const socket = getSocket();
+		const emitChoose = (activeSocket) => {
+			let settled = false;
+			const finishWithLocal = () => {
+				if (settled) return;
+				settled = true;
+				clearTimeout(fallbackTimer);
+				applyLocalPairing();
+			};
+			const fallbackTimer = setTimeout(() => {
+				if (settled) return;
+				showToast(
+					'Pairing service unavailable. Applied the pairing locally instead.',
+					'warning',
+				);
+				finishWithLocal();
+			}, 3000);
+			activeSocket.emit(
+				'game:chooseOpponent',
+				{
+					gameId: normalizedGameId,
+					userId: context.user.id,
+					opponentId: normalizedOpponentId,
+				},
+				(response) => {
+					if (settled) return;
+					settled = true;
+					clearTimeout(fallbackTimer);
+					if (response?.error) {
+						showToast(response.error, 'error');
+						syncGameStateNow(normalizedGameId, context).finally(() => {
+							window.dispatchEvent(
+								new CustomEvent('quiz:games-updated'),
+							);
+						});
+						return;
+					}
+					if (response?.game) {
+						mergeServerGameSnapshot(response.game);
+						window.dispatchEvent(
+							new CustomEvent('quiz:games-updated'),
+						);
+						renderGameStage(context);
+						return;
+					}
+					syncGameStateNow(normalizedGameId, context).finally(() => {
+						window.dispatchEvent(new CustomEvent('quiz:games-updated'));
+					});
+				},
+			);
+		};
+		if (socket?.connected) {
+			emitChoose(socket);
+			return;
+		}
+		if (socket) {
+			let settled = false;
+			const finishWait = () => {
+				if (settled) return;
+				settled = true;
+				try { socket.off('connect', onConnect); } catch (_) {}
+				clearTimeout(timeoutId);
+			};
+			const onConnect = () => {
+				finishWait();
+				emitChoose(socket);
+			};
+			const timeoutId = setTimeout(() => {
+				finishWait();
+				applyLocalPairing();
+			}, 5000);
+			socket.once('connect', onConnect);
+			try { window.__QUIZ_SOCKET_AUTH_KEEPER__?.reviveCachedSocket?.(); } catch (_) {}
+			return;
+		}
+		applyLocalPairing();
+	}
+
 	function forfeitLiveGame(gameId, context, reason = 'left-stage') {
 		const activeGame =
 			getGameByIdResolved(gameId) ||
@@ -6730,10 +6915,42 @@
 		const results = game.results;
 		if (!results || !results.leaderboard) return null;
 		const myUserId = String(context?.user?.id || '');
-		if (game.mode === 'team') {
-			const participant = game.session?.participants?.find(
+		const myStudentNumber = String(
+			context?.user?.studentNumber || context?.identity?.numero || '',
+		).trim();
+		const myName = String(
+			context?.user?.name ||
+				context?.identity?.name ||
+				context?.user?.username ||
+				'',
+		)
+			.trim()
+			.toLowerCase();
+		const findParticipant = (participants) => {
+			let match = (participants || []).find(
 				(p) => String(p?.userId || '') === myUserId,
 			);
+			if (!match && (participants || []).length && myStudentNumber) {
+				match = (participants || []).find(
+					(p) =>
+						String(p?.studentNumber || p?.numero || p?.number || '') ===
+						myStudentNumber,
+				);
+			}
+			if (!match && (participants || []).length && myName) {
+				match = (participants || []).find(
+					(p) =>
+						String(p?.name || p?.username || '')
+							.trim()
+							.toLowerCase() === myName,
+				);
+			}
+			return match || null;
+		};
+		const findEntryByUser = (entry) =>
+			String(entry?.userId || entry?.id || '') === myUserId;
+		if (game.mode === 'team') {
+			const participant = findParticipant(game.session?.participants);
 			if (!participant) return null;
 			const teamId = String(participant.teamId || 'team-a');
 			const entry = results.leaderboard.find(
@@ -6755,16 +6972,33 @@
 				name: entry?.name || getTeamName(game, teamId),
 			};
 		}
-		const entry = results.leaderboard.find(
-			(e) => String(e?.userId || e?.id || '') === myUserId,
-		);
-		const rank =
-			results.leaderboard.findIndex(
-				(e) => String(e?.userId || e?.id || '') === myUserId,
-			) + 1;
-		const isWinner = results.winners?.some(
-			(w) => String(w?.userId || w?.id || '') === myUserId,
-		);
+		let entry = results.leaderboard.find(findEntryByUser);
+		let rank = results.leaderboard.findIndex(findEntryByUser) + 1;
+		if (!entry && myStudentNumber) {
+			const byNumberIndex = results.leaderboard.findIndex(
+				(e) =>
+					String(
+						e?.studentNumber || e?.numero || e?.number || '',
+					).trim() === myStudentNumber,
+			);
+			if (byNumberIndex >= 0) {
+				entry = results.leaderboard[byNumberIndex];
+				rank = byNumberIndex + 1;
+			}
+		}
+		if (!entry && myName) {
+			const byNameIndex = results.leaderboard.findIndex(
+				(e) =>
+					String(e?.name || '')
+						.trim()
+						.toLowerCase() === myName,
+			);
+			if (byNameIndex >= 0) {
+				entry = results.leaderboard[byNameIndex];
+				rank = byNameIndex + 1;
+			}
+		}
+		const isWinner = results.winners?.some(findEntryByUser);
 		const hasWinner =
 			Array.isArray(results.winners) && results.winners.length > 0;
 		return entry
@@ -7363,6 +7597,130 @@
 		}
 	}
 
+	function getPairingConfigForClient(game) {
+		const pairing =
+			game?.settings?.pairing && typeof game.settings.pairing === 'object'
+				? game.settings.pairing
+				: {};
+		return {
+			enabled: Boolean(pairing.enabled),
+			mode: String(pairing.mode || '').trim(),
+			gameType: String(pairing.gameType || '').trim(),
+			pairs: pairing.pairs && typeof pairing.pairs === 'object' ? pairing.pairs : {},
+		};
+	}
+
+	function pairKeyOf(value) {
+		return String(value || '').trim().toLowerCase();
+	}
+
+	function renderPairingPanelForStudent(game, session, context, participant) {
+		if (!game || game.mode !== 'team') return '';
+		const pairing = getPairingConfigForClient(game);
+		if (!pairing.enabled) return '';
+		const myId = pairKeyOf(context?.user?.id);
+		if (!myId || !participant) return '';
+		const pairingModeLabel = {
+			chosen: 'Students choose their opponent',
+			assigned: 'Teacher assigns opponents',
+			random: 'Random pairing',
+		}[pairing.mode] || pairing.mode;
+		const gameTypeValue = pairing.gameType || game.type || '';
+		const gameTypeLabel = (() => {
+			try {
+				return getGameTypeLabel(gameTypeValue) || gameTypeValue;
+			} catch (e) {
+				return gameTypeValue;
+			}
+		})();
+		const teammates = session.participants || [];
+		const teamOf = (p) =>
+			String(p?.teamId || 'team-a') === 'team-b' ? 'team-b' : 'team-a';
+		const myTeam = teamOf(participant);
+		const otherTeamList = teammates.filter((q) => teamOf(q) !== myTeam);
+		const pairs = pairing.pairs || {};
+		const myPair = pairs[myId] || null;
+		const myOpponent = myPair
+			? teammates.find(
+					(q) => pairKeyOf(q.userId) === pairKeyOf(myPair.opponentId),
+				)
+			: null;
+		const opponentTakenIds = new Set(
+			teammates
+				.filter(
+					(q) =>
+						pairs[pairKeyOf(q.userId)] && pairKeyOf(q.userId) !== myId,
+				)
+				.map((q) => pairKeyOf(q.userId)),
+		);
+		const opponentStatus = myPair
+			? `<div class="pairing-duel">
+					<span class="pairing-duel-badge">Your duel opponent</span>
+					<strong>${escapeHtml(
+						myOpponent?.name || myOpponent?.userId || 'an opponent',
+					)}</strong>
+					<span class="pairing-game-type">Game: ${escapeHtml(
+						gameTypeLabel || gameTypeValue,
+					)}</span>
+					<span class="pairing-duel-hint">Both sides are paired. Wait for the match to start.</span>
+				</div>`
+			: '';
+		let body = '';
+		if (myPair) {
+			body = opponentStatus;
+		} else if (pairing.mode === 'chosen') {
+			const freeOpponents = otherTeamList.filter(
+				(q) => !opponentTakenIds.has(pairKeyOf(q.userId)),
+			);
+			const choiceList = freeOpponents.length
+				? freeOpponents
+						.map(
+							(q) => `
+							<button
+								type="button"
+								class="opponent-choice-btn"
+								data-action="choose-opponent"
+								data-game-id="${escapeHtml(game.id)}"
+								data-opponent-id="${escapeHtml(q.userId)}"
+							>
+								<span>${escapeHtml(q.name || q.userId)}</span>
+								<small>${escapeHtml(
+									teamOf(q) === 'team-b'
+										? game.settings?.teamNames?.b || 'Team B'
+										: game.settings?.teamNames?.a || 'Team A',
+								)}</small>
+							</button>`,
+						)
+						.join('')
+				: otherTeamList.length
+					? '<div class="pairing-duel-hint">Everyone on the other team is already paired.</div>'
+					: '<div class="pairing-duel-hint">You are not on a team yet. Join a team in the lobby list to choose your opponent.</div>';
+			body = `
+				<div class="pairing-duel">
+					<span class="pairing-duel-badge">Choose your opponent</span>
+					<div class="opponent-choice-list">${choiceList}</div>
+					<span class="pairing-game-type">Duel game: ${escapeHtml(
+						gameTypeLabel || gameTypeValue,
+					)}</span>
+				</div>
+			`;
+		} else {
+			body = `
+				<div class="pairing-duel">
+					<span class="pairing-duel-badge">Waiting for pairing</span>
+					<span class="pairing-duel-hint">The teacher will assign your opponent before the match starts.</span>
+				</div>
+			`;
+		}
+		return `
+			<div class="student-pairing-panel">
+				<h5>1v1 Duel Pairing</h5>
+				<div class="pairing-duel-mode">${escapeHtml(pairingModeLabel)}</div>
+				${body}
+			</div>
+		`;
+	}
+
 	function renderLobbyStage(stage, game, context) {
 		const session = ensureSession(game);
 		const lobbyLabel = getLobbyLabelForGame(game);
@@ -7428,6 +7786,16 @@
 								: 'Wait for the teacher to review the lobby and start the match.'
 					}</p>
 					${howToPlayGuide}
+					${
+						participant
+							? renderPairingPanelForStudent(
+									game,
+									session,
+									context,
+									participant,
+								)
+							: ''
+					}
 					${
 						participant
 							? `<button class="workspace-btn" data-action="toggle-ready" data-game-id="${game.id}" ${
@@ -8764,6 +9132,129 @@
 		`;
 	}
 
+	function renderCompletedPairingSummary(game, context) {
+		if (!game || game.mode !== 'team') return '';
+		const session = ensureSession(game);
+		const participants = session.participants || [];
+		if (!participants.length) return '';
+		const pairing = getPairingConfigForClient(game);
+		if (!pairing.enabled) return '';
+		const results = game.results || {};
+		const leaderboard = Array.isArray(results.leaderboard)
+			? results.leaderboard
+			: [];
+		const teamNames = game.settings?.teamNames || { a: 'Team A', b: 'Team B' };
+		const teamOf = (p) =>
+			String(p?.teamId || 'team-a') === 'team-b' ? 'team-b' : 'team-a';
+		const scoreForParticipant = (participant) => {
+			const pid = String(participant?.userId || '').trim();
+			if (!pid) return 0;
+			const entry = leaderboard.find(
+				(e) => String(e?.userId || e?.id || '').trim() === pid,
+			);
+			return entry ? Number(entry?.score || entry?.points || 0) : 0;
+		};
+		const withScore = (participant) => {
+			return { ...participant, score: scoreForParticipant(participant) };
+		};
+		const pairs = pairing.pairs || {};
+		const pairKeys = Object.keys(pairs);
+		const renderedPairs = [];
+		const seen = new Set();
+		pairKeys.forEach((key) => {
+			if (!key || seen.has(key)) return;
+			const entry = pairs[key];
+			const oppKey = pairKeyOf(entry?.opponentId);
+			if (!oppKey || seen.has(oppKey)) return;
+			const a = participants.find(
+				(p) => pairKeyOf(p.userId) === key,
+			);
+			const b = participants.find(
+				(p) => pairKeyOf(p.userId) === oppKey,
+			);
+			if (a && b) {
+				renderedPairs.push({ a: withScore(a), b: withScore(b) });
+				seen.add(key);
+				seen.add(oppKey);
+			}
+		});
+		if (!renderedPairs.length) return '';
+		const duelRows = renderedPairs
+			.map((pair) => {
+				const aWins = pair.a.score > pair.b.score;
+				const bWins = pair.b.score > pair.a.score;
+				const verdict = aWins ? pair.a : bWins ? pair.b : null;
+				return `
+					<div class="pairing-duel-result">
+						<div class="pairing-duel-player ${aWins ? 'won' : ''}">
+							<span>${escapeHtml(pair.a.name || pair.a.userId)}</span>
+							<small>${
+								teamOf(pair.a) === 'team-b'
+									? escapeHtml(teamNames.b)
+									: escapeHtml(teamNames.a)
+							}</small>
+							<strong>${pair.a.score} pts</strong>
+						</div>
+						<div class="pairing-duel-vs">
+							${
+								verdict
+									? `Winner: ${escapeHtml(verdict.name || verdict.userId)}`
+									: 'Draw'
+							}
+						</div>
+						<div class="pairing-duel-player ${bWins ? 'won' : ''}">
+							<span>${escapeHtml(pair.b.name || pair.b.userId)}</span>
+							<small>${
+								teamOf(pair.b) === 'team-b'
+									? escapeHtml(teamNames.b)
+									: escapeHtml(teamNames.a)
+							}</small>
+							<strong>${pair.b.score} pts</strong>
+						</div>
+					</div>
+				`;
+			})
+			.join('');
+		const teamStats = {
+			'team-a': { name: teamNames.a, score: 0 },
+			'team-b': { name: teamNames.b, score: 0 },
+		};
+		participants.forEach((p) => {
+			teamStats[teamOf(p)].score += scoreForParticipant(p);
+		});
+		const winningTeam =
+			teamStats['team-a'].score === teamStats['team-b'].score
+				? null
+				: teamStats['team-a'].score > teamStats['team-b'].score
+					? 'team-a'
+					: 'team-b';
+		return `
+			<section class="completed-pairing-summary">
+				<h4>1v1 Duels &amp; Team Total</h4>
+				<div class="pairing-team-totals">
+					<div class="pairing-team-total ${winningTeam === 'team-a' ? 'won' : ''}">
+						<span>${escapeHtml(teamStats['team-a'].name)}</span>
+						<strong>${teamStats['team-a'].score} pts</strong>
+					</div>
+					<div class="pairing-team-total ${winningTeam === 'team-b' ? 'won' : ''}">
+						<span>${escapeHtml(teamStats['team-b'].name)}</span>
+						<strong>${teamStats['team-b'].score} pts</strong>
+					</div>
+				</div>
+				${
+					winningTeam
+						? `<div class="pairing-team-winner">${
+								winningTeam === 'team-a'
+									? escapeHtml(teamNames.a)
+									: escapeHtml(teamNames.b)
+							} wins the match!</div>`
+						: '<div class="pairing-team-winner">The match ended in a tie.</div>'
+				}
+				<div class="pairing-duel-results">${duelRows}</div>
+			</section>
+		`;
+	}
+
 	function renderCompletedStage(stage, game, context) {
 		const renderCompletedQuestionCorrections = (currentGame) => {
 			const collectCompletedReviewQuestionEntries = (targetGame) => {
@@ -8982,6 +9473,7 @@
 							<div class="stat-note">${escapeHtml(String(leaderboard.length || 0))} ranked players</div>
 						</div>
 					</div>
+					${renderCompletedPairingSummary(game, context)}
 					${renderCompletedQuestionCorrections(game)}
 				</div>
 			</div>
@@ -10402,6 +10894,20 @@
 		return compact || 'BDG';
 	}
 
+	// Single source of truth for the badges shown as "locked" up for grabs.
+	const BADGE_CATALOG = [
+		{ id: 'first_win', tier: 'gold', icon: 'W1', name: 'First Victory', desc: 'Won a multiplayer match.' },
+		{ id: 'podium', tier: 'silver', icon: 'TOP', name: 'Podium', desc: 'Finished in the top 3.' },
+		{ id: 'perfect_run', tier: 'sky', icon: 'PER', name: 'Perfect Run', desc: 'Finished with full points in one session.' },
+		{ id: 'centurion', tier: 'emerald', icon: '100+', name: 'Centurion', desc: 'Scored at least 100 points in a game.' },
+		{ id: 'card_master', tier: 'emerald', icon: 'CARD', name: 'Card Master', desc: 'Won a Card Battle.' },
+		{ id: 'speedster', tier: 'sky', icon: 'SPD', name: 'Speedster', desc: 'Won a Sprint Race.' },
+		{ id: 'unstoppable', tier: 'gold', icon: '150+', name: 'Unstoppable', desc: 'Scored at least 150 points in a game.' },
+		{ id: 'tournament_joiner', tier: 'emerald', icon: 'ARE', name: 'Arena Challenger', desc: 'Joined a live tournament arena.' },
+		{ id: 'tournament_rookie', tier: 'bronze', icon: 'TRK', name: 'Tournament Rookie', desc: 'Earned at least 100 tournament points.' },
+		{ id: 'tournament_elite', tier: 'gold', icon: 'TEL', name: 'Tournament Elite', desc: 'Earned at least 500 tournament points.' },
+	];
+
 	function getBadgeVisualMeta(badge) {
 		const badgeText = `${String(badge?.id || '')} ${String(
 			badge?.name || '',
@@ -10668,15 +11174,42 @@
 		// registration through the Prisma-backed endpoint before updating that
 		// view, so a refresh or a different device sees the same membership.
 		if (hasStudentRestApi()) {
+			// When the admin already synced this tournament to the database the
+			// DB row's uuid is stamped as dbTournamentId — use that, otherwise
+			// fall back to the legacy id.
+			const registerTarget = String(
+				activeTournament.dbTournamentId || activeTournament.id || '',
+			).trim();
 			try {
 				await window.API.raw(
 					'POST',
-					`/tournaments/${encodeURIComponent(activeTournament.id)}/register`,
+					`/tournaments/${encodeURIComponent(registerTarget)}/register`,
 					{},
 				);
 			} catch (error) {
-				showToast(error?.message || 'Could not join this tournament.', 'error');
-				return;
+				const status = Number(error?.status) || 0;
+				const message = String(error?.message || '');
+				const isConflict =
+					status === 409 || /already registered/i.test(message);
+				const isNotFound =
+					status === 404 || /not found/i.test(message);
+				if (isConflict) {
+					showToast('You have already joined this tournament', 'info');
+				} else if (isNotFound) {
+					// The DB row is missing (a legacy in-flight tournament that
+					// has not been synced yet). Fall back to the local broadcast
+					// record so joining still works instead of a hard 404.
+					console.warn(
+						'Tournament DB record missing, falling back to local registration:',
+						error?.message || error,
+					);
+				} else {
+					showToast(
+						error?.message || 'Could not join this tournament.',
+						'error',
+					);
+					return;
+				}
 			}
 		}
 
@@ -11365,6 +11898,58 @@
 		`;
 	}
 
+	function getCurrentSeasonId() {
+		try {
+			const anchor = new Date('2026-01-01T00:00:00').getTime();
+			const seasonIndex =
+				Math.floor((Date.now() - anchor) / (90 * 24 * 60 * 60 * 1000)) + 1;
+			return Math.max(seasonIndex, 1);
+		} catch (e) {
+			return 1;
+		}
+	}
+
+	const SEASON_REWARD_EXP = 1000;
+
+	function renderSeasonBanner(context) {
+		const banner = byId('studentSeasonBanner');
+		if (!banner) return;
+		const user = context?.user || {};
+		const seasonId = getCurrentSeasonId();
+		const seasonExp = Math.max(Number(user.seasonExp) || 0, 0);
+		const seasonComplete = Math.max(Number(user.seasonComplete) || 0, 0);
+		const threshold = SEASON_REWARD_EXP;
+		const pct = Math.min(
+			100,
+			Math.round((seasonExp / Math.max(threshold, 1)) * 100),
+		);
+		const unlocked = seasonExp >= threshold;
+		const numberEl = byId('studentSeasonNumber');
+		if (numberEl) numberEl.textContent = String(seasonId);
+		const bar = byId('studentSeasonBarFill');
+		if (bar) bar.style.width = `${pct}%`;
+		const pctEl = byId('studentSeasonPct');
+		if (pctEl) pctEl.textContent = `${pct}%`;
+		const thresholdEl = byId('studentSeasonThreshold');
+		if (thresholdEl)
+			thresholdEl.textContent = Number(threshold).toLocaleString();
+		const rewardEl = byId('studentSeasonReward');
+		if (rewardEl) {
+			const claimed = seasonComplete >= seasonId;
+			if (unlocked) {
+				rewardEl.innerHTML = claimed
+					? 'Seasonal reward claimed'
+					: 'Seasonal reward unlocked!';
+			} else {
+				rewardEl.innerHTML = `Next reward at <strong>${Number(
+					threshold,
+				).toLocaleString()}</strong> EXP`;
+			}
+			rewardEl.classList.toggle('unlocked', unlocked);
+		}
+		banner.classList.toggle('season-claimed', seasonComplete >= seasonId);
+	}
+
 	function renderGamificationUIV2(context) {
 		const exp = Number(context?.user?.exp) || 0;
 		const level = Math.floor(exp / 200) + 1;
@@ -11387,6 +11972,7 @@
 		}
 		renderProfileGamificationChips(context?.user || {});
 		renderProfilePerformanceSnapshot(context);
+		renderSeasonBanner(context);
 
 		const badgesList = byId('studentBadgesList');
 		if (badgesList) {
@@ -11395,10 +11981,7 @@
 						.slice()
 						.sort((a, b) => Number(b?.earnedAt || 0) - Number(a?.earnedAt || 0))
 				: [];
-			if (!badges.length) {
-				badgesList.innerHTML =
-					'<div class="empty-state-small" style="grid-column: 1 / -1;">No badges earned yet. Keep playing!</div>';
-			} else {
+			if (badges.length) {
 				badgesList.innerHTML = badges
 					.map((badge) => {
 						const visualMeta = getBadgeVisualMeta(badge);
@@ -11425,10 +12008,45 @@
 											: ''
 									}
 								</div>
-							</article>
-						`;
+							</article>`;
 					})
 					.join('');
+			} else {
+				badgesList.innerHTML =
+					'<div class="empty-state-small" style="grid-column: 1 / -1;">No badges earned yet. Keep playing!</div>';
+			}
+			const earnedIds = new Set(
+				badges.map((item) => String(item?.id || '').trim()),
+			);
+			const locked = BADGE_CATALOG.filter(
+				(candidate) => !earnedIds.has(candidate.id),
+			).slice(0, 6);
+			if (locked.length) {
+				badgesList.innerHTML += `
+					<div class="student-badges-locked-label">Locked badges</div>
+					${locked
+						.map(
+							(item) => `
+						<article class="student-badge-card tier-${escapeHtml(
+							item.tier,
+						)} locked" title="${escapeHtml(item.name)}">
+							<div class="student-badge-medal" aria-hidden="true">
+								<span class="student-badge-ribbon left"></span>
+								<span class="student-badge-ribbon right"></span>
+								<div class="student-badge-icon">${escapeHtml(item.icon)}</div>
+								<span class="student-badge-lock">
+									<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+								</span>
+							</div>
+							<div class="student-badge-body">
+								<div class="student-badge-pill">Locked</div>
+								<div class="student-badge-title">${escapeHtml(item.name)}</div>
+								<div class="student-badge-desc">${escapeHtml(item.desc)}</div>
+								<div class="student-badge-date">Keep playing to unlock</div>
+							</div>
+						</article>`,
+						)
+						.join('')}`;
 			}
 		}
 
@@ -12489,6 +13107,7 @@
 				'leave-stage',
 				'toggle-header-rows',
 				'toggle-ready',
+				'choose-opponent',
 				'set-special-card',
 				'toggle-reminder-rule',
 				'use-hint',
@@ -12580,6 +13199,14 @@
 				if (action === 'toggle-ready') {
 					toggleReady(gameId, context);
 					renderGameStage(context);
+					return;
+				}
+				if (action === 'choose-opponent') {
+					chooseOpponent(
+						gameId,
+						button.dataset.opponentId || '',
+						context,
+					);
 					return;
 				}
 				if (action === 'set-special-card') {
@@ -13657,8 +14284,11 @@
 				const exam = (
 					window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || []
 				).find((e) => e.id === examId);
-				const limit = Number(exam?.timeLimit || exam?.duration || 0);
-				if (limit > 0) trainingState.timeLimitSec = limit * 60;
+				// `timeLimit` is stored in seconds; `duration` is in minutes.
+				const minutesLimit = Number(exam?.duration) || 0;
+				const secondsLimit = Number(exam?.timeLimit) || 0;
+				if (secondsLimit > 0) trainingState.timeLimitSec = secondsLimit;
+				else if (minutesLimit > 0) trainingState.timeLimitSec = minutesLimit * 60;
 			}
 		} catch (_) {}
 
@@ -13717,10 +14347,12 @@
 			perQuestion: [],
 			questionOptions: questions.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
-			timeLimitSec: Math.max(
-				0,
-				Number(exam.timeLimit || exam.duration || 0) * 60,
-			),
+			// `timeLimit` is stored in seconds; `duration` is in minutes.
+			timeLimitSec: Math.max(0, (() => {
+				const minutesLimit = Number(exam.duration) || 0;
+				const secondsLimit = Number(exam.timeLimit) || 0;
+				return secondsLimit > 0 ? secondsLimit : minutesLimit * 60;
+			})()),
 		};
 
 		clearTrainingStorage();
@@ -15499,9 +16131,63 @@
 		}
 	}, 800);
 
+	function buildFallbackGameOutcome(game, context) {
+		const session = game?.session || {};
+		const participants = Array.isArray(session.participants)
+			? session.participants
+			: [];
+		const myUserId = String(context?.user?.id || '');
+		let participant = participants.find(
+			(p) => String(p?.userId || '') === myUserId,
+		);
+		const myNumber = String(
+			context?.user?.studentNumber || context?.identity?.numero || '',
+		).trim();
+		if (!participant && myNumber) {
+			participant = participants.find(
+				(p) =>
+					String(p?.studentNumber || p?.numero || p?.number || '') ===
+					myNumber,
+			);
+		}
+		const myName = String(
+			context?.user?.name ||
+				context?.identity?.name ||
+				context?.user?.username ||
+				'',
+		)
+			.trim()
+			.toLowerCase();
+		if (!participant && myName) {
+			participant = participants.find(
+				(p) =>
+					String(p?.name || p?.username || '')
+						.trim()
+						.toLowerCase() === myName,
+			);
+		}
+		if (!participant) return null;
+		const sorted = participants
+			.map((p) => p)
+			.sort((a, b) => {
+				const scoreDiff =
+					Number(b.score || 0) - Number(a.score || 0);
+				if (scoreDiff !== 0) return scoreDiff;
+				return Number(a.timeSpent || 0) - Number(b.timeSpent || 0);
+			});
+		const rankPlace = sorted.indexOf(participant);
+		return {
+			label: 'Completed',
+			rank: rankPlace >= 0 ? rankPlace + 1 : '-',
+			score: Number(participant.score || 0),
+			timeSpent: Number(participant.timeSpent || 0),
+			name: participant.name || context.user.name || 'Player',
+		};
+	}
+
 	function saveGameResult(game, context) {
 		try {
-			if (!game?.id) return;
+			if (!game?.id) return false;
 			const session = game.session || {};
 			const lobbyId = String(
 				session.lobbyId ||
@@ -15514,10 +16200,16 @@
 					getLobbyLabelForGame(game),
 			);
 			const resultKey = `${game.id}::${lobbyId}`;
-			if (savedGameResultIds.has(resultKey)) return;
+			if (savedGameResultIds.has(resultKey)) return false;
 			// Calculate outcome if not already present
-			const outcome = getGameOutcome(game, context);
-			if (!outcome) return;
+			let outcome = getGameOutcome(game, context);
+			if (!outcome) {
+				// Leaderboards are keyed per-team in team mode or may be
+				// missing this student entirely. Never drop a completed game's
+				// history: attribute via the participant slot instead.
+				outcome = buildFallbackGameOutcome(game, context);
+			}
+			if (!outcome) return false;
 
 			const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 			// Check if result already exists for this game ID to avoid duplicates
@@ -15630,6 +16322,7 @@
 					window.__DI_CONTAINER__.repo.setAll_sync('results', results);
 					window.dispatchEvent(new Event('storage'));
 				}
+				return true;
 			} else {
 				savedGameResultIds.add(resultKey);
 				results.unshift(resultEntry);
@@ -15647,13 +16340,33 @@
 				if (typeof renderWorkspace === 'function') {
 					// debounced render might be better but this is fine
 				}
+				return true;
 			}
 		} catch (e) {
 			console.error('Failed to save game result:', e);
+			return false;
 		}
 	}
 
 	let gameUiRefreshTimer = null;
+	function persistCompletedGameResults(context) {
+		if (!context) return 0;
+		const games = getGamesStore();
+		let savedAny = 0;
+		games.forEach((game) => {
+			const isCompleted =
+				game.status === 'completed' ||
+				String(game.session?.status || '').toLowerCase() === 'completed';
+			if (isCompleted && saveGameResult(game, context)) {
+				savedAny += 1;
+			}
+		});
+		if (savedAny && typeof renderResultsList === 'function') {
+			renderResultsList(context);
+		}
+		return savedAny;
+	}
+
 	function scheduleGameUiRefresh(context) {
 		if (!context) return;
 		if (gameUiRefreshTimer) return;
@@ -15664,12 +16377,7 @@
 			renderGamificationUI(context);
 
 			// Check for completed games and save results
-			const games = getGamesStore();
-			games.forEach((game) => {
-				if (game.status === 'completed') {
-					saveGameResult(game, context);
-				}
-			});
+			persistCompletedGameResults(context);
 		}, 120);
 	}
 
@@ -15700,6 +16408,15 @@
 			key === 'quizTournamentsHistory'
 		) {
 			renderWorkspace();
+			// A game completed in another window/tab (e.g. the admin ended the
+			// session locally with no socket) surfaces via the storage event;
+			// persist any newly-completed results and refresh the Results tab.
+			if (key === 'quizGames') {
+				const context = getStudentContext();
+				if (context) {
+					persistCompletedGameResults(context);
+				}
+			}
 		}
 	});
 
@@ -15757,6 +16474,16 @@
 			if (isWinner) expGained += gConfig.expPerWin;
 			expGained += score * gConfig.expPerCorrect;
 			user.exp += expGained;
+			const activeSeasonId = getCurrentSeasonId();
+			if (Number(user.seasonId) !== activeSeasonId) {
+				user.seasonId = activeSeasonId;
+				user.seasonExp = expGained;
+			} else {
+				user.seasonExp = (Number(user.seasonExp) || 0) + expGained;
+			}
+			if (Number(user.seasonExp) >= SEASON_REWARD_EXP) {
+				user.seasonComplete = activeSeasonId;
+			}
 
 			const hasBadge = (badgeId) =>
 				user.badges.some((badge) => badge && badge.id === badgeId);
@@ -15784,12 +16511,12 @@
 						'Scored at least 100 points.',
 					);
 				}
-				if (score >= 500) {
+				if (score >= 150) {
 					addBadge(
 						'unstoppable',
-						'500+',
+						'150+',
 						'Unstoppable',
-						'Scored at least 500 points.',
+						'Scored at least 150 points.',
 					);
 				}
 				if (resultEntry.gameType === 'cards' && isWinner) {
@@ -15837,20 +16564,20 @@
 					const totalTournamentScore = Object.values(
 						user.tournamentScores,
 					).reduce((sum, value) => sum + (Number(value) || 0), 0);
-					if (totalTournamentScore >= 250) {
+					if (totalTournamentScore >= 100) {
 						addBadge(
 							'tournament_rookie',
 							'TRK',
 							'Tournament Rookie',
-							'Earned at least 250 tournament points.',
+							'Earned at least 100 tournament points.',
 						);
 					}
-					if (totalTournamentScore >= 1000) {
+					if (totalTournamentScore >= 500) {
 						addBadge(
 							'tournament_elite',
 							'TEL',
 							'Tournament Elite',
-							'Earned at least 1000 tournament points.',
+							'Earned at least 500 tournament points.',
 						);
 					}
 				}
@@ -15924,6 +16651,16 @@
 				(Number(resultEntry.score) || 0) *
 				(Number(gConfig.expPerCorrect) || 10);
 			user.exp += expGained;
+			const activeSeasonId = getCurrentSeasonId();
+			if (Number(user.seasonId) !== activeSeasonId) {
+				user.seasonId = activeSeasonId;
+				user.seasonExp = expGained;
+			} else {
+				user.seasonExp = (Number(user.seasonExp) || 0) + expGained;
+			}
+			if (Number(user.seasonExp) >= SEASON_REWARD_EXP) {
+				user.seasonComplete = activeSeasonId;
+			}
 
 			if (gConfig.autoAwardBadges !== false) {
 				const hasBadge = (badgeId) => user.badges.some((b) => b.id === badgeId);
@@ -15943,12 +16680,12 @@
 					);
 				if (resultEntry.score >= 100)
 					addBadge('centurion', '🔥', 'Centurion', 'Scored over 100 points.');
-				if (resultEntry.score >= 500)
+				if (resultEntry.score >= 150)
 					addBadge(
 						'unstoppable',
 						'⚡',
 						'Unstoppable',
-						'Scored over 500 points.',
+						'Scored over 150 points.',
 					);
 				if (resultEntry.gameType === 'cards' && isWinner)
 					addBadge('card_master', '🃏', 'Card Master', 'Won a Card Battle.');

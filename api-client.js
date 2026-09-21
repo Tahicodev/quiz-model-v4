@@ -438,15 +438,26 @@
     },
 
     games: function (g) {
-      var status = String(g.status || 'waiting');
-      if (status === 'open') status = 'waiting';
-      else if (status === 'live') status = 'active';
-      else if (status === 'completed') status = 'finished';
-      else if (status !== 'active' && status !== 'paused' && status !== 'finished') status = 'waiting';
+      // Legacy status vocabulary: draft (hidden from students) / open / live /
+      // completed. The SaaS column only knows waiting/active/paused/finished,
+      // and `draft` must NOT surface as `open`. Keep the exact legacy status in
+      // settings_json.legacyStatus so a create/update round trip (which maps
+      // draft→waiting) restores 'draft' on the next bootstrap instead of
+      // leaking a half-built game into students' available lists.
+      var rawStatus = String(g.status || 'waiting');
+      var legacyStatus = rawStatus;
+      var status;
+      if (rawStatus === 'live') status = 'active';
+      else if (rawStatus === 'completed') status = 'finished';
+      else if (rawStatus === 'open') status = 'waiting';
+      else if (rawStatus === 'draft') status = 'waiting';
+      else if (['waiting', 'active', 'paused', 'finished'].indexOf(rawStatus) >= 0) status = rawStatus;
+      else { status = 'waiting'; legacyStatus = 'open'; }
       var questionIds = Array.isArray(g.questions)
         ? g.questions.map(function (q) { return (q && (q.id || q.question_id)) || q; }).filter(Boolean)
         : (Array.isArray(g.question_ids) ? g.question_ids : []);
       var settings = Object.assign({}, g.settings || {});
+      settings.legacyStatus = legacyStatus;
       if (Array.isArray(g.classIds)) settings.classIds = g.classIds;
       if (g.session) settings.session = g.session;
       if (g.results) settings.results = g.results;

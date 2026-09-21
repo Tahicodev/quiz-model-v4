@@ -2924,13 +2924,51 @@
 		}
 	}
 
-	function openUserModal(userId) {
+	function serverUserToLegacy(remote) {
+		if (!remote) return null;
+		let subjects = [];
+		if (Array.isArray(remote.subjects)) subjects = remote.subjects;
+		else if (remote.subjects_json) {
+			subjects = safeJsonParse(remote.subjects_json, []);
+			if (!Array.isArray(subjects)) subjects = [];
+		}
+		return {
+			id: remote.id || '',
+			name: remote.name || '',
+			username: remote.username || '',
+			role: remote.role || ROLE_STUDENT,
+			status: remote.status || 'active',
+			numero: remote.numero || remote.studentNumber || '',
+			studentNumber: remote.numero || remote.studentNumber || '',
+			classId: remote.class_id || remote.classId || '',
+			email: remote.email || '',
+			phone: remote.phone || '',
+			subjects,
+			classIds: [],
+			createdAt: remote.created_at || remote.createdAt || '',
+			updatedAt: remote.updated_at || remote.updatedAt || '',
+		};
+	}
+
+	async function openUserModal(userId) {
 		const modal = document.getElementById('userModal');
 		if (!modal) return;
 		let user = null;
 		if (userId) {
 			const users = getUsers();
 			user = users.find((u) => u.id === userId) || null;
+			// The local cache can be stale or hold a client-generated stub id
+			// (e.g. an approved account request mirrored before bootstrap).
+			// Fall back to the server row so the editor always loads the real
+			// profile instead of blank "N/A" fields.
+			if (!user && window.API && typeof window.API.get === 'function') {
+				try {
+					const remote = await window.API.get('users', userId);
+					user = serverUserToLegacy(remote);
+				} catch (_) {
+					user = null;
+				}
+			}
 			if (user && !canManageUser(user) && !isAdmin()) {
 				showToast('Access denied', 'error');
 				return;
@@ -3352,6 +3390,28 @@
 		return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 	}
 
+	// Look a user up on the server by username so admin actions (password
+	// reset) can target the real DB row even when the local cache holds a
+	// client-generated stub id.
+	async function resolveServerUserId(username) {
+		if (!username || !window.API || typeof window.API.list !== 'function') {
+			return null;
+		}
+		try {
+			const result = await window.API.list('users', { search: username, limit: 200 });
+			const list = result && Array.isArray(result.data) ? result.data : [];
+			const match = list.find(
+				(u) =>
+					String(u.username || '')
+						.trim()
+						.toLowerCase() === String(username).trim().toLowerCase(),
+			);
+			return match && match.id ? match.id : null;
+		} catch (_) {
+			return null;
+		}
+	}
+
 	async function copyTempPassword(value) {
 		const text = String(value || '');
 		if (!text) return;
@@ -3400,14 +3460,42 @@
 			return;
 		}
 
+		// One-time display target. The id in the local cache can be a
+		// client-generated stub that never reached the DB (an approved request
+		// mirrored before bootstrap), which makes the server's getById throw
+		// "User not found". Re-resolve against the server by id first, then by
+		// username, so the reset always lands on the real DB row.
+		let serverTargetId = user.id;
+		if (window.API && typeof window.API.get === 'function') {
+			try {
+				const serverUser = await window.API.get('users', user.id);
+				if (serverUser && serverUser.id) serverTargetId = serverUser.id;
+			} catch (_) {
+				const resolved = await resolveServerUserId(user.username);
+				if (!resolved) {
+					showToast(
+						'User not found on the server — refresh the page and try again.',
+						'error',
+					);
+					return;
+				}
+				serverTargetId = resolved;
+			}
+		}
+
 		const newPassword = generateTempPassword(10);
 		if (window.API && typeof window.API.raw === 'function') {
 			try {
 				await window.API.raw(
 					'POST',
-					'/users/' + encodeURIComponent(userId) + '/reset-password',
+					'/users/' + encodeURIComponent(serverTargetId) + '/reset-password',
 					{ newPassword },
 				);
+				// Adopt the real id so later edits/resets reuse it, not the stub.
+				if (String(serverTargetId) !== String(user.id)) {
+					user.id = serverTargetId;
+					saveUsers(users);
+				}
 			} catch (apiErr) {
 				console.warn('[auth] API reset password failed:', apiErr);
 				showToast(
@@ -3697,11 +3785,45 @@
 		}
 	}
 
+	// Server rows come back snake_case (student_number, class_id, class_name,
+	// full_name, created_at, reviewer_id, reviewed_at, review_note,
+	// created_user_id) while locally-submitted mirrors are camelCase. Normalize
+	// every row to the camelCase shape the admin queue UI reads, so an approved
+	// request never renders "Student #: N/A / Class: N/A" and the post-approve
+	// mirror copies real values into the new user.
+	function normalizeAccountRequest(req) {
+		if (!req || typeof req !== 'object') return req;
+		if (!Array.isArray(req)) {
+			const base = Object.assign({}, req);
+			if (base.full_name != null && base.fullName == null)
+				base.fullName = base.full_name;
+			if (base.student_number != null && base.studentNumber == null)
+				base.studentNumber = base.student_number;
+			if (base.class_id != null && base.classId == null)
+				base.classId = base.class_id;
+			if (base.class_name != null && base.className == null)
+				base.className = base.class_name;
+			if (base.reviewer_id != null && base.reviewerId == null)
+				base.reviewerId = base.reviewer_id;
+			if (base.reviewed_at != null && base.reviewedAt == null)
+				base.reviewedAt = base.reviewed_at;
+			if (base.review_note != null && base.reviewNote == null)
+				base.reviewNote = base.review_note;
+			if (base.created_user_id != null && base.createdUserId == null)
+				base.createdUserId = base.created_user_id;
+			if (base.created_at != null && base.createdAt == null)
+				base.createdAt = base.created_at;
+			return base;
+		}
+		return req.map(normalizeAccountRequest);
+	}
+
 	function getAccountRequests() {
 		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-		return r
+		var raw = r
 			? r.getValue_sync('account_requests', [])
 			: safeJsonParse(localStorage.getItem(ACCOUNT_REQUESTS_KEY), []);
+		return normalizeAccountRequest(Array.isArray(raw) ? raw : []);
 	}
 
 	function saveAccountRequests(requests) {
@@ -4818,6 +4940,7 @@
 		rejectPendingImport,
 		renderPendingImports,
 		getAccountRequests,
+		normalizeAccountRequest,
 		submitAccountRequest,
 		approveAccountRequest,
 		rejectAccountRequest,

@@ -1404,6 +1404,11 @@ function updateClassList(classesList = classes) {
 					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>',
 					onClick: () => openAssignClassExams(cls.id),
 				},
+				{
+					label: 'Add Game',
+					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="4"></rect><line x1="6" y1="10" x2="6" y2="14"></line><line x1="10" y1="10" x2="10" y2="14"></line><line x1="14" y1="10" x2="14" y2="14"></line><line x1="18" y1="10" x2="18" y2="14"></line></svg>',
+					onClick: () => openClassGamesModal(cls.id),
+				},
 				// Changed cls.className to cls.name
 				{
 					label: 'Edit Class',
@@ -1446,8 +1451,24 @@ function updateClassList(classesList = classes) {
             <td>${dateCreated}</td>
             <td>${studentCount}</td>
             <td>${examCount}</td>
+            <td class="class-assigned-games-cell">${
+							window.renderClassGamesCell
+								? window.renderClassGamesCell(cls.id)
+								: 'No games'
+						}</td>
             <td class="actions-cell">
                 <div class="exam-actions">
+                    <button class="exam-action-btn exam-classes-btn" onclick="openClassGamesModal('${
+											cls.id
+										}')" title="Add Game">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="6" width="20" height="12" rx="4"></rect>
+                            <line x1="6" y1="10" x2="6" y2="14"></line>
+                            <line x1="10" y1="10" x2="10" y2="14"></line>
+                            <line x1="14" y1="10" x2="14" y2="14"></line>
+                            <line x1="18" y1="10" x2="18" y2="14"></line>
+                        </svg>
+                    </button>
                     <button class="exam-action-btn exam-assign-btn" onclick="openAssignClassStudents('${
 											cls.id
 										}')" title="Assign Students">
