@@ -1,0 +1,1376 @@
+/* theme.css — dark theme + cross-device responsiveness overlay.
+   Loaded LAST by admin.html and student-workspace.html.
+
+   Light mode is untouched. The whole design is driven by the CSS variables
+   in styles.css :root, so flipping those under html[data-theme='dark']
+   re-themes every component that already consumes var(--bg-surface),
+   var(--border-color), var(--text-*) etc. A smaller set of targeted
+   overrides below cleans the structural surfaces that still hardcode
+   light colors (headers, chips, admin.css panels, student cards).
+   The early inline <head> script on each page sets data-theme from
+   localStorage (quizTheme) before first paint; without a saved choice it
+   follows prefers-color-scheme. */
+
+/* ── Dark palette ─────────────────────────────────────────────────────────── */
+html[data-theme='dark'] {
+	color-scheme: dark;
+
+	--primary: #3b82f6;
+	--primary-dark: #2563eb;
+	--primary-light: #1c2d4f;
+	--secondary: #94a3b8;
+	--success: #34d399;
+	--danger: #f87171;
+	--warning: #fbbf24;
+	--info: #22d3ee;
+
+	--bg-body: #0b1422;
+	--bg-surface: #101a2c;
+	--bg-surface-alt: #17233a;
+
+	--text-main: #1e29e8;
+	--text-secondary: #a8b7cd;
+	--text-muted: #74839c;
+	--text-inverted: #ffffff;
+	--text-primary: #1e29e8;
+
+	--border-color: #223047;
+	--border-focus: #60a5fa;
+
+	--shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+	--shadow-md:
+		0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -1px rgba(0, 0, 0, 0.35);
+	--shadow-lg:
+		0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='dark'] ::selection {
+	background-color: rgba(59, 130, 246, 0.35);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] {
+	scrollbar-color: #2b3b5a var(--bg-body);
+}
+
+/* ── Structural surfaces that hardcode light colors ─────────────────────── */
+
+/* Admin + shared top bar */
+html[data-theme='dark'] .app-header {
+	background: var(--bg-surface);
+}
+
+html[data-theme='dark'] .header-main-bar {
+	background: var(--bg-surface);
+}
+
+html[data-theme='dark'] .header-nav-container {
+	background: var(--bg-surface);
+}
+
+html[data-theme='dark'] .header-global-search .search-input-wrapper {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .search-input-wrapper:focus-within {
+	border-color: var(--border-focus);
+}
+
+html[data-theme='dark'] .profile-btn,
+html[data-theme='dark'] .workspace-profile-btn,
+html[data-theme='dark'] .settings-btn,
+html[data-theme='dark'] .notifications-btn {
+	background: var(--bg-surface-alt);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .profile-menu,
+html[data-theme='dark'] .dropdown-menu,
+html[data-theme='dark'] .workspace-dropdown-menu,
+html[data-theme='dark'] .user-dropdown-menu {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+html[data-theme='dark'] .profile-menu .menu-item:hover,
+html[data-theme='dark'] .dropdown-menu .menu-item:hover,
+html[data-theme='dark'] .workspace-dropdown-menu .menu-item:hover {
+	background: var(--bg-surface-alt);
+}
+
+/* Mobile nav expansion + active tab bubble */
+html[data-theme='dark'] .header-nav-container.active {
+	background: var(--bg-surface-alt);
+}
+
+html[data-theme='dark'] .nav-tab.active {
+	background-color: var(--bg-surface) !important;
+	border-bottom-color: var(--primary);
+}
+
+/* Student workspace header + panels */
+html[data-theme='dark'] .workspace-header {
+	background: rgba(16, 26, 44, 0.88);
+	border-color: rgba(148, 163, 184, 0.16);
+	box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='dark'] .workspace-main {
+	background: var(--bg-body);
+}
+
+/* Cards, panels, chips, status bars */
+html[data-theme='dark'] .game-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .game-card.completed {
+	background: var(--bg-surface-alt);
+}
+
+html[data-theme='dark'] .game-card.open {
+	border-color: rgba(52, 211, 153, 0.45);
+}
+
+html[data-theme='dark'] .game-card.live {
+	border-color: rgba(59, 130, 246, 0.55);
+	box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18);
+}
+
+html[data-theme='dark'] .status-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .status-card.pending {
+	border-color: rgba(251, 191, 36, 0.5);
+}
+
+html[data-theme='dark'] .student-auth-panel {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .user-bulk-actions {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	box-shadow: none;
+}
+
+html[data-theme='dark'] .filter-chip {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .filter-chip:hover {
+	color: var(--text-main);
+	border-color: var(--border-focus);
+}
+
+html[data-theme='dark'] .filter-chip.active {
+	background: var(--primary);
+	border-color: var(--primary);
+	color: #ffffff;
+}
+
+html[data-theme='dark'] .games-refresh-btn {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .exam-card,
+html[data-theme='dark'] .class-card,
+html[data-theme='dark'] .question-card,
+html[data-theme='dark'] .result-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+/* admin.css panels */
+html[data-theme='dark'] .admin-root {
+	background: var(--bg-body);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .monitoring-header {
+	background: linear-gradient(135deg, #101a2c 0%, #16233a 100%);
+	border-color: var(--border-color);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='dark'] .monitoring-controls {
+	background: rgba(16, 26, 44, 0.9);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .monitoring-controls label {
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .monitoring-toggle {
+	background: var(--bg-surface-alt);
+}
+
+html[data-theme='dark'] .monitoring-status {
+	color: var(--text-muted);
+}
+
+html[data-theme='dark'] .monitoring-kpi {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .monitoring-kpi span {
+	color: var(--text-muted);
+}
+
+html[data-theme='dark'] .monitoring-kpi strong {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .monitoring-level {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .monitoring-panel code,
+html[data-theme='dark'] .monitoring-grid code,
+html[data-theme='dark'] .sw-mono {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .admin-kpi {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .admin-kpi__value {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .admin-kpi__label {
+	color: var(--text-muted);
+}
+
+html[data-theme='dark'] .admin-toolbar,
+html[data-theme='dark'] .admin-table__toolbar {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .admin-table__wrap {
+	border-color: var(--border-color);
+	box-shadow: none;
+}
+
+html[data-theme='dark'] .admin-tab {
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .admin-tab:hover {
+	color: var(--text-main);
+	background: var(--bg-surface-alt);
+}
+
+html[data-theme='dark'] .admin-tab--active {
+	color: var(--primary);
+	background: var(--primary-light);
+}
+
+html[data-theme='dark'] .admin-quick-action {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .admin-quick-action:hover {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-focus);
+}
+
+html[data-theme='dark'] .admin-activity__item {
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .admin-activity__title {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .admin-activity__empty {
+	color: var(--text-muted);
+}
+
+html[data-theme='dark'] .admin-error {
+	background: rgba(248, 113, 113, 0.12);
+	border-color: rgba(248, 113, 113, 0.4);
+	color: var(--text-main);
+}
+
+/* Game realtime panels + pairing */
+html[data-theme='dark'] .game-pairing-panel,
+html[data-theme='dark'] .game-manual-settings,
+html[data-theme='dark'] .game-preset-summary {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .pairing-row {
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .class-game-chip {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .class-game-chip .class-game-name {
+	color: var(--text-main);
+}
+
+/* Setup wizard panels */
+html[data-theme='dark'] .sw-panel,
+html[data-theme='dark'] .sw-info-item {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .sw-info-label {
+	color: var(--text-muted);
+}
+
+html[data-theme='dark'] .sw-info-value {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .sw-cmd-block,
+html[data-theme='dark'] .sw-url-list li {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .sw-badge-ok {
+	background: rgba(52, 211, 153, 0.18);
+	color: var(--success);
+}
+
+html[data-theme='dark'] .sw-badge-warn {
+	background: rgba(251, 191, 36, 0.18);
+	color: var(--warning);
+}
+
+html[data-theme='dark'] .sw-badge-fail {
+	background: rgba(248, 113, 113, 0.18);
+	color: var(--danger);
+}
+
+html[data-theme='dark'] .sw-badge-info {
+	background: rgba(34, 211, 238, 0.18);
+	color: var(--info);
+}
+
+html[data-theme='dark'] .sw-copy-btn {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .sw-step:hover {
+	background: var(--bg-surface-alt);
+}
+
+/* Quick-start / tournament panels */
+html[data-theme='dark'] .tournament-status-chip,
+html[data-theme='dark'] .tournament-sync-chip {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .tournament-guidance-card,
+html[data-theme='dark'] .tournament-recommendation-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+/* Tabs inside modals / studios */
+html[data-theme='dark'] .gm-tab-btn,
+html[data-theme='dark'] .tournament-studio-tab-btn {
+	color: var(--text-secondary);
+	background: transparent;
+	border-color: transparent;
+}
+
+html[data-theme='dark'] .gm-tab-btn:hover,
+html[data-theme='dark'] .tournament-studio-tab-btn:hover {
+	color: var(--text-main);
+	background: var(--bg-surface-alt);
+}
+
+html[data-theme='dark'] .gm-tab-btn.active,
+html[data-theme='dark'] .tournament-studio-tab-btn.active {
+	color: var(--primary);
+	background: var(--primary-light);
+}
+
+/* Tables */
+html[data-theme='dark'] .data-table {
+	background: var(--bg-surface);
+}
+
+html[data-theme='dark'] .data-table td {
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .data-table tr:hover td {
+	background: var(--bg-surface-alt);
+}
+
+html[data-theme='dark'] .data-table tr.is-selected td {
+	background: var(--primary-light);
+}
+
+/* Modals already follow vars, keep headers/footers consistent */
+html[data-theme='dark'] .modal-header,
+html[data-theme='dark'] .modal-footer {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .modal-backdrop {
+	background-color: rgba(2, 6, 16, 0.72);
+}
+
+/* Toasts */
+html[data-theme='dark'] .toast {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Badges — keep colored semantic badges, neutral ones go dark */
+html[data-theme='dark'] .badge--gray,
+html[data-theme='dark'] .badge--draft,
+html[data-theme='dark'] .badge {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	border-color: var(--border-color);
+}
+
+/* Forms */
+html[data-theme='dark'] .form-control:focus,
+html[data-theme='dark'] input:focus,
+html[data-theme='dark'] select:focus,
+html[data-theme='dark'] textarea:focus {
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+html[data-theme='dark'] input::placeholder,
+html[data-theme='dark'] textarea::placeholder {
+	color: var(--text-muted);
+}
+
+/* ── Theme toggle button ──────────────────────────────────────────────────── */
+.theme-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 38px;
+	padding: 0;
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-md);
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	cursor: pointer;
+	transition:
+		background 150ms ease,
+		color 150ms ease,
+		border-color 150ms ease;
+	flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+	background: var(--bg-surface);
+	color: var(--text-main);
+	border-color: var(--border-focus);
+}
+
+.theme-toggle:focus-visible {
+	outline: 2px solid var(--border-focus);
+	outline-offset: 2px;
+}
+
+.header-right .theme-toggle {
+	margin-right: 10px;
+}
+
+.workspace-actions .theme-toggle {
+	margin-right: 8px;
+}
+
+.theme-toggle svg {
+	width: 18px;
+	height: 18px;
+}
+
+.theme-toggle__icon--sun {
+	display: none;
+}
+
+html[data-theme='dark'] .theme-toggle__icon--sun {
+	display: block;
+}
+
+html[data-theme='dark'] .theme-toggle__icon--moon {
+	display: none;
+}
+
+/* ── Responsive overlay (safe, additive across all devices) ──────────────── */
+@media (max-width: 1100px) {
+	html[data-theme='dark'] body,
+	body {
+		overflow-x: hidden;
+	}
+
+	.admin-kpi-grid,
+	.monitoring-kpis {
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	}
+
+	.monitoring-grid {
+		grid-template-columns: 1fr !important;
+	}
+}
+
+@media (max-width: 900px) {
+	.game-preset-summary-grid,
+	.sw-info-grid,
+	.pairing-summary,
+	.gamification-leaderboard-list {
+		grid-template-columns: 1fr 1fr !important;
+	}
+
+	.games-studio-layout,
+	.gm-tab-panel > .form-row,
+	.tournament-dashboard-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.chart-container {
+		min-width: 0 !important;
+	}
+}
+
+@media (max-width: 768px) {
+	.header-main-bar {
+		height: auto;
+		min-height: 60px;
+		flex-wrap: wrap;
+		padding-top: var(--space-sm);
+		padding-bottom: var(--space-sm);
+	}
+
+	.header-global-search {
+		order: 10;
+		flex: 1 1 100%;
+		margin-top: var(--space-sm);
+	}
+
+	.header-global-search .search-input-wrapper {
+		width: 100%;
+	}
+
+	.admin-name {
+		display: none;
+	}
+
+	.monitoring-kpis,
+	.admin-kpi-grid {
+		grid-template-columns: 1fr 1fr !important;
+	}
+
+	.game-preset-summary-grid,
+	.sw-info-grid,
+	.pairing-summary {
+		grid-template-columns: 1fr !important;
+	}
+
+	.pairing-actions,
+	.panel-controls,
+	.game-filters-bar .game-filter-row {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.game-filter-search,
+	.game-filter-search .form-control {
+		width: 100%;
+	}
+
+	.workspace-header-row {
+		flex-wrap: wrap;
+	}
+
+	.workspace-actions {
+		flex-wrap: wrap;
+		justify-content: flex-start;
+	}
+
+	.exam-card-grid,
+	.game-grid,
+	.library-grid,
+	.results-grid,
+	.recent-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.table-container,
+	.table-wrapper,
+	.admin-table__wrap {
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.modal-content {
+		width: 96% !important;
+		margin: 1.5vh auto !important;
+		max-height: 92vh;
+		overflow-y: auto;
+	}
+
+	.admin-toolbar,
+	.admin-table__toolbar {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.admin-toolbar__field {
+		min-width: 0 !important;
+	}
+
+	.toolbar {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.monitoring-controls {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.monitoring-controls .form-control {
+		width: 100%;
+	}
+
+	.game-pairing-section .form-row {
+		flex-direction: column;
+	}
+
+	.game-pairing-section .half {
+		width: 100% !important;
+	}
+
+	.chip-list,
+	.filter-chips-row,
+	.game-status-row {
+		flex-wrap: wrap;
+	}
+}
+
+@media (max-width: 480px) {
+	.monitoring-kpis,
+	.admin-kpi-grid {
+		grid-template-columns: 1fr !important;
+	}
+
+	.header-branding h1 {
+		font-size: 16px;
+	}
+
+	.profile-btn .admin-name,
+	.workspace-profile-info {
+		display: none;
+	}
+
+	.modal-content {
+		width: 98% !important;
+	}
+
+	.workspace-brand {
+		gap: 10px;
+	}
+
+	.workspace-brand h1 {
+		font-size: 1.1rem;
+	}
+}
+
+/* ── Arena palette (student workspace + blueprint layers) ───────────────────
+   The arena surface is driven entirely by these :root variables (styles.css
+   12112 + 30668). Re-theming them flips the whole student page at once. */
+html[data-theme='dark'] {
+	--arena-ink: #e6edf7;
+	--arena-muted: #9fb1c7;
+	--arena-line: #23384f;
+	--arena-surface: var(--bg-surface);
+	--arena-canvas: var(--bg-body);
+	--arena-teal: #22b8b1;
+	--arena-teal-dark: #5fd0ca;
+	--arena-blue: #6ca0ff;
+	--arena-gold: #f5bb55;
+	--arena-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+}
+
+/* --arena-ink is ALSO used as the active-tab background (white text) —
+   keep that one accented instead of light. */
+html[data-theme='dark'] body.student-workspace .workspace-tab-btn.active,
+html[data-theme='dark'] .workspace-tab-btn.active {
+	background: var(--primary);
+	color: #ffffff;
+	box-shadow: 0 6px 15px rgba(0, 0, 0, 0.35);
+}
+
+/* ── Hardcoded !important light colors (remediation layer) ──────────────────
+   These rules in styles.css use !important, so a plain (non-!important)
+   override can never win the cascade. They must be re-asserted here. */
+html[data-theme='dark'] #settingsModal .settings-tab-btn:hover,
+html[data-theme='dark'] #settingsModal .settings-tab-btn:focus-visible,
+html[data-theme='dark'] #settingsModal .settings-tab-btn.active {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-focus) !important;
+	color: var(--primary) !important;
+}
+
+html[data-theme='dark'] #settingsModal .settings-tab-btn.active svg,
+html[data-theme='dark'] #settingsModal .settings-tab-btn:hover svg {
+	color: var(--primary) !important;
+}
+
+html[data-theme='dark'] #settingsModal .modal-header h2,
+html[data-theme='dark'] #examModal.is-open .modal-header h2,
+html[data-theme='dark'] #classModal.is-open .modal-header h2 {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #settingsModal .close:hover,
+html[data-theme='dark'] #userModal .close:hover,
+html[data-theme='dark'] #examModal.is-open .close:hover,
+html[data-theme='dark'] #classModal.is-open .close:hover {
+	background: rgba(248, 113, 113, 0.2) !important;
+	color: #fca5a5 !important;
+}
+
+html[data-theme='dark'] .upload-zone {
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .upload-zone.drag-over {
+	border-color: #a78bfa !important;
+	background: rgba(139, 92, 246, 0.18) !important;
+}
+
+html[data-theme='dark'] .strategy-card {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .strategy-card:hover {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .strategy-card.active {
+	background: rgba(139, 92, 246, 0.18) !important;
+	border-color: #a78bfa !important;
+}
+
+html[data-theme='dark'] .filter-search-input,
+html[data-theme='dark'] .filter-select {
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .filter-select:hover {
+	border-color: var(--border-focus) !important;
+}
+
+html[data-theme='dark'] .blank-correct {
+	background-color: rgba(52, 211, 153, 0.2) !important;
+	color: #a7f3d0 !important;
+}
+
+html[data-theme='dark'] .blank-incorrect {
+	background-color: rgba(248, 113, 113, 0.2) !important;
+	color: #fecaca !important;
+}
+
+html[data-theme='dark'] .option-btn.correct,
+html[data-theme='dark'] .draggable-option.correct,
+html[data-theme='dark'] .odd-one-option.correct {
+	background: linear-gradient(135deg, rgba(52, 211, 153, 0.22), rgba(52, 211, 153, 0.3)) !important;
+	color: #a7f3d0 !important;
+}
+
+html[data-theme='dark'] .option-btn.incorrect,
+html[data-theme='dark'] .draggable-option.incorrect,
+html[data-theme='dark'] .odd-one-option.incorrect {
+	background: linear-gradient(135deg, rgba(248, 113, 113, 0.22), rgba(248, 113, 113, 0.3)) !important;
+	color: #fecaca !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal.is-open .ai-modal-tab.active {
+	border-color: #a5b4fc !important;
+	background: rgba(99, 102, 241, 0.22) !important;
+}
+
+/* ── Admin tables: force readable text on dark surfaces ───────────────────── */
+html[data-theme='dark'] .admin-table th {
+	background: var(--bg-surface-alt) !important;
+	color: var(--text-secondary) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .admin-table td {
+	color: var(--text-main) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .admin-table__row:hover td {
+	background: var(--bg-surface-alt) !important;
+}
+
+html[data-theme='dark'] .admin-table__empty {
+	color: var(--text-muted) !important;
+}
+
+html[data-theme='dark'] .admin-table__error {
+	color: #fca5a5 !important;
+}
+
+html[data-theme='dark'] .data-table th {
+	background-color: var(--bg-surface-alt) !important;
+	color: var(--text-secondary) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .data-table td {
+	color: var(--text-main) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+/* ── JS inline-style remediation ─────────────────────────────────────────────
+   Admin/dashboard templates hardcode light colors inline, which beat any
+   non-!important stylesheet rule. Re-assert dark values with !important. */
+
+/* Overview dashboard stacked-chart labels (inline #1e293b / #f1f5f9). */
+html[data-theme='dark'] .bar-label {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .bar-label span {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .bar-label span[style*='background'] {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+/* Question answer pills / validation badges (inline indigo + light greys). */
+html[data-theme='dark'] .validation-badge,
+html[data-theme='dark'] .draggable-list > span,
+html[data-theme='dark'] .answer-badges-container span[style*='background'] {
+	background: rgba(99, 102, 241, 0.18) !important;
+	border-color: #6366f1 !important;
+	color: #c7d2fe !important;
+}
+
+html[data-theme='dark'] .draggable-list > span {
+	border-radius: 999px !important;
+}
+
+html[data-theme='dark'] .draggable-list span[style*='color'],
+html[data-theme='dark'] .answer-badges-container span[style*='color'] {
+	color: var(--text-muted) !important;
+}
+
+/* Results: device-source badge (inline #f1f5f9 pill) + muted labels. */
+html[data-theme='dark'] .device-source-badge {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+/* Realtime admin: connected-devices panel inline greys (#666 / #888). */
+html[data-theme='dark'] #devices-list > div {
+	border-top-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #devices-list div[style*='color'] {
+	color: var(--text-muted) !important;
+}
+
+/* ── Admin shell + all-tab guarantees ────────────────────────────────────────
+   Force the admin main area, dashboard containers and panels to dark
+   surfaces with light text, no matter what the original CSS painted. */
+html[data-theme='dark'] .app-content {
+	background-color: var(--bg-body) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .tab-content {
+	background-color: var(--bg-body) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .dashboard-container {
+	background-color: var(--bg-body) !important;
+	color: var(--text-main) !important;
+}
+
+/* Welcome header (Good afternoon, Admin …). */
+html[data-theme='dark'] .dashboard-header {
+	background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .dashboard-header h2,
+html[data-theme='dark'] .welcome-text h2,
+html[data-theme='dark'] .welcome-text h3 {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .welcome-text p,
+html[data-theme='dark'] .welcome-text .text-muted {
+	color: var(--text-muted) !important;
+}
+
+html[data-theme='dark'] .date-badge {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+/* Panels / KPI cards / quick actions / activity across every tab. */
+html[data-theme='dark'] .dashboard-panel,
+html[data-theme='dark'] .card,
+html[data-theme='dark'] .stat-card,
+html[data-theme='dark'] .kpi-card,
+html[data-theme='dark'] .panel-body,
+html[data-theme='dark'] .overview-panel {
+	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .panel-header {
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .panel-header h2,
+html[data-theme='dark'] .panel-header h3,
+html[data-theme='dark'] .panel-header h4 {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .panel-header p,
+html[data-theme='dark'] .panel-header .text-muted {
+	color: var(--text-muted) !important;
+}
+
+/* ── All admin tables: light text on dark cells — precise white-list ────────
+   Forces every table inside the admin content area to keep the text color
+   clearly different from its background, regardless of inherited color. */
+html[data-theme='dark'] .app-content table {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .app-content table th {
+	background-color: var(--bg-surface-alt) !important;
+	color: var(--text-secondary) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .app-content table td {
+	color: var(--text-main) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .app-content table tr:hover td {
+	background-color: var(--bg-surface-alt) !important;
+}
+
+html[data-theme='dark'] .app-content .table-container {
+	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .app-content .empty-cell,
+html[data-theme='dark'] .app-content .table-placeholder {
+	color: var(--text-muted) !important;
+}
+
+/* ── Settings modal: inline light styles in the markup ──────────────────────
+   The settings form hardcodes white/light backgrounds and dark text inline
+   (style="background:#fff", style="color:#1e293b", light gradients, …).
+   Inline styles beat stylesheets, so these re-assertions need !important. */
+html[data-theme='dark'] #settingsModal .settings-group {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #settingsModal .settings-group h3,
+html[data-theme='dark'] #settingsModal .settings-group h4,
+html[data-theme='dark'] #settingsModal .settings-group strong {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #settingsModal .preset-form-container {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='dark'] #settingsModal #presetsList,
+html[data-theme='dark'] #settingsModal #gamePresetsList,
+html[data-theme='dark'] #settingsModal #realtime-devices-list {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #settingsModal #realtime-devices-list div[style*='color'] {
+	color: var(--text-muted) !important;
+}
+
+html[data-theme='dark'] #settingsModal div[style*='background: #fff'],
+html[data-theme='dark'] #settingsModal div[style*='background: #ffffff'],
+html[data-theme='dark'] #settingsModal div[style*='background: #f8fafc'] {
+	background: var(--bg-surface-alt) !important;
+}
+
+/* "Push default settings" + preset gradient groups → plain dark card. */
+html[data-theme='dark'] #settingsModal .settings-group[style*='gradient'] {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+/* Code-question form inline whites. */
+html[data-theme='dark'] #code-snippet-container {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #code-snippet-container label,
+html[data-theme='dark'] #code-snippet-container span[style*='color'] {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] #code-snippet,
+html[data-theme='dark'] #code-language,
+html[data-theme='dark'] #code-answer-mode {
+	background: var(--bg-surface-alt) !important;
+	color: var(--text-main) !important;
+	border-color: var(--border-color) !important;
+}
+
+/* Hardcoded dark text inline → theme light text. (Light-mode chips that pair
+   a colored bg with a colored text keep their identity; only literal
+   near-black/gray ink is re-pointed.) */
+html[data-theme='dark'] [style*='color: #1e293b'],
+html[data-theme='dark'] [style*='color:#1e293b'],
+html[data-theme='dark'] [style*='color: #0f172a'],
+html[data-theme='dark'] [style*='color:#0f172a'],
+html[data-theme='dark'] [style*='color: #111827'],
+html[data-theme='dark'] [style*='color:#111827'],
+html[data-theme='dark'] [style*='color: #1f2937'],
+html[data-theme='dark'] [style*='color:#1f2937'],
+html[data-theme='dark'] [style*='color: #334155'],
+html[data-theme='dark'] [style*='color:#334155'],
+html[data-theme='dark'] [style*='color: #374151'],
+html[data-theme='dark'] [style*='color:#374151'],
+html[data-theme='dark'] [style*='color: #475569'],
+html[data-theme='dark'] [style*='color:#475569'] {
+	color: var(--text-main) !important;
+}
+
+/* ── Last-resort pins for sections repeatedly reported as white ───────────── */
+html[data-theme='dark'] #general-settings,
+html[data-theme='dark'] #settingsModal .settings-section {
+	background-color: var(--bg-surface) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #settingsModal .settings-content-wrapper,
+html[data-theme='dark'] .settings-content-wrapper {
+	background-color: var(--bg-body) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .settings-tabs {
+	background: var(--bg-surface) !important;
+	border-bottom-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .kpi-section-title {
+	color: var(--text-muted) !important;
+}
+
+html[data-theme='dark'] .kpi-section-title::after {
+	background: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .kpi-section-title svg {
+	stroke: var(--text-muted) !important;
+}
+
+html[data-theme='dark'] .dashboard-container {
+	background-color: var(--bg-body) !important;
+}
+
+html[data-theme='dark'] .app-content {
+	background-color: var(--bg-body) !important;
+}
+
+/* ── Modal dark remediation: category / user / exam / class /
+      assign modals + AI Question Generator ────────────────────────── */
+
+html[data-theme='dark'] #categoryModal .modal-content,
+html[data-theme='dark'] #categoryModal.is-open .modal-content,
+html[data-theme='dark'] #userModal .modal-content,
+html[data-theme='dark'] #userModal.is-open .modal-content,
+html[data-theme='dark'] #examModal .modal-content,
+html[data-theme='dark'] #examModal.is-open .modal-content,
+html[data-theme='dark'] #classModal .modal-content,
+html[data-theme='dark'] #classModal.is-open .modal-content,
+html[data-theme='dark'] #questionModal .modal-content {
+	background-color: var(--bg-surface) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #categoryModal .modal-header,
+html[data-theme='dark'] #categoryModal.is-open .modal-header,
+html[data-theme='dark'] #userModal .modal-header,
+html[data-theme='dark'] #userModal.is-open .modal-header,
+html[data-theme='dark'] #examModal .modal-header,
+html[data-theme='dark'] #examModal.is-open .modal-header,
+html[data-theme='dark'] #classModal .modal-header,
+html[data-theme='dark'] #classModal.is-open .modal-header,
+html[data-theme='dark'] #questionModal .modal-header {
+	background-color: var(--bg-surface) !important;
+	background-image: none !important;
+	color: var(--text-main) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #categoryModal .modal-header h2,
+html[data-theme='dark'] #categoryModal.is-open .modal-header h2,
+html[data-theme='dark'] #userModal .modal-header h2,
+html[data-theme='dark'] #userModal.is-open .modal-header h2,
+html[data-theme='dark'] #examModal .modal-header h2,
+html[data-theme='dark'] #examModal.is-open .modal-header h2,
+html[data-theme='dark'] #classModal .modal-header h2,
+html[data-theme='dark'] #classModal.is-open .modal-header h2,
+html[data-theme='dark'] #questionModal .modal-header h2 {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #categoryModal .modal-body,
+html[data-theme='dark'] #categoryModal.is-open .modal-body,
+html[data-theme='dark'] #userModal .modal-body,
+html[data-theme='dark'] #userModal.is-open .modal-body,
+html[data-theme='dark'] #examModal .modal-body,
+html[data-theme='dark'] #examModal.is-open .modal-body,
+html[data-theme='dark'] #classModal .modal-body,
+html[data-theme='dark'] #classModal.is-open .modal-body,
+html[data-theme='dark'] #questionModal .modal-body {
+	background-color: var(--bg-body) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #examModal.is-open .exam-filters-container,
+html[data-theme='dark'] #examModal.is-open .question-column h4 {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] #examModal.is-open .question-column {
+	background-color: var(--bg-body) !important;
+}
+
+html[data-theme='dark'] #classModal .class-students-group,
+html[data-theme='dark'] #classModal .class-exams-group,
+html[data-theme='dark'] #classModal.is-open .class-students-group,
+html[data-theme='dark'] #classModal.is-open .class-exams-group,
+html[data-theme='dark'] #assignClassStudentsModal .class-students-group,
+html[data-theme='dark'] #assignClassExamsModal .class-exams-group {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #classModal .selected-student-item {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #categoryModal .form-actions,
+html[data-theme='dark'] #examModal .form-actions,
+html[data-theme='dark'] #classModal .form-actions,
+html[data-theme='dark'] #examModal #examForm > .form-actions,
+html[data-theme='dark'] #categoryModal #categoryForm > .form-actions,
+html[data-theme='dark'] #classModal #classForm > .form-actions,
+html[data-theme='dark'] #examModal.is-open .form-actions,
+html[data-theme='dark'] #classModal.is-open .form-actions {
+	background-color: var(--bg-surface) !important;
+	background-image: none !important;
+	border-top-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #assignCategoryQuestionsModal .question-item,
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-item,
+html[data-theme='dark'] #assignExamQuestionsModal .question-item,
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-item {
+	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #assignCategoryQuestionsModal .question-item.selected,
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-item.selected,
+html[data-theme='dark'] #assignExamQuestionsModal .question-item.selected,
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-item.selected {
+	background-color: rgba(99, 102, 241, 0.18) !important;
+}
+
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-number,
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-number {
+	background-color: var(--bg-surface-alt) !important;
+	color: var(--text-muted) !important;
+}
+
+html[data-theme='dark'] #assignClassStudentsModal .roster-summary {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar {
+	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar .filter-search-input,
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar .filter-select,
+html[data-theme='dark'] #assignClassStudentsModal .roster-action-btn {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #assignClassStudentsModal .roster-table-wrapper {
+	background-color: var(--bg-body) !important;
+}
+
+html[data-theme='dark'] #assignClassStudentsModal table.roster-table th,
+html[data-theme='dark'] #assignClassStudentsModal .roster-status-pending {
+	background-color: var(--bg-surface-alt) !important;
+	color: var(--text-secondary) !important;
+}
+
+/* AI Question Generator */
+html[data-theme='dark'] #aiGeneratorModal .modal-content,
+html[data-theme='dark'] #aiGeneratorModal.is-open .modal-content {
+	background-color: var(--bg-surface) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal.is-open .modal-body {
+	background-color: var(--bg-body) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal.is-open .ai-modal-header {
+	background-color: var(--bg-surface) !important;
+	background-image: none !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .ai-modal-tabs {
+	background-color: var(--bg-surface) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .ai-modal-tab.active {
+	background-color: transparent !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal #tab-ai-standard {
+	border-bottom-color: #6366f1 !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal #tab-ai-document {
+	color: var(--text-muted) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal #ai-generator-footer {
+	background-color: var(--bg-surface) !important;
+	border-top-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .ai-pro-tips {
+	background-image: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.7)) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .tip-item {
+	background-color: rgba(15, 23, 42, 0.45) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .supported-formats {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .strategy-card.active {
+	background-color: rgba(99, 102, 241, 0.18) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .progress-container {
+	background-color: var(--bg-surface-alt) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .progress-bar {
+	background-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal #previewContent {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .cooldown-bar {
+	background-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal [style*='background: white'],
+html[data-theme='dark'] #aiGeneratorModal [style*='background: #fff'],
+html[data-theme='dark'] #aiGeneratorModal [style*='background: #ffffff'],
+html[data-theme='dark'] #aiGeneratorModal [style*='background: #f8fafc'],
+html[data-theme='dark'] #aiGeneratorModal [style*='background: #f1f5f9'],
+html[data-theme='dark'] #aiGeneratorModal [style*='background: rgba(255, 255, 255, 0.7)'] {
+	background-color: var(--bg-surface-alt) !important;
+}

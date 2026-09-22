@@ -1,0 +1,5029 @@
+html[data-theme='dark'] html.auth-pending body {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .student-auth-panel {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .user-role.admin {
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .user-role.teacher {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .user-role.student {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .user-class-hint {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .user-bulk-actions {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .user-bulk-actions .bulk-summary {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .user-bulk-actions .bulk-subtext {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .data-table tr.is-selected td {
+	background-color: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .data-table tr.is-selected:hover td {
+	background-color: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .workspace-header {
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] .workspace-brand p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .workspace-profile-btn {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .workspace-profile-name {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .workspace-profile-class {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .workspace-dropdown-menu {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .workspace-btn.ghost {
+	color: rgb(172, 188, 225);
+	border: 1px solid rgb(35, 69, 180);
+}
+html[data-theme='dark'] .workspace-tabs {
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] .workspace-tab-btn {
+	border: 1px solid rgb(61, 101, 154);
+	background: var(--bg-surface);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .workspace-tab-btn:hover {
+	color: rgb(142, 167, 235);
+	background: rgb(31, 59, 91);
+}
+html[data-theme='dark'] .hero-card {
+	background: linear-gradient(
+		165deg,
+		rgba(16, 26, 44, 0.98),
+		rgba(16, 26, 44, 0.96)
+	);
+}
+html[data-theme='dark'] .workspace-panel {
+	background: rgba(16, 26, 44, 0.94);
+}
+html[data-theme='dark'] .panel-header p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-badge-card {
+	border: 1px solid rgb(60, 103, 154);
+	background: linear-gradient(160deg, var(--bg-surface) 0%, rgb(31, 57, 91) 58%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .student-badge-card.tier-gold {
+	border-color: rgb(182, 142, 32);
+	background: linear-gradient(160deg, rgb(91, 82, 31) 0%, rgb(91, 80, 31) 48%, rgb(91, 79, 31) 100%);
+}
+html[data-theme='dark'] .student-badge-card.tier-silver {
+	border-color: var(--border-color);
+	background: linear-gradient(160deg, var(--bg-surface) 0%, var(--bg-surface) 52%, var(--bg-surface-alt) 100%);
+}
+html[data-theme='dark'] .student-badge-card.tier-bronze {
+	border-color: rgb(164, 108, 50);
+	background: linear-gradient(160deg, rgb(91, 61, 31) 0%, rgb(91, 60, 31) 52%, rgb(91, 61, 31) 100%);
+}
+html[data-theme='dark'] .student-badge-card.tier-emerald {
+	border-color: rgb(32, 182, 123);
+	background: linear-gradient(160deg, rgb(31, 91, 61) 0%, rgb(31, 91, 52) 55%, rgb(31, 91, 52) 100%);
+}
+html[data-theme='dark'] .student-badge-card.tier-sky {
+	border-color: rgb(32, 134, 182);
+	background: linear-gradient(160deg, rgb(31, 67, 91) 0%, rgb(31, 67, 91) 55%, rgb(31, 71, 91) 100%);
+}
+html[data-theme='dark'] .student-badge-icon {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-badge-card.tier-gold .student-badge-icon {
+	background: radial-gradient(circle at 30% 30%, rgb(91, 80, 31), #facc15 72%, #ca8a04);
+}
+html[data-theme='dark'] .student-badge-card.tier-silver .student-badge-icon {
+	background: radial-gradient(circle at 30% 30%, var(--bg-surface), rgb(46, 60, 76) 72%, #94a3b8);
+}
+html[data-theme='dark'] .student-badge-card.tier-bronze .student-badge-icon {
+	background: radial-gradient(circle at 30% 30%, rgb(91, 64, 31), #d97706 72%, #9a3412);
+}
+html[data-theme='dark'] .student-badge-card.tier-emerald .student-badge-icon {
+	background: radial-gradient(circle at 30% 30%, rgb(31, 91, 50), #34d399 72%, #047857);
+}
+html[data-theme='dark'] .student-badge-card.tier-sky .student-badge-icon {
+	background: radial-gradient(circle at 30% 30%, rgb(31, 67, 91), #38bdf8 72%, #0369a1);
+}
+html[data-theme='dark'] .student-badge-pill {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .student-badge-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-badge-desc {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-badge-icon::after {
+	content: '';
+	position: absolute;
+	inset: 4px;
+	border-radius: inherit;
+	background: linear-gradient(
+		160deg,
+		rgba(16, 26, 44, 0.6),
+		rgba(16, 26, 44, 0.08) 46%,
+		transparent 72%
+	);
+	pointer-events: none;;
+}
+html[data-theme='dark'] .student-badge-card.locked {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-badge-lock {
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .profile-season-banner::after {
+	content: '';
+	position: absolute;
+	inset: -40% -20% auto auto;
+	width: 180px;
+	height: 180px;
+	border-radius: 999px;
+	background: radial-gradient(
+		circle,
+		rgba(16, 26, 44, 0.22),
+		transparent 65%
+	);
+	pointer-events: none;;
+}
+html[data-theme='dark'] .profile-season-bar {
+	background: rgba(16, 26, 44, 0.22);
+}
+html[data-theme='dark'] .student-tournament-status {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-status.active {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-tournament-status.inactive {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-benefits {
+	border: 1px solid rgb(32, 96, 182);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .student-tournament-benefits-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-benefits ul {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-stat {
+	border: 1px solid rgb(60, 103, 154);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .student-tournament-stat .label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-stat .value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-row {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-tournament-row-rank {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .student-tournament-row-name {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-row-points {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-focus-card {
+	border: 1px solid rgb(60, 103, 154);
+	background: linear-gradient(135deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .student-tournament-focus-card.is-live {
+	background: linear-gradient(135deg, rgb(31, 67, 91) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .student-tournament-focus-card.is-warning {
+	background: linear-gradient(135deg, rgb(91, 65, 31) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .student-tournament-focus-card.is-done {
+	border-color: rgb(32, 182, 86);
+	background: linear-gradient(135deg, rgb(31, 91, 50) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .student-tournament-focus-kicker {
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .student-tournament-focus-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-focus-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-focus-note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-step {
+	border: 1px solid rgb(60, 103, 154);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .student-tournament-step.is-done {
+	border-color: rgb(32, 182, 86);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 91, 50) 100%);
+}
+html[data-theme='dark'] .student-tournament-step.is-locked {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-tournament-step-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-step-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-step-note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-panel {
+	border: 1px solid rgb(60, 103, 154);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-tournament-panel-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-round-card {
+	border: 1px solid rgb(60, 103, 154);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .student-tournament-round-card.is-completed {
+	border-color: rgb(32, 182, 86);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 91, 50) 100%);
+}
+html[data-theme='dark'] .student-tournament-round-card.is-upcoming {
+	border-color: rgb(32, 99, 182);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .student-tournament-round-card.is-locked {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-tournament-round-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-round-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-round-progress-row {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-progress-track {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .student-tournament-round-chip {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .student-tournament-game-card {
+	border: 1px solid rgb(60, 103, 154);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-tournament-game-card.is-live {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .student-tournament-game-card.is-completed {
+	border-color: rgb(32, 182, 86);
+	background: rgb(31, 91, 50);
+}
+html[data-theme='dark'] .student-tournament-game-card.is-open {
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .student-tournament-game-card.is-pending {
+	border-color: rgb(32, 99, 182);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .student-tournament-game-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-game-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-inline-note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-participant-row {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-tournament-participant-row.is-self {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .student-tournament-participant-name {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-tournament-participant-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-status-pill.live {
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .student-tournament-status-pill.waiting {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-status-pill.done {
+	color: rgb(159, 239, 189);
+}
+html[data-theme='dark'] .student-tournament-status-pill.warning {
+	background: rgb(91, 65, 31);
+	color: rgb(241, 181, 157);
+}
+html[data-theme='dark'] .student-tournament-status-pill.danger {
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-tournament-status-pill.muted {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-tournament-benefits p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .filter-chip {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .games-refresh-btn {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .exam-card {
+	background: linear-gradient(160deg, rgb(31, 61, 91), var(--bg-surface));
+	border: 1px solid rgb(58, 103, 156);
+}
+html[data-theme='dark'] .exam-status {
+	background: var(--bg-surface-alt);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .exam-card.status-completed .exam-status {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .exam-card.status-available .exam-status {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .exam-tag {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .performance-bar {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .performance-row {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .performance-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-card {
+	border: 1px solid rgb(48, 109, 166);
+	background: radial-gradient(
+			circle at top right,
+			rgba(59, 130, 246, 0.16),
+			transparent 32%
+		),
+		radial-gradient(
+			circle at bottom left,
+			rgba(16, 185, 129, 0.1),
+			transparent 28%
+		),
+		linear-gradient(135deg, var(--bg-surface) 0%, rgb(31, 57, 91) 52%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .avatar-frame {
+	background: linear-gradient(135deg, rgb(31, 67, 91) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .avatar-frame span {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .avatar-upload {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .profile-meta p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-chip {
+	color: rgb(172, 168, 229);
+}
+html[data-theme='dark'] .profile-chip.profile-chip-points {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .profile-chip.profile-chip-badges {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .profile-stat-tile {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 45, 91) 100%);
+}
+html[data-theme='dark'] .profile-insight-card {
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] .profile-stat-tile span {
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .profile-insight-kicker {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-stat-tile strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .profile-stat-tile small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-insight-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-progress-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-insight-copy strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .profile-insight-card.accent-blue {
+	background: linear-gradient(180deg, rgb(31, 57, 91) 0%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .profile-insight-card.accent-gold {
+	background: linear-gradient(180deg, rgb(91, 79, 31) 0%, rgb(91, 78, 31) 100%);
+}
+html[data-theme='dark'] .profile-insight-card.accent-emerald {
+	background: linear-gradient(180deg, rgb(31, 91, 65) 0%, rgb(31, 91, 61) 100%);
+}
+html[data-theme='dark'] .profile-insight-value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .profile-form {
+	background: rgba(16, 26, 44, 0.6);
+}
+html[data-theme='dark'] .profile-form label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-form .form-control {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .profile-form .form-control:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .profile-actions .workspace-btn.ghost {
+	background: rgba(16, 26, 44, 0.85);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-actions .workspace-btn.ghost:hover {
+	background: var(--bg-surface-alt);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .profile-request-status {
+	background: rgba(16, 26, 44, 0.85);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .profile-hero-banner-bg::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background-image:
+		radial-gradient(
+			circle at 25% 35%,
+			rgba(16, 26, 44, 0.08) 0,
+			transparent 1px
+		),
+		radial-gradient(
+			circle at 75% 70%,
+			rgba(16, 26, 44, 0.06) 0,
+			transparent 1px
+		),
+		radial-gradient(
+			circle at 50% 90%,
+			rgba(16, 26, 44, 0.05) 0,
+			transparent 1px
+		);
+	background-size: 60px 60px;
+	opacity: 0.6;;
+}
+html[data-theme='dark'] .profile-meta--banner .profile-chip {
+	background: rgba(16, 26, 44, 0.18);
+}
+html[data-theme='dark'] .profile-premium-badge {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .profile-avatar--floating .avatar-upload {
+	background: rgba(16, 26, 44, 0.95);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .profile-avatar--floating .avatar-upload:hover {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-stats-card > .profile-hero-stats {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-form-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-form-card-header h3 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .profile-form-card-header p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-tab-btn {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .tournament-joined-mini {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .status-card {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .status-card.pending {
+	background: rgb(91, 79, 31);
+	border-color: rgb(182, 147, 32);
+}
+html[data-theme='dark'] .status-icon {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .status-content p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .status-content small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .request-status-card {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .request-pill.pending {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .request-pill.approved {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .request-pill.rejected {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .ai-preview-type {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-card {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .game-card.open {
+	border-color: rgb(32, 182, 85);
+}
+html[data-theme='dark'] .game-card.live {
+	border-color: rgb(32, 99, 182);
+}
+html[data-theme='dark'] .game-card.completed {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .game-badge {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-badge.ghost {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-pill.open {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .game-pill.live {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .game-pill.completed {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-stat-card {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .game-stat-card .stat-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-stat-card .stat-value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .game-result-inline {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .game-result-inline.win {
+	border-color: rgb(32, 182, 85);
+	background: rgb(31, 91, 56);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .game-result-inline.lose {
+	border-color: rgb(182, 32, 32);
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .game-result-inline.neutral {
+	border-color: var(--border-color);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-result-card {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .game-result-card .result-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .game-result-card .result-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-result-card .result-outcome.win {
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .game-result-card .result-outcome.lose {
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .game-result-card .result-outcome.neutral {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-stage .workspace-btn {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .game-stage .form-control {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .game-scoreboard {
+	background: rgba(16, 26, 44, 0.08);
+}
+html[data-theme='dark'] .game-stage.emergency .play-card-face {
+	background: linear-gradient(145deg, rgb(91, 31, 35), rgb(91, 31, 35));
+}
+html[data-theme='dark'] .score-pill {
+	background: rgba(16, 26, 44, 0.15);
+}
+html[data-theme='dark'] .score-pill.ready {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .status-pill {
+	background: rgba(16, 26, 44, 0.15);
+}
+html[data-theme='dark'] .status-pill.thinking {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .status-pill.answered {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .status-pill.answering {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .status-pill.turn {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .status-pill.winner {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .game-main {
+	background: rgba(16, 26, 44, 0.05);
+}
+html[data-theme='dark'] .play-card-face {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .play-card.play-card--hidden .play-card-face {
+	background: linear-gradient(145deg, var(--bg-surface), var(--bg-surface-alt)),
+		repeating-linear-gradient(
+			45deg,
+			rgba(15, 23, 42, 0.05) 0,
+			rgba(15, 23, 42, 0.05) 8px,
+			rgba(16, 26, 44, 0.28) 8px,
+			rgba(16, 26, 44, 0.28) 16px
+		);
+}
+html[data-theme='dark'] .play-card.play-card--mirror .play-card-face {
+	background: linear-gradient(145deg, rgb(91, 31, 35), rgb(91, 31, 35));
+}
+html[data-theme='dark'] .play-card.play-card--time-warp .play-card-face {
+	background: linear-gradient(145deg, rgb(31, 88, 91), rgb(31, 67, 91));
+}
+html[data-theme='dark'] .play-card.play-card--double-or-nothing .play-card-face {
+	background: linear-gradient(145deg, rgb(91, 79, 31), rgb(91, 79, 31));
+}
+html[data-theme='dark'] .play-card.play-card--shield .play-card-face {
+	background: linear-gradient(145deg, rgb(41, 31, 91), rgb(42, 31, 91));
+}
+html[data-theme='dark'] .play-card.play-card--freeze .play-card-face {
+	background: linear-gradient(145deg, rgb(31, 88, 91), rgb(31, 57, 91));
+}
+html[data-theme='dark'] .play-card.play-card--steal .play-card-face {
+	background: linear-gradient(145deg, rgb(91, 65, 31), rgb(91, 66, 31));
+}
+html[data-theme='dark'] .play-card.play-card--fog .play-card-face {
+	background: linear-gradient(145deg, var(--bg-surface), var(--bg-surface-alt));
+}
+html[data-theme='dark'] .play-card.play-card--combo-breaker .play-card-face {
+	background: linear-gradient(145deg, rgb(31, 91, 50), rgb(31, 91, 52));
+}
+html[data-theme='dark'] .play-card.play-card--overclock .play-card-face {
+	background: linear-gradient(145deg, rgb(91, 31, 35), rgb(91, 31, 35));
+}
+html[data-theme='dark'] .play-card-suit.red {
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .play-card-suit.black {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .play-card-meta-grid {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .play-card-meta-grid .meta-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .play-card-meta-grid .meta-value {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .play-card-answer-block {
+	background: var(--bg-surface-alt);
+	border: 1px dashed rgb(35, 69, 180);
+}
+html[data-theme='dark'] .play-card-answer-block .answer-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .play-card-answer-block .answer-value {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .card-chip {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .winner-banner {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .games-studio-tabs {
+	border: 1px solid rgb(69, 105, 145);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .games-studio-tab-btn {
+	border: 1px solid rgb(69, 107, 145);
+	background: var(--bg-surface);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .games-studio-tab-btn:hover {
+	border-color: rgb(32, 103, 182);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .tournament-studio-tabs {
+	border: 1px solid rgb(69, 105, 145);
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .tournament-studio-tab-btn {
+	border: 1px solid rgb(69, 107, 145);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-studio-tab-btn:hover {
+	border-color: rgb(32, 103, 182);
+	color: var(--text-main);
+	background: rgba(16, 26, 44, 0.5);
+}
+html[data-theme='dark'] .tournament-status-chip {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-status-chip.is-active {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .tournament-status-chip.is-inactive {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-guidance-card {
+	background: linear-gradient(135deg, rgb(31, 57, 91), var(--bg-surface));
+}
+html[data-theme='dark'] .tournament-guidance-card .tournament-guidance-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-guidance-card ul {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-card {
+	border: 1px solid rgb(32, 96, 182);
+	background: linear-gradient(180deg, var(--bg-surface), rgb(31, 57, 91));
+}
+html[data-theme='dark'] .tournament-round-card-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-card-note {
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .tournament-round-card-header h4 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-round-section-title {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-selected-list {
+	border: 1px solid rgb(60, 103, 154);
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] .tournament-round-candidate-panel {
+	border: 1px solid rgb(60, 103, 154);
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] .tournament-round-selected-game {
+	border: 1px solid rgb(60, 103, 154);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .tournament-round-selected-game.is-warning {
+	border-color: rgb(182, 109, 32);
+	background: rgb(91, 65, 31);
+}
+html[data-theme='dark'] .tournament-round-selected-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-round-selected-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-selected-note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-status-chip.is-danger {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .tournament-round-status-chip.is-warning {
+	background: rgb(91, 65, 31);
+	color: rgb(241, 181, 157);
+}
+html[data-theme='dark'] .tournament-round-status-chip.is-waiting {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-status-chip.is-fresh {
+	background: rgb(31, 88, 91);
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .tournament-round-candidate {
+	border: 1px solid rgb(60, 103, 154);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .tournament-round-candidate:hover {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] .tournament-round-candidate.is-selected {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .tournament-round-candidate-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-round-candidate-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-empty {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-recommendation-card {
+	border: 1px solid var(--border-color);
+	background: linear-gradient(135deg, var(--bg-surface), rgb(31, 45, 91));
+}
+html[data-theme='dark'] .tournament-recommendation-card h4 {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .tournament-recommendation-card ul {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-benefits-card {
+	border: 1px solid rgb(32, 96, 182);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .tournament-benefits-card h4 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-benefits-card ul {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-meta-chip {
+	background: rgb(31, 45, 91);
+	color: rgb(185, 196, 213);
+	border: 1px solid rgb(32, 96, 182);
+}
+html[data-theme='dark'] .tournament-meta-chip.muted {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-sync-chip {
+	border: 1px solid rgb(32, 96, 182);
+	background: rgb(31, 57, 91);
+	color: rgb(159, 178, 239);
+}
+html[data-theme='dark'] .tournament-sync-chip.is-connected {
+	background: rgb(31, 91, 63);
+	border-color: rgb(32, 182, 85);
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .tournament-sync-chip.is-disconnected {
+	background: rgb(91, 65, 31);
+	border-color: rgb(182, 112, 32);
+	color: rgb(241, 181, 157);
+}
+html[data-theme='dark'] .tournament-sync-chip.muted {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .gamification-leaderboard {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .gamification-leaderboard-header h4 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .gamification-history-header h4 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .gamification-leaderboard-header p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .gamification-leaderboard-row {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .gamification-leaderboard-rank {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .gamification-leaderboard-player {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .gamification-leaderboard-player small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .gamification-leaderboard-score {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .gamification-history-row {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .gamification-history-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .gamification-history-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .gamification-history-winner {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .game-recommendation-card {
+	border: 1px solid var(--border-color);
+	background: linear-gradient(135deg, var(--bg-surface), rgb(31, 45, 91));
+}
+html[data-theme='dark'] .game-reco-title {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .game-reco-item {
+	background: rgba(16, 26, 44, 0.82);
+	border: 1px solid rgb(32, 96, 182);
+}
+html[data-theme='dark'] .game-reco-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-reco-value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .game-reco-chip {
+	border: 1px solid rgb(32, 62, 182);
+	background: var(--bg-surface);
+	color: rgb(174, 172, 226);
+}
+html[data-theme='dark'] .game-reco-warning {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .game-question-block {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .game-selection-caption {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-selected-question {
+	border: 1px solid rgb(57, 101, 157);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .selected-question-text {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .selected-question-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-question-bank {
+	border: 1px dashed rgb(35, 69, 180);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .game-question-bank-controls {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .game-question-bank-controls .bank-control label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-question-bank-list {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .game-bank-item:hover {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .game-bank-item .bank-text {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .game-bank-item .bank-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-list-card {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .game-status.open {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .game-status.live {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .game-status.completed {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-list-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-lobby {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .lobby-row {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .lobby-status.ready {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .lobby-status.waiting {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .teacher-access-grid .switch-label {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .teacher-access-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-request-card {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-request-card.pending {
+	border-color: rgb(182, 152, 32);
+}
+html[data-theme='dark'] .profile-request-card.approved {
+	border-color: rgb(32, 182, 85);
+}
+html[data-theme='dark'] .profile-request-card.rejected {
+	border-color: rgb(182, 32, 32);
+}
+html[data-theme='dark'] .message-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .assignment-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .message-body {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .assignment-body {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .result-row {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .result-score {
+	color: rgb(142, 206, 235);
+}
+html[data-theme='dark'] .empty-state {
+	background: rgb(31, 53, 91);
+	color: var(--text-secondary);
+	border: 1px solid rgb(43, 100, 171);
+}
+html[data-theme='dark'] .workspace-header .mobile-menu-btn {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .nav-tab.has-notification {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .temp-password-display {
+	background: rgb(40, 57, 82);
+}
+html[data-theme='dark'] .temp-password-value {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .chart-legend {
+	background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .modal-header-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #questionFormModal .form-actions {
+	background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%);
+}
+html[data-theme='dark'] #categoryModal .form-actions {
+	background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%);
+}
+html[data-theme='dark'] #quickCategoryModal .form-actions {
+	background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%);
+}
+html[data-theme='dark'] #userModal .form-actions {
+	background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%);
+}
+html[data-theme='dark'] #examModal .form-actions {
+	background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%);
+}
+html[data-theme='dark'] #classModal .form-actions {
+	background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%);
+}
+html[data-theme='dark'] #questionFormModal .radio-group {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .preset-settings-tabs {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .lightbox-nav {
+	background: rgba(16, 26, 44, 0.1);
+}
+html[data-theme='dark'] .lightbox-nav:hover {
+	background: rgba(16, 26, 44, 0.3);
+}
+html[data-theme='dark'] .exam-training-style {
+	background: rgba(16, 26, 44, 0.96);
+}
+html[data-theme='dark'] .exam-training-style .header-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .exam-training-style .quiz-card {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .exam-training-style .question {
+	background: linear-gradient(180deg, rgb(31, 57, 91) 0%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .exam-training-style .options .option-btn {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .exam-training-style .options .multi-option {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .exam-training-style .options .option-btn:hover {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 46, 182);
+}
+html[data-theme='dark'] .exam-training-style .options .multi-option:hover {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 46, 182);
+}
+html[data-theme='dark'] .exam-training-style .options .option-btn.selected {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .exam-training-style .options .multi-option.selected {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .exam-training-style .word-bank {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .exam-training-style .draggable-container {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .exam-training-style .word-bank-item {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .exam-training-style .word-bank-chip {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .exam-training-style .draggable-option {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .exam-training-modal .training-modal-content {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .exam-training-modal .training-modal-header {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .exam-training-modal .training-modal-header h3 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .exam-training-modal .quiz-card {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .exam-training-modal .question {
+	background: linear-gradient(180deg, rgb(31, 57, 91) 0%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .exam-training-modal .options .option-btn {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .exam-training-modal .options .multi-option {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .exam-training-modal .options .option-btn:hover {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 46, 182);
+}
+html[data-theme='dark'] .exam-training-modal .options .multi-option:hover {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 46, 182);
+}
+html[data-theme='dark'] .question-instruction {
+	background: linear-gradient(135deg, rgb(91, 79, 31) 0%, rgb(91, 84, 31) 100%);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .question-answer-mode.single {
+	background: rgb(31, 57, 91);
+	color: rgb(163, 182, 235);
+	border: 1px solid rgb(32, 103, 182);
+}
+html[data-theme='dark'] .question-answer-mode.multiple {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+	border: 1px solid rgb(32, 182, 86);
+}
+html[data-theme='dark'] .option-btn.correct {
+	background: linear-gradient(135deg, rgb(31, 91, 52) 0%, rgb(31, 91, 52) 100%) !important;
+	color: rgb(165, 233, 192);
+}
+html[data-theme='dark'] .option-btn.incorrect {
+	background: linear-gradient(135deg, rgb(91, 31, 31) 0%, rgb(91, 31, 31) 100%) !important;
+	color: rgb(234, 164, 164);
+}
+html[data-theme='dark'] .ai-type-card-v2:hover {
+	border-color: rgb(32, 58, 182);
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .ai-type-card-v2.disabled-opacity {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .option-label {
+	color: var(--text-main);
+}
+html[data-theme='dark'] .quiz-item.matched {
+	background-color: rgb(31, 91, 52);
+	color: rgb(165, 233, 192);
+}
+html[data-theme='dark'] .correct-answer-badge {
+	background-color: rgb(31, 91, 52);
+	color: rgb(157, 241, 188);
+	border: 1px solid rgb(32, 182, 86);
+}
+html[data-theme='dark'] .blank-answer-badge {
+	background-color: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+	border: 1px solid rgb(182, 147, 32);
+}
+html[data-theme='dark'] .blank-number {
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] .code-snippet-dots span:nth-child(1) {
+	background: rgb(91, 31, 48);
+}
+html[data-theme='dark'] .code-snippet-dots span:nth-child(2) {
+	background: rgb(91, 73, 31);
+}
+html[data-theme='dark'] .code-snippet-dots span:nth-child(3) {
+	background: rgb(36, 91, 31);
+}
+html[data-theme='dark'] .code-line-number {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .code-snippet-block .code-comment {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] textarea.code-editor::placeholder {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .code-answer-mode-selector label {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .code-answer-mode-selector label:hover {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .notification-toast::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(
+		circle at top left,
+		rgba(16, 26, 44, 0.16),
+		transparent 60%
+	);
+	pointer-events: none;;
+}
+html[data-theme='dark'] .filter-results-message {
+	background-color: rgb(91, 79, 31);
+	border: 1px solid rgb(182, 147, 32);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .lightbox-zoom-controls button {
+	background: rgba(16, 26, 44, 0.1);
+}
+html[data-theme='dark'] .lightbox-zoom-controls button:hover {
+	background: rgba(16, 26, 44, 0.3);
+}
+html[data-theme='dark'] .landing-card.accent {
+	background: rgb(31, 67, 91);
+	border-color: rgb(32, 131, 182);
+}
+html[data-theme='dark'] .landing-card.accent .landing-icon {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .landing-card.accent .landing-cta {
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .exam-entry-status .status-pill {
+	background: var(--bg-surface-alt);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .exam-entry-status .status-pill.success {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .exam-entry-status .status-pill.info {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .exam-entry-status .status-pill.warning {
+	background: rgb(91, 86, 31);
+	color: rgb(241, 201, 157);
+}
+html[data-theme='dark'] .warning-text {
+	background-color: rgb(91, 79, 31);
+	border: 1px solid rgb(182, 147, 32);
+}
+html[data-theme='dark'] body.student-workspace .workspace-header {
+	background: rgba(16, 26, 44, 0.92);
+}
+html[data-theme='dark'] body.student-workspace .workspace-tabs {
+	background: rgba(16, 26, 44, 0.94);
+}
+html[data-theme='dark'] body.student-workspace .workspace-tab-btn:hover {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] body.student-workspace .filter-chip {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] body.student-workspace .filter-chip.active {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 99, 182);
+}
+html[data-theme='dark'] body.student-workspace .filter-chip:hover {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 99, 182);
+}
+html[data-theme='dark'] body.student-workspace .games-panel {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+}
+html[data-theme='dark'] body.student-workspace .game-quick-join {
+	background: linear-gradient(100deg, rgb(31, 57, 91), rgb(31, 57, 91));
+	border: 1px solid rgb(32, 90, 182);
+}
+html[data-theme='dark'] body.student-workspace .workspace-input {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(48, 98, 167);
+}
+html[data-theme='dark'] body.student-workspace .game-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] body.student-workspace .game-card:hover {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] body.student-workspace .game-pill.open {
+	background: rgb(31, 54, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] body.student-workspace .game-pill.live {
+	background: rgb(91, 67, 31);
+	color: rgb(241, 204, 157);
+}
+html[data-theme='dark'] body.student-workspace .game-pill.completed {
+	background: rgb(31, 45, 91);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] body.student-workspace .workspace-btn.ghost {
+	background: rgb(31, 57, 91);
+	border: 1px solid rgb(32, 99, 182);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] body.student-workspace .student-tournament-stat {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] body.student-workspace .student-tournament-panel {
+	background: rgb(31, 51, 91);
+}
+html[data-theme='dark'] #games {
+	background: linear-gradient(180deg, rgb(31, 55, 91) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] #games .date-badge {
+	background: rgba(16, 26, 44, 0.14);
+}
+html[data-theme='dark'] #games .games-studio-tabs {
+	background: rgb(31, 59, 91);
+	border: 1px solid rgb(46, 105, 168);
+}
+html[data-theme='dark'] #games .tournament-studio-tabs {
+	background: rgb(31, 59, 91);
+	border: 1px solid rgb(46, 105, 168);
+}
+html[data-theme='dark'] #games .games-studio-tab-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #games .tournament-studio-tab-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #games .games-studio-tab-btn:hover {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .tournament-studio-tab-btn:hover {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .games-studio-tab-btn.active {
+	background: var(--bg-surface);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .tournament-studio-tab-btn.active {
+	background: var(--bg-surface);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .game-admin-panel {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-dashboard-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-control-panel {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .game-lobby {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .gamification-main-form {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-info-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-participants-panel {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .game-form .form-control {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .game-form select {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .game-form input {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .game-form textarea {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .gamification-controls .form-control {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .gamification-controls select {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .gamification-controls input {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .gamification-controls textarea {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	border-color: rgb(55, 107, 159);
+}
+html[data-theme='dark'] #games .game-list-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .game-list-card:hover {
+	border-color: rgb(32, 103, 182);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .game-badge {
+	border: 1px solid var(--border-color);
+	background: rgb(38, 61, 85);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #games .game-badge.game-code-badge {
+	background: rgb(31, 54, 91);
+	border-color: rgb(32, 99, 182);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .game-lobby-share-code {
+	background: rgb(31, 57, 91);
+	border: 1px solid rgb(60, 154, 142);
+	border-color: rgb(32, 90, 182);
+}
+html[data-theme='dark'] #games .game-start-error-banner {
+	background: rgb(91, 31, 31);
+	border: 1px solid rgb(182, 32, 32);
+	color: rgb(233, 165, 171);
+}
+html[data-theme='dark'] #games .tournament-round-card {
+	background: rgb(31, 51, 91);
+}
+html[data-theme='dark'] #games .round-game-card {
+	background: rgb(31, 51, 91);
+}
+html[data-theme='dark'] #games .gamification-history-item {
+	background: rgb(31, 51, 91);
+}
+html[data-theme='dark'] #games .tournament-round-card.is-current {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] #games .round-game-card.live {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] #games .tournament-progress-track {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] #games .progress-track {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .checkbox-wrapper input[type='checkbox']:checked::before {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .selection-points-badge {
+	background: rgb(31, 45, 91);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .checkbox-list {
+	border: 1px solid var(--border-color);
+	background-color: rgba(16, 26, 44, 0.5);
+}
+html[data-theme='dark'] .checkbox-list-item {
+	background-color: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .checkbox-list-item:hover {
+	background-color: rgb(31, 59, 91);
+}
+html[data-theme='dark'] .custom-checkmark {
+	background-color: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .checkbox-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .switch-slider {
+	background-color: rgb(46, 60, 76);
+}
+html[data-theme='dark'] .dropdown-toggle {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	color: var(--text-secondary);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .dropdown-menu {
+	background: linear-gradient(
+		135deg,
+		rgba(16, 26, 44, 0.98),
+		rgba(16, 26, 44, 0.98)
+	);
+}
+html[data-theme='dark'] .dropdown-item {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .question-column .filter-row select {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .question-column .filter-row input {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .exam-filters-container .filter-row select {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .exam-filters-container .filter-row input {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .dropdown-toggle:hover {
+	background: linear-gradient(135deg, var(--bg-surface-alt), rgb(46, 60, 76));
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .dropdown-toggle svg {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .dropdown-toggle .icon {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .exam-copy-btn {
+	color: rgb(142, 235, 176);
+}
+html[data-theme='dark'] .exam-test-btn {
+	color: rgb(235, 201, 142);
+}
+html[data-theme='dark'] .btn-icon {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sort-direction-btn {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #sortCategoryDirection {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #sortExamDirection {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #sortClassDirection {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #sortResultDirection {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .sort-direction-btn:hover {
+	background: linear-gradient(135deg, var(--bg-surface-alt), rgb(46, 60, 76));
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] #sortCategoryDirection:hover {
+	background: linear-gradient(135deg, var(--bg-surface-alt), rgb(46, 60, 76));
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] #sortExamDirection:hover {
+	background: linear-gradient(135deg, var(--bg-surface-alt), rgb(46, 60, 76));
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] #sortClassDirection:hover {
+	background: linear-gradient(135deg, var(--bg-surface-alt), rgb(46, 60, 76));
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] #sortResultDirection:hover {
+	background: linear-gradient(135deg, var(--bg-surface-alt), rgb(46, 60, 76));
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .sort-direction-btn svg {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #sortCategoryDirection svg {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #sortExamDirection svg {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #sortClassDirection svg {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #sortResultDirection svg {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .points-badge {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .auth-recovery-toggle {
+	color: rgb(142, 171, 235);
+}
+html[data-theme='dark'] .auth-recovery-panel {
+	border: 1px solid rgb(32, 96, 182);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .auth-recovery-status {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-recovery-status.error {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .auth-recovery-status.success {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .status-badge.active {
+	color: rgb(157, 241, 188);
+}
+html[data-theme='dark'] .status-badge.inactive {
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .status-badge.pending {
+	color: rgb(235, 192, 142);
+}
+html[data-theme='dark'] .pagination-controls button {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #prev-page {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #next-page {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .pagination-controls button:disabled {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] #prev-page:disabled {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] #next-page:disabled {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] #pagination-info {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #pagination-start {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #pagination-end {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #pagination-total {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .results-filters {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+}
+html[data-theme='dark'] .filter-group label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .filter-group select {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .filter-group input {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .results-filters-container {
+	background: linear-gradient(135deg, var(--bg-surface), var(--bg-surface-alt));
+}
+html[data-theme='dark'] .search-group input {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-btn {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-btn:hover {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .admin-name {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .profile-menu {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .user-email {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .menu-item {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .menu-item:hover {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .menu-item.logout-item:hover {
+	background: rgb(91, 31, 31);
+}
+html[data-theme='dark'] .app-header {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .questions-toolbar {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .search-group input:focus {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .bulk-actions-container {
+	background: rgb(91, 31, 31);
+	border: 1px solid rgb(182, 32, 32);
+}
+html[data-theme='dark'] .btn-danger-soft {
+	background: rgb(91, 31, 31);
+	border: 1px solid rgb(182, 32, 32);
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .btn-danger-soft:hover {
+	border-color: rgb(182, 32, 32);
+	background: rgb(91, 31, 31);
+}
+html[data-theme='dark'] .btn-primary-soft {
+	color: rgb(142, 171, 235);
+}
+html[data-theme='dark'] .btn-secondary-soft {
+	color: var(--text-secondary);
+	background: var(--bg-surface-alt);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .modal-header {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .modal-header h2 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .modal-footer {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .form-group label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .form-control {
+	border: 1px solid var(--border-color);
+	color: rgb(181, 194, 217);
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] select.form-control {
+	border: 1px solid var(--border-color);
+	color: rgb(181, 194, 217);
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] .btn-text-action:hover {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .modal .form-actions {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .search-input-wrapper input {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .search-input-wrapper input:focus {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .btn-inline-save {
+	background: rgb(31, 91, 63);
+	color: rgb(157, 241, 215);
+}
+html[data-theme='dark'] .btn-inline-cancel {
+	background: rgb(91, 31, 31);
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] #options-container h3 {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #options-container h4 {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .form-section-title {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .option-tab-btn:hover {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .multiple-choice-toggle .switch-text {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #mc-answer-wrapper .checkbox-wrapper label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .available-questions {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .selected-questions {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .available-questions h4 {
+	background: linear-gradient(to bottom, var(--bg-surface), var(--bg-surface-alt));
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .selected-questions h4 {
+	background: linear-gradient(to bottom, var(--bg-surface), var(--bg-surface-alt));
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .filter-bar {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .premium-question-item {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .premium-question-item:hover {
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] .question-icon-wrapper {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+	border: 1px solid rgb(32, 122, 182);
+}
+html[data-theme='dark'] .question-text {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .meta-tag.type {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .meta-tag.easy {
+	background: rgb(31, 91, 52);
+	color: rgb(159, 239, 189);
+	border: 1px solid rgb(32, 182, 85);
+}
+html[data-theme='dark'] .meta-tag.medium {
+	background: rgb(91, 86, 31);
+	color: rgb(241, 207, 157);
+	border: 1px solid rgb(182, 158, 32);
+}
+html[data-theme='dark'] .meta-tag.hard {
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+	border: 1px solid rgb(182, 32, 32);
+}
+html[data-theme='dark'] .action-icon {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .selected-questions .premium-question-item .action-icon {
+	background: rgb(91, 31, 31);
+	border-color: rgb(182, 32, 32);
+}
+html[data-theme='dark'] .category-header {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .category-header:hover {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .count-badge {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .mobile-action-sheet {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .action-sheet-header h3 {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .close-sheet-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .close-sheet-btn:hover {
+	background: var(--bg-surface-alt);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .close-sheet-btn:active {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .action-sheet-btn {
+	background: var(--bg-surface);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .action-sheet-btn:active {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .action-sheet-btn.primary {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 171, 235);
+}
+html[data-theme='dark'] .action-sheet-btn.primary:active {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .action-sheet-btn.danger {
+	background: rgb(91, 31, 31);
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .action-sheet-btn.danger:active {
+	background: rgb(91, 31, 31);
+}
+html[data-theme='dark'] .action-sheet-cancel-btn {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .action-sheet-cancel-btn:active {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .category-filter-section input {
+	border: 1px solid var(--border-color);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .category-filter-section select {
+	border: 1px solid var(--border-color);
+	color: rgb(181, 194, 217);
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] .category-filter-section input:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .category-filter-section.th-filter-wrapper select:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .questions-type-filters .type-filter-badge {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .questions-type-filters .type-filter-badge:hover {
+	background: var(--bg-surface-alt);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .date-badge {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .stat-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .stat-card.green .stat-icon {
+	background: rgb(31, 91, 52);
+	color: rgb(157, 241, 213);
+}
+html[data-theme='dark'] .stat-card.green .stat-info h3 {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .stat-card.purple .stat-icon {
+	background: rgb(60, 31, 91);
+}
+html[data-theme='dark'] .stat-card.amber .stat-icon {
+	background: rgb(91, 79, 31);
+	color: rgb(235, 201, 142);
+}
+html[data-theme='dark'] .stat-card.amber .stat-info h3 {
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] .stat-card.indigo .stat-icon {
+	background: rgb(31, 45, 91);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .stat-card.indigo .stat-info h3 {
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .stat-card.rose .stat-icon {
+	background: rgb(91, 31, 35);
+	color: rgb(235, 142, 163);
+}
+html[data-theme='dark'] .stat-card.rose .stat-info h3 {
+	color: rgb(241, 157, 177);
+}
+html[data-theme='dark'] .stat-card.cyan .stat-icon {
+	background: rgb(31, 86, 91);
+	color: rgb(142, 222, 235);
+}
+html[data-theme='dark'] .stat-card.cyan .stat-info h3 {
+	color: rgb(157, 223, 241);
+}
+html[data-theme='dark'] .stat-card.orange .stat-icon {
+	background: rgb(91, 66, 31);
+	color: rgb(235, 180, 142);
+}
+html[data-theme='dark'] .stat-card.orange .stat-info h3 {
+	color: rgb(241, 181, 157);
+}
+html[data-theme='dark'] .icon-orange {
+	background: rgb(91, 66, 31);
+	color: rgb(235, 174, 142);
+}
+html[data-theme='dark'] .dashboard-panel {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .quick-action-btn:hover {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .icon-green {
+	background: rgb(31, 91, 52);
+	color: rgb(157, 241, 188);
+}
+html[data-theme='dark'] .icon-purple {
+	background: rgb(60, 31, 91);
+}
+html[data-theme='dark'] .icon-amber {
+	background: rgb(91, 79, 31);
+	color: rgb(235, 192, 142);
+}
+html[data-theme='dark'] .icon-cyan {
+	background: rgb(31, 86, 91);
+	color: rgb(157, 225, 241);
+}
+html[data-theme='dark'] .icon-indigo {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .icon-rose {
+	background: rgb(91, 31, 35);
+	color: rgb(235, 142, 163);
+}
+html[data-theme='dark'] .kpi-scroll-btn {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .kpi-scroll-btn:hover {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .bar-stacked {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .filter-badge {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .filter-badge:hover {
+	background: var(--bg-surface-alt);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .filter-badge[data-type='code'].active {
+	border-color: rgb(78, 32, 182);
+}
+html[data-theme='dark'] .activity-icon-small.icon-blue {
+	background-color: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .activity-icon-small.icon-green {
+	background-color: rgb(31, 91, 52);
+	color: rgb(157, 241, 188);
+}
+html[data-theme='dark'] .activity-icon-small.icon-purple {
+	background-color: rgb(60, 31, 91);
+}
+html[data-theme='dark'] .activity-icon-small.icon-amber {
+	background-color: rgb(91, 79, 31);
+	color: rgb(235, 192, 142);
+}
+html[data-theme='dark'] .activity-icon-small.icon-cyan {
+	background-color: rgb(31, 86, 91);
+	color: rgb(157, 225, 241);
+}
+html[data-theme='dark'] .activity-icon-small.icon-indigo {
+	background-color: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .activity-icon-small.icon-rose {
+	background-color: rgb(91, 31, 35);
+	color: rgb(235, 142, 163);
+}
+html[data-theme='dark'] .status-badge.status-info {
+	background-color: rgb(31, 67, 91);
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .status-badge.status-success {
+	background-color: rgb(31, 91, 52);
+	color: rgb(159, 239, 189);
+}
+html[data-theme='dark'] .status-badge.status-warning {
+	background-color: rgb(91, 79, 31);
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] .status-badge.status-error {
+	background-color: rgb(91, 31, 31);
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .badge-blue {
+	background-color: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .badge-green {
+	background-color: rgb(31, 91, 52);
+	color: rgb(157, 241, 188);
+}
+html[data-theme='dark'] .badge-purple {
+	background-color: rgb(60, 31, 91);
+}
+html[data-theme='dark'] .badge-amber {
+	background-color: rgb(91, 79, 31);
+	color: rgb(235, 192, 142);
+}
+html[data-theme='dark'] .badge-cyan {
+	background-color: rgb(31, 86, 91);
+	color: rgb(157, 225, 241);
+}
+html[data-theme='dark'] .badge-indigo {
+	background-color: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .badge-rose {
+	background-color: rgb(91, 31, 35);
+	color: rgb(235, 142, 163);
+}
+html[data-theme='dark'] .table-container {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .data-table th {
+	background-color: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .data-table td {
+	color: rgb(183, 196, 215);
+}
+html[data-theme='dark'] .data-table tr:hover {
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] .empty-cell {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .btn-export {
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] .btn-export:hover {
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] .stat-box.score {
+	background: linear-gradient(135deg, rgb(31, 91, 50), var(--bg-surface));
+}
+html[data-theme='dark'] .stat-box.time {
+	background: linear-gradient(135deg, rgb(31, 67, 91), var(--bg-surface));
+}
+html[data-theme='dark'] .correction-item.correct {
+	background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, transparent 60%),
+		var(--card-inner-bg, var(--bg-surface));
+}
+html[data-theme='dark'] .correction-item.incorrect {
+	background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, transparent 60%),
+		var(--card-inner-bg, var(--bg-surface));
+}
+html[data-theme='dark'] .correction-item.correct .correction-item-status {
+	background-color: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .correction-item.incorrect .correction-item-status {
+	background-color: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .multi-option .option-label {
+	color: var(--text-main);
+}
+html[data-theme='dark'] .category-filter-section .filter-row select {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .category-filter-section .filter-row input {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .modal-content {
+	background: rgba(16, 26, 44, 0.95);
+}
+html[data-theme='dark'] .word-bank-image {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .word-bank-item {
+	background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .word-bank-item::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(
+		to right,
+		transparent,
+		rgba(16, 26, 44, 0.8),
+		transparent
+	);
+	transform: translateX(-100%);
+	transition: 0.5s;;
+}
+html[data-theme='dark'] .remove-word-btn {
+	background: rgba(16, 26, 44, 0.5);
+}
+html[data-theme='dark'] .dashboard-header {
+	background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .stat-card.blue .stat-info h3 {
+	color: rgb(159, 178, 239);
+}
+html[data-theme='dark'] .stat-card.purple .stat-info h3 {
+	color: rgb(178, 142, 235);
+}
+html[data-theme='dark'] .dashboard-panel .panel-header {
+	background: linear-gradient(to bottom, var(--bg-surface), var(--bg-surface-alt));
+}
+html[data-theme='dark'] .activity-icon.icon-amber {
+	color: rgb(235, 201, 142);
+}
+html[data-theme='dark'] .activity-icon.icon-green {
+	color: rgb(157, 241, 213);
+}
+html[data-theme='dark'] .activity-icon.icon-cyan {
+	color: rgb(142, 222, 235);
+}
+html[data-theme='dark'] .ai-type-card:hover {
+	border-color: rgb(63, 32, 182);
+	background: rgb(61, 31, 91);
+}
+html[data-theme='dark'] .ai-type-checkbox input:checked + .ai-type-card {
+	border-color: rgb(78, 32, 182);
+	background: linear-gradient(to bottom, rgb(51, 31, 91), rgb(41, 31, 91));
+}
+html[data-theme='dark'] .cooldown-bar {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .ai-preview-card:hover {
+	border-color: rgb(109, 32, 182);
+}
+html[data-theme='dark'] .ai-preview-card.selected {
+	border-color: rgb(78, 32, 182);
+	background: rgb(51, 31, 91);
+	border-left-color: rgb(78, 32, 182);
+}
+html[data-theme='dark'] .ai-preview-option.correct {
+	background: linear-gradient(135deg, rgb(31, 91, 60) 0%, rgb(31, 91, 64) 100%);
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .ai-preview-answer strong {
+	color: rgb(157, 241, 215);
+}
+html[data-theme='dark'] .ai-loading-overlay {
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] .ai-loading-spinner {
+	border: 4px solid var(--border-color);
+	border-top-color: rgb(78, 32, 182);
+}
+html[data-theme='dark'] .ai-status-badge.success {
+	background: rgb(31, 91, 60);
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .ai-status-badge.error {
+	background: rgb(91, 31, 31);
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .ai-status-badge.pending {
+	background: rgb(91, 79, 31);
+	color: rgb(235, 192, 142);
+}
+html[data-theme='dark'] input[type='range'] {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .order-number-pill {
+	background: rgba(16, 26, 44, 0.2);
+}
+html[data-theme='dark'] .ai-type-card {
+	background: linear-gradient(to bottom, var(--bg-surface), var(--bg-surface));
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .ai-type-name {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .ai-preview-card {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .model-badge.free {
+	background: rgb(31, 91, 63);
+	color: rgb(157, 241, 215);
+}
+html[data-theme='dark'] .model-badge.recommend {
+	background: rgb(91, 79, 31);
+	color: rgb(235, 192, 142);
+}
+html[data-theme='dark'] .ai-header-icon-wrapper {
+	background: rgba(16, 26, 44, 0.15);
+}
+html[data-theme='dark'] .active-model-badge {
+	background: rgba(16, 26, 44, 0.1);
+}
+html[data-theme='dark'] .ai-type-card:hover:not(:has(input:checked)) {
+	border-color: var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .ai-type-card-v2 {
+	border: 2px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .ai-type-card-v2.selected {
+	border-color: rgb(32, 35, 182);
+	background: linear-gradient(135deg, rgb(31, 45, 91), rgb(41, 31, 91));
+}
+html[data-theme='dark'] .ai-type-name-v2 {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .ai-type-stepper {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .stepper-btn {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .ai-code-mode-panel {
+	background: var(--bg-surface);
+	border: 1px solid rgb(63, 101, 151);
+}
+html[data-theme='dark'] .ai-code-mode-icon {
+	background: rgb(31, 45, 91);
+	border: 1px solid rgb(32, 62, 182);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .ai-code-mode-label {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .ai-code-mode-help {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .ai-code-format-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .ai-code-format-card.selected {
+	border-color: rgb(32, 35, 182);
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .ai-type-card-v2.code-type-card.selected {
+	background: linear-gradient(135deg, rgb(31, 91, 63), rgb(31, 91, 60));
+}
+html[data-theme='dark'] .upload-zone {
+	border: 3px dashed var(--border-color);
+	background: linear-gradient(135deg, var(--bg-surface-alt) 0%, var(--bg-surface-alt) 100%);
+}
+html[data-theme='dark'] .strategy-card {
+	border: 2px solid var(--border-color) !important;
+}
+html[data-theme='dark'] .strategy-card strong {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .upload-zone.drag-over {
+	border-color: rgb(32, 59, 182);
+}
+html[data-theme='dark'] .upload-zone h3 {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .upload-zone p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .supported-formats {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .uploaded-files-list h3 {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .file-item {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .file-item:hover {
+	border-color: rgb(32, 59, 182);
+}
+html[data-theme='dark'] .file-name {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .file-size {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .file-status.pending {
+	background: rgb(91, 77, 31);
+	color: rgb(241, 219, 157);
+}
+html[data-theme='dark'] .file-status.extracting {
+	background: rgb(32, 81, 91);
+	color: rgb(157, 229, 241);
+}
+html[data-theme='dark'] .file-status.success {
+	background: rgb(39, 84, 49);
+	color: rgb(165, 233, 180);
+}
+html[data-theme='dark'] .file-status.error {
+	background: rgb(91, 31, 36);
+	color: rgb(233, 165, 171);
+}
+html[data-theme='dark'] .radio-content {
+	border: 2px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .radio-card:hover .radio-content {
+	background: var(--bg-surface-alt);
+	border-color: rgb(32, 59, 182);
+}
+html[data-theme='dark'] .radio-card input:checked + .radio-content {
+	border-color: rgb(32, 59, 182);
+}
+html[data-theme='dark'] .radio-content strong {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .radio-content small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .progress-container {
+	background: linear-gradient(135deg, var(--bg-surface-alt) 0%, var(--bg-surface-alt) 100%);
+}
+html[data-theme='dark'] .progress-container h3 {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .progress-bar {
+	background: rgba(16, 26, 44, 0.5);
+}
+html[data-theme='dark'] #extractionStatus {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .content-preview {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .content-stats {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-rules-section {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .rules-group {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .rules-grid .switch-label {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .rules-grid .switch-label:hover {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .player-state.active {
+	background-color: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+	border: 1px solid rgb(32, 182, 86);
+}
+html[data-theme='dark'] .player-state.eliminated {
+	background-color: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+	border: 1px solid rgb(182, 32, 32);
+}
+html[data-theme='dark'] .player-state.spectator {
+	background-color: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .elimination-reason {
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .survivor-bonus {
+	background-color: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .last-survivor-countdown {
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .player-card {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .hot-potato-timer {
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .turn-indicator {
+	color: rgb(235, 201, 142);
+}
+html[data-theme='dark'] .player-turn-card {
+	border: 2px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .player-turn-card.active {
+	background: rgb(91, 79, 31);
+}
+html[data-theme='dark'] .player-turn-card.inactive {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .player-turn-card.eliminated {
+	border-color: rgb(182, 32, 32);
+	background: rgb(91, 31, 31);
+}
+html[data-theme='dark'] .turn-countdown-bar {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .hot-potato-warning {
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .question-share-display {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .auth-modal .auth-modal-header {
+	background: linear-gradient(180deg, rgb(31, 57, 91) 0%, var(--bg-surface) 100%),
+		linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(2, 132, 199, 0.04));
+}
+html[data-theme='dark'] .auth-modal .auth-modal-brand-text h2 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .auth-modal .auth-modal-brand-text p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-modal .auth-form-intro {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-modal .auth-field label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-modal .auth-input {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .auth-modal .auth-input:focus {
+	background: rgb(31, 31, 91);
+}
+html[data-theme='dark'] .auth-modal .auth-toggle-password {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .auth-modal .auth-toggle-password:hover {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 103, 182);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .auth-modal .auth-remember {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-modal .auth-recovery {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .auth-modal .auth-recovery-toggle {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .auth-modal .auth-recovery-panel {
+	border: 1px solid rgb(32, 99, 182);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .auth-modal .auth-recovery-panel label {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .auth-modal .auth-recovery-status {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-modal .auth-recovery-status.error {
+	border-color: rgb(182, 32, 32);
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .auth-modal .auth-recovery-status.success {
+	border-color: rgb(32, 182, 85);
+	background: rgb(31, 91, 50);
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .auth-modal .auth-request-divider {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-modal .auth-section-toggle {
+	color: rgb(142, 171, 235);
+}
+html[data-theme='dark'] .auth-modal .auth-section-toggle:hover {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .auth-modal .auth-request-status {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .auth-modal .auth-request-status.success {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .auth-modal .auth-request-status.error {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .bulk-student-controls #studentUserPicker {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .bulk-student-controls #studentUserPicker option:checked {
+	background: rgb(31, 57, 91) linear-gradient(0deg, rgb(31, 57, 91), rgb(31, 57, 91));
+	color: rgb(163, 182, 235);
+}
+html[data-theme='dark'] #classModal .class-students-group {
+	border: 1px solid rgb(63, 101, 151);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #classModal .class-exams-group {
+	border: 1px solid rgb(63, 101, 151);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #classModal .class-section-header label {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #classModal .class-filter-row label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #classModal .class-helper-text {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #classModal .selected-student-item {
+	border: 1px solid rgb(66, 99, 148);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-request-row {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .profile-request-row.pending {
+	background: rgb(91, 79, 31);
+	border-color: rgb(182, 147, 32);
+}
+html[data-theme='dark'] .profile-request-row.approved {
+	background: rgb(31, 91, 50);
+	border-color: rgb(32, 182, 86);
+}
+html[data-theme='dark'] .profile-request-row.rejected {
+	background: rgb(91, 31, 31);
+	border-color: rgb(182, 32, 32);
+}
+html[data-theme='dark'] .profile-request-row .request-note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-request-row .request-review-note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-dashboard-card {
+	border: 1px solid rgb(47, 102, 168);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .tournament-control-panel {
+	background: linear-gradient(135deg, var(--bg-surface) 0%, rgb(31, 57, 91) 52%, rgb(31, 59, 91) 100%);
+	border: 1px solid rgb(32, 103, 182);
+}
+html[data-theme='dark'] .tournament-control-kicker {
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .tournament-control-title-row h4 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-control-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-lifecycle-status-card {
+	background: rgba(16, 26, 44, 0.86);
+}
+html[data-theme='dark'] .tournament-lifecycle-status-card .label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-lifecycle-status-card .value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-lifecycle-status-card .note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .control-actions-wrap {
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] .control-actions-heading {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-section-kicker {
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .tournament-section-header h4 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-section-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-section-meta {
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .progress-bar-container {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .round-game-card {
+	border: 1px solid rgb(47, 102, 168);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .round-game-card.completed {
+	border-color: rgb(32, 182, 86);
+	background: linear-gradient(180deg, rgb(31, 91, 38) 0%, rgb(31, 91, 63) 100%);
+}
+html[data-theme='dark'] .round-game-card.live {
+	border-color: rgb(32, 103, 182);
+	background: linear-gradient(180deg, rgb(31, 57, 91) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .round-game-card.removed {
+	border-color: rgb(182, 109, 32);
+	background: linear-gradient(180deg, rgb(91, 61, 31) 0%, rgb(91, 65, 31) 100%);
+}
+html[data-theme='dark'] .game-type-badge {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .game-mode-badge {
+	background: rgb(31, 91, 52);
+	color: rgb(159, 239, 189);
+}
+html[data-theme='dark'] .round-game-lobby-badge {
+	background: rgb(42, 31, 91);
+	color: rgb(178, 142, 235);
+}
+html[data-theme='dark'] .game-card-name {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .round-game-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-card-status {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .round-game-stat {
+	background: rgba(16, 26, 44, 0.78);
+}
+html[data-theme='dark'] .round-game-stat span {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .round-game-stat strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .round-game-state-pill.is-live {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .round-game-state-pill.is-completed {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .round-game-state-pill.is-removed {
+	background: rgb(91, 65, 31);
+	color: rgb(241, 181, 157);
+}
+html[data-theme='dark'] .round-game-state-pill.is-paused {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] .round-game-state-pill.is-ready {
+	background: rgb(31, 88, 91);
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .round-game-state-pill.is-waiting {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .round-game-actions > .btn[disabled] {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .tournament-dashboard-card.gamification-leaderboard {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .info-item {
+	border: 1px solid var(--border-color);
+	background: rgba(16, 26, 44, 0.86);
+}
+html[data-theme='dark'] .info-item small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .info-item div {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .participant-row {
+	border: 1px solid var(--border-color);
+	background: rgba(16, 26, 44, 0.92);
+}
+html[data-theme='dark'] .participant-name {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .participant-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .participant-status.online {
+	color: rgb(166, 232, 182);
+}
+html[data-theme='dark'] .participant-status.done {
+	color: rgb(166, 232, 182);
+}
+html[data-theme='dark'] .participant-status.offline {
+	color: rgb(229, 148, 156);
+}
+html[data-theme='dark'] .participant-status.danger {
+	color: rgb(229, 148, 156);
+}
+html[data-theme='dark'] .participant-status.live {
+	color: rgb(157, 191, 241);
+}
+html[data-theme='dark'] .participant-status.waiting {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .participant-status.warning {
+	color: rgb(241, 213, 157);
+}
+html[data-theme='dark'] .participant-status.muted {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-status-chip.is-warning {
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] .tournament-dashboard-card .empty-state-small {
+	border: 1px dashed var(--border-color);
+	background: rgba(16, 26, 44, 0.88);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-dashboard-card .gamification-leaderboard-row {
+	border-color: rgb(47, 102, 168);
+}
+html[data-theme='dark'] .tournament-dashboard-card .gamification-leaderboard-row.top {
+	background: linear-gradient(
+		180deg,
+		rgba(16, 26, 44, 0.7) 0%,
+		rgba(16, 26, 44, 0.95) 100%
+	);
+}
+html[data-theme='dark'] .tournament-dashboard-card .gamification-leaderboard-rank {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .admin-watch-stat {
+	border: 1px solid var(--border-color);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .admin-watch-stat-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-watch-stat-value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-game-watch-focus {
+	border: 1px solid rgb(60, 103, 154);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .admin-game-watch-section {
+	border: 1px solid rgb(60, 103, 154);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] .admin-game-watch-focus-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-game-watch-focus-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-game-watch-section-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-game-watch-focus-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-game-watch-section-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-game-watch-question-label {
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .admin-game-watch-question.muted {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-game-watch-answer {
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .admin-game-watch-player-card {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-game-watch-player-name {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-game-watch-player-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-game-watch-player-stats {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .admin-game-watch-player-stats span {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-game-watch-player-note {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .admin-game-watch-player-note.muted {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-game-watch-player-mini-stats span {
+	background: rgb(31, 52, 91);
+	color: rgb(163, 182, 235);
+}
+html[data-theme='dark'] .admin-watch-chip {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 210, 241);
+}
+html[data-theme='dark'] .admin-watch-chip.muted {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-watch-kv-row {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-watch-kv-row strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-watch-side-note {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-watch-side-note.strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-watch-empty {
+	border: 1px dashed var(--border-color);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-watch-feed-item {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-watch-feed-item.tone-live {
+	background: linear-gradient(180deg, rgb(31, 57, 91) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .admin-watch-feed-time {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-watch-feed-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-watch-feed-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-watch-feed-chip {
+	background: rgb(31, 45, 91);
+	color: rgb(172, 168, 229);
+}
+html[data-theme='dark'] .tournament-round-empty-panel {
+	border: 1px dashed var(--border-color);
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .tournament-round-empty-panel.is-warning {
+	background: linear-gradient(180deg, rgb(91, 76, 31) 0%, rgb(91, 79, 31) 100%);
+}
+html[data-theme='dark'] .tournament-round-empty-eyebrow {
+	color: rgb(157, 241, 234);
+}
+html[data-theme='dark'] .tournament-round-empty-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-round-empty-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .btn-secondary-soft:hover {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .tournament-studio-tab-btn.active {
+	background: var(--bg-surface);
+	color: var(--text-main);
+}
+html[data-theme='dark'] .gamification-main-form {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .panel-header-tiny h3 {
+	color: var(--text-main);
+}
+html[data-theme='dark'] .panel-header-tiny p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .card-premium {
+	background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .tournament-paused-mini {
+	background: rgb(91, 80, 31);
+	color: rgb(235, 196, 142);
+}
+html[data-theme='dark'] .tournament-paused-card {
+	background: rgb(91, 81, 31);
+	color: rgb(235, 196, 142);
+}
+html[data-theme='dark'] .tournament-round-card.is-current {
+	border: 1px solid rgb(32, 89, 182);
+}
+html[data-theme='dark'] .round-status-badge.warning {
+	background: rgb(91, 80, 31);
+	color: rgb(235, 196, 142);
+}
+html[data-theme='dark'] .tournament-missing-games-panel {
+	background: rgb(91, 80, 31);
+	border: 1px solid rgb(182, 119, 32);
+}
+html[data-theme='dark'] .tournament-missing-games-panel.is-warning {
+	background: rgb(91, 80, 31);
+	border-color: rgb(182, 119, 32);
+	color: rgb(241, 231, 157);
+}
+html[data-theme='dark'] .tournament-missing-games-title {
+	color: rgb(241, 231, 157);
+}
+html[data-theme='dark'] .tournament-missing-games-details {
+	background: rgba(16, 26, 44, 0.5);
+}
+html[data-theme='dark'] .tournament-missing-games-note {
+	color: rgb(241, 231, 157);
+}
+html[data-theme='dark'] .modal-content.tournament-missing-games-modal {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .modal-header h3 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .modal-close-btn:hover {
+	background: var(--bg-surface-alt);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .tournament-missing-games-round-section {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .tournament-missing-games-round-section h5 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .th-inline-filter:hover {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .th-inline-filter:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .ai-type-card-v2:has(input:checked) {
+	border-color: rgb(32, 35, 182);
+	background: linear-gradient(135deg, rgb(31, 45, 91), rgb(41, 31, 91));
+}
+html[data-theme='dark'] .ai-type-card-v2.code-type-card:has(input:checked) {
+	background: linear-gradient(135deg, rgb(31, 91, 63), rgb(31, 91, 60));
+}
+html[data-theme='dark'] .ai-type-card-v2:has(input:checked) .ai-type-name-v2 {
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .ai-type-card-v2.code-type-card:has(input:checked) .ai-type-name-v2 {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .stepper-val {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .ai-code-mode-inner {
+	background: linear-gradient(135deg, rgb(31, 91, 63), rgb(31, 91, 60));
+	border: 1.5px solid rgb(32, 182, 123);
+}
+html[data-theme='dark'] .ai-pro-tips-v2 {
+	border: 1.5px solid var(--border-color);
+}
+html[data-theme='dark'] .ai-tips-toggle {
+	background: var(--bg-surface);
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .ai-tips-toggle:hover {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .tips-chevron {
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .ai-tip-item {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .ai-tip-info {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] .ai-tip-success {
+	background: rgb(31, 91, 50);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .ai-tip-warning {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .ai-tip-danger {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] #settingsModal .modal-content {
+	border: 1px solid rgb(66, 103, 148) !important;
+}
+html[data-theme='dark'] #settingsModal .modal-header {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-title-block p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #settingsModal .settings-autosave-status {
+	border: 1px solid rgb(32, 96, 182);
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #settingsModal .settings-autosave-status[data-state='saving'] {
+	border-color: rgb(182, 112, 32);
+	background: rgb(91, 65, 31);
+	color: rgb(241, 181, 157);
+}
+html[data-theme='dark'] #settingsModal .settings-autosave-status[data-state='saved'] {
+	border-color: rgb(32, 182, 85);
+	background: rgb(31, 91, 50);
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] #settingsModal .settings-autosave-status[data-state='error'] {
+	border-color: rgb(182, 32, 32);
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] #settingsModal .settings-sidebar-toggle {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #settingsModal .settings-sidebar-toggle:hover {
+	background: var(--bg-surface-alt);
+	border-color: rgb(85, 103, 129);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #settingsModal .settings-sidebar-toggle:focus-visible {
+	background: var(--bg-surface-alt);
+	border-color: rgb(85, 103, 129);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #settingsModal #settingsForm {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #settingsModal .settings-section .settings-group {
+	border: 1px solid var(--border-color) !important;
+}
+html[data-theme='dark'] #settingsModal .preset-form-container {
+	border: 1px solid var(--border-color) !important;
+}
+html[data-theme='dark'] #settingsModal #presetsListContainer {
+	border: 1px solid var(--border-color) !important;
+}
+html[data-theme='dark'] #settingsModal #gamePresetsListContainer {
+	border: 1px solid var(--border-color) !important;
+}
+html[data-theme='dark'] #settingsModal .users-settings-intro {
+	border: 1px solid rgb(32, 96, 182);
+	background: radial-gradient(
+			circle at top left,
+			rgba(59, 130, 246, 0.14),
+			transparent 34%
+		),
+		linear-gradient(135deg, var(--bg-surface) 0%, rgb(31, 57, 91) 100%);
+}
+html[data-theme='dark'] #settingsModal .users-settings-intro h3 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #settingsModal .user-settings-tabs {
+	border: 1px solid rgb(66, 103, 148);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #settingsModal .user-settings-tab-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #settingsModal .user-settings-tab-btn:hover {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #settingsModal .user-settings-tab-btn:focus-visible {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #settingsModal .user-settings-tab-btn.active {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #settingsModal .settings-section-title-icon {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .student-runtime-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-runtime-header h1 {
+	color: rgb(177, 191, 221);
+}
+html[data-theme='dark'] .student-runtime-progress {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .student-runtime-progress-bar {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .student-runtime-question {
+	color: rgb(177, 191, 221);
+}
+html[data-theme='dark'] .student-answer-option {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-answer-option:hover {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .student-answer-option:has(input:checked) {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .lobby-help {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #examModal.is-open .modal-content {
+	border: 1px solid rgb(66, 103, 148) !important;
+}
+html[data-theme='dark'] #classModal.is-open .modal-content {
+	border: 1px solid rgb(66, 103, 148) !important;
+}
+html[data-theme='dark'] #examModal.is-open .modal-header {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
+}
+html[data-theme='dark'] #classModal.is-open .modal-header {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
+}
+html[data-theme='dark'] #examModal.is-open .exam-filters-container {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #examModal.is-open .question-column {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #examModal.is-open .question-column h4 {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #classModal.is-open .class-students-group {
+	border: 1px solid var(--border-color) !important;
+}
+html[data-theme='dark'] #classModal.is-open .class-exams-group {
+	border: 1px solid var(--border-color) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal.is-open .modal-content {
+	border: 1px solid rgb(66, 103, 148) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal.is-open .ai-header-icon-wrapper {
+	background: rgba(16, 26, 44, 0.16);
+}
+html[data-theme='dark'] body.student-workspace .workspace-tabs-profile-dock .workspace-profile-btn {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] body.student-workspace .hero-card:nth-child(n + 5) {
+	background: rgb(31, 67, 91);
+}
+html[data-theme='dark'] body.student-workspace .workspace-panel {
+	background: rgba(16, 26, 44, 0.96);
+}
+html[data-theme='dark'] #games .game-badge.tournament-badge {
+	background: rgb(91, 67, 31);
+	border-color: rgb(182, 122, 32);
+	color: rgb(241, 210, 157);
+}
+html[data-theme='dark'] #games .game-lobby-share-code strong {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .tournament-section-kicker {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .tournament-control-kicker {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .arena-library-toolbar {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-catalog-toolbar {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .arena-eyebrow {
+	color: rgb(142, 171, 235);
+}
+html[data-theme='dark'] #games .arena-editor-content {
+	background: var(--bg-surface);
+	border: 1px solid rgb(54, 103, 161);
+}
+html[data-theme='dark'] #games .arena-editor-header {
+	background: linear-gradient(120deg, rgb(31, 56, 91), var(--bg-surface));
+}
+html[data-theme='dark'] #games .arena-modal-close {
+	border: 1px solid rgb(55, 107, 159);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #games .arena-modal-close:hover {
+	border-color: rgb(32, 103, 182);
+	color: rgb(142, 167, 235);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #games .tournament-assignment-launcher {
+	border: 1px solid rgb(46, 105, 168);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #games .tournament-library-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-library-card:hover {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] #games .tournament-library-status.is-active {
+	background: rgb(31, 54, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .tournament-library-status.is-paused {
+	background: rgb(91, 72, 31);
+	color: rgb(241, 205, 157);
+}
+html[data-theme='dark'] #games .tournament-library-status.is-completed {
+	background: rgb(31, 45, 91);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] #games .tournament-library-status.is-draft {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #games .btn-danger-soft {
+	color: rgb(241, 163, 157);
+	background: rgb(91, 40, 31);
+	border-color: rgb(182, 51, 32);
+}
+html[data-theme='dark'] #games .btn-danger-soft:hover {
+	color: rgb(241, 163, 157);
+	background: rgb(91, 40, 31);
+	border-color: rgb(182, 49, 32);
+}
+html[data-theme='dark'] #games .arena-empty-state {
+	background: var(--bg-surface);
+	border: 1px dashed rgb(58, 105, 156);
+}
+html[data-theme='dark'] #games .tournament-watch-hero {
+	border: 1px solid rgb(32, 90, 182);
+	background: linear-gradient(120deg, rgb(31, 57, 91), rgb(31, 57, 91));
+}
+html[data-theme='dark'] #games .tournament-watch-stats div {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-watch-stats strong {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .tournament-watch-grid > div {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #games .tournament-watch-round span {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #games .tournament-watch-player span {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .arena-editor-content {
+	background: var(--bg-surface);
+	border: 1px solid rgb(54, 103, 161);
+}
+html[data-theme='dark'] .arena-editor-header {
+	background: linear-gradient(120deg, rgb(31, 56, 91), var(--bg-surface));
+}
+html[data-theme='dark'] .arena-modal-close {
+	border: 1px solid rgb(55, 107, 159);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .arena-modal-close:hover {
+	border-color: rgb(32, 103, 182);
+	color: rgb(142, 167, 235);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .tournament-watch-hero {
+	border: 1px solid rgb(32, 90, 182);
+	background: linear-gradient(120deg, rgb(31, 57, 91), rgb(31, 57, 91));
+}
+html[data-theme='dark'] .tournament-watch-stats div {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .tournament-watch-stats strong {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .tournament-watch-grid > div {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .tournament-watch-round span {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .tournament-watch-player span {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .tournament-round-selected-actions .action-btn-icon.edit {
+	border-color: rgb(32, 99, 182);
+	background: rgb(31, 57, 91);
+	color: rgb(142, 171, 235);
+}
+html[data-theme='dark'] .tournament-round-selected-actions .action-btn-icon.delete {
+	border-color: rgb(182, 32, 32);
+	background: rgb(91, 40, 31);
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .tournament-round-selected-actions .action-btn-icon.apply {
+	border-color: rgb(32, 99, 182);
+}
+html[data-theme='dark'] .tournament-round-selected-actions .action-btn-icon.cancel {
+	border-color: var(--border-color);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .tournament-round-selected-actions .action-btn-icon.cancel:hover {
+	border-color: rgb(85, 103, 129);
+	background: var(--bg-surface-alt);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .student-workspace .training-modal-content {
+	background: var(--bg-surface);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .student-workspace .training-modal-header {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-workspace .training-modal-header h3 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .close-modal-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .close-modal-btn:hover {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .training-badge {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .training-type-tag {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .training-progress-bar {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .training-question-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .training-question-card .question-text {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .options-grid .option-btn {
+	background: var(--bg-surface);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .options-grid .option-btn:hover {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .options-grid .option-btn.selected {
+	border-color: rgb(32, 35, 182);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .results-header {
+	background: radial-gradient(
+			circle at top right,
+			rgba(99, 102, 241, 0.14),
+			transparent 35%
+		),
+		linear-gradient(135deg, rgb(31, 57, 91) 0%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .results-header h2 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .results-header p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .results-stats-grid .stat-card {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .results-stats-grid .stat-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .results-actions {
+	background: rgba(16, 26, 44, 0.7);
+}
+html[data-theme='dark'] .results-actions .workspace-btn.ghost {
+	background: rgba(16, 26, 44, 0.95);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .corrections-container {
+	background: rgba(16, 26, 44, 0.65);
+}
+html[data-theme='dark'] .corrections-container h4 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .correction-item {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .correction-header .question-number {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .status-badge.pass {
+	background: rgb(31, 91, 60);
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .status-badge.fail {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .badge-success {
+	background: rgb(31, 91, 60);
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .badge-danger {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .explanation-box {
+	background: var(--bg-surface-alt);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .training-timer {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .training-timer.warning {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .training-option-question {
+	color: rgb(172, 188, 225);
+	background: linear-gradient(180deg, rgb(31, 57, 91) 0%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .training-option {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .training-option:hover {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .training-option.selected {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .matching-pair-row {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .matching-arrow {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .matching-select {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .draggable-container {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .draggable-option {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+}
+html[data-theme='dark'] .fill-blank-input {
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .fill-blank-drop-zone {
+	border: 2px dashed var(--border-color);
+}
+html[data-theme='dark'] .word-bank {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .word-bank-chip {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .training-next-btn:disabled {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .training-per-q-timer {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .training-progress-strip {
+	background: linear-gradient(
+		180deg,
+		rgba(16, 26, 44, 0.85),
+		rgba(16, 26, 44, 0.96)
+	);
+}
+html[data-theme='dark'] .training-meta-time {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 211, 241);
+	border: 1px solid rgb(32, 131, 182);
+}
+html[data-theme='dark'] .training-meta-time.warning {
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+	border-color: rgb(182, 32, 32);
+}
+html[data-theme='dark'] .training-meta-points {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+	border: 1px solid rgb(182, 152, 32);
+}
+html[data-theme='dark'] .training-progress-dot .dot {
+	background: rgb(46, 60, 76);
+}
+html[data-theme='dark'] .training-progress-dot.is-current .dot {
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .matching-hint {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .matching-column h4 {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .matching-quiz-item {
+	background: var(--bg-surface);
+	border: 2px solid var(--border-color);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .matching-quiz-item:hover {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .matching-quiz-item.selected {
+	background: rgb(91, 65, 31);
+	color: rgb(241, 178, 157);
+	border-color: rgb(182, 100, 32);
+}
+html[data-theme='dark'] .pair-number-badge {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .fill-blank-question {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .fill-blank-question .fill-blank-drop-zone {
+	background: var(--bg-surface);
+	border: 2px dashed var(--border-color);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .fill-blank-question .fill-blank-drop-zone:hover {
+	border-color: rgb(32, 35, 182);
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .fill-blank-question .fill-blank-drop-zone.is-active-target {
+	border-color: rgb(182, 100, 32);
+	background: rgb(91, 65, 31);
+}
+html[data-theme='dark'] .fill-blank-question .fill-blank-drop-zone.is-filled {
+	background: rgb(31, 45, 91);
+	border-color: rgb(32, 35, 182);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .fill-blank-question .fill-blank-drop-zone.is-drag-over {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] .fill-blank-hint {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .fill-blank-hint--free {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .training-fill-blank .word-bank {
+	background: linear-gradient(180deg, var(--bg-surface-alt) 0%, var(--bg-surface-alt) 100%);
+}
+html[data-theme='dark'] .word-bank-chip:hover {
+	border-color: rgb(32, 35, 182);
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .training-options .training-option.is-correct {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .training-options .training-option.is-incorrect {
+	border-color: rgb(182, 32, 32);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .training-matching select.matching-select:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .draggable-container .draggable-option:hover {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .fill-blank-input:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .corrections-container .question-type-tag {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-workspace .training-summary-tile {
+	background: linear-gradient(160deg, rgb(31, 57, 91) 0%, var(--bg-surface) 60%, rgb(31, 59, 91) 100%);
+}
+html[data-theme='dark'] .student-workspace .training-summary-tile .performance-metric span {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-workspace .training-delta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-workspace .training-delta--up {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .training-delta--down {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .performance-attempt {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-workspace .performance-attempt--weak .performance-attempt-badge {
+	background: linear-gradient(135deg, rgb(91, 31, 31), #dc2626);
+}
+html[data-theme='dark'] .student-workspace .performance-attempt--weak .performance-bar span {
+	background: linear-gradient(90deg, rgb(91, 31, 31), #dc2626);
+}
+html[data-theme='dark'] .student-workspace .training-card--repeated {
+	background: radial-gradient(
+			circle at top right,
+			rgba(99, 102, 241, 0.1),
+			transparent 42%
+		),
+		linear-gradient(160deg, rgb(31, 61, 91), var(--bg-surface));
+}
+html[data-theme='dark'] .student-workspace .training-attempt-count {
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .student-workspace .training-best-score {
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .student-workspace .training-trend {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-workspace .training-trend--improving {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .training-trend--slipping {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .results-list .result-row {
+	background: linear-gradient(160deg, var(--bg-surface) 0%, var(--bg-surface) 100%);
+}
+html[data-theme='dark'] .student-workspace .result-kind--training {
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .student-workspace .result-kind--exam {
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .student-workspace .result-kind--game {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .results-list .result-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-workspace .results-list .result-score {
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .student-workspace .results-list .result-score.passed {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .results-list .result-score.failed {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] #studentProfileModal .modal-header .close {
+	background: rgba(16, 26, 44, 0.12);
+}
+html[data-theme='dark'] #studentProfileModal .modal-header .close:hover {
+	background: rgba(16, 26, 44, 0.24);
+}
+html[data-theme='dark'] #studentProfileModal .profile-tab-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #studentProfileModal .profile-tab-btn:hover {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #studentProfileModal .profile-tab-btn.active {
+	background: var(--bg-surface);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] #studentProfileModal .form-control:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .student-workspace .results-stats-grid .stat-card.stat-passed {
+	background: linear-gradient(160deg, rgb(31, 91, 73) 0%, rgb(31, 91, 52) 100%);
+}
+html[data-theme='dark'] .student-workspace .results-stats-grid .stat-card.stat-passed .stat-value {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .results-stats-grid .stat-card.stat-passed .stat-label {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .results-stats-grid .stat-card.stat-failed {
+	background: linear-gradient(160deg, rgb(91, 31, 31) 0%, rgb(91, 31, 31) 100%);
+}
+html[data-theme='dark'] .student-workspace .results-stats-grid .stat-card.stat-failed .stat-value {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .results-stats-grid .stat-card.stat-failed .stat-label {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .exam-card .exam-status.status-passed {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .student-workspace .exam-card .exam-status.status-failed {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] #studentProfileModal .profile-actions .workspace-btn.ghost {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #studentProfileModal .profile-actions .workspace-btn.ghost:hover {
+	background: var(--bg-surface-alt);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-kicker {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-card.accent-blue .profile-insight-kicker {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-card.accent-gold .profile-insight-kicker {
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-card.accent-emerald .profile-insight-kicker {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-copy {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] body.student-workspace .workspace-header .mobile-menu-btn {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #studentProfileModal .profile-tabs-v2 {
+	background: linear-gradient(180deg, var(--bg-surface-alt), var(--bg-surface));
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #studentProfileModal .profile-tabs-v2 .profile-tab-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #studentProfileModal .profile-tabs-v2 .profile-tab-btn:hover {
+	color: rgb(142, 167, 235);
+	background: rgba(16, 26, 44, 0.85);
+	border-color: rgb(32, 96, 182);
+}
+html[data-theme='dark'] .exam-classes-btn {
+	color: rgb(157, 241, 232);
+}
+html[data-theme='dark'] .modal-hint-box {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .modal-hint-box strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .points-interval-filter {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .points-interval-sep {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .assign-checklist {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .assign-checklist__empty {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .assign-checklist__item {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .assign-checklist__label {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .assign-checklist__meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #assignClassStudentsModal .class-students-group {
+	border: 1px solid rgb(63, 101, 151);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignClassExamsModal .class-exams-group {
+	border: 1px solid rgb(63, 101, 151);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignClassStudentsModal .class-section-header label {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #assignClassExamsModal .class-section-header label {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #assignClassStudentsModal .class-filter-row label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #assignClassStudentsModal .class-helper-text {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .pending-import-card {
+	border: 1px solid rgb(63, 101, 151);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .pending-import-card:hover {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] .pending-import-title {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .pending-import-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .pending-import-chip {
+	background: rgb(31, 45, 91);
+	border: 1px solid rgb(32, 62, 182);
+	color: rgb(172, 168, 229);
+}
+html[data-theme='dark'] .pending-import-chip.muted {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .category-filter-section .filter-toolbar {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+	border: 1px solid rgb(63, 101, 151);
+}
+html[data-theme='dark'] .exam-filters-container .filter-toolbar {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+	border: 1px solid rgb(63, 101, 151);
+}
+html[data-theme='dark'] .filter-field-icon {
+	color: var(--text-secondary);
+	background: var(--bg-surface);
+	border: 1px solid rgb(63, 101, 151);
+}
+html[data-theme='dark'] .filter-search-input {
+	border: 1px solid rgb(63, 101, 151);
+	color: rgb(181, 194, 217);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .filter-field-icon:focus-within {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .filter-search-input:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] .filter-select {
+	border: 1px solid rgb(63, 101, 151) !important;
+}
+html[data-theme='dark'] .filter-toolbar .points-interval-filter input {
+	border: 1px solid rgb(63, 101, 151) !important;
+	background: var(--bg-surface);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .filter-toolbar .points-interval-sep {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .filter-toolbar-quick .quick-filter-btn {
+	border: 1px solid rgb(63, 101, 151);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .filter-toolbar-quick .quick-filter-btn:hover {
+	border-color: rgb(32, 35, 182);
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .filter-undo-btn {
+	border: 1px dashed var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .filter-undo-btn:hover {
+	color: rgb(241, 193, 157);
+	background: rgb(91, 79, 31);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .question-item {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-item {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .question-item {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-item {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .question-item:hover {
+	border-color: rgb(32, 103, 182);
+	background: rgb(31, 59, 91);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-item:hover {
+	border-color: rgb(32, 103, 182);
+	background: rgb(31, 59, 91);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .question-item:hover {
+	border-color: rgb(32, 103, 182);
+	background: rgb(31, 59, 91);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-item:hover {
+	border-color: rgb(32, 103, 182);
+	background: rgb(31, 59, 91);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .question-item.selected {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-item.selected {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .question-item.selected {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-item.selected {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-title {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-title {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .premium-question-number {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .premium-question-number {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] #assignExamQuestionsModal .question-item .question-content {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal .question-item .question-content {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-summary {
+	color: var(--text-secondary);
+	background: var(--bg-surface-alt);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface-alt) 100%);
+	border: 1px solid rgb(63, 101, 151);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar .filter-field-icon {
+	color: var(--text-secondary);
+	background: var(--bg-surface);
+	border: 1px solid rgb(63, 101, 151);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar .filter-search-input {
+	border: 1px solid rgb(63, 101, 151);
+	color: rgb(181, 194, 217);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar .filter-search-input:focus {
+	border-color: rgb(32, 35, 182);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-toolbar .filter-select {
+	border: 1px solid rgb(63, 101, 151) !important;
+}
+html[data-theme='dark'] #assignClassStudentsModal .class-user-picker-row {
+	border: 1px dashed rgb(69, 102, 145);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-table-wrapper {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignClassStudentsModal table.roster-table th {
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #assignClassStudentsModal table.roster-table td {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #assignClassStudentsModal table.roster-table tbody tr:hover {
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #assignClassStudentsModal td.roster-number {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-name-text {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] #assignClassStudentsModal td.roster-account {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-status-active {
+	color: rgb(157, 241, 217);
+	background: rgb(31, 91, 63);
+	border: 1px solid rgb(32, 182, 113);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-status-disabled {
+	color: rgb(241, 193, 157);
+	background: rgb(91, 79, 31);
+	border: 1px solid rgb(182, 152, 32);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-status-pending {
+	color: var(--text-secondary);
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-action-btn {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-action-btn:hover {
+	border-color: rgb(32, 35, 182);
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-action-btn:disabled:hover {
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #assignClassStudentsModal .roster-action-danger:hover {
+	border-color: rgb(182, 32, 32);
+	color: rgb(235, 142, 142);
+	background: rgb(91, 31, 31);
+}
+html[data-theme='dark'] .exam-preset-info {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .exam-preset-tag {
+	background: rgb(31, 45, 91);
+	border: 1px solid rgb(32, 66, 182);
+}
+html[data-theme='dark'] .exam-preset-chip {
+	background: var(--bg-surface);
+	border: 1px solid rgb(63, 101, 151);
+}
+html[data-theme='dark'] .exam-preset-chip-value {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .exam-preset-welcome strong {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .exam-preset-welcome span {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .training-preset-banner {
+	background: linear-gradient(135deg, var(--bg-surface) 0%, rgb(31, 45, 91) 100%);
+	border: 1px solid rgb(32, 66, 182);
+}
+html[data-theme='dark'] .game-card .exam-preset-info {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] #quickStartModal .modal-header .modal-close {
+	background: rgba(16, 26, 44, 0.12);
+}
+html[data-theme='dark'] #quickStartModal .modal-header .close {
+	background: rgba(16, 26, 44, 0.12);
+}
+html[data-theme='dark'] .quick-start-steps {
+	background: linear-gradient(
+		180deg,
+		rgba(16, 26, 44, 0.9),
+		rgba(16, 26, 44, 0.65)
+	);
+}
+html[data-theme='dark'] .qs-step.visited:not(.active) {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .qs-step.visited:not(.active) .qs-step-num {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .qs-step.active .qs-step-num {
+	background: rgba(16, 26, 44, 0.25);
+}
+html[data-theme='dark'] .qs-count.done {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .qs-step.active .qs-count {
+	background: rgba(16, 26, 44, 0.22);
+}
+html[data-theme='dark'] .qs-status.ok {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] #quickStartModal .btn-secondary {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .qs-subtabs {
+	border: 1px solid rgb(66, 103, 148);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .qs-subtab-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .qs-subtab-btn:hover {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .qs-subtab-btn:focus-visible {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .qs-subtab-btn.active {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #quickStartModal .qs-field .form-control:focus {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .qs-logo-row {
+	background: rgba(16, 26, 44, 0.5);
+}
+html[data-theme='dark'] .qs-cred-subtabs {
+	border: 1px solid rgb(66, 103, 148);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .qs-cred-subtab-btn {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .qs-cred-subtab-btn:hover {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+	border-color: rgb(66, 103, 148);
+}
+html[data-theme='dark'] .qs-cred-subtab-btn:focus-visible {
+	background: var(--bg-surface);
+	color: rgb(172, 188, 225);
+	border-color: rgb(66, 103, 148);
+}
+html[data-theme='dark'] .qs-cred-subtab-btn.active[data-credtab='password'] {
+	background: linear-gradient(135deg, rgb(31, 57, 91), rgb(31, 57, 91));
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .qs-cred-subtab-btn.active[data-credtab='recovery'] {
+	background: linear-gradient(135deg, rgb(31, 91, 63), rgb(31, 91, 60));
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .qs-cred-panel {
+	background: linear-gradient(
+			160deg,
+			rgba(16, 26, 44, 0.95),
+			rgba(16, 26, 44, 0.65)
+		),
+		var(--bg-surface);
+}
+html[data-theme='dark'] .bkp-group-header {
+	background: linear-gradient(
+		135deg,
+		rgba(16, 26, 44, 0.95),
+		rgba(16, 26, 44, 0.8)
+	);
+}
+html[data-theme='dark'] .bkp-count {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .bkp-item small {
+	color: rgb(235, 142, 142);
+}
+html[data-theme='dark'] .student-pairing-panel {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .pairing-duel-mode {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .pairing-duel-badge {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .pairing-game-type {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .opponent-choice-btn {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .opponent-choice-btn:hover {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .opponent-choice-btn small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .completed-pairing-summary {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .pairing-team-total {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .pairing-team-total.won {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .pairing-duel-result {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .pairing-duel-player small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .pairing-duel-vs {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-root {
+	background: var(--bg-surface-alt);
+	color: rgb(183, 196, 215);
+}
+html[data-theme='dark'] .monitoring-header {
+	border: 1px solid rgb(63, 101, 151);
+	background: linear-gradient(135deg, var(--bg-surface) 0%, rgb(31, 53, 91) 100%);
+}
+html[data-theme='dark'] .monitoring-controls {
+	border: 1px solid rgb(63, 101, 151);
+	background: rgba(16, 26, 44, 0.86);
+}
+html[data-theme='dark'] .monitoring-controls label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .monitoring-toggle {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .monitoring-status {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .monitoring-kpi {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .monitoring-kpi span {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .monitoring-kpi strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .monitoring-grid .panel-header {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .monitoring-recent-panel .panel-header {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .monitoring-level-debug {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 211, 241);
+}
+html[data-theme='dark'] .monitoring-level-info {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .monitoring-level-warn {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .monitoring-level-error {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .monitoring-level-fatal {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .monitoring-panel code {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .monitoring-grid code {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .admin-header__profile-menu {
+	background: var(--bg-surface);
+	color: rgb(177, 191, 221);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .admin-header__profile-mail {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-header__menu-item {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-header__menu-item:hover {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-header__menu-item--danger {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .page-title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .page-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-error {
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+	border: 1px solid rgb(182, 32, 32);
+}
+html[data-theme='dark'] .admin-toolbar__field {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-toolbar__field select {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-toolbar__field input {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .input--error {
+	background: rgb(91, 31, 31);
+}
+html[data-theme='dark'] .field-error {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .field-error--generic {
+	background: rgb(91, 31, 31);
+	border: 1px solid rgb(182, 32, 32);
+}
+html[data-theme='dark'] .admin-kpi {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .admin-kpi__value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-kpi__label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-quick-action {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .admin-quick-action:hover {
+	background: rgb(31, 57, 91);
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] .admin-activity__col {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .admin-activity__title {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-table {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-table thead th {
+	background: var(--bg-surface);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .admin-table__th--sortable:hover {
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .admin-table__row:hover {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-table__empty {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-table__error {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .admin-table__wrap {
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .admin-table__search {
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .admin-table__pager {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .badge {
+	background: var(--bg-surface-alt);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .badge--green {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .badge--red {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .badge--gray {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .badge--draft {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .badge--active {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .badge--archived {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .badge--admin {
+	background: rgb(42, 31, 91);
+	color: rgb(179, 143, 235);
+}
+html[data-theme='dark'] .badge--student {
+	background: rgb(31, 57, 91);
+	color: rgb(159, 178, 239);
+}
+html[data-theme='dark'] .badge--super_admin {
+	background: rgb(91, 31, 66);
+	color: rgb(241, 157, 191);
+}
+html[data-theme='dark'] .badge--easy {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .badge--medium {
+	background: rgb(91, 79, 31);
+	color: rgb(241, 189, 157);
+}
+html[data-theme='dark'] .badge--hard {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .badge--mcq {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .badge--true-false {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .badge--fill-blank {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .badge--matching {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .badge--order {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .form-field label {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .form-field input {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .form-field select {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .form-field textarea {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .form-field input:focus {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] .form-field select:focus {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] .form-field textarea:focus {
+	border-color: rgb(32, 103, 182);
+}
+html[data-theme='dark'] .admin-modal__hint {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .admin-modal__hint strong {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .admin-checklist {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-checklist__item:hover {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .admin-checklist__label {
+	color: rgb(183, 196, 215);
+}
+html[data-theme='dark'] .confirm-message {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .admin-category-tree {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .sw-step {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-step:hover {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .sw-step.active {
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] .sw-step.visited {
+	color: rgb(157, 241, 188);
+}
+html[data-theme='dark'] .sw-step-num {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-step-desc {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-info-item {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .sw-badge-ok {
+	background: rgb(31, 91, 52);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .sw-badge-warn {
+	background: rgb(91, 86, 31);
+	color: rgb(241, 201, 157);
+}
+html[data-theme='dark'] .sw-badge-fail {
+	background: rgb(91, 31, 31);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .sw-badge-info {
+	background: rgb(31, 67, 91);
+	color: rgb(157, 212, 241);
+}
+html[data-theme='dark'] .sw-warning-box {
+	background: rgb(91, 79, 31);
+	border: 1px solid rgb(182, 152, 32);
+}
+html[data-theme='dark'] .sw-info-box {
+	background: rgb(31, 57, 91);
+	border: 1px solid rgb(32, 99, 182);
+}
+html[data-theme='dark'] .sw-error-box {
+	background: rgb(91, 31, 31);
+	border: 1px solid rgb(182, 32, 32);
+	color: rgb(238, 160, 160);
+}
+html[data-theme='dark'] .sw-primary-url {
+	background: rgb(31, 91, 50);
+	border: 2px dashed rgb(32, 182, 86);
+}
+html[data-theme='dark'] .sw-primary-url-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-primary-url-value {
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] .sw-qr-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-qr-container {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .sw-cmd-label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-cdn-table th {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-summary-item {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .sw-summary-detail {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .sw-quick-item {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .sw-spinner {
+	border: 3px solid var(--border-color);
+}
+html[data-theme='dark'] .gm-tab-btn {
+	color: var(--text-secondary);
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .gm-tab-btn:hover {
+	color: rgb(172, 188, 225);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .gm-tab-btn.active {
+	background: rgb(91, 31, 66);
+	border-color: rgb(182, 32, 114);
+	color: rgb(241, 157, 191);
+}
+html[data-theme='dark'] .game-preset-summary {
+	border: 1px solid rgb(182, 32, 117);
+	background: rgb(91, 31, 64);
+}
+html[data-theme='dark'] .game-preset-summary h4 {
+	color: rgb(241, 157, 191);
+}
+html[data-theme='dark'] .game-preset-summary-item {
+	background: var(--bg-surface);
+	border: 1px solid rgb(182, 32, 118);
+}
+html[data-theme='dark'] .game-preset-summary-value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .game-preset-summary-features ul {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .class-game-chip {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .class-game-chip.class-game-more {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .class-games-row {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .class-games-name {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .class-games-stats {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-filters-bar {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .game-filter-row label {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .game-pairing-section {
+	border: 1px dashed var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .game-pairing-panel {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .pairing-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .pairing-summary {
+	background: rgb(31, 45, 91);
+}
+html[data-theme='dark'] .pairing-row {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] .pairing-student small {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .pairing-opponent {
+	color: rgb(185, 196, 213);
+}
+
+@media (max-width: 768px) {
+html[data-theme='dark'] #studentProfileModal .modal-header {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #questionTable tbody tr {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+}
+html[data-theme='dark'] #questionTable tbody tr:active {
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] #questionTable tbody td::before {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #questionTable tbody td.question-cell .question-text-content {
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] tbody tr:active {
+	background-color: var(--bg-surface);
+}
+html[data-theme='dark'] #question-list-table tbody tr.question-row-selected {
+	border-color: rgb(32, 103, 182);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #question-list-table tbody tr.detail-row td {
+	border: 1px solid rgb(32, 96, 182);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row > td {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row > td::before {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row > td:nth-child(2) {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #question-list-table .question-text {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row > .options-cell::before {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row > .answer-cell::before {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row > .image-cell::before {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #settingsModal .settings-tab-btn {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #settingsModal .settings-tab-btn.active {
+	border-color: rgb(32, 99, 182);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #activityTable tbody td {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #activityTable tbody td::before {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #usersTable tbody tr.is-selected {
+	border-color: rgb(32, 103, 182);
+	background: rgb(31, 57, 91);
+}
+html[data-theme='dark'] #usersTable tbody td::before {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #usersTable tbody td:nth-child(2) {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #examModal .question-text {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] #categoryModal .form-actions {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #examModal .form-actions {
+	background: var(--bg-surface);
+}
+}
+
+@media (max-width: 760px) {
+html[data-theme='dark'] #settingsModal .modal-header {
+	background: radial-gradient(
+				circle at top left,
+				rgba(37, 99, 235, 0.12),
+				transparent 34%
+			),
+			linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-title-block p {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #settingsModal .settings-header-actions {
+	border: 1px solid var(--border-color);
+	background: rgba(16, 26, 44, 0.9);
+}
+html[data-theme='dark'] #settingsModal .settings-reset-btn {
+	border: 1px solid rgb(182, 32, 32);
+	background: rgb(91, 31, 31);
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] #settingsModal .settings-sidebar-toggle {
+	border-color: rgb(32, 99, 182);
+	background: rgb(31, 57, 91);
+	color: rgb(142, 167, 235);
+}
+html[data-theme='dark'] #settingsModal .close {
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #settingsModal #settingsForm {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] #settingsModal .settings-tabs {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-tab-btn {
+	border: 1px solid rgb(66, 103, 148) !important;
+}
+}

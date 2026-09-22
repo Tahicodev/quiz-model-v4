@@ -72,6 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
 	console.log('window.openSettingsModal is:', typeof window.openSettingsModal);
 });
 
+// Re-apply settings whenever the theme changes so the light/dark variables
+// stay in sync with the current data-theme.
+document.addEventListener('quiz:themechange', () => {
+	applySettings();
+});
+
 // Load settings from localStorage
 function loadSettings() {
 	try {
@@ -91,8 +97,16 @@ function applySettings() {
 	// Apply CSS Variables
 	root.style.setProperty('--primary', currentSettings.primaryColor);
 	root.style.setProperty('--primary-dark', currentSettings.secondaryColor); // Using secondary for primary-dark
-	root.style.setProperty('--bg-body', currentSettings.backgroundColor);
-	root.style.setProperty('--text-main', currentSettings.textColor);
+	if ((root.getAttribute('data-theme') || 'light') === 'dark') {
+		// Dark mode: keep the dark palette's --bg-body / --text-main (from
+		// theme.css — including the #1E29E8 text color) instead of letting the
+		// saved light colors override them via inline styles.
+		root.style.removeProperty('--bg-body');
+		root.style.removeProperty('--text-main');
+	} else {
+		root.style.setProperty('--bg-body', currentSettings.backgroundColor);
+		root.style.setProperty('--text-main', currentSettings.textColor);
+	}
 	root.style.setProperty('--border-focus', currentSettings.inputFocusColor);
 	root.style.setProperty('--font-sans', currentSettings.fontFamily);
 
