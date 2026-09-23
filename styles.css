@@ -6749,6 +6749,50 @@ body.student-workspace .game-quiz-shell .game-submit-btn {
 	flex-wrap: wrap;
 }
 
+/* Lobby history: previous lobbies with their winner / "No winner". */
+.game-result-summary {
+	margin-top: 14px;
+	padding-top: 14px;
+	border-top: 1px solid #e2e8f0;
+}
+
+.game-result-summary h5 {
+	margin: 0 0 8px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #475569;
+}
+
+.game-result-summary .result-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.game-result-summary .result-meta > div {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.78rem;
+	color: #334155;
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	padding: 6px 10px;
+}
+
+.game-result-summary .lobby-result.has-winner {
+	font-weight: 600;
+	color: #166534;
+}
+
+.game-result-summary .lobby-result.no-winner {
+	color: #b91c1c;
+}
+
 /* Teacher access controls */
 .teacher-access-grid {
 	display: grid;

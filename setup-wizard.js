@@ -434,9 +434,7 @@
 			html += '<div class="sw-info-box">📊 Configured capacity: ' + (d.capacity.maxUsers || 100) + ' users, ' + (d.capacity.maxGamePlayers || 30) + ' players per game. Your 20-student classroom fits comfortably.</div>';
 		}
 
-		html += '<div class="sw-actions">';
-		html += '<button type="button" class="btn btn-primary" onclick="window.closeSetupWizard()">Done</button>';
-		html += '</div>';
+		// Closing is handled by the footer Back/Done buttons — no inline button.
 
 		return html;
 	}
@@ -535,7 +533,7 @@
 		// Navigation buttons
 		if (backBtn) backBtn.style.visibility = state.currentStep === 0 ? 'hidden' : 'visible';
 		if (nextBtn) {
-			nextBtn.textContent = state.currentStep === STEP_DEFS.length - 1 ? 'Close' : 'Next';
+			nextBtn.textContent = state.currentStep === STEP_DEFS.length - 1 ? 'Done' : 'Next';
 			nextBtn.disabled = false;
 		}
 	}
@@ -635,7 +633,15 @@
 	window.openSetupWizard = openSetupWizard;
 	window.closeSetupWizard = closeSetupWizard;
 	window.setupWizardGoTo = goToStep;
-	window.setupWizardNext = nextStep;
+	window.setupWizardNext = function () {
+		// On the final step the right-side footer button is "Done": close the
+		// wizard instead of trying to advance (which used to do nothing).
+		if (state.currentStep >= STEP_DEFS.length - 1) {
+			closeSetupWizard();
+			return;
+		}
+		nextStep();
+	};
 	window.setupWizardBack = prevStep;
 	window.setupWizardCopy = copyText;
 	window.setupWizardSetProfile = setProfile;

@@ -1019,22 +1019,33 @@
 
 	function applySchoolBranding() {
 		var titleEl = document.getElementById('dashboardTitle');
+		var mobileTitleEl = document.getElementById('mobileDashboardTitle');
 		var logoBox = document.querySelector('.header-branding .brand-logo');
-		if (!titleEl && !logoBox) return;
+		var mobileLogoBox = document.querySelector(
+			'.mobile-menu-branding .brand-logo',
+		);
+		if (!titleEl && !logoBox && !mobileTitleEl && !mobileLogoBox) return;
 
 		var apply = function (profile) {
 			if (!profile) return;
 			var isTeacher = currentUser && currentUser.role === ROLE_TEACHER;
+			var label = isTeacher ? profile.name + ' — Teachers' : profile.name;
 			if (titleEl && profile.name) {
-				titleEl.textContent = isTeacher
-					? profile.name + ' — Teachers'
-					: profile.name;
+				titleEl.textContent = label;
 			}
-			if (logoBox && profile.logo_url) {
-				logoBox.innerHTML =
-					'<img src="' +
+			if (mobileTitleEl && profile.name) {
+				mobileTitleEl.textContent = label;
+			}
+			var logoHtml = profile.logo_url
+				? '<img src="' +
 					profile.logo_url +
-					'" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+					'" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />'
+				: '';
+			if (logoBox && logoHtml) {
+				logoBox.innerHTML = logoHtml;
+			}
+			if (mobileLogoBox && logoHtml) {
+				mobileLogoBox.innerHTML = logoHtml;
 			}
 		};
 
@@ -1095,6 +1106,14 @@
 		const titleEl = document.getElementById('dashboardTitle');
 		if (titleEl) {
 			titleEl.textContent =
+				currentUser.role === ROLE_TEACHER
+					? 'Teacher Dashboard'
+					: 'Admin Dashboard';
+		}
+
+		const mobileTitleEl = document.getElementById('mobileDashboardTitle');
+		if (mobileTitleEl) {
+			mobileTitleEl.textContent =
 				currentUser.role === ROLE_TEACHER
 					? 'Teacher Dashboard'
 					: 'Admin Dashboard';

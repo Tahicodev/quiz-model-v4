@@ -38,6 +38,17 @@ class DocumentQuestionGenerator {
     }
   }
 
+  get isDark() {
+    return document.documentElement.getAttribute('data-theme') === 'dark';
+  }
+
+  clearDragState() {
+    if (!this.uploadZone) return;
+    // Clear inline overrides so the static CSS (light or dark) takes over.
+    this.uploadZone.style.borderColor = '';
+    this.uploadZone.style.background = '';
+  }
+
   // ============================================================================
   // INITIALIZATION & EVENT LISTENERS
   // ============================================================================
@@ -58,18 +69,18 @@ class DocumentQuestionGenerator {
     this.uploadZone?.addEventListener('dragover', (e) => {
       e.preventDefault();
       this.uploadZone.style.borderColor = '#8b5cf6';
-      this.uploadZone.style.background = '#f5f3ff';
+      this.uploadZone.style.background = this.isDark
+        ? 'rgba(139, 92, 246, 0.22)'
+        : '#f5f3ff';
     });
 
     this.uploadZone?.addEventListener('dragleave', () => {
-      this.uploadZone.style.borderColor = '#cbd5e0';
-      this.uploadZone.style.background = 'white';
+      this.clearDragState();
     });
 
     this.uploadZone?.addEventListener('drop', (e) => {
       e.preventDefault();
-      this.uploadZone.style.borderColor = '#cbd5e0';
-      this.uploadZone.style.background = 'white';
+      this.clearDragState();
       this.handleFiles(Array.from(e.dataTransfer.files));
     });
 

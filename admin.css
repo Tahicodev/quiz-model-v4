@@ -1628,3 +1628,285 @@
 	gap: 0.5rem;
 	margin-top: 0.6rem;
 }
+
+/* ═══ Lobby Dock window + taskbar ═══ */
+.lobby-dock {
+	position: fixed;
+	left: 50%;
+	transform: translateX(-50%);
+	bottom: 6px;
+	width: min(940px, 94vw);
+	height: min(62vh, 720px);
+	display: none;
+	flex-direction: column;
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 14px 14px 10px 10px;
+	box-shadow: 0 18px 44px rgba(15, 23, 42, 0.32);
+	z-index: 2200;
+	overflow: hidden;
+}
+
+html.lobby-dock-open .lobby-dock {
+	display: flex;
+}
+
+.lobby-dock__bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border-bottom: 1px solid #e2e8f0;
+	background: #f8fafc;
+	user-select: none;
+	flex-shrink: 0;
+}
+
+.lobby-dock__title {
+	font-weight: 700;
+	font-size: 0.85rem;
+	color: #0f172a;
+	padding: 0 6px;
+	white-space: nowrap;
+}
+
+.lobby-dock__tabs {
+	display: flex;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	overflow-x: auto;
+}
+
+.lobby-dock-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 9px;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: #ffffff;
+	color: #475569;
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	max-width: 190px;
+	overflow: hidden;
+}
+
+.lobby-dock-tab.active {
+	background: #eff6ff;
+	border-color: #3b82f6;
+	color: #1e40af;
+}
+
+.lobby-dock-tab-close {
+	color: inherit;
+	opacity: 0.55;
+	padding: 0 2px;
+	font-size: 14px;
+	line-height: 1;
+}
+
+.lobby-dock-tab-close:hover {
+	opacity: 1;
+}
+
+.lobby-dock__btn {
+	flex: 0 0 auto;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	background: transparent;
+	color: #475569;
+	width: 30px;
+	height: 30px;
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.lobby-dock__btn:hover {
+	background: #eef2ff;
+}
+
+.lobby-dock__panes {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.lobby-dock-pane {
+	display: none;
+	height: 100%;
+	overflow-y: auto;
+	padding: 14px 16px;
+}
+
+.lobby-dock-pane.active {
+	display: block;
+}
+
+html.lobby-dock-min .lobby-dock {
+	display: none !important;
+}
+
+.lobby-taskbar {
+	display: none;
+	position: fixed;
+	left: 50%;
+	transform: translateX(-50%);
+	bottom: 0;
+	align-items: center;
+	gap: 8px;
+	width: min(560px, 94vw);
+	padding: 6px 10px;
+	background: #f8fafc;
+	border: 1px solid #cbd5e1;
+	border-bottom: none;
+	border-radius: 12px 12px 0 0;
+	box-shadow: 0 -6px 18px rgba(15, 23, 42, 0.18);
+	z-index: 2300;
+}
+
+html.lobby-dock-min .lobby-taskbar {
+	display: flex;
+}
+
+.lobby-taskbar__label {
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: #0f172a;
+	white-space: nowrap;
+}
+
+.lobby-taskbar__tokens {
+	display: flex;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	overflow-x: auto;
+}
+
+.lobby-taskbar-token {
+	padding: 4px 10px;
+	border: 1px solid #cbd5e1;
+	border-radius: 999px;
+	background: #ffffff;
+	color: #334155;
+	font-size: 0.75rem;
+	font-weight: 600;
+	cursor: pointer;
+	white-space: nowrap;
+	max-width: 150px;
+	overflow: hidden;
+}
+
+.lobby-taskbar-token.active {
+	background: #e0e7ff;
+	border-color: #6366f1;
+	color: #3730a3;
+}
+
+.lobby-taskbar__btn {
+	flex: 0 0 auto;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	background: transparent;
+	color: #475569;
+	width: 30px;
+	height: 28px;
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.lobby-taskbar__btn:hover {
+	background: #e0e7ff;
+}
+
+/* Dedicated lobby page (admin.html?lobby=GameId): hide the admin chrome and
+   show only the .game-lobby panel, centered in the viewport. */
+#lobbyPage {
+	display: none;
+	margin: 0 auto;
+	padding: 28px 20px 120px;
+	max-width: 860px;
+	box-sizing: border-box;
+}
+
+html[data-lobby-page] #lobbyPage {
+	display: block;
+}
+
+html[data-lobby-page] .app-container {
+	display: none !important;
+}
+
+.lobby-page .game-lobby {
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 16px;
+	padding: 22px;
+	box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+}
+
+/* Games tab: games list on the left, open lobby panel on the right. */
+.games-split {
+	display: flex;
+	gap: 16px;
+	align-items: flex-start;
+}
+
+.games-split > #gameList {
+	flex: 1 1 55%;
+	min-width: 0;
+}
+
+.games-split > #gameLobby {
+	flex: 1 1 45%;
+	min-width: 0;
+}
+
+@media (max-width: 900px) {
+	.games-split {
+		flex-direction: column;
+	}
+}
+
+/* Mobile-only copy of the branding that lives inside the collapsible menu.
+   Hidden on desktop; shown at the top of the menu on phones. */
+.mobile-menu-branding {
+	display: none !important;
+}
+
+/* Phones only: hide the big dashboard title and pin the school logo to the
+   left of the header. Tablets (>=641px) keep the centered title visible. */
+@media (max-width: 640px) {
+	#dashboardTitle {
+		display: none !important;
+	}
+
+	.header-main-bar > .header-branding {
+		display: none !important;
+	}
+
+	.header-nav-container .header-branding {
+		position: static;
+		justify-content: flex-start;
+		pointer-events: auto;
+	}
+
+	.header-nav-container .mobile-menu-branding {
+		display: flex !important;
+		justify-content: center;
+		gap: 10px;
+		align-items: center;
+		padding: 12px 16px;
+		border-bottom: 1px solid #e2e8f0;
+	}
+
+	.header-nav-container .mobile-menu-branding h1 {
+		font-size: 18px;
+	}
+}

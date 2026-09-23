@@ -39,9 +39,9 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-22-r5" />
-		<link rel="stylesheet" href="admin.css?v=2026-09-21-r3" />
-		<link rel="stylesheet" href="theme.css?v=2026-09-22-r8" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-22-r6" />
+		<link rel="stylesheet" href="admin.css?v=2026-09-22-r9" />
+		<link rel="stylesheet" href="theme.css?v=2026-09-22-r13" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r2" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
@@ -133,7 +133,7 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
 		<script src="api-client.js?v=2026-09-15-r2" defer></script>
-		<script src="auth.js?v=2026-09-17-r4" defer></script>
+		<script src="auth.js?v=2026-09-22-r5" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="settings.js?v=2026-09-17-r5" defer></script>
 
@@ -154,10 +154,10 @@
 		<script src="realtime-settings.js?v=2026-09-19-r1" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js" defer></script>
-		<script src="games-management.js?v=2026-09-21-r4" defer></script>
+		<script src="games-management.js?v=2026-09-22-r10" defer></script>
 		<script src="quick-start.js?v=2026-09-15-r3" defer></script>
 		<script src="qrcode-generator.js" defer></script>
-		<script src="setup-wizard.js" defer></script>
+		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
 			<script src="admin-main.js?v=2026-09-17-r4" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -172,7 +172,7 @@
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="vendor/jszip.min.js"></script> -->
 		<script src="ai-question-generator.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="rag.js" defer></script>
+		<script src="rag.js?v=2026-09-22-r1" defer></script>
 
 		<!-- Syntax Highlighting -->
 		<link rel="stylesheet" href="vendor/atom-one-dark.min.css">
@@ -183,6 +183,9 @@
 		
 	</head>
 	<body>
+		<!-- Dedicated lobby page (admin.html?lobby=GameId): a full-viewport
+		     .game-lobby panel; everything else is hidden via data-lobby-page. -->
+		<div id="lobbyPage" class="lobby-page"></div>
 		<div class="app-container">
 			<header class="app-header">
 				<div class="header-main-bar">
@@ -369,6 +372,29 @@
 
 				<!-- Collapsible Navigation -->
 				<div class="header-nav-container" id="headerNav">
+					<!-- Mobile-only copy of the branding, shown at the top of
+					     the menu; synced with the header one via auth.js -->
+					<div
+						class="header-branding mobile-menu-branding"
+						onclick="window.location.href='admin.html'; setTimeout(() => openTab(event, 'overview'), 100);"
+						title="Go to Overview"
+					>
+						<div class="brand-logo">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z"></path>
+								<path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+							</svg>
+						</div>
+						<h1 id="mobileDashboardTitle">Admin Dashboard</h1>
+					</div>
 					<nav class="main-nav">
 						<button class="nav-tab" data-tab="overview" data-roles="admin,teacher" onclick="openTab(event, 'overview')">
 							<svg
@@ -2498,12 +2524,14 @@
 										</button>
 									</div>
 								</div>
-								<div id="gameList" class="game-list"></div>
-								<div class="game-lobby" id="gameLobby">
-									<div class="empty-state">Select a game to view the lobby.</div>
+								<div class="games-split">
+									<div id="gameList" class="game-list"></div>
+									<div class="game-lobby" id="gameLobby">
+										<div class="empty-state">Select a game to view the lobby.</div>
 									</div>
 								</div>
 							</div>
+						</div>
 						</div>
 
 						<div class="games-studio-pane" data-games-studio-pane="tournament-studio">
@@ -7356,5 +7384,21 @@
 				}
 			});
 		</script>
+
+		<!-- Lobby Dock: multiple open lobbies as tabs in one minimizable
+		     window (taskbar), so the rest of the app stays usable. -->
+		<div id="lobbyDock" class="lobby-dock" aria-hidden="false">
+			<div class="lobby-dock__bar">
+				<div class="lobby-dock__title">Lobbies</div>
+				<div class="lobby-dock__tabs" id="lobbyDockTabs"></div>
+				<button type="button" class="lobby-dock__btn" id="lobbyDockMinBtn" title="Minimize window">_</button>
+			</div>
+			<div class="lobby-dock__panes" id="lobbyDockPanes"></div>
+		</div>
+		<div id="lobbyTaskbar" class="lobby-taskbar" aria-hidden="false">
+			<span class="lobby-taskbar__label">Lobbies <b id="lobbyTaskbarCount"></b></span>
+			<div class="lobby-taskbar__tokens" id="lobbyTaskbarTokens"></div>
+			<button type="button" class="lobby-taskbar__btn" data-lobby-restore-all title="Restore windows">▲</button>
+		</div>
 	</body>
 </html>

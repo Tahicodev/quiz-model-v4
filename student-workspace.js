@@ -15953,6 +15953,22 @@
 			console.warn('No game ID provided');
 			return;
 		}
+		if (!new URLSearchParams(window.location.search).has('game')) {
+			// Normal workspace view: open the lobby in its own window/tab so
+			// the student's workspace is not replaced by the play screen.
+			const lobbyWin = window.open(
+				'student-workspace.html?game=' +
+					encodeURIComponent(String(gameId)) +
+					'&join=1',
+				'_blank',
+			);
+			if (lobbyWin) {
+				showToast('Lobby opened in a new window', 'info');
+			} else {
+				showToast('Pop-up blocked — use a direct click.', 'warning');
+			}
+			return;
+		}
 		const context = getStudentContext();
 		if (!context) {
 			showToast('Please sign in to play', 'error');
@@ -16067,6 +16083,27 @@
 		});
 	}
 
+	// Dedicated play window (student-workspace.html?game=GameId&join=1):
+	// automatically join and render the lobby stage in this window instead of
+	// redirecting the student's normal workspace.
+	function openLobbyFromQuery() {
+		const gameId = new URLSearchParams(window.location.search).get('game');
+		if (!gameId) return;
+		let attempted = false;
+		const attempt = () => {
+			if (attempted) return;
+			attempted = true;
+			try {
+				window.joinGameLobby(gameId);
+			} catch (_) {
+				attempted = false;
+			}
+		};
+		window.addEventListener('quiz:bootstrap-ready', attempt, { once: true });
+		window.addEventListener('auth:changed', attempt, { once: true });
+		setTimeout(attempt, 800);
+	}
+
 	document.addEventListener('DOMContentLoaded', () => {
 		bindWorkspaceTabs();
 		attachFilters();
@@ -16083,6 +16120,7 @@
 
 		renderWorkspace();
 		openExamFromQuery();
+		openLobbyFromQuery();
 		queueStickyProfileDockUpdate();
 	});
 

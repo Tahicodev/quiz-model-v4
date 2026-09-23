@@ -1,6 +1,12 @@
 (function () {
 	'use strict';
 
+	// True when this admin page was opened as a dedicated lobby window
+	// (admin.html?lobby=GameId) so "Open Lobby" docks in place instead of
+	// spawning yet another window.
+	const isLobbyWindow = () =>
+		new URLSearchParams(window.location.search).has('lobby');
+
 	const state = {
 		editingId: null,
 		selectedGameId: null,
@@ -2901,6 +2907,14 @@
 	}
 
 	function openLobby(gameId) {
+		if (isLobbyWindow()) {
+			// Dedicated lobby window (admin.html?lobby=GameId): show the
+			// .game-lobby panel as a full page with the admin chrome hidden.
+			state.selectedGameId = gameId;
+			document.documentElement.setAttribute('data-lobby-page', '');
+			renderLobby();
+			return;
+		}
 		const localGame = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
 		if (!localGame) {
 			showArenaMessage('Lobby could not open: this game is missing from the local library. Refresh the games and choose a current game.');
@@ -2963,7 +2977,8 @@
 			showToast('Lobby is now open (Local)', 'warning');
 		}
 		state.selectedGameId = gameId;
-		renderGameList();
+		// Render the lobby in place, to the right of the games list.
+		setGamesStudioTab('games-studio');
 		renderLobby();
 	}
 
@@ -3952,18 +3967,13 @@
 		`;
 	}
 
-	function renderLobby() {
-		const container = byId('gameLobby');
-		if (!container) return;
-		if (!state.selectedGameId) {
-			container.innerHTML =
-				'<div class="empty-state">Select a game to view the lobby.</div>';
-			return;
+function buildLobbyHtml(gameId) {
+		if (!gameId) {
+			return '<div class="empty-state">Select a game to view the lobby.</div>';
 		}
-		const game = GameCore.getGameById(state.selectedGameId);
+		const game = GameCore.getGameById(gameId);
 		if (!game) {
-			container.innerHTML = '<div class="empty-state">Game not found.</div>';
-			return;
+			return '<div class="empty-state">Game not found.</div>';
 		}
 		const session = GameCore.ensureGameSession(game);
 		ensureLobbyIdentity(game, session);
@@ -4005,7 +4015,7 @@
 				? escapeHtml(pendingStartError)
 				: 'Start the game for all participants';
 
-		container.innerHTML = `
+		return `
 			<div class="game-lobby-header">
 				<h4>${escapeHtml(game.name)} • ${escapeHtml(
 					session.lobbyLabel || 'Lobby #1',
@@ -4023,22 +4033,22 @@
 						? participants
 								.map(
 									(p) => `
-							<div class="lobby-row">
-								<div>
-									<div class="lobby-name">${escapeHtml(p.name)}</div>
-									<div class="lobby-subtitle">${
-										game.mode === 'team'
-											? escapeHtml(
-													p.teamId === 'team-b' ? teamNames.b : teamNames.a,
-												)
-											: 'Solo player'
-									}</div>
-								</div>
-								<span class="lobby-status ${
-									p.ready ? 'ready' : 'waiting'
-								}">${p.ready ? 'Ready' : 'Waiting'}</span>
+						<div class="lobby-row">
+							<div>
+								<div class="lobby-name">${escapeHtml(p.name)}</div>
+								<div class="lobby-subtitle">${
+									game.mode === 'team'
+										? escapeHtml(
+												p.teamId === 'team-b' ? teamNames.b : teamNames.a,
+											)
+										: 'Solo player'
+								}</div>
 							</div>
-						`,
+							<span class="lobby-status ${
+								p.ready ? 'ready' : 'waiting'
+							}">${p.ready ? 'Ready' : 'Waiting'}</span>
+						</div>
+					`,
 								)
 								.join('')
 						: '<div class="empty-state-small">No one has joined yet.</div>'
@@ -4088,21 +4098,211 @@
 								),
 							)
 							.slice(0, 6)
-							.map(
-								(entry) =>
-									`<div>${escapeHtml(entry.lobbyLabel || entry.lobbyId || 'Lobby')} • ${
-										entry.results?.winners?.[0]?.name
-											? `Winner: ${escapeHtml(entry.results.winners[0].name)}`
+							.map((entry) => {
+									const winnerName = entry.results?.winners?.[0]?.name;
+									return `<div><span>${escapeHtml(
+										entry.lobbyLabel || entry.lobbyId || 'Lobby',
+									)}</span><span class="lobby-result ${
+										winnerName ? 'has-winner' : 'no-winner'
+									}">${
+										winnerName
+											? `Winner: ${escapeHtml(winnerName)}`
 											: 'No winner'
-									}</div>`,
-							)
-							.join('')}
+									}</span></div>`;
+								})
+								.join('')}
 					</div>
 				</div>
 			`
 					: ''
 			}
 		`;
+	}
+
+	function renderLobby(container) {
+		const target = container || byId('gameLobby');
+		if (!target) return;
+		if (!state.selectedGameId) {
+			target.innerHTML =
+				'<div class="empty-state">Select a game to view the lobby.</div>';
+			return;
+		}
+		const html = buildLobbyHtml(state.selectedGameId);
+		target.innerHTML = html;
+		refreshLobbyDockPanes();
+		// Dedicated lobby page (?lobby=GameId): keep the full-page view in
+		// sync with every lobby render (socket updates, joins, starts...).
+		const page = byId('lobbyPage');
+		if (page && document.documentElement.hasAttribute('data-lobby-page')) {
+			page.innerHTML = '<div class="game-lobby" id="gameLobby">' + html + '</div>';
+		}
+	}
+
+	function renderLobbyInto(target, gameId) {
+		if (!target || !gameId) return;
+		target.innerHTML = buildLobbyHtml(gameId);
+	}
+
+	/* ── Lobby Dock: multiple open lobbies as tabs in one window that can be
+	      minimized/restored like a taskbar, so the rest of the app stays usable ── */
+	const lobbyDock = {
+		gameIds: [],
+		activeId: null,
+		minimized: false,
+	};
+
+	function dockGetPane(gameId) {
+		return byId('lobbyPane-' + String(gameId).replace(/[^a-zA-Z0-9_-]/g, ''));
+	}
+
+	function dockGameLabel(gameId) {
+		const game = GameCore.getGameById(gameId);
+		if (!game) return 'Lobby';
+		return String(game.name || 'Lobby').slice(0, 24);
+	}
+
+	function refreshLobbyDockPanes() {
+		if (lobbyDock.minimized || !lobbyDock.gameIds.length) return;
+		lobbyDock.gameIds.forEach((gameId) => {
+			const pane = dockGetPane(gameId);
+			if (pane) renderLobbyInto(pane, gameId);
+		});
+	}
+
+	function dockUpdateUi() {
+		const tabs = byId('lobbyDockTabs');
+		const panes = byId('lobbyDockPanes');
+		if (!tabs || !panes) return;
+		document.documentElement.classList.toggle(
+			'lobby-dock-open',
+			lobbyDock.gameIds.length > 0 && !lobbyDock.minimized,
+		);
+		document.documentElement.classList.toggle(
+			'lobby-dock-min',
+			lobbyDock.minimized && lobbyDock.gameIds.length > 0,
+		);
+		tabs.innerHTML = lobbyDock.gameIds
+			.map(
+				(gameId) =>
+					`<button type="button" class="lobby-dock-tab${
+						gameId === lobbyDock.activeId ? ' active' : ''
+					}" data-lobby-id="${escapeHtml(gameId)}" title="${escapeHtml(
+						dockGameLabel(gameId),
+					)}">${escapeHtml(
+						dockGameLabel(gameId),
+					)}<span class="lobby-dock-tab-close" data-lobby-close="${escapeHtml(
+						gameId,
+					)}" title="Close lobby">×</span></button>`,
+			)
+			.join('');
+		panes.innerHTML = lobbyDock.gameIds
+			.map(
+				(gameId) =>
+					`<div class="lobby-dock-pane${
+						gameId === lobbyDock.activeId ? ' active' : ''
+					}" id="lobbyPane-${String(gameId).replace(
+						/[^a-zA-Z0-9_-]/g,
+						'',
+					)}"></div>`,
+			)
+			.join('');
+		const tokens = byId('lobbyTaskbarTokens');
+		if (tokens) {
+			tokens.innerHTML = lobbyDock.gameIds
+				.map(
+					(gameId) =>
+						`<button type="button" class="lobby-taskbar-token${
+							gameId === lobbyDock.activeId ? ' active' : ''
+						}" data-lobby-restore="${escapeHtml(gameId)}">${escapeHtml(
+							dockGameLabel(gameId),
+						)}</button>`,
+				)
+				.join('');
+		}
+		const count = byId('lobbyTaskbarCount');
+		if (count) count.textContent = lobbyDock.gameIds.length || '';
+		refreshLobbyDockPanes();
+	}
+
+	function openLobbyDock(gameId) {
+		if (!gameId) return;
+		if (lobbyDock.gameIds.indexOf(gameId) !== -1) {
+			activateLobbyDock(gameId);
+			return;
+		}
+		lobbyDock.gameIds.push(gameId);
+		lobbyDock.activeId = gameId;
+		lobbyDock.minimized = false;
+		document.documentElement.classList.remove('lobby-dock-min');
+		dockUpdateUi();
+	}
+
+	function activateLobbyDock(gameId) {
+		if (lobbyDock.gameIds.indexOf(gameId) === -1) return;
+		lobbyDock.activeId = gameId;
+		lobbyDock.minimized = false;
+		document.documentElement.classList.remove('lobby-dock-min');
+		dockUpdateUi();
+	}
+
+	function closeLobbyDock(gameId) {
+		const index = lobbyDock.gameIds.indexOf(gameId);
+		if (index === -1) return;
+		lobbyDock.gameIds.splice(index, 1);
+		if (lobbyDock.activeId === gameId) {
+			lobbyDock.activeId = lobbyDock.gameIds[0] || null;
+		}
+		dockUpdateUi();
+	}
+
+	function minimizeLobbyDock() {
+		if (!lobbyDock.gameIds.length) return;
+		lobbyDock.minimized = true;
+		document.documentElement.classList.remove('lobby-dock-open');
+		document.documentElement.classList.add('lobby-dock-min');
+		dockUpdateUi();
+	}
+
+	function restoreLobbyDock() {
+		lobbyDock.minimized = false;
+		document.documentElement.classList.remove('lobby-dock-min');
+		dockUpdateUi();
+	}
+
+	function bindLobbyDock() {
+		const tabs = byId('lobbyDock');
+		if (tabs && tabs.dataset.bound !== 'true') {
+			tabs.dataset.bound = 'true';
+			tabs.addEventListener('click', (event) => {
+				const tab = event.target.closest('[data-lobby-id]');
+				if (tab) {
+					activateLobbyDock(String(tab.getAttribute('data-lobby-id')));
+					return;
+				}
+				const close = event.target.closest('[data-lobby-close]');
+				if (close) {
+					event.stopPropagation();
+					closeLobbyDock(String(close.getAttribute('data-lobby-close')));
+				}
+			});
+			const minBtn = byId('lobbyDockMinBtn');
+			if (minBtn) minBtn.addEventListener('click', minimizeLobbyDock);
+		}
+		const taskbar = byId('lobbyTaskbar');
+		if (taskbar && taskbar.dataset.bound !== 'true') {
+			taskbar.dataset.bound = 'true';
+			taskbar.addEventListener('click', (event) => {
+				const token = event.target.closest('[data-lobby-restore]');
+				if (token) {
+					activateLobbyDock(
+						String(token.getAttribute('data-lobby-restore')),
+					);
+					return;
+				}
+				const restoreAll = event.target.closest('[data-lobby-restore-all]');
+				if (restoreAll) restoreLobbyDock();
+			});
+		}
 	}
 
 	function getAdminWatchGame(gameId) {
@@ -5775,6 +5975,12 @@
 	window.deleteGame = deleteGame;
 	window.deleteAllGames = deleteAllGames;
 	window.openGameLobby = openLobby;
+	window.openLobbyDock = openLobbyDock;
+	window.minimizeLobbyDock = minimizeLobbyDock;
+	window.restoreLobbyDock = restoreLobbyDock;
+	window.closeLobbyDock = closeLobbyDock;
+	window.renderLobbyInto = renderLobbyInto;
+	window.bindLobbyDock = bindLobbyDock;
 	window.startGameSession = startGame;
 	window.endGameSession = endGame;
 	window.resetGameSession = resetSession;
@@ -11275,6 +11481,37 @@
 
 	document.addEventListener('DOMContentLoaded', () => {
 		setTimeout(loadGamificationUI, 500); // Allow DOM elements to settle
+		bindLobbyDock();
+
+		// Dedicated lobby window (admin.html?lobby=GameId): auto-open that
+		// lobby's dock. Retry until the game exists in the local library —
+		// a brand-new window may still be waiting on its server snapshot.
+		const lobbyParam = new URLSearchParams(window.location.search).get(
+			'lobby',
+		);
+		if (lobbyParam) {
+			let opened = false;
+			let attempts = 0;
+			const tryOpenLobby = () => {
+				if (opened) return;
+				if (GameCore.getGameById && GameCore.getGameById(lobbyParam)) {
+					opened = true;
+					try {
+						openLobby(String(lobbyParam));
+					} catch (_) {
+						/* ignore single-frame render errors */
+					}
+					return;
+				}
+				attempts += 1;
+				if (attempts >= 16) return; // give up silently after ~8s
+				setTimeout(tryOpenLobby, 500);
+			};
+			window.addEventListener('quiz:bootstrap-ready', tryOpenLobby, {
+				once: true,
+			});
+			setTimeout(tryOpenLobby, 400);
+		}
 
 		// Persist a legacy live tournament that predates the DB bridge so
 		// students registering through the REST endpoint find a real row. No

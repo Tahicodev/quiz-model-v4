@@ -771,11 +771,52 @@ html[data-theme='dark'] #classModal.is-open .close:hover {
 
 html[data-theme='dark'] .upload-zone {
 	border-color: var(--border-color) !important;
+	background: var(--bg-surface-alt) !important;
 }
 
 html[data-theme='dark'] .upload-zone.drag-over {
 	border-color: #a78bfa !important;
 	background: rgba(139, 92, 246, 0.18) !important;
+}
+
+/* Question list: mobile rows collapse into white cards (styles.css) —
+   force the dark surface so each row matches the theme. */
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='dark'] #question-list-table tbody tr.question-table-row > td {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #question-list-table .question-meta,
+html[data-theme='dark'] #question-list-table .row-details {
+	color: var(--text-secondary) !important;
+}
+
+/* Lobby history (Previous Lobbies) dark styling. */
+html[data-theme='dark'] .game-result-summary {
+	border-top-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .game-result-summary h5 {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .game-result-summary .result-meta > div {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .game-result-summary .lobby-result.has-winner {
+	color: #86efac !important;
+}
+
+html[data-theme='dark'] .game-result-summary .lobby-result.no-winner {
+	color: #fca5a5 !important;
 }
 
 html[data-theme='dark'] .strategy-card {
@@ -1373,4 +1414,138 @@ html[data-theme='dark'] #aiGeneratorModal [style*='background: #f8fafc'],
 html[data-theme='dark'] #aiGeneratorModal [style*='background: #f1f5f9'],
 html[data-theme='dark'] #aiGeneratorModal [style*='background: rgba(255, 255, 255, 0.7)'] {
 	background-color: var(--bg-surface-alt) !important;
+}
+
+/* ── Lobby Dock window + taskbar (dark) ── */
+html[data-theme='dark'] .lobby-dock {
+	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	box-shadow: 0 18px 44px rgba(2, 6, 23, 0.55) !important;
+}
+
+html[data-theme='dark'] .lobby-dock__bar {
+	background-color: var(--bg-surface-alt) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .lobby-dock__title {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .lobby-dock-tab {
+	background-color: var(--bg-body) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .lobby-dock-tab.active {
+	background-color: rgba(99, 102, 241, 0.18) !important;
+	border-color: #6366f1 !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .lobby-dock__btn {
+	border-color: var(--border-color) !important;
+	background-color: transparent !important;
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .lobby-dock__btn:hover {
+	background-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+html[data-theme='dark'] .lobby-dock-pane {
+	background-color: var(--bg-body) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .lobby-dock-pane .game-lobby-share-code {
+	background: var(--bg-surface-alt) !important;
+	border: 1px solid #2563eb !important;
+}
+
+html[data-theme='dark'] .lobby-dock-pane .game-lobby-share-code strong {
+	color: var(--text-primary) !important;
+}
+
+html[data-theme='dark'] .lobby-dock-pane .game-start-error-banner {
+	background: rgba(220, 38, 38, 0.16) !important;
+	border: 1px solid rgba(248, 113, 113, 0.5) !important;
+	color: #fca5a5 !important;
+}
+
+html[data-theme='dark'] .lobby-taskbar {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .lobby-taskbar__label {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .lobby-taskbar-token {
+	background-color: var(--bg-body) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .lobby-taskbar-token.active {
+	background-color: rgba(99, 102, 241, 0.18) !important;
+	border-color: #6366f1 !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .lobby-taskbar__btn {
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .lobby-taskbar__btn:hover {
+	background-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+/* ── Dedicated lobby page (admin.html?lobby=GameId) ── */
+html[data-theme='dark'][data-lobby-page] .game-lobby {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .game-lobby-share-code {
+	background: rgb(31, 57, 91) !important;
+	border: 1px solid rgb(60, 154, 142) !important;
+	border-color: rgb(32, 90, 182) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .game-lobby-share-code strong {
+	color: rgb(142, 167, 235) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .game-start-error-banner {
+	background: rgb(91, 31, 31) !important;
+	border: 1px solid rgb(182, 32, 32) !important;
+	color: rgb(233, 165, 171) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .lobby-row {
+	background: #0b1220 !important;
+	border: 1px solid var(--border-color) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .game-lobby-header h4,
+html[data-theme='dark'][data-lobby-page] .game-lobby-meta {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .game-lobby .empty-state,
+html[data-theme='dark'][data-lobby-page] .game-lobby .empty-state-small {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .lobby-name {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'][data-lobby-page] .lobby-subtitle {
+	color: var(--text-secondary) !important;
 }
