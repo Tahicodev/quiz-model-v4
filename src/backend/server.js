@@ -17,6 +17,10 @@ app.use(
 	helmet({
 		contentSecurityPolicy: {
 			directives: {
+				// Disable helmet's default `upgrade-insecure-requests`: it forces
+				// every http:// subresource to https:// on non-`localhost` origins,
+				// which breaks the app when served over plain-HTTP on a LAN IP.
+				upgradeInsecureRequests: null,
 				defaultSrc: ["'self'"],
 				scriptSrc: [
 					"'self'",
