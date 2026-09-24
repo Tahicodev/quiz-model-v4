@@ -1149,6 +1149,7 @@
 				presetOverrides = {
 					timeLimit: preset.timeLimit,
 					penalty: preset.penalty,
+					totalQuestions: preset.totalQuestions,
 					welcomeTitle: preset.welcomeTitle || '',
 					welcomeMessage: preset.welcomeMessage || '',
 					primaryColor: preset.primaryColor,
@@ -2036,4 +2037,73 @@
 		div.textContent = text;
 		return div.innerHTML;
 	}
+
+	/**
+	 * Push uncategorized training questions to all connected devices. Student
+	 * workspace does not depend on admin settings, so only the question bank
+	 * is pushed here. Used by the periodic Auto-Sync loop.
+	 */
+	window.pushUncategorizedQuestions = function (opts = {}) {
+		if (!realtimeSocket || !realtimeSocket.connected) {
+			if (!opts.quiet) {
+				showRealtimeStatus('Not connected to realtime server', 'error');
+			}
+			return false;
+		}
+
+		let allQuestions = [];
+		try {
+			allQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
+			if (!Array.isArray(allQuestions)) allQuestions = [];
+		} catch (e) {
+			allQuestions = [];
+		}
+
+		const trainingQuestions = allQuestions.filter(
+			(q) =>
+				!q.category || q.category === '' || q.category === 'uncategorized',
+		);
+
+		realtimeSocket.emit('admin:pushSettings', {
+			quizQuestions: trainingQuestions,
+		});
+
+		const message = `Auto-synced ${trainingQuestions.length} uncategorized questions to devices`;
+
+		if (!opts.quiet) {
+			showRealtimeStatus(message, 'success');
+		} else {
+			console.log('[auto-sync]', message);
+		}
+		return true;
+	};
+
+	/**
+	 * Periodic auto-sync loop. Reads the latest quizSettings on every tick so
+	 * toggling realtimeEnabled / autoSyncQuestions / realtimeSyncInterval takes
+	 * effect immediately with no restart.
+	 */
+	let _autoSyncTicker = null;
+	let _lastAutoSyncRunAt = 0;
+
+	window.startRealtimeSyncLoop = function () {
+		if (_autoSyncTicker) return;
+		_autoSyncTicker = setInterval(() => {
+			const raw = JSON.parse(localStorage.getItem('quizSettings') || '{}');
+			const enabled = raw.realtimeEnabled !== false;
+			const autoSyncQuestions = raw.autoSyncQuestions !== false;
+			const intervalSec = Math.max(1, parseInt(raw.realtimeSyncInterval) || 5);
+			if (!enabled || !autoSyncQuestions) {
+				_lastAutoSyncRunAt = 0;
+				return;
+			}
+			if (!realtimeSocket || !realtimeSocket.connected) return;
+			const now = Date.now();
+			if (now - _lastAutoSyncRunAt < intervalSec * 1000) return;
+			_lastAutoSyncRunAt = now;
+			window.pushUncategorizedQuestions({ quiet: true });
+		}, 1000);
+	};
+
+	window.startRealtimeSyncLoop();
 })();

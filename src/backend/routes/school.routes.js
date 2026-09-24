@@ -73,10 +73,11 @@ router.put(
   async (req, res, next) => {
     try {
       const { repo, auditSvc } = getContainer();
-      const { name, school_type, address, city, phone, email, logo_url } = req.body;
+      const { name, school_type, school_year, address, city, phone, email, logo_url } = req.body;
       const updated = await repo.update('schools', req.schoolId, {
         name,
         school_type,
+        school_year,
         address,
         city,
         phone,

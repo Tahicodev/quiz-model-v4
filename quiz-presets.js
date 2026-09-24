@@ -10,6 +10,93 @@
 	});
 
 	/**
+	 * Ensure the preset form lives inside the preset modal body. The form is
+	 * authored hidden inside the Presets tab and is reparented on first open.
+	 */
+	function mountPresetForm() {
+		const modalBody = document.getElementById('quizPresetModalBody');
+		const form = document.getElementById('quizPresetFormContainer');
+		if (modalBody && form && form.parentNode !== modalBody) {
+			modalBody.appendChild(form);
+		}
+	}
+
+	function syncPresetModalTitle() {
+		const modalTitle = document.getElementById('quizPresetModalTitle');
+		const formTitle = document.getElementById('presetFormTitle');
+		if (modalTitle && formTitle) modalTitle.textContent = formTitle.textContent;
+	}
+
+	/**
+	 * Show the quiz preset modal (form must already be populated).
+	 */
+	function showPresetModal() {
+		mountPresetForm();
+		syncPresetModalTitle();
+		const form = document.getElementById('quizPresetFormContainer');
+		if (form) form.style.display = 'block';
+		const modal = document.getElementById('quizPresetModal');
+		if (!modal) return;
+		// The modal markup is authored inside a hidden ancestor (#aiGeneratorModal
+		// is display:none until opened), so pull it up to <body> first or it can
+		// never render. Same pattern as openResetDataModal/openQuickStart.
+		if (modal.parentElement && modal.parentElement !== document.body) {
+			document.body.appendChild(modal);
+		}
+		modal.style.display = 'flex';
+		setTimeout(() => modal.classList.add('active'), 10);
+	}
+
+	/**
+	 * Open the modal in "create" state (fresh form).
+	 */
+	function openPresetModal() {
+		resetPresetForm();
+		document.getElementById('presetFormTitle').textContent =
+			'Create New Preset';
+		showPresetModal();
+	}
+
+	/**
+	 * Close the quiz preset modal.
+	 */
+	function closePresetModal() {
+		const form = document.getElementById('quizPresetFormContainer');
+		if (form) form.style.display = 'none';
+		const modal = document.getElementById('quizPresetModal');
+		if (!modal) return;
+		modal.style.display = 'none';
+		modal.classList.remove('active');
+	}
+
+	/**
+	 * Reset the preset form to its defaults.
+	 */
+	function resetPresetForm() {
+		document.getElementById('editingPresetId').value = '';
+		document.getElementById('preset-name').value = '';
+		document.getElementById('preset-totalQuestions').value = 5;
+		document.getElementById('preset-timeLimit').value = 300;
+		document.getElementById('preset-penalty').value = 0;
+		document.getElementById('preset-shuffleQuestions').checked = true;
+		document.getElementById('preset-showExplanations').checked = false;
+		document.getElementById('preset-primaryColor').value = '#2563eb';
+		document.getElementById('preset-primaryColor-text').value = '#2563eb';
+		document.getElementById('preset-secondaryColor').value = '#1e40af';
+		document.getElementById('preset-secondaryColor-text').value = '#1e40af';
+		document.getElementById('preset-backgroundColor').value = '#f8fafc';
+		document.getElementById('preset-backgroundColor-text').value = '#f8fafc';
+		document.getElementById('preset-textColor').value = '#1e293b';
+		document.getElementById('preset-textColor-text').value = '#1e293b';
+		document.getElementById('preset-inputFocusColor').value = '#3b82f6';
+		document.getElementById('preset-inputFocusColor-text').value = '#3b82f6';
+		document.getElementById('preset-fontFamily').value = "'Segoe UI', system-ui";
+		document.getElementById('preset-passingScore').value = 50;
+		document.getElementById('preset-welcomeTitle').value = '';
+		document.getElementById('preset-welcomeMessage').value = '';
+	}
+
+	/**
 	 * Load all presets from localStorage
 	 * @returns {Array} Array of preset objects
 	 */
@@ -21,6 +108,7 @@
 				const defaultPreset = {
 					id: 'preset-default-demo',
 					name: 'Standard Quick Quiz',
+					totalQuestions: 5,
 					timeLimit: 300,
 					penalty: 0,
 					shuffleQuestions: true,
@@ -82,7 +170,7 @@
 				align-items: center;
 				padding: 12px 16px;
 				border-bottom: 1px solid #e2e8f0;
-				background: white;
+				background: #fff;
 			">
 				<div style="display: flex; align-items: center; gap: 12px;">
 					<div style="
@@ -92,9 +180,9 @@
 						background: ${preset.primaryColor || '#2563eb'};
 					"></div>
 					<div>
-						<div style="font-weight: 600; color: #1e293b;">${escapeHtml(preset.name)}</div>
-						<div style="font-size: 12px; color: #64748b;">
-							${formatTime(preset.timeLimit)} • ${preset.penalty || 0}pts penalty • ${preset.passingScore || 50}% to pass
+						<div class="preset-name" style="font-weight: 600; color: #1e293b;">${escapeHtml(preset.name)}</div>
+						<div class="preset-meta" style="font-size: 12px; color: #64748b;">
+							${formatTime(preset.timeLimit)} • ${preset.penalty || 0}pts penalty • ${preset.passingScore || 50}% to pass • ${preset.totalQuestions || 5} questions
 						</div>
 					</div>
 				</div>
@@ -134,6 +222,7 @@
 	function savePreset() {
 		const editingId = document.getElementById('editingPresetId')?.value;
 		const name = document.getElementById('preset-name')?.value?.trim();
+		const totalQuestions = parseInt(document.getElementById('preset-totalQuestions')?.value) || 5;
 		const timeLimit = parseInt(document.getElementById('preset-timeLimit')?.value) || 300;
 		const penalty = parseInt(document.getElementById('preset-penalty')?.value) || 0;
 		const shuffleQuestions = document.getElementById('preset-shuffleQuestions')?.checked ?? true;
@@ -158,6 +247,7 @@
 		const presetData = {
 			id: editingId || generatePresetId(),
 			name,
+			totalQuestions,
 			timeLimit,
 			penalty,
 			shuffleQuestions,
@@ -197,8 +287,6 @@
 		if (window.refreshTrainingPresetDropdown) window.refreshTrainingPresetDropdown();
 
 		// Scroll to the saved preset
-
-		// Scroll to the saved preset
 		setTimeout(() => {
 			const presetElement = document.querySelector(`.preset-item[data-preset-id="${presetData.id}"]`);
 			if (presetElement) {
@@ -207,7 +295,7 @@
 				presetElement.style.transition = 'background-color 0.5s ease';
 				presetElement.style.backgroundColor = '#ecfccb'; // Light green highlight
 				setTimeout(() => {
-					presetElement.style.backgroundColor = 'white';
+					presetElement.style.backgroundColor = '#fff';
 				}, 2000);
 			}
 		}, 100);
@@ -228,6 +316,7 @@
 		document.getElementById('editingPresetId').value = preset.id;
 		document.getElementById('presetFormTitle').textContent = 'Edit Preset';
 		document.getElementById('preset-name').value = preset.name;
+		document.getElementById('preset-totalQuestions').value = preset.totalQuestions || 5;
 		document.getElementById('preset-timeLimit').value = preset.timeLimit || 300;
 		document.getElementById('preset-penalty').value = preset.penalty || 0;
 		document.getElementById('preset-shuffleQuestions').checked = preset.shuffleQuestions ?? true;
@@ -249,8 +338,8 @@
 		document.getElementById('preset-welcomeTitle').value = preset.welcomeTitle || '';
 		document.getElementById('preset-welcomeMessage').value = preset.welcomeMessage || '';
 
-		// Scroll to form for better UX
-		document.querySelector('.preset-form-container')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		// Open the form in a modal for editing
+		showPresetModal();
 	}
 
 	/**
@@ -270,30 +359,12 @@
 	}
 
 	/**
-	 * Cancel editing and reset form
+	 * Cancel editing: reset the form and close the modal.
 	 */
 	function cancelPresetEdit() {
-		document.getElementById('editingPresetId').value = '';
 		document.getElementById('presetFormTitle').textContent = 'Create New Preset';
-		document.getElementById('preset-name').value = '';
-		document.getElementById('preset-timeLimit').value = 300;
-		document.getElementById('preset-penalty').value = 0;
-		document.getElementById('preset-shuffleQuestions').checked = true;
-		document.getElementById('preset-showExplanations').checked = false;
-		document.getElementById('preset-primaryColor').value = '#2563eb';
-		document.getElementById('preset-primaryColor-text').value = '#2563eb';
-		document.getElementById('preset-secondaryColor').value = '#1e40af';
-		document.getElementById('preset-secondaryColor-text').value = '#1e40af';
-		document.getElementById('preset-backgroundColor').value = '#f8fafc';
-		document.getElementById('preset-backgroundColor-text').value = '#f8fafc';
-		document.getElementById('preset-textColor').value = '#1e293b';
-		document.getElementById('preset-textColor-text').value = '#1e293b';
-		document.getElementById('preset-inputFocusColor').value = '#3b82f6';
-		document.getElementById('preset-inputFocusColor-text').value = '#3b82f6';
-		document.getElementById('preset-fontFamily').value = "'Segoe UI', system-ui";
-		document.getElementById('preset-passingScore').value = 50;
-		document.getElementById('preset-welcomeTitle').value = '';
-		document.getElementById('preset-welcomeMessage').value = '';
+		resetPresetForm();
+		closePresetModal();
 	}
 
 	/**
@@ -332,4 +403,6 @@
 	window.getPresetById = getPresetById;
 	window.getAllPresets = getAllPresets;
 	window.loadPresetsList = loadPresetsList;
+	window.openPresetModal = openPresetModal;
+	window.closePresetModal = closePresetModal;
 })();

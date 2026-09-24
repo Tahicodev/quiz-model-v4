@@ -27,10 +27,12 @@ model School {
   phone        String?
   email        String?
   logo_url     String? // base64 data-URL school logo
+  school_year  String? // e.g. "2025-2026" — set in the school info panel
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
   users              User[]
+  archives           SchoolArchive[]
   classes            Class[]
   categories         Category[]
   questions          Question[]
@@ -52,6 +54,28 @@ model School {
   teacherMessages    TeacherMessage[]
   teacherAssignments TeacherAssignment[]
   aiConfigs          AIConfig[]
+}
+
+// ─── School Year Archives ────────────────────────────────────────────────────
+// End-of-year snapshots: a copy of the school's full dataset grouped under a
+// school-year label (e.g. "2025-2026"). One row per school+year — archiving
+// again overwrites the folder for that year. data_json holds the snapshot
+// payload, stats_json a per-store summary for cheap list/preview rendering.
+model SchoolArchive {
+  id         String   @id @default(uuid())
+  school_id  String
+  year       String // e.g. "2025-2026"
+  label      String?
+  data_json  String // full year snapshot payload (JSON)
+  stats_json String? // per-store counts summary (JSON)
+  size_bytes Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
+
+  @@unique([school_id, year])
+  @@index([school_id])
 }
 
 // ─── Users & Auth ────────────────────────────────────────────────────────────

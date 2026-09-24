@@ -19,8 +19,9 @@ const DEFAULT_SETTINGS = {
 	realtimeEnabled: false,
 	autoSync: true,
 	broadcastUpdates: true,
+	autoSyncQuestions: true,
 	realtimeSyncInterval: 5,
-	// Training mode settings
+	// Training mode setting
 	trainingPresetId: '',
 	// Teacher access controls
 	teacherAccess: {
@@ -149,49 +150,39 @@ function openSettingsModal() {
 			: localStorage.getItem('settingsSidebarCollapsed') === 'true',
 	);
 
-	// Populate fields
-	document.getElementById('setting-totalQuestions').value =
-		currentSettings.totalQuestions;
-	document.getElementById('setting-timeLimit').value =
-		currentSettings.timeLimit;
-	document.getElementById('setting-penalty').value = currentSettings.penalty;
+	// Populate fields (each global quiz/theme control now lives inside the
+	// quiz preset form — the global inputs no longer exist in General, so
+	// every read below is null-guarded and falls back to currentSettings).
+	const setInput = (id, value) => {
+		const el = document.getElementById(id);
+		if (el) el.value = value;
+	};
 
-	document.getElementById('setting-primaryColor').value =
-		currentSettings.primaryColor;
-	document.getElementById('setting-primaryColor-text').value =
-		currentSettings.primaryColor;
+	const totalQuestionsEl = document.getElementById('setting-totalQuestions');
+	if (totalQuestionsEl) totalQuestionsEl.value = currentSettings.totalQuestions;
+	setInput('setting-timeLimit', currentSettings.timeLimit);
+	setInput('setting-penalty', currentSettings.penalty);
 
-	document.getElementById('setting-secondaryColor').value =
-		currentSettings.secondaryColor;
-	document.getElementById('setting-secondaryColor-text').value =
-		currentSettings.secondaryColor;
+	setInput('setting-primaryColor', currentSettings.primaryColor);
+	setInput('setting-primaryColor-text', currentSettings.primaryColor);
+	setInput('setting-secondaryColor', currentSettings.secondaryColor);
+	setInput('setting-secondaryColor-text', currentSettings.secondaryColor);
+	setInput('setting-backgroundColor', currentSettings.backgroundColor);
+	setInput('setting-backgroundColor-text', currentSettings.backgroundColor);
+	setInput('setting-textColor', currentSettings.textColor);
+	setInput('setting-textColor-text', currentSettings.textColor);
+	setInput('setting-inputFocusColor', currentSettings.inputFocusColor);
+	setInput('setting-inputFocusColor-text', currentSettings.inputFocusColor);
+	setInput('setting-fontFamily', currentSettings.fontFamily);
+	setInput('setting-welcomeTitle', currentSettings.welcomeTitle);
+	setInput('setting-welcomeMessage', currentSettings.welcomeMessage);
 
-	document.getElementById('setting-backgroundColor').value =
-		currentSettings.backgroundColor;
-	document.getElementById('setting-backgroundColor-text').value =
-		currentSettings.backgroundColor;
-
-	document.getElementById('setting-textColor').value =
-		currentSettings.textColor;
-	document.getElementById('setting-textColor-text').value =
-		currentSettings.textColor;
-
-	document.getElementById('setting-inputFocusColor').value =
-		currentSettings.inputFocusColor;
-	document.getElementById('setting-inputFocusColor-text').value =
-		currentSettings.inputFocusColor;
-
-	document.getElementById('setting-fontFamily').value =
-		currentSettings.fontFamily;
-
-	document.getElementById('setting-welcomeTitle').value =
-		currentSettings.welcomeTitle;
-	document.getElementById('setting-welcomeMessage').value =
-		currentSettings.welcomeMessage;
-
-	// Populate training preset dropdown
+	// Populate training preset dropdown (Presets tab)
 	if (typeof window.refreshTrainingPresetDropdown === 'function') {
 		window.refreshTrainingPresetDropdown();
+	}
+	if (typeof window.loadSchoolInfoForm === 'function') {
+		window.loadSchoolInfoForm();
 	}
 
 	// Populate realtime settings
@@ -215,6 +206,12 @@ function openSettingsModal() {
 	);
 	if (broadcastUpdatesInput)
 		broadcastUpdatesInput.checked = currentSettings.broadcastUpdates !== false;
+
+	const autoSyncQuestionsInput = document.getElementById(
+		'setting-autoSyncQuestions',
+	);
+	if (autoSyncQuestionsInput)
+		autoSyncQuestionsInput.checked = currentSettings.autoSyncQuestions !== false;
 
 	const syncIntervalInput = document.getElementById(
 		'setting-realtimeSyncInterval',
@@ -591,8 +588,9 @@ function switchSettingsTab(event, tabName) {
 	const target = document.getElementById(`${tabName}-settings`);
 	if (target) {
 		target.classList.remove('hidden');
-		// Dynamically refresh preset dropdown when entering General tab
-		if (tabName === 'general' && window.refreshTrainingPresetDropdown) {
+		// Dynamically refresh the training preset dropdown when entering
+		// the Presets tab (the Training Mode group now lives there).
+		if (tabName === 'presets' && window.refreshTrainingPresetDropdown) {
 			window.refreshTrainingPresetDropdown();
 		}
 		if (tabName === 'presets' && window.refreshGamePresetSettings) {
@@ -620,6 +618,10 @@ function switchSettingsTab(event, tabName) {
 		// whenever the AI Generation tab is opened.
 		if (tabName === 'ai-generation' && window.refreshAIConfigLists) {
 			window.refreshAIConfigLists();
+		}
+		// Refresh school-year archives when the Data tab opens.
+		if (tabName === 'data' && window.archivesRefresh) {
+			window.archivesRefresh();
 		}
 	}
 
@@ -779,25 +781,71 @@ async function saveSettingsForm(options = {}) {
 			recoveryCodeHash = await window.Auth.hashText(recoveryCode);
 		}
 	}
-	// Gather values
+	// Gather values — global quiz/theme/welcome fields were removed from the
+	// General tab (they now live inside quiz presets), so every read is
+	// null-guarded and preserves the last value when the control is gone.
+	const readInput = (id, fallback) => {
+		const el = document.getElementById(id);
+		return el ? el.value : fallback;
+	};
+	const readInt = (id, fallback, min) => {
+		const el = document.getElementById(id);
+		const parsed = el ? parseInt(el.value, 10) : NaN;
+		return Number.isFinite(parsed) && (min === undefined || parsed >= min)
+			? parsed
+			: fallback;
+	};
+	const readChecked = (id, fallback) => {
+		const el = document.getElementById(id);
+		return el ? el.checked : fallback;
+	};
+
 	const newSettings = {
-		totalQuestions:
-			parseInt(document.getElementById('setting-totalQuestions').value) ||
-			DEFAULT_SETTINGS.totalQuestions,
-		timeLimit:
-			parseInt(document.getElementById('setting-timeLimit').value) ||
-			DEFAULT_SETTINGS.timeLimit,
-		penalty: parseInt(document.getElementById('setting-penalty').value) || 0,
+		totalQuestions: readInt(
+			'setting-totalQuestions',
+			currentSettings.totalQuestions || DEFAULT_SETTINGS.totalQuestions,
+			1,
+		),
+		timeLimit: readInt(
+			'setting-timeLimit',
+			currentSettings.timeLimit || DEFAULT_SETTINGS.timeLimit,
+			10,
+		),
+		penalty: readInt('setting-penalty', currentSettings.penalty || 0, 0),
 
-		primaryColor: document.getElementById('setting-primaryColor').value,
-		secondaryColor: document.getElementById('setting-secondaryColor').value,
-		backgroundColor: document.getElementById('setting-backgroundColor').value,
-		textColor: document.getElementById('setting-textColor').value,
-		inputFocusColor: document.getElementById('setting-inputFocusColor').value,
-		fontFamily: document.getElementById('setting-fontFamily').value,
+		primaryColor: readInput(
+			'setting-primaryColor',
+			currentSettings.primaryColor || DEFAULT_SETTINGS.primaryColor,
+		),
+		secondaryColor: readInput(
+			'setting-secondaryColor',
+			currentSettings.secondaryColor || DEFAULT_SETTINGS.secondaryColor,
+		),
+		backgroundColor: readInput(
+			'setting-backgroundColor',
+			currentSettings.backgroundColor || DEFAULT_SETTINGS.backgroundColor,
+		),
+		textColor: readInput(
+			'setting-textColor',
+			currentSettings.textColor || DEFAULT_SETTINGS.textColor,
+		),
+		inputFocusColor: readInput(
+			'setting-inputFocusColor',
+			currentSettings.inputFocusColor || DEFAULT_SETTINGS.inputFocusColor,
+		),
+		fontFamily: readInput(
+			'setting-fontFamily',
+			currentSettings.fontFamily || DEFAULT_SETTINGS.fontFamily,
+		),
 
-		welcomeTitle: document.getElementById('setting-welcomeTitle').value,
-		welcomeMessage: document.getElementById('setting-welcomeMessage').value,
+		welcomeTitle: readInput(
+			'setting-welcomeTitle',
+			currentSettings.welcomeTitle || DEFAULT_SETTINGS.welcomeTitle,
+		),
+		welcomeMessage: readInput(
+			'setting-welcomeMessage',
+			currentSettings.welcomeMessage || DEFAULT_SETTINGS.welcomeMessage,
+		),
 
 		trainingPresetId: document.getElementById('setting-trainingPreset')
 			? document.getElementById('setting-trainingPreset').value
@@ -820,6 +868,11 @@ async function saveSettingsForm(options = {}) {
 			? document.getElementById('setting-broadcastUpdates').checked
 			: currentSettings.broadcastUpdates !== undefined
 				? currentSettings.broadcastUpdates
+				: true,
+		autoSyncQuestions: document.getElementById('setting-autoSyncQuestions')
+			? document.getElementById('setting-autoSyncQuestions').checked
+			: currentSettings.autoSyncQuestions !== undefined
+				? currentSettings.autoSyncQuestions
 				: true,
 		realtimeSyncInterval: document.getElementById(
 			'setting-realtimeSyncInterval',
@@ -892,6 +945,27 @@ window.closeSettingsModal = closeSettingsModal;
 window.toggleSettingsSidebar = toggleSettingsSidebar;
 window.saveSettingsForm = saveSettingsForm;
 window.switchSettingsTab = switchSettingsTab;
+
+/**
+ * The single "Save Settings" button at the top of the modal. Saves every
+ * tab in one go: the school information panel (server-side) first, then the
+ * general/realtime/presets settings (which closes the modal when done).
+ */
+async function saveAllSettings() {
+	const schoolName = (
+		document.getElementById('setting-schoolName')?.value || ''
+	).trim();
+	if (schoolName && typeof saveSchoolInfoForm === 'function') {
+		try {
+			await saveSchoolInfoForm();
+		} catch (err) {
+			console.warn('[settings] school info save failed:', err);
+		}
+	}
+	await saveSettingsForm({ closeModal: true, notify: true });
+}
+
+window.saveAllSettings = saveAllSettings;
 window.switchUsersSettingsTab = switchUsersSettingsTab;
 window.switchPresetSettingsTab = switchPresetSettingsTab;
 window.resetSettings = resetSettings;
@@ -1027,6 +1101,16 @@ const BACKUP_STORE_LABELS = {
 };
 
 const BACKUP_STORE_KEYS = Object.keys(BACKUP_STORE_LABELS);
+
+// Collect every configured store through the repo shim (`__get`). Single entry
+// point shared by export, backup-picker, and school-year archive flows.
+function collectAllStores() {
+	const collected = {};
+	BACKUP_STORE_KEYS.forEach(function (key) {
+		collected[key] = __get(key);
+	});
+	return collected;
+}
 
 // Keep the picker state in one place so export and import can share the same UI.
 const pendingBackupPicker = {
@@ -1885,6 +1969,97 @@ function refreshTrainingPresetDropdown() {
 }
 
 window.refreshTrainingPresetDropdown = refreshTrainingPresetDropdown;
+
+// ─── School Information (General tab) ─────────────────────────────────────────
+// The General tab is now the School Information panel only. Fields are stored
+// on the server via /school/profile (same endpoint the Quick Start wizard
+// uses). We re-fetch on modal open so the form always shows server truth.
+
+let schoolInfoLoadPromise = null;
+
+function loadSchoolInfoForm() {
+	if (!(window.API && window.API.raw)) return;
+	if (!schoolInfoLoadPromise) {
+		schoolInfoLoadPromise = window.API
+			.raw('GET', '/school/profile/full')
+			.then((profile) => {
+				schoolInfoLoadPromise = null;
+				if (!profile) return;
+				const set = (id, value) => {
+					const el = document.getElementById(id);
+					if (el) el.value = value || '';
+				};
+				set('setting-schoolName', profile.name);
+				set('setting-schoolYear', profile.school_year);
+				set('setting-schoolType', profile.school_type || 'primaire');
+				set('setting-schoolCity', profile.city);
+				set('setting-schoolPhone', profile.phone);
+				set('setting-schoolEmail', profile.email);
+				set('setting-schoolAddress', profile.address);
+			})
+			.catch(() => {
+				schoolInfoLoadPromise = null;
+			});
+	}
+	return schoolInfoLoadPromise;
+}
+
+function saveSchoolInfoForm() {
+	const name = (document.getElementById('setting-schoolName')?.value || '')
+		.trim();
+	if (!name) {
+		if (typeof showToast === 'function') {
+			showToast('School name is required', 'error');
+		}
+		return;
+	}
+	if (!(window.API && window.API.raw)) {
+		if (typeof showToast === 'function') {
+			showToast('Server API unavailable', 'error');
+		}
+		return;
+	}
+	const body = {
+		name,
+		school_type:
+			document.getElementById('setting-schoolType')?.value || 'primaire',
+		school_year:
+			(document.getElementById('setting-schoolYear')?.value || '').trim() ||
+			null,
+		city: (document.getElementById('setting-schoolCity')?.value || '').trim() ||
+			null,
+		address:
+			(document.getElementById('setting-schoolAddress')?.value || '').trim() ||
+			null,
+		phone:
+			(document.getElementById('setting-schoolPhone')?.value || '').trim() ||
+			null,
+		email:
+			(document.getElementById('setting-schoolEmail')?.value || '').trim() ||
+			null,
+	};
+	window.API.raw('PUT', '/school/profile', body)
+		.then(() => {
+			if (typeof showToast === 'function') {
+				showToast('School information saved', 'success');
+			}
+			if (typeof window.refreshPendingImportsBadge === 'function') {
+				window.refreshPendingImportsBadge();
+			}
+		})
+		.catch((err) => {
+			if (typeof showToast === 'function') {
+				showToast(
+					'Failed to save school info: ' +
+						(err && err.message ? err.message : 'network error'),
+					'error',
+				);
+			}
+		});
+}
+
+window.loadSchoolInfoForm = loadSchoolInfoForm;
+window.saveSchoolInfoForm = saveSchoolInfoForm;
 
 // ─── Reset Data (Settings → Data tab) ────────────────────────────────────────
 // Wipes the school back to first-setup state via POST /api/v1/admin/reset-data

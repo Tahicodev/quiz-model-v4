@@ -1108,6 +1108,85 @@ html[data-theme='dark'] #settingsModal .settings-group[style*='gradient'] {
 	border-color: var(--border-color) !important;
 }
 
+/* ── Quiz / Game preset MODALS (forms are relocated out of #settingsModal
+      into #quizPresetModal / #gamePresetModal on open, so the form's
+      inline-light overrides above must be re-asserted in the new home) ── */
+
+html[data-theme='dark'] #quizPresetModal .preset-form-container,
+html[data-theme='dark'] #gamePresetModal .preset-form-container {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .preset-form-container .settings-group,
+html[data-theme='dark'] #gamePresetModal .preset-form-container .settings-group {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .preset-form-container .settings-group h3,
+html[data-theme='dark'] #quizPresetModal .preset-form-container .settings-group h4,
+html[data-theme='dark'] #quizPresetModal .preset-form-container .settings-group strong,
+html[data-theme='dark'] #gamePresetModal .preset-form-container .settings-group h3,
+html[data-theme='dark'] #gamePresetModal .preset-form-container .settings-group h4,
+html[data-theme='dark'] #gamePresetModal .preset-form-container .settings-group strong {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .preset-form-container h4[style*='color'],
+html[data-theme='dark'] #gamePresetModal .preset-form-container h4[style*='color'] {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .preset-form-container div[style*='background: #fff'],
+html[data-theme='dark'] #quizPresetModal .preset-form-container div[style*='background: #ffffff'],
+html[data-theme='dark'] #quizPresetModal .preset-form-container div[style*='background: #f8fafc'],
+html[data-theme='dark'] #gamePresetModal .preset-form-container div[style*='background: #fff'],
+html[data-theme='dark'] #gamePresetModal .preset-form-container div[style*='background: #ffffff'],
+html[data-theme='dark'] #gamePresetModal .preset-form-container div[style*='background: #f8fafc'] {
+	background: var(--bg-surface) !important;
+}
+
+/* Pastel chips (badges / icon tiles) → translucent dark tints. */
+html[data-theme='dark'] #quizPresetModal .preset-form-container [style*='background: #e0f2fe'],
+html[data-theme='dark'] #gamePresetModal .preset-form-container [style*='background: #e0f2fe'] {
+	background: rgba(56, 189, 248, 0.16) !important;
+	color: #7dd3fc !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .preset-form-container [style*='background: #fdf4ff'] {
+	background: rgba(217, 70, 239, 0.16) !important;
+	color: #e9d5ff !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .preset-form-container [style*='background: #ecfeff'],
+html[data-theme='dark'] #gamePresetModal .preset-form-container [style*='background: #ecfeff'] {
+	background: rgba(34, 211, 238, 0.16) !important;
+	color: #a5f3fc !important;
+}
+
+/* Modal chrome (header border is forced light via .modal[style*='flex']). */
+html[data-theme='dark'] #quizPresetModal .modal-content,
+html[data-theme='dark'] #gamePresetModal .modal-content {
+	background-color: var(--bg-surface) !important;
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .modal-header,
+html[data-theme='dark'] #gamePresetModal .modal-header {
+	background-color: var(--bg-surface) !important;
+	color: var(--text-main) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] #quizPresetModal .modal-header h2,
+html[data-theme='dark'] #gamePresetModal .modal-header h2 {
+	color: var(--text-main) !important;
+}
+
 /* Code-question form inline whites. */
 html[data-theme='dark'] #code-snippet-container {
 	background: var(--bg-surface-alt) !important;
@@ -1548,4 +1627,152 @@ html[data-theme='dark'][data-lobby-page] .lobby-name {
 
 html[data-theme='dark'][data-lobby-page] .lobby-subtitle {
 	color: var(--text-secondary) !important;
+}
+/* ?? School Year Archives (Settings ? Data) ??????????????????????????????? */
+html[data-theme='dark'] .archives-year-badge {
+	background: rgba(234, 88, 12, 0.16) !important;
+	color: #fdba74 !important;
+	border-color: rgba(234, 88, 12, 0.4) !important;
+}
+
+html[data-theme='dark'] .archives-item {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .archives-item-title {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .archives-item-meta {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .archives-item-summary {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .btn-danger-ghost {
+	background: transparent !important;
+	color: #fca5a5 !important;
+	border-color: rgba(220, 38, 38, 0.5) !important;
+}
+
+html[data-theme='dark'] .btn-danger-ghost:hover {
+	background: rgba(220, 38, 38, 0.14) !important;
+}
+
+html[data-theme='dark'] .archive-preview-meta {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .archive-preview-label {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .archive-stat {
+	background: rgba(255, 255, 255, 0.04) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .archive-stat-count {
+	color: #93c5fd !important;
+}
+
+html[data-theme='dark'] .archive-stat-label {
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] .archive-table-head {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .archive-table th {
+	color: var(--text-secondary) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .archive-table td {
+	color: var(--text-main) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .archive-table-row code {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .archive-json-view {
+	background: #0b1220 !important;
+	color: var(--text-main) !important;
+	border-color: var(--border-color) !important;
+}
+
+/* Presets tab: outer containers + list cards inherit a dark surface. */
+html[data-theme='dark'] #settingsModal #presetsListContainer,
+html[data-theme='dark'] #settingsModal #gamePresetsListContainer {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	box-shadow: none !important;
+}
+
+/* Preset cards inside the modal inherit a dark surface; the game preset
+   cards set background:#fff inline and quiz cards background:white, which
+   would stay light if we only styled the containers. */
+html[data-theme='dark'] #settingsModal .preset-item {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	box-shadow: none !important;
+}
+
+html[data-theme='dark'] #settingsModal .preset-item:hover {
+	background: var(--bg-surface) !important;
+	border-color: var(--accent-color) !important;
+}
+
+html[data-theme='dark'] #settingsModal .preset-item .preset-name {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] #settingsModal .preset-item .preset-meta,
+html[data-theme='dark'] #settingsModal .preset-item .preset-subtitle {
+	color: var(--text-secondary) !important;
+}
+
+/* Users tab inside the settings modal: dark card rows + text. */
+@media (max-width: 768px) {
+	html[data-theme='dark'] #settingsModal #usersTable tbody tr {
+		border-color: var(--border-color) !important;
+		background: var(--bg-surface-alt) !important;
+		box-shadow: none !important;
+	}
+	html[data-theme='dark'] #settingsModal #usersTable tbody tr.is-selected {
+		border-color: rgb(32, 103, 182) !important;
+		background: rgb(31, 57, 91) !important;
+	}
+	html[data-theme='dark'] #settingsModal #usersTable tbody td {
+		color: var(--text-main) !important;
+	}
+	html[data-theme='dark'] #settingsModal #usersTable tbody td::before {
+		color: var(--text-secondary) !important;
+	}
+	html[data-theme='dark'] #settingsModal #usersTable tbody td:nth-child(2) {
+		color: rgb(172, 188, 225) !important;
+	}
+}
+
+/* Settings modal tab pills on mobile: force dark re-assert (styles.css uses
+   #ffffff with !important). */
+@media (max-width: 760px) {
+	html[data-theme='dark'] #settingsModal .settings-tab-btn {
+		border-color: var(--border-color) !important;
+		background: var(--bg-surface) !important;
+		color: var(--text-secondary) !important;
+		box-shadow: none !important;
+	}
+	html[data-theme='dark'] #settingsModal .settings-tab-btn.active {
+		border-color: rgb(32, 99, 182) !important;
+		background: rgb(31, 57, 91) !important;
+		color: rgb(142, 167, 235) !important;
+		box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.14) !important;
+	}
 }

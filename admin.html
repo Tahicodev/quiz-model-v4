@@ -39,9 +39,9 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-22-r6" />
-		<link rel="stylesheet" href="admin.css?v=2026-09-22-r9" />
-		<link rel="stylesheet" href="theme.css?v=2026-09-22-r13" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-24-r7" />
+		<link rel="stylesheet" href="admin.css?v=2026-09-23-r11" />
+		<link rel="stylesheet" href="theme.css?v=2026-09-24-r17" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r2" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
@@ -135,7 +135,7 @@
 		<script src="api-client.js?v=2026-09-15-r2" defer></script>
 		<script src="auth.js?v=2026-09-22-r5" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-09-17-r5" defer></script>
+		<script src="settings.js?v=2026-09-24-r9" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -151,11 +151,12 @@
 		<script src="results-management.js" defer></script>
 		<script src="overview-dashboard.js" defer></script>
 		<script src="global-search.js" defer></script>
-		<script src="realtime-settings.js?v=2026-09-19-r1" defer></script>
+		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
-		<script src="quiz-presets.js" defer></script>
-		<script src="games-management.js?v=2026-09-22-r10" defer></script>
-		<script src="quick-start.js?v=2026-09-15-r3" defer></script>
+		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
+		<script src="games-management.js?v=2026-09-24-r14" defer></script>
+		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
+		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
 			<script src="admin-main.js?v=2026-09-17-r4" defer></script>
@@ -1534,26 +1535,26 @@
 										<option value="date">Date Created</option>
 										<option value="questions">Question Count</option>
 									</select>
-									<button
-										id="sortCategoryDirection"
-										class="btn-icon desc"
-										onclick="toggleCategorySortDirection()"
-										title="Toggle Sort Direction"
+<button
+									id="sortCategoryDirection"
+									class="btn-icon desc"
+									onclick="toggleCategorySortDirection()"
+									title="Toggle Sort Direction"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
 									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<path d="M12 5v14M19 12l-7 7-7-7" />
-										</svg>
-									</button>
-								</div>
+										<path d="M12 5v14M19 12l-7 7-7-7" />
+									</svg>
+								</button>
 							</div>
+						</div>
 						</div>
 
 						<div class="table-container">
@@ -2526,9 +2527,7 @@
 								</div>
 								<div class="games-split">
 									<div id="gameList" class="game-list"></div>
-									<div class="game-lobby" id="gameLobby">
-										<div class="empty-state">Select a game to view the lobby.</div>
-									</div>
+<div class="game-lobby" id="gameLobby"></div>
 								</div>
 							</div>
 						</div>
@@ -3795,10 +3794,19 @@
 				<div class="modal-header">
 					<div class="settings-title-block">
 						<h2>App Settings</h2>
-						<p>Auto-save enabled</p>
+						<p>Changes save automatically as you edit</p>
 					</div>
 					<div class="settings-header-actions">
-						<span id="settingsAutosaveStatus" class="settings-autosave-status" aria-live="polite">Auto-save on</span>
+						<button
+							type="button"
+							id="settingsSaveButton"
+							class="btn btn-primary settings-save-btn"
+							title="Save settings now"
+							onclick="window.saveAllSettings()"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+							Save Settings
+						</button>
 						<button
 							type="button"
 							class="btn btn-danger-soft settings-reset-btn"
@@ -3865,186 +3873,94 @@
 
 						<!-- General Settings -->
 						<div id="general-settings" class="settings-section" data-roles="admin,teacher" data-settings-tab="general">
-							<!-- Welcome Screen (First) -->
-							<div class="settings-group" style="padding-bottom: 25px; margin-bottom: 25px; border-bottom: 1px solid #e2e8f0;">
-								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-									<span style="background: #e0f2fe; color: #0284c7; padding: 6px; border-radius: 8px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-									</span>
-									<h3 style="margin: 0; font-size: 1.1rem;">Welcome Screen</h3>
-								</div>
-								
-								<div class="form-group">
-									<label for="setting-welcomeTitle">Welcome Title</label>
+<!-- School Information -->
+						<div class="settings-group">
+							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+								<span style="background: #e0f2fe; color: #0284c7; padding: 6px; border-radius: 8px;">
+									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+								</span>
+								<h3 style="margin: 0; font-size: 1.1rem;">School Information</h3>
+							</div>
+
+							<p class="text-muted" style="margin-bottom: 16px; font-size: 0.9em;">This identifies your school on the login page and powers the School Year Archives folder. Quiz, training and theme presets are configured under the <strong>Presets</strong> tab.</p>
+
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="setting-schoolName">School Name</label>
 									<input
 										type="text"
-										id="setting-welcomeTitle"
+										id="setting-schoolName"
 										class="form-control"
-										placeholder="e.g. Welcome to the Final Exam"
+										placeholder="Lycée Al Khawarizmi"
 										style="padding: 10px;"
 									/>
 								</div>
-								<div class="form-group">
-									<label for="setting-welcomeMessage">Welcome Message</label>
-									<textarea
-										id="setting-welcomeMessage"
-										class="form-control"
-										rows="3"
-										placeholder="e.g. You have 60 minutes to complete this exam. Good luck!"
-										style="padding: 10px;"
-									></textarea>
-								</div>
-							</div>
-
-							<!-- Theme Settings -->
-							<div class="settings-group" style="padding-bottom: 25px; margin-bottom: 25px; border-bottom: 1px solid #e2e8f0;">
-								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-									<span style="background: #fdf4ff; color: #a21caf; padding: 6px; border-radius: 8px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
-									</span>
-									<h3 style="margin: 0; font-size: 1.1rem;">Theme & Style</h3>
-								</div>
-								
-								<div class="form-row">
-									<div class="form-group half">
-										<label for="setting-primaryColor">Primary Color</label>
-										<div style="display: flex; align-items: center; gap: 10px">
-											<input type="color" id="setting-primaryColor" class="form-control" style="width: 50px; padding: 2px; height: 40px;" />
-											<input type="text" id="setting-primaryColor-text" class="form-control" style="padding: 10px;" onchange="document.getElementById('setting-primaryColor').value = this.value" />
-										</div>
-									</div>
-									<div class="form-group half">
-										<label for="setting-secondaryColor">Secondary Color</label>
-										<div style="display: flex; align-items: center; gap: 10px">
-											<input type="color" id="setting-secondaryColor" class="form-control" style="width: 50px; padding: 2px; height: 40px;" />
-											<input type="text" id="setting-secondaryColor-text" class="form-control" style="padding: 10px;" onchange="document.getElementById('setting-secondaryColor').value = this.value" />
-										</div>
-									</div>
-								</div>
-								<div class="form-row">
-									<div class="form-group half">
-										<label for="setting-backgroundColor">Background Color</label>
-										<div style="display: flex; align-items: center; gap: 10px">
-											<input type="color" id="setting-backgroundColor" class="form-control" style="width: 50px; padding: 2px; height: 40px;" />
-											<input type="text" id="setting-backgroundColor-text" class="form-control" style="padding: 10px;" onchange="document.getElementById('setting-backgroundColor').value = this.value" />
-										</div>
-									</div>
-									<div class="form-group half">
-										<label for="setting-textColor">Text Color</label>
-										<div style="display: flex; align-items: center; gap: 10px">
-											<input type="color" id="setting-textColor" class="form-control" style="width: 50px; padding: 2px; height: 40px;" />
-											<input type="text" id="setting-textColor-text" class="form-control" style="padding: 10px;" onchange="document.getElementById('setting-textColor').value = this.value" />
-										</div>
-									</div>
-								</div>
-								<div class="form-group">
-									<label for="setting-inputFocusColor">Input Focus Color</label>
-									<div style="display: flex; align-items: center; gap: 10px">
-										<input type="color" id="setting-inputFocusColor" class="form-control" style="width: 50px; padding: 2px; height: 40px;" />
-										<input type="text" id="setting-inputFocusColor-text" class="form-control" style="padding: 10px;" onchange="document.getElementById('setting-inputFocusColor').value = this.value" />
-									</div>
-								</div>
-								<div class="form-group">
-									<label for="setting-fontFamily">Font Family</label>
+								<div class="form-group half">
+									<label for="setting-schoolYear">School Year</label>
 									<input
 										type="text"
-										id="setting-fontFamily"
+										id="setting-schoolYear"
 										class="form-control"
-										placeholder="'Segoe UI', system-ui, sans-serif"
-										style="padding: 10px;"
-									/>
-									<small class="text-muted">Enter valid CSS font-family string</small>
-								</div>
-							</div>
-
-							<!-- Quiz Configuration -->
-							<div class="settings-group" style="padding-bottom: 25px; margin-bottom: 25px; border-bottom: 1px solid #e2e8f0;">
-								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-									<span style="background: #fdf2f8; color: #db2777; padding: 6px; border-radius: 8px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-									</span>
-									<h3 style="margin: 0; font-size: 1.1rem;">Quiz Configuration</h3>
-								</div>
-								
-								<div class="form-row">
-									<div class="form-group half">
-										<label for="setting-totalQuestions">Total Questions per Quiz</label>
-										<input
-											type="number"
-											id="setting-totalQuestions"
-											class="form-control"
-											min="1"
-											required
-											style="padding: 10px;"
-										/>
-									</div>
-									<div class="form-group half">
-										<label for="setting-timeLimit">Time Limit (seconds)</label>
-										<input
-											type="number"
-											id="setting-timeLimit"
-											class="form-control"
-											min="10"
-											required
-											style="padding: 10px;"
-										/>
-									</div>
-								</div>
-								<div class="form-group">
-									<label for="setting-penalty">Penalty per Wrong Answer (points)</label>
-									<input
-										type="number"
-										id="setting-penalty"
-										class="form-control"
-										min="0"
-										required
+										placeholder="2025-2026"
 										style="padding: 10px;"
 									/>
 								</div>
 							</div>
-
-							<!-- Training Configuration -->
-							<div class="settings-group">
-								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-									<span style="background: #ecfccb; color: #65a30d; padding: 6px; border-radius: 8px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-									</span>
-									<h3 style="margin: 0; font-size: 1.1rem;">Training Mode Configuration</h3>
-								</div>
-								
-								<p class="text-muted" style="margin-bottom: 12px; font-size: 0.9em;">Configure the default settings for training mode on student devices.</p>
-								<div class="form-group">
-									<label for="setting-trainingPreset">Training Preset</label>
-									<select id="setting-trainingPreset" class="form-control" style="padding: 10px;">
-										<option value="">-- Use Default Settings --</option>
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="setting-schoolType">School Type</label>
+									<select id="setting-schoolType" class="form-control" style="padding: 10px;">
+										<option value="primaire">Primaire (Primary)</option>
+										<option value="college">Collège (Middle School)</option>
+										<option value="lycee">Lycée (High School)</option>
 									</select>
-									<small class="text-muted">Select a preset to use for training mode</small>
 								</div>
+								<div class="form-group half">
+									<label for="setting-schoolCity">City</label>
+									<input
+										type="text"
+										id="setting-schoolCity"
+										class="form-control"
+										placeholder="Casablanca"
+										style="padding: 10px;"
+									/>
+								</div>
+							</div>
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="setting-schoolPhone">Phone</label>
+									<input
+										type="tel"
+										id="setting-schoolPhone"
+										class="form-control"
+										placeholder="+212 5 22 00 00 00"
+										style="padding: 10px;"
+									/>
+								</div>
+								<div class="form-group half">
+									<label for="setting-schoolEmail">Email</label>
+									<input
+										type="email"
+										id="setting-schoolEmail"
+										class="form-control"
+										placeholder="contact@school.com"
+										style="padding: 10px;"
+									/>
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="setting-schoolAddress">Address</label>
+								<input
+									type="text"
+									id="setting-schoolAddress"
+									class="form-control"
+									placeholder="12 Rue des Écoles"
+									style="padding: 10px;"
+								/>
 							</div>
 
-							<!-- Push DEFAULT Settings -->
-							<div class="settings-group" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-color: #7dd3fc; margin-top: 25px;">
-								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-									<span style="background: #0ea5e9; color: white; padding: 6px; border-radius: 8px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
-									</span>
-									<h3 style="margin: 0; font-size: 1.1rem;">Push Settings to Devices</h3>
-								</div>
-								
-								<p class="text-muted" style="margin-bottom: 16px; font-size: 0.9em;">Push these default settings and uncategorized questions to all connected student devices.</p>
-								
-								<div style="display: flex; flex-wrap: wrap; gap: 12px;">
-									<button type="button" class="btn btn-primary" onclick="window.pushDefaultSettings()" style="flex: 1; min-width: 140px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>
-										Push DEFAULT Settings
-									</button>
-									<button type="button" class="btn btn-danger-soft" onclick="window.clearRemoteKeys()" style="flex: 1; min-width: 140px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-										Clear Remote Keys
-									</button>
-								</div>
-								<small class="text-muted" style="display: block; margin-top: 10px;">Requires connection to realtime server. Clear removes pushed data from devices.</small>
-							</div>
+							<small class="text-muted" style="display: block; margin-top: 8px;">Saved to the server by the Save Settings button above — also used by Quick Start and the login page branding.</small>
+						</div>
 
 						</div>
 
@@ -4079,6 +3995,13 @@
 							
 							<p class="text-muted" style="margin-bottom: 20px">Create reusable configurations for exams. Each preset defines time limit, penalty, and other quiz settings.</p>
 							
+							<div style="display: flex; justify-content: flex-end; margin-bottom: 14px;">
+								<button type="button" class="btn btn-primary" onclick="window.openPresetModal()">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+									Create New Preset
+								</button>
+							</div>
+							
 							<!-- Preset List -->
 							<div id="presetsListContainer" style="margin-bottom: 25px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
 								<div id="presetsList" style="max-height: 200px; overflow-y: auto;">
@@ -4086,8 +4009,8 @@
 								</div>
 							</div>
 
-							<!-- Create/Edit Preset Form -->
-							<div class="preset-form-container" style="background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+							<!-- Create/Edit Preset Form (moved into #quizPresetModal on open) -->
+							<div id="quizPresetFormContainer" class="preset-form-container" style="display: none; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
 								<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
 									<h4 style="margin: 0; font-size: 1rem; color: #475569;" id="presetFormTitle">Create New Preset</h4>
 									<div style="background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 500;">
@@ -4113,6 +4036,10 @@
 								</div>
 								
 								<div class="form-row">
+									<div class="form-group half">
+										<label for="preset-totalQuestions">Total Questions per Quiz</label>
+										<input type="number" id="preset-totalQuestions" class="form-control" min="1" value="5" />
+									</div>
 									<div class="form-group half">
 										<label for="preset-timeLimit">Time Limit (seconds)</label>
 										<input type="number" id="preset-timeLimit" class="form-control" min="60" value="300" />
@@ -4214,13 +4141,20 @@
 
 							<p class="text-muted" style="margin-bottom: 20px">Create reusable game rule packs and match types. Games can only use these presets.</p>
 
+							<div style="display: flex; justify-content: flex-end; margin-bottom: 14px;">
+								<button type="button" class="btn btn-primary" onclick="window.openGamePresetModal()">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+									Create New Game Preset
+								</button>
+							</div>
+
 							<div id="gamePresetsListContainer" style="margin-bottom: 25px; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
 								<div id="gamePresetsList" style="max-height: 240px; overflow-y: auto;">
 									<div style="padding: 20px; text-align: center; color: #9ca3af;">No game presets created yet</div>
 								</div>
 							</div>
 
-							<div class="preset-form-container" style="background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+							<div id="gamePresetFormContainer" class="preset-form-container" style="display: none; background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
 								<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
 									<h4 style="margin: 0; font-size: 1rem; color: #475569;" id="gamePresetFormTitle">Create New Game Preset</h4>
 									<div style="background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 500;">
@@ -4550,6 +4484,27 @@
 								</div>
 							</div>
 							</div>
+
+							<!-- Training Mode Configuration -->
+							<div class="settings-group" style="margin-top: 25px;">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+									<span style="background: #ecfccb; color: #65a30d; padding: 6px; border-radius: 8px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+									</span>
+									<h3 style="margin: 0; font-size: 1.1rem;">Training Mode</h3>
+								</div>
+
+								<p class="text-muted" style="margin-bottom: 14px; font-size: 0.9em;">Choose which quiz preset training mode on student devices uses. Leave on the default to fall back to the app defaults.</p>
+								<div class="form-row">
+									<div class="form-group half">
+										<label for="setting-trainingPreset">Quiz Preset</label>
+										<select id="setting-trainingPreset" class="form-control" style="padding: 10px;">
+											<option value="">-- Use Default Settings --</option>
+										</select>
+										<small class="text-muted">Applied to training quizzes on student devices</small>
+									</div>
+								</div>
+							</div>
 						</div>
 
 						<!-- Data Settings -->
@@ -4627,9 +4582,40 @@
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
 										Run Quick Start
 									</button>
-								</div>
+</div>
 
-								<div class="settings-group" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
+							<!-- School Year Archives -->
+							<div class="settings-group" id="archivesSettingsGroup">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+									<span style="background: #ffedd5; color: #ea580c; padding: 6px; border-radius: 8px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 20V8H2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2z"></path><path d="M2 4h20"></path><path d="M12 8v4"></path><line x1="12" y1="12" x2="12" y2="16"></line></svg>
+									</span>
+									<h3 style="margin: 0; font-size: 1.1rem;">School Year Archives</h3>
+									<span class="archives-year-badge" id="archivesCurrentYearBadge" title="Current school year (set under School info)" style="margin-left: auto;">—</span>
+								</div>
+								<p class="text-muted" style="margin-bottom: 20px;">
+									At the end of the year, save the whole school year — classes, students, teachers, categories, questions, exams, games, tournaments and results — into one folder. It stays grouped so you can browse it later, download it as a file, or move it to another device. Archiving a year again simply overwrites that year's folder; your live data is never touched.
+								</p>
+								<div class="archives-actions" style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
+									<button type="button" class="btn btn-primary" onclick="window.archivesCreate()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+										Archive this year
+									</button>
+									<button type="button" class="btn btn-secondary" onclick="window.archivesExportLatest()" title="Download the current school year (or the most recent archive) as a file">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+										Export year snapshot
+									</button>
+									<button type="button" class="btn btn-secondary" onclick="window.archivesRefresh()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+										Refresh
+									</button>
+								</div>
+								<div id="archivesList" class="archives-list">
+									<p class="text-muted">Loading archives…</p>
+								</div>
+							</div>
+
+							<div class="settings-group" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
 									<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
 										<span style="background: #dc2626; color: white; padding: 6px; border-radius: 8px;">
 											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -4761,13 +4747,21 @@
 									<small class="text-muted" style="display: block; margin-left: 24px;">Automatically sync quiz results to all devices</small>
 								</div>
 
-								<div class="form-group">
-									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-										<input type="checkbox" id="setting-broadcastUpdates" checked />
-										<span>Broadcast Updates</span>
-									</label>
-									<small class="text-muted" style="display: block; margin-left: 24px;">Push question/exam updates to connected devices</small>
-								</div>
+<div class="form-group">
+								<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+									<input type="checkbox" id="setting-broadcastUpdates" checked />
+									<span>Broadcast Updates</span>
+								</label>
+								<small class="text-muted" style="display: block; margin-left: 24px;">Push question/exam updates to connected devices</small>
+							</div>
+
+							<div class="form-group">
+								<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+									<input type="checkbox" id="setting-autoSyncQuestions" checked />
+									<span>Auto-Sync Questions (uncategorized)</span>
+								</label>
+								<small class="text-muted" style="display: block; margin-left: 24px;">Periodically push uncategorized training questions to connected devices.</small>
+							</div>
 
 								<div class="form-group">
 									<button type="button" class="btn btn-secondary" onclick="window.syncUsersToClients()">
@@ -4802,6 +4796,8 @@
 										>How often to sync data between devices</small
 									>
 								</div>
+
+								<p class="text-muted" style="margin-top: 10px; font-size: 0.88em;">When enabled, uncategorized training questions are pushed to all connected student devices on the interval above.</p>
 							</div>
 						</div>
 
@@ -7310,6 +7306,24 @@
 			</div>
 		</div>
 
+		<!-- School Year Archive preview modal -->
+		<div id="archivePreviewModal" class="modal">
+			<div class="modal-content" style="max-width: 760px;">
+				<div class="modal-header" id="archivePreviewHeader">
+					<h2>📁 School Year Archive</h2>
+					<button type="button" class="modal-close" onclick="window.archivesClosePreview()" aria-label="Close archive preview">&times;</button>
+				</div>
+				<div class="modal-body" id="archivePreviewBody">
+					<p class="text-muted">Loading…</p>
+				</div>
+				<div class="modal-footer">
+					<button type="button" class="btn btn-danger" id="archivePreviewDeleteBtn" onclick="window.archivesDeleteCurrent()">Delete folder</button>
+					<button type="button" class="btn btn-secondary" onclick="window.archivesClosePreview()">Close</button>
+					<button type="button" class="btn btn-primary" id="archivePreviewExportBtn" onclick="window.archivesExportCurrent()">Download file</button>
+				</div>
+			</div>
+		</div>
+
 		<!-- Reset Data danger modal -->
 		<div id="resetDataModal" class="modal">
 			<div class="modal-content" style="max-width: 480px;">
@@ -7336,6 +7350,44 @@
 						Delete Everything &amp; Restart App
 					</button>
 				</div>
+			</div>
+		</div>
+
+		<!-- Quiz Preset modal — the quiz preset form is moved in here on open -->
+		<div id="quizPresetModal" class="modal" aria-hidden="true">
+			<div class="modal-content" style="max-width: 760px;">
+				<div class="modal-header">
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-violet">
+							<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+						</div>
+						<div class="modal-header-text">
+							<h2 id="quizPresetModalTitle">Create New Preset</h2>
+							<p class="modal-header-subtitle">Define a reusable quiz configuration</p>
+						</div>
+					</div>
+					<span class="close" onclick="window.closePresetModal()">&times;</span>
+				</div>
+				<div class="modal-body" id="quizPresetModalBody"></div>
+			</div>
+		</div>
+
+		<!-- Game Preset modal — the game preset form is moved in here on open -->
+		<div id="gamePresetModal" class="modal" aria-hidden="true">
+			<div class="modal-content" style="max-width: 760px;">
+				<div class="modal-header">
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-green">
+							<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path><circle cx="9" cy="7" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="17" r="1"></circle></svg>
+						</div>
+						<div class="modal-header-text">
+							<h2 id="gamePresetModalTitle">Create New Game Preset</h2>
+							<p class="modal-header-subtitle">Define a reusable game rule pack and match type</p>
+						</div>
+					</div>
+					<span class="close" onclick="window.closeGamePresetModal()">&times;</span>
+				</div>
+				<div class="modal-body" id="gamePresetModalBody"></div>
 			</div>
 		</div>
 

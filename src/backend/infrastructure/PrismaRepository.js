@@ -35,6 +35,7 @@ const MODEL_MAP = {
 	audit_logs: 'auditLog',
 	refresh_tokens: 'refreshToken',
 	schools: 'school',
+	school_archives: 'schoolArchive',
 	profile_requests: 'profileRequest',
 	account_requests: 'accountRequest',
 	game_presets: 'gamePreset',

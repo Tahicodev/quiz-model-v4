@@ -26,6 +26,8 @@ export const SchoolProfileSchema = z.object({
     .max(100)
     .transform((v) => v.trim()),
   school_type: z.enum(SCHOOL_TYPES).default('primaire'),
+  // School year label, e.g. "2025-2026". Plain text — no date semantics needed.
+  school_year: optionalTrimmed(20),
   address: optionalTrimmed(255),
   city: optionalTrimmed(100),
   phone: optionalTrimmed(50),

@@ -27,6 +27,7 @@
 	var STEP_IMPORT_KEYS = {
 		classes: ['classes'],
 		students: ['users'],
+		teachers: ['users'],
 		categories: ['categories'],
 		questions: ['questions', 'categories'],
 		exams: ['exams', 'exam_questions', 'exam_classes'],
@@ -40,7 +41,7 @@
 			id: 'security',
 			title: 'School & Security',
 			icon: '🔐',
-			description: 'Your school\'s identity and credentials — school information, admin password and recovery code, and teacher accounts. Each school gets its own setup.',
+			description: 'Your school\'s identity and credentials — school information, the admin password, and the recovery code. Each school gets its own setup.',
 			count: function () {
 				var ok = 0;
 				if (getSchoolProfileCached().named) ok += 1;
@@ -76,6 +77,14 @@
 			add: function () {
 				if (window.openUserModal) window.openUserModal(null);
 			},
+		},
+		{
+			id: 'teachers',
+			title: 'Teachers',
+			icon: '🧑‍🏫',
+			description: 'Add teacher accounts with full profiles (numero, phone, email, subjects) and assign them to classes.',
+			count: teacherCount,
+			add: function () { window.quickStartAddTeacher(); },
 		},
 		{
 			id: 'categories',
@@ -187,14 +196,15 @@
 	function isInstanceEmpty() {
 		try {
 			// Indexes shifted by the Security step at index 0:
-			// 0 security, 1 classes, 2 students, 3 categories, 4 questions,
-			// 5 exams, 6 games, 7 done. The security step never counts toward
-			// emptiness — a school can be fully identified on an empty instance.
+			// 0 security, 1 classes, 2 students, 3 teachers, 4 categories,
+			// 5 questions, 6 exams, 7 games, 8 done. The security and
+			// teachers steps never count toward emptiness — a school can be
+			// fully identified and staffed on an empty instance.
 			var classes = STEPS[1].count();
 			var students = STEPS[2].count();
-			var questions = STEPS[4].count();
-			var exams = STEPS[5].count();
-			var games = STEPS[6].count();
+			var questions = STEPS[5].count();
+			var exams = STEPS[6].count();
+			var games = STEPS[7].count();
 			return classes + students + questions + exams + games === 0;
 		} catch (_) {
 			return false;
@@ -298,7 +308,7 @@
 
 	function switchSecuritySubTab(event, tabName) {
 		if (event && event.preventDefault) event.preventDefault();
-		var safeTab = tabName === 'credentials' || tabName === 'teachers' ? tabName : 'school';
+		var safeTab = tabName === 'credentials' ? 'credentials' : 'school';
 		state.securitySubTab = safeTab;
 
 		var content = document.getElementById('quickStartStepContent');
@@ -334,8 +344,7 @@
 
 	function renderSecurityContent(panel) {
 		var profile = schoolProfileCache.profile || {};
-		var teachers = teacherCount();
-		var activeSubTab = state.securitySubTab === 'credentials' || state.securitySubTab === 'teachers' ? state.securitySubTab : 'school';
+		var activeSubTab = state.securitySubTab === 'credentials' ? state.securitySubTab : 'school';
 		var activeCredentialsTab = state.credentialsSubTab === 'recovery' ? 'recovery' : 'password';
 		var subTabButton = function (tabName, icon, label) {
 			var active = activeSubTab === tabName ? ' active' : '';
@@ -348,11 +357,10 @@
 
 		panel.innerHTML =
 			'<h3 class="qs-title">🔐 School & Security</h3>' +
-			'<p class="qs-desc">Each school has its own identity, credentials, and staff. Fill this in once — it powers the login page branding, per-school data, and password recovery.</p>' +
+			'<p class="qs-desc">Each school has its own identity and credentials. Fill this in once — it powers the login page branding, per-school data, and password recovery.</p>' +
 			'<div class="qs-subtabs" role="tablist" aria-label="School and security sections">' +
 			subTabButton('school', '🏫', 'School Information') +
 			subTabButton('credentials', '🔑', 'Admin Credentials') +
-			subTabButton('teachers', '🧑‍🏫', 'Teachers') +
 			'</div>' +
 
 			'<div class="qs-subtab-panel' + (activeSubTab === 'school' ? '' : ' hidden') + '" data-sectab="school" role="tabpanel">' +
@@ -361,6 +369,8 @@
 			'<div class="qs-form-grid">' +
 			'<div class="qs-field qs-field-full"><label for="qsSchoolName">School Name</label>' +
 			'<input type="text" id="qsSchoolName" class="form-control" placeholder="Lycée Al Khawarizmi" value="' + escapeHtml(profile.name || '') + '"></div>' +
+			'<div class="qs-field"><label for="qsSchoolYear">School Year</label>' +
+			'<input type="text" id="qsSchoolYear" class="form-control" placeholder="2025-2026" value="' + escapeHtml(profile.school_year || '') + '"></div>' +
 			'<div class="qs-field"><label for="qsSchoolType">School Type</label>' +
 			'<select id="qsSchoolType" class="form-control">' +
 			'<option value="primaire"' + (profile.school_type === 'primaire' ? ' selected' : '') + '>Primaire (Primary)</option>' +
@@ -428,18 +438,6 @@
 			'</div>' +
 			'</div>' +
 			'</div>' +
-			'</div>' +
-
-			'<div class="qs-subtab-panel' + (activeSubTab === 'teachers' ? '' : ' hidden') + '" data-sectab="teachers" role="tabpanel">' +
-			'<div class="qs-security">' +
-			'<h4 class="qs-section-title">🧑‍🏫 Teachers</h4>' +
-			'<div class="qs-status ' + (teachers > 0 ? 'ok' : '') + '">' +
-			(teachers > 0 ? '✓ ' + teachers + ' teacher(s) already added' : 'No teachers yet — add their accounts with full profiles (numero, phone, email, subjects, classes).') +
-			'</div>' +
-			'<div class="qs-actions">' +
-			'<button type="button" class="btn btn-primary" onclick="window.quickStartAddTeacher()">' + qsButtonIcon('userPlus') + '<span>Add teacher</span></button>' +
-			'</div>' +
-			'</div>' +
 			'</div>';
 
 		if (!schoolProfileCache.loaded) {
@@ -484,6 +482,7 @@
 	window.quickStartSaveSchool = function () {
 		var nameEl = document.getElementById('qsSchoolName');
 		var typeEl = document.getElementById('qsSchoolType');
+		var yearEl = document.getElementById('qsSchoolYear');
 		var cityEl = document.getElementById('qsSchoolCity');
 		var addressEl = document.getElementById('qsSchoolAddress');
 		var phoneEl = document.getElementById('qsSchoolPhone');
@@ -496,6 +495,7 @@
 		var body = {
 			name: name,
 			school_type: typeEl ? typeEl.value : 'primaire',
+			school_year: (yearEl ? yearEl.value : '').trim() || null,
 			city: (cityEl ? cityEl.value : '').trim() || null,
 			address: (addressEl ? addressEl.value : '').trim() || null,
 			phone: (phoneEl ? phoneEl.value : '').trim() || null,

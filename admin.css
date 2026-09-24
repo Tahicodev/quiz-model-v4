@@ -1851,7 +1851,8 @@ html[data-lobby-page] .app-container {
 	box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
 }
 
-/* Games tab: games list on the left, open lobby panel on the right. */
+/* Games tab: games list takes the full width until a lobby is opened; then
+   the page splits into two columns (list on the left, lobby on the right). */
 .games-split {
 	display: flex;
 	gap: 16px;
@@ -1859,13 +1860,22 @@ html[data-lobby-page] .app-container {
 }
 
 .games-split > #gameList {
-	flex: 1 1 55%;
+	flex: 1 1 100%;
 	min-width: 0;
 }
 
 .games-split > #gameLobby {
+	display: none;
 	flex: 1 1 45%;
 	min-width: 0;
+}
+
+.games-split.lobby-open > #gameList {
+	flex: 1 1 55%;
+}
+
+.games-split.lobby-open > #gameLobby {
+	display: block;
 }
 
 @media (max-width: 900px) {
@@ -1909,4 +1919,178 @@ html[data-lobby-page] .app-container {
 	.header-nav-container .mobile-menu-branding h1 {
 		font-size: 18px;
 	}
+}
+
+/* ?? School Year Archives (Settings ? Data) ??????????????????????????????? */
+.archives-year-badge {
+	display: inline-block;
+	font-size: 0.85rem;
+	font-weight: 600;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: #ffedd5;
+	color: #c2410c;
+	border: 1px solid #fed7aa;
+	white-space: nowrap;
+}
+
+.archives-items {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.archives-item {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 12px 14px;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	background: #fff;
+}
+
+.archives-item-main {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.archives-item-title {
+	font-weight: 600;
+	color: #0f172a;
+	margin-bottom: 2px;
+}
+
+.archives-item-meta {
+	font-size: 0.78rem;
+	color: #64748b;
+	margin-bottom: 4px;
+}
+
+.archives-item-summary {
+	font-size: 0.85rem;
+	color: #334155;
+}
+
+.archives-item-actions {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
+.archives-item-actions .btn-sm {
+	padding: 4px 10px;
+	font-size: 0.8rem;
+}
+
+.btn-danger-ghost {
+	background: #fff;
+	color: #dc2626;
+	border: 1px solid #fecaca;
+}
+
+.btn-danger-ghost:hover {
+	background: #fef2f2;
+}
+
+/* Preview modal */
+.archive-preview-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+	font-size: 0.85rem;
+	color: #64748b;
+	margin-bottom: 8px;
+}
+
+.archive-preview-label {
+	font-weight: 600;
+	color: #334155;
+}
+
+.archive-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+	gap: 10px;
+}
+
+.archive-stat {
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	padding: 10px;
+	text-align: center;
+}
+
+.archive-stat-count {
+	font-size: 1.35rem;
+	font-weight: 700;
+	color: #2563eb;
+}
+
+.archive-stat-label {
+	font-size: 0.78rem;
+	color: #64748b;
+	margin-top: 2px;
+}
+
+.archive-store-select {
+	max-width: 360px;
+	margin-bottom: 10px;
+}
+
+.archive-store-table-wrap {
+	overflow-x: auto;
+	margin-bottom: 4px;
+}
+
+.archive-table-head {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: #334155;
+	margin-bottom: 6px;
+}
+
+.archive-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.archive-table th {
+	text-align: left;
+	font-size: 0.75rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	color: #64748b;
+	padding: 6px 8px;
+	border-bottom: 1px solid #e2e8f0;
+}
+
+.archive-table td {
+	padding: 6px 8px;
+	font-size: 0.82rem;
+	border-bottom: 1px solid #f1f5f9;
+	vertical-align: top;
+}
+
+.archive-table-row code {
+	word-break: break-all;
+	white-space: pre-wrap;
+	color: #334155;
+}
+
+.archive-json-view {
+	width: 100%;
+	min-height: 180px;
+	resize: vertical;
+	font-family: Consolas, Monaco, monospace;
+	font-size: 0.78rem;
+	line-height: 1.5;
+	color: #0f172a;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 8px;
+	padding: 10px;
+	box-sizing: border-box;
 }

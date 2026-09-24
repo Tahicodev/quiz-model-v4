@@ -2787,8 +2787,7 @@
 				state.selectedGameId = null;
 				const lobby = byId('gameLobby');
 				if (lobby) {
-					lobby.innerHTML =
-						'<div class="empty-state">Select a game to view the lobby.</div>';
+					lobby.innerHTML = '';
 				}
 			}
 			renderGameList();
@@ -2862,8 +2861,7 @@
 			state.selectedGameId = null;
 			const lobby = byId('gameLobby');
 			if (lobby) {
-				lobby.innerHTML =
-					'<div class="empty-state">Select a game to view the lobby.</div>';
+				lobby.innerHTML = '';
 			}
 			renderGameList();
 		};
@@ -3693,6 +3691,7 @@
 	function renderGameList() {
 		const container = byId('gameList');
 		if (!container) return;
+		updateGamesSplitLayout();
 		buildGameFilterOptions();
 		const games = GameCore.getQuizGames();
 		// Tournament instances are no longer hidden: they are real lobbies
@@ -4123,18 +4122,29 @@ function buildLobbyHtml(gameId) {
 		const target = container || byId('gameLobby');
 		if (!target) return;
 		if (!state.selectedGameId) {
-			target.innerHTML =
-				'<div class="empty-state">Select a game to view the lobby.</div>';
+			target.innerHTML = '';
+			updateGamesSplitLayout();
 			return;
 		}
 		const html = buildLobbyHtml(state.selectedGameId);
 		target.innerHTML = html;
 		refreshLobbyDockPanes();
+		updateGamesSplitLayout();
 		// Dedicated lobby page (?lobby=GameId): keep the full-page view in
 		// sync with every lobby render (socket updates, joins, starts...).
 		const page = byId('lobbyPage');
 		if (page && document.documentElement.hasAttribute('data-lobby-page')) {
 			page.innerHTML = '<div class="game-lobby" id="gameLobby">' + html + '</div>';
+		}
+	}
+
+	// Toggles the split view: the games list is full-width until a lobby is
+	// selected, then the page splits into list + lobby columns.
+	function updateGamesSplitLayout() {
+		if (isLobbyWindow()) return;
+		const split = byId('gameList')?.parentElement;
+		if (split && split.classList.contains('games-split')) {
+			split.classList.toggle('lobby-open', Boolean(state.selectedGameId));
 		}
 	}
 
@@ -6661,7 +6671,7 @@ function buildLobbyHtml(gameId) {
 					background: #fff;
 				">
 					<div>
-						<div style="font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px;">
+						<div class="preset-name" style="font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 8px;">
 							<span>${escapeHtml(preset.name)}</span>
 							${
 								preset.isDefault
@@ -6669,7 +6679,7 @@ function buildLobbyHtml(gameId) {
 									: ''
 							}
 						</div>
-						<div style="font-size: 0.85rem; color: #64748b;">
+						<div class="preset-meta" style="font-size: 0.85rem; color: #64748b;">
 							${typeLabel} - ${modeLabel} - ${summary}
 						</div>
 					</div>
@@ -6758,6 +6768,56 @@ function buildLobbyHtml(gameId) {
 			byId('game-preset-lastSurvivorTimer').value = '30';
 		toggleGamePresetRulesVisibility();
 	}
+
+	function mountGamePresetForm() {
+		const modalBody = byId('gamePresetModalBody');
+		const form = byId('gamePresetFormContainer');
+		if (modalBody && form && form.parentNode !== modalBody) {
+			modalBody.appendChild(form);
+		}
+	}
+
+	function syncGamePresetModalTitle() {
+		const modalTitle = byId('gamePresetModalTitle');
+		const formTitle = byId('gamePresetFormTitle');
+		if (modalTitle && formTitle) modalTitle.textContent = formTitle.textContent;
+	}
+
+	function showGamePresetModal() {
+		mountGamePresetForm();
+		syncGamePresetModalTitle();
+		const form = byId('gamePresetFormContainer');
+		if (form) form.style.display = 'block';
+		const modal = byId('gamePresetModal');
+		if (!modal) return;
+		// Modal is authored inside a hidden ancestor (#aiGeneratorModal), so pull
+		// it up to <body> first or it can never render (same pattern as
+		// openResetDataModal/openQuickStart).
+		if (modal.parentElement && modal.parentElement !== document.body) {
+			document.body.appendChild(modal);
+		}
+		modal.style.display = 'flex';
+		setTimeout(() => modal.classList.add('active'), 10);
+	}
+
+	function openGamePresetModal() {
+		resetGamePresetForm();
+		const formTitle = byId('gamePresetFormTitle');
+		if (formTitle) formTitle.textContent = 'Create New Game Preset';
+		showGamePresetModal();
+	}
+
+	function closeGamePresetModal() {
+		const form = byId('gamePresetFormContainer');
+		if (form) form.style.display = 'none';
+		const modal = byId('gamePresetModal');
+		if (!modal) return;
+		modal.style.display = 'none';
+		modal.classList.remove('active');
+	}
+
+	window.openGamePresetModal = openGamePresetModal;
+	window.closeGamePresetModal = closeGamePresetModal;
 
 	function parsePresetRuleValue(preset, key, fallback) {
 		if (!preset) return fallback;
@@ -6886,6 +6946,7 @@ function buildLobbyHtml(gameId) {
 			byId('game-preset-lastSurvivorTimer').value =
 				rules.lastSurvivor.eliminationTimer;
 		toggleGamePresetRulesVisibility();
+		showGamePresetModal();
 	}
 
 	async function deleteGamePresetSettings(presetId) {
@@ -7076,6 +7137,7 @@ function buildLobbyHtml(gameId) {
 		renderGamePresetList();
 		loadGamePresets();
 		resetGamePresetForm();
+		closeGamePresetModal();
 		showToast('Game preset saved', 'success');
 	}
 
@@ -7111,6 +7173,7 @@ function buildLobbyHtml(gameId) {
 
 	window.editGamePresetSettings = editGamePresetSettings;
 	window.deleteGamePresetSettings = deleteGamePresetSettings;
+	window.getGamePresets = getGamePresets;
 	window.refreshGamePresetSettings = function () {
 		renderGamePresetList();
 	};

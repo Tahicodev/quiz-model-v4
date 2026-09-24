@@ -72,7 +72,7 @@ app.use(
 	}),
 );
 app.use(cookieParser());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 // ── Request logging ─────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -176,6 +176,7 @@ import notificationRoutes from './routes/notifications.routes.js';
 import gamificationRoutes from './routes/gamification.routes.js';
 import teacherMessageRoutes from './routes/teacher-messages.routes.js';
 import teacherAssignmentRoutes from './routes/teacher-assignments.routes.js';
+import archivesRoutes from './routes/archives.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -251,6 +252,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/gamification', gamificationRoutes);
 app.use('/api/v1/teacher-messages', teacherMessageRoutes);
 app.use('/api/v1/teacher-assignments', teacherAssignmentRoutes);
+app.use('/api/v1/archives', archivesRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
 // Disable caching for HTML/JS entry points so dev edits reach the browser
