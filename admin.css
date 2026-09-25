@@ -1878,9 +1878,33 @@ html[data-lobby-page] .app-container {
 	display: block;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 640px) {
 	.games-split {
 		flex-direction: column;
+	}
+}
+
+/* Games tab — on phones the lobby stacks under the game list (wrap);
+   tablet and desktop keep the two-column split. */
+@media (min-width: 641px) {
+	.games-split {
+		flex-direction: row;
+	}
+}
+
+/* Games tab — center the title/subtitle and badge inside the header
+   on mobile so the text no longer hugs the left edge. */
+@media (max-width: 640px) {
+	#games .dashboard-header {
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: 10px;
+	}
+
+	#games .dashboard-header h2,
+	#games .dashboard-header .text-muted {
+		text-align: center;
 	}
 }
 
@@ -2087,10 +2111,331 @@ html[data-lobby-page] .app-container {
 	font-family: Consolas, Monaco, monospace;
 	font-size: 0.78rem;
 	line-height: 1.5;
-	color: #0f172a;
+color: #0f172a;
 	background: #f8fafc;
 	border: 1px solid #e2e8f0;
 	border-radius: 8px;
 	padding: 10px;
 	box-sizing: border-box;
+}
+
+/* ============================================================
+   MOBILE VIEWPORT FIXES
+   ============================================================ */
+
+/* Activity Log tab — stack the Export CSV button under the search
+   box and keep it full width + centred so it never misaligns. */
+@media (max-width: 640px) {
+	#activity .content-header {
+		align-items: stretch;
+		gap: 10px;
+	}
+
+	#activity .header-actions {
+		grid-template-columns: 1fr;
+	}
+
+	#activity .btn-export {
+		width: 100%;
+		min-height: 40px;
+		justify-content: center;
+	}
+
+	#activity .table-container .empty-cell {
+		text-align: center;
+		padding: 18px 10px;
+	}
+}
+
+/* Centre empty-state blocks inside their panels on mobile (except the
+   games list, which keeps the full-width treatment it has on desktop). */
+@media (max-width: 768px) {
+	#games .game-admin-panel > .empty-state,
+	#games .game-admin-panel > .empty-state-small,
+	#settingsModal .empty-state,
+	#settingsModal .empty-state-small {
+		width: 100%;
+		max-width: 420px;
+		margin: 12px auto;
+		text-align: center;
+	}
+
+	#gameList .empty-state,
+	#gameList .empty-state-small {
+		width: 100%;
+		max-width: none;
+		margin: 12px auto;
+		text-align: center;
+	}
+}
+
+/* Games Studio — keep the header buttons on the same row as the h3
+   instead of dropping the Clear All button below it on mobile. */
+@media (max-width: 768px) {
+	#games .game-admin-panel:has(.panel-header-actions) > .panel-header {
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 12px;
+	}
+
+	#games .game-admin-panel:has(.panel-header-actions) > .panel-header > div:first-child {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	#games .game-admin-panel .panel-header-actions {
+		flex: 0 0 auto;
+	}
+}
+
+/* App Settings modal — give the Save Settings button a proper mobile
+   layout instead of letting the two-column grid squish it. */
+@media (max-width: 760px) {
+	#settingsModal .settings-header-actions {
+		grid-template-columns: 1fr;
+	}
+
+	#settingsModal .settings-save-btn {
+		width: 100%;
+		min-width: 0;
+		min-height: 40px;
+		padding: 9px 12px;
+		border-radius: 12px;
+		font-size: 0.82rem;
+		font-weight: 600;
+		line-height: 1.2;
+		white-space: nowrap;
+	}
+
+	#settingsModal .settings-save-btn svg {
+		flex: 0 0 auto;
+	}
+
+	/* Preset rows — let the name/meta wrap and keep the Edit/Delete
+	   icon buttons pinned to the right so they never overflow. */
+	#settingsModal .preset-item {
+		flex-wrap: wrap !important;
+		align-items: center;
+		gap: 8px 12px;
+		padding: 12px !important;
+	}
+
+	#settingsModal .preset-item > div:first-child {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	#settingsModal .preset-item > div:last-child {
+		flex: 0 0 auto;
+		margin-left: auto;
+		gap: 6px !important;
+	}
+
+	#settingsModal .preset-item .preset-meta {
+		white-space: normal;
+		word-break: break-word;
+	}
+
+	/* Data section — hide the long school-year badge on phones */
+	#archivesCurrentYearBadge {
+		display: none !important;
+	}
+
+	/* Users tab — drop the sticky tabs so they scroll away with the page */
+	#settingsModal .user-settings-tabs {
+		position: static !important;
+	}
+
+	/* Users tab — the Add User control stays a round + button whose
+	   label is always visible as a tooltip below it on phones. */
+	#settingsModal #add-user-btn::after {
+		top: calc(100% + 8px);
+		bottom: auto;
+		opacity: 1;
+		visibility: visible;
+		transform: translateY(0);
+	}
+}
+
+/* ============================================================
+   MODAL FOOTERS — action bars pinned to the modal bottom in
+   every viewport. Bars rendered inside the scrolling .modal-body
+   previously floated above the bottom edge; now they sit flush
+   (short forms) and stay pinned while the body scrolls (long).
+   ============================================================ */
+
+/* Drop the trailing padding from any body whose last element is an
+   action bar, so the bar reaches the modal's bottom corner. */
+.modal .modal-body:has(.form-actions:last-child) {
+	padding-bottom: 0;
+}
+
+/* The six "standard form" modals declare their body padding with an
+   ID rule, so repeat the flush here with matching weight. */
+#userModal .modal-body,
+#questionFormModal .modal-body,
+#quickCategoryModal .modal-body {
+	padding-bottom: 0 !important;
+}
+
+/* Keep every in-body action bar pinned at the visible bottom while
+   the body scrolls. (Exam / category / class keep their own pinned
+   overlays on mobile via the specific rules in styles.css.) */
+.modal .form-actions {
+	position: sticky;
+	bottom: 0;
+	flex-shrink: 0;
+	z-index: 5;
+}
+
+/* Dark theme: a pinned bar needs a solid surface so scrolled content
+   never shows through it. */
+html[data-theme='dark'] #userModal #userForm .form-actions,
+html[data-theme='dark'] #questionFormModal .form-actions,
+html[data-theme='dark'] #quickCategoryModal .form-actions,
+html[data-theme='dark'] #resetPasswordModal .form-actions,
+html[data-theme='dark'] #importUserModal .form-actions,
+html[data-theme='dark'] #exportUserModal .form-actions {
+	background-color: var(--bg-surface) !important;
+	border-top-color: var(--border-color) !important;
+}
+
+/* ============================================================
+   APP SETTINGS HEADER — action buttons become three compact
+   icon-only squares sitting on the same row as the "App
+   Settings" title (right-aligned) with a bit more air above,
+   instead of the stacked full-width buttons on small screens.
+   ============================================================ */
+
+@media (max-width: 760px) {
+	#settingsModal .modal-header {
+		grid-template-columns: minmax(0, 1fr) auto !important;
+		align-items: center !important;
+		gap: 8px 12px !important;
+		padding: 18px 54px 12px 14px !important;
+	}
+
+	#settingsModal .settings-title-block {
+		min-width: 0;
+	}
+
+	/* Turn the action cluster into a right-aligned icon row. */
+	#settingsModal .settings-header-actions {
+		display: flex !important;
+		flex-direction: row !important;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 6px;
+		width: auto;
+		min-width: 0;
+		margin-left: 0;
+		padding: 0;
+		border: 0 !important;
+		border-radius: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+	}
+
+	#settingsModal
+		.settings-header-actions
+		.settings-save-btn,
+	#settingsModal
+		.settings-header-actions
+		.settings-reset-btn,
+	#settingsModal
+		.settings-header-actions
+		.settings-sidebar-toggle {
+		width: 38px;
+		min-width: 38px;
+		height: 38px;
+		min-height: 38px;
+		padding: 0;
+		gap: 0;
+		justify-content: center;
+		align-items: center;
+		border-radius: 12px;
+		font-size: 0;
+		line-height: 1;
+	}
+
+	#settingsModal
+		.settings-header-actions
+		.settings-save-btn
+		svg,
+	#settingsModal
+		.settings-header-actions
+		.settings-reset-btn
+		svg,
+	#settingsModal
+		.settings-header-actions
+		.settings-sidebar-toggle
+		svg {
+		width: 18px !important;
+		height: 18px !important;
+		margin-right: 0 !important;
+	}
+}
+
+/* ============================================================
+   ACTIVITY LOG — stack the header on phones, hide the search
+   box there, and keep the Export CSV button aligned and tidy
+   on tablet + desktop instead of letting it sit oddly beside
+   the heading.
+   ============================================================ */
+
+@media (max-width: 640px) {
+	#activity .content-header {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+
+	#activity .search-box {
+		display: none !important;
+	}
+
+	#activity .header-actions {
+		margin-top: 8px;
+	}
+}
+
+@media (min-width: 641px) {
+	#activity .content-header {
+		align-items: center;
+		gap: 12px;
+	}
+
+	#activity .header-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 12px;
+		width: auto;
+	}
+
+	#activity .search-box {
+		width: 250px;
+		min-width: 0;
+	}
+
+	#activity .btn-export {
+		min-height: 40px;
+		padding: 8px 16px;
+		border-radius: 8px;
+		font-size: 0.9rem;
+		white-space: nowrap;
+	}
+}
+
+/* ============================================================
+   TEACHER ACCESS TAB — don't force the tab to span the whole
+   settings-tabs row on narrow screens; let it flow like every
+   other tab.
+   ============================================================ */
+
+@media (max-width: 480px) {
+	#settingsModal .settings-tab-btn[data-settings-tab='teacher-access'] {
+		grid-column: auto !important;
+	}
 }
