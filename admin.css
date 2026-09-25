@@ -2391,12 +2391,17 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		gap: 8px;
 	}
 
-	#activity .search-box {
-		display: none !important;
+	#activity .header-actions {
+		position: static !important;
+		display: grid !important;
+		grid-template-columns: 1fr;
+		margin-top: 8px;
 	}
 
-	#activity .header-actions {
-		margin-top: 8px;
+	#activity .search-box {
+		display: block !important;
+		width: 100%;
+		min-width: 0;
 	}
 }
 
