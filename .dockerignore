@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.vscode
+tests
+gui-test-screenshots
+coverage
+vendor/offline
+vendor/mkcert
+certs
+.env
+prisma/dev.db
+prisma/dev.db.bak
+prisma/*.db-journal
+prisma/test-*.db
+*.log

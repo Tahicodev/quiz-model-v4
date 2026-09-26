@@ -43,11 +43,11 @@ export class AIService {
     if (!topic || !topic.trim()) throw new ValidationError({ topic: ['Topic is required'] });
     if (!count || count < 1 || count > 20) throw new ValidationError({ count: ['Count must be 1-20'] });
     if (type && !typeValues.includes(type)) throw new ValidationError({ type: [`Invalid type: ${type}`] });
-    if (difficulty && !diffValues.includes(difficulty)) throw new ValidationError({ difficulty: [`Invalid difficulty: ${difficulty}`] });
+    if (difficulty && difficulty !== 'mixed' && !diffValues.includes(difficulty)) throw new ValidationError({ difficulty: [`Invalid difficulty: ${difficulty}`] });
 
     const prompt = this.#buildPrompt({ topic, count: Math.min(count, 20), type, difficulty });
     const raw = await this.#callLLM(prompt);
-    const parsed = this.#parseResponse(raw, type || 'mcq', difficulty || 'medium');
+    const parsed = this.#parseResponse(raw, type || 'mcq', difficulty === 'mixed' ? 'medium' : (difficulty || 'medium'));
     return parsed;
   }
 
@@ -226,7 +226,7 @@ Respond ONLY with a valid JSON array. Example for MCQ:
       'odd-one-out': '"options" = array of 4 strings where exactly one does not belong; "answer" = the odd one',
       'draggable': '"options" = array of 4-6 strings in the CORRECT order; "answer" = the same strings joined with "," (comma-separated, correct order)',
       'matching-pairs': '"options" = array of "left-->right" pair strings; "answer" = the pairs joined with "|" (e.g. "A-->1|B-->2")',
-      'fill-blank': '"question" contains "[[1]]", "[[2]]"… placeholders; "options" = array of the correct words for each blank; "answer" = the words joined with "|" in blank order',
+      'fill-blank': '"question" contains "___" (three underscores) for each blank; "options" = a word bank with the correct words plus 1-2 plausible distractors; "answer" = "1:word|2:word" where the numbers match the blanks left to right',
       'code': '"question" contains the code snippet; "answer" = the expected output/value; optional "language" and "answerMode" ("text"|"options")',
     };
 
@@ -240,6 +240,14 @@ Respond ONLY with a valid JSON array. Example for MCQ:
 
     const total = Object.values(typeCounts || {}).reduce((s, n) => s + Number(n || 0), 0) || 5;
 
+    const isMixed = difficulty === 'mixed';
+    const diffLabel = isMixed
+      ? 'Mixed — produce a balanced spread of easy, medium and hard questions'
+      : difficulty;
+    const diffField = isMixed
+      ? '"difficulty": one of ["easy","medium","hard"] chosen per question (spread a balanced mix)'
+      : `"difficulty": "${difficulty}"`;
+
     return `You are a quiz-question generator for a school quiz app. Generate questions about the topic below.
 
 TOPIC / SOURCE MATERIAL:
@@ -249,9 +257,9 @@ REQUIRED QUESTIONS (exact counts):
 ${requested.join('\n')}
 
 RULES:
-- Difficulty: ${difficulty}. Points per question: ${points}. Language: ${language}.
+- Difficulty: ${diffLabel}. Points per question: ${points}. Language: ${language}.
 - Each question object MUST use EXACTLY these keys:
-  { "question": string, "type": one of ["multiple-choice","multiple-choice-multi","true-false","odd-one-out","draggable","matching-pairs","fill-blank","code"], "options": string[], "answer": string, "explanation": string, "difficulty": "${difficulty}", "points": ${points} }
+  { "question": string, "type": one of ["multiple-choice","multiple-choice-multi","true-false","odd-one-out","draggable","matching-pairs","fill-blank","code"], "options": string[], "answer": string, "explanation": string, ${diffField}, "points": ${points} }
 - The "answer" MUST be copy-pasteable from the "options" array (except fill-blank / code).
 - No numbering, no markdown, no commentary — respond with ONE valid JSON array of question objects and NOTHING else.
 
@@ -263,7 +271,7 @@ Example output:
     "options": ["124", "144", "156", "132"],
     "answer": "144",
     "explanation": "12 × 12 = 144.",
-    "difficulty": "${difficulty}",
+    "difficulty": "${isMixed ? 'medium' : difficulty}",
     "points": ${points}
   }
 ]`;
@@ -386,11 +394,26 @@ Example output:
       if (typeof options === 'string') {
         options = options.split(',').map((s) => s.trim()).filter(Boolean);
       }
+      let question = String(row.question || row.text || '').trim();
+      let answer = String(row.answer || '').trim();
+      if (type === 'fill-blank') {
+        // Match the manual editor's structure: "___" blanks in the text and
+        // a numbered "1:word|2:word" answer. Repair [[1]] / {{1}} / [blank]
+        // placeholders and unnumbered word lists a model may still emit.
+        question = question.replace(/\[\[\d+\]\]|\{\{\d+\}\}|\[blank\]/gi, '___');
+        if (!/^\s*\d+\s*:/.test(answer)) {
+          const parts = answer.split('|').map((s) => s.trim()).filter(Boolean);
+          const words = parts.length > 1
+            ? parts
+            : answer.split(',').map((s) => s.trim()).filter(Boolean);
+          answer = words.map((word, i) => `${i + 1}:${word}`).join('|');
+        }
+      }
       return {
-        question: String(row.question || row.text || '').trim(),
+        question,
         type,
         options: Array.isArray(options) ? options.map((o) => (typeof o === 'object' ? String(o.text || o.value || '') : String(o))) : [],
-        answer: String(row.answer || '').trim(),
+        answer,
         explanation: String(row.explanation || '').trim() || '',
         difficulty: ['easy', 'medium', 'hard'].includes(String(row.difficulty).toLowerCase())
           ? String(row.difficulty).toLowerCase()

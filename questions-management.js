@@ -6368,7 +6368,21 @@ function validateCodeTypeDistribution(typeCounts = {}, codeTypeCounts = {}) {
 // client-side generator when no model is selected/configured.
 async function generateQuestionsViaServer({ topic, typeCounts, difficulty, points, language }) {
 	let configId = null;
-	try { configId = localStorage.getItem('quizAISelectedConfig') || null; } catch (_) {}
+	try {
+		const saved = localStorage.getItem('quizAISelectedConfig') || null;
+		// A saved selection can outlive its config (deleted in Settings, or
+		// the DB was re-created). Only trust it while it still exists in the
+		// loaded list; otherwise clear it so the user gets the "pick a model"
+		// guidance instead of a cryptic "AI config not found" 404.
+		if (saved) {
+			const known = aiSharedConfigs || [];
+			if (known.length === 0 || known.some((c) => String(c.id) === String(saved))) {
+				configId = saved;
+			} else {
+				try { localStorage.removeItem('quizAISelectedConfig'); } catch (_) {}
+			}
+		}
+	} catch (_) {}
 
 	if (!configId) {
 		// No model selected: use the legacy browser-side generator if it's
@@ -7038,6 +7052,26 @@ function normalizeImportedAIQuestion(question, fallbackCategoryId = '') {
 				? q.useWordBank
 				: true,
 		);
+		// Force the manual-editor structure so imported questions display the
+		// same way as hand-made ones: "___" blanks + numbered "1:word|2:word".
+		q.question = String(q.question || '').replace(
+			/\[\[\d+\]\]|\{\{\d+\}\}|\[blank\]/gi,
+			'___',
+		);
+		if (!/^\s*\d+\s*:/.test(String(q.answer || '').trim())) {
+			const parts = String(q.answer || '')
+				.split('|')
+				.map((s) => s.trim())
+				.filter(Boolean);
+			const words =
+				parts.length > 1
+					? parts
+					: String(q.answer || '')
+							.split(',')
+							.map((s) => s.trim())
+							.filter(Boolean);
+			q.answer = words.map((word, i) => `${i + 1}:${word}`).join('|');
+		}
 	}
 
 	q.explanation = String(q.explanation || '').trim();

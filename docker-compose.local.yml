@@ -1,0 +1,37 @@
+# Quiz App v4 — single-machine, any-OS Docker stack (SQLite, no external services)
+#
+# One-click usage:
+#   Windows: double-click  docker-start.bat   (or run: docker compose -f docker-compose.local.yml up -d)
+#   Linux/macOS:           ./docker-start.sh
+#
+# Offline: put quiz-app-v4-image.tar next to this folder -> docker-start loads it.
+# Internet: docker-start builds the image automatically the first time.
+
+services:
+  app:
+    image: quiz-app-v4:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV:           production
+      APP_MODE:           local
+      DB_PROVIDER:        sqlite
+      DATABASE_URL:       "file:./dev.db"
+      JWT_SECRET:         ${JWT_SECRET}
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+      BCRYPT_ROUNDS:      12
+      PORT:               3000
+      CORS_ORIGIN:        http://localhost:3000
+      LOG_LEVEL:          info
+      DEFAULT_SCHOOL_ID:  local
+      QUIZ_ADMIN_SECRET:  ${QUIZ_ADMIN_SECRET}
+    volumes:
+      - quiz-data:/app/prisma
+
+volumes:
+  quiz-data:

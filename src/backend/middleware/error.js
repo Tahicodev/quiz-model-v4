@@ -20,7 +20,13 @@ export const errorHandler = (err, req, res, next) => {
       logger.warn(`[${code}] ${message}`, { path: req.path });
     }
   } else {
-    // Unhandled system errors
+    // Unhandled system errors. body-parser/express errors carry their own
+    // status (e.g. malformed JSON -> 400); honor it when present.
+    if (Number.isInteger(err?.statusCode) && err.statusCode >= 400 && err.statusCode < 600) {
+      statusCode = err.statusCode;
+    } else if (Number.isInteger(err?.status) && err.status >= 400 && err.status < 600) {
+      statusCode = err.status;
+    }
     logger.error('Unhandled Exception:', { error: err.message, stack: err.stack, path: req.path });
   }
 

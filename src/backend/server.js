@@ -1,4 +1,6 @@
 import http from 'http';
+import https from 'https';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -327,8 +329,14 @@ setInterval(
 	60 * 60 * 1000,
 );
 
-// ── HTTP + Socket.io Server ───────────────────────────────────────────────────
-const httpServer = http.createServer(app);
+// ── HTTP(S) + Socket.io Server ──────────────────────────────────────────────
+const tlsOpts = config.tlsEnabled
+	? {
+			key: fs.readFileSync(config.tlsKeyPath),
+			cert: fs.readFileSync(config.tlsCertPath),
+		}
+	: null;
+const httpServer = tlsOpts ? https.createServer(tlsOpts, app) : http.createServer(app);
 
 // Boot: attach Socket.io to the httpServer with the container's services.
 // Uses an async IIFE so a failure here fails fast with a logged error rather
@@ -342,8 +350,12 @@ const httpServer = http.createServer(app);
 		});
 		httpServer.listen(config.port, '0.0.0.0', () => {
 			logger.info(
-				{ port: config.port, host: '0.0.0.0' },
-				'Backend server started (SaaS) — reachable on LAN',
+				{
+					port: config.port,
+					protocol: config.tlsEnabled ? 'https' : 'http',
+					host: '0.0.0.0',
+				},
+				'Backend server started — reachable on LAN',
 			);
 		});
 	} catch (err) {

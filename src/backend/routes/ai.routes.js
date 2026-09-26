@@ -26,7 +26,7 @@ const GenerateSchema = z.object({
   topic:      z.string().min(1).max(500),
   count:      z.coerce.number().int().min(1).max(20).default(3),
   type:       z.enum(['mcq','true-false','fill-blank','matching','order']).default('mcq'),
-  difficulty: z.enum(['easy','medium','hard']).default('medium'),
+  difficulty: z.enum(['easy','medium','hard','mixed']).default('medium'),
 });
 
 const GenerateTextSchema = z.object({
@@ -257,7 +257,7 @@ const StructuredGenerateSchema = z.object({
   }).optional(),
   topic: z.string().min(1).max(8000),
   typeCounts: z.record(z.string(), z.coerce.number().int().min(0).max(20)).optional().default({}),
-  difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
+  difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']).default('medium'),
   points: z.coerce.number().int().min(1).max(100).default(1),
   language: z.string().max(40).default('English'),
 });
@@ -325,7 +325,7 @@ router.post('/prompt', requireRole(AI_ROLES), async (req, res, next) => {
     const prompt = aiSvc.buildStructurePrompt({
       topic: String(req.body?.topic || 'general knowledge'),
       typeCounts: req.body?.typeCounts || {},
-      difficulty: ['easy', 'medium', 'hard'].includes(req.body?.difficulty) ? req.body.difficulty : 'medium',
+      difficulty: ['easy', 'medium', 'hard', 'mixed'].includes(req.body?.difficulty) ? req.body.difficulty : 'medium',
       points: Number(req.body?.points) > 0 ? Math.min(Number(req.body.points), 100) : 1,
       language: String(req.body?.language || 'English'),
     });

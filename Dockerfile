@@ -1,59 +1,44 @@
-# Dockerfile — multi-stage build for the Quiz Application
-# Stage 1: install production dependencies + optionally build the frontend
-# Stage 2: runtime — slim Node image, runs the backend
+# quiz-app-v4 — single-container build (works on any OS with Docker)
+# Build:  docker compose -f docker-compose.local.yml build
+# Run:    docker compose -f docker-compose.local.yml up -d
+# The app runs in local/SQLite mode; data persists in the quiz-data volume.
 
-# ── Stage 1: Build / Install ──────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM node:22-slim
 
-WORKDIR /app
-
-# Copy package files first (leverages Docker layer caching)
-COPY package*.json ./
-RUN npm ci --omit=dev && \
-    npm cache clean --force
-
-# Copy prisma schema and generate client (schema-only, no migrations at build)
-COPY prisma/schema.prisma ./prisma/
-RUN npx prisma generate
-
-# (Optional) Build frontend bundle with esbuild
-# COPY src/frontend/ ./src/frontend/
-# COPY src/shared/ ./src/shared/
-# RUN npx esbuild src/frontend/main.js --bundle --outfile=public/bundle.js --minify
-
-# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
-FROM node:22-alpine AS runtime
-
-# Create non-root user (security best practice)
-RUN addgroup -S quizapp && adduser -S quizapp -G quizapp
+ENV NODE_ENV=production \
+    CHECKPOINT_DISABLE=1 \
+    PRISMA_HIDE_UPDATE_MESSAGE=1
 
 WORKDIR /app
 
-# Copy production node_modules and prisma client from builder
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma/generated ./prisma/generated
+# OpenSSL is required by Prisma's engines (schema/query) on Debian-based images.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends openssl && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy application source (backend + shared — frontend optional if pre-built)
-COPY src/backend/ ./src/backend/
-COPY src/frontend/ ./src/frontend/
-COPY src/shared/ ./src/shared/
-COPY prisma/schema.prisma ./prisma/
-COPY prisma/migrations/ ./prisma/migrations/
-COPY package.json ./
+# Install ALL dependencies (prisma + esbuild are devDeps but needed at runtime
+# for migrations/bundles). --ignore-scripts: the frontend build needs source
+# files which are copied below.
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
 
-# (Optional) Copy pre-built frontend if Stage 1 built it
-# COPY --from=builder /app/public ./public
+# Copy the full app (roots static pages, src, prisma, public bundles, vendor libs)
+COPY . .
 
-# Expose the API port
+# Strip anything that must not run/ship inside the image (dist volumes handle data)
+RUN rm -f .env && \
+    rm -f prisma/dev.db prisma/dev.db.bak prisma/*.db-journal prisma/test-*.db && \
+    rm -rf tests gui-test-screenshots dist
+
+# Generate the Prisma client (downloads engines into the image — needs network
+# once at BUILD time; afterwards the image is fully self-contained) and build
+# the frontend bundles.
+RUN npx prisma generate && (npm run build || true)
+
 EXPOSE 3000
 
-# Healthcheck — verifies the Express /health endpoint responds
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+  CMD node -e "fetch('http://localhost:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
-# Run migrations on startup, then start the server.
-# Use `migrate deploy` (not `dev`) — matches spec §25 Operations guideline.
-CMD ["sh", "-c", "npx prisma migrate deploy && node src/backend/server.js"]
-
-# Switch to non-root user
-USER quizapp
+# Migrate + seed on every start (both idempotent), then boot the server.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node src/backend/server.js"]
