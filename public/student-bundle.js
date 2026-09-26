@@ -17197,7 +17197,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     try {
       sessionStorage.setItem("quizSession", JSON.stringify(session));
       const role = String(user.role || "").toLowerCase();
-      localStorage.setItem(`quizSession:${role || "user"}`, JSON.stringify(session));
+      localStorage.setItem(
+        `quizSession:${role || "user"}`,
+        JSON.stringify(session)
+      );
       if (token) {
         localStorage.setItem(`quizAuthToken:${role || "user"}`, token);
       }
@@ -17231,17 +17234,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           localStorage.removeItem("quizSessionRemember");
         }
       } else {
-        localStorage.setItem(`quizCurrentUser:${role || "user"}`, JSON.stringify({
-          id: user.id,
-          username: user.username,
-          name: user.name || user.username,
-          role: user.role,
-          numero: user.numero || user.studentNumber || "",
-          studentNumber: user.studentNumber || user.numero || "",
-          classId: user.class_id || user.classId || "",
-          className: user.class_name || user.className || "",
-          status: "active"
-        }));
+        localStorage.setItem(
+          `quizCurrentUser:${role || "user"}`,
+          JSON.stringify({
+            id: user.id,
+            username: user.username,
+            name: user.name || user.username,
+            role: user.role,
+            numero: user.numero || user.studentNumber || "",
+            studentNumber: user.studentNumber || user.numero || "",
+            classId: user.class_id || user.classId || "",
+            className: user.class_name || user.className || "",
+            status: "active"
+          })
+        );
       }
       const seedUser = {
         id: user.id,
@@ -17319,66 +17325,76 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         input.type = reveal ? "text" : "password";
         toggle.textContent = reveal ? "Hide" : "Show";
         toggle.setAttribute("aria-pressed", reveal ? "true" : "false");
-        toggle.setAttribute("aria-label", reveal ? "Hide password" : "Show password");
+        toggle.setAttribute(
+          "aria-label",
+          reveal ? "Hide password" : "Show password"
+        );
       });
     }
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const username = (form.querySelector('[data-auth="username"]') || {}).value || "";
-      const password = (form.querySelector('[data-auth="password"]') || {}).value || "";
-      const remember = Boolean(
-        (form.querySelector('[data-auth="remember"]') || {}).checked
-      );
-      if (!username.trim() || !password) {
-        setAuthStatus("Please enter both your username and password.", "error");
-        return;
-      }
-      const submitBtn = document.getElementById("entryAuthSubmitBtn");
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Signing in\u2026";
-      }
-      setAuthStatus("", "");
-      try {
-        const res = await fetch(getApiBase() + "/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username: username.trim(), password }),
-          credentials: "include"
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const msg = data && data.error && data.error.message || data && data.message || "Invalid username or password.";
-          setAuthStatus(msg, "error");
+    form.addEventListener(
+      "submit",
+      async (e) => {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const username = (form.querySelector('[data-auth="username"]') || {}).value || "";
+        const password = (form.querySelector('[data-auth="password"]') || {}).value || "";
+        const remember = Boolean(
+          (form.querySelector('[data-auth="remember"]') || {}).checked
+        );
+        if (!username.trim() || !password) {
+          setAuthStatus("Please enter both your username and password.", "error");
+          return;
+        }
+        const submitBtn = document.getElementById("entryAuthSubmitBtn");
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Signing in\u2026";
+        }
+        setAuthStatus("", "");
+        try {
+          const res = await fetch(getApiBase() + "/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: username.trim(), password }),
+            credentials: "include"
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const msg = data && data.error && data.error.message || data && data.message || "Invalid username or password.";
+            setAuthStatus(msg, "error");
+            if (submitBtn) {
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = "Sign In";
+            }
+            return;
+          }
+          const payload = data && (data.user || data.data) ? data : { user: data };
+          const user = payload.user || payload;
+          const token = payload.accessToken || payload.token || "";
+          persistLegacySession(
+            { ...payload, user, accessToken: token },
+            remember
+          );
+          sessionStorage.setItem(
+            user.role === "student" ? "studentLoggedIn" : "adminLoggedIn",
+            "true"
+          );
+          setAuthStatus("Signed in \u2014 redirecting\u2026", "success");
+          setTimeout(() => redirectAfterLogin(user.role), 300);
+        } catch (err) {
+          console.error("[entry-auth] login request failed:", err);
+          setAuthStatus(
+            "Could not reach the server \u2014 check your connection and try again.",
+            "error"
+          );
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.innerHTML = "Sign In";
           }
-          return;
         }
-        const payload = data && (data.user || data.data) ? data : { user: data };
-        const user = payload.user || payload;
-        const token = payload.accessToken || payload.token || "";
-        persistLegacySession({ ...payload, user, accessToken: token }, remember);
-        sessionStorage.setItem(
-          user.role === "student" ? "studentLoggedIn" : "adminLoggedIn",
-          "true"
-        );
-        setAuthStatus("Signed in \u2014 redirecting\u2026", "success");
-        setTimeout(() => redirectAfterLogin(user.role), 300);
-      } catch (err) {
-        console.error("[entry-auth] login request failed:", err);
-        setAuthStatus(
-          "Could not reach the server \u2014 check your connection and try again.",
-          "error"
-        );
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = "Sign In";
-        }
-      }
-    }, { capture: true });
+      },
+      { capture: true }
+    );
   }
   function redirectIfAlreadySignedIn() {
     try {
@@ -17867,6 +17883,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     }
     function refreshAccessToken() {
+      if (typeof window.__legacyBridgeRefresh === "function") {
+        return window.__legacyBridgeRefresh();
+      }
       if (refreshing) return refreshing;
       if (authUnavailable) {
         var blocked = new Error("Session expired");
@@ -18032,10 +18051,29 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         };
         var type = String(q.type || "multiple-choice");
         var mappedType = TYPE_MAP[type] || "mcq";
-        var rawOptions = Array.isArray(q.optionData) && q.optionData.length ? q.optionData.map(function(o) {
-          return typeof o === "string" ? o : o && o.text || "";
-        }) : Array.isArray(q.options) ? q.options : [];
-        var optionsJson = rawOptions.length ? JSON.stringify(rawOptions) : void 0;
+        var rawOptions = Array.isArray(q.optionData) && q.optionData.length ? q.optionData : Array.isArray(q.options) ? q.options : [];
+        var serializedOptions = [];
+        for (var oi = 0; oi < rawOptions.length; oi++) {
+          var o = rawOptions[oi];
+          if (typeof o === "string") {
+            serializedOptions.push(o);
+            continue;
+          }
+          if (!o || typeof o !== "object") continue;
+          var oText = String(o.text != null ? o.text : o.label || o.value || "").trim();
+          var oImage = String(o.image != null ? o.image : o.imageUrl || o.src || "").trim();
+          if (!oText && !oImage) continue;
+          if (!oImage) {
+            serializedOptions.push(oText);
+            continue;
+          }
+          var oNode = { text: oText, image: oImage };
+          if (o.isImageOnly) oNode.isImageOnly = true;
+          if (o.id != null) oNode.id = String(o.id);
+          if (o.number != null) oNode.number = String(o.number);
+          serializedOptions.push(oNode);
+        }
+        var optionsJson = serializedOptions.length ? JSON.stringify(serializedOptions) : void 0;
         var answer = q.answer;
         if (typeof answer !== "string") {
           answer = Array.isArray(answer) ? JSON.stringify(answer) : answer == null ? "" : String(answer);
@@ -18114,15 +18152,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return out;
       },
       games: function(g) {
-        var status = String(g.status || "waiting");
-        if (status === "open") status = "waiting";
-        else if (status === "live") status = "active";
-        else if (status === "completed") status = "finished";
-        else if (status !== "active" && status !== "paused" && status !== "finished") status = "waiting";
+        var rawStatus = String(g.status || "waiting");
+        var legacyStatus = rawStatus;
+        var status;
+        if (rawStatus === "live") status = "active";
+        else if (rawStatus === "completed") status = "finished";
+        else if (rawStatus === "open") status = "waiting";
+        else if (rawStatus === "draft") status = "waiting";
+        else if (["waiting", "active", "paused", "finished"].indexOf(rawStatus) >= 0) status = rawStatus;
+        else {
+          status = "waiting";
+          legacyStatus = "open";
+        }
         var questionIds2 = Array.isArray(g.questions) ? g.questions.map(function(q) {
           return q && (q.id || q.question_id) || q;
         }).filter(Boolean) : Array.isArray(g.question_ids) ? g.question_ids : [];
         var settings = Object.assign({}, g.settings || {});
+        settings.legacyStatus = legacyStatus;
         if (Array.isArray(g.classIds)) settings.classIds = g.classIds;
         if (g.session) settings.session = g.session;
         if (g.results) settings.results = g.results;
@@ -18221,6 +18267,34 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       var mapper = MAPPERS[entity];
       return mapper ? mapper(data || {}) : data || {};
     }
+    function uploadEmbeddedImages(entity, data) {
+      if (entity !== "questions" || !data || typeof data !== "object") {
+        return Promise.resolve(data);
+      }
+      var bucket = [];
+      var collect = function(list) {
+        if (!Array.isArray(list)) return;
+        for (var i = 0; i < list.length; i++) {
+          var item = list[i];
+          if (item && typeof item === "object" && typeof item.image === "string" && /^data:image\//i.test(item.image)) {
+            bucket.push(item);
+          }
+        }
+      };
+      collect(data.optionData);
+      collect(data.options);
+      collect(data.answers);
+      if (!bucket.length) return Promise.resolve(data);
+      var pending = bucket.map(function(item) {
+        return request("POST", "/uploads", { dataUrl: item.image }).then(function(res) {
+          if (res && res.url) item.image = res.url;
+        }).catch(function() {
+        });
+      });
+      return Promise.all(pending).then(function() {
+        return data;
+      });
+    }
     window.API = {
       /** GET /api/v1/<entity>[?query] */
       list: function(entity, query) {
@@ -18242,11 +18316,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       },
       /** POST /api/v1/<entity> — payload is mapped through MAPPERS first. */
       create: function(entity, data) {
-        return request("POST", "/" + entity, mapPayload(entity, data));
+        return uploadEmbeddedImages(entity, data).then(function(payload) {
+          return request("POST", "/" + entity, mapPayload(entity, payload));
+        });
       },
       /** PATCH /api/v1/<entity>/<id> */
       update: function(entity, id, patch) {
-        return request("PATCH", "/" + entity + "/" + encodeURIComponent(id), mapPayload(entity, patch));
+        return uploadEmbeddedImages(entity, patch).then(function(payload) {
+          return request("PATCH", "/" + entity + "/" + encodeURIComponent(id), mapPayload(entity, payload));
+        });
       },
       /** DELETE /api/v1/<entity>/<id> */
       remove: function(entity, id) {
@@ -18353,7 +18431,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const now = (/* @__PURE__ */ new Date()).toISOString();
       const genId = () => {
         if (typeof generateUUID === "function") return generateUUID();
-        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+          return crypto.randomUUID();
         return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
           const r = Math.random() * 16 | 0;
           return (c === "x" ? r : r & 3 | 8).toString(16);
@@ -18416,7 +18495,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const entered = String(code || "").trim();
       if (!entered) return false;
       const enteredHash = await hashPassword(entered);
-      const settings = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("settings")), {});
+      const settings = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("settings")),
+        {}
+      );
       const savedHash = String(settings.recoveryCodeHash || "").trim();
       const defaultHash = await hashPassword(DEFAULT_RECOVERY_CODE);
       if (savedHash && enteredHash === savedHash) return true;
@@ -18509,7 +18591,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             );
             return;
           }
-          console.warn("[auth] server recovery verify unreachable \u2014 falling back to local", err);
+          console.warn(
+            "[auth] server recovery verify unreachable \u2014 falling back to local",
+            err
+          );
         }
       }
       const ok = await verifyRecoveryCodeValue(code);
@@ -18523,13 +18608,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       recoveryTicket = null;
       recoveryUnlockedUntil = Date.now() + RECOVERY_UNLOCK_TTL_MS;
       setRecoveryPanelMode("reset");
-      setRecoveryStatus("Recovery verified. You can reset the dashboard password for 15 minutes.", "success");
+      setRecoveryStatus(
+        "Recovery verified. You can reset the dashboard password for 15 minutes.",
+        "success"
+      );
     }
     async function resetDashboardPasswordFromForm(formEl) {
       const unlocked = recoveryTicket || Date.now() < recoveryUnlockedUntil;
       if (!unlocked) {
         setRecoveryPanelMode("open");
-        setRecoveryStatus("Recovery verification expired. Verify the code again.", "error");
+        setRecoveryStatus(
+          "Recovery verification expired. Verify the code again.",
+          "error"
+        );
         return;
       }
       const username = String(
@@ -18539,7 +18630,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         formEl?.querySelector('[data-recovery="password"]')?.value || ""
       );
       if (!username || password.length < 6) {
-        setRecoveryStatus("Enter a username and a password with at least 6 characters.", "error");
+        setRecoveryStatus(
+          "Enter a username and a password with at least 6 characters.",
+          "error"
+        );
         return;
       }
       if (recoveryTicket && window.API && typeof window.API.raw === "function") {
@@ -18553,7 +18647,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           recoveryUnlockedUntil = 0;
           setRecoveryPanelMode("closed");
           if (formEl) formEl.reset();
-          setRecoveryStatus("Admin password reset. Sign in with the new password.", "success");
+          setRecoveryStatus(
+            "Admin password reset. Sign in with the new password.",
+            "success"
+          );
           return;
         } catch (err) {
           const status = err && err.status;
@@ -18563,19 +18660,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
               recoveryUnlockedUntil = 0;
               setRecoveryPanelMode("open");
             }
-            setRecoveryStatus(
-              err?.message || "Password reset failed",
-              "error"
-            );
+            setRecoveryStatus(err?.message || "Password reset failed", "error");
             return;
           }
-          console.warn("[auth] server recovery reset unreachable \u2014 falling back to local", err);
+          console.warn(
+            "[auth] server recovery reset unreachable \u2014 falling back to local",
+            err
+          );
         }
       }
       const users = await ensureDefaultAdmin();
       let user = findUserByUsername(users, username);
       if (!user) {
-        user = users.find((entry) => String(entry.role || "").toLowerCase() === ROLE_ADMIN) || normalizeUser({
+        user = users.find(
+          (entry) => String(entry.role || "").toLowerCase() === ROLE_ADMIN
+        ) || normalizeUser({
           name: "Administrator",
           username,
           role: ROLE_ADMIN,
@@ -18594,7 +18693,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       recoveryUnlockedUntil = 0;
       setRecoveryPanelMode("closed");
       if (formEl) formEl.reset();
-      setRecoveryStatus("Dashboard password reset. Sign in with the new password.", "success");
+      setRecoveryStatus(
+        "Dashboard password reset. Sign in with the new password.",
+        "success"
+      );
     }
     function findUserByUsername(users, username) {
       const normalized = String(username || "").trim().toLowerCase();
@@ -18766,7 +18868,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return Array.isArray(mirrored) ? mirrored : [];
     }
     function getAccessibleClasses() {
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       if (isTeacher()) {
         const teacherClassIds = getTeacherClassIds();
         return classes.filter((cls) => teacherClassIds.includes(cls.id));
@@ -18811,7 +18916,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!isStudentLikeUser(user)) return null;
       let className = user.className;
       if (!className && user.classId) {
-        const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+        const classes = safeJsonParse(
+          JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+          []
+        );
         const match = classes.find((c) => c.id === user.classId);
         if (match) className = match.name;
       }
@@ -18832,7 +18940,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         classes: true,
         games: true,
         results: true,
-        activity: true
+        activity: true,
+        monitoring: true
       },
       settings: true,
       settingsTabs: {
@@ -18847,7 +18956,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
     };
     function getTeacherAccessSettings() {
-      const settings = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("settings")), {});
+      const settings = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("settings")),
+        {}
+      );
       const stored = settings.teacherAccess || {};
       return {
         tabs: { ...DEFAULT_TEACHER_ACCESS.tabs, ...stored.tabs || {} },
@@ -18879,7 +18991,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (classId && classIds.includes(classId)) return true;
           const className = item.class || item.className || "";
           if (!className) return false;
-          const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+          const classes = safeJsonParse(
+            JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+            []
+          );
           const match = classes.find((c) => c.name === className);
           return Boolean(match && classIds.includes(match.id));
         }
@@ -18953,7 +19068,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function canAccessSettingsTab(tabName) {
       if (isAdmin()) return true;
       if (isTeacher()) {
-        if (tabName === "teacher-access" || tabName === "data" || tabName === "realtime") {
+        if (tabName === "teacher-access" || tabName === "data" || tabName === "realtime" || tabName === "setup") {
           return false;
         }
         const access = getTeacherAccessSettings();
@@ -19001,7 +19116,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-tab-btn[data-settings-tab]").forEach((btn) => {
         const key = btn.dataset.settingsTab;
         if (!key) return;
-        if (key === "teacher-access" || key === "data" || key === "realtime") {
+        if (key === "teacher-access" || key === "data" || key === "realtime" || key === "setup") {
           btn.classList.add("role-hidden");
           return;
         }
@@ -19014,7 +19129,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-section[data-settings-tab]").forEach((section) => {
         const key = section.dataset.settingsTab;
         if (!key) return;
-        if (key === "teacher-access" || key === "data" || key === "realtime") {
+        if (key === "teacher-access" || key === "data" || key === "realtime" || key === "setup") {
           section.classList.add("role-hidden");
           return;
         }
@@ -19028,16 +19143,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     var schoolBrandingCache = { loaded: false, profile: null };
     function applySchoolBranding() {
       var titleEl = document.getElementById("dashboardTitle");
+      var mobileTitleEl = document.getElementById("mobileDashboardTitle");
       var logoBox = document.querySelector(".header-branding .brand-logo");
-      if (!titleEl && !logoBox) return;
+      var mobileLogoBox = document.querySelector(
+        ".mobile-menu-branding .brand-logo"
+      );
+      if (!titleEl && !logoBox && !mobileTitleEl && !mobileLogoBox) return;
       var apply = function(profile) {
         if (!profile) return;
         var isTeacher2 = currentUser && currentUser.role === ROLE_TEACHER;
+        var label = isTeacher2 ? profile.name + " \u2014 Teachers" : profile.name;
         if (titleEl && profile.name) {
-          titleEl.textContent = isTeacher2 ? profile.name + " \u2014 Teachers" : profile.name;
+          titleEl.textContent = label;
         }
-        if (logoBox && profile.logo_url) {
-          logoBox.innerHTML = '<img src="' + profile.logo_url + '" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />';
+        if (mobileTitleEl && profile.name) {
+          mobileTitleEl.textContent = label;
+        }
+        var logoHtml = profile.logo_url ? '<img src="' + profile.logo_url + '" alt="School logo" style="width:100%;height:100%;object-fit:contain;border-radius:50%;" />' : "";
+        if (logoBox && logoHtml) {
+          logoBox.innerHTML = logoHtml;
+        }
+        if (mobileLogoBox && logoHtml) {
+          mobileLogoBox.innerHTML = logoHtml;
         }
       };
       if (schoolBrandingCache.loaded) {
@@ -19084,6 +19211,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const titleEl = document.getElementById("dashboardTitle");
       if (titleEl) {
         titleEl.textContent = currentUser.role === ROLE_TEACHER ? "Teacher Dashboard" : "Admin Dashboard";
+      }
+      const mobileTitleEl = document.getElementById("mobileDashboardTitle");
+      if (mobileTitleEl) {
+        mobileTitleEl.textContent = currentUser.role === ROLE_TEACHER ? "Teacher Dashboard" : "Admin Dashboard";
       }
       applySchoolBranding();
       const navButtons = Array.from(document.querySelectorAll(".nav-tab"));
@@ -19203,7 +19334,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function populateStudentAccountRequestClassSelect() {
       const classSelect = document.getElementById("student-request-class");
       if (!classSelect) return;
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       const options = classes.filter((cls) => cls && cls.id && cls.name).map(
         (cls) => `<option value="${escapeHtml(String(cls.id))}">${escapeHtml(
           String(cls.name)
@@ -19305,7 +19439,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     function syncStudentToClasses(user, previousUser) {
       if (!isStudentLikeUser(user)) return;
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       let changed = false;
       if (previousUser && isStudentLikeUser(previousUser) && previousUser.classId) {
         const oldClass = classes.find((c) => c.id === previousUser.classId);
@@ -19593,7 +19730,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return;
       }
       const scope = getSelectedUserClassScope();
-      const allClasses = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const allClasses = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       const accessibleClasses = isTeacher() ? getAccessibleClasses() : allClasses;
       const classMap = buildClassNameMap(allClasses);
       const filteredUsers = getFilteredUsers(getUsers()).filter((u) => {
@@ -19685,7 +19825,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return;
       }
       const scope = getSelectedUserClassScope();
-      const allClasses = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const allClasses = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       const classMap = buildClassNameMap(allClasses);
       const filteredUsers = getFilteredUsers(getUsers()).filter(
         (u) => u.role !== ROLE_ADMIN
@@ -19812,7 +19955,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return;
       }
       const scope = getSelectedUserClassScope();
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       const classMap = buildClassNameMap(classes);
       let teachers = getFilteredUsers(getUsers()).filter(
         (u) => u.role === ROLE_TEACHER
@@ -20229,7 +20375,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const tableBody = document.getElementById("usersTableBody");
       if (!tableBody) return;
       refreshUserClassFilter();
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       const classMap = buildClassNameMap(classes);
       const rosterNameMap = /* @__PURE__ */ new Map();
       classes.forEach((cls) => {
@@ -20414,7 +20563,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return;
       }
       let adminCount = users.filter((u) => u.role === ROLE_ADMIN).length;
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       let classesChanged = false;
       let deleted = 0;
       let skipped = 0;
@@ -20497,7 +20649,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const teacherNumeroInput = document.getElementById("teacherNumeroField");
       const teacherPhoneInput = document.getElementById("teacherPhoneField");
       const teacherEmailInput = document.getElementById("teacherEmailField");
-      const teacherSubjectsInput = document.getElementById("teacherSubjectsField");
+      const teacherSubjectsInput = document.getElementById(
+        "teacherSubjectsField"
+      );
       if (teacherNumeroInput)
         teacherNumeroInput.value = user?.numero || user?.studentNumber || "";
       if (teacherPhoneInput) teacherPhoneInput.value = user?.phone || "";
@@ -20523,7 +20677,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       const teacherClassList = document.getElementById("teacherClassList");
       if (teacherClassList) {
-        const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+        const classes = safeJsonParse(
+          JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+          []
+        );
         const assignedClassIds = Array.isArray(user?.classIds) ? user.classIds : getTeacherClassAssignments()[user?.id] || [];
         teacherClassList.innerHTML = classes.map((c) => {
           const checked = assignedClassIds.includes(c.id) ? "checked" : "";
@@ -20553,13 +20710,46 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         studentFields.style.display = role === ROLE_STUDENT ? "block" : "none";
       }
     }
-    function openUserModal(userId) {
+    function serverUserToLegacy(remote) {
+      if (!remote) return null;
+      let subjects = [];
+      if (Array.isArray(remote.subjects)) subjects = remote.subjects;
+      else if (remote.subjects_json) {
+        subjects = safeJsonParse(remote.subjects_json, []);
+        if (!Array.isArray(subjects)) subjects = [];
+      }
+      return {
+        id: remote.id || "",
+        name: remote.name || "",
+        username: remote.username || "",
+        role: remote.role || ROLE_STUDENT,
+        status: remote.status || "active",
+        numero: remote.numero || remote.studentNumber || "",
+        studentNumber: remote.numero || remote.studentNumber || "",
+        classId: remote.class_id || remote.classId || "",
+        email: remote.email || "",
+        phone: remote.phone || "",
+        subjects,
+        classIds: [],
+        createdAt: remote.created_at || remote.createdAt || "",
+        updatedAt: remote.updated_at || remote.updatedAt || ""
+      };
+    }
+    async function openUserModal(userId) {
       const modal = document.getElementById("userModal");
       if (!modal) return;
       let user = null;
       if (userId) {
         const users = getUsers();
         user = users.find((u) => u.id === userId) || null;
+        if (!user && window.API && typeof window.API.get === "function") {
+          try {
+            const remote = await window.API.get("users", userId);
+            user = serverUserToLegacy(remote);
+          } catch (_) {
+            user = null;
+          }
+        }
         if (user && !canManageUser(user) && !isAdmin()) {
           showToast2("Access denied", "error");
           return;
@@ -20670,7 +20860,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         updatedUser.studentNumber = studentNumber;
         updatedUser.classId = classId;
-        const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+        const classes = safeJsonParse(
+          JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+          []
+        );
         const classMatch = classes.find((c) => c.id === classId);
         updatedUser.className = classMatch ? classMatch.name : "";
       } else {
@@ -20705,7 +20898,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         try {
           let serverUser = null;
           if (existingUser) {
-            serverUser = await window.API.update("users", existingUserId, payload);
+            serverUser = await window.API.update(
+              "users",
+              existingUserId,
+              payload
+            );
           } else {
             serverUser = await window.API.create("users", payload);
           }
@@ -20718,7 +20915,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             updatedUser.subjects = Array.isArray(serverUser.subjects) ? serverUser.subjects : updatedUser.subjects || [];
             updatedUser.createdAt = serverUser.created_at || updatedUser.createdAt;
             updatedUser.updatedAt = serverUser.updated_at || updatedUser.updatedAt;
-            const i = users.findIndex((u) => u.id === updatedUser.id || u.username === updatedUser.username);
+            const i = users.findIndex(
+              (u) => u.id === updatedUser.id || u.username === updatedUser.username
+            );
             if (i !== -1) users[i] = updatedUser;
             savedToServer = true;
           }
@@ -20741,20 +20940,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
               assignments[updatedUser.id] = updatedUser.classIds;
               const serialized = JSON.stringify(assignments);
               if (window.API && typeof window.API.update === "function") {
-                await window.API.update(
-                  "settings",
-                  "teacherClassAssignments",
-                  {
-                    key: "teacherClassAssignments",
-                    value: serialized,
-                    visibility: "admin"
-                  }
-                );
+                await window.API.update("settings", "teacherClassAssignments", {
+                  key: "teacherClassAssignments",
+                  value: serialized,
+                  visibility: "admin"
+                });
               }
-              localStorage.setItem(
-                "quizTeacherClassAssignments",
-                serialized
-              );
+              localStorage.setItem("quizTeacherClassAssignments", serialized);
             } catch (assignmentErr) {
               console.warn(
                 "[auth] teacher class assignments save failed:",
@@ -20856,7 +21048,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           window.syncUsersToClients();
         }
         if (user.role === ROLE_STUDENT && user.classId) {
-          const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+          const classes = safeJsonParse(
+            JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+            []
+          );
           let changed = false;
           const target = classes.find((c) => c.id === user.classId);
           if (target && Array.isArray(target.students)) {
@@ -20879,6 +21074,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const bytes = new Uint32Array(length);
       (crypto && crypto.getRandomValues ? crypto.getRandomValues(bytes) : null) || bytes.fill(Math.floor(Math.random() * 4294967295));
       return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+    }
+    async function resolveServerUserId(username) {
+      if (!username || !window.API || typeof window.API.list !== "function") {
+        return null;
+      }
+      try {
+        const result = await window.API.list("users", { search: username, limit: 200 });
+        const list = result && Array.isArray(result.data) ? result.data : [];
+        const match = list.find(
+          (u) => String(u.username || "").trim().toLowerCase() === String(username).trim().toLowerCase()
+        );
+        return match && match.id ? match.id : null;
+      } catch (_) {
+        return null;
+      }
     }
     async function copyTempPassword(value) {
       const text = String(value || "");
@@ -20923,14 +21133,35 @@ A new temporary password will be generated and shown to you once so you can shar
       )) {
         return;
       }
+      let serverTargetId = user.id;
+      if (window.API && typeof window.API.get === "function") {
+        try {
+          const serverUser = await window.API.get("users", user.id);
+          if (serverUser && serverUser.id) serverTargetId = serverUser.id;
+        } catch (_) {
+          const resolved = await resolveServerUserId(user.username);
+          if (!resolved) {
+            showToast2(
+              "User not found on the server \u2014 refresh the page and try again.",
+              "error"
+            );
+            return;
+          }
+          serverTargetId = resolved;
+        }
+      }
       const newPassword = generateTempPassword(10);
       if (window.API && typeof window.API.raw === "function") {
         try {
           await window.API.raw(
             "POST",
-            "/users/" + encodeURIComponent(userId) + "/reset-password",
+            "/users/" + encodeURIComponent(serverTargetId) + "/reset-password",
             { newPassword }
           );
+          if (String(serverTargetId) !== String(user.id)) {
+            user.id = serverTargetId;
+            saveUsers(users);
+          }
         } catch (apiErr) {
           console.warn("[auth] API reset password failed:", apiErr);
           showToast2(
@@ -21170,9 +21401,36 @@ A new temporary password will be generated and shown to you once so you can shar
         localStorage.setItem(PROFILE_REQUESTS_KEY, JSON.stringify(requests));
       }
     }
+    function normalizeAccountRequest(req) {
+      if (!req || typeof req !== "object") return req;
+      if (!Array.isArray(req)) {
+        const base = Object.assign({}, req);
+        if (base.full_name != null && base.fullName == null)
+          base.fullName = base.full_name;
+        if (base.student_number != null && base.studentNumber == null)
+          base.studentNumber = base.student_number;
+        if (base.class_id != null && base.classId == null)
+          base.classId = base.class_id;
+        if (base.class_name != null && base.className == null)
+          base.className = base.class_name;
+        if (base.reviewer_id != null && base.reviewerId == null)
+          base.reviewerId = base.reviewer_id;
+        if (base.reviewed_at != null && base.reviewedAt == null)
+          base.reviewedAt = base.reviewed_at;
+        if (base.review_note != null && base.reviewNote == null)
+          base.reviewNote = base.review_note;
+        if (base.created_user_id != null && base.createdUserId == null)
+          base.createdUserId = base.created_user_id;
+        if (base.created_at != null && base.createdAt == null)
+          base.createdAt = base.created_at;
+        return base;
+      }
+      return req.map(normalizeAccountRequest);
+    }
     function getAccountRequests() {
       var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-      return r ? r.getValue_sync("account_requests", []) : safeJsonParse(localStorage.getItem(ACCOUNT_REQUESTS_KEY), []);
+      var raw = r ? r.getValue_sync("account_requests", []) : safeJsonParse(localStorage.getItem(ACCOUNT_REQUESTS_KEY), []);
+      return normalizeAccountRequest(Array.isArray(raw) ? raw : []);
     }
     function saveAccountRequests(requests) {
       var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
@@ -21184,7 +21442,10 @@ A new temporary password will be generated and shown to you once so you can shar
     }
     function resolveClassNameById(classId) {
       if (!classId) return "";
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       const match = classes.find((cls) => String(cls.id) === String(classId));
       return match ? String(match.name || "") : "";
     }
@@ -21283,7 +21544,13 @@ A new temporary password will be generated and shown to you once so you can shar
               "account_request",
               `${fullName} account request`,
               "requested",
-              { requestId: created.id, username, studentNumber, classId, className }
+              {
+                requestId: created.id,
+                username,
+                studentNumber,
+                classId,
+                className
+              }
             );
           }
           if (typeof window.addAdminNotification === "function") {
@@ -21295,7 +21562,10 @@ A new temporary password will be generated and shown to you once so you can shar
           }
           return { ok: true, request: created };
         } catch (err) {
-          return { ok: false, message: err && err.message ? err.message : "Account request failed" };
+          return {
+            ok: false,
+            message: err && err.message ? err.message : "Account request failed"
+          };
         }
       }
       const request = {
@@ -21363,7 +21633,11 @@ A new temporary password will be generated and shown to you once so you can shar
       }
       if (window.API && typeof window.API.raw === "function" && request.id) {
         try {
-          const result = await window.API.raw("POST", "/account-requests/" + encodeURIComponent(request.id) + "/approve", { note });
+          const result = await window.API.raw(
+            "POST",
+            "/account-requests/" + encodeURIComponent(request.id) + "/approve",
+            { note }
+          );
           const newUserId = result && result.userId;
           request.status = "approved";
           request.reviewNote = note;
@@ -21392,22 +21666,32 @@ A new temporary password will be generated and shown to you once so you can shar
             syncStudentToClasses(newUser2, null);
           }
           if (typeof logActivity === "function") {
-            logActivity("account_request", `${request.fullName} account request`, "approved", {
-              requestId: request.id,
-              username: request.username,
-              studentNumber: request.studentNumber,
-              classId: request.classId,
-              className: request.className,
-              userId: newUserId || "",
-              reviewerId: reviewerId || "",
-              reviewNote: note
-            });
+            logActivity(
+              "account_request",
+              `${request.fullName} account request`,
+              "approved",
+              {
+                requestId: request.id,
+                username: request.username,
+                studentNumber: request.studentNumber,
+                classId: request.classId,
+                className: request.className,
+                userId: newUserId || "",
+                reviewerId: reviewerId || "",
+                reviewNote: note
+              }
+            );
           }
           if (typeof window.addAdminNotification === "function") {
             window.addAdminNotification({
               type: "account_request",
               message: `Account request approved for ${request.fullName}`,
-              data: { requestId: request.id, username: request.username, classId: request.classId, userId: newUserId }
+              data: {
+                requestId: request.id,
+                username: request.username,
+                classId: request.classId,
+                userId: newUserId
+              }
             });
           }
           return request;
@@ -21484,7 +21768,11 @@ A new temporary password will be generated and shown to you once so you can shar
       }
       if (window.API && typeof window.API.raw === "function" && request.id) {
         try {
-          await window.API.raw("POST", "/account-requests/" + encodeURIComponent(request.id) + "/reject", { note });
+          await window.API.raw(
+            "POST",
+            "/account-requests/" + encodeURIComponent(request.id) + "/reject",
+            { note }
+          );
         } catch (err) {
           showToast2(err && err.message || "Rejection failed", "error");
           return null;
@@ -21546,18 +21834,28 @@ A new temporary password will be generated and shown to you once so you can shar
           saveProfileRequests(requests2);
           let className2 = payload.currentSnapshot?.className || "";
           if (!className2 && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
-            const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
-            const match = classes.find((c) => c.id === payload.currentSnapshot.classId);
+            const classes = safeJsonParse(
+              JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+              []
+            );
+            const match = classes.find(
+              (c) => c.id === payload.currentSnapshot.classId
+            );
             if (match) className2 = match.name;
           }
           if (typeof logActivity === "function") {
-            logActivity("profile_request", `${displayName} profile update request`, "requested", {
-              requestId: request2.id,
-              userId: payload.userId,
-              studentName: displayName,
-              studentNumber: payload.currentSnapshot?.studentNumber || "",
-              className: className2
-            });
+            logActivity(
+              "profile_request",
+              `${displayName} profile update request`,
+              "requested",
+              {
+                requestId: request2.id,
+                userId: payload.userId,
+                studentName: displayName,
+                studentNumber: payload.currentSnapshot?.studentNumber || "",
+                className: className2
+              }
+            );
           }
           if (typeof window.addAdminNotification === "function") {
             window.addAdminNotification({
@@ -21568,7 +21866,10 @@ A new temporary password will be generated and shown to you once so you can shar
           }
           return request2;
         } catch (err) {
-          console.warn("[auth] profile-request API call failed, falling back to local:", err);
+          console.warn(
+            "[auth] profile-request API call failed, falling back to local:",
+            err
+          );
         }
       }
       const requests = getProfileRequests();
@@ -21586,7 +21887,10 @@ A new temporary password will be generated and shown to you once so you can shar
       saveProfileRequests(requests);
       let className = payload.currentSnapshot?.className || "";
       if (!className && payload.currentSnapshot?.classId && window.__DI_CONTAINER__?.repo) {
-        const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+        const classes = safeJsonParse(
+          JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+          []
+        );
         const match = classes.find(
           (c) => c.id === payload.currentSnapshot.classId
         );
@@ -21733,7 +22037,10 @@ A new temporary password will be generated and shown to you once so you can shar
       }
       if (request.avatar) user.avatar = request.avatar;
       if (user.classId) {
-        const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+        const classes = safeJsonParse(
+          JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+          []
+        );
         const match = classes.find((c) => c.id === user.classId);
         user.className = match ? match.name : user.className;
       }
@@ -21769,7 +22076,10 @@ A new temporary password will be generated and shown to you once so you can shar
       if (!container) return;
       const requests = getProfileRequests();
       const users = getUsers();
-      const classes = safeJsonParse(JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")), []);
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
       const classMap = new Map(classes.map((c) => [c.id, c.name]));
       let scopedRequests = requests;
       if (isTeacher()) {
@@ -21893,7 +22203,9 @@ A new temporary password will be generated and shown to you once so you can shar
       if (recoveryToggle) {
         recoveryToggle.addEventListener("click", toggleRecoveryPanel);
       }
-      const recoveryUnlockForm = document.getElementById("authRecoveryUnlockForm");
+      const recoveryUnlockForm = document.getElementById(
+        "authRecoveryUnlockForm"
+      );
       if (recoveryUnlockForm) {
         recoveryUnlockForm.addEventListener("submit", (e) => {
           e.preventDefault();
@@ -22055,6 +22367,7 @@ A new temporary password will be generated and shown to you once so you can shar
       rejectPendingImport,
       renderPendingImports,
       getAccountRequests,
+      normalizeAccountRequest,
       submitAccountRequest,
       approveAccountRequest,
       rejectAccountRequest,
@@ -22173,7 +22486,9 @@ A new temporary password will be generated and shown to you once so you can shar
     if (raw.includes(",")) {
       const commaParts = splitBy(/,+/);
       const normalizedAnswer = normalizeQuestionToken(answer);
-      const includesFullAnswer = normalizedAnswer && commaParts.some((part) => normalizeQuestionToken(part) === normalizedAnswer);
+      const includesFullAnswer = normalizedAnswer && commaParts.some(
+        (part) => normalizeQuestionToken(part) === normalizedAnswer
+      );
       const safeCommaList = commaParts.length >= 2 && commaParts.length <= 8 && commaParts.every((part) => part.length <= 96);
       if (safeCommaList && (!String(answer || "").includes(",") || includesFullAnswer)) {
         return commaParts;
@@ -22182,7 +22497,9 @@ A new temporary password will be generated and shown to you once so you can shar
     const camelParts = splitBy(/(?<=[a-z0-9])(?=[A-Z])/);
     if (camelParts.length > 1) {
       const normalizedAnswer = normalizeQuestionToken(answer);
-      if (!normalizedAnswer || camelParts.some((part) => normalizeQuestionToken(part) === normalizedAnswer)) {
+      if (!normalizedAnswer || camelParts.some(
+        (part) => normalizeQuestionToken(part) === normalizedAnswer
+      )) {
         return camelParts;
       }
     }
@@ -22353,12 +22670,10 @@ A new temporary password will be generated and shown to you once so you can shar
     );
   }
   function hasExplicitOrderQuestionSignal(question = {}) {
-    const rawType = String(question.type || question.questionType || "").toLowerCase();
-    const textBlob = [
-      question.question,
-      question.text,
-      question.instruction
-    ].map((item) => String(item || "").toLowerCase()).join(" ");
+    const rawType = String(
+      question.type || question.questionType || ""
+    ).toLowerCase();
+    const textBlob = [question.question, question.text, question.instruction].map((item) => String(item || "").toLowerCase()).join(" ");
     if (rawType.includes("drag") || rawType.includes("order") || rawType.includes("ordon")) {
       return true;
     }
@@ -22786,9 +23101,7 @@ A new temporary password will be generated and shown to you once so you can shar
   }
   function sanitizeStudentInfo(raw = {}) {
     return {
-      numero: String(
-        raw.numero ?? raw.number ?? raw.studentNumber ?? ""
-      ).trim(),
+      numero: String(raw.numero ?? raw.number ?? raw.studentNumber ?? "").trim(),
       name: String(raw.name ?? raw.fullName ?? raw.username ?? "").trim(),
       class: String(raw.class ?? raw.className ?? "").trim()
     };
@@ -22849,7 +23162,9 @@ A new temporary password will be generated and shown to you once so you can shar
           });
           return;
         }
-        const sessionStudent = sanitizeStudentInfo(activeSession.studentInfo || {});
+        const sessionStudent = sanitizeStudentInfo(
+          activeSession.studentInfo || {}
+        );
         const formStudent = getStudentInfoFromForm();
         const studentInfo2 = sessionStudent.numero ? sessionStudent : formStudent;
         if (!studentInfo2.numero || !studentInfo2.name || !studentInfo2.class) {
@@ -22871,7 +23186,10 @@ A new temporary password will be generated and shown to you once so you can shar
         if (!sessionStudent.numero) {
           activeSession.studentInfo = studentInfo2;
           activeSession.startedAt = activeSession.startedAt || (/* @__PURE__ */ new Date()).toISOString();
-          localStorage.setItem("examActiveSession", JSON.stringify(activeSession));
+          localStorage.setItem(
+            "examActiveSession",
+            JSON.stringify(activeSession)
+          );
         }
       } catch (error51) {
         console.error("Exam allowlist validation failed:", error51);
@@ -23660,8 +23978,12 @@ A new temporary password will be generated and shown to you once so you can shar
     }, 100);
   }
   function initializeDefaultQuestions() {
-    const existingQuestions = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("questions"));
-    const existingSettings = JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("settings"));
+    const existingQuestions = JSON.stringify(
+      window.__DI_CONTAINER__.repo.getAll_sync("questions")
+    );
+    const existingSettings = JSON.stringify(
+      window.__DI_CONTAINER__.repo.getAll_sync("settings")
+    );
     if (!existingSettings) {
       const defaultSettings = {
         totalQuestions: 5,
@@ -23801,7 +24123,9 @@ A new temporary password will be generated and shown to you once so you can shar
                 console.log("Directly starting exam with ID:", examId);
                 currentMode = quizModes.exam;
                 const questionBank = JSON.parse(
-                  JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("questions")) || "[]"
+                  JSON.stringify(
+                    window.__DI_CONTAINER__.repo.getAll_sync("questions")
+                  ) || "[]"
                 );
                 const activeSession = JSON.parse(
                   localStorage.getItem("examActiveSession") || "null"
@@ -23854,9 +24178,15 @@ A new temporary password will be generated and shown to you once so you can shar
                     runtimeSession.id = created?.id || "";
                   }
                 } catch (sessionError) {
-                  console.warn("Exam API session unavailable; keeping local recovery state:", sessionError);
+                  console.warn(
+                    "Exam API session unavailable; keeping local recovery state:",
+                    sessionError
+                  );
                 }
-                localStorage.setItem("examActiveSession", JSON.stringify(runtimeSession));
+                localStorage.setItem(
+                  "examActiveSession",
+                  JSON.stringify(runtimeSession)
+                );
                 if (document.getElementById("welcome-page")) {
                   document.getElementById("welcome-page").style.display = "none";
                 }
@@ -23875,14 +24205,22 @@ A new temporary password will be generated and shown to you once so you can shar
         if (typeof bootstrap2 === "function") {
           Promise.resolve(bootstrap2()).then(() => {
             const refreshedExams = window.__DI_CONTAINER__.repo.getAll_sync("exams") || [];
-            if (refreshedExams.some((entry) => String(entry.id) === String(examId))) {
+            if (refreshedExams.some(
+              (entry) => String(entry.id) === String(examId)
+            )) {
               window.location.reload();
               return;
             }
             console.warn("Exam ID not found after bootstrap:", examId);
-          }).catch(() => console.warn("Unable to refresh exam data for:", examId));
+          }).catch(
+            () => console.warn("Unable to refresh exam data for:", examId)
+          );
         } else {
-          window.addEventListener("quiz:bootstrap-ready", () => window.location.reload(), { once: true });
+          window.addEventListener(
+            "quiz:bootstrap-ready",
+            () => window.location.reload(),
+            { once: true }
+          );
           console.warn("Exam ID not found in database:", examId);
         }
       }
@@ -23910,7 +24248,9 @@ A new temporary password will be generated and shown to you once so you can shar
       console.error("Student info form not found");
       return false;
     }
-    const hasStudentAccounts = window.Auth?.getUsers ? window.Auth.getUsers().some((u) => u.role === "student" && u.status !== "disabled") : false;
+    const hasStudentAccounts = window.Auth?.getUsers ? window.Auth.getUsers().some(
+      (u) => u.role === "student" && u.status !== "disabled"
+    ) : false;
     if (hasStudentAccounts && (!window.Auth?.isStudent || !window.Auth.isStudent())) {
       showToast2("Please sign in to start the quiz", "error");
       return false;
@@ -24075,13 +24415,21 @@ A new temporary password will be generated and shown to you once so you can shar
     if (!activeSession?.id || !window.API?.raw) return null;
     for (const entry of answers || []) {
       if (!entry?.questionId || entry.userAnswer == null) continue;
-      await window.API.raw("POST", `/sessions/${encodeURIComponent(activeSession.id)}/answer`, {
-        session_id: activeSession.id,
-        question_id: entry.questionId,
-        answer: typeof entry.userAnswer === "string" ? entry.userAnswer : JSON.stringify(entry.userAnswer)
-      });
+      await window.API.raw(
+        "POST",
+        `/sessions/${encodeURIComponent(activeSession.id)}/answer`,
+        {
+          session_id: activeSession.id,
+          question_id: entry.questionId,
+          answer: typeof entry.userAnswer === "string" ? entry.userAnswer : JSON.stringify(entry.userAnswer)
+        }
+      );
     }
-    return window.API.raw("POST", `/sessions/${encodeURIComponent(activeSession.id)}/submit`, {});
+    return window.API.raw(
+      "POST",
+      `/sessions/${encodeURIComponent(activeSession.id)}/submit`,
+      {}
+    );
   }
   async function endQuiz() {
     if (timerId) {
@@ -24157,10 +24505,18 @@ A new temporary password will be generated and shown to you once so you can shar
                 mode: "exam",
                 passed: sessionResult.results.passed
               };
-              const withoutDuplicate = dbResults.filter((item) => String(item.id) !== String(canonical.id));
-              window.__DI_CONTAINER__.repo.setAll_sync("results", [...withoutDuplicate, canonical]);
+              const withoutDuplicate = dbResults.filter(
+                (item) => String(item.id) !== String(canonical.id)
+              );
+              window.__DI_CONTAINER__.repo.setAll_sync("results", [
+                ...withoutDuplicate,
+                canonical
+              ]);
             } catch (persistError) {
-              console.warn("Could not persist exam result to the API bridge:", persistError);
+              console.warn(
+                "Could not persist exam result to the API bridge:",
+                persistError
+              );
             }
           }
           if (!activeSession.completedResults) {
@@ -24570,9 +24926,7 @@ A new temporary password will be generated and shown to you once so you can shar
 							<tr>
 								<td>Training</td>
 								<td>${r.score}/${r.totalQuestions}</td>
-								<td>${Math.floor(r.time / 60)}:${String(
-        r.time % 60
-      ).padStart(2, "0")}</td>
+								<td>${Math.floor(r.time / 60)}:${String(r.time % 60).padStart(2, "0")}</td>
 								<td>${new Date(r.date).toLocaleString()}</td>
 							</tr>
 						`

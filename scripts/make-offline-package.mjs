@@ -54,6 +54,7 @@ const nmCache = join(dist, 'vendored-node_modules');
 const EXCLUDE = new Set([
   '.git', '.github', '.kilo', '.zcode', 'certs', 'dist',
   'gui-test-screenshots', 'tests', 'node_modules', 'prisma', '.env',
+  '.import-staging',
 ]);
 const STRAY_RE = /^report\..+\.json$|^\.prev_pkg$|^\.staging_pkg$/;
 

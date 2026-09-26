@@ -4526,6 +4526,11 @@
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
 										Export Data
 									</button>
+									<button type="button" class="btn btn-secondary" onclick="window.exportAllDataZip()" style="margin-left: 8px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M12 18v-6"></path><path d="m9 15 3 3 3-3"></path></svg>
+										Export Data + Images (ZIP)
+									</button>
+									<p class="text-muted" style="margin-top: 12px; font-size: 0.9em;">The ZIP includes the <strong>uploads</strong> folder with the image files, so questions keep their pictures when you restore the backup on another machine. (Requires internet to the server.)</p>
 							</div>
 
 							<div class="settings-group">
@@ -4544,7 +4549,7 @@
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
 									Import Backup File
 								</button>
-								<input type="file" id="importDataInput" accept=".json" style="display: none" onchange="window.importAllData(this)" />
+								<input type="file" id="importDataInput" accept=".json,.zip,application/json,application/zip" style="display: none" onchange="window.importAllData(this)" />
 
 								<div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 20px;">
 										<p class="text-muted" style="margin-bottom: 15px;">

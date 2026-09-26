@@ -1119,6 +1119,7 @@ const pendingBackupPicker = {
 	availableKeys: [],
 	allowedKeys: null,
 	input: null,
+	zipToken: null,
 };
 
 function getBackupStoreValue(data, key) {
@@ -1313,6 +1314,86 @@ function exportAllData() {
 	}
 }
 
+// Same token resolution as api-client.js getToken().
+function getApiAuthToken() {
+	if (window.__authToken) return window.__authToken;
+	try {
+		var session = JSON.parse(
+			sessionStorage.getItem('quizSession') ||
+				localStorage.getItem('quizSession') ||
+				'null',
+		);
+		return (session && session.token) || localStorage.getItem('quizAuthToken') || '';
+	} catch (e) {
+		return localStorage.getItem('quizAuthToken') || '';
+	}
+}
+
+// Export everything (data + the uploads/ image folder) as one ZIP via the
+// server, so image questions stay intact when the backup is restored elsewhere.
+async function exportAllDataZip() {
+	try {
+		const timestamp = new Date().toISOString();
+		const collected = collectAllStores();
+		const exportData = {
+			version: '2.0',
+			timestamp: timestamp,
+			type: 'quiz-app-backup',
+			data: {
+				...collected,
+				// Legacy key kept so old imports and tooling keep working
+				activityLog: collected.activity,
+			},
+		};
+
+		showToast('Packaging data + images…', 'info');
+		const token = getApiAuthToken();
+		const res = await fetch('/api/v1/exports/bundle', {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/json',
+				...(token ? { Authorization: 'Bearer ' + token } : {}),
+			},
+			body: JSON.stringify({ data: exportData.data }),
+		});
+		if (!res.ok) {
+			const err = new Error(
+				'Server refused the export' + (res.status ? ' (' + res.status + ')' : ''),
+			);
+			err.status = res.status;
+			throw err;
+		}
+
+		const blob = await res.blob();
+		const disposition = res.headers.get('Content-Disposition') || '';
+		const match = /filename="([^"]+)"/.exec(disposition);
+		const fileName =
+			(match && match[1]) || 'quiz-app-backup-' + timestamp.slice(0, 10) + '.zip';
+
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = fileName;
+		document.body.appendChild(link);
+		link.click();
+		setTimeout(function () {
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+		}, 200);
+
+		recordBackupActivity(
+			'export',
+			'Exported full backup (data + images) ' + fileName,
+			'icon-rose',
+		);
+		showToast('Full backup saved: ' + fileName, 'success');
+	} catch (error) {
+		console.error('Full backup export failed:', error);
+		showToast('Failed to export full backup: ' + error.message, 'error');
+	}
+}
+
 function openExportPicker() {
 	try {
 		const collected = collectAllStores();
@@ -1356,6 +1437,12 @@ function openImportPicker(inputElement, data, allowedKeys) {
 }
 
 function closeBackupPickerModal() {
+	// If a ZIP import was staged but the user cancelled, drop the staged files.
+	if (pendingBackupPicker.zipToken) {
+		const pendingToken = pendingBackupPicker.zipToken;
+		pendingBackupPicker.zipToken = null;
+		discardZipUploads(pendingToken);
+	}
 	const modal = document.getElementById('backupPickerModal');
 	if (modal) modal.style.display = 'none';
 	if (pendingBackupPicker.mode === 'import' && pendingBackupPicker.input)
@@ -1454,21 +1541,79 @@ function performCustomImport() {
 		return;
 	}
 
+	const zipToken = pendingBackupPicker.zipToken;
+	const finish = function () {
+		closeBackupPickerModal();
+		showToast('Data imported successfully! Reloading...', 'success');
+		setTimeout(function () {
+			window.location.reload();
+		}, 1000);
+	};
+
 	try {
 		applyBackupStores(pendingBackupPicker.data || {}, selectedKeys);
 		const scope = pendingBackupPicker.allowedKeys
 			? 'selected wizard section'
 			: selectedKeys.length + ' selected stores';
 		recordBackupActivity('import', 'Imported ' + scope, 'icon-indigo');
-		showToast('Data imported successfully! Reloading...', 'success');
-		closeBackupPickerModal();
-		setTimeout(function () {
-			window.location.reload();
-		}, 1000);
+
+		// A ZIP backup staged image files server-side — commit them once the
+		// user confirms, then reload (data is already applied to localStorage).
+		if (zipToken) {
+			pendingBackupPicker.zipToken = null;
+			showToast('Data imported — restoring image files…', 'info');
+			commitZipUploads(zipToken).then(
+				function () {
+					finish();
+				},
+				function (err) {
+					console.error('Committing uploads failed:', err);
+					finish();
+				},
+			);
+			return;
+		}
+		finish();
 	} catch (error) {
 		console.error('Custom import failed:', error);
 		showToast('Failed to import data: ' + error.message, 'error');
 	}
+}
+
+/** Tell the server to move a staged import's uploads folder into place. */
+function commitZipUploads(uploadToken) {
+	const token = getApiAuthToken();
+	return fetch('/api/v1/imports/bundle/commit', {
+		method: 'POST',
+		credentials: 'include',
+		headers: {
+			'Content-Type': 'application/json',
+			...(token ? { Authorization: 'Bearer ' + token } : {}),
+		},
+		body: JSON.stringify({ uploadToken: uploadToken }),
+	}).then(function (res) {
+		if (!res.ok) {
+			const err = new Error('Could not restore image files (' + res.status + ')');
+			err.status = res.status;
+			throw err;
+		}
+		return res.json();
+	});
+}
+
+/** Discard a staged (unconfirmed) ZIP import's image files. */
+function discardZipUploads(uploadToken) {
+	const token = getApiAuthToken();
+	return fetch(
+		'/api/v1/imports/bundle/' + encodeURIComponent(uploadToken),
+		{
+			method: 'DELETE',
+			credentials: 'include',
+			headers: token ? { Authorization: 'Bearer ' + token } : {},
+		},
+	).catch(function () {
+		return null;
+	});
 }
 
 function applyBackupStores(data, selectedKeys) {
@@ -1614,6 +1759,13 @@ function importAllData(inputElement, allowedKeys) {
 		inputElement && inputElement.files ? inputElement.files[0] : null;
 	if (!file) return;
 
+	// Full-backup ZIPs (data + images) are unpacked server-side so the uploads
+	// folder can be restored alongside the data.
+	if (/\.zip$/i.test(file.name)) {
+		importAllDataZip(file, inputElement, allowedKeys);
+		return;
+	}
+
 	const reader = new FileReader();
 	reader.onload = function (e) {
 		try {
@@ -1649,6 +1801,54 @@ function importAllData(inputElement, allowedKeys) {
 	reader.readAsText(file);
 }
 
+/**
+ * Imports a full-backup ZIP (data.json + uploads/) so image questions keep
+ * their pictures. The file is unpacked server-side; the data is handed to the
+ * normal picker, and the images are committed when import is confirmed.
+ */
+async function importAllDataZip(file, inputElement, allowedKeys) {
+	try {
+		showToast('Unpacking backup ZIP…', 'info');
+		const token = getApiAuthToken();
+		const res = await fetch('/api/v1/imports/bundle', {
+			method: 'POST',
+			credentials: 'include',
+			headers: {
+				'Content-Type': 'application/zip',
+				...(token ? { Authorization: 'Bearer ' + token } : {}),
+			},
+			body: file,
+		});
+		if (!res.ok) {
+			const errText = await res.text().catch(function () {
+				return '';
+			});
+			throw new Error(
+				'Server refused the backup' +
+					(res.status ? ' (' + res.status + ')' : '') +
+					(errText ? ': ' + errText : ''),
+			);
+		}
+
+		const result = await res.json();
+		if (!result || !result.data) throw new Error('The backup unpacked empty.');
+
+		pendingBackupPicker.zipToken = result.uploadToken || null;
+		openImportPicker(inputElement, result.data, allowedKeys || null);
+		showToast(
+			'Backup ready' +
+				(result.files && result.files.length
+					? ' — ' + result.files.length + ' image file(s) will be restored with the data.'
+					: ' — no image files in this backup.'),
+			'info',
+		);
+	} catch (error) {
+		console.error('ZIP import failed:', error);
+		showToast('Failed to import ZIP backup: ' + error.message, 'error');
+		if (inputElement) inputElement.value = '';
+	}
+}
+
 function safeReadLS(key, fallback) {
 	try {
 		const val = localStorage.getItem(key);
@@ -1660,6 +1860,7 @@ function safeReadLS(key, fallback) {
 
 // Make globally available
 window.exportAllData = exportAllData;
+window.exportAllDataZip = exportAllDataZip;
 window.importAllData = importAllData;
 window.safeReadLS = safeReadLS; // used by importDeviceData result mapping
 window.openExportPicker = openExportPicker;

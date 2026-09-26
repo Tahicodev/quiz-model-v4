@@ -2313,7 +2313,7 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		grid-template-columns: minmax(0, 1fr) auto !important;
 		align-items: center !important;
 		gap: 8px 12px !important;
-		padding: 18px 54px 12px 14px !important;
+		padding: 18px 14px 12px 14px !important;
 	}
 
 	#settingsModal .settings-title-block {
@@ -2357,6 +2357,33 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		border-radius: 12px;
 		font-size: 0;
 		line-height: 1;
+	}
+
+	/* Keep the close button in the same icon row so it lines up with
+	   the save/reset/tabs actions instead of floating over the title. */
+	#settingsModal .settings-header-actions .settings-close-btn,
+	#settingsModal .settings-header-actions .close {
+		position: static !important;
+		width: 38px;
+		min-width: 38px;
+		height: 38px;
+		min-height: 38px;
+		flex: 0 0 auto;
+		margin: 0;
+		padding: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		border: 1px solid #cbd5e1;
+		border-radius: 12px;
+		background: #ffffff;
+		color: #0f172a;
+		font-size: 1.15rem;
+		font-weight: 600;
+		line-height: 1;
+		opacity: 1;
+		text-shadow: none;
+		box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
 	}
 
 	#settingsModal

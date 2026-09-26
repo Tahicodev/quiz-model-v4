@@ -19,7 +19,15 @@ export function initSessionQuestion(sessionId) {
   socket.on(SOCKET_EVENTS.GAME_QUESTION, (q) => {
     const el = document.getElementById('session-question');
     if (!el) return;
-    const opts = (q?.options || []).map(o => `<label><input type="radio" name="sq-answer" value="${o}" /> ${o}</label>`).join('<br/>');
+    const opts = (q?.options || []).map((o, i) => {
+      const opt = o && typeof o === 'object' ? o : { text: o, image: '' };
+      const text = String(opt.text ?? opt.label ?? opt.value ?? '').trim() || String(i + 1);
+      const image = String(opt.image ?? opt.imageUrl ?? opt.src ?? '').trim();
+      const inner = image
+        ? `<span class="sq-option-image"><img src="${image}" alt="${text}"></span>`
+        : `<span class="sq-option-label">${text}</span>`;
+      return `<label class="sq-option"><input type="radio" name="sq-answer" value="${text}" /> ${inner}</label>`;
+    }).join('<br/>');
     safeSetHTML(el, `
       <h3>${q?.text}</h3>
       <form id="sq-form">

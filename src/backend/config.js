@@ -81,6 +81,12 @@ export const config = Object.freeze({
   tlsCertPath: process.env.TLS_CERT_PATH || 'certs/server.crt',
   tlsKeyPath: process.env.TLS_KEY_PATH || 'certs/server.key',
 
+  // ── Storage (user-uploaded images) ────────────────────────────────────────
+  // Directory inside the app that holds uploaded option/media images. Served
+  // at /uploads and shipped with the offline package so images survive the
+  // LAN install (DB stores only relative URLs).
+  uploadsDir: process.env.UPLOADS_DIR || 'uploads',
+
   // ── Realtime ──────────────────────────────────────────────────────────────
   // Optional Redis adapter for multi-instance deployments.
   redisUrl: process.env.REDIS_URL || null,

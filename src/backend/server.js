@@ -177,12 +177,15 @@ import bulkRoutes from './routes/bulk.routes.js';
 import profileRequestRoutes from './routes/profile-requests.routes.js';
 import accountRequestRoutes from './routes/account-requests.routes.js';
 import gamePresetRoutes from './routes/game-presets.routes.js';
+import uploadsRoutes from './routes/uploads.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import notificationRoutes from './routes/notifications.routes.js';
 import gamificationRoutes from './routes/gamification.routes.js';
 import teacherMessageRoutes from './routes/teacher-messages.routes.js';
 import teacherAssignmentRoutes from './routes/teacher-assignments.routes.js';
 import archivesRoutes from './routes/archives.routes.js';
+import exportsRoutes from './routes/exports.routes.js';
+import importsRoutes from './routes/imports.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -253,12 +256,15 @@ app.use('/api/v1/bulk', bulkRoutes);
 app.use('/api/v1/profile-requests', profileRequestRoutes);
 app.use('/api/v1/account-requests', authLimiter, accountRequestRoutes);
 app.use('/api/v1/game-presets', gamePresetRoutes);
+app.use('/api/v1/uploads', uploadsRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/gamification', gamificationRoutes);
 app.use('/api/v1/teacher-messages', teacherMessageRoutes);
 app.use('/api/v1/teacher-assignments', teacherAssignmentRoutes);
 app.use('/api/v1/archives', archivesRoutes);
+app.use('/api/v1/exports', exportsRoutes);
+app.use('/api/v1/imports', importsRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
 // Disable caching for HTML/JS entry points so dev edits reach the browser
@@ -280,6 +286,11 @@ const noCacheOpts = {
 	},
 };
 app.use(express.static('public', noCacheOpts));
+// User-uploaded images (question/media options) live in appRoot/uploads and
+// are served at /uploads — relative URLs stored in `options_json`, so they
+// survive LAN/deploy without a CDN. Long cache: filenames are content-unique.
+fs.mkdirSync(config.uploadsDir, { recursive: true });
+app.use('/uploads', express.static(config.uploadsDir, { maxAge: '7d', immutable: true }));
 // Serve root-level dev files (admin.html, admin.css, styles.css)
 app.use(express.static('./', noCacheOpts));
 

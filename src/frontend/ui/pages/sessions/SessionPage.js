@@ -45,7 +45,14 @@ function render() {
   const options = parseOptions(question.options_json || question.options);
   const selected = answers[question.id];
   const optionMarkup = options.length
-    ? options.map((option) => `<label class="student-answer-option"><input type="radio" name="answer" value="${escapeAttribute(option)}" ${String(selected ?? '') === String(option) ? 'checked' : ''}> <span>${escapeHtml(option)}</span></label>`).join('')
+    ? options.map((option, index) => {
+        const value = escapeAttribute(option.text || String(index + 1));
+        const optionKey = String(selected ?? '') === option.text;
+        const inner = option.image
+          ? `<div class="student-option-image"><img src="${escapeAttribute(option.image)}" alt="${escapeAttribute(option.text || 'Option image')}"></div>${option.text ? `<div class="student-option-caption">${escapeHtml(option.text)}</div>` : ''}`
+          : `<span>${escapeHtml(option.text)}</span>`;
+        return `<label class="student-answer-option"><input type="radio" name="answer" value="${value}" ${optionKey ? 'checked' : ''}> ${inner}</label>`;
+      }).join('')
     : `<input class="form-control" name="answer" value="${escapeAttribute(selected || '')}" autocomplete="off">`;
   safeSetHTML(document.getElementById('app'), `
     <section class="student-runtime-card">
@@ -87,8 +94,17 @@ function parseAnswers(value) {
 }
 
 function parseOptions(value) {
-  if (Array.isArray(value)) return value.map(String);
-  try { return JSON.parse(value || '[]').map(String); } catch (_) { return []; }
+  if (Array.isArray(value)) return value.map(normalizeOption).filter((o) => o && (o.text || o.image));
+  try { return JSON.parse(value || '[]').map(normalizeOption).filter((o) => o && (o.text || o.image)); } catch (_) { return []; }
+}
+
+function normalizeOption(option) {
+  if (option && typeof option === 'object' && !Array.isArray(option)) {
+    const text = String(option.text ?? option.label ?? option.value ?? '').trim();
+    const image = String(option.image ?? option.imageUrl ?? option.src ?? '').trim();
+    return { text, image };
+  }
+  return { text: String(option ?? '').trim(), image: '' };
 }
 
 function escapeHtml(value) {

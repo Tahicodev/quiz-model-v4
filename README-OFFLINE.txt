@@ -67,6 +67,11 @@ During setup.bat / install.sh you can answer YES to "Enable HTTPS?".
 Notes
 -----
 - Everything runs locally (SQLite database). No cloud needed.
+- Images: question option/media images are saved inside the app's
+  "uploads" folder and referenced from the database — they travel with
+  this package, so image questions keep working offline. Full backups
+  can be exported as a ZIP (data + images) and re-imported from that
+  same ZIP, so images come back too.
 - Option A is built for Windows x64 (win32-x64): it bundles installed
   node_modules + Prisma engines for that platform, so install is instant
   and independent of your npm version.

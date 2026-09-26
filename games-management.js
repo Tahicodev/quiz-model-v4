@@ -1044,7 +1044,10 @@
 				question.question,
 				question.answer,
 				question.explanation,
-				question.options?.join(' '),
+				question.options
+				?.map((o) => (o && typeof o === 'object' ? o.text || '' : String(o || '')))
+				.filter(Boolean)
+				.join(' '),
 			]
 				.filter(Boolean)
 				.join(' ')

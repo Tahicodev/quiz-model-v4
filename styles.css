@@ -9453,6 +9453,46 @@ textarea {
 	object-fit: cover;
 }
 
+/* SessionPage (new SPA exam runtime) image options */
+.student-option-image img {
+	max-width: 140px;
+	max-height: 140px;
+	width: auto;
+	height: auto;
+	display: block;
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-sm);
+	object-fit: contain;
+	background: var(--surface-2, #f2f3f5);
+	padding: var(--space-xs);
+}
+.student-option-caption {
+	font-size: 0.85rem;
+	color: var(--text-secondary);
+	margin-top: var(--space-xs);
+}
+.student-answer-option {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	padding: var(--space-sm) var(--space-md);
+}
+
+/* SessionQuestion (live proctored session) image options */
+.sq-option {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-sm);
+}
+.sq-option-image img {
+	max-width: 120px;
+	max-height: 120px;
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-sm);
+	object-fit: contain;
+	vertical-align: middle;
+}
+
 .image-overlay {
 	position: absolute;
 	bottom: 0;

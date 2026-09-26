@@ -229,17 +229,31 @@ const SANITIZERS = {
     const mappedType = TYPE_MAP[rawType] || 'mcq';
 
     // Options: prefer `optionData` (array of `{text, image}`), fall back to
-    // the plain `options` array. Always serialize as a JSON string array.
-    const rawOptions =
+    // the plain `options` array. Serialize as JSON — plain strings for text
+    // options, `{ text, image, isImageOnly }` for image options, so images
+    // survive every import path (CSV, paste, Excel).
+    const serializedOptions = [];
+    const rawOptionSources =
       Array.isArray(row.optionData) && row.optionData.length > 0
-        ? row.optionData.map((o) =>
-            typeof o === 'string' ? o : (o && o.text) ?? '',
-          )
+        ? row.optionData
         : Array.isArray(row.options)
           ? row.options
           : [];
+    for (const entry of rawOptionSources) {
+      if (typeof entry === 'string') { serializedOptions.push(entry); continue; }
+      if (!entry || typeof entry !== 'object') continue;
+      const entryText = String(entry.text ?? entry.label ?? entry.value ?? '').trim();
+      const entryImage = String(entry.image ?? entry.imageUrl ?? entry.src ?? '').trim();
+      if (!entryText && !entryImage) continue;
+      if (!entryImage) { serializedOptions.push(entryText); continue; }
+      const node = { text: entryText, image: entryImage };
+      if (entry.isImageOnly) node.isImageOnly = true;
+      if (entry.id != null) node.id = String(entry.id);
+      if (entry.number != null) node.number = String(entry.number);
+      serializedOptions.push(node);
+    }
     const optionsJson =
-      rawOptions.length > 0 ? JSON.stringify(rawOptions) : undefined;
+      serializedOptions.length > 0 ? JSON.stringify(serializedOptions) : undefined;
 
     // category: legacy row stores either the category id (string) or
     // "uncategorized" / category name. If it's a non-empty string that

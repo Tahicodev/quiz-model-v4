@@ -334,9 +334,28 @@
       var mappedType = TYPE_MAP[type] || 'mcq';
 
       var rawOptions = Array.isArray(q.optionData) && q.optionData.length
-        ? q.optionData.map(function (o) { return typeof o === 'string' ? o : (o && o.text) || ''; })
+        ? q.optionData
         : (Array.isArray(q.options) ? q.options : []);
-      var optionsJson = rawOptions.length ? JSON.stringify(rawOptions) : undefined;
+      // Option nodes: plain strings (text options) OR objects carrying an
+      // image URL. `text` doubles as the answer identity token, so scoring
+      // (student submit → answer compare) keeps working unchanged; the
+      // student renderers show the image when present and fall back to text.
+      var serializedOptions = [];
+      for (var oi = 0; oi < rawOptions.length; oi++) {
+        var o = rawOptions[oi];
+        if (typeof o === 'string') { serializedOptions.push(o); continue; }
+        if (!o || typeof o !== 'object') continue;
+        var oText = String(o.text != null ? o.text : o.label || o.value || '').trim();
+        var oImage = String(o.image != null ? o.image : o.imageUrl || o.src || '').trim();
+        if (!oText && !oImage) continue;
+        if (!oImage) { serializedOptions.push(oText); continue; }
+        var oNode = { text: oText, image: oImage };
+        if (o.isImageOnly) oNode.isImageOnly = true;
+        if (o.id != null) oNode.id = String(o.id);
+        if (o.number != null) oNode.number = String(o.number);
+        serializedOptions.push(oNode);
+      }
+      var optionsJson = serializedOptions.length ? JSON.stringify(serializedOptions) : undefined;
 
       var answer = q.answer;
       if (typeof answer !== 'string') {
@@ -568,6 +587,46 @@
     return mapper ? mapper(data || {}) : (data || {});
   }
 
+  // ─── Embedded image upload ─────────────────────────────────────────────────
+  // Question option data carries images either as base64 data URLs (freshly
+  // picked in the editor) or as /uploads URLs (already persisted). Before a
+  // question hits the wire, persist any data: URLs to the real uploads folder
+  // via /api/v1/uploads and swap them for stable relative URLs. On failure we
+  // keep the data URL — CSP allows 'data:' — so a save never bricks over a
+  // transient upload error.
+  function uploadEmbeddedImages(entity, data) {
+    if (entity !== 'questions' || !data || typeof data !== 'object') {
+      return Promise.resolve(data);
+    }
+    var bucket = [];
+    var collect = function (list) {
+      if (!Array.isArray(list)) return;
+      for (var i = 0; i < list.length; i++) {
+        var item = list[i];
+        if (
+          item &&
+          typeof item === 'object' &&
+          typeof item.image === 'string' &&
+          /^data:image\//i.test(item.image)
+        ) {
+          bucket.push(item);
+        }
+      }
+    };
+    collect(data.optionData);
+    collect(data.options);
+    collect(data.answers);
+    if (!bucket.length) return Promise.resolve(data);
+    var pending = bucket.map(function (item) {
+      return request('POST', '/uploads', { dataUrl: item.image })
+        .then(function (res) {
+          if (res && res.url) item.image = res.url;
+        })
+        .catch(function () { /* fallback: keep data: URL */ });
+    });
+    return Promise.all(pending).then(function () { return data; });
+  }
+
   // ─── Public API ──────────────────────────────────────────────────────────
   window.API = {
     /** GET /api/v1/<entity>[?query] */
@@ -592,12 +651,16 @@
 
     /** POST /api/v1/<entity> — payload is mapped through MAPPERS first. */
     create: function (entity, data) {
-      return request('POST', '/' + entity, mapPayload(entity, data));
+      return uploadEmbeddedImages(entity, data).then(function (payload) {
+        return request('POST', '/' + entity, mapPayload(entity, payload));
+      });
     },
 
     /** PATCH /api/v1/<entity>/<id> */
     update: function (entity, id, patch) {
-      return request('PATCH', '/' + entity + '/' + encodeURIComponent(id), mapPayload(entity, patch));
+      return uploadEmbeddedImages(entity, patch).then(function (payload) {
+        return request('PATCH', '/' + entity + '/' + encodeURIComponent(id), mapPayload(entity, payload));
+      });
     },
 
     /** DELETE /api/v1/<entity>/<id> */

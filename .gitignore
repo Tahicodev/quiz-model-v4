@@ -30,6 +30,12 @@ prisma/test.db-journal
 prisma/test-*.db
 prisma/test-*.db-journal
 
+# user-uploaded images (shipped inside the offline package, never in git)
+uploads/
+
+# temp staging for ZIP backup imports
+.import-staging/
+
 # Student bundle temp build entry
 src/frontend/.student-build-entry.js
 
