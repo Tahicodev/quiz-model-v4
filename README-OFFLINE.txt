@@ -62,6 +62,54 @@ During setup.bat / install.sh you can answer YES to "Enable HTTPS?".
     - To remove the browser warning on each tablet/phone, install
       certs\ca\rootCA.pem  as a CA certificate once on each device
       (Settings → Security → Install cert), then open https://<IP>:3000.
+
+TRUSTING THE CERTIFICATE ON STUDENT DEVICES (step by step)
+------------------------------------------------------------
+Only the one file matters:  certs\ca\rootCA.pem  (created on the SERVER
+machine when you answered YES to HTTPS during setup; it sits in the
+"certs" folder next to setup.bat). Copy it to each student device once
+(USB / email / network share), then install it there. Test on one
+device before rolling out to the rest.
+
+  Windows (Chrome / Edge / Firefox):
+    1. Double-click rootCA.pem -> "Install Certificate..."
+    2. Storage location: Current User -> Next
+    3. Tick "Place all certificates in the following store" -> Browse
+    4. Choose "Trusted Root Certification Authorities" -> OK -> Next -> Finish
+    5. Restart the browser, then open https://<server-IP>:3000
+
+  Android (Chrome):
+    1. Open the rootCA.pem file (tap it in e-mail / Downloads)
+    2. Settings -> Security -> More security settings
+       -> Encryption & credentials -> Install a certificate -> CA certificate
+    3. Pick the file, confirm with your PIN
+    4. Reopen Chrome -> https://<server-IP>:3000
+
+  iPhone / iPad (Safari) — BOTH steps are required:
+    1. Open rootCA.pem -> Settings -> "Profile Downloaded" -> Install (PASSCODE)
+    2. Settings -> General -> About -> Certificate Trust Settings
+       -> switch ON full trust for the "rootCA" certificate
+    3. Open https://<server-IP>:3000 in Safari
+
+  macOS (Safari / Chrome):
+    1. Double-click rootCA.pem (Keychain Access opens)
+    2. Get Info on "rootCA" -> expand "Trust"
+       -> "When using this certificate" -> "Always Trust"
+    3. Reopen the browser -> https://<server-IP>:3000
+
+Check: if the browser STILL shows "Your connection is not private"
+(NET::ERR_CERT_AUTHORITY_INVALID), the CA did not install or the
+browser was not restarted. The steps above install it once per device;
+afterwards the warning goes away for good.
+
+Remember:
+  - Students must open  https://<server-IP>:3000  (the IP printed at the
+    end of setup.bat), NOT "localhost" — the certificate is made to trust
+    the server's LAN address, not each student PC.
+  - Keep the "certs" folder inside the app folder. If you re-run HTTPS
+    setup later, a NEW CA is created and students need the new rootCA.pem.
+  - No internet is required — this is all local files.
+
     - Skip HTTPS anytime by answering N — plain HTTP works fine.
 
 Notes
