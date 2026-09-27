@@ -1,0 +1,97 @@
+◇ injected env (12) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+[GameServer] Game engine registered
+[19:01:22] [32mINFO[39m: [36mLegacy game engine mounted on SaaS socket server[39m
+    [35mservice[39m: "quiz-app"
+[19:01:22] [32mINFO[39m: [36mLegacy sync relay handlers registered[39m
+    [35mservice[39m: "quiz-app"
+[19:01:22] [32mINFO[39m: [36mBackend server started — reachable on LAN[39m
+    [35mservice[39m: "quiz-app"
+    [35mport[39m: 3000
+    [35mprotocol[39m: "http"
+    [35mhost[39m: "0.0.0.0"
+[19:01:23] [32mINFO[39m: [36mSocket connected[39m
+    [35mservice[39m: "quiz-app"
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+    [35msocketId[39m: "YCSlPYboH_PzjufmAAAB"
+[GameServer] Hydrated game: Duel Math — 1v1 (f9e63ca2-2c9d-488f-a5a5-5b5814303bef) - Status: open
+[GameServer] Hydrated game: Duel Math — 1v1 (13d251d9-160a-461b-b208-6ec9b0db5ae0) - Status: open
+[GameServer] Hydrated game: Team Clash — 2A vs 2B (ff4966c2-6989-4f3e-9fdb-ac8618492b4f) - Status: open
+[GameServer] Hydrated game: Team Clash — 2A vs 2B (27b5a178-9ca0-4a70-a6b0-a40bd88c7921) - Status: open
+[GameServer] Hydrated game: Duel Math — 1v1 (tournament--f90a75ff-9e15-4545-a4e2-d546e79d3e4b--r1--g1--f9e63ca2-2c9d-488f-a5a5-5b5814303bef) - Status: completed
+[GameServer] Hydrated game: Duel Math — 1v1 (tournament--f90a75ff-9e15-4545-a4e2-d546e79d3e4b--r2--g1--f9e63ca2-2c9d-488f-a5a5-5b5814303bef) - Status: completed
+[19:01:24] [32mINFO[39m: [36mSocket connected[39m
+    [35mservice[39m: "quiz-app"
+    [35muserId[39m: "7c43230c-0d02-4969-bd06-1f88e1f8807b"
+    [35msocketId[39m: "JSinlXbOH4FRjsiUAAAF"
+[19:01:25] [32mINFO[39m: [36mSocket connected[39m
+    [35mservice[39m: "quiz-app"
+    [35muserId[39m: "7c43230c-0d02-4969-bd06-1f88e1f8807b"
+    [35msocketId[39m: "08HrTDOWhjdMAUnPAAAH"
+[19:01:25] [32mINFO[39m: [36mbulk.routes: dropped legacy-only fields[39m
+    [35mservice[39m: "quiz-app"
+[19:01:26] [32mINFO[39m: [36mbulk.routes: dropped legacy-only fields[39m
+    [35mservice[39m: "quiz-app"
+[19:01:26] [32mINFO[39m: [36mSocket connected[39m
+    [35mservice[39m: "quiz-app"
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+    [35msocketId[39m: "VePG71q6iweGQPlhAAAL"
+[19:01:27] [32mINFO[39m: [36mbulk.routes: dropped legacy-only fields[39m
+    [35mservice[39m: "quiz-app"
+[19:01:27] [32mINFO[39m: [36mbulk.routes: dropped legacy-only fields[39m
+    [35mservice[39m: "quiz-app"
+[19:01:27] [32mINFO[39m: [36mbulk.routes: dropped legacy-only fields[39m
+    [35mservice[39m: "quiz-app"
+[19:03:28] [31mERROR[39m: [36mUnhandled Exception:[39m
+    [35mservice[39m: "quiz-app"
+[19:03:48] [33mWARN[39m:
+    [35mservice[39m: "quiz-app"
+    [35mtype[39m: "SECURITY"
+    [35mevent[39m: "login_success"
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+    [35mip[39m: "127.0.0.1"
+[19:03:54] [33mWARN[39m:
+    [35mservice[39m: "quiz-app"
+    [35mtype[39m: "SECURITY"
+    [35mevent[39m: "login_success"
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+    [35mip[39m: "127.0.0.1"
+[19:03:54] [33mWARN[39m: [36m[AI_MODEL_UNSUPPORTED] "gemini-2.5-flash-image" is an image-generation-only model (it creates pictures, not questions). Pick a text-capable model such as Gemini Flash/Pro for questions. Option images are only auto-generated with OpenAI or OpenRouter models.[39m
+    [35mservice[39m: "quiz-app"
+[19:03:54] [33mWARN[39m:
+    [35mservice[39m: "quiz-app"
+    [35mmethod[39m: "POST"
+    [35mpath[39m: "/api/v1/ai/generate/structured"
+    [35mstatus[39m: 422
+    [35mms[39m: 6
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+[19:03:59] [33mWARN[39m:
+    [35mservice[39m: "quiz-app"
+    [35mtype[39m: "SECURITY"
+    [35mevent[39m: "login_success"
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+    [35mip[39m: "127.0.0.1"
+[19:04:00] [31mERROR[39m: [36m[AI_PROVIDER_ERROR] Provider google responded 400: {
+  "error": {
+    "code": 400,
+    "message": "API key not valid. Please pass a valid API key.",
+    "status": "INVALID_ARGUMENT",
+    "details": [
+      {
+        "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+        "reason": "API_KEY_INVALID",
+        "domain": "googleapis.com",
+        "[39m
+    [35mservice[39m: "quiz-app"
+[19:04:00] [31mERROR[39m:
+    [35mservice[39m: "quiz-app"
+    [35mmethod[39m: "POST"
+    [35mpath[39m: "/api/v1/ai/generate/structured"
+    [35mstatus[39m: 502
+    [35mms[39m: 186
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+[19:04:15] [33mWARN[39m:
+    [35mservice[39m: "quiz-app"
+    [35mtype[39m: "SECURITY"
+    [35mevent[39m: "login_success"
+    [35muserId[39m: "490c657f-9e8d-4457-828d-339756254fa8"
+    [35mip[39m: "127.0.0.1"

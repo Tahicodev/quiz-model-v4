@@ -1831,42 +1831,19 @@
 		 * Show notification for new session
 		 */
 		function showSessionNotification(session) {
-			// Create floating notification
-			const notification = document.createElement('div');
-			notification.style.cssText = `
-			position: fixed;
-			top: 20px;
-			right: 20px;
-			background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-			color: white;
-			padding: 16px 24px;
-			border-radius: 12px;
-			box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-			z-index: 10000;
-			font-family: system-ui, -apple-system, sans-serif;
-			animation: slideIn 0.3s ease-out;
-		`;
-			notification.innerHTML = `
-			<div style="font-weight: 600; margin-bottom: 4px;">📚 New ${session.mode === 'exam' ? 'Exam' : 'Training'} Available</div>
-			<div style="opacity: 0.9; font-size: 14px;">${session.examName}</div>
-		`;
-
-			// Add animation style
-			const style = document.createElement('style');
-			style.textContent = `
-			@keyframes slideIn {
-				from { transform: translateX(100%); opacity: 0; }
-				to { transform: translateX(0); opacity: 1; }
+			const kind = session?.mode === 'exam' ? 'Exam' : 'Training';
+			const title = String(session?.examName || `${kind} session`).trim();
+			const message = `New ${kind} Available${title ? `: ${title}` : ''}`;
+			if (typeof window.showToast === 'function') {
+				window.showToast(message, 'success');
+				return;
 			}
-		`;
-			document.head.appendChild(style);
+			const notification = document.createElement('div');
+			notification.className = 'notification-toast toast-success';
+			notification.setAttribute('role', 'status');
+			notification.textContent = message;
 			document.body.appendChild(notification);
-
-			// Auto-remove after 5 seconds
-			setTimeout(() => {
-				notification.style.animation = 'slideIn 0.3s ease-out reverse';
-				setTimeout(() => notification.remove(), 300);
-			}, 5000);
+			setTimeout(() => notification.remove(), 4000);
 		}
 
 		// heartbeat + periodic sync (send only results, not full data)

@@ -14,11 +14,72 @@
 
 import { config } from '../config.js';
 import { logger } from '../logger.js';
-import { ValidationError } from '../../shared/errors.js';
+import { ValidationError, AppError } from '../../shared/errors.js';
 import { QUESTION_TYPES, DIFFICULTY } from '../../shared/constants.js';
 
 const typeValues = Object.values(QUESTION_TYPES);
 const diffValues = Object.values(DIFFICULTY);
+
+/**
+ * Question types whose editor modal supports image options. When one of these
+ * is generated, the LLM is asked to describe each option as an image prompt;
+ * ImageGenService then turns those prompts into real pictures (or the question
+ * falls back to plain text options).
+ */
+export const IMAGE_CAPABLE_TYPES = ['multiple-choice', 'multiple-choice-multi', 'odd-one-out', 'draggable'];
+
+// Models that ONLY produce images (Nano Banana, Google image models, GPT-image,
+// DALL·E, Flux, …). They cannot write text questions — calling them on the
+// chat/generate endpoint fails, so we refuse up-front with a clear message.
+const IMAGE_ONLY_MODEL_HINTS = [
+  'nanobanana', // Nano Banana (any spacing/dashes normalized away)
+  'gemini-2.0-flash-preview-image-generation',
+  'gemini-2.5-flash-image',
+  'gpt-image', 'dall-e', 'dall.e',
+  'imagen', 'flux', 'sdxl', 'stable-diffusion',
+  'midjourney', 'edgen', 'ideogram', 'firefly', 'recraft',
+];
+
+/** Whether a model id looks like an image-generation-only model. */
+export function isImageOnlyModel(modelId) {
+  const m = String(modelId || '').toLowerCase().replace(/[\s_-]+/g, '');
+  return IMAGE_ONLY_MODEL_HINTS.some((hint) => m.includes(String(hint).replace(/[\s_-]+/g, '')));
+}
+
+/** Friendly run-time validator — tells which model to actually pick. */
+export function modelCapabilityLabel(cfg) {
+  const model = String(cfg?.model_id || '');
+  if (isImageOnlyModel(model)) return 'image-only';
+  if (String(cfg?.provider || '').toLowerCase() === 'openai' || String(cfg?.provider || '').toLowerCase() === 'openrouter') {
+    return 'images-and-text';
+  }
+  return 'text';
+}
+
+/**
+ * When the user picks an image-generation-only model (Nano Banana, GPT-Image,
+ * …), that model cannot WRITE questions — so the question TEXT is written by a
+ * text-capable sibling from the same provider using the same API key, and the
+ * image model is used later to render the plain option IMAGES. This is what
+ * makes "images as options + question text" work for image-output models.
+ */
+const IMAGE_ONLY_TEXT_SIBLINGS = {
+  google: 'gemini-2.5-flash',
+  openai: 'gpt-4o-mini',
+  openrouter: 'openai/gpt-4o-mini',
+};
+
+/**
+ * Text model that will write the questions when an image-only model is
+ * selected. `AI_IMAGE_QUESTION_MODEL` overrides the per-provider default.
+ * Returns null for providers we cannot pair (no reliable text model).
+ */
+export function textSiblingModel(config) {
+  const envModel = String(process.env.AI_IMAGE_QUESTION_MODEL || '').trim();
+  if (envModel) return envModel;
+  const provider = String(config?.provider || '').toLowerCase();
+  return IMAGE_ONLY_TEXT_SIBLINGS[provider] || null;
+}
 
 export class AIService {
   #repo;
@@ -218,7 +279,7 @@ Respond ONLY with a valid JSON array. Example for MCQ:
    *   multiple-choice, multiple-choice-multi, true-false, odd-one-out,
    *   draggable, matching-pairs, fill-blank, code
    */
-  buildStructurePrompt({ topic, typeCounts = {}, difficulty = 'medium', points = 1, language = 'English' }) {
+  buildStructurePrompt({ topic, typeCounts = {}, difficulty = 'medium', points = 1, language = 'English', imageOptions = true }) {
     const typeSpecs = {
       'multiple-choice': '"options" = array of 4 plausible strings; "answer" = the exact correct option string',
       'multiple-choice-multi': '"options" = array of 4-6 strings; "answer" = correct options joined with " | " (pipe-separated)',
@@ -230,15 +291,27 @@ Respond ONLY with a valid JSON array. Example for MCQ:
       'code': '"question" contains the code snippet; "answer" = the expected output/value; optional "language" and "answerMode" ("text"|"options")',
     };
 
+    // Image-option specs for the question types whose editor supports pictures.
+    // The LLM cannot paint, so each option is described as a generation prompt;
+    // the server turns those prompts into real images (ImageGenService).
+    const imageTypeSpecs = {
+      'multiple-choice': '"options" = array of 4 OBJECTS { "label": "short unique keyword naming the option", "image": "detailed image-generation prompt uniquely depicting that option" }; "answer" = the LABEL of the correct option',
+      'multiple-choice-multi': '"options" = array of 4-6 OBJECTS { "label", "image" }; "answer" = correct option LABELS joined with " | " (pipe-separated)',
+      'odd-one-out': '"options" = array of 4 OBJECTS { "label", "image" } where exactly one does not belong; "answer" = the LABEL of the odd one',
+      'draggable': '"options" = array of 4-6 OBJECTS { "label", "image" } in the CORRECT order; "answer" = the LABELS in correct order joined with "," (comma-separated)',
+    };
+
+    const IMAGE_SET = new Set(IMAGE_CAPABLE_TYPES);
+    const typeSpec = (t) =>
+      imageOptions && IMAGE_SET.has(t) ? imageTypeSpecs[t] : typeSpecs[t];
+
     const requested = Object.entries(typeCounts || {})
       .filter(([, n]) => Number(n) > 0)
-      .map(([t, n]) => `- ${n} × ${t}${typeSpecs[t] ? ` — ${typeSpecs[t]}` : ''}`);
+      .map(([t, n]) => `- ${n} × ${t}${typeSpec(t) ? ` — ${typeSpec(t)}` : ''}`);
 
     if (!requested.length) {
-      requested.push(`- 5 × multiple-choice — ${typeSpecs['multiple-choice']}`);
+      requested.push(`- 5 × multiple-choice — ${typeSpec('multiple-choice')}`);
     }
-
-    const total = Object.values(typeCounts || {}).reduce((s, n) => s + Number(n || 0), 0) || 5;
 
     const isMixed = difficulty === 'mixed';
     const diffLabel = isMixed
@@ -247,6 +320,39 @@ Respond ONLY with a valid JSON array. Example for MCQ:
     const diffField = isMixed
       ? '"difficulty": one of ["easy","medium","hard"] chosen per question (spread a balanced mix)'
       : `"difficulty": "${difficulty}"`;
+
+    const imageRules = imageOptions
+      ? `
+- IMAGE-OPTION TYPES (${IMAGE_CAPABLE_TYPES.join(', ')}): "options" must be OBJECTS of the form { "label", "image" }. The "label" is a short UNIQUE keyword naming the option (the "answer" MUST be built from labels). The "image" value is a self-contained image-generation prompt for that option's picture — describe content, composition, style (photo, illustration, icon…), aspect ratio and a plain background; it must NOT contain readable text, letters, digits, watermarks or the answer itself. Each option's image must look clearly different from the others.
+- Every "label" must be unique within its question.`
+      : '';
+    const optionsShape = imageOptions
+      ? '"options": array (plain strings for text types, or { "label", "image" } objects for image-option types)'
+      : '"options": string[]';
+    const answerRule = imageOptions
+      ? 'The "answer" MUST be copy-pasteable from the "options" array (exact label for image-option questions; except fill-blank / code).'
+      : 'The "answer" MUST be copy-pasteable from the "options" array (except fill-blank / code).';
+    const imageExample = imageOptions
+      ? `
+
+Example output (IMAGE options — only for ${IMAGE_CAPABLE_TYPES.join(', ')}):
+[
+  {
+    "question": "Which fruit is red?",
+    "type": "multiple-choice",
+    "options": [
+      { "label": "apple", "image": "studio photo of a shiny red apple on a plain white background, centered, no text" },
+      { "label": "banana", "image": "studio photo of a yellow banana on a plain white background, centered, no text" },
+      { "label": "cherry", "image": "studio photo of two bright red cherries on a plain white background, centered, no text" },
+      { "label": "kiwi", "image": "studio photo of a sliced green kiwi on a plain white background, centered, no text" }
+    ],
+    "answer": "apple",
+    "explanation": "The apple is the only red fruit.",
+    "difficulty": "${isMixed ? 'easy' : difficulty}",
+    "points": ${points}
+  }
+]`
+      : '';
 
     return `You are a quiz-question generator for a school quiz app. Generate questions about the topic below.
 
@@ -259,11 +365,11 @@ ${requested.join('\n')}
 RULES:
 - Difficulty: ${diffLabel}. Points per question: ${points}. Language: ${language}.
 - Each question object MUST use EXACTLY these keys:
-  { "question": string, "type": one of ["multiple-choice","multiple-choice-multi","true-false","odd-one-out","draggable","matching-pairs","fill-blank","code"], "options": string[], "answer": string, "explanation": string, ${diffField}, "points": ${points} }
-- The "answer" MUST be copy-pasteable from the "options" array (except fill-blank / code).
+  { "question": string, "type": one of ["multiple-choice","multiple-choice-multi","true-false","odd-one-out","draggable","matching-pairs","fill-blank","code"], ${optionsShape}, "answer": string, "explanation": string, ${diffField}, "points": ${points} }
+- ${answerRule}${imageRules}
 - No numbering, no markdown, no commentary — respond with ONE valid JSON array of question objects and NOTHING else.
 
-Example output:
+Example output (text options):
 [
   {
     "question": "What is the result of 12 × 12?",
@@ -274,7 +380,7 @@ Example output:
     "difficulty": "${isMixed ? 'medium' : difficulty}",
     "points": ${points}
   }
-]`;
+]${imageExample}`;
   }
 
   /**
@@ -283,6 +389,28 @@ Example output:
    */
   async generateWithProvider(config, params) {
     if (!config?.model_id) throw new ValidationError({ model_id: ['No model selected'] });
+    // Image-generation-only models (Nano Banana, GPT-Image, …) cannot write
+    // text questions. Pair them with a text-capable sibling from the same
+    // provider/key: the sibling writes the question text, the image model
+    // renders the option pictures. The original image model is carried on the
+    // config so ImageGenService later generates the option images with it.
+    if (isImageOnlyModel(config.model_id)) {
+      const sibling = textSiblingModel(config);
+      if (!sibling) {
+        throw new AppError(
+          'AI_MODEL_UNSUPPORTED',
+          `"${config.model_id}" is an image-generation-only model and provider "${config.provider || '?'}" has no text-capable sibling to write the questions with. Pick a text-capable model.`,
+          422,
+        );
+      }
+      config._imageOnlyOriginalModel = config.model_id;
+      this.#logger.info('Image-only model auto-paired with a text sibling', {
+        imageModel: config._imageOnlyOriginalModel,
+        textModel: sibling,
+        provider: config.provider,
+      });
+      config.model_id = sibling;
+    }
     const prompt = this.buildStructurePrompt(params);
     const raw = await this.#callProvider(config, prompt);
     const questions = this.#parseStructuredQuestions(raw);
@@ -387,6 +515,8 @@ Example output:
       'code': 'code',
     };
 
+    const IMAGE_SET = new Set(IMAGE_CAPABLE_TYPES);
+
     return rows.map((row) => {
       const rawType = String(row.type || 'multiple-choice').trim().toLowerCase();
       const type = TYPE_ALIASES[rawType] || 'multiple-choice';
@@ -396,7 +526,37 @@ Example output:
       }
       let question = String(row.question || row.text || '').trim();
       let answer = String(row.answer || '').trim();
-      if (type === 'fill-blank') {
+
+      // Image-option draft detection: for image-capable types the model was
+      // asked for { label, image } objects where "image" is a generation
+      // prompt. A question only becomes an image draft when EVERY option is a
+      // well-formed object (label + prompt); otherwise it degrades to text.
+      let imageDraft = null;
+      if (IMAGE_SET.has(type) && Array.isArray(options) && options.length) {
+        const objects = options.map((o) => (o && typeof o === 'object' && !Array.isArray(o) ? o : null));
+        const allObjects = objects.every(Boolean);
+        const parsed = allObjects
+          ? objects.map((o, idx) => ({
+              label: String(o.label || o.text || o.name || o.value || '').trim(),
+              prompt: String(o.image || o.imagePrompt || o.prompt || '').trim(),
+              index: idx,
+            }))
+          : [];
+        const allComplete = parsed.length === options.length && parsed.every((p) => p.label && p.prompt);
+        if (allComplete) {
+          imageDraft = parsed.map((p) => ({ label: p.label, image: p.prompt }));
+          answer = this.#mapAnswerLabels(answer, imageDraft.map((o) => o.label), type);
+        } else if (allObjects && parsed.every((p) => p.label)) {
+          // Object-style options with no prompts → keep as plain text labels.
+          options = parsed.map((p) => p.label);
+        } else {
+          options = options.map((o) =>
+            typeof o === 'object' ? String(o.text || o.label || o.value || '') : String(o),
+          );
+        }
+      }
+
+      if (!imageDraft && type === 'fill-blank') {
         // Match the manual editor's structure: "___" blanks in the text and
         // a numbered "1:word|2:word" answer. Repair [[1]] / {{1}} / [blank]
         // placeholders and unnumbered word lists a model may still emit.
@@ -412,7 +572,11 @@ Example output:
       return {
         question,
         type,
-        options: Array.isArray(options) ? options.map((o) => (typeof o === 'object' ? String(o.text || o.value || '') : String(o))) : [],
+        options: imageDraft
+          ? imageDraft
+          : Array.isArray(options)
+            ? options.map((o) => (typeof o === 'object' ? String(o.text || o.value || '') : String(o)))
+            : [],
         answer,
         explanation: String(row.explanation || '').trim() || '',
         difficulty: ['easy', 'medium', 'hard'].includes(String(row.difficulty).toLowerCase())
@@ -422,7 +586,40 @@ Example output:
         language: row.language || undefined,
         answerMode: row.answerMode || undefined,
         codeSnippet: row.codeSnippet || undefined,
+        ...(imageDraft ? { imageMode: true } : {}),
       };
     }).filter((q) => q.question && q.answer);
+  }
+
+  /**
+   * Remap a model's answer onto option LABELS for an image draft. Accepts the
+   * label itself, 1-based positions, letters and 0-based indices.
+   */
+  #mapAnswerLabels(answerRaw, labels, type) {
+    const raw = String(answerRaw || '').trim();
+    if (!raw) return raw;
+    const mapToken = (token) => {
+      const t = String(token || '').trim();
+      const exact = labels.find((l) => l.toLowerCase() === t.toLowerCase());
+      if (exact) return exact;
+      const numeric = Number.parseInt(t, 10);
+      if (Number.isFinite(numeric) && String(numeric) === t && numeric >= 1 && numeric <= labels.length) {
+        return labels[numeric - 1];
+      }
+      const letter = t.match(/^([a-h])$/i);
+      if (letter) {
+        const idx = letter[1].toUpperCase().charCodeAt(0) - 65;
+        if (idx >= 0 && idx < labels.length) return labels[idx];
+      }
+      if (Number.isFinite(numeric) && String(numeric) === t && numeric >= 0 && numeric < labels.length) {
+        return labels[numeric];
+      }
+      return t;
+    };
+    const tokens = type === 'draggable' ? raw.split(',') : raw.split(/[,|]/);
+    const mapped = tokens.map(mapToken).filter(Boolean);
+    if (type === 'draggable') return mapped.join(',');
+    if (type === 'multiple-choice-multi') return mapped.join('|');
+    return mapped[0] || raw;
   }
 }

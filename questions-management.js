@@ -5810,10 +5810,14 @@ async function refreshAIConfigLists() {
 	const statusEl = document.getElementById('ai-shared-model-status');
 	try {
 		const res = await aiApi('GET', '/ai/configs');
-		aiSharedConfigs = Array.isArray(res?.data) ? res.data : [];
+		// API.raw normally returns the JSON body, but tolerate the common API
+		// envelopes as well so shared configs remain available to the generator.
+		const configs = Array.isArray(res) ? res : (res?.data ?? res?.configs ?? res?.items);
+		aiSharedConfigs = Array.isArray(configs) ? configs : [];
 	} catch (err) {
-		aiSharedConfigs = [];
-		if (statusEl) statusEl.textContent = 'Could not load shared models.';
+		// Keep the most recent successful list if a transient refresh fails.
+		if (!Array.isArray(aiSharedConfigs)) aiSharedConfigs = [];
+		if (statusEl) statusEl.textContent = 'Could not load shared models. Try reopening Settings or the generator.';
 	}
 
 	const shared = aiSharedConfigs.filter((c) => c.is_shared);
@@ -5863,7 +5867,7 @@ function renderAISharedCatalogList() {
 		<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid #f3f4f6;">
 			<div>
 				<strong style="font-size:0.9rem;">${escapeHtml(cfg.name)}</strong>
-				<small class="text-muted" style="display:block;">${escapeHtml(cfg.provider)} · ${escapeHtml(cfg.model_id)}${cfg.key_hint ? ' · ' + escapeHtml(cfg.key_hint) : ''}</small>
+				<small class="text-muted" style="display:block;">${capabilityBadgeChip(cfg)}${escapeHtml(cfg.provider)} · ${escapeHtml(cfg.model_id)}${cfg.key_hint ? ' · ' + escapeHtml(cfg.key_hint) : ''}</small>
 			</div>
 			<div style="display:flex; gap:6px;">
 				<button type="button" class="btn btn-sm btn-secondary" onclick="window.testAISharedConfig('${cfg.id}')">Test</button>
@@ -5884,7 +5888,7 @@ function renderAIMyModelsList(mine) {
 		<div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border:1px solid #f3f4f6; border-radius:8px; margin-bottom:6px;">
 			<div>
 				<strong style="font-size:0.9rem;">${escapeHtml(cfg.name)}</strong>
-				<small class="text-muted" style="display:block;">${escapeHtml(cfg.model_id)}${cfg.base_url ? ' · ' + escapeHtml(cfg.base_url) : ''}</small>
+				<small class="text-muted" style="display:block;">${capabilityBadgeChip(cfg)}${escapeHtml(cfg.model_id)}${cfg.base_url ? ' · ' + escapeHtml(cfg.base_url) : ''}</small>
 			</div>
 			<div style="display:flex; gap:6px;">
 				<button type="button" class="btn btn-sm btn-secondary" onclick="window.useMyAIModel('${cfg.id}')">Use</button>
@@ -6160,6 +6164,9 @@ function saveAISettings() {}
 function openAIGeneratorModal() {
 	const modal = document.getElementById('aiGeneratorModal');
 	if (!modal) return;
+	modal.inert = false;
+	modal.removeAttribute('inert');
+	modal._aiReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 	
 	// Check if AI is configured — either a server-side model (shared or
 	// personal, selected in Settings → AI Generation) or the legacy local key.
@@ -6174,19 +6181,7 @@ function openAIGeneratorModal() {
 	}
 
 	// Update active model indicator
-	const modelNameEl = document.getElementById('ai-current-model-name');
-	if (modelNameEl) {
-		let displayName = 'Default';
-		if (hasServerModel && Array.isArray(aiSharedConfigs)) {
-			const cfg = aiSharedConfigs.find((c) => c.id === selectedServerConfigId);
-			if (cfg) displayName = cfg.name || cfg.model_id;
-		} else if (aiGenerator && aiGenerator.config) {
-			const currentModel = aiGenerator.config.model || 'Default';
-			displayName = currentModel.split('/').pop().replace(':free', '').replace(/-/g, ' ');
-			displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
-		}
-		modelNameEl.textContent = displayName;
-	}
+	syncAICurrentModelName();
 
 	// Reset state
 	aiGeneratedQuestions = [];
@@ -6207,6 +6202,18 @@ function openAIGeneratorModal() {
 	
 	// Populate categories
 	populateAICategorySelect();
+
+	// Every modal open starts on the Text style (classic generation), so the
+	// two-picker confusion is avoided until the teacher explicitly asks for
+	// the manual Images builder.
+	window.setAIOptionStyle('text');
+	refreshAIConfigLists()
+		.then(() => {
+			populateAIGeneratorModelSelect();
+		})
+		.catch(() => {
+			populateAIGeneratorModelSelect();
+		});
 	
 	// Show modal
 	promoteAIGeneratorModal(modal);
@@ -6225,6 +6232,15 @@ function openAIGeneratorModal() {
 function closeAIGeneratorModal() {
 	const modal = document.getElementById('aiGeneratorModal');
 	if (modal) {
+		const active = document.activeElement;
+		const returnFocus = modal._aiReturnFocus;
+		// Move focus out before marking this subtree hidden to assistive tech.
+		if (active && modal.contains(active)) active.blur();
+		if (returnFocus?.isConnected && !modal.contains(returnFocus)) {
+			try { returnFocus.focus({ preventScroll: true }); } catch (_) { returnFocus.focus(); }
+		}
+		modal.inert = true;
+		modal.setAttribute('inert', '');
 		modal.style.setProperty('display', 'none', 'important');
 		[
 			'position',
@@ -6240,6 +6256,7 @@ function closeAIGeneratorModal() {
 		modal.removeAttribute('role');
 		document.documentElement.classList.remove('modal-open');
 		document.body.classList.remove('modal-open');
+		modal._aiReturnFocus = null;
 	}
 	aiGeneratedQuestions = [];
 	aiSelectedQuestions.clear();
@@ -6366,7 +6383,7 @@ function validateCodeTypeDistribution(typeCounts = {}, codeTypeCounts = {}) {
 // Generate questions through the server (shared or personal AI config), so
 // the API key never needs to exist in this browser. Falls back to the legacy
 // client-side generator when no model is selected/configured.
-async function generateQuestionsViaServer({ topic, typeCounts, difficulty, points, language }) {
+async function generateQuestionsViaServer({ topic, typeCounts, difficulty, points, language, imageOptions, imageConfigId }) {
 	let configId = null;
 	try {
 		const saved = localStorage.getItem('quizAISelectedConfig') || null;
@@ -6383,6 +6400,16 @@ async function generateQuestionsViaServer({ topic, typeCounts, difficulty, point
 			}
 		}
 	} catch (_) {}
+
+	let trustedImageConfigId = null;
+	if (imageConfigId) {
+		const known = aiSharedConfigs || [];
+		if (known.some((c) => String(c.id) === String(imageConfigId))) {
+			trustedImageConfigId = imageConfigId;
+		} else {
+			try { localStorage.removeItem('quizAIImageConfig'); } catch (_) {}
+		}
+	}
 
 	if (!configId) {
 		// No model selected: use the legacy browser-side generator if it's
@@ -6406,17 +6433,144 @@ async function generateQuestionsViaServer({ topic, typeCounts, difficulty, point
 
 	const res = await window.API.raw('POST', '/ai/generate/structured', {
 		configId,
+		...(trustedImageConfigId ? { imageConfigId: trustedImageConfigId } : {}),
 		topic,
 		typeCounts,
 		difficulty,
 		points,
 		language,
+		imageOptions,
 	});
 	const questions = Array.isArray(res?.data) ? res.data : [];
 	if (!questions.length) {
 		throw new Error(res?.message || 'The model returned no usable questions — try again or pick a stronger model.');
 	}
+	if (res?.note) {
+		try { showToast(res.note, 'info'); } catch (_) {}
+	}
 	return questions;
+}
+
+// Read + validate the manual image builder (Images option style). Throws a
+// readable message when a required field is missing.
+function buildImageQuestionFromBuilder() {
+	const questionText = document.getElementById('ai-image-question-text')?.value?.trim() || '';
+	if (!questionText) throw new Error('Please enter the question text.');
+	if (questionText.length > 8000) throw new Error('The question text is too long (max 8000 characters).');
+
+	const items = Array.from(document.querySelectorAll('#ai-image-options-list .ai-image-option-item'));
+	if (items.length < 2) {
+		throw new Error('Add at least two options with their image descriptions.');
+	}
+
+	const options = [];
+	let answer = '';
+	let correctCount = 0;
+	items.forEach((item, i) => {
+		const desc = item.querySelector('.ai-image-option-desc')?.value?.trim() || '';
+		if (!desc) throw new Error(`Option ${i + 1} is empty — describe what the picture for it should show.`);
+		const label = `Option ${i + 1}`;
+		const radio = item.querySelector('.ai-image-option-correct');
+		if (radio && radio.checked) {
+			correctCount += 1;
+			answer = label;
+		}
+		options.push({ label, image: desc });
+	});
+	if (correctCount !== 1) {
+		throw new Error('Mark exactly one option as the correct answer (use the radio next to the option).');
+	}
+
+	const imageConfigId = document.getElementById('ai-image-model-select')?.value || '';
+	if (!imageConfigId) {
+		throw new Error('Select an Image Model to render the option pictures.');
+	}
+	if (!(aiSharedConfigs || []).some((c) => String(c.id) === String(imageConfigId))) {
+		throw new Error('The selected Image Model is no longer available — pick it again.');
+	}
+
+	return { questionText, options, answer, imageConfigId };
+}
+
+// Render one manually-authored question (Images style): the server crafts the
+// draft and turns each option description into a real uploaded picture.
+async function generateImageQuestionViaServer({ questionText, options, answer, imageConfigId, points, difficulty, language }) {
+	const res = await window.API.raw('POST', '/ai/generate/image-question', {
+		imageConfigId,
+		questionText,
+		options,
+		answer,
+		points,
+		difficulty,
+		language,
+	});
+	const questions = Array.isArray(res?.data) ? res.data : [];
+	if (!questions.length) {
+		throw new Error(res?.message || 'The image model returned no usable question — pick another model and try again.');
+	}
+	if (res?.note) {
+		try { showToast(res.note, 'info'); } catch (_) {}
+	}
+	return questions;
+}
+
+// Show/hide the manual image builder inside the IMAGE style panel.
+window.createAIImageQuestion = function() {
+	const panel = document.getElementById('ai-image-builder-panel');
+	if (!panel) return;
+	if (panel.style.display !== 'none') {
+		panel.style.display = 'none';
+		return;
+	}
+	panel.style.display = 'block';
+	const question = document.getElementById('ai-image-question-text');
+	if (question) question.focus();
+};
+
+// The "+" button: append a new empty option row to the image builder. The
+// first option is pre-marked as the correct answer (so a whole row is always
+// selected), and clicking anywhere on a row makes it the correct one.
+window.addAIImageOption = function() {
+	const list = document.getElementById('ai-image-options-list');
+	if (!list) return;
+	const items = list.querySelectorAll('.ai-image-option-item');
+	if (items.length >= 10) {
+		showToast('Maximum 10 options per question', 'warning');
+		return;
+	}
+	const item = document.createElement('div');
+	item.className = 'ai-image-option-item';
+	const idx = items.length + 1;
+	const isFirst = items.length === 0;
+	item.innerHTML = `
+		<span class="ai-image-option-label">Option ${idx}</span>
+		<input type="radio" name="ai-image-correct" class="ai-image-option-correct" ${isFirst ? 'checked' : ''} title="Mark this option as the correct answer" />
+		<textarea class="form-control ai-image-option-desc" rows="2" placeholder="Describe the image for this option, e.g. a white router with three antennas"></textarea>
+		<button type="button" class="ai-image-option-remove" title="Remove this option" onclick="removeAIImageOption(this)">🗑️</button>
+	`;
+	// Clicking the row (except the textarea or the remove button) selects it
+	// as the correct answer — much easier to hit than a tiny radio.
+	item.addEventListener('click', (e) => {
+		if (e.target.closest('.ai-image-option-remove') || e.target.closest('.ai-image-option-desc')) return;
+		const radio = item.querySelector('.ai-image-option-correct');
+		if (radio) radio.checked = true;
+	});
+	list.appendChild(item);
+};
+
+window.removeAIImageOption = function(btn) {
+	const item = btn?.closest?.('.ai-image-option-item');
+	if (item) item.remove();
+};
+
+// Re-open the builder to a blank state (used when the modal is reset).
+function resetAIImageBuilder() {
+	const panel = document.getElementById('ai-image-builder-panel');
+	if (panel) panel.style.display = 'none';
+	const question = document.getElementById('ai-image-question-text');
+	if (question) question.value = '';
+	const list = document.getElementById('ai-image-options-list');
+	if (list) list.innerHTML = '';
 }
 
 window.generateQuestionsWithAI = async function() {
@@ -6432,6 +6586,45 @@ window.generateQuestionsWithAI = async function() {
 	const topic = document.getElementById('ai-topic')?.value?.trim();
 	const difficulty = document.getElementById('ai-difficulty')?.value || 'medium';
 	const category = document.getElementById('ai-category')?.value || '';
+	
+	// IMAGE option style → manual builder. The teacher wrote the question text
+	// and the image description of every option themselves, so only the Image
+	// Model is used (it renders the option pictures). No topic / types here.
+	if (currentAITab === 'standard' && getAIOptionStyle() === 'image') {
+		const language = (document.getElementById('ai-language')?.value || 'French').trim() || 'French';
+		const points = Math.min(100, Math.max(1, Number.parseInt(document.getElementById('ai-points')?.value, 10) || 1));
+		hideError();
+		setGenerateButtonLoading(true);
+		try {
+			const built = buildImageQuestionFromBuilder();
+			const questions = await generateImageQuestionViaServer({
+				questionText: built.questionText,
+				options: built.options,
+				answer: built.answer,
+				imageConfigId: built.imageConfigId,
+				points,
+				difficulty: document.getElementById('ai-difficulty')?.value || 'medium',
+				language,
+			});
+			if (questions && questions.length > 0) {
+				questions.forEach((q) => { q.points = points; });
+				aiGeneratedQuestions = questions;
+				displayAIPreview(questions);
+				showToast(`✨ Generated ${questions.length} question(s) with image options!`, 'success');
+			}
+		} catch (error) {
+			console.error('AI image generation error:', error);
+			let errorMsg = error.message || 'Failed to generate the image question';
+			if (/failed to fetch|network|err_name_not_resolved|load failed/i.test(String(errorMsg))) {
+				errorMsg = 'The image provider could not be reached. Check your internet connection, provider API key, and allowed model, then try again.';
+			}
+			showError(errorMsg);
+			showToast(`Image generation failed: ${errorMsg}`, 'error');
+		} finally {
+			setGenerateButtonLoading(false);
+		}
+		return;
+	}
 	
 	// Get type counts from steppers
 	const typeCounts = getTypeCounts(currentAITab);
@@ -6457,9 +6650,8 @@ window.generateQuestionsWithAI = async function() {
 		let questions = [];
 
 		if (currentAITab === 'standard') {
-			const language = document.getElementById('ai-language')?.value || 'fr';
-			const points = parseInt(document.getElementById('ai-points')?.value) || 1;
-
+			const language = (document.getElementById('ai-language')?.value || 'French').trim() || 'French';
+			const points = Math.min(100, Math.max(1, Number.parseInt(document.getElementById('ai-points')?.value, 10) || 1));
 			const codeTypeCounts = getCodeTypeCounts('standard');
 			validateCodeTypeDistribution(typeCounts, codeTypeCounts);
 
@@ -6469,6 +6661,7 @@ window.generateQuestionsWithAI = async function() {
 				difficulty,
 				points,
 				language,
+				imageOptions: false,
 			});
 
 			// Apply points
@@ -6497,7 +6690,7 @@ window.generateQuestionsWithAI = async function() {
 
 			// Send the extracted document text through the server-side model
 			// (shared/personal config) instead of calling from the browser.
-			const docText = (typeof documentQuestionGenerator.getDocumentText === 'function'
+const docText = (typeof documentQuestionGenerator.getDocumentText === 'function'
 				? documentQuestionGenerator.getDocumentText()
 				: '') || '';
 			if (docText) {
@@ -6507,6 +6700,7 @@ window.generateQuestionsWithAI = async function() {
 					difficulty: docDifficulty,
 					points: docPoints,
 					language: 'English',
+					imageOptions: false,
 				});
 			} else {
 				// Legacy client path (kept as fallback).
@@ -6713,10 +6907,17 @@ function createPreviewCard(question, index) {
 		optionsHtml = `
 			<div class="ai-preview-options">
 				${question.options.map((opt) => {
+					const isObject = opt && typeof opt === 'object';
+					const optText = isObject ? String(opt.text || opt.label || '') : String(opt || '');
+					const optImage = isObject ? String(opt.image || '') : '';
 					const isCorrect = answerTokens.some(
-						(token) => token.toLowerCase() === String(opt).trim().toLowerCase(),
+						(token) => token.toLowerCase() === optText.trim().toLowerCase(),
 					);
-					return `<span class="ai-preview-option ${isCorrect ? 'correct' : ''}">${escapeHtml(opt)}</span>`;
+					const safeText = escapeHtml(optText);
+					if (optImage) {
+						return `<span class="ai-preview-option ai-preview-option-image ${isCorrect ? 'correct' : ''}"><img src="${escapeHtml(optImage)}" alt="${safeText}" /><span class="ai-preview-option-label">${safeText}</span></span>`;
+					}
+					return `<span class="ai-preview-option ${isCorrect ? 'correct' : ''}">${safeText}</span>`;
 				}).join('')}
 			</div>
 		`;
@@ -6762,7 +6963,7 @@ function createPreviewCard(question, index) {
 			</div>
 			<span style="margin-left: auto; font-size: 0.85rem; color: var(--text-muted);">Q${index + 1}</span>
 		</div>
-		<div class="ai-preview-question">${escapeHtml(question.question)}</div>
+		<div class="ai-preview-question">${escapeHtml(question.question).replace(/&#x20;/gi, ' ')}</div>
 		${question.codeSnippet ? `
 			<div class="code-snippet-block" style="margin: 12px 0;">
 				<div class="code-snippet-header">
@@ -6847,6 +7048,9 @@ window.resetAIGenerator = function() {
 	if (previewList) previewList.innerHTML = '';
 	if (errorDiv) errorDiv.classList.add('hidden');
 	if (cooldownContainer) cooldownContainer.classList.add('hidden');
+	
+	// Reset the manual image builder (Images option style) to a blank state.
+	resetAIImageBuilder();
 	
 	// Hide code options
 	const standardCodeOptions = document.getElementById('ai-standard-code-options');
@@ -7480,14 +7684,328 @@ function getTypeCounts(tab) {
 	return counts;
 }
 
-/**
- * Update pro tips based on selected configuration (placeholder for future dynamic tips)
- * @param {string} tab - 'standard' or 'document'
- */
-window.updateProTips = function(tab) {
-	// Currently static tips - could be made dynamic based on difficulty/type selection
-	console.log('[AI Generator] Pro tips updated for tab:', tab);
+// ── AI Generator: in-modal model picker, option style & dynamic tips ──────────
+
+const AI_IMAGE_CAPABLE_PROVIDERS = ['openai', 'openrouter'];
+
+// Providers that can auto-generate real option images (must mirror the
+// server-side ImageGenService IMAGE_PROVIDERS set).
+function isImageCapableProvider(provider) {
+	return AI_IMAGE_CAPABLE_PROVIDERS.includes(String(provider || '').toLowerCase());
+}
+
+// Image-generation-only models (Nano Banana, Google image models, GPT-image,
+// DALL·E, Flux…). Must mirror AIService.isImageOnlyModel(). They cannot write
+// text questions, so they are flagged everywhere as "image-only".
+const AI_IMAGE_ONLY_MODEL_HINTS = [
+	'nanobanana',
+	'gemini-2.0-flash-preview-image-generation',
+	'gemini-2.5-flash-image',
+	'gpt-image', 'dall-e', 'dall.e',
+	'imagen', 'flux', 'sdxl', 'stable-diffusion',
+	'midjourney', 'edgen', 'ideogram', 'firefly', 'recraft',
+];
+
+function isImageOnlyModelId(modelId) {
+	const m = String(modelId || '').toLowerCase().replace(/[\s_-]+/g, '');
+	return AI_IMAGE_ONLY_MODEL_HINTS.some((hint) => m.includes(String(hint).replace(/[\s_-]+/g, '')));
+}
+
+// Mirror of AIService.textSiblingModel() — the text model used to write the
+// question TEXT when an image-only model is selected (same provider/key).
+const AI_IMAGE_ONLY_TEXT_SIBLINGS = { google: 'gemini-2.5-flash', openai: 'gpt-4o-mini', openrouter: 'openai/gpt-4o-mini' };
+function aiImageQuestionModelFor(cfg) {
+	if (!cfg) return '';
+	return AI_IMAGE_ONLY_TEXT_SIBLINGS[String(cfg.provider || '').toLowerCase()] || '';
+}
+
+// Human-readable capability of a config, used when listing models.
+// image-only   → model only creates pictures, so a text sibling writes the
+//                questions while this model renders the option images
+// Image options → OpenAI / OpenRouter: text questions + real option images
+// text output  → any other provider: plain text options
+function modelCapabilityBadge(cfg) {
+	if (!cfg) return { icon: '📝', label: 'Text' };
+	if (isImageOnlyModelId(cfg.model_id)) return { icon: '🎨', label: 'Image-only (options as images)' };
+	if (isImageCapableProvider(cfg.provider)) return { icon: '🖼️', label: 'Text + image options' };
+	return { icon: '📝', label: 'Text output' };
+}
+
+function capabilityBadgeChip(cfg) {
+	const b = modelCapabilityBadge(cfg);
+	const colors = {
+		'📝': '#0f766e',
+		'🖼️': '#b45309',
+		'🎨': '#9d174d',
+	};
+	const color = colors[b.icon] || '#475569';
+	return `<span style="display:inline-block; font-size:0.68rem; font-weight:700; color:${color}; background:${color}18; border:1px solid ${color}40; border-radius:999px; padding:1px 7px; margin-right:6px;">${b.icon} ${b.label}</span>`;
+}
+
+// The config currently selected for generation (shared or personal).
+function currentAISelectedConfig() {
+	let id = null;
+	try { id = localStorage.getItem('quizAISelectedConfig'); } catch (_) {}
+	return (aiSharedConfigs || []).find((c) => String(c.id) === String(id)) || null;
+}
+
+function getAIOptionStyle() {
+	// Session-only state (hidden input), no persistence: every modal open
+	// starts on Text so only the Text Model picker shows until Images is chosen.
+	const hidden = document.getElementById('ai-option-style-value');
+	if (hidden && (hidden.value === 'text' || hidden.value === 'image')) return hidden.value;
+	return 'text';
+}
+
+// Fill the generator's model dropdown with the admin-shared models plus the
+// personal configs saved with the teacher's own key. Image-capable providers
+// (OpenAI / OpenRouter) are flagged so the right model for image questions is
+// easy to spot.
+function populateAIGeneratorModelSelect() {
+	const select = document.getElementById('ai-generator-model-select');
+	if (!select) return;
+
+	let saved = null;
+	try { saved = localStorage.getItem('quizAISelectedConfig'); } catch (_) {}
+
+	const shared = (aiSharedConfigs || []).filter((c) => c.is_shared);
+	const mine = (aiSharedConfigs || []).filter((c) => !c.is_shared);
+
+	select.innerHTML = '';
+	const none = document.createElement('option');
+	none.value = '';
+	none.textContent = '-- Use default (your last selection in Settings) --';
+	select.appendChild(none);
+
+	const addGroup = (label, list, isShared) => {
+		if (!list || !list.length) return;
+		const group = document.createElement('optgroup');
+		group.label = label;
+		list.forEach((cfg) => {
+			const opt = document.createElement('option');
+			opt.value = cfg.id;
+			const badge = modelCapabilityBadge(cfg);
+			const who = isShared ? ' · shared' : ' · my key';
+			let text = `${badge.icon} ${badge.label}`;
+			if (badge.icon === '🎨') {
+				const sibling = aiImageQuestionModelFor(cfg);
+				if (sibling) text += ` (questions via ${sibling})`;
+			}
+			text += ` · ${escapeHtml(cfg.name || '')} (${escapeHtml(cfg.provider || '')} · ${escapeHtml(cfg.model_id || '')}${who})`;
+			if (cfg.key_hint) text += ` ${escapeHtml(cfg.key_hint)}`;
+			opt.textContent = text;
+			group.appendChild(opt);
+		});
+		select.appendChild(group);
+	};
+
+	addGroup('Shared by admin', shared, true);
+	addGroup('My models (my own key)', mine, false);
+
+	if (saved && (aiSharedConfigs || []).some((c) => String(c.id) === String(saved))) {
+		select.value = saved;
+	} else {
+		select.value = '';
+	}
+	window.onAIGeneratorModelChange(select, { silent: true });
+	populateAIImageModelSelect();
+}
+
+// Whether a stored config can RENDER real option images. Mirrors the server's
+// ImageGenService.render() canImage check: OpenAI/OpenRouter providers always,
+// plus Google image-only models (Nano Banana…) via its image API.
+function canConfigRenderImages(cfg) {
+	if (!cfg) return false;
+	const provider = String(cfg.provider || '').toLowerCase();
+	// Admin-shared configs may be routed through compatible custom gateways
+	// whose provider label is not one of the built-in providers. Let teachers
+	// choose them; the server validates actual support and can show a useful
+	// provider-specific error if image generation is unavailable.
+	return Boolean(cfg.is_shared)
+		|| isImageCapableProvider(provider)
+		|| (provider === 'google' && isImageOnlyModelId(cfg.model_id));
+}
+
+// The image model currently picked in the generator (or null → Auto).
+function currentAIImageConfig() {
+	const select = document.getElementById('ai-image-model-select');
+	const id = select?.value || '';
+	if (!id) return null;
+	return (aiSharedConfigs || []).find((c) => String(c.id) === String(id)) || null;
+}
+
+// Fill the "Image Model" picker (only shown for the Image option style) with
+// the configs able to render option images. Restores the last per-browser pick.
+function populateAIImageModelSelect() {
+	const select = document.getElementById('ai-image-model-select');
+	if (!select) return;
+
+	let saved = null;
+	try { saved = localStorage.getItem('quizAIImageConfig'); } catch (_) {}
+
+	const candidates = (aiSharedConfigs || []).filter((c) => canConfigRenderImages(c));
+
+	select.innerHTML = '';
+	const auto = document.createElement('option');
+	auto.value = '';
+	auto.textContent = '-- Select an image model --';
+	select.appendChild(auto);
+
+	const addGroup = (label, list, isShared) => {
+		if (!list || !list.length) return;
+		const group = document.createElement('optgroup');
+		group.label = label;
+		list.forEach((cfg) => {
+			const opt = document.createElement('option');
+			opt.value = cfg.id;
+			const badge = modelCapabilityBadge(cfg);
+			const who = isShared ? ' · shared' : ' · my key';
+			let text = `${badge.icon} ${badge.label}`;
+			text += ` · ${escapeHtml(cfg.name || '')} (${escapeHtml(cfg.provider || '')} · ${escapeHtml(cfg.model_id || '')}${who})`;
+			if (cfg.key_hint) text += ` ${escapeHtml(cfg.key_hint)}`;
+			opt.textContent = text;
+			group.appendChild(opt);
+		});
+		select.appendChild(group);
+	};
+
+	const shared = candidates.filter((c) => c.is_shared);
+	const mine = candidates.filter((c) => !c.is_shared);
+	addGroup('Shared by admin', shared, true);
+	addGroup('My models (my own key)', mine, false);
+	if (!candidates.length) {
+		const unavailable = document.createElement('option');
+		unavailable.disabled = true;
+		unavailable.textContent = (aiSharedConfigs || []).length
+			? 'No image-capable models are configured'
+			: 'No models loaded — refresh AI settings and try again';
+		select.appendChild(unavailable);
+	}
+
+	if (saved && candidates.some((c) => String(c.id) === String(saved))) {
+		select.value = saved;
+	} else {
+		select.value = '';
+	}
+	window.onAIImageModelChange(select, { silent: true });
+}
+
+// Picking a dedicated image model persists it per-browser and refreshes the
+// warnings. `silent` is used while repopulating, so the saved pick survives.
+window.onAIImageModelChange = function(select, opts) {
+	const id = select?.value || '';
+	if (!opts || opts.silent !== true) {
+		try {
+			if (id) localStorage.setItem('quizAIImageConfig', id);
+			else localStorage.removeItem('quizAIImageConfig');
+		} catch (_) {}
+	}
+	updateAIImageModelHint();
+	updateAIOptionStyleWarning();
 };
+
+function updateAIImageModelHint() {
+	const hint = document.getElementById('ai-image-model-hint');
+	if (!hint) return;
+	const cfg = currentAIImageConfig();
+	if (!cfg) {
+		hint.textContent = 'Pick the model that renders the option pictures (OpenAI, OpenRouter or a Google image model like Nano Banana).';
+		return;
+	}
+	const provider = String(cfg.provider || '').toLowerCase();
+	if (provider === 'google' && isImageOnlyModelId(cfg.model_id)) {
+		hint.textContent = `🎨 ${escapeHtml(cfg.name || '')} (${escapeHtml(cfg.model_id || '')}) renders the option images through Google's image API with its own key.`;
+	} else {
+		hint.textContent = `🖼️ Option images will be generated with the ${escapeHtml(cfg.provider || '')} key (gpt-image-1 / openai/gpt-image-1, or the server AI_IMAGE_MODEL).`;
+	}
+}
+
+// Selecting a model here sets it as the generation config for this browser
+// (same storage the server-side generator reads). `silent` is used when the
+// select is just being repopulated programmatically — do not wipe the saved
+// selection on a transient empty list.
+window.onAIGeneratorModelChange = function(select, opts) {
+	const id = select?.value || '';
+	if (!opts || opts.silent !== true) {
+		try {
+			if (id) localStorage.setItem('quizAISelectedConfig', id);
+			else localStorage.removeItem('quizAISelectedConfig');
+		} catch (_) {}
+	}
+	syncAICurrentModelName();
+	updateAIGeneratorModelHint();
+	updateAIOptionStyleWarning();
+	window.onAIImageModelChange(document.getElementById('ai-image-model-select'), { silent: true });
+};
+
+// Header "active model" indicator.
+function syncAICurrentModelName() {
+	const modelNameEl = document.getElementById('ai-current-model-name');
+	if (!modelNameEl) return;
+	const cfg = currentAISelectedConfig();
+	let displayName = 'Default';
+	if (cfg) {
+		displayName = cfg.name || cfg.model_id || 'Default';
+	} else if (aiGenerator && aiGenerator.config) {
+		const currentModel = aiGenerator.config.model || 'Default';
+		displayName = currentModel.split('/').pop().replace(':free', '').replace(/-/g, ' ');
+		displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+	}
+	modelNameEl.textContent = displayName;
+}
+
+function updateAIGeneratorModelHint() {
+	const hint = document.getElementById('ai-generator-model-hint');
+	if (!hint) return;
+	const cfg = currentAISelectedConfig();
+	if (!cfg) {
+		hint.textContent = 'Pick a model here, or use your last Settings selection. It writes the question text and the text options.';
+		return;
+	}
+	if (isImageOnlyModelId(cfg.model_id)) {
+		const sibling = aiImageQuestionModelFor(cfg);
+		if (sibling) {
+			hint.textContent = `🎨 ${escapeHtml(cfg.name || '')} (${escapeHtml(cfg.model_id || '')}) only generates pictures — the question text will be written via ${sibling} with the same key. Prefer a text-capable model here.`;
+		} else {
+			hint.textContent = `⚠️ ${escapeHtml(cfg.name || '')} (${escapeHtml(cfg.model_id || '')}) only generates pictures with no text sibling — pick a text-capable model here.`;
+		}
+		return;
+	}
+	hint.textContent = `ℹ️ ${escapeHtml(cfg.name || '')} (${escapeHtml(cfg.provider || '')} · ${escapeHtml(cfg.model_id || '')}) writes the question text and the text options. For image options, switch to the 🖼️ Images style.`;
+}
+
+// Segmented Text vs Images option-style toggle. Text shows the classic
+// generation fields; Images reveals the manual "question with image options"
+// builder. Swapping to Images never destroys a half-built question.
+window.setAIOptionStyle = function(style) {
+	const container = document.getElementById('ai-option-style');
+	const hidden = document.getElementById('ai-option-style-value');
+	if (!container || !hidden) return;
+	style = style === 'image' ? 'image' : 'text';
+	container.querySelectorAll('.ai-style-btn').forEach((btn) => {
+		btn.classList.toggle('active', btn.dataset.style === style);
+		btn.setAttribute('aria-pressed', btn.dataset.style === style ? 'true' : 'false');
+	});
+	hidden.value = style;
+	const form = document.getElementById('ai-generator-form');
+	if (form) form.dataset.aiStyle = style;
+	const textFields = document.getElementById('ai-text-style-fields');
+	if (textFields) textFields.dataset.hidden = style === 'image' ? '1' : '0';
+	const builder = document.getElementById('ai-image-style-builder');
+	if (builder) builder.dataset.hidden = style === 'image' ? '0' : '1';
+	const commonSettings = document.querySelector('.ai-common-question-settings');
+	if (commonSettings) commonSettings.dataset.imageStyle = style === 'image' ? '1' : '0';
+	updateAIOptionStyleWarning();
+};
+
+function updateAIOptionStyleWarning() {
+	const warn = document.getElementById('ai-option-style-warning');
+	if (!warn) return;
+	const style = getAIOptionStyle();
+	warn.textContent = style === 'image'
+		? 'Build one question: type the question text, add options and describe the image for each one, then pick an Image Model below.'
+		: '';
+}
 
 // Expose new functions
 window.recalcAITotal = recalcAITotal;

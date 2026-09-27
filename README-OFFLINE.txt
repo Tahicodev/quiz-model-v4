@@ -72,6 +72,21 @@ Notes
   this package, so image questions keep working offline. Full backups
   can be exported as a ZIP (data + images) and re-imported from that
   same ZIP, so images come back too.
+- AI image options: when the AI generator produces Multiple-Choice,
+  Multi-Answer, Odd-One-Out or Drag & Drop questions, it can also
+  auto-generate the option pictures (like doing it manually). This
+  happens when the selected AI model is OpenAI, OpenRouter or a Google
+  image model (e.g. Nano Banana, gemini-2.5-flash-image). Image-only
+  models cannot write text, so picking one auto-pairs it with a text
+  model from the same provider/key (per provider default below) that
+  writes the question text while the image model renders the option
+  pictures. Any other provider (or a failed image) falls back to
+  normal text options. Optional server settings:
+    AI_IMAGE_MODEL        image model (defaults: gpt-image-1 / openai/gpt-image-1)
+    AI_IMAGE_QUESTION_MODEL  text model for image-only models (defaults per provider: google → gemini-2.5-flash, openai→gpt-4o-mini, openrouter→openai/gpt-4o-mini)
+    AI_IMAGE_SIZE         image size (default 1024x1024)
+    AI_IMAGE_MAX_TOTAL    max images generated per request (default 20)
+    AI_IMAGE_CONCURRENCY  parallel image calls (default 2)
 - Option A is built for Windows x64 (win32-x64): it bundles installed
   node_modules + Prisma engines for that platform, so install is instant
   and independent of your npm version.

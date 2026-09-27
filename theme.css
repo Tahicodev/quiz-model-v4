@@ -1423,10 +1423,11 @@ html[data-theme='dark'] #aiGeneratorModal.is-open .modal-body {
 }
 
 html[data-theme='dark'] #aiGeneratorModal.is-open .ai-modal-header {
-	background-color: var(--bg-surface) !important;
-	background-image: none !important;
-	color: var(--text-main) !important;
+	background-image: linear-gradient(118deg, #312e81 0%, #3730a3 58%, #4c1d95 100%) !important;
+	color: #ffffff !important;
 }
+
+html[data-theme='dark'] #aiGeneratorModal.is-open .ai-modal-subtitle { color: rgba(255,255,255,.76) !important; }
 
 html[data-theme='dark'] #aiGeneratorModal .ai-modal-tabs {
 	background-color: var(--bg-surface) !important;
@@ -1434,7 +1435,30 @@ html[data-theme='dark'] #aiGeneratorModal .ai-modal-tabs {
 }
 
 html[data-theme='dark'] #aiGeneratorModal .ai-modal-tab.active {
-	background-color: transparent !important;
+	background-color: rgba(99, 102, 241, 0.18) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .ai-modal-tab {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-secondary) !important;
+}
+
+html[data-theme='dark'] #aiGeneratorModal .ai-modal-tab small { color: var(--text-muted) !important; }
+html[data-theme='dark'] #aiGeneratorModal .ai-tab-icon { background: rgba(99,102,241,.2) !important; color: #c7d2fe !important; }
+html[data-theme='dark'] #aiGeneratorModal .form-control {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal .ai-type-card-v2 {
+	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-generator-form > .form-row:first-child,
+html[data-theme='dark'] #aiGeneratorModal #ai-text-style-fields > .form-row:nth-of-type(2) {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
 }
 
 html[data-theme='dark'] #aiGeneratorModal #tab-ai-standard {

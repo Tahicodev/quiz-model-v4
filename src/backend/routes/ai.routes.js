@@ -15,7 +15,9 @@ import { validate } from '../middleware/validate.js';
 import { ROLES } from '../../shared/constants.js';
 import { getContainer } from '../container.js';
 import { listProviderModels } from '../services/AIConfigService.js';
+import { AppError } from '../../shared/errors.js';
 import { z } from 'zod';
+import { isImageOnlyModel } from '../services/AIService.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -241,12 +243,89 @@ router.post('/models/refresh', requireRole(AI_ROLES), async (req, res, next) => 
 });
 
 /**
+ * POST /api/v1/ai/generate/image-question
+ * Build ONE manually-authored question (Images option style). The teacher
+ * writes the question text and describes the picture for every option; the
+ * chosen Image Model renders those descriptions into real uploaded images.
+ * No LLM text generation happens — only the image provider is called.
+ */
+const ImageQuestionSchema = z.object({
+  imageConfigId: z.string().max(100),
+  questionText: z.string().min(1).max(8000),
+  options: z.array(
+    z.object({
+      label: z.string().max(200),
+      // The teacher's description of what the image must show (draft prompt).
+      image: z.string().min(1).max(2000),
+    }),
+  ).min(2).max(10),
+  answer: z.string().max(200),
+  points: z.coerce.number().int().min(1).max(100).default(1),
+  difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']).default('medium'),
+  language: z.string().max(40).default('English'),
+});
+
+router.post('/generate/image-question', requireRole(AI_ROLES), async (req, res, next) => {
+  try {
+    const parsed = ImageQuestionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ code: 'VALIDATION_ERROR', fields: parsed.error.flatten().fieldErrors });
+    }
+    const { aiConfigSvc, imageGenSvc } = getContainer();
+    const params = parsed.data;
+
+    const imageConfig = await aiConfigSvc.resolveForGeneration(req.user, req.schoolId, params.imageConfigId);
+    const provider = String(imageConfig.provider || '').toLowerCase();
+    const model = String(imageConfig.model_id || '').trim();
+    const canImage = imageGenSvc.isImageProvider(provider) || (provider === 'google' && isImageOnlyModel(model));
+    if (!canImage) {
+      throw new AppError('AI_MODEL_UNSUPPORTED', `"${imageConfig.model_id}" cannot generate images. Pick an OpenAI, OpenRouter or Google image (e.g. Nano Banana) model.`, 422);
+    }
+
+    // Craft a single multiple-choice draft: the option "image" field holds the
+    // teacher's description, which render() turns into a real picture.
+    const draft = {
+      type: 'multiple-choice',
+      question: params.questionText,
+      options: params.options.map((o) => ({ label: o.label, image: o.image })),
+      answer: params.answer,
+      imageMode: true,
+      requireImages: true,
+      difficulty: params.difficulty,
+      points: params.points,
+      explanation: '',
+    };
+
+    const { questions, note } = await imageGenSvc.render({ config: imageConfig, questions: [draft] });
+    const generatedQuestion = questions?.[0];
+    if (!generatedQuestion?.imageMode || !(generatedQuestion.options || []).some((option) => option?.image)) {
+      throw new AppError(
+        'AI_IMAGE_GENERATION_FAILED',
+        note || 'The selected image model did not return option images. Check its API key, model access, and image-generation support, then try again.',
+        502,
+      );
+    }
+    res.json({ data: questions, count: questions.length, note });
+  } catch (err) {
+    // AppError (bad config / unsupported model) flows through normally.
+    if (err instanceof AppError) return next(err);
+    const detail = err && err.message ? String(err.message) : 'The image generation call failed — check your key and model, then try again.';
+    next(new AppError('AI_IMAGE_GENERATION_FAILED', detail, 502));
+  }
+});
+
+/**
  * POST /api/v1/ai/generate/structured
  * Generate questions in the app's exact structure using either a stored
  * config (configId) or a one-off custom provider block. Runs server-side.
  */
 const StructuredGenerateSchema = z.object({
   configId: z.string().max(100).optional(),
+  // When the teacher picks distinct models for questions and option images,
+  // the TEXT config keeps writing the questions while imageConfigId is the
+  // config that renders the option pictures. Falls back to the text config.
+  // .nullish() tolerates the client sending null when "Auto" is selected.
+  imageConfigId: z.string().max(100).nullish(),
   custom: z.object({
     provider: z.enum(['openrouter', 'openai', 'anthropic', 'google', 'deepseek', 'custom']).optional(),
     model_id: z.string().max(200).optional(),
@@ -260,6 +339,10 @@ const StructuredGenerateSchema = z.object({
   difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']).default('medium'),
   points: z.coerce.number().int().min(1).max(100).default(1),
   language: z.string().max(40).default('English'),
+  // Image-option generation for multiple-choice / multi / odd-one-out /
+  // draggable. Only OpenAI and OpenRouter providers auto-generate real
+  // images; everything else falls back to text options.
+  imageOptions: z.boolean().optional().default(true),
 });
 
 router.post('/generate/structured', requireRole(AI_ROLES), async (req, res, next) => {
@@ -302,15 +385,41 @@ router.post('/generate/structured', requireRole(AI_ROLES), async (req, res, next
       return res.status(422).json({ code: 'VALIDATION_ERROR', fields: { configId: ['Pick a model or provide a custom one'] } });
     }
 
+    // An explicit Image Model picker lets the teacher render the option images
+    // with a different config (own provider/key). Resolve it up-front so a bad
+    // id fails fast instead of after wasting text-generation tokens.
+    const imageConfig = params.imageConfigId
+      ? await aiConfigSvc.resolveForGeneration(req.user, req.schoolId, params.imageConfigId)
+      : null;
+
     const questions = await aiSvc.generateWithProvider(config, {
       topic: params.topic,
       typeCounts: params.typeCounts,
       difficulty: params.difficulty,
       points: params.points,
       language: params.language,
+      imageOptions: params.imageOptions,
     });
-    res.json({ data: questions, count: questions.length });
-  } catch (err) { next(err); }
+
+    // Image-option questions (multiple-choice, multi, odd-one-out, draggable)
+    // arrive as drafts whose options are { label, image-prompt }. Turn those
+    // prompts into real pictures for OpenAI/OpenRouter/Google image models, or
+    // fall back to text. The image config renders the options when chosen.
+    const { imageGenSvc } = getContainer();
+    const { questions: finalQuestions, note } = await imageGenSvc.render({ config: imageConfig || config, questions });
+    // Only describe the auto-pairing when no explicit image config was chosen —
+    // render()'s own note already says which model produced the pictures.
+    const pairingNote = (!params.imageConfigId && config?._imageOnlyOriginalModel)
+      ? ` "${config._imageOnlyOriginalModel}" only generates images, so the question text was written via ${config.model_id} (same key) and the option images via ${config._imageOnlyOriginalModel}.`
+      : '';
+    res.json({ data: finalQuestions, count: finalQuestions.length, note: note + pairingNote });
+  } catch (err) {
+    // ValidationError / AppError flow through the normal handler (422 & co).
+    // Plain provider/fetch errors get a readable 502 instead of a masked 500.
+    if (err instanceof AppError) return next(err);
+    const detail = err && err.message ? String(err.message) : 'The AI provider call failed — check your connection, key and model, then try again.';
+    next(new AppError('AI_PROVIDER_ERROR', detail, 502));
+  }
 });
 
 /**
@@ -328,6 +437,7 @@ router.post('/prompt', requireRole(AI_ROLES), async (req, res, next) => {
       difficulty: ['easy', 'medium', 'hard', 'mixed'].includes(req.body?.difficulty) ? req.body.difficulty : 'medium',
       points: Number(req.body?.points) > 0 ? Math.min(Number(req.body.points), 100) : 1,
       language: String(req.body?.language || 'English'),
+      imageOptions: req.body?.imageOptions !== false,
     });
     res.json({ prompt });
   } catch (err) { next(err); }

@@ -18,6 +18,7 @@ import { AuthService } from './services/AuthService.js';
 import { UserService } from './services/UserService.js';
 import { AuditService } from './services/AuditService.js';
 import { AIService } from './services/AIService.js';
+import { ImageGenService } from './services/ImageGenService.js';
 import { RAGService } from './services/RAGService.js';
 import { AIConfigService } from './services/AIConfigService.js';
 import { ProfileRequestService } from './services/ProfileRequestService.js';
@@ -60,6 +61,7 @@ export function createContainer() {
 
     // AI
     aiSvc:  new AIService(repo, logger),
+    imageGenSvc: new ImageGenService({ logger }),
     ragSvc: new RAGService(repo, logger),
     aiConfigSvc: new AIConfigService(repo, logger),
     questionSvc: new QuestionService(repo),
