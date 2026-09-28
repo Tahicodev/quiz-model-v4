@@ -1748,6 +1748,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', initClassManagement);
+window.addEventListener('quiz:bootstrap-ready', function () {
+	if (!document.getElementById('classList')) return;
+	loadClasses();
+	updateClassList();
+	loadAvailableExams();
+});
 
 // Expose functions to window for HTML onclick handlers
 window.createNewClass = createNewClass;

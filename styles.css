@@ -29076,6 +29076,90 @@ tr[data-id],
 	}
 }
 
+/* Keep create/edit modal headers and action footers fixed while the form body
+   scrolls between them. Applies across the standard admin CRUD modals. */
+#questionFormModal .modal-content,
+#categoryModal .modal-content,
+#quickCategoryModal .modal-content,
+#examModal .modal-content,
+#classModal .modal-content,
+#gameModal .modal-content,
+#userModal .modal-content {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+#questionFormModal .modal-body,
+#categoryModal .modal-body,
+#quickCategoryModal .modal-body,
+#examModal .modal-body,
+#classModal .modal-body,
+#gameModal .modal-body,
+#userModal .modal-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+#questionFormModal .modal-header,
+#categoryModal .modal-header,
+#quickCategoryModal .modal-header,
+#examModal .modal-header,
+#classModal .modal-header,
+#gameModal .modal-header,
+#userModal .modal-header {
+	flex: 0 0 auto;
+}
+
+#questionFormModal .form-actions,
+#categoryModal .form-actions,
+#quickCategoryModal .form-actions,
+#examModal .form-actions,
+#classModal .form-actions,
+#gameModal .form-actions,
+#userModal .form-actions {
+	flex: 0 0 auto;
+}
+
+#questionFormModal .modal-content,
+#categoryModal .modal-content,
+#quickCategoryModal .modal-content,
+#examModal .modal-content,
+#classModal .modal-content,
+#userModal .modal-content { height: min(88dvh, 860px); }
+
+@media (max-width: 768px) {
+	#questionFormModal .modal-content,
+	#categoryModal .modal-content,
+	#quickCategoryModal .modal-content,
+	#examModal .modal-content,
+	#classModal .modal-content,
+	#userModal .modal-content {
+		height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+	}
+	#questionFormModal .modal-body,
+	#categoryModal .modal-body,
+	#quickCategoryModal .modal-body,
+	#examModal .modal-body,
+	#classModal .modal-body,
+	#userModal .modal-body { padding-bottom: 16px; }
+	#questionFormModal .form-actions,
+	#categoryModal .form-actions,
+	#quickCategoryModal .form-actions,
+	#examModal .form-actions,
+	#classModal .form-actions,
+	#userModal .form-actions {
+		position: static !important;
+		margin: 12px -12px -16px !important;
+		padding: 10px 12px max(10px, env(safe-area-inset-bottom)) !important;
+		background: var(--bg-surface, #fff) !important;
+	}
+}
+
 @media (max-width: 480px) {
 	#examModal .modal-content,
 	#categoryModal .modal-content,
@@ -30097,7 +30181,7 @@ body:has(.entry-gate-container.entry-runtime-active) {
 	border-radius: 12px !important;
 }
 
-#userModal #userForm .form-actions {
+#userModal .modal-body > .form-actions {
 	display: flex;
 	justify-content: flex-end;
 	gap: 10px;
@@ -30106,7 +30190,7 @@ body:has(.entry-gate-container.entry-runtime-active) {
 	border-top: 1px solid #e2e8f0;
 }
 
-#userModal #userForm .form-actions .btn {
+#userModal .modal-body > .form-actions .btn {
 	width: auto;
 	min-width: 110px;
 }
@@ -30126,12 +30210,12 @@ body:has(.entry-gate-container.entry-runtime-active) {
 		grid-template-columns: 1fr;
 	}
 
-	#userModal #userForm .form-actions {
+	#userModal .modal-body > .form-actions {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
 
-	#userModal #userForm .form-actions .btn {
+	#userModal .modal-body > .form-actions .btn {
 		width: 100%;
 		min-width: 0;
 	}
@@ -34914,14 +34998,92 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	max-width: 1000px;
 	display: flex;
 	flex-direction: column;
-	max-height: 88vh;
+	height: min(88dvh, 820px);
+	max-height: 88dvh;
 	margin: 3vh auto;
+	overflow: hidden;
 }
 
 .assign-modal .modal-body {
-	overflow-y: auto;
-	flex: 1;
+	display: flex;
+	flex: 1 1 auto;
 	min-height: 0;
+	overflow: hidden;
+}
+
+.assign-modal .modal-form-layout {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+}
+
+.assign-modal .modal-form-layout > :not(.form-actions) {
+	flex: 0 0 auto;
+}
+
+.assign-modal .modal-form-layout > .question-selection-container {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: auto;
+	max-height: none;
+}
+
+.assign-modal .modal-form-layout > .form-actions {
+	flex: 0 0 auto;
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px solid #e2e8f0;
+	background: var(--bg-surface, #fff);
+}
+
+#assignCategoryQuestionsModal .modal-content {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	max-height: calc(100dvh - 32px);
+	overflow: hidden;
+}
+
+#assignCategoryQuestionsModal .modal-header { flex: 0 0 auto; }
+
+#assignCategoryQuestionsModal .modal-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	overflow: hidden;
+	overscroll-behavior: contain;
+}
+
+#assignCategoryQuestionsModal .modal-form-layout {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+#assignCategoryQuestionsModal .modal-form-layout > .question-selection-container {
+	flex: 1 1 auto;
+	min-height: 0;
+	height: auto;
+	max-height: none;
+}
+
+#assignCategoryQuestionsModal .modal-form-layout > .category-filter-section {
+	flex: 0 0 auto;
+	max-height: 34vh;
+	overflow-y: auto;
+}
+
+#assignCategoryQuestionsModal .modal-form-layout > .form-actions {
+	position: static;
+	z-index: auto;
+	flex: 0 0 auto;
+	margin-top: 10px;
+	padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+	border-top: 1px solid #e2e8f0;
+	background: var(--bg-surface, #fff);
 }
 
 /* Points interval filter (moved markup lost its inline styles) */
@@ -35024,9 +35186,35 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 @media (max-width: 768px) {
 	.assign-modal {
 		max-width: 96vw;
-		max-height: 92vh;
-		margin: 4vw auto;
+		width: 96vw;
+		height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		margin: calc(12px + env(safe-area-inset-top)) auto calc(12px + env(safe-area-inset-bottom));
 	}
+	.assign-modal .modal-header { flex: 0 0 auto; }
+	.assign-modal .modal-body { flex: 1 1 auto; min-height: 0; }
+	.assign-modal .modal-form-layout > .form-actions {
+		position: sticky;
+		bottom: 0;
+		z-index: 3;
+		margin-top: 8px;
+		padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+		background: var(--bg-surface, #fff);
+	}
+	.assign-modal .question-selection-container {
+		grid-template-columns: 1fr;
+		grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+		min-height: 0;
+		height: auto;
+		max-height: none;
+		gap: 10px;
+	}
+	.assign-modal .available-questions,
+	.assign-modal .selected-questions {
+		min-height: 0;
+		height: auto;
+	}
+	.assign-modal .question-list-scroll { min-height: 0 !important; }
 }
 
 /* ═══ ASSIGN CLASS MODALS (roster + exams moved out of classModal) ═══ */
@@ -35169,6 +35357,32 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 }
 
 @media (max-width: 768px) {
+	#questionFormModal .modal-content,
+	#categoryModal .modal-content,
+	#quickCategoryModal .modal-content,
+	#examModal .modal-content,
+	#classModal .modal-content,
+	#userModal .modal-content {
+		height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+		max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+	}
+	#questionFormModal .modal-body,
+	#categoryModal .modal-body,
+	#quickCategoryModal .modal-body,
+	#examModal .modal-body,
+	#classModal .modal-body,
+	#userModal .modal-body { padding-bottom: 16px !important; }
+	#questionFormModal .form-actions,
+	#categoryModal .form-actions,
+	#quickCategoryModal .form-actions,
+	#examModal .form-actions,
+	#classModal .form-actions,
+	#userModal .form-actions {
+		position: static !important;
+		margin: 12px -12px -16px !important;
+		padding: 10px 12px max(10px, env(safe-area-inset-bottom)) !important;
+		background: var(--bg-surface, #fff) !important;
+	}
 	#assignClassStudentsModal .class-filter-row {
 		grid-template-columns: 1fr;
 	}
@@ -35189,6 +35403,30 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	#assignClassExamsModal .exam-selection-list {
 		max-height: 220px;
 	}
+	#assignCategoryQuestionsModal .modal-content {
+		width: calc(100vw - 16px);
+		max-width: none;
+		height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		margin: calc(8px + env(safe-area-inset-top)) auto calc(8px + env(safe-area-inset-bottom));
+		border-radius: 14px;
+	}
+	#assignCategoryQuestionsModal .modal-body { padding: 12px; }
+	#assignCategoryQuestionsModal .question-selection-container {
+		grid-template-columns: 1fr;
+		grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+		min-height: 0;
+		height: auto;
+		max-height: none;
+		gap: 10px;
+	}
+	#assignCategoryQuestionsModal .available-questions,
+	#assignCategoryQuestionsModal .selected-questions {
+		min-height: 0;
+		height: auto;
+	}
+	#assignCategoryQuestionsModal .question-list-scroll { min-height: 0 !important; }
+	#assignCategoryQuestionsModal .modal-form-layout > .form-actions { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 }
 
 /* ═══ PENDING STUDENT IMPORTS (teacher-staged, admin-confirmed) ═══ */
@@ -37324,4 +37562,541 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	letter-spacing: 0.03em;
 	color: #64748b;
 	text-align: center;
+}
+
+/* Category assignment expands with its open folders. Scroll the modal body as
+   one document instead of trapping expanded questions in the left column. */
+#assignCategoryQuestionsModal .assign-modal {
+	height: auto;
+	max-height: calc(100dvh - 24px);
+	min-height: min(70dvh, 640px);
+	margin: auto;
+}
+
+#assignCategoryQuestionsModal .modal-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: block;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+#assignCategoryQuestionsModal #assignCategoryQuestionsForm {
+	display: flex;
+	flex-direction: column;
+	min-height: min-content;
+}
+
+#assignCategoryQuestionsModal .category-filter-section {
+	flex: 0 0 auto;
+	max-height: none;
+	overflow: visible;
+}
+
+#assignCategoryQuestionsModal .question-selection-container {
+	display: grid !important;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	flex: 0 0 auto;
+	align-items: start;
+	height: auto;
+	min-height: 0;
+	max-height: none;
+}
+
+#assignCategoryQuestionsModal .available-questions,
+#assignCategoryQuestionsModal .selected-questions {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	height: auto;
+	min-height: 260px;
+	max-height: none;
+	overflow: visible;
+}
+
+#assignCategoryQuestionsModal .premium-question-title,
+#assignCategoryQuestionsModal .question-item .question-content {
+	font-size: clamp(0.72rem, 0.68rem + 0.18vw, 0.82rem);
+	line-height: 1.4;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+#assignCategoryQuestionsModal .premium-question-preview {
+	font-size: clamp(0.66rem, 0.63rem + 0.12vw, 0.74rem);
+	line-height: 1.4;
+}
+
+#assignCategoryQuestionsModal .question-list-scroll {
+	flex: 0 0 auto;
+	min-height: 0 !important;
+	max-height: none !important;
+	overflow: visible;
+}
+
+#assignCategoryQuestionsModal .modal-body > .form-actions {
+	position: sticky;
+	bottom: 0;
+	z-index: 10;
+	align-self: stretch;
+	box-sizing: border-box;
+	width: 100%;
+	margin-top: auto;
+	padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+	background: #fff;
+	background: var(--bg-surface, #fff);
+	background-color: #fff;
+	box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 768px) {
+	#assignCategoryQuestionsModal .assign-modal {
+		width: calc(100vw - 16px);
+		height: auto;
+		max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		min-height: 0;
+		margin: auto;
+	}
+
+	#assignCategoryQuestionsModal .question-selection-container {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto;
+	}
+
+	#assignCategoryQuestionsModal .premium-question-title,
+	#assignCategoryQuestionsModal .question-item .question-content {
+		font-size: clamp(0.7rem, 0.66rem + 0.2vw, 0.78rem);
+	}
+
+	#assignCategoryQuestionsModal .available-questions,
+	#assignCategoryQuestionsModal .selected-questions {
+		min-height: 220px;
+	}
+}
+
+/* Shared modal frame: fixed header and action row around independently
+   scrolling modal content. modal-layout.js promotes nested action rows here. */
+.modal .modal-content:has(> .modal-header):has(> .modal-body) {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+	overflow: hidden;
+}
+
+.modal .modal-content > .modal-header {
+	flex: 0 0 auto;
+}
+
+.modal .modal-content > .modal-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+	overscroll-behavior: contain;
+}
+
+.modal .modal-content > .modal-body:has(> .form-actions) {
+	overflow: hidden;
+}
+
+.modal .modal-content > .modal-body:has(> .form-actions) > :not(.form-actions) {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.modal .modal-content > .modal-body > .form-actions {
+	position: static !important;
+	flex: 0 0 auto;
+	align-self: stretch;
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0 !important;
+	padding: 12px 20px max(12px, env(safe-area-inset-bottom)) !important;
+	border-top: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 0;
+	background: var(--bg-surface, #fff) !important;
+	box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+}
+
+@media (max-width: 768px) {
+	.modal .modal-content:has(> .modal-header):has(> .modal-body) {
+		max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+	}
+
+	.modal .modal-content > .modal-body > .form-actions {
+		padding: 10px 14px max(10px, env(safe-area-inset-bottom)) !important;
+	}
+}
+
+/* Keep question typography compact even when saved question HTML contains
+   its own oversized headings or paragraph styles. */
+#assignCategoryQuestionsModal .question-item,
+#assignCategoryQuestionsModal .premium-question-item,
+#assignExamQuestionsModal .question-item,
+#assignExamQuestionsModal .premium-question-item {
+	font-size: clamp(0.7rem, 0.66rem + 0.16vw, 0.78rem);
+	line-height: 1.35;
+}
+
+#assignCategoryQuestionsModal .question-item .question-content,
+#assignCategoryQuestionsModal .premium-question-title,
+#assignExamQuestionsModal .question-item .question-content,
+#assignExamQuestionsModal .premium-question-title {
+	font-size: clamp(0.7rem, 0.66rem + 0.16vw, 0.78rem) !important;
+	line-height: 1.35 !important;
+	font-weight: 400;
+}
+
+#assignCategoryQuestionsModal .question-item .question-content :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, span, strong, em, div),
+#assignExamQuestionsModal .question-item .question-content :is(p, li, blockquote, h1, h2, h3, h4, h5, h6, span, strong, em, div) {
+	font-size: inherit !important;
+	line-height: inherit !important;
+	margin-block: 0.15em;
+}
+
+#assignCategoryQuestionsModal .premium-question-preview,
+#assignExamQuestionsModal .premium-question-preview {
+	font-size: clamp(0.64rem, 0.61rem + 0.12vw, 0.7rem);
+	line-height: 1.35;
+}
+
+#assignCategoryQuestionsModal :is(.premium-badge, .type-badge, .category-badge, .premium-category-badge, .points-badge, .multiple-indicator, .single-indicator, .premium-question-number),
+#assignExamQuestionsModal :is(.premium-badge, .type-badge, .category-badge, .premium-category-badge, .points-badge, .multiple-indicator, .single-indicator, .premium-question-number) {
+	box-sizing: border-box;
+	min-height: 18px;
+	padding: 2px 7px !important;
+	border-radius: 999px;
+	font-size: clamp(0.58rem, 0.56rem + 0.1vw, 0.66rem) !important;
+	font-weight: 600;
+	line-height: 1.15 !important;
+	letter-spacing: 0.02em;
+}
+
+#assignCategoryQuestionsModal .selection-points-badge,
+#assignExamQuestionsModal .selection-points-badge {
+	min-height: 18px;
+	padding: 2px 7px;
+	font-size: clamp(0.58rem, 0.56rem + 0.1vw, 0.66rem);
+	line-height: 1.15;
+}
+
+/* The AI generator has its own tab workspace and footer layout. Keep the tab
+   content as one scrolling surface rather than applying the generic form-body
+   flex layout used by the CRUD modals. */
+#aiGeneratorModal.is-open .modal-body {
+	display: block !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	padding: 0 !important;
+	overflow-x: hidden !important;
+	overflow-y: auto !important;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+}
+
+#aiGeneratorModal.is-open .ai-tab-containers,
+#aiGeneratorModal.is-open .ai-tab-pane {
+	box-sizing: border-box;
+	min-width: 0;
+}
+
+#aiGeneratorModal.is-open .ai-tab-pane {
+	width: 100%;
+}
+
+#aiGeneratorModal.is-open .form-control {
+	max-width: 100%;
+}
+
+@media (max-width: 560px) {
+	#aiGeneratorModal.is-open .ai-tab-pane {
+		padding: 16px 14px !important;
+	}
+
+	#aiGeneratorModal.is-open .ai-modal-tabs {
+		gap: 6px;
+		padding: 8px 10px;
+	}
+
+	#aiGeneratorModal.is-open .ai-modal-tab {
+		min-width: 0;
+		flex: 1 1 0;
+		padding: 9px 10px;
+	}
+
+	#aiGeneratorModal.is-open #ai-generator-footer {
+		padding: 10px 12px max(10px, env(safe-area-inset-bottom)) !important;
+	}
+}
+
+/* Shared, calm empty states for question filters and assignment pickers. */
+.filter-results-message,
+.premium-no-questions-state,
+.no-questions-state {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 190px;
+	margin: 12px 0;
+	padding: clamp(20px, 4vw, 32px) 18px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 16px;
+	background: var(--bg-surface, #fff);
+	color: var(--text-muted, #64748b);
+	text-align: center;
+}
+
+.filter-results-message svg,
+.premium-no-questions-state svg,
+.no-questions-state svg {
+	box-sizing: border-box;
+	width: 44px !important;
+	height: 44px !important;
+	flex: 0 0 auto;
+	margin: 0 0 4px !important;
+	padding: 10px;
+	border-radius: 14px;
+	background: #eef2ff;
+	color: #6366f1;
+	opacity: 1;
+}
+
+.filter-results-message h3,
+.premium-no-questions-state h3,
+.no-questions-state h3 {
+	margin: 0;
+	color: var(--text-primary, #1e293b);
+	font-size: 0.96rem;
+	font-weight: 650;
+	line-height: 1.35;
+}
+
+.filter-results-message p,
+.premium-no-questions-state p,
+.no-questions-state p {
+	max-width: 420px;
+	margin: 0;
+	color: var(--text-muted, #64748b);
+	font-size: 0.82rem;
+	line-height: 1.55;
+}
+
+.filter-results-message .clear-filters-btn {
+	margin-top: 6px;
+	padding: 7px 12px;
+	border: 1px solid #c7d2fe;
+	border-radius: 9px;
+	background: #eef2ff;
+	color: #4338ca;
+	font-size: 0.78rem;
+	font-weight: 600;
+	transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-results-message .clear-filters-btn:hover {
+	border-color: #a5b4fc;
+	background: #e0e7ff;
+}
+
+@media (max-width: 600px) {
+	.filter-results-message,
+	.premium-no-questions-state,
+	.no-questions-state {
+		min-height: 160px;
+		margin: 8px 0;
+		padding: 20px 14px;
+		border-radius: 12px;
+	}
+
+	.filter-results-message p,
+	.premium-no-questions-state p,
+	.no-questions-state p {
+		font-size: 0.78rem;
+	}
+}
+
+/* Assign Questions picker: keep the title and actions fixed while the two
+   question lists use the remaining modal height for their own scrolling. */
+#assignExamQuestionsModal .assign-modal {
+	box-sizing: border-box;
+	width: min(96vw, 1200px);
+	height: min(90dvh, 900px);
+	max-height: calc(100dvh - 24px);
+	margin: auto;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
+}
+
+#assignExamQuestionsModal .modal-header {
+	flex: 0 0 auto;
+}
+
+#assignExamQuestionsModal .modal-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	padding: 16px 18px;
+	overflow: hidden;
+	overscroll-behavior: contain;
+}
+
+#assignExamQuestionsModal #assignExamQuestionsForm {
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+#assignExamQuestionsModal .exam-filters-container {
+	flex: 0 0 auto;
+	max-height: min(34vh, 320px);
+	margin: 0 0 12px;
+	overflow-y: auto;
+}
+
+#assignExamQuestionsModal .question-selection-container {
+	flex: 1 1 0;
+	min-height: 0;
+	height: auto;
+	max-height: none;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px;
+}
+
+#assignExamQuestionsModal .question-column {
+	min-width: 0;
+	min-height: 0;
+	max-height: none;
+}
+
+#assignExamQuestionsModal .question-column .question-list-scroll {
+	flex: 1 1 0;
+	min-height: 0 !important;
+	max-height: none !important;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+#assignExamQuestionsModal #assignExamQuestionsForm > .form-actions {
+	position: static;
+	z-index: auto;
+	flex: 0 0 auto;
+	margin: 12px 0 0;
+	padding: 14px 0 0;
+	border-top: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 0;
+	background: var(--bg-surface, #fff);
+}
+
+@media (max-width: 768px) {
+	#assignExamQuestionsModal .assign-modal {
+		width: calc(100vw - 16px);
+		height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		margin: auto;
+		border-radius: 14px;
+	}
+
+	#assignExamQuestionsModal .modal-body {
+		padding: 10px;
+	}
+
+	#assignExamQuestionsModal .exam-filters-container {
+		max-height: min(30dvh, 250px);
+		margin-bottom: 8px;
+	}
+
+	#assignExamQuestionsModal .question-selection-container {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 8px;
+	}
+
+	#assignExamQuestionsModal #assignExamQuestionsForm > .form-actions {
+		margin-top: 8px;
+		padding: 10px 0 max(8px, env(safe-area-inset-bottom));
+	}
+}
+
+/* Category assignment layout: the form alone scrolls; the action bar is a
+   separate flex sibling so it reserves space instead of covering questions. */
+#assignCategoryQuestionsModal .assign-modal {
+	box-sizing: border-box;
+	width: min(96vw, 1200px);
+	height: min(90dvh, 900px);
+	max-height: calc(100dvh - 24px);
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+#assignCategoryQuestionsModal .modal-header {
+	flex: 0 0 auto;
+}
+
+#assignCategoryQuestionsModal .modal-body {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+	padding-bottom: 0;
+	overflow: hidden;
+}
+
+#assignCategoryQuestionsModal #assignCategoryQuestionsForm {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
+	height: auto;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+#assignCategoryQuestionsModal .modal-body > .form-actions {
+	position: static;
+	flex: 0 0 auto;
+	align-self: stretch;
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0;
+	padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+	border-top: 1px solid #e2e8f0;
+	background: #fff;
+	background: var(--bg-surface, #fff);
+	box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+}
+
+@media (max-width: 768px) {
+	#assignCategoryQuestionsModal .assign-modal {
+		width: calc(100vw - 16px);
+		height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+		margin: auto;
+		border-radius: 14px;
+	}
+
+	#assignCategoryQuestionsModal .modal-body {
+		min-height: 0;
+	}
+
+	#assignCategoryQuestionsModal .modal-body > .form-actions {
+		padding: 10px 14px max(10px, env(safe-area-inset-bottom));
+	}
 }

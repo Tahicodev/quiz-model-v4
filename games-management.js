@@ -2487,6 +2487,24 @@
 			});
 	}
 
+	// Opening the admin lobby is a lifecycle action, not a game edit. The game
+	// update endpoint intentionally rejects changes after start; only persist
+	// the legacy visible/open marker while the database game is still waiting.
+	// Active games are already joinable and should open read-only for monitoring.
+	async function persistLobbyOpenToApi(game) {
+		if (!window.API?.get || !window.API?.update || !game?.id) return;
+		try {
+			const storedGame = await window.API.get('games', game.id);
+			if (String(storedGame?.status || '').toLowerCase() !== 'waiting') return;
+			await window.API.update('games', game.id, { status: 'open' });
+		} catch (error) {
+			// A legacy realtime-only game may not have a matching database row.
+			// Its lobby is still opened by the socket engine below.
+			if (error?.status === 404 || error?.code === 'NOT_FOUND') return;
+			console.warn('[Games] Could not persist lobby visibility:', error?.message || error);
+		}
+	}
+
 	// ── Tournament → Database persistence ──────────────────────────────────
 	// Games already write through to the Prisma engine (persistGameToApi) and
 	// are reconciled DB-first on bootstrap. Tournaments previously lived only
@@ -2923,10 +2941,9 @@
 		}
 		const socket = window.clientSocket;
 		if (socket && socket.connected) {
-			// Persist the open state (status open -> wire waiting +
-			// settings.legacyStatus 'open') so a rehydrate after server restart
-			// keeps this lobby visible instead of regressing to a hidden draft.
-			persistGameToApi({ ...localGame, status: 'open' }, false);
+			// Persist visibility only for a game that has not started. Updating an
+			// active game through the configuration endpoint is correctly rejected.
+			void persistLobbyOpenToApi(localGame);
 			// Get game data from localStorage to help server hydrate if needed
 			const games = window.__DI_CONTAINER__.repo.getAll_sync('games');
 			const gameData = games.find((g) => g.id === gameId);

@@ -4993,6 +4993,11 @@
 	window.copyTempPassword = copyTempPassword;
 	window.closeResetPasswordModal = closeResetPasswordModal;
 	window.renderUsersTable = renderUsersTable;
+	window.addEventListener('quiz:bootstrap-ready', () => {
+		renderUsersTable();
+		renderProfileRequests();
+		renderPendingImports();
+	});
 	window.renderProfileRequests = renderProfileRequests;
 	window.renderPendingImports = renderPendingImports;
 	window.approvePendingImport = async function (importId) {

@@ -2,6 +2,10 @@
 
 Quiz application — SaaS build.
 
+> Full documentation in [USER_GUIDE.md](USER_GUIDE.md) (install, admin use,
+> student use, all game modes, configuration, offline classroom deployment and
+> troubleshooting).
+
 This distribution is single-mode (SaaS). All authentication, persistence, and realtime coordination goes through the SaaS backend (Express + Prisma + Socket.IO). The legacy localStorage / LAN mode is no longer supported.
 
 ## Quick start

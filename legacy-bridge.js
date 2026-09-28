@@ -335,8 +335,34 @@
           if (!data) return;
           for (var table in data) {
             if (data.hasOwnProperty(table) && Array.isArray(data[table])) {
-              cache[table] = data[table];
-              writeAll(table, data[table]);
+              var rows = data[table];
+              // Legacy category/question screens use camelCase and the
+              // `category` alias. Bootstrap rows are Prisma-shaped, so retain
+              // category_id while exposing the same stable category id to
+              // those older views after every hard refresh.
+              if (table === 'questions') {
+                rows = rows.map(function (question) {
+                  var categoryId = question.category_id || question.categoryId || question.category || '';
+                  return Object.assign({}, question, {
+                    question: question.question || question.text || '',
+                    category: categoryId,
+                    categoryId: categoryId,
+                    options: Array.isArray(question.options)
+                      ? question.options
+                      : (function () {
+                          try { return JSON.parse(question.options_json || '[]'); } catch (_) { return []; }
+                        })(),
+                  });
+                });
+              } else if (table === 'categories') {
+                rows = rows.map(function (category) {
+                  return Object.assign({}, category, {
+                    parentId: category.parentId || category.parent_id || null,
+                  });
+                });
+              }
+              cache[table] = rows;
+              writeAll(table, rows);
             }
           }
           // Reconcile games against the DB-authoritative list. The realtime
@@ -355,6 +381,7 @@
           // Quick Start wizard) may not have registered their event listener
           // yet when the fetch resolves — this lets them detect a bootstrap
           // that already landed before they were ready.
+          serverDataReady = true;
           window.__legacyBridgeBootstrappedAt = Date.now();
           try {
             window.dispatchEvent(new CustomEvent('quiz:bootstrap-ready', {
@@ -540,21 +567,23 @@
     var syncDebouncePending = Object.create(null);
     var lastBulkPayload = Object.create(null);
     var bulkRetryAfterUntil = Object.create(null);
+    var bulkRetryCount = Object.create(null);
+    var SNAPSHOT_TABLES = { categories: true, questions: true, exams: true, results: true };
+    var snapshotDeleteIds = Object.create(null);
+    var serverDataReady = false;
 
     function scheduleBulkSync(table, data) {
+      // Never treat an old browser cache as a complete database snapshot.
+      if (SNAPSHOT_TABLES[table] && !serverDataReady) return;
       var serialized;
       try {
         serialized = JSON.stringify(data);
       } catch (_) {
         serialized = null;
       }
-      if (serialized && lastBulkPayload[table] === serialized) {
-        return;
-      }
-      if (serialized) lastBulkPayload[table] = serialized;
       syncDebouncePending[table] = data;
       if (syncDebounceTimers[table]) clearTimeout(syncDebounceTimers[table]);
-      var delay = 800;
+      var delay = Math.min(30000, 800 * Math.pow(2, Math.min(bulkRetryCount[table] || 0, 5)));
       var retryAt = bulkRetryAfterUntil[table] || 0;
       if (retryAt > Date.now()) {
         delay = Math.max(delay, retryAt - Date.now());
@@ -563,7 +592,23 @@
         delete syncDebounceTimers[table];
         var latest = syncDebouncePending[table];
         delete syncDebouncePending[table];
-        syncToApi(table, latest, 'bulk');
+        var deletes = SNAPSHOT_TABLES[table] ? (snapshotDeleteIds[table] || []) : [];
+        if (SNAPSHOT_TABLES[table]) snapshotDeleteIds[table] = [];
+        var bulkPayload = SNAPSHOT_TABLES[table]
+          ? { items: latest, deleteIds: deletes }
+          : latest;
+        syncToApi(table, bulkPayload, 'bulk').then(function () {
+          bulkRetryCount[table] = 0;
+          if (serialized) lastBulkPayload[table] = serialized;
+        }).catch(function () {
+          // Retry the latest full snapshot. The server remains authoritative;
+          // failed writes stay visibly pending and cannot be mistaken for saved.
+          bulkRetryCount[table] = (bulkRetryCount[table] || 0) + 1;
+          if (SNAPSHOT_TABLES[table] && deletes.length) {
+            snapshotDeleteIds[table] = Array.from(new Set((snapshotDeleteIds[table] || []).concat(deletes)));
+          }
+          scheduleBulkSync(table, latest);
+        });
       }, delay);
     }
 
@@ -612,7 +657,7 @@
       // is unaffected — we just don't hit an endpoint that would 403/500.
       // Cached localStorage writes are allowed while logged out, but must not
       // become requests with an empty or stale Bearer header.
-      if (authUnavailable || !getToken() || !canSyncTable(table)) return;
+      if (authUnavailable || !getToken() || !canSyncTable(table)) return Promise.resolve({ skipped: true });
 
       var base = getBaseUrl() + '/' + table;
 
@@ -643,18 +688,22 @@
         url = base + '/' + encodeURIComponent(payload.id);
       } else {
         // 'bulk' — used by setAll_sync / setValue_sync.
-        if (!payload || (Array.isArray(payload) && payload.length === 0)) return;
+        if (!payload || (Array.isArray(payload) && payload.length === 0 && !SNAPSHOT_TABLES[table])) return;
         init.method = 'POST';
-        var body = Array.isArray(payload) ? { items: payload } : { value: payload };
+        var body = Array.isArray(payload)
+          ? { items: payload }
+          : SNAPSHOT_TABLES[table] && payload && Array.isArray(payload.items)
+            ? { items: payload.items, replace: true, deleteIds: payload.deleteIds || [] }
+          : { value: payload };
         init.body = JSON.stringify(body);
         url = getBaseUrl() + '/bulk/' + encodeURIComponent(table);
       }
 
-      fireWithRetry(url, init, table, label);
+      return fireWithRetry(url, init, table, label);
     }
 
     function fireWithRetry(url, init, table, label, retried) {
-      fetch(url, init)
+      return fetch(url, init)
         .then(function (res) {
           if (res.status === 401 && !retried) {
             // Access token expired or missing — refresh via the httpOnly cookie
@@ -687,7 +736,9 @@
                 var retryAfter = Number(res.headers && res.headers.get && res.headers.get('Retry-After'));
                 bulkRetryAfterUntil[table] = Date.now() + Math.max(retryAfter || 5, 5) * 1000;
               }
-              notifySyncError(table, 'HTTP ' + res.status + ' — ' + String(detail).slice(0, 200));
+              var error = new Error('HTTP ' + res.status + ' — ' + String(detail).slice(0, 200));
+              error.status = res.status;
+              throw error;
             });
           }
           // Success — reset the per-table failure counter so the
@@ -699,11 +750,12 @@
         .catch(function (err) {
           if (err && err.status === 401) {
             invalidateAuthSession();
-            return;
+            throw err;
           }
           if (!authUnavailable) {
             notifySyncError(table, err && err.message ? err.message : 'network error');
           }
+          throw err;
         });
     }
 
@@ -758,6 +810,16 @@
       },
 
       setAll_sync: function (table, data) {
+        if (SNAPSHOT_TABLES[table] && Array.isArray(data)) {
+          var previous = readAll(table);
+          var nextIds = new Set(data.map(function (row) { return row && row.id != null ? String(row.id) : ''; }));
+          var removedIds = previous
+            .filter(function (row) { return row && row.id != null && !nextIds.has(String(row.id)); })
+            .map(function (row) { return String(row.id); });
+          if (removedIds.length) {
+            snapshotDeleteIds[table] = Array.from(new Set((snapshotDeleteIds[table] || []).concat(removedIds)));
+          }
+        }
         cache[table] = data;
         writeAll(table, data);
         // Debounce bulk syncs per table. Realtime sessions (tournaments, games)

@@ -97,11 +97,16 @@ if "!MODE!"=="offline" (
 
 :offline_engines
 rem Restore the Prisma engine binaries snapshotted at bundle time
+rem (into @prisma\engines AND the prisma CLI folder, plus Prisma's download
+rem  cache — otherwise prisma generate tries to download the engines)
 if "!MODE!"=="offline" (
   if exist "vendor\offline\prisma-engines\!PLAT!" (
     echo  [4/9] Restoring Prisma engines for !PLAT!...
-    if exist "node_modules\@prisma\engines" rmdir /s /q "node_modules\@prisma\engines"
-    xcopy "vendor\offline\prisma-engines\!PLAT!" "node_modules\@prisma\engines\" /e /i /y >nul
+    node scripts\restore-prisma-engines.mjs
+    if errorlevel 1 (
+      echo  [4/9] [WARN] Prisma engines restore skipped
+      echo         prisma generate will need internet this once.
+    )
   ) else (
     echo  [4/9] [WARN] No bundled Prisma engines for !PLAT!
     echo         prisma generate will need internet this once.

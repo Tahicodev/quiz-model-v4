@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	loadSettings();
 	applySettings();
 	bindSettingsAutoSave();
+	loadSettingsFromDatabase();
 	console.log('Settings.js: Settings loaded and applied.');
 	console.log('window.openSettingsModal is:', typeof window.openSettingsModal);
 });
@@ -77,6 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // stay in sync with the current data-theme.
 document.addEventListener('quiz:themechange', () => {
 	applySettings();
+});
+window.addEventListener('quiz:bootstrap-ready', () => {
+	loadSettingsFromDatabase();
 });
 
 // Load settings from localStorage
@@ -88,6 +92,37 @@ function loadSettings() {
 		}
 	} catch (e) {
 		console.error('Error loading settings:', e);
+	}
+}
+
+function canManageAdminSettings() {
+	return Boolean(
+		window.Auth?.isAdmin?.() ||
+		String(window.Auth?.getCurrentRole?.() || '').toLowerCase() === 'super_admin',
+	);
+}
+
+async function loadSettingsFromDatabase() {
+	if (!window.API?.raw || !window.__authToken) return;
+	try {
+		const rolePath = canManageAdminSettings() ? 'admin' : 'teacher';
+		const response = await window.API.raw('GET', '/settings/' + rolePath);
+		const rows = Array.isArray(response) ? response : response?.data;
+		if (!Array.isArray(rows)) return;
+		const fromDatabase = {};
+		rows.forEach((row) => {
+			if (!row?.key || !(row.key in DEFAULT_SETTINGS)) return;
+			try {
+				fromDatabase[row.key] = JSON.parse(row.value);
+			} catch (_) {
+				fromDatabase[row.key] = row.value;
+			}
+		});
+		currentSettings = { ...DEFAULT_SETTINGS, ...fromDatabase };
+		localStorage.setItem('quizSettings', JSON.stringify(currentSettings));
+		applySettings();
+	} catch (error) {
+		console.warn('[settings] database refresh failed:', error?.message || error);
 	}
 }
 
@@ -884,6 +919,17 @@ async function saveSettingsForm(options = {}) {
 	};
 
 	// Save
+	// Persist settings on the server before updating the cache or showing a
+	// successful save. Settings are stored as individual DB keys.
+	if (window.API?.raw && window.__authToken) {
+		const visibility = canManageAdminSettings() ? 'admin' : 'teacher';
+		const settings = Object.entries(newSettings).map(([key, value]) => ({
+			key,
+			value: typeof value === 'string' ? value : JSON.stringify(value),
+			visibility,
+		}));
+		await window.API.raw('POST', '/settings/bulk', { settings });
+	}
 	currentSettings = newSettings;
 	localStorage.setItem('quizSettings', JSON.stringify(currentSettings));
 	if (source !== 'auto') settingsAutoSaveDirty = false;
@@ -929,9 +975,25 @@ async function saveSettingsForm(options = {}) {
 }
 
 // Reset Settings
-function resetSettings() {
+async function resetSettings() {
 	if (confirm('Are you sure you want to reset all settings to default?')) {
-		currentSettings = { ...DEFAULT_SETTINGS };
+		const defaults = { ...DEFAULT_SETTINGS };
+		if (window.API?.raw && window.__authToken) {
+			const visibility = canManageAdminSettings() ? 'admin' : 'teacher';
+			try {
+				await window.API.raw('POST', '/settings/bulk', {
+					settings: Object.entries(defaults).map(([key, value]) => ({
+						key,
+						value: typeof value === 'string' ? value : JSON.stringify(value),
+						visibility,
+					})),
+				});
+			} catch (error) {
+				showToast('Could not reset settings in the database: ' + (error?.message || 'server error'), 'error');
+				return;
+			}
+		}
+		currentSettings = defaults;
 		localStorage.setItem('quizSettings', JSON.stringify(currentSettings));
 		applySettings();
 		openSettingsModal(); // Reload form

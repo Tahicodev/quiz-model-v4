@@ -866,7 +866,7 @@ function importResultsJSON(input) {
 	const file = input.files[0];
 	const reader = new FileReader();
 
-	reader.onload = (event) => {
+	reader.onload = async (event) => {
 		try {
 			const parsed = JSON.parse(event.target.result);
 			const incoming = Array.isArray(parsed)
@@ -904,6 +904,12 @@ function importResultsJSON(input) {
 				added++;
 			});
 
+			if (added > 0 && window.API?.raw && window.__authToken) {
+				const serverResult = await window.API.raw('POST', '/bulk/results', { items: existing });
+				if (serverResult?.count === 0 && !serverResult?.deduped) {
+					throw new Error('The server did not save the imported results');
+				}
+			}
 			window.__DI_CONTAINER__.repo.setAll_sync('results', existing);
 
 			if (added > 0) {
@@ -1107,10 +1113,11 @@ function viewResultDetails(resultId) {
 	document.body.appendChild(modal);
 }
 
-function deleteResult(resultId) {
+async function deleteResult(resultId) {
 	if (!confirm('Are you sure you want to delete this result?')) return;
 
 	let results = window.__DI_CONTAINER__.repo.getAll_sync('results');
+	const target = results.find((r) => r.id === resultId);
 	const initialLength = results.length;
 
 	// Delete by id or by numero+date combination
@@ -1124,6 +1131,14 @@ function deleteResult(resultId) {
 		return;
 	}
 
+	if (window.API?.remove && window.__authToken && target?.id && /^[0-9a-f-]{36}$/i.test(target.id)) {
+		try {
+			await window.API.remove('results', resultId);
+		} catch (error) {
+			showToast('Could not delete result from the database: ' + (error?.message || 'server error'), 'error');
+			return;
+		}
+	}
 	window.__DI_CONTAINER__.repo.setAll_sync('results', results);
 
 	loadResults();

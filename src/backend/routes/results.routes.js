@@ -85,6 +85,20 @@ router.get('/user/:userId/stats', async (req, res, next) => {
 // (training, practice, etc.) and persist it. This complements the
 // `bulk/results` endpoint and is what the legacy bridge's `create_sync`
 // hits. Students can only create results for themselves.
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const result = await repo.modelFor('results').findFirst({
+      where: { id: req.params.id, school_id: req.schoolId },
+      select: { id: true, user_id: true },
+    });
+    if (!result) return res.status(404).json({ code: 'NOT_FOUND', message: 'Result not found' });
+    assertSelfOrInstructor(req, result.user_id);
+    await repo.delete('results', result.id);
+    res.status(204).send();
+  } catch (err) { next(err); }
+});
+
 router.post('/', async (req, res, next) => {
   try {
     const { repo } = getContainer();

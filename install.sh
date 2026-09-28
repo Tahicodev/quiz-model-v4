@@ -74,11 +74,16 @@ else
 fi
 
 # Restore the Prisma engine binaries snapshotted at bundle time (offline only)
+# (into @prisma/engines AND the prisma CLI folder, plus Prisma's download cache —
+#  otherwise prisma generate tries to download the engines)
 if [ "$OFFLINE" = "1" ]; then
   if [ -d "$OFFLINE_DIR/prisma-engines/$PLAT" ]; then
     echo "  Restoring Prisma engines for $PLAT…"
-    rm -rf node_modules/@prisma/engines
-    cp -R "$OFFLINE_DIR/prisma-engines/$PLAT" node_modules/@prisma/engines
+    if node scripts/restore-prisma-engines.mjs; then
+      :
+    else
+      echo -e "${YELLOW}  Prisma engines restore skipped — prisma generate will need internet once.${NC}"
+    fi
   else
     echo -e "${YELLOW}  No bundled Prisma engines for $PLAT — prisma generate will need internet once.${NC}"
   fi

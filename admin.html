@@ -159,7 +159,8 @@
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
-			<script src="admin-main.js?v=2026-09-17-r4" defer></script>
+		<script src="admin-main.js?v=2026-09-17-r4" defer></script>
+		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
 <script src="vendor/pdf.min.js"></script>
@@ -557,15 +558,14 @@
 									Here's what's happening with your quizzes today.
 								</p>
 							</div>
-							<div class="date-badge">
 		<!-- Setup Wizard modal -->
-		<div id="setupWizardModal" class="modal">
-			<div class="modal-content" style="max-width: 720px;">
-				<div class="modal-header">
+		<div id="setupWizardModal" class="modal" role="dialog" aria-modal="true" aria-label="Classroom Setup Wizard">
+			<div class="modal-content sw-modal-content">
+				<div class="modal-header sw-modal-header">
 					<h2>🌐 Classroom Setup Wizard</h2>
 					<button type="button" class="modal-close" onclick="window.closeSetupWizard()">&times;</button>
 				</div>
-				<div class="modal-body">
+				<div class="modal-body sw-modal-body">
 					<div class="sw-layout">
 						<div class="sw-steps" id="swSteps"></div>
 						<div class="sw-panel">
@@ -573,13 +573,14 @@
 						</div>
 					</div>
 				</div>
-				<div class="modal-footer">
+				<div class="modal-footer sw-modal-footer">
 					<button type="button" class="btn btn-secondary" id="swBackBtn" onclick="window.setupWizardBack()">Back</button>
 					<button type="button" class="btn btn-primary" id="swNextBtn" onclick="window.setupWizardNext()">Next</button>
 				</div>
 			</div>
 		</div>
 
+							<div class="date-badge">
 		<script>
 									document.write(
 										new Date().toLocaleDateString('en-US', {
@@ -3614,7 +3615,7 @@
 					<span class="close" onclick="closeCategoryModal()">&times;</span>
 				</div>
 				<div class="modal-body">
-					<form id="categoryForm">
+					<form id="categoryForm" class="modal-form-layout">
 						<div class="form-group">
 							<label for="categoryName">Category Name</label>
 							<input type="text" id="categoryName" required />
@@ -5894,7 +5895,7 @@
 					<span class="close" onclick="closeAssignCategoryQuestions()">&times;</span>
 				</div>
 				<div class="modal-body">
-					<form id="assignCategoryQuestionsForm" onsubmit="return false;">
+					<form id="assignCategoryQuestionsForm" class="modal-form-layout" onsubmit="return false;">
 						<div class="category-filter-section">
 							<div class="filter-toolbar">
 								<div class="filter-toolbar-group filter-toolbar-main">
@@ -6067,23 +6068,23 @@
 								></div>
 							</div>
 						</div>
-						<div class="form-actions">
-							<button
-								type="button"
-								class="btn btn-secondary"
-								onclick="closeAssignCategoryQuestions()"
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								class="btn btn-primary"
-								onclick="saveAssignCategoryQuestions()"
-							>
-								Save Assignment
-							</button>
-						</div>
 					</form>
+					<div class="form-actions" role="group" aria-label="Assignment actions">
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick="closeAssignCategoryQuestions()"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							class="btn btn-primary"
+							onclick="saveAssignCategoryQuestions()"
+						>
+							Save Assignment
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -6119,7 +6120,7 @@
 					<span class="close" onclick="closeAssignExamQuestions()">&times;</span>
 				</div>
 				<div class="modal-body">
-					<form id="assignExamQuestionsForm" onsubmit="return false;">
+					<form id="assignExamQuestionsForm" class="modal-form-layout" onsubmit="return false;">
 						<div class="exam-filters-container">
 							<div class="filter-toolbar">
 								<div class="filter-toolbar-group filter-toolbar-main">

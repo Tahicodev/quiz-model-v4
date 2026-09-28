@@ -22394,6 +22394,11 @@ A new temporary password will be generated and shown to you once so you can shar
     window.copyTempPassword = copyTempPassword;
     window.closeResetPasswordModal = closeResetPasswordModal;
     window.renderUsersTable = renderUsersTable;
+    window.addEventListener("quiz:bootstrap-ready", () => {
+      renderUsersTable();
+      renderProfileRequests();
+      renderPendingImports();
+    });
     window.renderProfileRequests = renderProfileRequests;
     window.renderPendingImports = renderPendingImports;
     window.approvePendingImport = async function(importId) {
@@ -28603,37 +28608,19 @@ A new temporary password will be generated and shown to you once so you can shar
         }
       }
       function showSessionNotification(session) {
+        const kind = session?.mode === "exam" ? "Exam" : "Training";
+        const title = String(session?.examName || `${kind} session`).trim();
+        const message = `New ${kind} Available${title ? `: ${title}` : ""}`;
+        if (typeof window.showToast === "function") {
+          window.showToast(message, "success");
+          return;
+        }
         const notification = document.createElement("div");
-        notification.style.cssText = `
-			position: fixed;
-			top: 20px;
-			right: 20px;
-			background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-			color: white;
-			padding: 16px 24px;
-			border-radius: 12px;
-			box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-			z-index: 10000;
-			font-family: system-ui, -apple-system, sans-serif;
-			animation: slideIn 0.3s ease-out;
-		`;
-        notification.innerHTML = `
-			<div style="font-weight: 600; margin-bottom: 4px;">\u{1F4DA} New ${session.mode === "exam" ? "Exam" : "Training"} Available</div>
-			<div style="opacity: 0.9; font-size: 14px;">${session.examName}</div>
-		`;
-        const style = document.createElement("style");
-        style.textContent = `
-			@keyframes slideIn {
-				from { transform: translateX(100%); opacity: 0; }
-				to { transform: translateX(0); opacity: 1; }
-			}
-		`;
-        document.head.appendChild(style);
+        notification.className = "notification-toast toast-success";
+        notification.setAttribute("role", "status");
+        notification.textContent = message;
         document.body.appendChild(notification);
-        setTimeout(() => {
-          notification.style.animation = "slideIn 0.3s ease-out reverse";
-          setTimeout(() => notification.remove(), 300);
-        }, 5e3);
+        setTimeout(() => notification.remove(), 4e3);
       }
       setInterval(() => {
         try {

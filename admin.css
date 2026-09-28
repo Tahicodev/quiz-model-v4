@@ -2471,3 +2471,319 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		grid-column: auto !important;
 	}
 }
+
+/* Classroom setup wizard */
+#setupWizardModal {
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	background: rgba(15, 23, 42, 0.58);
+	backdrop-filter: blur(6px);
+}
+
+#setupWizardModal .sw-modal-content {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	width: min(960px, calc(100vw - 40px));
+	height: min(84dvh, 800px);
+	max-height: calc(100dvh - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+	max-width: none !important;
+	min-height: 0;
+	margin: auto;
+	overflow: hidden;
+	border: 1px solid #dce4f0;
+	border-radius: 18px;
+	background: #fff;
+	box-shadow: 0 28px 70px rgba(15, 23, 42, 0.24);
+}
+
+#setupWizardModal .sw-modal-header {
+	box-sizing: border-box;
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	min-height: 86px;
+	padding: 18px 24px;
+	border: 0;
+	background: linear-gradient(115deg, #4338ca, #5b52db 62%, #6d5bd0);
+	color: #fff;
+}
+
+#setupWizardModal .sw-modal-title-wrap {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	min-width: 0;
+}
+
+#setupWizardModal .sw-modal-icon {
+	width: 44px;
+	height: 44px;
+	display: grid;
+	flex: 0 0 auto;
+	place-items: center;
+	border: 1px solid rgba(255, 255, 255, 0.24);
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.14);
+	font-size: 1.35rem;
+}
+
+#setupWizardModal .sw-modal-header h2 {
+	margin: 0;
+	color: #fff;
+	font-size: clamp(1.05rem, 1rem + 0.35vw, 1.3rem);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+#setupWizardModal .sw-modal-header p {
+	margin: 4px 0 0;
+	color: rgba(255, 255, 255, 0.78);
+	font-size: 0.82rem;
+}
+
+#setupWizardModal .sw-modal-header .modal-close {
+	width: 38px;
+	height: 38px;
+	display: grid;
+	flex: 0 0 auto;
+	place-items: center;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.12);
+	color: #fff;
+	font-size: 1.4rem;
+	line-height: 1;
+}
+
+#setupWizardModal .sw-modal-body {
+	display: flex;
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 0;
+	overflow: hidden;
+}
+
+#setupWizardModal .sw-layout {
+	display: flex;
+	flex: 1 1 auto;
+	gap: 0;
+	min-width: 0;
+	min-height: 0;
+}
+
+#setupWizardModal .sw-steps {
+	box-sizing: border-box;
+	flex: 0 0 226px;
+	gap: 5px;
+	min-height: 0;
+	padding: 18px 12px;
+	border-right: 1px solid #e8edf5;
+	background: #f8fafc;
+	overflow-y: auto;
+}
+
+#setupWizardModal .sw-step {
+	min-width: 0;
+	padding: 10px 11px;
+	border: 1px solid transparent;
+	border-radius: 11px;
+	color: #64748b;
+	font-size: 0.82rem;
+	font-weight: 500;
+	line-height: 1.3;
+	transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+#setupWizardModal .sw-step:hover {
+	border-color: #e2e8f0;
+	background: #fff;
+	color: #334155;
+}
+
+#setupWizardModal .sw-step.active {
+	border-color: #c7d2fe;
+	background: #eef2ff;
+	color: #4338ca;
+}
+
+#setupWizardModal .sw-step.visited {
+	color: #15803d;
+}
+
+#setupWizardModal .sw-step-num {
+	width: 26px;
+	height: 26px;
+	background: #e2e8f0;
+	color: #475569;
+	font-size: 0.7rem;
+}
+
+#setupWizardModal .sw-step.active .sw-step-num {
+	background: #4f46e5;
+	color: #fff;
+}
+
+#setupWizardModal .sw-step.visited .sw-step-num {
+	background: #16a34a;
+	color: #fff;
+}
+
+#setupWizardModal .sw-panel {
+	box-sizing: border-box;
+	flex: 1 1 auto;
+	min-width: 0;
+	min-height: 0;
+	max-height: none;
+	padding: 26px clamp(18px, 3vw, 36px);
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+#setupWizardModal .sw-step-title {
+	margin: 0 0 8px;
+	color: #172033;
+	font-size: 1.2rem;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+#setupWizardModal .sw-step-desc {
+	margin: 0 0 20px;
+	color: #64748b;
+	font-size: 0.88rem;
+	line-height: 1.6;
+}
+
+#setupWizardModal :is(.sw-info-item, .sw-info-box, .sw-warning-box, .sw-error-box, .sw-primary-url, .sw-qr-container, .sw-summary-item) {
+	border-radius: 12px;
+}
+
+#setupWizardModal .sw-info-item,
+#setupWizardModal .sw-summary-item {
+	border-color: #e2e8f0;
+	background: #f8fafc;
+}
+
+#setupWizardModal .sw-info-label,
+#setupWizardModal .sw-secondary-label,
+#setupWizardModal .sw-cmd-label {
+	color: #64748b;
+}
+
+#setupWizardModal .sw-primary-url {
+	border: 1px dashed #86efac;
+	background: #f0fdf4;
+}
+
+#setupWizardModal .sw-primary-url-value {
+	font-size: clamp(1rem, 0.9rem + 0.5vw, 1.2rem);
+	line-height: 1.4;
+}
+
+#setupWizardModal .sw-modal-footer {
+	box-sizing: border-box;
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 72px;
+	margin: 0;
+	padding: 12px 22px max(12px, env(safe-area-inset-bottom));
+	border-top: 1px solid #e2e8f0;
+	background: #fff;
+}
+
+#setupWizardModal .sw-modal-footer .btn {
+	min-width: 104px;
+	min-height: 40px;
+	border-radius: 10px;
+	font-weight: 600;
+}
+
+#setupWizardModal #swNextBtn {
+	border-color: #4f46e5;
+	background: #4f46e5;
+}
+
+#setupWizardModal #swNextBtn:hover:not(:disabled) {
+	border-color: #4338ca;
+	background: #4338ca;
+}
+
+@media (max-width: 640px) {
+	#setupWizardModal {
+		align-items: stretch;
+		padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+	}
+
+	#setupWizardModal .sw-modal-content {
+		width: 100%;
+		height: 100%;
+		max-height: none;
+		border-radius: 14px;
+	}
+
+	#setupWizardModal .sw-modal-header {
+		min-height: 70px;
+		padding: 12px 14px;
+	}
+
+	#setupWizardModal .sw-modal-icon {
+		width: 38px;
+		height: 38px;
+		border-radius: 12px;
+	}
+
+	#setupWizardModal .sw-modal-header p {
+		font-size: 0.74rem;
+	}
+
+	#setupWizardModal .sw-layout {
+		flex-direction: column;
+	}
+
+	#setupWizardModal .sw-steps {
+		flex: 0 0 auto;
+		flex-direction: row;
+		gap: 6px;
+		padding: 10px;
+		border-right: 0;
+		border-bottom: 1px solid #e8edf5;
+		overflow-x: auto;
+		overflow-y: hidden;
+	}
+
+	#setupWizardModal .sw-step {
+		flex: 0 0 76px;
+		flex-direction: column;
+		gap: 5px;
+		min-height: 66px;
+		padding: 7px 5px;
+		font-size: 0.68rem;
+	}
+
+	#setupWizardModal .sw-step-label {
+		max-width: 100%;
+		text-align: center;
+	}
+
+	#setupWizardModal .sw-panel {
+		flex: 1 1 auto;
+		padding: 18px 16px;
+	}
+
+	#setupWizardModal .sw-info-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	#setupWizardModal .sw-modal-footer {
+		min-height: 64px;
+		padding: 10px 14px max(10px, env(safe-area-inset-bottom));
+	}
+}

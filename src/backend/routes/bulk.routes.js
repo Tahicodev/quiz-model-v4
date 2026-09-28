@@ -72,6 +72,8 @@ const TEACHER_WRITABLE_TABLES = new Set([
 // through). This matches the existing UI policy: only admins rotate the
 // adminSecret and recoveryCode.
 const TEACHER_BLOCKED_SETTINGS_KEYS = new Set(['adminSecret', 'recoveryCode']);
+// Only stable, complete collections may request deletion reconciliation.
+const SNAPSHOT_TABLES = new Set(['categories', 'questions', 'exams', 'results']);
 
 router.use(requireAuth, enforceTenant);
 
@@ -260,6 +262,9 @@ const SANITIZERS = {
     // looks like an id (uuid or similar), use it; otherwise drop it so
     // the FK to `categories.id` doesn't fail.
     const rawCat = row.category_id ?? row.categoryId ?? row.category;
+    const hasCategory = Object.prototype.hasOwnProperty.call(row, 'category_id') ||
+      Object.prototype.hasOwnProperty.call(row, 'categoryId') ||
+      Object.prototype.hasOwnProperty.call(row, 'category');
     const categoryId =
       typeof rawCat === 'string' &&
       rawCat.trim() !== '' &&
@@ -329,7 +334,7 @@ const SANITIZERS = {
     return {
       ...(row.id && { id: String(row.id) }),
       school_id: schoolId,
-      ...(categoryId && { category_id: categoryId }),
+      ...(hasCategory ? { category_id: categoryId || null } : {}),
       type: mappedType,
       text,
       ...(optionsJson !== undefined && { options_json: optionsJson }),
@@ -1090,6 +1095,10 @@ router.post('/:table', async (req, res, next) => {
     req._bulkActorRole = req.user?.role;
 
     let { items } = req.body;
+    const replaceSnapshot = req.body?.replace === true && SNAPSHOT_TABLES.has(table);
+    if (req.body?.replace === true && !SNAPSHOT_TABLES.has(table)) {
+      return res.status(400).json({ code: 'INVALID_SNAPSHOT', message: `Snapshot replacement is not supported for ${table}` });
+    }
 
     if (req.user?.role === ROLES.STUDENT) {
       if (table === 'users' && Array.isArray(items)) {
@@ -1124,7 +1133,7 @@ router.post('/:table', async (req, res, next) => {
       }
     }
 
-    if (!Array.isArray(items) || items.length === 0) {
+    if (!Array.isArray(items) || (items.length === 0 && !replaceSnapshot)) {
       return res.status(400).json({
         code: 'VALIDATION_ERROR',
         message: 'items must be a non-empty array',
@@ -1187,6 +1196,7 @@ router.post('/:table', async (req, res, next) => {
     const scoped = [];
     const droppedPerRow = [];
     let missingRequiredCount = 0;
+    let foreignStudentRows = 0;
 
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
@@ -1211,6 +1221,7 @@ router.post('/:table', async (req, res, next) => {
         table === 'results' &&
         String(cleaned.user_id) !== String(req.user.id)
       ) {
+        foreignStudentRows += 1;
         continue;
       }
 
@@ -1238,7 +1249,14 @@ router.post('/:table', async (req, res, next) => {
       scoped.push(cleaned);
     }
 
-    if (scoped.length === 0) {
+    if (replaceSnapshot && scoped.length !== items.length - foreignStudentRows) {
+      return res.status(400).json({
+        code: 'INVALID_SNAPSHOT',
+        message: 'The snapshot contains rows that could not be saved; no rows were removed.',
+      });
+    }
+
+    if (scoped.length === 0 && !replaceSnapshot) {
       // Either the table is intentionally skipped (game_presets) or every row
       // was rejected by the sanitizer. Return success with count 0 — telling
       // the truth (nothing was written) but not breaking the UI.
@@ -1273,7 +1291,7 @@ router.post('/:table', async (req, res, next) => {
     const dedupeWindowMs = 60_000;
     const now = Date.now();
     const lastSeen = bulkWriteDedupe.get(dedupeKey);
-    if (lastSeen && now - lastSeen < dedupeWindowMs) {
+    if (!replaceSnapshot && lastSeen && now - lastSeen < dedupeWindowMs) {
       return res.status(201).json({ count: 0, skipped: 0, deduped: true });
     }
     bulkWriteDedupe.set(dedupeKey, now);
@@ -1292,6 +1310,12 @@ router.post('/:table', async (req, res, next) => {
     // fine for the data sizes involved (classes/categories/users in the low
     // hundreds at most) and avoids silently dropping edits.
     const model = repo.modelFor ? repo.modelFor(table) : null;
+    if (replaceSnapshot && (!model || typeof model.deleteMany !== 'function')) {
+      return res.status(501).json({
+        code: 'SNAPSHOT_UNAVAILABLE',
+        message: `Database snapshot replacement is unavailable for ${table}`,
+      });
+    }
     let upserted = 0;
     if (model && typeof model.upsert === 'function') {
       for (const row of scoped) {
@@ -1502,6 +1526,19 @@ router.post('/:table', async (req, res, next) => {
               error: assignmentErr?.message,
             });
           }
+        }
+      }
+
+      if (replaceSnapshot) {
+        const deleteIds = Array.isArray(req.body?.deleteIds)
+          ? Array.from(new Set(req.body.deleteIds.map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 10000)
+          : [];
+        if (deleteIds.length) {
+          const where = { school_id: req.schoolId, id: { in: deleteIds } };
+          if (table === 'results' && req.user?.role === ROLES.STUDENT) {
+            where.user_id = req.user.id;
+          }
+          await model.deleteMany({ where });
         }
       }
 

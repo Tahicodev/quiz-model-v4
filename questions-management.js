@@ -622,8 +622,15 @@ function formatCorrectAnswers(question) {
 function openCategoryAssignmentModal(button) {
 	currentCategoryAssignmentButton = button;
 	const row = button.closest('tr');
-	const questionIndex =
-		parseInt(row.querySelector('td:first-child').textContent) - 1;
+	const questionIndex = Number.parseInt(
+		row.querySelector('.question-checkbox')?.dataset.index ??
+		row.getAttribute('data-index'),
+		10,
+	);
+	if (!Number.isInteger(questionIndex) || questionIndex < 0) {
+		showToast('Could not identify this question. Refresh the list and try again.', 'error');
+		return;
+	}
 
 	// Initialize selected questions array
 	selectedQuestionsForAssignment = [questionIndex];
@@ -706,24 +713,24 @@ async function saveCategoryAssignment() {
 		return;
 	}
 
-	// Update selected questions with the category
+	// Update selected questions with the category and detach them from their
+	// previous category so the question list and server agree after a move.
 	const savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
 	const questions = savedQuestions || [];
 
 	let updatedCount = 0;
 	try {
-		for (const index of selectedQuestionsForAssignment) {
-			const question = questions[index];
-			if (!question) continue;
-			if (question.id && window.API?.raw) {
-				await window.API.raw(
-					'PATCH',
-					`/questions/${encodeURIComponent(question.id)}`,
-					{ category_id: categoryId },
-				);
-			}
+		const selectedQuestions = Array.from(new Set(selectedQuestionsForAssignment))
+			.map((index) => ({ index, question: questions[index] }))
+			.filter((entry) => entry.question);
+		if (!selectedQuestions.length) throw new Error('No valid questions are selected. Refresh the list and try again.');
+		if (!window.API?.raw) throw new Error('Question API is unavailable. Refresh the page and try again.');
+		for (const { question } of selectedQuestions) {
+			if (!question.id) throw new Error('A selected question has no server record. Refresh questions, then try again.');
+			await window.API.raw('PATCH', `/questions/${encodeURIComponent(question.id)}`, { category_id: categoryId });
 			question.category = categoryId;
 			question.categoryId = categoryId;
+			question.category_id = categoryId;
 			updatedCount++;
 		}
 	} catch (apiErr) {
@@ -741,7 +748,7 @@ async function saveCategoryAssignment() {
 	// Close modal
 	closeCategoryAssignmentModal();
 
-	showToast(`Successfully assigned ${updatedCount} question(s) to category`);
+	showToast(`Successfully updated ${updatedCount} question categor${updatedCount === 1 ? 'y' : 'ies'}`, 'success');
 
 	// Broadcast Updates if enabled
 	if (document.getElementById('setting-broadcastUpdates')?.checked) {
@@ -4200,6 +4207,12 @@ document.addEventListener('DOMContentLoaded', function () {
 	if (typeof loadCategoriesIntoSelect === 'function') {
 		loadCategoriesIntoSelect();
 	}
+});
+
+window.addEventListener('quiz:bootstrap-ready', function () {
+	if (!document.getElementById('question-list')) return;
+	updateQuestionList();
+	if (typeof loadCategoriesIntoSelect === 'function') loadCategoriesIntoSelect();
 });
 
 // Expose all functions to window object for global access

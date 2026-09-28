@@ -679,9 +679,10 @@ function openAssignCategoryQuestions(categoryId) {
 	setTimeout(() => {
 		setupCategoryModalFilters();
 		populateCategoryFilter();
-		loadAvailableQuestionsForCategory(false).then(() => {
-			preloadCategorySelectionFromRepo();
-		});
+		// This loader reads the repository synchronously, so preload selections
+		// immediately after the available-question list has been rendered.
+		loadAvailableQuestionsForCategory(false);
+		preloadCategorySelectionFromRepo();
 		updateCategoryQuestionCountsUI();
 	}, 100);
 }
@@ -795,22 +796,65 @@ async function saveAssignCategoryQuestions() {
 		parseInt(el.dataset.questionId || el.dataset.index),
 	);
 
-	// Apply the assignment to the question store: first detach this category
-	// from every question, then attach it to the selected ones. This mirrors
-	// the legacy saveCategoryForm question logic exactly.
+	// Build the full new assignment map so a question moved to another category
+	// is detached from its previous category and persisted to the server.
 	const savedQuestions =
 		window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
-	savedQuestions.forEach((question) => {
-		if (question.category === categoryId) {
-			question.category = 'uncategorized';
-		}
+	const assignedSet = new Set(assignedQuestionIds);
+	const originalCategories = savedQuestions.map((question) => question.category || question.categoryId || question.category_id || 'uncategorized');
+	const changedQuestions = [];
+	savedQuestions.forEach((question, index) => {
+		const currentCategory = originalCategories[index];
+		let nextCategory = currentCategory;
+		if (currentCategory === categoryId && !assignedSet.has(index)) nextCategory = 'uncategorized';
+		if (assignedSet.has(index)) nextCategory = categoryId;
+		if (nextCategory === currentCategory) return;
+		question.category = nextCategory;
+		question.categoryId = nextCategory;
+		question.category_id = nextCategory === 'uncategorized' ? null : nextCategory;
+		changedQuestions.push(question);
 	});
-	assignedQuestionIds.forEach((questionId) => {
-		if (savedQuestions[questionId]) {
-			savedQuestions[questionId].category = categoryId;
-		}
+	if (!window.API?.raw && changedQuestions.length) {
+		showToast('Question API is unavailable. Refresh the page and try again.', 'error');
+		return;
+	}
+	const categoryRows = window.__DI_CONTAINER__.repo.getAll_sync('categories') || categories || [];
+	const categoryById = new Map(categoryRows.map((entry) => [entry.id, entry]));
+	// Recalculate category memberships from the complete question set.
+	categoryById.forEach((entry, id) => {
+		entry.questions = savedQuestions.reduce((ids, question, index) => {
+			if ((question.category || question.categoryId || question.category_id || 'uncategorized') === id) ids.push(index);
+			return ids;
+		}, []);
+		entry.questionCount = entry.questions.length;
 	});
+
+	try {
+		for (const question of changedQuestions) {
+			if (!question.id) {
+				throw new Error('A selected question has no server record. Refresh the question list and try again.');
+			}
+			await window.API.raw('PATCH', `/questions/${encodeURIComponent(question.id)}`, {
+				category_id: question.category === 'uncategorized' ? null : question.category,
+			});
+		}
+	} catch (apiErr) {
+		console.error('[categories] question category persistence failed:', apiErr);
+		showToast(`Could not save category changes: ${apiErr?.message || 'server error'}`, 'error');
+		return;
+	}
 	window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
+	if (typeof window.__DI_CONTAINER__.repo.getAll_sync === 'function') {
+		const latestCategories = window.__DI_CONTAINER__.repo.getAll_sync('categories') || [];
+		latestCategories.forEach((entry) => {
+			entry.questions = savedQuestions.reduce((ids, question, index) => {
+				if ((question.category || question.categoryId || question.category_id || 'uncategorized') === entry.id) ids.push(index);
+				return ids;
+			}, []);
+			entry.questionCount = entry.questions.length;
+		});
+		window.__DI_CONTAINER__.repo.setAll_sync('categories', latestCategories);
+	}
 
 	// Keep the category row's cached counts in sync
 	if (category) {
@@ -822,9 +866,9 @@ async function saveAssignCategoryQuestions() {
 	updateCategoryList();
 	loadCategoriesIntoSelect();
 	loadCategoriesIntoFilters();
-	if (typeof window.renderQuestionList === 'function') {
+	if (typeof window.updateQuestionList === 'function') {
 		try {
-			window.renderQuestionList();
+			window.updateQuestionList();
 		} catch (e) {
 			/* optional */
 		}
@@ -2118,6 +2162,15 @@ document.addEventListener('DOMContentLoaded', function () {
 	if (document.getElementById('categoryList')) {
 		initCategoryManagement();
 	}
+});
+
+window.addEventListener('quiz:bootstrap-ready', function () {
+	if (!document.getElementById('categoryList')) return;
+	loadCategories();
+	updateQuestionCategoryCounts();
+	updateCategoryList();
+	loadCategoriesIntoSelect();
+	loadCategoriesIntoFilters();
 });
 
 // Enhanced toggle category folder for uncategorized - select all questions when clicked

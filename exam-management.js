@@ -2949,6 +2949,11 @@ function clearQuickFilters() {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', initExamManagement);
+window.addEventListener('quiz:bootstrap-ready', function () {
+	if (!document.getElementById('examList')) return;
+	loadExams();
+	updateExamList();
+});
 
 // Expose functions to window for HTML onclick handlers
 window.createNewExam = createNewExam;
