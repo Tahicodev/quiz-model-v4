@@ -186,6 +186,7 @@ import teacherAssignmentRoutes from './routes/teacher-assignments.routes.js';
 import archivesRoutes from './routes/archives.routes.js';
 import exportsRoutes from './routes/exports.routes.js';
 import importsRoutes from './routes/imports.routes.js';
+import kidsRoutes from './routes/kids.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -201,6 +202,10 @@ const adminHtmlPath = resolve(__dirname, '../../admin.html');
 const studentWorkspaceHtmlPath = resolve(
 	__dirname,
 	'../../student-workspace.html',
+);
+const kidsPlayerHtmlPath = resolve(
+	__dirname,
+	'../../public/kids/kids-player.html',
 );
 
 // Read entry HTML on each request in development so an already-running local
@@ -237,6 +242,14 @@ app.get('/student-workspace.html', (req, res) => {
 		.send(injectAppConfig(readEntryHtml(studentWorkspaceHtmlPath)));
 });
 
+app.get('/kids', (req, res) => {
+	res.type('html').send(injectAppConfig(readEntryHtml(kidsPlayerHtmlPath)));
+});
+
+app.get('/kids-player.html', (req, res) => {
+	res.type('html').send(injectAppConfig(readEntryHtml(kidsPlayerHtmlPath)));
+});
+
 app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/classes', classesRoutes);
@@ -265,6 +278,7 @@ app.use('/api/v1/teacher-assignments', teacherAssignmentRoutes);
 app.use('/api/v1/archives', archivesRoutes);
 app.use('/api/v1/exports', exportsRoutes);
 app.use('/api/v1/imports', importsRoutes);
+app.use('/api/v1/kids', kidsRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
 // Disable caching for HTML/JS entry points so dev edits reach the browser
@@ -309,7 +323,7 @@ import { createContainer } from './container.js';
 // Initialize the DI container once. Services are pulled from this container
 // for both the socket handlers and the periodic cleanup jobs.
 const container = createContainer();
-const { sessionSvc, gameSvc, tournamentSvc } = container;
+const { sessionSvc, gameSvc, tournamentSvc, kidsSessionSvc, kidsActivitySvc } = container;
 
 // Expired session cleanup (every 5 minutes)
 setInterval(
@@ -358,6 +372,8 @@ const httpServer = tlsOpts ? https.createServer(tlsOpts, app) : http.createServe
 			gameService: gameSvc,
 			tournamentService: tournamentSvc,
 			sessionService: sessionSvc,
+			kidsSessionSvc,
+			kidsActivitySvc,
 		});
 		httpServer.listen(config.port, '0.0.0.0', () => {
 			logger.info(

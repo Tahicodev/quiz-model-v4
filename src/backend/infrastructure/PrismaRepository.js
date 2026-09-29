@@ -45,6 +45,10 @@ const MODEL_MAP = {
 	teacher_assignments: 'teacherAssignment',
 	// NOTE: Prisma camelCases "AIConfig" to "aIConfig" on the client delegate.
 	ai_configs: 'aIConfig',
+	kids_activities: 'kidsActivity',
+	kids_activity_levels: 'kidsActivityLevel',
+	kids_game_sessions: 'kidsGameSession',
+	kids_game_templates: 'kidsGameTemplate',
 };
 
 /**
@@ -61,6 +65,8 @@ const SEARCH_FIELDS = {
 	game: ['name'],
 	tournament: ['name', 'description'],
 	setting: ['key'],
+	kidsActivity: ['title', 'description', 'subject', 'sub_topic', 'objective'],
+	kidsGameTemplate: ['name', 'description'],
 };
 
 const DEFAULT_ORDER_BY = {
@@ -81,6 +87,10 @@ const DEFAULT_ORDER_BY = {
 	settings: 'updated_at',
 	audit_logs: 'created_at',
 	refresh_tokens: 'created_at',
+	kids_activities: 'created_at',
+	kids_activity_levels: 'order_index',
+	kids_game_sessions: 'started_at',
+	kids_game_templates: 'phase',
 };
 
 export class PrismaRepository extends IStorageRepository {

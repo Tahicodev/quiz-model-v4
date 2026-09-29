@@ -14,7 +14,10 @@ export default defineConfig({
     // The Prisma contract test needs a moment to bring up its throwaway sqlite
     // DB; give the whole suite a generous timeout rather than tuning per-test.
     testTimeout: 20_000,
-    hookTimeout: 20_000,
+    // Each integration file spawns its own `prisma migrate deploy` in beforeAll.
+    // Run in parallel they queue behind each other and routinely exceed 20s, so
+    // the hook budget has to be well above a single test's budget.
+    hookTimeout: 180_000,
     // Keep test output readable in a terminal.
     reporter: 'default',
   },

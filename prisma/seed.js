@@ -12,6 +12,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { seedKidsGameTemplates } from './seeds/kids-game-templates.js';
 
 const prisma = new PrismaClient();
 
@@ -79,6 +80,9 @@ async function main() {
     });
   }
   console.log(`✓ ${settings.length} default settings ensured`);
+
+  // ── Kids Space: 20 Game Templates ──────────────────────────────────────────
+  await seedKidsGameTemplates(prisma);
 
   console.log('');
   console.log('⚠  Change the admin password immediately after first login!');

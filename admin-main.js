@@ -1314,10 +1314,16 @@ function openTab(event, tabName) {
 	// visible immediately. Previously the list was only rendered on initial
 	// DOMContentLoaded, which made the tab look frozen.
 	if (tabName === 'games' && typeof window.renderGameList === 'function') {
-		try {
-			window.renderGameList();
-		} catch (e) {
-			console.warn('[admin-main] renderGameList on tab open failed:', e);
+		// Skipped when this user's Games entry is Game Studio (a primaire
+		// teacher), since the classroom list is not what they will see.
+		if (window.gamesKidsOnlyEntry) {
+			// nothing to render
+		} else {
+			try {
+				window.renderGameList();
+			} catch (e) {
+				console.warn('[admin-main] renderGameList on tab open failed:', e);
+			}
 		}
 	}
 

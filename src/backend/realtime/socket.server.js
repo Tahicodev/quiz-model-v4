@@ -21,6 +21,7 @@ import { socketAuthMiddleware } from './socket.auth.js';
 import { registerGameHandlers } from './handlers/game.handler.js';
 import { registerTournamentHandlers } from './handlers/tournament.handler.js';
 import { registerSessionHandlers } from './handlers/session.handler.js';
+import { registerKidsHandlers } from './handlers/kids.handler.js';
 import { handleDisconnect } from './socket.cleanup.js';
 import { ROOM } from './socket.rooms.js';
 import { mountLegacyGameEngine } from './legacy-engine.bridge.js';
@@ -101,6 +102,9 @@ export async function initSocketServer(httpServer, services) {
     registerGameHandlers(socket, _io, services);
     registerTournamentHandlers(socket, _io, services);
     registerSessionHandlers(socket, _io, services);
+    if (services.kidsSessionSvc && services.kidsActivitySvc) {
+      registerKidsHandlers(socket, _io, services);
+    }
 
     socket.on('disconnect', (reason) => {
       logger.info({ userId: socket.data.user.id, reason }, 'Socket disconnected');

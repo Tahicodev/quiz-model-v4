@@ -107,6 +107,117 @@ export const SOCKET_EVENTS = Object.freeze({
   TOURNAMENT_ANSWER:     'tournament:answer',
   TOURNAMENT_LEAVE:      'tournament:leave',
   SESSION_HEARTBEAT:     'session:heartbeat',
+  // Kids Space Events
+  KIDS_JOIN:                'kids:join',
+  KIDS_LEAVE:               'kids:leave',
+  KIDS_ACTIVITY_STATE:      'kids:activity_state',
+  KIDS_LEVEL_DATA:          'kids:level_data',
+  KIDS_ANSWER:              'kids:answer',
+  KIDS_ANSWER_RESULT:       'kids:answer_result',
+  KIDS_PROGRESS:            'kids:progress',
+  KIDS_ACTIVITY_COMPLETE:   'kids:activity_complete',
+  KIDS_HINT_REQUEST:        'kids:hint_request',
+  KIDS_HINT_RESPONSE:       'kids:hint_response',
+  KIDS_TEACHER_BROADCAST:   'kids:teacher_broadcast',
+  KIDS_MONITOR:             'kids:monitor',
+});
+
+// ── Kids Space ──────────────────────────────────────────────────────────────
+
+/** Core mechanics (Phase 1): the atomic game types that render one question. */
+export const KIDS_CORE_MECHANICS = Object.freeze({
+  MULTIPLE_CHOICE: 'multiple_choice',
+  WORD_ORDER:      'word_order',
+  DRAG_DROP:       'drag_drop',
+  MATCHING:        'matching',
+  MEMORY:          'memory',
+  SORTING:         'sorting',
+  SEQUENCE:        'sequence',
+  FIND_CORRECT:    'find_correct',
+  BUBBLE_POP:      'bubble_pop',
+});
+
+/** Adventure wrappers (Phase 2): wrap core mechanics in a narrative shell. */
+export const KIDS_ADVENTURE_GAMES = Object.freeze({
+  TREASURE_HUNT:   'treasure_hunt',
+  OBSTACLE_RUN:    'obstacle_run',
+  PUZZLE:          'puzzle',
+  BOARD_GAME:      'board_game',
+  BUILD_CONSTRUCT: 'build_construct',
+  WHACK_TAP:       'whack_tap',
+});
+
+/** Immersive worlds (Phase 3): themed experiences around core mechanics. */
+export const KIDS_IMMERSIVE_GAMES = Object.freeze({
+  ANIMAL_RESCUE:    'animal_rescue',
+  SPACE_ADVENTURE:  'space_adventure',
+  COOKING:          'cooking',
+  ESCAPE_ROOM:      'escape_room',
+  FARM_GARDEN:      'farm_garden',
+});
+
+/** All game templates combined. */
+export const KIDS_GAME_TEMPLATES = Object.freeze({
+  ...KIDS_CORE_MECHANICS,
+  ...KIDS_ADVENTURE_GAMES,
+  ...KIDS_IMMERSIVE_GAMES,
+});
+
+export const KIDS_ACTIVITY_STATUS = Object.freeze({
+  DRAFT:     'draft',
+  PUBLISHED: 'published',
+  ARCHIVED:  'archived',
+});
+
+export const KIDS_THEMES = Object.freeze({
+  JUNGLE:       'jungle',
+  SPACE:        'space',
+  OCEAN:        'ocean',
+  FARM:         'farm',
+  CASTLE:       'castle',
+  DINOSAUR:     'dinosaur',
+  FOREST:       'forest',
+  CITY:         'city',
+  CIRCUS:       'circus',
+  MAGIC_WORLD:  'magic_world',
+  SCHOOL:       'school',
+  SUPERHERO:    'superhero',
+});
+
+export const KIDS_SUBJECTS = Object.freeze({
+  MATH:        'math',
+  FRENCH:      'french',
+  ENGLISH:     'english',
+  ARABIC:      'arabic',
+  SCIENCE:     'science',
+  DISCOVERY:   'discovery',     // découverte du monde
+  LOGIC:       'logic',
+  HISTORY:     'history',
+  GEOGRAPHY:   'geography',
+});
+
+export const KIDS_GRADES = Object.freeze({
+  PRESCHOOL: 'preschool',
+  CP:        'CP',
+  CE1:       'CE1',
+  CE2:       'CE2',
+  CM1:       'CM1',
+  CM2:       'CM2',
+  OTHER:     'other',
+});
+
+export const KIDS_DIFFICULTY = Object.freeze({
+  VERY_EASY: 'very_easy',
+  EASY:      'easy',
+  MEDIUM:    'medium',
+  HARD:      'hard',
+  ADAPTIVE:  'adaptive',
+});
+
+export const KIDS_TEMPLATE_CATEGORY = Object.freeze({
+  CORE:      'core',
+  ADVENTURE: 'adventure',
+  IMMERSIVE: 'immersive',
 });
 
 /**

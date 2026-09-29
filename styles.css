@@ -5749,6 +5749,12 @@ body.student-workspace .game-quiz-shell .game-submit-btn {
 	display: block;
 }
 
+/* `hidden` gates Game Studio to admins and primaire teachers, but the `.active`
+   rule above would win over the user-agent [hidden] rule, so restate it. */
+.games-studio-pane[hidden] {
+	display: none;
+}
+
 .games-studio-subheader {
 	margin-top: 0;
 	margin-bottom: 16px;

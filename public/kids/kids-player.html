@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Espace Kids — Jeux Éducatifs</title>
+  <link rel="stylesheet" href="/kids/themes/_base.css">
+  <link rel="stylesheet" href="/kids/kids-player.css">
+  <link rel="stylesheet" href="/kids/themes/worlds.css">
+</head>
+<body class="theme-jungle age-middle">
+  <div id="kids-app" class="kids-app-container">
+    <header class="kids-header">
+      <div class="kids-brand">
+        <span class="kids-mascot"><img id="kids-mascot-image" src="/kids/assets/mascot-idle.jpg" alt="Mascotte Kids Space"></span>
+        <div>
+          <h1 class="kids-title" id="activity-title">Espace Kids</h1>
+          <p class="kids-theme-name" id="kids-theme-name">Jungle &amp; Aventure</p>
+        </div>
+      </div>
+      <div class="kids-status-bar">
+        <div class="kids-star-counter" id="stars-display">⭐ <span id="stars-count">0</span></div>
+        <div class="kids-score-badge" id="score-display">🏆 <span id="score-count">0</span></div>
+      </div>
+    </header>
+
+    <main class="kids-main">
+      <div id="kids-game-viewport" class="kids-game-viewport">
+        <!-- Rendered by GameEngine -->
+        <div class="kids-welcome-card" id="welcome-view">
+          <h2>Prêt à jouer ? 🎮</h2>
+          <p>Rejoins ton aventure d'apprentissage !</p>
+          <div class="kids-join-form">
+            <input type="text" id="join-code-input" maxlength="6" placeholder="CODE (ex: ABC123)" class="kids-input-code" />
+            <button id="btn-join-code" class="kids-btn-primary">C'est parti ! 🚀</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="kids-footer">
+      <div class="kids-progress-wrap">
+        <div class="kids-progress-bar" id="progress-bar-fill" style="width: 0%;"></div>
+      </div>
+      <div class="kids-footer-row">
+        <div class="kids-level-indicator" id="level-indicator">Niveau 1 / 1</div>
+        <div class="kids-footer-actions">
+          <button type="button" id="kids-hint-button" class="kids-btn kids-btn-warning kids-btn-sm" onclick="window.__kidsEngine && window.__kidsEngine.requestHint()">💡 Indice</button>
+          <button type="button" id="kids-sound-button" class="kids-btn kids-btn-sm kids-btn-cyan" aria-pressed="true" title="Couper ou rétablir le son">🔊</button>
+          <button type="button" id="kids-exit-button" class="kids-btn kids-btn-sm" onclick="window.__kidsEngine && window.__kidsEngine.exit()">Quitter</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/kids/kids-player.js"></script>
+</body>
+</html>

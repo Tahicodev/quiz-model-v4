@@ -688,7 +688,9 @@
         url = base + '/' + encodeURIComponent(payload.id);
       } else {
         // 'bulk' — used by setAll_sync / setValue_sync.
-        if (!payload || (Array.isArray(payload) && payload.length === 0 && !SNAPSHOT_TABLES[table])) return;
+        if (!payload || (Array.isArray(payload) && payload.length === 0 && !SNAPSHOT_TABLES[table])) {
+          return Promise.resolve({ skipped: true });
+        }
         init.method = 'POST';
         var body = Array.isArray(payload)
           ? { items: payload }

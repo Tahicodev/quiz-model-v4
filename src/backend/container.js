@@ -28,6 +28,11 @@ import { NotificationService } from './services/NotificationService.js';
 import { GamificationService } from './services/GamificationService.js';
 import { TeacherMessageService } from './services/TeacherMessageService.js';
 import { TeacherAssignmentService } from './services/TeacherAssignmentService.js';
+import { KidsActivityService } from './services/kids/KidsActivityService.js';
+import { KidsGameSessionService } from './services/kids/KidsGameSessionService.js';
+import { GameSelector } from './services/kids/GameSelector.js';
+import { KidsAIService } from './services/kids/KidsAIService.js';
+import { KidsQuestionBankService } from './services/kids/KidsQuestionBankService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
 import { QuestionService } from '../frontend/services/QuestionService.js';
@@ -82,6 +87,13 @@ export function createContainer() {
     gamePresetSvc: new GamePresetService(repo),
     teacherMessageSvc: new TeacherMessageService(repo),
     teacherAssignmentSvc: new TeacherAssignmentService(repo),
+
+  // Kids Space
+  kidsActivitySvc: new KidsActivityService(repo),
+  kidsSessionSvc: new KidsGameSessionService(repo),
+  kidsGameSelector: new GameSelector(),
+  kidsAISvc: new KidsAIService(repo, logger),
+  kidsBankSvc: new KidsQuestionBankService(),
   });
 
   return _container;

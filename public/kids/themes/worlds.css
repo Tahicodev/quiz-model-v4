@@ -1,0 +1,183 @@
+/**
+ * public/kids/themes/worlds.css
+ *
+ * Single source of truth for the 12 Kids Space worlds.
+ *
+ * Previously the per-theme stylesheets (jungle.css / ocean.css / space.css) were
+ * linked but never swapped by ThemeEngine, and the --theme-* custom properties
+ * they declared were consumed by nothing. Every world therefore looked identical
+ * apart from its background image. Worlds are now declared once here and the
+ * player stylesheet reads the variables, so all 12 themes are real.
+ */
+
+body.theme-jungle {
+  --theme-primary: #52b788;
+  --theme-accent: #ffd166;
+  --theme-surface: linear-gradient(145deg, rgba(16, 42, 27, .86), rgba(23, 60, 38, .66));
+  --theme-header: linear-gradient(110deg, rgba(16, 42, 27, .78), rgba(23, 60, 38, .5));
+  --theme-border: rgba(82, 183, 136, .4);
+  --theme-glow: rgba(82, 183, 136, .32);
+  --theme-progress: linear-gradient(90deg, #ffd166, #52b788);
+  background-image: linear-gradient(#102a1b99, #102a1b99), url('/kids/assets/bg-jungle.png');
+}
+body.theme-space {
+  --theme-primary: #7c4dff;
+  --theme-accent: #00e5ff;
+  --theme-surface: linear-gradient(145deg, rgba(13, 27, 42, .88), rgba(30, 44, 74, .68));
+  --theme-header: linear-gradient(110deg, rgba(13, 27, 42, .8), rgba(30, 44, 74, .52));
+  --theme-border: rgba(124, 77, 255, .45);
+  --theme-glow: rgba(0, 229, 255, .34);
+  --theme-progress: linear-gradient(90deg, #f72585, #4cc9f0);
+  background-image: linear-gradient(#09162caa, #09162caa), url('/kids/assets/bg-space.png');
+}
+body.theme-ocean {
+  --theme-primary: #94d2bd;
+  --theme-accent: #ee9b00;
+  --theme-surface: linear-gradient(145deg, rgba(0, 31, 36, .86), rgba(0, 60, 70, .64));
+  --theme-header: linear-gradient(110deg, rgba(0, 31, 36, .8), rgba(0, 60, 70, .48));
+  --theme-border: rgba(148, 210, 189, .42);
+  --theme-glow: rgba(238, 155, 0, .32);
+  --theme-progress: linear-gradient(90deg, #94d2bd, #0a9396, #ee9b00);
+  background-image: linear-gradient(#003d5999, #003d5999), url('/kids/assets/bg-ocean.png');
+}
+body.theme-farm {
+  --theme-primary: #ff9800;
+  --theme-accent: #8bc34a;
+  --theme-surface: linear-gradient(145deg, rgba(58, 38, 18, .86), rgba(84, 56, 26, .64));
+  --theme-header: linear-gradient(110deg, rgba(58, 38, 18, .8), rgba(84, 56, 26, .5));
+  --theme-border: rgba(255, 152, 0, .42);
+  --theme-glow: rgba(139, 195, 74, .3);
+  --theme-progress: linear-gradient(90deg, #8bc34a, #ff9800);
+  background-image: linear-gradient(#274a1990, #274a1990), url('/kids/assets/bg-farm.png');
+}
+body.theme-castle {
+  --theme-primary: #ffb300;
+  --theme-accent: #e91e63;
+  --theme-surface: linear-gradient(145deg, rgba(24, 34, 60, .88), rgba(44, 56, 90, .66));
+  --theme-header: linear-gradient(110deg, rgba(24, 34, 60, .82), rgba(44, 56, 90, .5));
+  --theme-border: rgba(255, 179, 0, .42);
+  --theme-glow: rgba(233, 30, 99, .3);
+  --theme-progress: linear-gradient(90deg, #e91e63, #ffb300);
+  background-image: linear-gradient(#18223c99, #18223c99), url('/kids/assets/bg-castle.png');
+}
+body.theme-dinosaur {
+  --theme-primary: #7cb342;
+  --theme-accent: #ff7043;
+  --theme-surface: linear-gradient(145deg, rgba(20, 38, 8, .86), rgba(38, 62, 20, .64));
+  --theme-header: linear-gradient(110deg, rgba(20, 38, 8, .8), rgba(38, 62, 20, .5));
+  --theme-border: rgba(124, 179, 66, .42);
+  --theme-glow: rgba(255, 112, 67, .3);
+  --theme-progress: linear-gradient(90deg, #7cb342, #ff7043);
+  background-image: linear-gradient(#26481199, #26481199), url('/kids/assets/bg-dinosaur.png');
+}
+body.theme-forest {
+  --theme-primary: #4caf50;
+  --theme-accent: #ffca28;
+  --theme-surface: linear-gradient(145deg, rgba(12, 38, 22, .87), rgba(24, 60, 36, .66));
+  --theme-header: linear-gradient(110deg, rgba(12, 38, 22, .8), rgba(24, 60, 36, .5));
+  --theme-border: rgba(76, 175, 80, .42);
+  --theme-glow: rgba(255, 202, 40, .28);
+  --theme-progress: linear-gradient(90deg, #4caf50, #ffca28);
+  background-image: linear-gradient(#123b2999, #123b2999), url('/kids/assets/bg-forest.jpg');
+}
+body.theme-city {
+  --theme-primary: #42a5f5;
+  --theme-accent: #ffca28;
+  --theme-surface: linear-gradient(145deg, rgba(11, 32, 64, .87), rgba(22, 56, 104, .66));
+  --theme-header: linear-gradient(110deg, rgba(11, 32, 64, .8), rgba(22, 56, 104, .5));
+  --theme-border: rgba(66, 165, 245, .42);
+  --theme-glow: rgba(255, 202, 40, .3);
+  --theme-progress: linear-gradient(90deg, #42a5f5, #ffca28);
+  background-image: linear-gradient(#0b3d7f99, #0b3d7f99), url('/kids/assets/bg-city.png');
+}
+body.theme-circus {
+  --theme-primary: #ec407a;
+  --theme-accent: #ffd54f;
+  --theme-surface: linear-gradient(145deg, rgba(60, 10, 40, .86), rgba(96, 20, 62, .64));
+  --theme-header: linear-gradient(110deg, rgba(60, 10, 40, .8), rgba(96, 20, 62, .5));
+  --theme-border: rgba(236, 64, 122, .45);
+  --theme-glow: rgba(255, 213, 79, .32);
+  --theme-progress: linear-gradient(90deg, #ec407a, #ffd54f);
+  background-image: linear-gradient(#76214d88, #76214d88), url('/kids/assets/bg-circus.jpg');
+}
+body.theme-magic_world {
+  --theme-primary: #ab47bc;
+  --theme-accent: #ffd54f;
+  --theme-surface: linear-gradient(145deg, rgba(34, 12, 60, .88), rgba(62, 26, 100, .66));
+  --theme-header: linear-gradient(110deg, rgba(34, 12, 60, .82), rgba(62, 26, 100, .5));
+  --theme-border: rgba(171, 71, 188, .45);
+  --theme-glow: rgba(255, 213, 79, .3);
+  --theme-progress: linear-gradient(90deg, #ab47bc, #ffd54f);
+  background-image: linear-gradient(#34106499, #34106499), url('/kids/assets/bg-magic.jpg');
+}
+body.theme-school {
+  --theme-primary: #26a69a;
+  --theme-accent: #ffca28;
+  --theme-surface: linear-gradient(145deg, rgba(6, 40, 42, .87), rgba(14, 64, 66, .64));
+  --theme-header: linear-gradient(110deg, rgba(6, 40, 42, .8), rgba(14, 64, 66, .5));
+  --theme-border: rgba(38, 166, 154, .42);
+  --theme-glow: rgba(255, 202, 40, .28);
+  --theme-progress: linear-gradient(90deg, #26a69a, #ffca28);
+  background-image: linear-gradient(#0d5b6499, #0d5b6499), url('/kids/assets/bg-school.jpg');
+}
+body.theme-superhero {
+  --theme-primary: #ef5350;
+  --theme-accent: #ffd54f;
+  --theme-surface: linear-gradient(145deg, rgba(60, 10, 14, .87), rgba(104, 20, 26, .64));
+  --theme-header: linear-gradient(110deg, rgba(60, 10, 14, .8), rgba(104, 20, 26, .5));
+  --theme-border: rgba(239, 83, 80, .45);
+  --theme-glow: rgba(255, 213, 79, .3);
+  --theme-progress: linear-gradient(90deg, #ef5350, #ffd54f);
+  background-image: linear-gradient(#70131f99, #70131f99), url('/kids/assets/bg-superhero.jpg');
+}
+
+/* ── Themed surfaces ───────────────────────────────────────────────────── */
+
+body.theme-jungle .kids-header,
+body.theme-space .kids-header,
+body.theme-ocean .kids-header,
+body.theme-farm .kids-header,
+body.theme-castle .kids-header,
+body.theme-dinosaur .kids-header,
+body.theme-forest .kids-header,
+body.theme-city .kids-header,
+body.theme-circus .kids-header,
+body.theme-magic_world .kids-header,
+body.theme-school .kids-header,
+body.theme-superhero .kids-header {
+  background: var(--theme-header);
+  border-color: var(--theme-border);
+}
+
+body.theme-jungle .kids-welcome-card,
+body.theme-space .kids-welcome-card,
+body.theme-ocean .kids-welcome-card,
+body.theme-farm .kids-welcome-card,
+body.theme-castle .kids-welcome-card,
+body.theme-dinosaur .kids-welcome-card,
+body.theme-forest .kids-welcome-card,
+body.theme-city .kids-welcome-card,
+body.theme-circus .kids-welcome-card,
+body.theme-magic_world .kids-welcome-card,
+body.theme-school .kids-welcome-card,
+body.theme-superhero .kids-welcome-card {
+  background: var(--theme-surface);
+  border-color: var(--theme-border);
+}
+
+body .kids-progress-bar { background: var(--theme-progress); }
+
+/* Narrative world banner */
+.kids-world-banner { display:flex; align-items:center; gap:14px; padding:10px 16px; margin-bottom:14px; border:1px solid #fff8; border-radius:20px; background:linear-gradient(110deg,#fffffff2,#ffffffc9); box-shadow:0 12px 30px #06132933; color:#17213b }
+.kids-world-banner strong { font-size:1.08rem }
+.kids-world-banner small { display:block; color:#52606d; margin-top:3px }
+.kids-world-prop { width:74px; height:64px; object-fit:contain; filter:drop-shadow(0 6px 7px #0b193544) }
+.kids-world-progress { margin-left:auto; width:58px; height:12px; border-radius:99px; background:linear-gradient(90deg,#ffd54f 65%,#e2e8f0 65%) }
+
+/* Hint bubble — class names mirror components/HintBubble.js */
+.kids-hint-bubble { position:relative; margin:12px auto 0; max-width:560px; display:flex; gap:10px; align-items:flex-start; padding:12px 16px; border-radius:18px; background:linear-gradient(135deg,#fffbe6,#fff7d6); border:2px solid var(--theme-accent,#ffd166); color:#5b4636; box-shadow:0 10px 26px #00000026 }
+.kids-hint-bubble .hint-icon { font-size:1.5rem; line-height:1.1 }
+.kids-hint-bubble .hint-content { flex:1; font-weight:600; line-height:1.45 }
+.kids-hint-bubble .hint-close-btn { background:none; border:0; font-size:1rem; cursor:pointer; color:#a1887f; line-height:1; padding:2px 4px }
+.kids-hint-bubble.hint-appear { animation:popIn .35s cubic-bezier(.175,.885,.32,1.275) }
+.kids-hint-bubble.hint-disappear { opacity:0; transform:scale(.94); transition:opacity .3s ease, transform .3s ease }

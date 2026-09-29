@@ -39,8 +39,8 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-24-r7" />
-		<link rel="stylesheet" href="admin.css?v=2026-09-24-r17" />
+		<link rel="stylesheet" href="styles.css?v=2026-09-29-r8" />
+		<link rel="stylesheet" href="admin.css?v=2026-09-29-r18" />
 		<link rel="stylesheet" href="theme.css?v=2026-09-24-r17" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r2" />
 		<script>
@@ -154,7 +154,8 @@
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
-		<script src="games-management.js?v=2026-09-24-r14" defer></script>
+		<script src="games-management.js?v=2026-09-29-r15" defer></script>
+		<script src="kids-management.js?v=2026-09-29-r4" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
@@ -498,7 +499,7 @@
 							</svg>
 							Results
 						</button>
-						<button class="nav-tab" data-tab="games" data-roles="admin,teacher" onclick="openTab(event, 'games')">
+						<button class="nav-tab" data-tab="games" data-roles="admin,teacher" id="gamesNavTab" onclick="openTab(event, 'games')">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								width="16"
@@ -510,7 +511,7 @@
 							>
 								<path d="M2 12h4l3 8 4-16 3 8h4"></path>
 							</svg>
-							Games
+							<span data-games-nav-label>Games</span>
 						</button>
 						<button
 							class="nav-tab"
@@ -547,7 +548,6 @@
 			</header>
 
 			<main class="app-content">
-				<!-- Overview Dashboard Tab -->
 				<section id="overview" class="tab-content active" data-roles="admin,teacher">
 					<div class="dashboard-container">
 						<!-- Welcome Header -->
@@ -779,7 +779,7 @@
 							</div>
 							<div
 								class="stat-card indigo"
-								data-tooltip="Total number of game lobbies configured in Game Studio"
+								data-tooltip="Total number of game lobbies configured in Kids Space"
 							>
 								<div class="stat-bar"></div>
 								<div class="stat-icon">
@@ -1917,13 +1917,25 @@
 								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6.1 2h11.8a2 2 0 0 1 1.7.8l1.61 2.14a2 2 0 0 1 .13 2.2L16.79 15"></path><path d="M11 12 5.12 2.2"></path><path d="M13 12 18.88 2.2"></path><path d="M7 15a5 5 0 1 0 10 0"></path></svg>
 								Tournament Studio
 							</button>
+							<!-- Admin only: primary-school games live here so an admin sees every
+								     school's content in one place. Hidden for teachers. -->
+							<button
+								type="button"
+								class="games-studio-tab-btn games-studio-tab-kids"
+								data-games-studio-tab="kids-studio"
+								id="kidsStudioSubTab"
+								hidden
+							>
+								<span aria-hidden="true">🧒</span>
+								Kids Space
+							</button>
 						</div>
 
 						<div class="games-studio-pane active" data-games-studio-pane="games-studio">
 						<div class="game-admin-grid">
 							<div class="arena-library-toolbar">
 								<div>
-									<span class="arena-eyebrow">Game Studio</span>
+									<span class="arena-eyebrow">Kids Space</span>
 									<h3>Game Library</h3>
 									<p>Create rooms, share entry codes, and manage live sessions.</p>
 								</div>
@@ -1935,7 +1947,7 @@
 								<div class="modal-content modal-lg arena-editor-content">
 									<div class="modal-header arena-editor-header">
 										<div>
-											<span class="arena-eyebrow">Game Studio</span>
+											<span class="arena-eyebrow">Kids Space</span>
 											<h2 id="gameEditorTitle">Create game</h2>
 										</div>
 										<button type="button" class="arena-modal-close" id="closeGameEditorBtn" aria-label="Close">×</button>
@@ -2885,6 +2897,23 @@
 											</div>
 										</div>
 									</div>
+								</div>
+							</div>
+						</div>
+
+						<!-- Kids Space (primary school). Shown to admins as a sub-tab of
+						     Games, and as the whole Games entry for primaire teachers. -->
+						<div class="games-studio-pane" data-games-studio-pane="kids-studio" id="kidsStudioPane" hidden>
+							<div class="dashboard-container">
+								<div id="kids" class="kids-admin-page">
+									<div class="kids-admin-heading">
+										<div>
+											<h2>🧒 Kids Space</h2>
+											<p>Create, publish and track educational adventures for primary school.</p>
+										</div>
+										<button class="btn btn-primary" onclick="window.KidsManagement.openWizard()">+ New activity</button>
+									</div>
+									<div id="kidsDashboard" class="kids-dashboard"><p class="text-muted">Loading activities…</p></div>
 								</div>
 							</div>
 						</div>

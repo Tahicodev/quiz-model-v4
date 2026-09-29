@@ -15,10 +15,11 @@
  */
 
 export const ROOM = Object.freeze({
-  school:     (id) => `school:${id}`,
-  game:       (id) => `game:${id}`,
-  exam:       (id) => `exam:${id}`,
-  tournament: (id) => `tournament:${id}`,
+  school:       (id) => `school:${id}`,
+  game:         (id) => `game:${id}`,
+  exam:         (id) => `exam:${id}`,
+  tournament:   (id) => `tournament:${id}`,
+  kidsActivity: (id) => `kids:${id}`,
 });
 
 /**

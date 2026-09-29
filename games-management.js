@@ -15,6 +15,8 @@
 		// renderLobby can show it persistently instead of a 4s toast.
 		lastStartError: '',
 		gamesStudioTab: 'games-studio',
+		// True for a primaire teacher, whose only Games entry is Kids Space.
+		gamesKidsOnly: false,
 		tournamentStudioTab: 'planner',
 		tournamentModalsDelegated: false,
 		tournamentRoundDraft: [],
@@ -6001,6 +6003,8 @@ function buildLobbyHtml(gameId) {
 	}
 
 	window.initGameManagement = initGameManagement;
+	window.setGamesStudioTab = setGamesStudioTab;
+	window.setGamesKidsOnlyMode = setGamesKidsOnlyMode;
 	window.editGame = editGame;
 	window.deleteGame = deleteGame;
 	window.deleteAllGames = deleteAllGames;
@@ -7198,12 +7202,38 @@ function buildLobbyHtml(gameId) {
 		renderGamePresetList();
 	};
 
+	// Kids Space is reachable for an admin (as a Games sub-tab) and for a
+	// primaire teacher (as their whole Games entry). `state.gamesKidsOnly` marks
+	// the second case, where the other panes and the sub-tab bar are not options.
+	function kidsStudioAvailable() {
+		if (state.gamesKidsOnly) return true;
+		const subTab = byId('kidsStudioSubTab');
+		return !!(subTab && !subTab.hidden);
+	}
+
+	function setGamesKidsOnlyMode(enabled) {
+		state.gamesKidsOnly = !!enabled;
+		// openTab() checks this so it does not render the classroom list for a
+		// user whose Games entry is Kids Space.
+		window.gamesKidsOnlyEntry = state.gamesKidsOnly;
+		const bar = byId('gamesStudioTabs');
+		if (bar) bar.hidden = state.gamesKidsOnly;
+		const subTab = byId('kidsStudioSubTab');
+		if (subTab) subTab.hidden = state.gamesKidsOnly || !kidsStudioAvailable();
+	}
+
 	function setGamesStudioTab(tabKey) {
 		const normalized = String(tabKey || 'games-studio')
 			.trim()
 			.toLowerCase();
-		const activeTab =
-			normalized === 'tournament-studio' ? 'tournament-studio' : 'games-studio';
+		let activeTab = 'games-studio';
+		if (normalized === 'tournament-studio' || normalized === 'kids-studio') {
+			activeTab = normalized;
+		}
+		if (!kidsStudioAvailable()) activeTab = 'games-studio';
+		// A primaire teacher has Kids Space as their only Games entry, so a later
+		// request (for example selecting a lobby) must not pull them out of it.
+		if (state.gamesKidsOnly) activeTab = 'kids-studio';
 
 		// Update header text
 		const titleEl = byId('gamesTabTitle');
@@ -7213,6 +7243,10 @@ function buildLobbyHtml(gameId) {
 				titleEl.textContent = 'Tournament Studio';
 				subtitleEl.textContent =
 					'Plan tournament format, rounds, scoring, and rewards with full control.';
+			} else if (activeTab === 'kids-studio') {
+				titleEl.textContent = 'Kids Space';
+				subtitleEl.textContent =
+					'Primary-school adventures: build, publish, and track class results.';
 			} else {
 				titleEl.textContent = 'Games Control Center';
 				subtitleEl.textContent =
@@ -7231,13 +7265,15 @@ function buildLobbyHtml(gameId) {
 			);
 		document
 			.querySelectorAll('[data-games-studio-pane]')
-			.forEach((pane) =>
-				pane.classList.toggle(
-					'active',
+			.forEach((pane) => {
+				const isActive =
 					String(pane.dataset.gamesStudioPane || '').toLowerCase() ===
-						activeTab,
-				),
-			);
+					activeTab;
+				pane.classList.toggle('active', isActive);
+				// `hidden` gates availability (admin or primaire teacher only), so it
+				// is cleared here for the pane we are actually showing.
+				if (isActive) pane.hidden = false;
+			});
 		state.gamesStudioTab = activeTab;
 
 		if (activeTab === 'games-studio') {
@@ -7249,6 +7285,22 @@ function buildLobbyHtml(gameId) {
 			initTournamentStudioTabs();
 			setTournamentStudioTab(state.tournamentStudioTab || 'planner');
 			updateTournamentSyncStatus();
+		}
+
+		// Kids Space owns its own data, so it loads the first time it is opened
+		// rather than with the rest of the Games tab.
+		if (activeTab === 'kids-studio') {
+			const badge = byId('gamesStudioBadge');
+			if (badge) badge.textContent = 'Kids Space';
+			if (
+				window.KidsManagement &&
+				typeof window.KidsManagement.onShown === 'function'
+			) {
+				window.KidsManagement.onShown();
+			}
+		} else {
+			const badge = byId('gamesStudioBadge');
+			if (badge) badge.textContent = 'Studios';
 		}
 	}
 

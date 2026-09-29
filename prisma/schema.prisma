@@ -54,6 +54,8 @@ model School {
   teacherMessages    TeacherMessage[]
   teacherAssignments TeacherAssignment[]
   aiConfigs          AIConfig[]
+  kidsActivities     KidsActivity[]
+  kidsGameSessions   KidsGameSession[]
 }
 
 // ─── School Year Archives ────────────────────────────────────────────────────
@@ -114,6 +116,8 @@ model User {
   fulfilledAccountRequests AccountRequest[]    @relation("AccountRequestCreatedUser")
   teacherMessages          TeacherMessage[]
   teacherAssignments       TeacherAssignment[]
+  createdKidsActivities    KidsActivity[]      @relation("KidsActivityCreator")
+  kidsGameSessions         KidsGameSession[]
 
   @@unique([school_id, username])
   @@index([school_id])
@@ -197,6 +201,7 @@ model Question {
   school        School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
   category      Category?      @relation(fields: [category_id], references: [id], onDelete: SetNull)
   examQuestions ExamQuestion[]
+  kidsLevels    KidsActivityLevel[]
 
   @@index([school_id])
   @@index([category_id])
@@ -641,4 +646,131 @@ model AIConfig {
   school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
 
   @@index([school_id, owner_id])
+}
+
+// ─── Kids Space ─────────────────────────────────────────────────────────────
+
+// The top-level container: one activity per pedagogical objective.
+// An activity holds the LEARNING CONTENT (questions, items, pairs) AND the
+// GAME CONFIGURATION (which game template, theme, progression, rewards).
+// These two concerns are stored separately: levels hold the raw content;
+// game_template + theme + settings_json define the game shell.
+model KidsActivity {
+  id                  String    @id @default(uuid())
+  school_id           String
+  creator_id          String?
+  title               String
+  description         String?               // narration / story intro for the child
+  subject             String                // e.g. "french", "math", "science"
+  sub_topic           String?               // e.g. "addition", "alphabet", "animaux"
+  grade               String                // e.g. "CP", "CE1", "CE2", "CM1", "CM2"
+  age_min             Int       @default(5)
+  age_max             Int       @default(12)
+  objective           String?               // "Additionner des nombres jusqu'à 20"
+  game_template       String                // KIDS_GAME_TEMPLATES constant (e.g. "treasure_hunt")
+  theme               String    @default("jungle") // visual theme slug
+  difficulty          String    @default("easy")    // easy | medium | hard | adaptive
+  status              String    @default("draft")   // draft | published | archived
+  join_code           String?   @unique             // 6-char for kids to join
+  language            String    @default("fr")      // fr | en | ar
+  settings_json       String?                // JSON: { timer, hints, lives, maxAttempts }
+  rewards_json        String?                // JSON: { correctPoints, completionBonus, streakMultiplier }
+  progression_json    String?                // JSON: { type: "linear"|"branching", failAction, hintStrategy }
+  estimated_duration  Int?               // minutes
+  is_favorite         Boolean   @default(false)
+  play_count          Int       @default(0) // number of times played
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  school   School              @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  creator  User?               @relation("KidsActivityCreator", fields: [creator_id], references: [id], onDelete: SetNull)
+  levels   KidsActivityLevel[]
+  sessions KidsGameSession[]
+
+  @@index([school_id])
+  @@index([creator_id])
+  @@index([status])
+  @@index([join_code])
+  @@index([game_template])
+  @@index([subject])
+}
+
+// Each level = one screen / one challenge in the activity.
+// content_json holds the pedagogical content (question, items, pairs, etc.)
+// which is INDEPENDENT of the game mechanic — the GameEngine reads content_json
+// and renders it according to the activity's game_template.
+// For adventure games (Treasure Hunt, Space Adventure…), each level wraps a
+// core mechanic level inside the adventure narrative.
+model KidsActivityLevel {
+  id             String @id @default(uuid())
+  activity_id    String
+  order_index    Int    @default(0)
+  level_type     String               // core mechanic: "multiple_choice", "word_order", etc.
+  content_json   String               // game-type-specific JSON payload
+  points         Int    @default(10)
+  hint           String?              // optional hint text
+  explanation    String?              // shown after answer (learning moment)
+  media_url      String?              // optional image/audio
+  narrative_json String?              // JSON: { storyText, characterSays, sceneDescription }
+  question_id    String?              // shared question-bank row (Game Studio)
+
+  activity KidsActivity @relation(fields: [activity_id], references: [id], onDelete: Cascade)
+  question Question?   @relation(fields: [question_id], references: [id], onDelete: SetNull)
+
+  @@index([activity_id])
+  @@index([question_id])
+}
+
+// Tracks a student's real-time progress through an activity.
+model KidsGameSession {
+  id                String    @id @default(uuid())
+  activity_id       String
+  user_id           String
+  school_id         String
+  score             Int       @default(0)
+  total_possible    Int       @default(0)
+  current_level     Int       @default(0)
+  answers_json      String    @default("[]")  // [{levelId, answer, correct, timeMs, attempts}]
+  stars             Int       @default(0)     // 0-3 stars earned
+  badges_json       String    @default("[]")  // earned badge IDs
+  streak            Int       @default(0)     // current consecutive correct
+  best_streak       Int       @default(0)     // best streak in session
+  difficulty_level  String    @default("easy") // current adaptive difficulty
+  completed         Boolean   @default(false)
+  started_at        DateTime  @default(now())
+  completed_at      DateTime?
+  time_spent        Int       @default(0)     // total seconds
+
+  activity KidsActivity @relation(fields: [activity_id], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  school   School       @relation(fields: [school_id], references: [id], onDelete: Cascade)
+
+  @@unique([activity_id, user_id])
+  @@index([activity_id])
+  @@index([user_id])
+  @@index([school_id])
+}
+
+// Metadata catalog for available game templates.
+// This is READ-ONLY data seeded on migration — the GameSelector queries it
+// to pick the best game for a given pedagogical context.
+model KidsGameTemplate {
+  id                    String  @id
+  name                  String               // display name
+  description           String?
+  category              String               // "core" | "adventure" | "immersive"
+  interaction_type      String               // "tap" | "drag" | "match" | "sequence" | "explore"
+  supported_ages_json   String               // JSON: { min: 4, max: 12 }
+  supported_subjects    String               // JSON: ["*"] or ["math","french",…]
+  cognitive_skills      String               // JSON: ["memory","logic","sequencing",…]
+  pedagogical_goals     String               // JSON: ["recognition","association","ordering",…]
+  question_types        String               // JSON: compatible QUESTION_TYPES from existing system
+  difficulty_range      String               // JSON: { min: "easy", max: "hard" }
+  requires_images       Boolean @default(false)
+  requires_audio        Boolean @default(false)
+  min_items             Int     @default(2)  // min questions/items needed
+  max_items             Int     @default(50) // max questions/items
+  estimated_duration    Int     @default(5)  // minutes per session
+  config_schema_json    String?              // JSON Schema for template-specific config
+  phase                 Int     @default(1)  // implementation phase (1, 2, 3)
 }
