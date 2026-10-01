@@ -25,6 +25,42 @@ const socket = typeof io !== 'undefined' ? io() : null;
 const viewport = document.getElementById('kids-game-viewport');
 let activeSessionId = null;
 
+/**
+ * A Socket.IO emit that is answered by a callback, with a deadline.
+ *
+ * Socket.IO has no acknowledgement timeout of its own: if the reply never comes
+ * — the server restarted, the connection dropped mid-flight, the handler died
+ * before it could answer — the promise simply never settles. The game then sits
+ * in its "evaluating" state for good, and because the engine ignores any answer
+ * that is not asked for while playing, every later attempt is dropped without a
+ * word. That is one of the ways the Vérifier button came to look stuck, and it
+ * has no error message to show because nothing ever failed.
+ */
+const ACK_TIMEOUT_MS = 8000;
+
+function emitWithAck(event, payload, { timeoutMs = ACK_TIMEOUT_MS } = {}) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+    const timer = setTimeout(() => {
+      finish(reject, new Error('Le jeu n\'a pas répondu à temps.'));
+    }, timeoutMs);
+    socket.emit(event, payload, (res) => finish(resolve, res));
+  });
+}
+
+/** Why a submit failed, so the child is told something true. */
+function submitFailure(message, { status } = {}) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
 function showKidsToast(message, type = 'error') {
   let region = document.getElementById('kids-toast-region');
   if (!region) {
@@ -42,57 +78,83 @@ function showKidsToast(message, type = 'error') {
   setTimeout(() => toast.remove(), 3900);
 }
 
-const engine = new GameEngine({
-  viewportElement: viewport,
-  onAnswerSubmit: async ({ levelId, answer, timeMs, attempts }) => {
-    // Try Socket.IO first if connected
-    if (socket && socket.connected && activeSessionId) {
-      return new Promise((resolve, reject) => {
-        socket.emit(
-          'kids:answer',
-          { sessionId: activeSessionId, levelId, answer, timeMs, attempts },
-          (res) => {
-            if (res && res.success) resolve(res.data);
-            else reject(new Error(res?.error || 'Erreur lors de la réponse'));
-          }
-        );
-      });
-    }
-
-    // Fallback: REST API
-    const resp = await fetch(`/api/v1/kids/play/session/${activeSessionId}/answer`, {
+/** Records an answer over HTTP, used whenever the socket is not available. */
+async function submitOverRest({ levelId, answer, timeMs, attempts }) {
+  const token = getAuthToken();
+  let resp;
+  try {
+    resp = await fetch(`/api/v1/kids/play/session/${activeSessionId}/answer`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${getAuthToken()}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ level_id: levelId, answer, time_ms: timeMs, attempts }),
     });
+  } catch (err) {
+    // fetch only rejects when the request never reached the server.
+    throw submitFailure('Pas de connexion. Vérifie internet puis réessaie.', { status: 0 });
+  }
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.message || 'Erreur réseau');
+  if (resp.status === 401) {
+    throw submitFailure('Ta session a expiré. Reconnecte-toi pour continuer.', { status: 401 });
+  }
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    // Keep the status: "check your internet" was shown for a 404, a 401 and a
+    // server fault alike, so nothing the child was told could be trusted.
+    throw submitFailure(body.message || 'Le jeu n\'a pas pu enregistrer ta réponse.', { status: resp.status });
+  }
+  return resp.json();
+}
+
+const engine = new GameEngine({
+  viewportElement: viewport,
+  onAnswerSubmit: async ({ levelId, answer, timeMs, attempts }) => {
+    // No session means the game was never really joined, and answering anyway
+    // posted to /session/null/answer. That came back 404 and the child was told
+    // to check their internet, which was never the problem.
+    if (!activeSessionId) {
+      throw submitFailure('La partie n\'a pas démarré. Recharge la page.');
     }
-    return resp.json();
+
+    // Try Socket.IO first if connected
+    if (socket && socket.connected) {
+      let res;
+      try {
+        res = await emitWithAck('kids:answer', { sessionId: activeSessionId, levelId, answer, timeMs, attempts });
+      } catch (err) {
+        // A dropped or unanswered socket is a transport problem, not a wrong
+        // answer, and the answer has not been recorded yet. Try it over REST
+        // once rather than making the child press the button again.
+        return submitOverRest({ levelId, answer, timeMs, attempts });
+      }
+      if (res && res.success) return res.data;
+      throw submitFailure(res?.error || 'Erreur lors de la réponse', { status: 502 });
+    }
+
+    return submitOverRest({ levelId, answer, timeMs, attempts });
   },
 
   onHintRequest: async (levelId) => {
     if (socket && socket.connected && activeSessionId) {
-      return new Promise((resolve) => {
-        socket.emit('kids:hint_request', { sessionId: activeSessionId, levelId }, (res) => {
-          resolve(res?.data || { hint: 'Indice indisponible' });
-        });
-      });
+      try {
+        const res = await emitWithAck('kids:hint_request', { sessionId: activeSessionId, levelId });
+        return res?.data || { hint: 'Indice indisponible' };
+      } catch (err) {
+        // A hint is not worth failing over: fall through to HTTP.
+      }
     }
 
     const resp = await fetch(`/api/v1/kids/play/session/${activeSessionId}/hint`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${getAuthToken()}`,
+        ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}),
       },
       body: JSON.stringify({ level_id: levelId }),
     });
+    if (!resp.ok) return { hint: 'Indice indisponible' };
     return resp.json();
   },
 
@@ -197,15 +259,21 @@ async function joinActivityByCode(code) {
 
     // Socket join
     if (socket && socket.connected) {
-      socket.emit('kids:join', { joinCode: cleanCode }, (res) => {
-        if (res && res.success) {
-          activeSessionId = res.data.session.id;
-          window.__kidsActivityId = res.data.activity?.id || null;
-          engine.loadActivity(res.data.activity, res.data.session, res.data.currentLevel);
-        } else {
-          fallbackJoinViaRest(cleanCode);
-        }
-      });
+      let res;
+      try {
+        res = await emitWithAck('kids:join', { joinCode: cleanCode });
+      } catch (err) {
+        // Unanswered, not refused: go over HTTP rather than leave the child on
+        // a blank screen with no session and no explanation.
+        return fallbackJoinViaRest(cleanCode);
+      }
+      if (res && res.success) {
+        activeSessionId = res.data.session.id;
+        window.__kidsActivityId = res.data.activity?.id || null;
+        engine.loadActivity(res.data.activity, res.data.session, res.data.currentLevel);
+      } else {
+        fallbackJoinViaRest(cleanCode);
+      }
     } else {
       await fallbackJoinViaRest(cleanCode);
     }

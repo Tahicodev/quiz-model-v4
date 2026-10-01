@@ -230,10 +230,14 @@
         </div></div>`;
     }
     const short = tpl && kept.length < tpl.min_items;
+    const checks = preflight(w, d);
+    const blockers = checks.filter(c => !c.ok);
     const rows = levels.map((l, i) => {
       const isDropped = dropped.has(i);
       const open = state.editingLevel === i;
       const mechanic = levelMechanic(l);
+      let playable = false;
+      try { playable = hasPlayableContent(levelContentStrict(l)); } catch (_) { playable = false; }
       // An adventure shell shows both names: which game it is, and how this level
       // asks its question. One chip alone left the teacher guessing which was
       // which, and "mechanic: multiple_choice" read as a setting to configure
@@ -244,6 +248,10 @@
       if (l.question_id) chips.push('<span class="kids-chip kids-chip-linked" title="Linked to the question bank">🔗 bank</span>');
       chips.push(l.id ? '<span class="kids-chip kids-chip-saved">saved</span>' : '<span class="kids-chip kids-chip-new">new</span>');
       if (isDropped) chips.push('<span class="kids-chip kids-chip-dropped">dropped</span>');
+      // A level with no playable content publishes and then shows a child a blank
+      // screen, which no amount of checking in the publish step can catch later.
+      // Flagging it here, next to the level, is the only place it can still be fixed.
+      if (!isDropped && !playable) chips.push('<span class="kids-chip kids-chip-warn" title="This level has no question, options or pictures yet, so a child would see a blank game">⚠ nothing to play</span>');
       return `<li class="kids-level-row${isDropped ? ' kids-level-dropped' : ''}" data-index="${i}">
       <div class="kids-level-head"><b>Level ${i + 1}</b>${chips.join('')}</div>
       ${reviewWorldText(l) ? `<p class="kids-level-world">${esc(reviewWorldText(l))}</p>` : ''}
@@ -263,12 +271,25 @@
         <button type="button" class="btn btn-sm" onclick="KidsManagement.previewLevel(${i})">Preview</button>
         ${l.question_id ? '' : `<button type="button" class="btn btn-sm" onclick="KidsManagement.toggleEdit(${i})">${open ? '✖ Close' : '✎ Edit'}</button>`}
         ${l.question_id ? '' : `<button type="button" class="btn btn-sm" onclick="KidsManagement.regenerateLevel(${i})" title="Ask the model for a new version of this level only">🔁 Regenerate</button>`}
-        ${isDropped ? `<button type="button" class="btn btn-sm" onclick="KidsManagement.toggleLevel(${i},false)">↩ Keep it</button>` : `<button type="button" class="btn btn-sm btn-danger" onclick="KidsManagement.toggleLevel(${i},true)" title="Not saved when you publish">✖ Drop</button>`}
+        ${isDropped ? `<button type="button" class="btn btn-sm" onclick="KidsManagement.toggleLevel(${i},false)">↩ Keep it</button>` : `<button type="button" class="btn btn-sm btn-danger-outline" onclick="KidsManagement.toggleLevel(${i},true)" title="Not saved when you publish">✖ Drop</button>`}
       </div>
     </li>`;
     }).join('');
     const droppedCount = dropped.size;
-    return `<div class="kids-review"><h3>${esc(d.title || 'Untitled')}</h3><p>${esc(d.subject)} · ${esc(d.grade)} · ${d.age_min}–${d.age_max} yrs · ${esc(themeNames[d.theme] || d.theme)}</p><p>${esc(d.objective || 'No learning objective set')}</p></div>
+    // The review used to be a bare list of levels and a paragraph of warnings.
+    // The teacher had to work out, by hand, whether what they were about to
+    // publish was playable at all. These are the same checks the publish step
+    // runs, shown here where a level can still be fixed.
+    const checklist = checks.map(c => `<li class="kids-check ${c.ok ? 'kids-check-ok' : 'kids-check-bad'}"><span aria-hidden="true">${c.ok ? '✅' : '⚠️'}</span><span>${c.label}</span></li>`).join('');
+    const verdict = blockers.length
+      ? `<p class="kids-review-verdict kids-review-blocked"><strong>${blockers.length} thing${blockers.length > 1 ? 's' : ''} to fix before this can be published.</strong></p>`
+      : `<p class="kids-review-verdict kids-review-ready"><strong>Ready to publish.</strong> ${kept.length} level${kept.length > 1 ? 's' : ''}, all with something for the child to play.</p>`;
+    return `<div class="kids-review kids-review-hero"><h3>${esc(d.title || 'Untitled')}</h3><p>${esc(d.subject)} · ${esc(d.grade)} · ${d.age_min}–${d.age_max} yrs · ${esc(themeNames[d.theme] || d.theme)}</p><p>${esc(d.objective || 'No learning objective set')}</p></div>
+      <div class="kids-review-checks">
+        <h4>Before you publish</h4>
+        <ul class="kids-checklist">${checklist}</ul>
+        ${verdict}
+      </div>
       <h4>Review the ${kept.length} level(s) the model wrote</h4>
       ${short ? `<p class="text-danger">${esc(tpl.name)} needs at least ${tpl.min_items} levels; you are keeping ${kept.length}. Drop one more level or generate extra before publishing.</p>` : ''}
       ${droppedCount ? `<p class="text-muted">${droppedCount} level(s) marked as dropped will not be saved.</p>` : ''}
@@ -278,6 +299,7 @@
         <button type="button" class="btn btn-secondary" onclick="KidsManagement.regenerateDropped()" ${droppedCount && !w.busy ? '' : 'disabled'}>🔁 Regenerate the ${droppedCount} dropped</button>
         <button type="button" class="btn" onclick="KidsManagement.openBank()">+ From question bank</button>
         <button type="button" class="btn" onclick="KidsManagement.addLevel()">+ Add empty level</button>
+        <button type="button" class="btn btn-primary" onclick="KidsManagement.next()" ${blockers.length ? 'disabled' : ''}>Continue →</button>
       </div>`;
   }
   // Only points/hint/explanation/media are level-local overrides. content_json is

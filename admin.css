@@ -3039,6 +3039,35 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 #kidsStudioPane .kids-card-actions .btn{border-radius:9px;font-weight:700;padding:7px 10px}
 #kidsStudioPane .kids-card-actions .btn-primary{margin-right:auto}
 .btn-danger-outline{color:#b42318!important;border-color:#fecaca!important;background:#fff!important}.btn-danger-outline:hover{background:#fff1f2!important;border-color:#fda4af!important}
+/* The review step answers "can I publish this?" before the teacher has to ask.
+   The publish step already ran these checks, but only after the wizard let them
+   commit to a level they could not see was blank. */
+#kidsStudioPane .kids-review-hero{padding:18px 20px;border-radius:16px;border:1px solid color-mix(in srgb,var(--primary,#2563eb) 20%,var(--border-color,#e2e8f0));background:linear-gradient(120deg,color-mix(in srgb,var(--primary,#2563eb) 8%,var(--card-bg,#fff)),var(--card-bg,#fff) 60%);box-shadow:0 8px 22px rgba(15,23,42,.05)}
+#kidsStudioPane .kids-review-hero h3{margin:0 0 4px;font-size:1.24rem;letter-spacing:-.02em}
+#kidsStudioPane .kids-review-hero p{margin:2px 0;color:var(--text-secondary,#475569);font-size:.9rem}
+#kidsStudioPane .kids-review-checks{margin:14px 0 4px;padding:15px 17px;border-radius:15px;border:1px solid var(--border-color,#e2e8f0);background:var(--surface-muted,#f8fafc)}
+#kidsStudioPane .kids-review-checks h4{margin:0 0 9px;font-size:.94rem;letter-spacing:.01em}
+#kidsStudioPane .kids-checklist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+#kidsStudioPane .kids-check{display:flex;align-items:flex-start;gap:9px;font-size:.9rem;color:var(--text,#1e293b)}
+#kidsStudioPane .kids-check-ok{color:#15803d}
+#kidsStudioPane .kids-check-bad{color:#b42318;font-weight:650}
+#kidsStudioPane .kids-review-verdict{margin:11px 0 0;padding:9px 12px;border-radius:11px;font-size:.88rem}
+#kidsStudioPane .kids-review-ready{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d}
+#kidsStudioPane .kids-review-blocked{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239}
+#kidsStudioPane .kids-chip-warn{background:#fff7ed!important;color:#c2410c!important;border-color:#fed7aa!important;font-weight:700}
+/* The buttons were default-bordered and flat against every surface, so nothing
+   looked clickable and the primary action did not stand out from the rest. */
+#kidsStudioPane .btn{border-radius:11px;font-weight:700;padding:9px 15px;box-shadow:0 1px 2px rgba(15,23,42,.06),inset 0 1px 0 rgba(255,255,255,.6);transition:transform .12s ease,box-shadow .12s ease,background .12s ease,border-color .12s ease;background:var(--card-bg,#fff);color:var(--text,#1e293b);border:1px solid var(--border-color,#e2e8f0)}
+#kidsStudioPane .btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 5px 12px rgba(15,23,42,.11);border-color:color-mix(in srgb,var(--primary,#2563eb) 40%,var(--border-color,#e2e8f0))}
+#kidsStudioPane .btn:active:not(:disabled){transform:translateY(0);box-shadow:0 1px 2px rgba(15,23,42,.08)}
+#kidsStudioPane .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+#kidsStudioPane .btn-primary{background:var(--primary,#2563eb);color:#fff;border-color:transparent;box-shadow:0 3px 8px color-mix(in srgb,var(--primary,#2563eb) 32%,transparent)}
+#kidsStudioPane .btn-primary:hover:not(:disabled){background:var(--primary-dark,#1d4ed8);color:#fff;border-color:transparent;box-shadow:0 7px 16px color-mix(in srgb,var(--primary,#2563eb) 38%,transparent)}
+#kidsStudioPane .btn-secondary{background:var(--surface-muted,#f8fafc)}
+#kidsStudioPane .btn-sm{border-radius:9px;padding:7px 11px;font-weight:650}
+#kidsStudioPane .btn-danger{background:var(--danger,#dc2626);color:#fff;border-color:transparent}
+#kidsStudioPane .kids-card-actions .btn{border-radius:9px;font-weight:700;padding:7px 10px}
+#kidsStudioPane .kids-card-actions .btn-primary{margin-right:auto}
 #kidsStudioPane .kids-wizard-steps{position:sticky;top:0;z-index:2;padding:10px 0;background:var(--card-bg,#fff);border-bottom:1px solid var(--border-color,#e2e8f0)}
 #kidsStudioPane .kids-wizard-steps li{padding:7px 11px;font-weight:650}
 #kidsStudioPane .kids-wizard{gap:17px;padding:4px 2px 12px}
@@ -3047,4 +3076,4 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 #kidsStudioPane .modal-footer{margin-top:12px;padding-top:16px;border-top:1px solid var(--border-color,#e2e8f0)}
 #kidsStudioPane .kids-code{border:1px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#f8fbff);box-shadow:inset 0 1px #fff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 #kidsStudioPane .kids-share-link{padding:13px;border-radius:11px;background:var(--surface-muted,#f8fafc)}
-@media(max-width:700px){#kidsStudioPane .kids-admin-page{padding:16px}#kidsStudioPane .kids-admin-heading{padding:19px}#kidsStudioPane .kids-card-actions .btn-primary{margin-right:0}.kids-card-actions .btn{flex:1 1 auto}.kids-icon-action{flex:0 0 auto}}
+@media(max-width:700px){#kidsStudioPane .kids-admin-page{padding:16px}#kidsStudioPane .kids-admin-heading{padding:19px}#kidsStudioPane .kids-card-actions .btn-primary{margin-right:0}.kids-card-actions .btn{flex:1 1 auto}.kids-icon-action{flex:0 0 auto}#kidsStudioPane .kids-review-checks{padding:13px 14px}#kidsStudioPane .kids-level-row{padding:12px}}

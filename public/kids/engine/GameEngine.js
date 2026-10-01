@@ -236,9 +236,16 @@ export class GameEngine {
         }
       }
     } catch (err) {
+      // Every failure used to be reported as "check your internet", whether it
+      // was a dropped connection, an expired session, a wrong game code or a
+      // fault on the server. Nothing the child was told could be acted on, and
+      // the real reason only ever reached the console.
       console.error('Answer submission failed:', err);
       this.state.transitionTo(GAME_STATES.PLAYING);
-      this.showHint('Connexion interrompue. Vérifie internet puis essaie encore.');
+      // PLAYING again however this ended, so the answer can be given a second
+      // time. Leaving the engine in EVALUATING made the engine ignore every
+      // later answer, and the game looked broken for good.
+      this.showHint(err?.message || 'La réponse n\'a pas pu être enregistrée. Essaie encore.');
     }
   }
 
