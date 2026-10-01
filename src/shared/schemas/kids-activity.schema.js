@@ -214,6 +214,9 @@ export const KidsActivityCreateSchema = z.object({
   rewards_json:        z.union([z.string(), z.record(z.any())]).optional().nullable().transform(v => !v ? null : (typeof v === 'string' ? v : JSON.stringify(v))),
   progression_json:    z.union([z.string(), z.record(z.any())]).optional().nullable().transform(v => !v ? null : (typeof v === 'string' ? v : JSON.stringify(v))),
   estimated_duration:  z.coerce.number().int().min(1).max(120).optional().nullable(),
+  // Classes that should play this game (wizard step 2, "Audience"). Validated
+  // against the caller's school server-side, so a cross-tenant id is dropped.
+  class_ids:           z.array(z.string().min(1)).max(50).optional(),
   levels:              z.array(KidsActivityLevelCreateSchema).optional(),
 });
 
@@ -236,6 +239,9 @@ export const KidsActivityUpdateSchema = z.object({
   progression_json:    z.union([z.string(), z.record(z.any())]).optional().nullable().transform(v => !v ? undefined : (typeof v === 'string' ? v : JSON.stringify(v))),
   estimated_duration:  z.coerce.number().int().min(1).max(120).optional().nullable(),
   is_favorite:         z.boolean().optional(),
+  // Classes that should play this game (wizard step 2, "Audience"). When present
+  // this replaces the previous assignment set; omit it to leave it unchanged.
+  class_ids:           z.array(z.string().min(1)).max(50).optional(),
   // When supplied by the teacher wizard, this is a complete replacement set.
   // Keeping it optional preserves small metadata-only edits.
   levels:              z.array(KidsActivityLevelCreateSchema).optional(),
@@ -243,12 +249,27 @@ export const KidsActivityUpdateSchema = z.object({
 
 export const KidsActivityFilterSchema = z.object({
   subject:       z.string().optional(),
+  // Free text the teacher typed in the wizard, so it is matched partially.
+  sub_topic:     z.string().optional(),
   grade:         z.string().optional(),
+  // Age is a range, and a game matches when the two ranges overlap at all: a
+  // 5-8 year old game is relevant to someone filtering on 7-10.
+  age_min:       z.coerce.number().int().min(3).max(15).optional(),
+  age_max:       z.coerce.number().int().min(3).max(15).optional(),
+  language:      z.string().optional(),
   game_template: z.string().optional(),
   theme:         z.string().optional(),
+  difficulty:    z.string().optional(),
   status:        z.string().optional(),
   search:        z.string().optional(),
-  is_favorite:   z.coerce.boolean().optional(),
+  // Query strings arrive as text, and z.coerce.boolean() turns the string
+  // "false" into true, so the two are mapped explicitly.
+  is_favorite:   z.preprocess(v => (v === 'false' || v === '0' ? false : v), z.coerce.boolean()).optional(),
+  // "unassigned" matches the games left open to the whole school.
+  class_id:      z.string().min(1).optional(),
+  // Admin-only: narrow to the teacher who authored the games. The service still
+  // scopes by school, so this cannot reach another tenant's author.
+  creator_id:    z.string().min(1).optional(),
   limit:         z.coerce.number().int().min(1).max(200).default(50),
   offset:        z.coerce.number().int().min(0).default(0),
   orderBy:       z.enum(['created_at', 'title', 'play_count', 'updated_at']).default('created_at'),
@@ -258,6 +279,11 @@ export const KidsActivityFilterSchema = z.object({
 // ── AI Generation Request (Teacher Wizard) ──────────────────────────────────
 
 export const KidsAIGenerateSchema = z.object({
+  // What the teacher typed in step 1. The service reads these to build the
+  // prompt, so they have to survive validation: as unknown keys they were being
+  // stripped and the model only ever saw a title it made up itself.
+  title:        z.string().max(200).optional(),
+  description:  z.string().max(1000).optional(),
   subject:       z.string().min(1),
   sub_topic:     z.string().min(1).max(500),
   grade:         z.string().min(1),
@@ -270,8 +296,21 @@ export const KidsAIGenerateSchema = z.object({
   count:         z.coerce.number().int().min(1).max(30).default(8),
   language:      z.enum(['fr', 'en', 'ar']).default('fr'),
   // Optional: pick a specific AIConfig row instead of the school default, so a
-  // teacher can choose which model generates their levels in Game Studio.
+  // teacher can choose which model generates their levels in Kids Space.
   model_id:      z.string().min(1).optional(),
+  // Levels the teacher kept from the previous round. They are returned
+  // untouched and only the shortfall is asked of the model, so regenerating one
+  // level never discards the rest.
+  keep_levels:   z.array(z.object({
+    id:           z.string().optional(),
+    level_type:   z.string().optional(),
+    content_json: z.union([z.string(), z.record(z.any())]),
+    points:       z.coerce.number().optional(),
+    hint:         z.string().nullable().optional(),
+    explanation:  z.string().nullable().optional(),
+    media_url:    z.string().nullable().optional(),
+    question_id:  z.string().nullable().optional(),
+  })).max(60).optional().default([]),
 });
 
 // ── Play & Join Schemas ──────────────────────────────────────────────────────

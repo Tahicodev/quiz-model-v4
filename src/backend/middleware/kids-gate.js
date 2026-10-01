@@ -44,3 +44,18 @@ export const requirePrimaireSchool = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * Read-only counterpart of requirePrimaireSchool, for the activity list and the
+ * filter facets. An admin is an educator managing content and the admin panel
+ * shows them Kids Space whatever their own school_type is, so gating the list on
+ * 'primaire' left them with a permanently empty screen and no filters to use.
+ * Reads stay scoped to the caller's own school, so this widens nothing.
+ * Writing is still gated by requirePrimaireSchool.
+ */
+export const requireKidsReadAccess = async (req, res, next) => {
+  if (req.user && (req.user.role === ROLES.ADMIN || req.user.role === ROLES.SUPER_ADMIN)) {
+    return next();
+  }
+  return requirePrimaireSchool(req, res, next);
+};

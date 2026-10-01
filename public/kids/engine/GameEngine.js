@@ -67,6 +67,13 @@ export class GameEngine {
     if (typeof this.onExit === 'function') this.onExit();
   }
 
+  /** Start the current step over without losing the saved activity session. */
+  retryLevel() {
+    if (!this.currentLevel) return;
+    clearTimeout(this.advanceTimer);
+    this.mountLevel(this.currentLevel);
+  }
+
   /**
    * Load activity and session data into the engine.
    */
@@ -189,23 +196,35 @@ export class GameEngine {
         const mascot = document.querySelector('.kids-mascot');
         if (mascot) { const reaction = RewardEngine.reaction({ streak: result.streak, correct: true }); ThemeEngine.setMascotReaction(reaction); mascot.dataset.reaction = reaction; mascot.classList.add('mascot-react'); setTimeout(() => { mascot.classList.remove('mascot-react'); ThemeEngine.setMascotReaction('idle'); }, 900); }
         this.session.suggestedDifficulty = ProgressionEngine.suggest({ streak: result.streak, attempts: 1, difficulty: this.activity.difficulty });
-        this.feedback.showSuccess(result.earnedPoints, result.streak);
         this.session.score = result.newScore;
         this.session.stars = result.stars;
         this.updateStatsDisplay();
 
-        if (result.completed) {
-          setTimeout(() => {
+        // Advancing waits for the child, not for a timer. The old code changed
+        // level after 1500ms while the praise card stayed up for longer, so the
+        // next question appeared underneath a card about the last one — and the
+        // card's own button had nothing to do. The card now decides when the
+        // praise has been read; the timer below is only a backstop.
+        let advanced = false;
+        const advance = () => {
+          // Whichever route got here first wins, so the backstop cannot move the
+          // child on twice.
+          if (advanced) return;
+          advanced = true;
+          clearTimeout(this.advanceTimer);
+          if (result.completed) {
             this.showCelebration(result.newScore, result.stars, result.streak);
             if (this.onActivityComplete) this.onActivityComplete(result);
-          }, 1500);
-        } else if (result.nextLevel) {
-          setTimeout(() => {
+          } else if (result.nextLevel) {
             this.session.current_level = (this.session.current_level || 0) + 1;
             this.updateStatsDisplay();
             this.mountLevel(result.nextLevel);
-          }, 1500);
-        }
+          }
+        };
+        this.feedback.showSuccess(result.earnedPoints, result.streak, { onDismiss: advance });
+        // If the card is somehow never dismissed, the game still moves on rather
+        // than sitting on a stale question.
+        this.advanceTimer = setTimeout(advance, 8000);
       } else {
         SoundManager.play('retry');
         const mascot = document.querySelector('.kids-mascot');
@@ -219,6 +238,7 @@ export class GameEngine {
     } catch (err) {
       console.error('Answer submission failed:', err);
       this.state.transitionTo(GAME_STATES.PLAYING);
+      this.showHint('Connexion interrompue. Vérifie internet puis essaie encore.');
     }
   }
 

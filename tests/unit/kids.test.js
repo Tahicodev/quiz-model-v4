@@ -20,6 +20,111 @@ function withFakeSession(session, activity = null) {
   return () => { findSession.mockRestore(); findActivity?.mockRestore(); };
 }
 
+/**
+ * There is no built-in question pool any more, so every AI test has to stand in
+ * for the provider. The shapes below are the ones KidsAIService documents in its
+ * prompt, so a mocked level survives the same Zod check a real one would.
+ */
+const MECHANIC_SAMPLES = {
+  multiple_choice: {
+    instruction: 'Choisis la bonne réponse !',
+    question: 'Quel est le résultat de 4 + 3 ?',
+    options: [{ id: 'opt1', value: '6' }, { id: 'opt2', value: '7' }],
+    correctId: 'opt2',
+  },
+  word_order: {
+    instruction: 'Remets les lettres dans le bon ordre.',
+    answer: 'CHAT',
+    items: [{ id: '1', value: 'A' }, { id: '2', value: 'C' }, { id: '3', value: 'T' }, { id: '4', value: 'H' }],
+  },
+  drag_drop: {
+    instruction: 'Glisse le bon mot dans le trou.',
+    template: 'Le {blank} brille dans le ciel.',
+    blanks: [{ position: 0, answer: 'soleil' }],
+    choices: [{ id: 'c1', value: 'soleil' }, { id: 'c2', value: 'voiture' }],
+  },
+  matching: {
+    instruction: 'Relie chaque mot à son contraire !',
+    pairs: [
+      { id: 'p1', left: 'Grand', right: 'Petit' },
+      { id: 'p2', left: 'Chaud', right: 'Froid' },
+    ],
+  },
+  memory: {
+    instruction: 'Retouve les deux cartes qui vont ensemble !',
+    cards: [
+      { id: 'c1', matchId: 'm1', value: 'Chien', emoji: '🐶', type: 'emoji' },
+      { id: 'c2', matchId: 'm2', value: 'Chiot', emoji: '🐕', type: 'emoji' },
+      { id: 'c3', matchId: 'm1', value: 'Chien', emoji: '🐩', type: 'emoji' },
+      { id: 'c4', matchId: 'm2', value: 'Chiot', emoji: '🐕', type: 'emoji' },
+    ],
+  },
+  sorting: {
+    instruction: 'Range chaque aliment dans la bonne boîte !',
+    categories: [{ id: 'fruits', label: 'Fruits', emoji: '🍎' }, { id: 'legumes', label: 'Légumes', emoji: '🥕' }],
+    items: [
+      { id: 'i1', value: 'Pomme', categoryId: 'fruits' },
+      { id: 'i2', value: 'Carotte', categoryId: 'legumes' },
+      { id: 'i3', value: 'Banane', categoryId: 'fruits' },
+    ],
+  },
+  sequence: {
+    instruction: "Mets les nombres dans l'ordre croissant.",
+    items: [{ id: 'n1', value: '2' }, { id: 'n2', value: '5' }, { id: 'n3', value: '8' }],
+    correctOrder: ['n1', 'n2', 'n3'],
+  },
+  find_correct: {
+    instruction: 'Trouve la seule bonne image !',
+    question: 'Laquelle est un animal de la ferme ?',
+    items: [
+      { id: 'i1', value: 'La vache', emoji: '🐄' },
+      { id: 'i2', value: 'La voiture', emoji: '🚗' },
+      { id: 'i3', value: 'Le pain', emoji: '🍞' },
+    ],
+    correctId: 'i1',
+  },
+  bubble_pop: {
+    instruction: 'Éclate toutes les bulles paires !',
+    target: { value: 'Nombres pairs', type: 'text' },
+    bubbles: [
+      { id: 'b1', value: '2', isCorrect: true },
+      { id: 'b2', value: '3', isCorrect: false },
+      { id: 'b3', value: '4', isCorrect: true },
+      { id: 'b4', value: '5', isCorrect: false },
+    ],
+  },
+};
+
+const CORE_MECHANICS = Object.keys(MECHANIC_SAMPLES);
+
+/**
+ * Returns a Google-shaped response holding `count` playable levels. When a
+ * mechanic is given, every level uses that mechanic; otherwise one level is
+ * produced per core mechanic (cycling) so any template gets a valid answer.
+ */
+function mockGeminiLevels(count = 1, mechanic = null) {
+  const levels = Array.from({ length: count }, (_, i) => {
+    const used = mechanic || CORE_MECHANICS[i % CORE_MECHANICS.length];
+    return { mechanic: used, content: structuredClone(MECHANIC_SAMPLES[used]) };
+  });
+  return vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(levels) }] } }] }),
+  });
+}
+
+/**
+ * Points KidsAIService at one usable model. The school default is resolved with
+ * `findMany` so non-text models can be skipped, so that is what is mocked here.
+ */
+function mockSchoolModel(overrides = {}) {
+  return vi.spyOn(prisma.aIConfig, 'findMany').mockResolvedValue([{
+    id: 'cfg-1', name: 'Gemini Test', provider: 'google', model_id: 'gemini-test',
+    base_url: null, api_key_enc: 'x', owner_id: null, is_default: true, ...overrides,
+  }]);
+}
+
 describe('Kids Space - Foundation & Core Logic', () => {
   it('loads all 20 game templates in GameTemplateRegistry', () => {
     const templates = GameTemplateRegistry.getAll();
@@ -161,46 +266,80 @@ describe('Kids Space - Foundation & Core Logic', () => {
   it('KidsAIService generates activity with valid levels structure', async () => {
     const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
-    const activity = await aiSvc.generateActivity({
-      subject: 'french',
-      sub_topic: 'Les animaux de la forêt',
-      grade: 'CP',
-      count: 2,
-    }, 'dummy-school', 'dummy-user');
+    const findConfig = mockSchoolModel();
+    const globalFetch = globalThis.fetch;
+    globalThis.fetch = mockGeminiLevels(2, 'multiple_choice');
+    try {
+      const activity = await aiSvc.generateActivity({
+        subject: 'french',
+        sub_topic: 'Les animaux de la forêt',
+        grade: 'CP',
+        count: 2,
+        game_template: 'multiple_choice',
+      }, 'dummy-school', 'dummy-user');
 
-    expect(activity).toBeDefined();
-    expect(activity.title).toContain('animaux');
-    expect(activity.levels.length).toBeGreaterThanOrEqual(1);
-    expect(activity.levels[0].level_type).toBeDefined();
-    expect(typeof activity.levels[0].content_json).toBe('string');
+      expect(activity).toBeDefined();
+      expect(activity.title).toContain('animaux');
+      expect(activity.levels.length).toBe(2);
+      expect(activity.levels[0].level_type).toBeDefined();
+      expect(typeof activity.levels[0].content_json).toBe('string');
+    } finally {
+      globalThis.fetch = globalFetch;
+      findConfig.mockRestore();
+    }
   });
 
   it('wraps AI adventure content around a validated core mechanic', async () => {
     const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
-    const activity = await aiSvc.generateActivity({ subject: 'science', sub_topic: 'animaux', grade: 'CP', game_template: 'treasure_hunt', count: 1 }, 'school', 'user');
-    const content = JSON.parse(activity.levels[0].content_json);
-    expect(activity.levels[0].level_type).toBe('treasure_hunt');
-    expect(content.mechanic).toBe('multiple_choice');
+    const findConfig = mockSchoolModel();
+    const globalFetch = globalThis.fetch;
+    globalThis.fetch = mockGeminiLevels(1);
+    try {
+      const activity = await aiSvc.generateActivity({ subject: 'science', sub_topic: 'animaux', grade: 'CP', game_template: 'treasure_hunt', count: 1 }, 'school', 'user');
+      const content = JSON.parse(activity.levels[0].content_json);
+      expect(activity.levels[0].level_type).toBe('treasure_hunt');
+      expect(content.mechanic).toBe('multiple_choice');
+      // The core mechanic content must still be playable on its own.
+      expect(() => validateLevelContent('multiple_choice', content)).not.toThrow();
+    } finally {
+      globalThis.fetch = globalFetch;
+      findConfig.mockRestore();
+    }
   });
 
-  it('offline generator produces publishable content for EVERY game template', async () => {
+  it('produces publishable content for EVERY game template', async () => {
     const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
     const { ActivityValidator } = await import('../../src/backend/services/kids/ActivityValidator.js');
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
+    const findConfig = mockSchoolModel();
+    const globalFetch = globalThis.fetch;
 
     // Regression guard: the offline generator used to fall back to
     // multiple_choice content for any template without its own mock set, so 5 of
     // the 20 templates generated unplayable levels that failed publish
-    // validation (HTTP 422) with no feedback in the teacher wizard.
-    for (const template of GameTemplateRegistry.getAll()) {
-      const activity = await aiSvc.generateActivity(
-        { subject: 'science', sub_topic: 'les animaux', grade: 'CP', game_template: template.id, count: 2 },
-        'school', 'user',
-      );
-      expect(activity.levels.length, `${template.id} level count`).toBeGreaterThanOrEqual(template.min_items);
-      expect(() => ActivityValidator.validateForPublish({ activity, levels: activity.levels }),
-        `${template.id} must pass publish validation`).not.toThrow();
+    // validation (HTTP 422) with no feedback in the teacher wizard. A model that
+    // returns one usable level per slot must satisfy every template's own
+    // minimum, so the wizard can never be handed a thin activity.
+    try {
+      for (const template of GameTemplateRegistry.getAll()) {
+        const needed = Math.max(2, template.min_items);
+        // A core template must come back in its own mechanic; an adventure
+        // template wraps one of them.
+        const mechanic = template.category === 'core' ? template.id : 'multiple_choice';
+        globalThis.fetch = mockGeminiLevels(needed, mechanic);
+        const activity = await aiSvc.generateActivity(
+          { subject: 'science', sub_topic: 'les animaux', grade: 'CP', game_template: template.id, count: needed },
+          'school', 'user',
+        );
+        expect(activity.levels.length, `${template.id} level count`).toBeGreaterThanOrEqual(template.min_items);
+        expect(activity.rejected_levels, `${template.id} rejected levels`).toHaveLength(0);
+        expect(() => ActivityValidator.validateForPublish({ activity, levels: activity.levels }),
+          `${template.id} must pass publish validation`).not.toThrow();
+      }
+    } finally {
+      globalThis.fetch = globalFetch;
+      findConfig.mockRestore();
     }
   });
 
@@ -211,34 +350,130 @@ describe('Kids Space - Foundation & Core Logic', () => {
     expect(SOCKET_EVENTS.TOURNAMENT_LEAVE).toBe('tournament:leave');
   });
 
-  // ── Game Studio: honest AI reporting, model choice, question bank ──────────
+  // ── Kids Space: honest AI reporting, model choice, question bank ──────────
 
-  it('reports the generation source and a warning when the model is unusable', async () => {
+  it('fails loudly instead of substituting built-in questions when the model is unusable', async () => {
     // Regression guard: a provider 429 was swallowed and the offline pool was
     // returned as if the model had written it, which is how an "addition"
-    // activity ended up asking about spider legs.
+    // activity ended up asking about spider legs. There is no built-in pool any
+    // more, so a quota error has to reach the teacher.
     const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
+    const { AppError } = await import('../../src/shared/errors.js');
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
 
-    const findConfig = vi.spyOn(prisma.aIConfig, 'findFirst').mockResolvedValue({
-      id: 'cfg-1', name: 'Gemini Test', provider: 'google', model_id: 'gemini-test',
-      base_url: null, api_key_enc: 'x',
-    });
+    const findConfig = mockSchoolModel();
     const globalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false, status: 429,
       text: async () => JSON.stringify({ error: { code: 429, message: 'quota exceeded' } }),
     });
     try {
-      const activity = await aiSvc.generateActivity(
+      await expect(aiSvc.generateActivity(
         { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 2, language: 'en' },
         'school-1', 'user-1',
+      )).rejects.toBeInstanceOf(AppError);
+      // No request may be made against a key that is not configured either.
+      const callsBefore = globalThis.fetch.mock.calls.length;
+      expect(callsBefore).toBe(1);
+    } finally {
+      globalThis.fetch = globalFetch;
+      findConfig.mockRestore();
+    }
+  });
+
+  it('reports the rejected levels instead of padding the list with generic ones', async () => {
+    const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
+    const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
+
+    const findConfig = mockSchoolModel();
+    const globalFetch = globalThis.fetch;
+    // One playable level and one with no answers at all.
+    const payload = JSON.stringify([
+      { mechanic: 'multiple_choice', content: { instruction: 'Pick one!', question: '2 + 2 = ?', options: [{ id: 'a', value: '4' }, { id: 'b', value: '5' }], correctId: 'a' } },
+      { mechanic: 'multiple_choice', content: { instruction: 'Pick one!', question: 'broken' } },
+    ]);
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: payload }] } }] }),
+    });
+    try {
+      const activity = await aiSvc.generateActivity(
+        { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 2, language: 'en', game_template: 'multiple_choice' },
+        'school-1', 'user-1',
       );
-      expect(activity.source).toBe('fallback');
-      expect(activity.warnings.length).toBeGreaterThan(0);
-      expect(activity.warnings.join(' ')).toMatch(/quota|rate limit/i);
-      expect(activity.model.name).toBe('Gemini Test');
-      expect(activity.levels.length).toBeGreaterThan(0);
+      expect(activity.source).toBe('ai');
+      expect(activity.levels).toHaveLength(1);
+      expect(activity.rejected_levels).toHaveLength(1);
+      expect(activity.rejected_levels[0].index).toBe(1);
+      expect(activity.generated_count).toBe(1);
+    } finally {
+      globalThis.fetch = globalFetch;
+      findConfig.mockRestore();
+    }
+  });
+
+  it('keeps the levels the teacher asked to keep and only writes the shortfall', async () => {
+    const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
+    const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
+
+    const findConfig = mockSchoolModel();
+    const globalFetch = globalThis.fetch;
+    const fresh = JSON.stringify([
+      { mechanic: 'multiple_choice', content: { instruction: 'Pick one!', question: '3 + 3 = ?', options: [{ id: 'a', value: '6' }, { id: 'b', value: '7' }], correctId: 'a' } },
+    ]);
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true, status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: fresh }] } }] }),
+    });
+    try {
+      const keptLevel = {
+        level_type: 'multiple_choice',
+        content_json: JSON.stringify({ instruction: 'Pick one!', question: '1 + 1 = ?', options: [{ id: 'a', value: '2' }], correctId: 'a' }),
+        points: 10,
+      };
+      const activity = await aiSvc.generateActivity(
+        { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 2, language: 'en', game_template: 'multiple_choice', keep_levels: [keptLevel] },
+        'school-1', 'user-1',
+      );
+      expect(activity.kept_count).toBe(1);
+      expect(activity.generated_count).toBe(1);
+      // Kept level first, freshly written one second, so the wizard can put the
+      // replacement back in the slot the teacher chose.
+      expect(activity.levels).toHaveLength(2);
+      expect(activity.levels[0].content_json).toContain('1 + 1');
+      expect(activity.levels[1].content_json).toContain('3 + 3');
+    } finally {
+      globalThis.fetch = globalFetch;
+      findConfig.mockRestore();
+    }
+  });
+
+  it('asks the model only for the shortfall when the teacher regenerates 2 of 5 levels', async () => {
+    // Regression guard: `count` is the size the activity must end up with. The
+    // wizard used to send the number of slots being refilled (2) instead of the
+    // total (5), so the server computed a shortfall of 2 - 3 = -1 and wrote a
+    // single level, leaving the second dropped slot empty with no explanation.
+    const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
+    const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
+    const findConfig = mockSchoolModel();
+    const globalFetch = globalThis.fetch;
+    globalThis.fetch = mockGeminiLevels(2, 'multiple_choice');
+    try {
+      const kept = ['a', 'b', 'c'].map((id, i) => ({
+        level_type: 'multiple_choice',
+        content_json: JSON.stringify({ instruction: 'Garde-moi', question: `kept ${i}`, options: [{ id: 'x', value: '1' }], correctId: 'x' }),
+        points: 10,
+      }));
+      const activity = await aiSvc.generateActivity(
+        { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 5, game_template: 'multiple_choice', keep_levels: kept },
+        'school-1', 'user-1',
+      );
+      expect(activity.kept_count).toBe(3);
+      expect(activity.generated_count).toBe(2);
+      expect(activity.levels).toHaveLength(5);
+      // The prompt has to ask for two levels, not one.
+      const body = JSON.parse(globalThis.fetch.mock.calls[0][1].body);
+      expect(body.contents[0].parts[0].text).toContain('level_count": 2');
     } finally {
       globalThis.fetch = globalFetch;
       findConfig.mockRestore();
@@ -250,22 +485,16 @@ describe('Kids Space - Foundation & Core Logic', () => {
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
     const payload = JSON.stringify([{ content: { instruction: 'Pick one!', question: '2 + 2 = ?', options: [{ id: 'a', value: '4' }, { id: 'b', value: '5' }], correctId: 'a' }, hint: 'h', explanation: 'e' }]);
 
-    const findConfig = vi.spyOn(prisma.aIConfig, 'findFirst').mockResolvedValue({
-      id: 'cfg-1', name: 'Gemini Test', provider: 'google', model_id: 'gemini-test',
-      base_url: null, api_key_enc: 'x',
-    });
+    const findConfig = mockSchoolModel();
     const globalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true, status: 200,
-      json: async () => ({ candidates: [{ content: { parts: [{ text: payload }] } }] }),
-    });
+    globalThis.fetch = mockGeminiLevels(1);
     try {
       const activity = await aiSvc.generateActivity(
         { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 1, language: 'en' },
         'school-1', 'user-1',
       );
       expect(activity.source).toBe('ai');
-      expect(activity.warnings).toHaveLength(0);
+      expect(activity.rejected_levels).toHaveLength(0);
     } finally {
       globalThis.fetch = globalFetch;
       findConfig.mockRestore();
@@ -275,15 +504,12 @@ describe('Kids Space - Foundation & Core Logic', () => {
   it('sends the whole wizard to the model as JSON, including the output language', async () => {
     const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
-    const findConfig = vi.spyOn(prisma.aIConfig, 'findFirst').mockResolvedValue({
-      id: 'cfg-1', name: 'Gemini Test', provider: 'google', model_id: 'gemini-test',
-      base_url: null, api_key_enc: 'x',
-    });
+    const findConfig = mockSchoolModel();
     let sentPrompt = '';
     const globalFetch = globalThis.fetch;
     globalThis.fetch = vi.fn(async (url, init) => {
       sentPrompt = JSON.parse(init.body).contents[0].parts[0].text;
-      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '[]' }] } }] }) };
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify([{ mechanic: 'multiple_choice', content: { instruction: 'Pick one!', question: '2 + 2 = ?', options: [{ id: 'a', value: '4' }, { id: 'b', value: '5' }], correctId: 'a' } }]) }] } }] }) };
     });
     try {
       await aiSvc.generateActivity({
@@ -306,6 +532,20 @@ describe('Kids Space - Foundation & Core Logic', () => {
     }
   });
 
+  it('passes the title and description the teacher typed through validation', async () => {
+    // Regression guard: the generate schema dropped `title`/`description` as
+    // unknown keys, so the prompt only ever saw a title the service invented from
+    // the template name, no matter what the teacher wrote in step 1.
+    const { KidsAIGenerateSchema } = await import('../../src/shared/schemas/kids-activity.schema.js');
+    const parsed = KidsAIGenerateSchema.parse({
+      title: 'Le cycle de l’eau',
+      description: 'Nommer les trois états de l’eau.',
+      subject: 'science', sub_topic: 'the water cycle', grade: 'CE1', count: 3,
+    });
+    expect(parsed.title).toBe('Le cycle de l’eau');
+    expect(parsed.description).toBe('Nommer les trois états de l’eau.');
+  });
+
   it('never exposes a key when listing Game Studio models', async () => {
     const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
@@ -324,19 +564,64 @@ describe('Kids Space - Foundation & Core Logic', () => {
   it('refuses a model belonging to another school and falls back to the default', async () => {
     const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
     const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
-    const findFirst = vi.spyOn(prisma.aIConfig, 'findFirst')
-      .mockResolvedValueOnce(null)   // requested config: not in this school
-      .mockResolvedValueOnce({ id: 'school-default', name: 'Default', provider: 'google', model_id: 'd', base_url: null, api_key_enc: 'x' });
+    const findFirst = vi.spyOn(prisma.aIConfig, 'findFirst').mockResolvedValue(null); // requested config: not in this school
+    const findMany = vi.spyOn(prisma.aIConfig, 'findMany').mockResolvedValue([
+      { id: 'school-default', name: 'Default', provider: 'google', model_id: 'd', base_url: null, api_key_enc: 'x', owner_id: null, is_default: true },
+    ]);
     const globalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '[]' }] } }] }) });
+    globalThis.fetch = mockGeminiLevels(1, 'multiple_choice');
     try {
       const activity = await aiSvc.generateActivity(
-        { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 1, model_id: 'someone-elses-config' },
+        { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 1, game_template: 'multiple_choice', model_id: 'someone-elses-config' },
         'school-1', 'user-1',
       );
       expect(activity.model.id).toBe('school-default');
     } finally {
       globalThis.fetch = globalFetch;
+      findFirst.mockRestore();
+      findMany.mockRestore();
+    }
+  });
+
+  it('never sends a level request to an image or embedding model', async () => {
+    // Regression guard: a school with only image/embedding models configured used
+    // to pick one at random and the teacher got an empty generation with no idea
+    // why. The picker hides them, the default skips them, and an explicit pick
+    // is refused with a message that says what to do.
+    const { KidsAIService } = await import('../../src/backend/services/kids/KidsAIService.js');
+    const { AppError } = await import('../../src/shared/errors.js');
+    const aiSvc = new KidsAIService(null, { warn: () => {}, error: () => {}, info: () => {} });
+    const image = { id: 'img', name: 'Image Maker', provider: 'google', model_id: 'gemini-2.5-flash-image', base_url: null, api_key_enc: 'x' };
+    const embed = { id: 'emb', name: 'Embedder', provider: 'openai', model_id: 'text-embedding-3-small', base_url: null, api_key_enc: 'x' };
+    const text = { id: 'txt', name: 'Chatty', provider: 'google', model_id: 'gemini-3.1-flash-lite', base_url: null, api_key_enc: 'x', owner_id: null, is_default: false };
+    const globalFetch = globalThis.fetch;
+
+    const findMany = vi.spyOn(prisma.aIConfig, 'findMany').mockResolvedValue([image, embed, text]);
+    const findFirst = vi.spyOn(prisma.aIConfig, 'findFirst').mockResolvedValue(image);
+    globalThis.fetch = mockGeminiLevels(1, 'multiple_choice');
+    try {
+      // The picker only offers models that can answer.
+      const offered = await aiSvc.listAvailableModels('school-1', 'user-1');
+      expect(offered.map(m => m.id)).toEqual(['txt']);
+
+      // The default skips them even when they are the only rows present.
+      findMany.mockResolvedValue([image, embed]);
+      globalThis.fetch = vi.fn();
+      await expect(aiSvc.generateActivity(
+        { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 1, game_template: 'multiple_choice' },
+        'school-1', 'user-1',
+      )).rejects.toBeInstanceOf(AppError);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+
+      // An explicit pick of an image model is refused, not silently accepted.
+      findMany.mockResolvedValue([image, embed, text]);
+      await expect(aiSvc.generateActivity(
+        { subject: 'math', sub_topic: 'addition', grade: 'CP', count: 1, game_template: 'multiple_choice', model_id: 'img' },
+        'school-1', 'user-1',
+      )).rejects.toBeInstanceOf(AppError);
+    } finally {
+      globalThis.fetch = globalFetch;
+      findMany.mockRestore();
       findFirst.mockRestore();
     }
   });
@@ -417,8 +702,162 @@ describe('Kids Space - Foundation & Core Logic', () => {
     expect(tx.kidsActivityLevel.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'lvl-1' } }));
   });
 
-  it('reports a per-level success breakdown, with null instead of 0% when unplayed', async () => {
-    const { KidsGameSessionService } = await import('../../src/backend/services/kids/KidsGameSessionService.js');
+  it('assigns the chosen classes, refuses another school\'s, and treats none as open to all', async () => {
+    // The Audience step writes the audience straight into who can play, so a
+    // class id that is not in the school must fail loudly: saving the activity
+    // with a silently different audience is worse than an error.
+    const makeTx = (owned) => ({
+      kidsActivity: { update: vi.fn(async () => ({ id: 'act-1' })), findUnique: vi.fn(async () => ({ id: 'act-1', difficulty: 'easy' })) },
+      kidsActivityLevel: { findMany: vi.fn(async () => []), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
+      kidsActivityClass: {
+        deleteMany: vi.fn(),
+        create: vi.fn(async ({ data }) => data),
+      },
+      class: { findMany: vi.fn(async () => owned) },
+    });
+    const run = async (classIds, owned) => {
+      const tx = makeTx(owned);
+      const spy = vi.spyOn(prisma, '$transaction').mockImplementation(fn => fn(tx));
+      const levelSpy = vi.spyOn(prisma.kidsActivityLevel, 'findMany').mockResolvedValue([]);
+      const existsSpy = vi.spyOn(prisma.kidsActivity, 'findFirst').mockResolvedValue({ id: 'act-1' });
+      try {
+        await new KidsActivityService(null).update('act-1', {
+          title: 'T', subject: 'math', sub_topic: 'addition', grade: 'CP',
+          game_template: 'multiple_choice', class_ids: classIds,
+        }, 'school-1');
+        return { tx, error: null };
+      } catch (e) {
+        return { tx, error: e };
+      } finally { spy.mockRestore(); levelSpy.mockRestore(); existsSpy.mockRestore(); }
+    };
+
+    // Two classes from this school are linked.
+    const ok = await run(['c1', 'c2'], [{ id: 'c1' }, { id: 'c2' }]);
+    expect(ok.error).toBeNull();
+    expect(ok.tx.kidsActivityClass.create).toHaveBeenCalledTimes(2);
+    expect(ok.tx.class.findMany.mock.calls[0][0].where.school_id).toBe('school-1');
+
+    // Nothing ticked means the whole school, which is a real state and must not
+    // be mistaken for "no audience configured".
+    const open = await run([], []);
+    expect(open.error).toBeNull();
+    expect(open.tx.kidsActivityClass.deleteMany).toHaveBeenCalled();
+    expect(open.tx.kidsActivityClass.create).not.toHaveBeenCalled();
+
+    // A class from another school is rejected instead of quietly skipped.
+    const cross = await run(['c1', 'c-foreign'], [{ id: 'c1' }]);
+    expect(cross.error).toBeTruthy();
+    expect(cross.error.fields.class_ids[0]).toContain('c-foreign');
+    expect(cross.tx.kidsActivityClass.create).not.toHaveBeenCalled();
+  });
+
+  it('filters the activity list by every field the filter bar offers', async () => {
+    // Regression guard: the bar used to be cosmetic — only subject, grade,
+    // template, theme, status, search, favourite and class reached the query.
+    // Sub-topic, age, language, difficulty and author were sent by the UI and
+    // then dropped, so the list looked filtered and was not.
+    const findMany = vi.spyOn(prisma.kidsActivity, 'findMany').mockResolvedValue([]);
+    const count = vi.spyOn(prisma.kidsActivity, 'count').mockResolvedValue(0);
+    try {
+      const svc = new KidsActivityService();
+      await svc.list({
+        subject: 'math',
+        sub_topic: 'animaux',
+        grade: 'CP',
+        age_min: 7,
+        age_max: 10,
+        language: 'fr',
+        theme: 'ocean',
+        difficulty: 'medium',
+        game_template: 'treasure_hunt',
+        status: 'published',
+        creator_id: 'teacher-9',
+        class_id: 'class-2',
+        is_favorite: true,
+      }, 'school-A');
+      const [query] = findMany.mock.calls[0];
+      const w = query.where;
+      expect(w.school_id).toBe('school-A');
+      expect(w.subject).toBe('math');
+      // Free text the teacher typed, so it cannot be an exact match.
+      expect(w.sub_topic).toEqual({ contains: 'animaux' });
+      expect(w.grade).toBe('CP');
+      expect(w.language).toBe('fr');
+      expect(w.theme).toBe('ocean');
+      expect(w.difficulty).toBe('medium');
+      expect(w.game_template).toBe('treasure_hunt');
+      expect(w.status).toBe('published');
+      expect(w.creator_id).toBe('teacher-9');
+      expect(w.classes).toEqual({ some: { class_id: 'class-2' } });
+      expect(w.is_favorite).toBe(true);
+      // Age is an overlap: a game for 5-8 shows up when looking at 7-10.
+      expect(w.AND).toEqual([{ age_min: { lte: 10 } }, { age_max: { gte: 7 } }]);
+    } finally { findMany.mockRestore(); count.mockRestore(); }
+  });
+
+  it('leaves out the filters the teacher did not set', async () => {
+    const findMany = vi.spyOn(prisma.kidsActivity, 'findMany').mockResolvedValue([]);
+    const count = vi.spyOn(prisma.kidsActivity, 'count').mockResolvedValue(0);
+    try {
+      const svc = new KidsActivityService();
+      await svc.list({ subject: 'science' }, 'school-A');
+      const w = findMany.mock.calls[0][0].where;
+      // An empty AND array would be an invalid Prisma query.
+      expect(w.AND).toBeUndefined();
+      expect(w.creator_id).toBeUndefined();
+      expect(w.sub_topic).toBeUndefined();
+      expect(w.difficulty).toBeUndefined();
+      expect(w.is_favorite).toBeUndefined();
+    } finally { findMany.mockRestore(); count.mockRestore(); }
+  });
+
+  it('never lets the author filter reach another school', async () => {
+    // An admin filters by teacher, but the school scope is applied separately
+    // and unconditionally: knowing a teacher's id must not surface their games
+    // somewhere else.
+    const { KidsActivityFilterSchema } = await import('../../src/shared/schemas/kids-activity.schema.js');
+    const parsed = KidsActivityFilterSchema.parse({ creator_id: 'teacher-from-another-school', subject: 'math' });
+    expect(parsed.creator_id).toBe('teacher-from-another-school');
+    const findMany = vi.spyOn(prisma.kidsActivity, 'findMany').mockResolvedValue([]);
+    const count = vi.spyOn(prisma.kidsActivity, 'count').mockResolvedValue(0);
+    try {
+      await new KidsActivityService().list(parsed, 'school-A');
+      expect(findMany.mock.calls[0][0].where.school_id).toBe('school-A');
+    } finally { findMany.mockRestore(); count.mockRestore(); }
+  });
+
+  it('reads is_favorite=false as false, not as "every non-empty string is true"', async () => {
+    const { KidsActivityFilterSchema } = await import('../../src/shared/schemas/kids-activity.schema.js');
+    expect(KidsActivityFilterSchema.parse({ is_favorite: 'false' }).is_favorite).toBe(false);
+    expect(KidsActivityFilterSchema.parse({ is_favorite: 'true' }).is_favorite).toBe(true);
+    expect(KidsActivityFilterSchema.parse({ is_favorite: '0' }).is_favorite).toBe(false);
+  });
+
+  it('offers only the filter values that exist, and names the teachers', async () => {
+    // The dropdowns are built from this school's own games, so a sub-topic typed
+    // by hand is selectable and a teacher can be picked by name.
+    const groupBy = vi.spyOn(prisma.kidsActivity, 'groupBy').mockImplementation(async ({ by }) => {
+      if (by[0] === 'sub_topic') return [{ sub_topic: 'Les animaux', _count: { _all: 2 } }, { sub_topic: 'Addition', _count: { _all: 1 } }];
+      if (by[0] === 'creator_id') return [{ creator_id: 't1', _count: { _all: 3 } }, { creator_id: 't2', _count: { _all: 1 } }];
+      return [{ [by[0]]: 'x', _count: { _all: 1 } }];
+    });
+    const aggregate = vi.spyOn(prisma.kidsActivity, 'aggregate').mockResolvedValue({ _min: { age_min: 5 }, _max: { age_max: 12 } });
+    const user = vi.spyOn(prisma.user, 'findMany').mockResolvedValue([{ id: 't1', name: 'Mme Ada' }]);
+    try {
+      const fx = await new KidsActivityService().listFacets('school-A');
+      expect(fx.sub_topics.map(s => s.value)).toEqual(['Addition', 'Les animaux']);
+      // t2's user row is gone, so the games are still listed under a placeholder
+      // instead of vanishing from the teacher dropdown.
+      expect(fx.creators).toEqual([
+        { value: 't1', name: 'Mme Ada', count: 3 },
+        { value: 't2', name: 'Unknown teacher', count: 1 },
+      ]);
+      expect(fx.age).toEqual({ min: 5, max: 12 });
+      expect(groupBy.mock.calls[0][0].where).toEqual({ school_id: 'school-A' });
+    } finally { groupBy.mockRestore(); aggregate.mockRestore(); user.mockRestore(); }
+  });
+
+  it('reports a per-level success breakdown, with null instead of 0% when unplayed', async () => {    const { KidsGameSessionService } = await import('../../src/backend/services/kids/KidsGameSessionService.js');
     const svc = new KidsGameSessionService();
     const findActivity = vi.spyOn(prisma.kidsActivity, 'findFirst').mockResolvedValue({ id: 'a1', school_id: 's1', title: 'T', game_template: 'multiple_choice', subject: 'math' });
     const findSessions = vi.spyOn(prisma.kidsGameSession, 'findMany').mockResolvedValue([]);
@@ -556,5 +995,56 @@ describe('Kids Space - Foundation & Core Logic', () => {
         school_type: true,
       });
     } finally { findMany.mockRestore(); count.mockRestore(); }
+  });
+
+  it('lists only published games given to the student class, or left open to the school', async () => {
+    // The student welcome screen lists these, so the filter is the tenant guard:
+    // another school's games, a draft, and a game given to a different class must
+    // all stay out, while a class-assigned game and a school-wide one come back.
+    const findUser = vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({ class_id: 'class-1' });
+    const findMany = vi.spyOn(prisma.kidsActivity, 'findMany').mockResolvedValue([
+      { id: 'a1', title: 'For my class', join_code: 'ABC123', _count: { levels: 5 } },
+      { id: 'a2', title: 'Whole school', join_code: 'DEF456', _count: { levels: 3 } },
+    ]);
+    try {
+      const svc = new KidsActivityService();
+      const items = await svc.listForStudent('student-1', 'school-1');
+      expect(items).toHaveLength(2);
+
+      const [query] = findMany.mock.calls[0];
+      expect(query.where.school_id).toBe('school-1');
+      expect(query.where.status).toBe('published');
+      // Same class, or no class at all (open to the whole school).
+      expect(query.where.OR).toEqual([
+        { classes: { some: { class_id: 'class-1' } } },
+        { classes: { none: {} } },
+      ]);
+      // The player needs the join code to start, and a level count to show.
+      expect(query.select.join_code).toBe(true);
+      expect(query.select._count).toEqual({ select: { levels: true } });
+    } finally { findUser.mockRestore(); findMany.mockRestore(); }
+  });
+
+  it('does not list another student\'s games when the caller has no class', async () => {
+    // A student with `class_id: null` must not match the `__none__` sentinel and
+    // pull in the games assigned to some other class.
+    const findUser = vi.spyOn(prisma.user, 'findFirst').mockResolvedValue({ class_id: null });
+    const findMany = vi.spyOn(prisma.kidsActivity, 'findMany').mockResolvedValue([]);
+    try {
+      const svc = new KidsActivityService();
+      await svc.listForStudent('student-1', 'school-1');
+      const [query] = findMany.mock.calls[0];
+      expect(query.where.OR[0]).toEqual({ classes: { some: { class_id: '__none__' } } });
+    } finally { findUser.mockRestore(); findMany.mockRestore(); }
+  });
+
+  it('refuses to list games for a student who is not in the school', async () => {
+    const findUser = vi.spyOn(prisma.user, 'findFirst').mockResolvedValue(null);
+    const findMany = vi.spyOn(prisma.kidsActivity, 'findMany').mockResolvedValue([]);
+    try {
+      const svc = new KidsActivityService();
+      await expect(svc.listForStudent('outsider', 'school-1')).rejects.toBeTruthy();
+      expect(findMany).not.toHaveBeenCalled();
+    } finally { findUser.mockRestore(); findMany.mockRestore(); }
   });
 });

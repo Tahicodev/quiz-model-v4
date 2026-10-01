@@ -19,84 +19,18 @@
  */
 
 import { NotFoundError, ValidationError } from '../../../shared/errors.js';
-import { QUESTION_TYPES } from '../../../shared/constants.js';
 import { prisma } from '../../prisma.js';
+import {
+  MECHANIC_TO_QUESTION_TYPE,
+  QUESTION_TYPE_TO_MECHANIC,
+  BANKABLE_TYPES,
+  parseContent,
+  levelToQuestionText,
+  levelToAnswerAndOptions,
+  questionToLevelContent,
+} from '../../../shared/kids-question-bridge.js';
 
-/** Kids mechanic -> bank question type, for mechanics that round-trip cleanly. */
-const MECHANIC_TO_QUESTION_TYPE = Object.freeze({
-  multiple_choice: QUESTION_TYPES.MCQ,
-  find_correct: QUESTION_TYPES.MCQ,
-  true_false: QUESTION_TYPES.TRUE_FALSE,
-  word_order: QUESTION_TYPES.ORDER,
-  sequence: QUESTION_TYPES.ORDER,
-  matching: QUESTION_TYPES.MATCHING,
-  memory: QUESTION_TYPES.MATCHING,
-  drag_drop: QUESTION_TYPES.FILL_BLANK,
-  sorting: QUESTION_TYPES.MATCHING,
-});
-
-/** Reverse mapping, used when a bank question is pulled into an activity. */
-const QUESTION_TYPE_TO_MECHANIC = Object.freeze({
-  [QUESTION_TYPES.MCQ]: 'multiple_choice',
-  [QUESTION_TYPES.TRUE_FALSE]: 'true_false',
-  [QUESTION_TYPES.ORDER]: 'word_order',
-  [QUESTION_TYPES.MATCHING]: 'matching',
-  [QUESTION_TYPES.FILL_BLANK]: 'drag_drop',
-});
-
-export const BANKABLE_TYPES = Object.freeze(Object.values(MECHANIC_TO_QUESTION_TYPE));
-
-function parseContent(contentJson) {
-  if (contentJson && typeof contentJson === 'object') return contentJson;
-  try {
-    return JSON.parse(contentJson || '{}');
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Best-effort human label for a level, used as the question text when the
- * mechanic has no `question` field of its own.
- */
-function levelToText(content) {
-  if (content.question) return String(content.question);
-  if (content.instruction) return String(content.instruction);
-  if (content.answer) return String(content.answer);
-  if (Array.isArray(content.pairs) && content.pairs.length) {
-    return content.pairs.map(p => `${p.left} → ${p.right}`).join(' / ');
-  }
-  if (Array.isArray(content.items) && content.items.length) {
-    return content.items.map(i => i.value).join(' · ');
-  }
-  return 'Question';
-}
-
-/** Serialised answer key + options for the bank columns. */
-function levelToAnswerAndOptions(content) {
-  if (Array.isArray(content.options)) {
-    const options = content.options.map(o => (typeof o === 'string' ? o : o.value));
-    let answer = content.correctId;
-    if (answer && Array.isArray(content.options)) {
-      const hit = content.options.find(o => o && o.id === answer);
-      answer = hit ? hit.value : answer;
-    }
-    return { optionsJson: JSON.stringify(options), answer: answer ? String(answer) : '' };
-  }
-  if (Array.isArray(content.pairs)) {
-    return { optionsJson: JSON.stringify(content.pairs.map(p => [p.left, p.right])), answer: JSON.stringify(content.pairs) };
-  }
-  if (Array.isArray(content.sequence) && Array.isArray(content.correctOrder)) {
-    const byId = new Map(content.sequence.map(i => [i.id, i.value]));
-    return { optionsJson: JSON.stringify(content.sequence.map(i => i.value)), answer: JSON.stringify(content.correctOrder.map(id => byId.get(id) ?? id)) };
-  }
-  if (Array.isArray(content.blanks) && content.blanks.length) {
-    return { optionsJson: null, answer: String(content.blanks[0].answer ?? '') };
-  }
-  if (content.answer != null) return { optionsJson: null, answer: String(content.answer) };
-  if (content.target) return { optionsJson: null, answer: String(content.target.value ?? '') };
-  return { optionsJson: null, answer: '' };
-}
+export { BANKABLE_TYPES };
 
 export class KidsQuestionBankService {
   /**
@@ -113,7 +47,7 @@ export class KidsQuestionBankService {
     if (!type) return null;
 
     const { optionsJson, answer } = levelToAnswerAndOptions(content);
-    const text = levelToText(content);
+    const text = levelToQuestionText(content);
     if (!answer) return null;
 
     // Tagging with the sub-topic lets the pool picker filter by topic later.
@@ -234,97 +168,11 @@ export class KidsQuestionBankService {
   /**
    * Rebuilds a playable level payload from a bank question, for the mechanic the
    * target activity actually uses (narrative shells get a core mechanic inside).
+   * Delegates to the shared bridge so a question converted here and the same
+   * question imported into a game produce the same content.
    */
   questionToLevelContent(question, mechanic) {
-    const options = (() => {
-      if (!question.options_json) return [];
-      try {
-        return JSON.parse(question.options_json);
-      } catch {
-        return [];
-      }
-    })();
-
-    // Question.text is the question itself, so the instruction has to come from
-    // the mechanic — reusing the text for both made every level read "Foo? Foo?".
-    // Game Studio is an English workspace, so the scaffold copy is English.
-    const INSTRUCTIONS = {
-      matching: 'Match each one with its pair!',
-      memory: 'Find the identical pairs!',
-      word_order: 'Put the words in the right order!',
-      sequence: 'Put these in the right order!',
-      drag_drop: 'Drag the right word into the gap!',
-      true_false: 'True or false?',
-      multiple_choice: 'Choose the right answer!',
-    };
-    const instruction = INSTRUCTIONS[mechanic] || INSTRUCTIONS.multiple_choice;
-
-    if (mechanic === 'matching' || mechanic === 'memory') {
-      let pairs = options;
-      if (!Array.isArray(pairs) || !pairs.length || typeof pairs[0] !== 'object') {
-        try { pairs = JSON.parse(question.answer); } catch { pairs = []; }
-      }
-      if (!Array.isArray(pairs) || !pairs.length) return null;
-      if (mechanic === 'memory') {
-        const cards = [];
-        pairs.forEach((p, i) => {
-          cards.push({ id: `c${i}a`, matchId: `m${i}`, value: p[0] ?? p.left, type: 'text' });
-          cards.push({ id: `c${i}b`, matchId: `m${i}`, value: p[0] ?? p.left, type: 'text' });
-        });
-        return { instruction: instruction, cards };
-      }
-      return {
-        instruction: instruction,
-        pairs: pairs.map((p, i) => ({ id: `p${i + 1}`, left: p[0] ?? p.left, right: p[1] ?? p.right })),
-      };
-    }
-
-    if (mechanic === 'word_order' || mechanic === 'sequence') {
-      let answer = question.answer;
-      try { answer = JSON.parse(question.answer); } catch { /* plain string */ }
-      const values = Array.isArray(answer) ? answer : String(answer ?? '').split(/\s+/).filter(Boolean);
-      if (!values.length) return null;
-      return {
-        instruction: instruction,
-        question: question.text,
-        answer: Array.isArray(answer) ? undefined : String(question.answer),
-        items: values.map((v, i) => ({ id: `n${i + 1}`, value: String(v) })),
-        correctOrder: values.map((_, i) => `n${i + 1}`),
-      };
-    }
-
-    if (mechanic === 'drag_drop') {
-      const answer = question.answer || '';
-      return {
-        instruction: instruction,
-        question: question.text,
-        template: `${answer} {blank}`,
-        blanks: [{ position: 0, answer }],
-        choices: options.length ? options : [answer],
-      };
-    }
-
-    if (mechanic === 'true_false') {
-      return {
-        instruction: instruction,
-        question: question.text,
-        options: [
-          { id: 'tf1', value: 'True', emoji: '✅' },
-          { id: 'tf2', value: 'False', emoji: '❌' },
-        ],
-        correctId: String(question.answer).toLowerCase() === 'true' ? 'tf1' : 'tf2',
-      };
-    }
-
-    // multiple_choice (also the fallback for any bank type)
-    if (!options.length) return null;
-    const correctIndex = options.findIndex(o => String(o) === String(question.answer));
-    return {
-      instruction: instruction,
-      question: question.text,
-      options: options.map((o, i) => ({ id: `opt${i + 1}`, value: String(o) })),
-      correctId: `opt${correctIndex >= 0 ? correctIndex + 1 : 1}`,
-    };
+    return questionToLevelContent(question, mechanic, { language: 'en' });
   }
 
   /**

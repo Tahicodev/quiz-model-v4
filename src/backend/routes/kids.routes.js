@@ -11,7 +11,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/role.js';
-import { requirePrimaireSchool } from '../middleware/kids-gate.js';
+import { requirePrimaireSchool, requireKidsReadAccess } from '../middleware/kids-gate.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import {
   KidsActivityCreateSchema,
@@ -26,6 +26,8 @@ import {
 import { ROLES, SOCKET_EVENTS } from '../../shared/constants.js';
 import { getContainer } from '../container.js';
 import { GameTemplateRegistry } from '../services/kids/GameTemplateRegistry.js';
+import { validateLevelsFile, normalizeImportedLevels, readLevelsFile } from '../../shared/kids-level-checks.js';
+import { ValidationError } from '../../shared/errors.js';
 import { getIO } from '../realtime/socket.server.js';
 import { ROOM } from '../realtime/socket.rooms.js';
 
@@ -66,11 +68,20 @@ router.get('/dashboard', requireRole(TEACHER_ROLES), requirePrimaireSchool, asyn
 
 // ── 3. Activities CRUD ──────────────────────────────────────────────────────
 
-router.get('/activities', requireRole(TEACHER_ROLES), requirePrimaireSchool, validateQuery(KidsActivityFilterSchema), async (req, res, next) => {
+router.get('/activities', requireRole(TEACHER_ROLES), requireKidsReadAccess, validateQuery(KidsActivityFilterSchema), async (req, res, next) => {
   try {
     const { kidsActivitySvc } = getContainer();
     const result = await kidsActivitySvc.list(req.query, req.schoolId);
     res.json(result);
+  } catch (err) { next(err); }
+});
+
+// The values that exist in this school's games, so the filter bar offers real
+// choices. Declared before /activities/:id so the literal path is not swallowed.
+router.get('/activities/facets', requireRole(TEACHER_ROLES), requireKidsReadAccess, async (req, res, next) => {
+  try {
+    const { kidsActivitySvc } = getContainer();
+    res.json(await kidsActivitySvc.listFacets(req.schoolId));
   } catch (err) { next(err); }
 });
 
@@ -105,10 +116,22 @@ router.get('/ai/models', requireRole(TEACHER_ROLES), requirePrimaireSchool, asyn
 router.post('/activities/generate', requireRole(TEACHER_ROLES), requirePrimaireSchool, validate(KidsAIGenerateSchema), async (req, res, next) => {
   try {
     const { kidsAISvc } = getContainer();
-    // Returns { ..., levels, source, warnings, model }: the wizard shows the
-    // model badge and the warnings so fallback content is never silent.
+    // Returns { ..., levels, source, rejected_levels, model }. Nothing generic is
+    // substituted for the model: if generation fails the request fails, so a
+    // provider quota error can never be mistaken for generated content.
     const generated = await kidsAISvc.generateActivity(req.body, req.schoolId, req.user.id);
     res.json(generated);
+  } catch (err) { next(err); }
+});
+
+// Student's own list: the published games their class was given, plus anything
+// left open to the whole school. Declared before /activities/:id so the literal
+// path is not swallowed by the id route.
+router.get('/activities/for-me', requireRole(ROLES.STUDENT), async (req, res, next) => {
+  try {
+    const { kidsActivitySvc } = getContainer();
+    const items = await kidsActivitySvc.listForStudent(req.user.id, req.schoolId);
+    res.json({ items, count: items.length });
   } catch (err) { next(err); }
 });
 
@@ -218,6 +241,37 @@ router.post('/bank/questions/:questionId/attach', requireRole(TEACHER_ROLES), re
       schoolId: req.schoolId,
     });
     res.status(201).json(level);
+  } catch (err) { next(err); }
+});
+
+// Checks a levels file a teacher wrote elsewhere, before importing it. The rules
+// come from src/shared/kids-level-checks.js, the same module the offline
+// validator CLI uses, so the button in the wizard and the command line a teacher
+// runs on their own machine cannot disagree.
+//
+// A clean file comes back normalized, so the wizard can hold it directly instead
+// of the browser re-implementing the parsing. A dirty one is a 422 listing every
+// problem at once: fixing them one round trip at a time is the slow way.
+router.post('/levels/validate', requireRole(TEACHER_ROLES), requirePrimaireSchool, async (req, res, next) => {
+  try {
+    const templateId = req.body?.game_template || null;
+    const template = templateId ? GameTemplateRegistry.getById(templateId) : null;
+    const input = req.body?.levels ?? req.body;
+      // The language decides which instructions the validator expects, so a
+      // French file checked against English rules would reject good levels.
+      const language = req.body?.language || 'en';
+      const { ok, count, problems } = validateLevelsFile(input, {
+        templateId: template?.id ?? null,
+        minItems: template?.min_items,
+        language,
+      });
+    // Newline-separated, not a joined sentence: the shared api client flattens
+    // field details with commas, which would run the problems together on one
+    // line exactly when the teacher most needs them read one at a time.
+    if (!ok) throw new ValidationError({ levels: problems.map(p => `${p.label}: ${p.message}`).join('\n') });
+    // Normalized from the same unwrap the check used, so what the wizard holds
+    // is exactly what was verified.
+      res.json({ levels: normalizeImportedLevels(readLevelsFile(input), { language }), count });
   } catch (err) { next(err); }
 });
 

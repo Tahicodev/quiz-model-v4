@@ -30,6 +30,7 @@ import settingsRoutes from '../../../src/backend/routes/settings.routes.js';
 import schoolRoutes from '../../../src/backend/routes/school.routes.js';
 import bootstrapRoutes from '../../../src/backend/routes/bootstrap.routes.js';
 import bulkRoutes from '../../../src/backend/routes/bulk.routes.js';
+import kidsRoutes from '../../../src/backend/routes/kids.routes.js';
 
 // Container (needed for route handlers)
 import { createContainer } from '../../../src/backend/container.js';
@@ -63,6 +64,7 @@ app.use('/api/v1/settings',    settingsRoutes);
 app.use('/api/v1/school',     schoolRoutes);
 app.use('/api/v1/bootstrap',   bootstrapRoutes);
 app.use('/api/v1/bulk',        bulkRoutes);
+app.use('/api/v1/kids',        kidsRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

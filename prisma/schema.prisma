@@ -153,6 +153,7 @@ model Class {
   school             School              @relation(fields: [school_id], references: [id], onDelete: Cascade)
   users              User[]
   examClasses        ExamClass[]
+  kidsActivityClasses KidsActivityClass[]
   accountRequests    AccountRequest[]
   teacherMessages    TeacherMessage[]
   teacherAssignments TeacherAssignment[]
@@ -274,6 +275,23 @@ model ExamClass {
 
   @@unique([exam_id, class_id])
   @@index([exam_id])
+  @@index([class_id])
+}
+
+// Which classes are meant to play a Kids Space activity. Chosen in step 2 of the
+// wizard ("Audience") so the students in those classes see the game when they
+// sign in. Mirrors ExamClass so both assignment lists behave the same way.
+model KidsActivityClass {
+  id          String   @id @default(uuid())
+  activity_id String
+  class_id    String
+  assigned_at DateTime @default(now())
+
+  activity KidsActivity @relation(fields: [activity_id], references: [id], onDelete: Cascade)
+  class    Class        @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  @@unique([activity_id, class_id])
+  @@index([activity_id])
   @@index([class_id])
 }
 
@@ -686,6 +704,7 @@ model KidsActivity {
   creator  User?               @relation("KidsActivityCreator", fields: [creator_id], references: [id], onDelete: SetNull)
   levels   KidsActivityLevel[]
   sessions KidsGameSession[]
+  classes  KidsActivityClass[]
 
   @@index([school_id])
   @@index([creator_id])

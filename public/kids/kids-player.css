@@ -6,7 +6,11 @@
 .kids-app-container {
   display: flex;
   flex-direction: column;
+  /* 100vh, with dvh where it exists: on a phone the address bar changes the
+     viewport height as you scroll, and a fixed vh left the game taller than the
+     space the browser would actually give it. */
   height: 100vh;
+  height: 100dvh;
   max-width: 1100px;
   margin: 0 auto;
   padding: 0 20px;
@@ -72,12 +76,24 @@
 /* Main Viewport */
 .kids-main {
   flex: 1;
+  /* Without this, a flex child's automatic minimum size is its content, so the
+     main area refused to shrink and pushed the whole page taller than the screen
+     instead of scrolling itself. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 24px 0;
+  /* No justify-content here. Centring with `center` on a scrollable flex
+     container puts the overflowing half above the scroll origin, where no amount
+     of scrolling can reach it — which is why the instruction and the top of the
+     board could sit under the header with no way to bring them down. The
+     children centre themselves with auto margins instead, which collapse to
+     nothing when there is no room. */
+  padding: 24px 0 32px;
   overflow-y: auto;
+  /* So a scrolled-to element clears the header instead of sliding under it. */
+  scroll-padding-top: 16px;
+  overscroll-behavior: contain;
 }
 
 .kids-game-viewport {
@@ -86,7 +102,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* Centres the board when it fits, and collapses to 0 when it does not, so the
+     top of a tall board stays reachable. */
+  margin: auto 0;
+  padding-bottom: 8px;
 }
 
 /* Welcome Card */
@@ -100,6 +119,9 @@
   box-shadow: 0 24px 80px rgba(1,11,32,.42), inset 0 1px 0 rgba(255,255,255,.18);
   max-width: 500px;
   width: 100%;
+  /* Centres in the room there is, and collapses when there is none, matching
+     .kids-game-viewport. */
+  margin: auto 0;
   animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
@@ -108,6 +130,66 @@
   flex-direction: column;
   gap: 16px;
   margin-top: 24px;
+}
+
+/* Games the teacher assigned to the student's class: tappable cards above the
+   join-code form, so a student never has to be handed a code for a game that
+   was already given to them. */
+.kids-my-games {
+  margin-top: 26px;
+  text-align: left;
+}
+
+.kids-my-games h3 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.kids-my-game {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border-radius: var(--kids-radius-md);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.kids-my-game:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.kids-my-game:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.kids-my-game b {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.kids-my-game small {
+  font-size: 0.82rem;
+  opacity: 0.85;
+}
+
+.kids-my-game em {
+  font-style: normal;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.kids-my-game-locked {
+  opacity: 0.7;
 }
 
 .kids-input-code {
@@ -179,6 +261,13 @@
 .kids-footer-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .kids-footer-actions .kids-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+/* Small, friendly messages instead of browser alert boxes that block a child. */
+#kids-toast-region{position:fixed;z-index:2000;top:max(18px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(92vw,480px);pointer-events:none}
+.kids-toast{padding:14px 18px;border-radius:16px;background:#fff;color:#1f2937;border:2px solid #ffd166;box-shadow:0 16px 42px rgba(0,0,0,.28);font-size:1rem;font-weight:750;text-align:center;animation:popIn .25s ease-out}
+.kids-toast-info{border-color:#62d5ff}.kids-toast.is-leaving{opacity:0;transform:translateY(-12px);transition:opacity .25s,transform .25s}
+.kids-error-card{width:min(100%,560px);padding:32px;text-align:center;border-radius:var(--kids-radius-lg);background:var(--theme-surface);border:2px solid var(--theme-border);box-shadow:var(--kids-shadow-md)}
+.kids-error-card h3{margin:0 0 8px;font-size:1.5rem}.kids-error-card p{margin:0;line-height:1.5}
+
 /* Story Banner */
 .kids-story-banner {
   display: flex;
@@ -202,6 +291,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Room to breathe between the question, the pieces and the button, so a tall
+     board still reads as separate parts rather than one block. */
+  gap: 20px;
   animation: popIn 0.35s ease-out;
 }
 
@@ -209,7 +301,11 @@
   font-size: 1.4rem;
   font-weight: 800;
   text-align: center;
-  margin-bottom: 20px;
+  /* Its own line, with room either side: the instruction is the one thing a
+     child has to read before touching anything. */
+  line-height: 1.35;
+  padding: 0 8px;
+  margin: 0;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
@@ -219,12 +315,15 @@
   background: var(--theme-surface);
   box-shadow: 0 12px 30px rgba(2,13,38,.23);
   border-radius: var(--kids-radius-md);
-  padding: 16px 24px;
-  margin-bottom: 24px;
+  padding: 20px 26px;
+  margin: 0;
+  /* Long questions used to run to the edge and could be clipped mid-word. */
+  line-height: 1.35;
   text-align: center;
   border: 2px solid var(--theme-border);
   width: 100%;
   box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 /* Multiple Choice Grid */
@@ -265,30 +364,16 @@
   box-shadow: 0 3px 0 rgba(7,32,81,.28);
 }
 
-/* Word Order / Sequence Tiles */
-.word-order-target-slots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-height: 80px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 3px dashed rgba(255, 255, 255, 0.4);
-  border-radius: var(--kids-radius-md);
-  padding: 14px;
-  width: 100%;
-  box-sizing: border-box;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
+/* The ordered answer row used to be .word-order-target-slots, a dashed box that
+   only grew as pieces were dropped in. OrderTrack now draws the row and styles it
+   itself, so there is no box style to fight over. */
 .word-order-source-pool {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   justify-content: center;
   width: 100%;
-  margin-bottom: 24px;
+  /* No bottom margin: .kids-game-board spaces its children with a gap. */
 }
 
 .kids-tile {
@@ -301,11 +386,279 @@
   box-shadow: 0 5px 0 #b26a00, var(--kids-shadow-sm);
   cursor: pointer;
   transition: transform 0.15s;
+  /* A button now, not a div: it is a real control, so it needs the reset. */
+  border: none;
+  font-family: inherit;
+  line-height: 1.2;
 }
 
 .kids-tile:active {
   transform: translateY(3px);
   box-shadow: 0 2px 0 #b26a00;
+}
+
+/* A tile the keyboard has reached, so it is not lost on a white tile. */
+.kids-tile:focus-visible,
+.kids-order-remove:focus-visible,
+.kids-order-clear:focus-visible,
+.kids-feedback-action:focus-visible {
+  outline: 4px solid #fff;
+  outline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------
+   Ordered answer track (components/OrderTrack.js)
+
+   The answer is a fixed row of numbered slots, one per expected piece,
+   drawn before anything is placed. A child can then see how long the
+   answer is and where the next piece goes, instead of watching a dashed
+   box grow and having to remember the count.
+   ------------------------------------------------------------------ */
+.kids-order-track {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.22);
+  border: 3px dashed rgba(255, 255, 255, 0.4);
+  border-radius: var(--kids-radius-lg);
+  padding: 16px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* Dropping a piece here has to be obvious before the child lets go of it. */
+.kids-order-track.drop-hover {
+  background: rgba(255, 213, 79, 0.22);
+  border-color: #ffd166;
+}
+
+.kids-order-status {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.kids-order-status strong {
+  font-size: 1.3rem;
+  color: #ffd166;
+}
+
+.kids-order-status-empty {
+  opacity: 0.7;
+}
+
+.kids-order-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kids-order-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  /* Wide enough for a word, tall enough to be a comfortable tap target. */
+  min-width: 104px;
+  min-height: 104px;
+  padding: 30px 14px 12px;
+  box-sizing: border-box;
+  border-radius: var(--kids-radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px dashed rgba(255, 255, 255, 0.34);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s ease, border-color 0.2s ease;
+}
+
+.kids-order-slot.is-filled {
+  /* Solid, and lifted: a filled slot has to look like it is holding something. */
+  background: linear-gradient(180deg, #ffffff 0%, #eef4ff 100%);
+  border: 3px solid #ffd166;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18), var(--kids-shadow-md);
+  color: #1f2937;
+}
+
+.kids-order-slot.is-filled:hover {
+  transform: translateY(-3px) scale(1.03);
+}
+
+.kids-order-badge {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* A fixed 34px circle: big enough to read at arm's length on a tablet, and
+     the same size on every slot so the numbers do not jump about. */
+  width: 34px;
+  height: 34px;
+  border-radius: var(--kids-radius-full);
+  background: #ffd166;
+  color: #4a2c00;
+  font-size: 1.05rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 3px 0 #b26a00;
+}
+
+.kids-order-slot.is-empty .kids-order-badge {
+  background: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.kids-order-value {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 1.4rem;
+  font-weight: 800;
+  text-align: center;
+  word-break: break-word;
+}
+
+.kids-order-emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.kids-order-empty {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+/* The first empty slot carries the instruction rather than an ordinal, so the
+   child is told what to do exactly once, where they are looking. */
+.kids-order-slot.is-first-empty .kids-order-empty {
+  max-width: 20ch;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.kids-order-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: var(--kids-radius-full);
+  background: #ffe0b2;
+  color: #7a4b00;
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.kids-order-remove:hover {
+  background: #ffcc80;
+  transform: scale(1.12);
+}
+
+.kids-order-remove:active {
+  transform: scale(0.94);
+}
+
+.kids-order-tools {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.kids-order-hint {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+/* "Start again" is a correction, not the main action, so it stays quiet next
+   to the big Validate button rather than competing with it. */
+.kids-order-clear {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+}
+
+.kids-order-clear:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
+/* The pool of pieces to place, labelled so the two zones are told apart. */
+.kids-pool-zone {
+  width: 100%;
+  padding: 14px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: var(--kids-radius-lg);
+}
+
+.kids-pool-label {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.kids-pool-empty {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ffd166;
+}
+
+.word-order-actions {
+  display: flex;
+  justify-content: center;
+  /* Full width of the board, so the Vérifier button is a tap target rather than
+     a small one floating in the middle of a wide row. */
+  width: 100%;
+}
+
+/* On a phone the slots have to stay tappable, so they fill the row two across
+   rather than shrinking to a column of unreadable slivers. */
+@media (max-width: 620px) {
+  .kids-order-track {
+    padding: 12px;
+  }
+
+  .kids-order-slot {
+    min-width: 88px;
+    min-height: 88px;
+    padding: 28px 10px 10px;
+  }
+
+  .kids-order-value {
+    font-size: 1.2rem;
+  }
+
+  .kids-order-tools {
+    flex-direction: column;
+    gap: 10px;
+  }
 }
 
 /* Drag & Drop Blanks */
@@ -479,8 +832,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
+  /* A backdrop, not a curtain: the game stays visible behind the card, so a
+     child can see what just happened while they read the praise. */
+  background: rgba(7, 20, 48, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   z-index: 1000;
+  padding: 20px;
+  box-sizing: border-box;
   transition: opacity 0.3s;
 }
 
@@ -489,39 +848,77 @@
 }
 
 .kids-feedback-card {
-  background: rgba(255, 255, 255, 0.95);
+  position: relative;
+  background: #ffffff;
   color: #1a1a1a;
   border-radius: var(--kids-radius-lg);
-  padding: 30px 40px;
+  padding: 34px 40px 30px;
   text-align: center;
-  box-shadow: var(--kids-shadow-lg);
-  max-width: 420px;
-  width: 90%;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  max-width: 440px;
+  width: 100%;
+  box-sizing: border-box;
   animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  /* A coloured rim, so the card's mood reads before the words do. */
+  border: 6px solid #ffd166;
 }
-.kids-award-badges{display:flex;justify-content:center;align-items:center;gap:8px;margin:12px auto}.kids-award-badge { width:88px; height:88px; object-fit:contain; filter:drop-shadow(0 8px 8px rgba(54,30,0,.25)); animation:badgeFloat 1.4s ease-in-out infinite alternate }.kids-award-badge:nth-child(2){animation-delay:.18s}.kids-award-badge:nth-child(3){animation-delay:.36s}@keyframes badgeFloat{to{transform:translateY(-7px) rotate(3deg)}}
-@media (max-width: 620px) { .kids-app-container{padding:0 10px}.kids-header{padding:10px 12px}.kids-title{font-size:1.05rem}.kids-mascot{width:44px;height:44px}.kids-mascot img{width:50px;height:50px}.kids-status-bar{gap:6px}.kids-star-counter,.kids-score-badge{padding:7px 10px;font-size:.95rem}.kids-welcome-card,.kids-celebration-card{padding:28px 20px}.game-question-banner{font-size:1.3rem;padding:14px}.mc-options-grid{grid-template-columns:1fr}.kids-world-banner{padding:9px}.kids-world-prop{width:52px;height:50px} }
+
+/* The retry card is warm rather than red: a child has to try again, and a
+   stop sign in front of the question is the wrong message. */
+.kids-feedback-retry .kids-feedback-card {
+  border-color: #ffab40;
+}
 
 .kids-feedback-emoji {
   font-size: 3.5rem;
-  margin-bottom: 8px;
+  line-height: 1;
+  margin-bottom: 10px;
+  animation: popIn 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .kids-feedback-text {
+  margin: 0 0 14px;
   font-size: 1.6rem;
   font-weight: 800;
+  line-height: 1.25;
   color: #2e7d32;
-  margin-bottom: 8px;
 }
 
-.retry-card .kids-feedback-text {
+.retry-card .kids-feedback-text,
+.kids-feedback-retry .kids-feedback-text {
   color: #d84315;
 }
 
+.kids-feedback-extra {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
 .kids-feedback-points {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #ff8f00;
+  background: #fff3e0;
+  border-radius: var(--kids-radius-full);
+  padding: 8px 20px;
+}
+
+.kids-feedback-explanation {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  font-weight: 600;
+  color: #374151;
+  background: #f3f4f6;
+  border-radius: var(--kids-radius-md);
+  padding: 12px 16px;
 }
 
 .kids-streak-badge {
@@ -531,6 +928,118 @@
   font-weight: 800;
   border-radius: var(--kids-radius-full);
   padding: 6px 16px;
-  margin-top: 10px;
   font-size: 1rem;
 }
+
+/* The child is in control of the card: it is the biggest thing on screen and
+   the only thing that is a button. */
+.kids-feedback-action {
+  min-width: 200px;
+  font-size: 1.3rem;
+}
+
+.kids-feedback-action-success {
+  background: linear-gradient(180deg, #ffd54f 0%, #ffb300 100%);
+  color: #4a2c00;
+}
+
+.kids-feedback-action-retry {
+  background: linear-gradient(180deg, #ffb74d 0%, #fb8c00 100%);
+  color: #3e2723;
+}
+
+/* ------------------------------------------------------------------
+   Retry banner (engine/FeedbackEngine.js)
+
+   Deliberately not a modal. The retry card used to be a full-screen overlay,
+   which covered the game for its whole timer: the Vérifier button looked stuck
+   because every tap landed on the overlay, and answering wrong a second time
+   started the wait over. A child who has been asked to try again has to be able
+   to keep working, so this sits inside the game, takes no focus, and never
+   blocks a tap.
+   ------------------------------------------------------------------ */
+.kids-feedback-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  /* Full width of the board, and in the flow rather than floating, so it never
+     covers the slots or the buttons it is talking about. */
+  box-sizing: border-box;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border-radius: var(--kids-radius-md);
+  background: #fff3e0;
+  border: 2px solid #ffb74d;
+  box-shadow: 0 10px 26px rgba(2, 13, 38, 0.24);
+  color: #7a4b00;
+  /* Warm, not red: this is a nudge to try again, not a mark against them. */
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.kids-feedback-banner-emoji {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.kids-feedback-banner-text {
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.3;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The reason they were given, in their own colours: the banner's amber is for
+   the app, this is for the child. */
+.kids-feedback-banner-why {
+  flex: 1 1 100%;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #4b5563;
+}
+
+.kids-feedback-banner-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: var(--kids-radius-full);
+  background: rgba(122, 75, 0, 0.14);
+  color: #7a4b00;
+  font-size: 1.3rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.kids-feedback-banner-close:hover {
+  background: rgba(122, 75, 0, 0.24);
+  transform: scale(1.08);
+}
+
+.kids-feedback-banner-close:focus-visible {
+  outline: 3px solid #7a4b00;
+  outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .kids-feedback-banner {
+    flex-wrap: wrap;
+    padding: 12px 14px;
+  }
+
+  .kids-feedback-banner-text {
+    font-size: 1.05rem;
+  }
+}
+.kids-award-badges{display:flex;justify-content:center;align-items:center;gap:8px;margin:12px auto}.kids-award-badge { width:88px; height:88px; object-fit:contain; filter:drop-shadow(0 8px 8px rgba(54,30,0,.25)); animation:badgeFloat 1.4s ease-in-out infinite alternate }.kids-award-badge:nth-child(2){animation-delay:.18s}.kids-award-badge:nth-child(3){animation-delay:.36s}@keyframes badgeFloat{to{transform:translateY(-7px) rotate(3deg)}}
+@media (max-width: 620px) { .kids-app-container{padding:0 10px}.kids-header{padding:10px 12px}.kids-title{font-size:1.05rem}.kids-mascot{width:44px;height:44px}.kids-mascot img{width:50px;height:50px}.kids-status-bar{gap:6px}.kids-star-counter,.kids-score-badge{padding:7px 10px;font-size:.95rem}.kids-welcome-card,.kids-celebration-card{padding:28px 20px}.game-question-banner{font-size:1.3rem;padding:14px}.mc-options-grid{grid-template-columns:1fr}.kids-world-banner{padding:9px}.kids-world-prop{width:52px;height:50px} .kids-feedback-card{padding:26px 22px 24px}.kids-feedback-text{font-size:1.35rem}.kids-feedback-action{min-width:0;width:100%} }
+

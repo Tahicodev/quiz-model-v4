@@ -2147,6 +2147,75 @@ color: #0f172a;
 	}
 }
 
+/* How a question is asked, next to which game it belongs to. Quieter than the
+   game name, because it describes the level rather than naming it. */
+.kids-chip-mechanic {
+	background: #eef2ff;
+	border-color: #c7d2fe;
+	color: #3730a3;
+}
+
+/* The story line of an adventure shell: what the hero does before the question
+   is asked. Italic, so it reads as narration rather than as the question. */
+.kids-level-world {
+	margin: 0 0 4px;
+	font-style: italic;
+	color: var(--text-muted, #6b7280);
+}
+
+/* A level's own content fields, opened under its row. Two columns of labels
+   with the textareas spanning both, so a matching level's two columns can be
+   read side by side instead of stacked. */
+.kids-level-content {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+	margin: 12px 0 4px;
+	padding: 14px 16px;
+	background: var(--surface-2, #f6f7fb);
+	border: 1px solid var(--border, #e2e5ee);
+	border-radius: 10px;
+}
+
+.kids-level-content > label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+
+/* A textarea, and the note about JSON ids, read better across the full width
+   than squeezed into one column beside a short input. */
+.kids-level-content > label:has(textarea),
+.kids-level-content > p {
+	grid-column: 1 / -1;
+}
+
+.kids-level-content textarea {
+	font-family: inherit;
+	font-size: 0.9rem;
+	font-weight: 400;
+	resize: vertical;
+}
+
+.kids-level-content textarea[rows='8'] {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.8rem;
+}
+
+.kids-level-content > p {
+	margin: 0;
+	font-weight: 400;
+}
+
+/* One column on a phone: two side-by-side textareas are too narrow to type in. */
+@media (max-width: 768px) {
+	.kids-level-content {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 /* Centre empty-state blocks inside their panels on mobile (except the
    games list, which keeps the full-width treatment it has on desktop). */
 @media (max-width: 768px) {
@@ -2799,6 +2868,27 @@ html[data-theme='dark'] #exportUserModal .form-actions {
    school it came from and keeps the primary-school content marked as kids. */
 .kids-card-school { display:flex; align-items:center; gap:7px; margin-top:8px !important; font-size:.82rem; }
 .kids-badge-kids { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:.72rem; font-weight:700; letter-spacing:.02em; }
+/* Filter bar above the activity grid. Three rows on desktop, stacked on a
+   narrow screen; every control keeps a visible label or placeholder so a
+   teacher can tell "all subjects" from "no filter applied". */
+.kids-filters { display:grid; gap:10px; margin:0 0 18px; padding:14px; border:1px solid var(--border-color,#e2e8f0); border-radius:14px; background:var(--card-bg,#fff); }
+.kids-filter-row { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.kids-filter-row .form-control { flex:1 1 150px; min-width:130px; height:auto; padding:7px 10px; font-size:.88rem; }
+.kids-filter-row input[type=search] { flex:2 1 240px; }
+.kids-filter-age { display:flex; align-items:center; gap:7px; font-size:.85rem; font-weight:600; white-space:nowrap; }
+.kids-filter-age .form-control { flex:0 0 66px; min-width:0; }
+.kids-filter-check { display:flex; align-items:center; gap:7px; font-size:.87rem; font-weight:600; white-space:nowrap; cursor:pointer; }
+.kids-filter-check input { width:auto; }
+.kids-filter-count { margin-left:auto; font-size:.83rem; color:var(--text-muted,#64748b); white-space:nowrap; }
+/* Admin cards name the author and the other filterable fields, so what a filter
+   matched is readable without opening the activity. */
+.kids-card-meta { font-size:.82rem; margin-top:6px !important; }
+@media (max-width:720px) {
+  .kids-filter-row .form-control { flex:1 1 100%; }
+  .kids-filter-age { flex:1 1 100%; }
+  .kids-filter-age .form-control { flex:1 1 auto; }
+  .kids-filter-count { margin-left:0; }
+}
 #kidsStudioPane .kids-admin-page { padding-top:4px; }
 .kids-wizard { display:grid; gap:13px; }.kids-wizard label { display:grid; gap:5px; font-weight:600; }.kids-form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }.kids-results { max-height:60vh; overflow:auto; white-space:pre-wrap; }
 .kids-analytics{padding:12px;border-radius:10px;background:#eef6ff;margin-bottom:12px}
@@ -2809,6 +2899,14 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-levels{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:12px;max-height:46vh;overflow:auto}.kids-level-row{border:1px solid var(--border-color,#e2e8f0);border-radius:12px;padding:12px 14px;background:#fff}.kids-level-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.kids-level-text{margin:7px 0;font-size:.9rem;color:#334155;white-space:pre-wrap;word-break:break-word}.kids-chip{background:#eef2f7;border-radius:999px;padding:2px 9px;font-size:.72rem;text-transform:uppercase;letter-spacing:.03em;color:#475569}.kids-chip-saved{background:#dcfce7;color:#166534}.kids-chip-new{background:#fef9c3;color:#854d0e}.kids-level-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:10px 0}.kids-level-fields label{display:grid;gap:4px;font-size:.78rem;font-weight:600;color:#475569}.kids-level-media{width:100%;max-height:150px;object-fit:cover;border-radius:10px;margin:4px 0}
 .kids-preflight{list-style:none;padding:0;margin:0 0 14px;display:grid;gap:6px}.kids-check-ok{color:#166534;font-weight:600}.kids-check-bad{color:#b91c1c;font-weight:600}
 .kids-modal-content{max-width:820px}.kids-modal-wide{max-width:100%}.kids-wizard-steps{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0;margin:0 0 20px}.kids-wizard-steps li{font-size:.78rem;padding:6px 9px;border-radius:999px;background:#e2e8f0;color:#475569}.kids-wizard-steps li.active{background:#2563eb;color:#fff}.kids-wizard-steps li.complete{background:#dcfce7;color:#166534}.kids-generation-ok{color:#166534;font-weight:600}.kids-review{padding:18px;border-radius:12px;background:#f8fafc}.kids-preview-frame{display:block;width:100%;height:560px;border:0;border-radius:12px;background:#e2e8f0}
+/* The preview sits inside the wizard's modal and closes on its own, so the
+   teacher gets the game without losing the activity they were writing. */
+.kids-preview{display:flex;flex-direction:column;gap:14px}
+.kids-preview-bar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.kids-preview-bar p{margin:0;flex:1 1 260px;font-size:.9rem}
+/* Tall enough to see the whole board: the game has to be checked on a phone-shaped
+   screen, and half of it hidden behind a scroll was no use to anyone. */
+.kids-preview .kids-preview-frame{height:min(72vh,720px);min-height:420px}
 @media(max-width:600px){.kids-admin-heading{align-items:flex-start;flex-direction:column}.kids-form-row{grid-template-columns:1fr}}
 
 /* ── Kids Space: AI source badge, question bank picker, class report ─────── */
@@ -2816,9 +2914,41 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-source small{color:inherit;opacity:.75;font-size:.78rem;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .kids-source-ai{background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe}
 .kids-source-fallback{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa}
+.kids-source-import{background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc}
+
+/* Import a levels file written outside Kids Space. */
+.kids-import{display:grid;gap:12px}
+.kids-import-file{display:grid;gap:5px;font-size:.85rem;font-weight:600}
+.kids-import-file input{font-weight:400}
+.kids-import textarea{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem;line-height:1.5}
+.kids-import-report{border-radius:10px;padding:11px 13px;font-size:.86rem;line-height:1.5;max-height:34vh;overflow:auto}
+.kids-import-report.is-ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.kids-import-report.is-bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
 .kids-warnings{list-style:none;padding:0;margin:10px 0 0;display:grid;gap:7px}
 .kids-warnings li{background:#fef2f2;border:1px solid #fecaca;border-left:3px solid #ef4444;color:#991b1b;padding:9px 12px;border-radius:9px;font-size:.85rem;line-height:1.45}
 .kids-chip-linked{background:#e0f2fe;color:#075985}
+.kids-chip-dropped{background:#fee2e2;color:#991b1b}
+
+/* Step 6 review: a level the teacher marked as dropped stays visible but is
+   dimmed and its fields are disabled, so nothing disappears without explanation. */
+.kids-level-dropped{background:#f8fafc;opacity:.62;border-style:dashed}
+.kids-level-dropped .kids-level-text{text-decoration:line-through;text-decoration-color:#94a3b8}
+
+/* Step 2 audience: the class list is a checkbox grid, not a <select>, so a
+   teacher can see the whole school at once and pick several classes. */
+.kids-classes{border:1px solid var(--border-color,#e2e8f0);border-radius:12px;padding:12px 14px;margin:0;display:grid;gap:9px}
+.kids-classes legend{font-weight:700;font-size:.88rem;padding:0 6px}
+.kids-class-pick{display:grid!important;grid-template-columns:auto 1fr;gap:10px;align-items:center;font-weight:400!important;background:#fff;border:1px solid var(--border-color,#e2e8f0);border-radius:10px;padding:9px 12px;cursor:pointer}
+.kids-class-pick:hover{background:#f8fafc}
+.kids-class-pick input{margin:0;width:16px;height:16px}
+.kids-class-pick-body{display:grid;gap:2px}
+.kids-class-pick-body b{font-size:.88rem}
+.kids-class-pick-body small{color:var(--text-muted,#64748b);font-size:.76rem}
+
+/* Step 5: what the model actually wrote, before the teacher commits to it. */
+.kids-generated{margin-top:4px;padding:14px;border:1px solid #ddd6fe;border-radius:12px;background:#faf5ff}
+.kids-generated h4{margin:0 0 10px;font-size:.95rem;color:#5b21b6}
+.kids-levels-preview{max-height:38vh}
 
 .kids-bank{display:grid;gap:12px}
 .kids-bank-list{max-height:44vh;overflow:auto;display:grid;gap:7px;padding-right:4px}
@@ -2864,8 +2994,57 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-table-scroll{overflow:auto;max-height:44vh}
 .kids-rank{font-weight:700;color:var(--text-muted,#64748b);width:32px}
 
+/* Levels format reference, shown in the wizard's "AI content" step. */
+.kids-format-help{margin:18px 0 0;border:1px solid var(--border,#e2e8f0);border-radius:12px;background:#f8fafc}
+.kids-format-help>summary{cursor:pointer;padding:12px 15px;font-weight:700;font-size:.92rem;list-style:none;display:flex;align-items:center;gap:8px}
+.kids-format-help>summary::-webkit-details-marker{display:none}
+.kids-format-help>summary::after{content:'▾';margin-left:auto;color:var(--text-muted,#64748b);transition:transform .15s}
+.kids-format-help[open]>summary::after{transform:rotate(180deg)}
+.kids-format-help>summary:hover{background:#eef2f7;border-radius:11px}
+.kids-format-help>*:not(summary){margin-left:15px;margin-right:15px}
+.kids-format-help>*:last-child{margin-bottom:15px}
+.kids-format-help h5{margin:16px 0 6px;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted,#64748b)}
+.kids-format-help code{background:#e2e8f0;border-radius:5px;padding:1px 5px;font-size:.82em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.kids-format-mechanic{margin:8px 0;border:1px solid var(--border,#e2e8f0);border-radius:10px;background:#fff}
+.kids-format-mechanic>summary{cursor:pointer;padding:9px 13px;font-size:.87rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kids-format-mechanic>summary:hover{background:#f1f5f9;border-radius:9px}
+.kids-format-mechanic>summary code{background:#e2e8f0}
+.kids-format-mechanic>*:not(summary){margin-left:13px;margin-right:13px}
+.kids-format-mechanic>*:last-child{margin-bottom:13px}
+.kids-format-code{background:#0f172a;color:#e2e8f0;padding:12px 14px;border-radius:9px;overflow:auto;font-size:.78rem;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;max-height:34vh;margin-top:10px!important;white-space:pre}
+
 @media(max-width:700px){
   .kids-level-bar{grid-template-columns:24px 1fr 52px;row-gap:4px}
   .kids-bar-track{grid-column:1/-1}
   .kids-bar-meta{grid-column:1/-1;text-align:left}
+  .kids-format-code{font-size:.72rem}
 }
+
+/* Premium Kids Space pass: shared rhythm, clearer hierarchy and purposeful
+   actions. These selectors are scoped so the regular Games studio keeps its
+   established controls. */
+#kidsStudioPane .kids-admin-page{max-width:1440px;margin:0 auto;padding:28px}
+#kidsStudioPane .kids-admin-heading{padding:24px 26px;border:1px solid color-mix(in srgb,var(--primary,#2563eb) 22%,var(--border-color,#e2e8f0));border-radius:20px;background:linear-gradient(120deg,color-mix(in srgb,var(--primary,#2563eb) 10%,var(--card-bg,#fff)),var(--card-bg,#fff) 58%);box-shadow:0 14px 35px rgba(15,23,42,.07)}
+#kidsStudioPane .kids-admin-heading h2{font-size:1.6rem;letter-spacing:-.035em;font-weight:800}
+#kidsStudioPane .kids-admin-heading .btn{border-radius:11px;padding:10px 16px;font-weight:750;box-shadow:0 6px 14px color-mix(in srgb,var(--primary,#2563eb) 22%,transparent)}
+#kidsStudioPane .kids-filters{padding:16px;border-radius:18px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+#kidsStudioPane .kids-activity-grid{gap:20px}
+#kidsStudioPane .kids-activity-card{position:relative;min-height:235px;padding:20px;border-radius:18px;box-shadow:0 9px 24px rgba(15,23,42,.06);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+#kidsStudioPane .kids-activity-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--primary,#2563eb) 42%,var(--border-color,#e2e8f0));box-shadow:0 16px 32px rgba(15,23,42,.11)}
+#kidsStudioPane .kids-activity-card h3{font-size:1.08rem;line-height:1.3;letter-spacing:-.015em}
+.kids-card-topline{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.kids-icon-action{width:34px;height:34px;border:1px solid var(--border-color,#e2e8f0);border-radius:10px;background:var(--card-bg,#fff);color:#e8a400;font-size:1.2rem;line-height:1;cursor:pointer;transition:transform .15s ease,background .15s ease}
+.kids-icon-action:hover{background:#fff8dc;transform:scale(1.06)}
+#kidsStudioPane .kids-card-actions{padding-top:4px;border-top:1px solid var(--border-color,#e2e8f0);gap:7px}
+#kidsStudioPane .kids-card-actions .btn{border-radius:9px;font-weight:700;padding:7px 10px}
+#kidsStudioPane .kids-card-actions .btn-primary{margin-right:auto}
+.btn-danger-outline{color:#b42318!important;border-color:#fecaca!important;background:#fff!important}.btn-danger-outline:hover{background:#fff1f2!important;border-color:#fda4af!important}
+#kidsStudioPane .kids-wizard-steps{position:sticky;top:0;z-index:2;padding:10px 0;background:var(--card-bg,#fff);border-bottom:1px solid var(--border-color,#e2e8f0)}
+#kidsStudioPane .kids-wizard-steps li{padding:7px 11px;font-weight:650}
+#kidsStudioPane .kids-wizard{gap:17px;padding:4px 2px 12px}
+#kidsStudioPane .kids-wizard label{font-size:.88rem;color:var(--text,#1e293b)}
+#kidsStudioPane .kids-wizard .form-control{min-height:42px;border-radius:10px}
+#kidsStudioPane .modal-footer{margin-top:12px;padding-top:16px;border-top:1px solid var(--border-color,#e2e8f0)}
+#kidsStudioPane .kids-code{border:1px solid #bfdbfe;background:linear-gradient(135deg,#eff6ff,#f8fbff);box-shadow:inset 0 1px #fff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+#kidsStudioPane .kids-share-link{padding:13px;border-radius:11px;background:var(--surface-muted,#f8fafc)}
+@media(max-width:700px){#kidsStudioPane .kids-admin-page{padding:16px}#kidsStudioPane .kids-admin-heading{padding:19px}#kidsStudioPane .kids-card-actions .btn-primary{margin-right:0}.kids-card-actions .btn{flex:1 1 auto}.kids-icon-action{flex:0 0 auto}}

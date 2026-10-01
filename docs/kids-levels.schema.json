@@ -1,0 +1,1002 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quiz-app.local/schemas/kids-levels.schema.json",
+  "title": "Kids Space levels file",
+  "description": "A file of Kids Space levels, ready to import. Either a bare array of levels or an object with a \"levels\" array. Validate before importing with: node scripts/validate-kids-levels.mjs <file>",
+  "type": "object",
+  "required": [
+    "levels"
+  ],
+  "properties": {
+    "levels": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/level"
+      }
+    }
+  },
+  "$defs": {
+    "flatQuestion": {
+      "type": "object",
+      "required": [
+        "type",
+        "text"
+      ],
+      "description": "A level in the Questions-tab shape. \"type\" says the mechanic; the game builds the level from it. true-false plays as multiple choice with True and False as the two options.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "mcq",
+            "true-false",
+            "order",
+            "fill-blank",
+            "matching"
+          ],
+          "description": "The mechanic. \"true-false\" is a question type, not a mechanic: there is no true_false level_type."
+        },
+        "text": {
+          "type": "string",
+          "description": "The question, or the sentence with the gap."
+        },
+        "options": {
+          "description": "The choices, as plain strings; for matching, an array of [left, right] pairs. Not needed for true-false.",
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            {
+              "type": "string",
+              "description": "A bank question stores its options as a JSON string."
+            }
+          ]
+        },
+        "answer": {
+          "description": "The correct option's text, or the word to rebuild for \"order\". May also be an id.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array"
+            }
+          ]
+        },
+        "points": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "hint": {
+          "type": "string"
+        },
+        "explanation": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string",
+          "description": "A two-letter code. Checked against this language, not the wizard's."
+        }
+      }
+    },
+    "level": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "order_index": {
+          "default": 0,
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "level_type": {
+          "type": "string",
+          "minLength": 1,
+          "enum": [
+            "animal_rescue",
+            "board_game",
+            "bubble_pop",
+            "build_construct",
+            "cooking",
+            "drag_drop",
+            "escape_room",
+            "farm_garden",
+            "find_correct",
+            "matching",
+            "memory",
+            "multiple_choice",
+            "obstacle_run",
+            "puzzle",
+            "sequence",
+            "sorting",
+            "space_adventure",
+            "treasure_hunt",
+            "whack_tap",
+            "word_order"
+          ],
+          "description": "The core mechanic this level plays with, or the game template when the level is an adventure or immersive shell (then content_json must also carry \"mechanic\"). Not used in the flat question shape."
+        },
+        "content_json": {
+          "description": "The level content. Its shape depends on level_type. For an adventure or immersive template, level_type is the template and content_json must also carry a \"mechanic\" field naming the core mechanic used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/multiple_choice"
+            },
+            {
+              "$ref": "#/$defs/word_order"
+            },
+            {
+              "$ref": "#/$defs/drag_drop"
+            },
+            {
+              "$ref": "#/$defs/matching"
+            },
+            {
+              "$ref": "#/$defs/memory"
+            },
+            {
+              "$ref": "#/$defs/sorting"
+            },
+            {
+              "$ref": "#/$defs/sequence"
+            },
+            {
+              "$ref": "#/$defs/find_correct"
+            },
+            {
+              "$ref": "#/$defs/bubble_pop"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "points": {
+          "default": 10,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "explanation": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "narrative_json": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "$ref": "#/$defs/flatQuestion/properties/type"
+        },
+        "text": {
+          "$ref": "#/$defs/flatQuestion/properties/text"
+        },
+        "options": {
+          "$ref": "#/$defs/flatQuestion/properties/options"
+        },
+        "answer": {
+          "$ref": "#/$defs/flatQuestion/properties/answer"
+        }
+      },
+      "required": [
+        "level_type",
+        "content_json"
+      ],
+      "description": "A level, either in the game shape (level_type plus content_json) or in the flat question shape.",
+      "anyOf": [
+        {
+          "required": [
+            "type",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "mcq",
+                "true-false",
+                "order",
+                "fill-blank",
+                "matching"
+              ]
+            }
+          }
+        },
+        {
+          "required": [
+            "level_type",
+            "content_json"
+          ]
+        }
+      ]
+    },
+    "multiple_choice": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "options": {
+          "minItems": 2,
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "image": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "emoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "value"
+            ]
+          }
+        },
+        "correctId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "instruction",
+        "question",
+        "options",
+        "correctId"
+      ]
+    },
+    "word_order": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "answer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "items": {
+          "minItems": 2,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "instruction",
+        "answer",
+        "items"
+      ]
+    },
+    "drag_drop": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1
+        },
+        "blanks": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "answer": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "position",
+              "answer"
+            ]
+          }
+        },
+        "choices": {
+          "minItems": 2,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "instruction",
+        "template",
+        "blanks",
+        "choices"
+      ]
+    },
+    "matching": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pairs": {
+          "minItems": 2,
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "left": {
+                "type": "string",
+                "minLength": 1
+              },
+              "right": {
+                "type": "string",
+                "minLength": 1
+              },
+              "leftImage": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "rightImage": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "leftEmoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "rightEmoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "left",
+              "right"
+            ]
+          }
+        }
+      },
+      "required": [
+        "instruction",
+        "pairs"
+      ]
+    },
+    "memory": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cards": {
+          "minItems": 4,
+          "maxItems": 24,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "matchId": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              },
+              "image": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "emoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": {
+                "default": "text",
+                "type": "string",
+                "enum": [
+                  "text",
+                  "image",
+                  "emoji"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "matchId",
+              "value"
+            ]
+          }
+        }
+      },
+      "required": [
+        "instruction",
+        "cards"
+      ]
+    },
+    "sorting": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "categories": {
+          "minItems": 2,
+          "maxItems": 4,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              },
+              "color": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "emoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ]
+          }
+        },
+        "items": {
+          "minItems": 3,
+          "maxItems": 30,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "image": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "emoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "categoryId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "value",
+              "categoryId"
+            ]
+          }
+        }
+      },
+      "required": [
+        "instruction",
+        "categories",
+        "items"
+      ]
+    },
+    "sequence": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "minItems": 2,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "image": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "emoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "value"
+            ]
+          }
+        },
+        "correctOrder": {
+          "minItems": 2,
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "instruction",
+        "items",
+        "correctOrder"
+      ]
+    },
+    "find_correct": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "minItems": 3,
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "image": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "emoji": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "value"
+            ]
+          }
+        },
+        "correctId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "instruction",
+        "question",
+        "items",
+        "correctId"
+      ]
+    },
+    "bubble_pop": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "instruction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "default": "text",
+              "type": "string",
+              "enum": [
+                "text",
+                "image",
+                "emoji"
+              ]
+            }
+          },
+          "required": [
+            "value"
+          ]
+        },
+        "bubbles": {
+          "minItems": 3,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1
+              },
+              "isCorrect": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "value",
+              "isCorrect"
+            ]
+          }
+        }
+      },
+      "required": [
+        "instruction",
+        "target",
+        "bubbles"
+      ]
+    },
+    "templateMinimums": {
+      "description": "Levels needed before a game can be published, per game template.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "default": {
+        "multiple_choice": 1,
+        "word_order": 2,
+        "drag_drop": 2,
+        "matching": 2,
+        "memory": 4,
+        "sorting": 3,
+        "sequence": 2,
+        "find_correct": 3,
+        "bubble_pop": 3,
+        "treasure_hunt": 5,
+        "obstacle_run": 5,
+        "puzzle": 4,
+        "board_game": 5,
+        "build_construct": 5,
+        "whack_tap": 5,
+        "animal_rescue": 4,
+        "space_adventure": 5,
+        "cooking": 4,
+        "escape_room": 5,
+        "farm_garden": 4
+      }
+    }
+  }
+}

@@ -3,10 +3,17 @@
  *
  * Core Renderer: Sequence & Chronology.
  * Students arrange elements in a sequence from left to right.
+ *
+ * The positions used to be printed as raw text inside each tile — "#2 4+4" —
+ * which read as part of the answer and gave no sense of how many steps the
+ * sequence needed. They are now the numbered track from components/OrderTrack.js,
+ * the same one word_order uses, so the child sees the shape of the answer and
+ * each step's place before placing anything.
  */
 
 import { GameRegistry } from '../engine/GameRegistry.js';
 import { DraggableItem } from '../components/DraggableItem.js';
+import { OrderTrack } from '../components/OrderTrack.js';
 
 export class SequenceGame {
   constructor({ container, levelData, onSubmit, onHint }) {
@@ -23,10 +30,13 @@ export class SequenceGame {
   render() {
     this.container.innerHTML = `
       <div class="game-instruction">${this.content.instruction}</div>
-      <div class="word-order-target-slots" id="sequence-slots"></div>
-      <div class="word-order-source-pool" id="sequence-pool"></div>
-      <div style="margin-top: 20px;">
-        <button id="btn-validate-sequence" class="kids-btn kids-btn-primary" style="display: none;">Vérifier la Suite ➡️</button>
+      <div id="sequence-slots"></div>
+      <div class="kids-pool-zone">
+        <p class="kids-pool-label">Étapes à placer</p>
+        <div class="word-order-source-pool" id="sequence-pool"></div>
+      </div>
+      <div class="word-order-actions">
+        <button id="btn-validate-sequence" class="kids-btn kids-btn-primary kids-btn-lg" style="display: none;">Vérifier la Suite ➡️</button>
       </div>
     `;
 
@@ -44,25 +54,36 @@ export class SequenceGame {
     const poolEl = this.container.querySelector('#sequence-pool');
     const validateBtn = this.container.querySelector('#btn-validate-sequence');
 
-    slotsEl.innerHTML = '';
     poolEl.innerHTML = '';
 
-    if (this.orderedSlots.length === 0) {
-      slotsEl.innerHTML = '<span class="slots-placeholder">Place les étapes dans l’ordre ici 👉</span>';
-    } else {
-      this.orderedSlots.forEach((item, idx) => {
-        const tile = document.createElement('div');
-        tile.className = 'kids-tile';
-        tile.innerHTML = `<span>#${idx + 1}</span> ${item.emoji ? `<span>${item.emoji}</span> ` : ''}${item.value}`;
-        tile.addEventListener('click', () => this.moveToPool(item.id));
-        slotsEl.appendChild(tile);
-      });
+    this.track = new OrderTrack({
+      zone: slotsEl,
+      total: this.poolItems.length + this.orderedSlots.length,
+      placed: this.orderedSlots,
+      emptyLabel: '👇 Touche une étape pour la placer',
+      hint: '👆 Touche une étape pour la remettre ici',
+      onSendBack: (id) => this.moveToPool(id),
+      onClear: () => this.clearAll(),
+    });
+    this.track.render();
+
+    if (this.poolItems.length === 0) {
+      poolEl.innerHTML = '<span class="kids-pool-empty">Toutes les étapes sont placées 🎉</span>';
     }
 
     this.poolItems.forEach(item => {
-      const tile = document.createElement('div');
+      const tile = document.createElement('button');
+      tile.type = 'button';
       tile.className = 'kids-tile';
-      tile.innerHTML = `${item.emoji ? `<span>${item.emoji}</span> ` : ''}${item.value}`;
+      if (item.emoji) {
+        const emoji = document.createElement('span');
+        emoji.className = 'kids-order-emoji';
+        emoji.setAttribute('aria-hidden', 'true');
+        emoji.textContent = item.emoji;
+        tile.appendChild(emoji);
+      }
+      tile.appendChild(document.createTextNode(String(item.value ?? '')));
+      tile.setAttribute('aria-label', `Place ${item.value ?? ''}`);
       tile.addEventListener('click', () => this.moveToSlots(item.id));
       DraggableItem.attach(tile, { data: item, dropZonesSelector: '#sequence-slots' });
       poolEl.appendChild(tile);
@@ -72,10 +93,10 @@ export class SequenceGame {
       this.moveToSlots(data.id);
     });
 
-    if (this.poolItems.length === 0 && this.orderedSlots.length > 0) {
-      validateBtn.style.display = 'inline-flex';
-    } else {
-      validateBtn.style.display = 'none';
+    const ready = this.poolItems.length === 0 && this.orderedSlots.length > 0;
+    validateBtn.style.display = ready ? 'inline-flex' : 'none';
+    if (ready) {
+      validateBtn.textContent = 'Vérifier la Suite ➡️';
     }
   }
 
@@ -95,6 +116,13 @@ export class SequenceGame {
       this.poolItems.push(item);
       this.renderSlotsAndPool();
     }
+  }
+
+  /** Send every placed step back to the pool. */
+  clearAll() {
+    this.poolItems = [...this.orderedSlots, ...this.poolItems];
+    this.orderedSlots = [];
+    this.renderSlotsAndPool();
   }
 
   onWrongAnswer() {
