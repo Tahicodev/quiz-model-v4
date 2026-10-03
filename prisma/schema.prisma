@@ -54,6 +54,7 @@ model School {
   teacherMessages    TeacherMessage[]
   teacherAssignments TeacherAssignment[]
   aiConfigs          AIConfig[]
+  kidsGames          KidsGame[]
 }
 
 // ─── School Year Archives ────────────────────────────────────────────────────
@@ -114,6 +115,7 @@ model User {
   fulfilledAccountRequests AccountRequest[]    @relation("AccountRequestCreatedUser")
   teacherMessages          TeacherMessage[]
   teacherAssignments       TeacherAssignment[]
+  kidsGames                KidsGame[]          @relation("KidsGameTeacher")
 
   @@unique([school_id, username])
   @@index([school_id])
@@ -618,6 +620,64 @@ model TeacherAssignment {
   teacher User?  @relation(fields: [teacher_id], references: [id], onDelete: SetNull)
 
   @@index([school_id, class_id, due_date])
+}
+
+// ─── Kids Space ─────────────────────────────────────────────────────────────
+// Teachers create themed educational games for primary/preschool students.
+// Games wrap existing Question types (no new types) in kid-friendly interactions.
+// Kids play via PIN (no login required) — sessions are anonymous.
+model KidsGame {
+  id             String   @id @default(uuid())
+  school_id      String
+  teacher_id     String
+  name           String
+  description    String?
+  // game_type maps to a kid-friendly wrapper over an existing question type:
+  // bubble-pop (MCQ single) | star-collector (MCQ multi) | leap-frog (true-false)
+  // sort-it-out (odd-one-out) | pair-party (matching) | build-a-tower (draggable)
+  // magic-words (fill-blank) | code-explorer (code)
+  game_type      String
+  theme          String   @default("jungle") // matches bg-* keys in assets.txt
+  grade          String?  // maternelle | cp | ce1 | ce2 | cm1 | cm2
+  subject        String?  // Maths | Français | Sciences | etc.
+  // JSON snapshot of Question objects (same shape as Question model).
+  // Stored as snapshot so published games are immune to question bank edits.
+  questions_json String   @default("[]")
+  // game-specific config: time_per_q, max_hints, mascot_theme, allow_replay, etc.
+  config_json    String?
+  status         String   @default("draft") // draft | published | archived
+  pin            String?  @unique // 4-char uppercase, set on publish
+  play_count     Int      @default(0)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  school   School            @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  teacher  User              @relation("KidsGameTeacher", fields: [teacher_id], references: [id], onDelete: Cascade)
+  sessions KidsGameSession[]
+
+  @@index([school_id])
+  @@index([teacher_id])
+  @@index([game_type])
+  @@index([grade])
+  @@index([status])
+  @@index([pin])
+}
+
+model KidsGameSession {
+  id           String   @id @default(uuid())
+  game_id      String
+  player_name  String   // kid enters just their first name — no account needed
+  avatar       String?  // chosen animal emoji / color token
+  score        Int      @default(0)
+  stars        Int      @default(0)  // 0-3 star rating based on score %
+  answers_json String?  // [{question_id, given, correct, time_ms}]
+  completed    Boolean  @default(false)
+  created_at   DateTime @default(now())
+
+  game  KidsGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
+
+  @@index([game_id])
+  @@index([created_at])
 }
 
 // ─── AI Configurations ──────────────────────────────────────────────────────
