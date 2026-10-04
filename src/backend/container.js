@@ -39,6 +39,7 @@ import { GameService } from '../frontend/services/GameService.js';
 import { TournamentService } from '../frontend/services/TournamentService.js';
 import { SessionService } from '../frontend/services/SessionService.js';
 import { SettingsService } from '../frontend/services/SettingsService.js';
+import { KidsGameService } from '../frontend/services/KidsGameService.js';
 
 let _container = null;
 
@@ -73,6 +74,7 @@ export function createContainer() {
     tournamentSvc,
     sessionSvc: new SessionService(repo),
     settingsSvc: new SettingsService(repo),
+    kidsGameSvc: new KidsGameService(repo),
 
     // Full-persistence stores (Phase 2)
     notificationSvc: new NotificationService(repo),

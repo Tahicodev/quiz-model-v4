@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🧸 Kids Games — Play</title>
+<link rel="stylesheet" href="/kids/kids-player.css" />
+</head>
+<body class="kid-body">
+<div class="kid-wrap">
+	<div class="kid-header">
+		<div id="kidMascot" class="kid-mascot" aria-hidden="true">🦊</div>
+		<div class="kid-title">
+			<h1 id="kidGameName">Kids Game</h1>
+			<p id="kidGameSub">Loading… ⏳</p>
+		</div>
+		<div class="spacer"></div>
+		<button id="kidSoundBtn" class="kid-sound-btn" aria-label="Toggle sound">🔊</button>
+	</div>
+	<div class="kid-progress" id="kidProgress" hidden>
+		<span id="kidProgressLabel">1/1</span>
+		<div class="kid-progress-bar"><div id="kidProgressFill" class="kid-progress-fill"></div></div>
+		<div class="kid-timer"><div class="kid-timer-ring" id="kidTimerRing"><span id="kidTimerNum">15</span></div></div>
+	</div>
+	<div id="kidScreen"></div>
+</div>
+<div class="kid-stars-rain" id="kidStarsRain" hidden></div>
+<!-- Engine first: it owns the window.KidsPlayer registry the games below register into. -->
+<script src="/kids/kids-player.js"></script>
+<script src="/kids/games/BubblePopGame.js"></script>
+<script src="/kids/games/StarCollectorGame.js"></script>
+<script src="/kids/games/LeapFrogGame.js"></script>
+<script src="/kids/games/SortItOutGame.js"></script>
+<script src="/kids/games/PairPartyGame.js"></script>
+<script src="/kids/games/BuildATowerGame.js"></script>
+<script src="/kids/games/MagicWordsGame.js"></script>
+<script src="/kids/games/CodeExplorerGame.js"></script>
+</body>
+</html>

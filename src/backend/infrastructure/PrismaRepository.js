@@ -43,6 +43,8 @@ const MODEL_MAP = {
 	gamification: 'gamificationConfig',
 	teacher_messages: 'teacherMessage',
 	teacher_assignments: 'teacherAssignment',
+	kidsGames: 'kidsGame',
+	kidsGameSessions: 'kidsGameSession',
 	// NOTE: Prisma camelCases "AIConfig" to "aIConfig" on the client delegate.
 	ai_configs: 'aIConfig',
 };
@@ -61,6 +63,7 @@ const SEARCH_FIELDS = {
 	game: ['name'],
 	tournament: ['name', 'description'],
 	setting: ['key'],
+	kidsGame: ['name', 'description', 'subject'],
 };
 
 const DEFAULT_ORDER_BY = {
@@ -75,6 +78,8 @@ const DEFAULT_ORDER_BY = {
 	results: 'date_taken',
 	games: 'created_at',
 	game_sessions: 'joined_at',
+	kidsGames: 'created_at',
+	kidsGameSessions: 'created_at',
 	tournaments: 'created_at',
 	tournament_entries: 'registered_at',
 	exam_sessions: 'started_at',

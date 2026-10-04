@@ -186,6 +186,7 @@ import teacherAssignmentRoutes from './routes/teacher-assignments.routes.js';
 import archivesRoutes from './routes/archives.routes.js';
 import exportsRoutes from './routes/exports.routes.js';
 import importsRoutes from './routes/imports.routes.js';
+import kidsRoutes from './routes/kids.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -237,6 +238,28 @@ app.get('/student-workspace.html', (req, res) => {
 		.send(injectAppConfig(readEntryHtml(studentWorkspaceHtmlPath)));
 });
 
+// ── Kids player pages (no login, plan §5.4) ─────────────────────────────
+// PIN entry landing + full-screen game page. Served as plain static HTML
+// (no APP_CONFIG injection needed — the player uses anonymous endpoints).
+const kidsIndexPath = resolve(__dirname, '../../public/kids/index.html');
+const kidsPlayPath = resolve(__dirname, '../../public/kids/play.html');
+
+app.get(['/kids', '/kids/'], (req, res) => {
+	try {
+		res.type('html').send(readEntryHtml(kidsIndexPath));
+	} catch {
+		res.status(404).json({ code: 'NOT_FOUND', message: 'Kids player not installed' });
+	}
+});
+
+app.get('/kids/play/:pin', (req, res) => {
+	try {
+		res.type('html').send(readEntryHtml(kidsPlayPath));
+	} catch {
+		res.status(404).json({ code: 'NOT_FOUND', message: 'Kids player not installed' });
+	}
+});
+
 app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/classes', classesRoutes);
@@ -265,6 +288,7 @@ app.use('/api/v1/teacher-assignments', teacherAssignmentRoutes);
 app.use('/api/v1/archives', archivesRoutes);
 app.use('/api/v1/exports', exportsRoutes);
 app.use('/api/v1/imports', importsRoutes);
+app.use('/api/v1/kids', kidsRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
 // Disable caching for HTML/JS entry points so dev edits reach the browser

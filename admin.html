@@ -155,6 +155,7 @@
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-09-24-r14" defer></script>
+		<script src="kids-games-management.js?v=2026-10-03-r1" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
@@ -1912,6 +1913,14 @@
 							<button
 								type="button"
 								class="games-studio-tab-btn"
+								data-games-studio-tab="kids-games-studio"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6.5" r="2.5"></circle><circle cx="17" cy="6.5" r="2.5"></circle><circle cx="12" cy="13" r="7"></circle><circle cx="9.5" cy="12" r="0.6"></circle><circle cx="14.5" cy="12" r="0.6"></circle><ellipse cx="12" cy="15" rx="1.8" ry="1.4"></ellipse></svg>
+								Kids Games
+							</button>
+							<button
+								type="button"
+								class="games-studio-tab-btn"
 								data-games-studio-tab="tournament-studio"
 							>
 								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6.1 2h11.8a2 2 0 0 1 1.7.8l1.61 2.14a2 2 0 0 1 .13 2.2L16.79 15"></path><path d="M11 12 5.12 2.2"></path><path d="M13 12 18.88 2.2"></path><path d="M7 15a5 5 0 1 0 10 0"></path></svg>
@@ -2534,6 +2543,85 @@
 						</div>
 						</div>
 
+						<div class="games-studio-pane" data-games-studio-pane="kids-games-studio">
+							<!-- Kids Games Studio -->
+							<div class="game-admin-full-width">
+								<div class="game-admin-panel">
+									<div class="panel-header kids-library-header">
+										<div>
+											<span class="arena-eyebrow">Kids Games Studio</span>
+											<h3>Kids Games Library</h3>
+											<p>Create themed educational games for primary/preschool students. Kids play via PIN — no login required.</p>
+										</div>
+										<div class="panel-header-actions">
+											<button type="button" class="btn btn-primary" id="addKidsGameBtn" data-tip="New Kids Game" aria-label="New Kids Game">
+												<span class="kids-add-icon" aria-hidden="true">＋</span><span class="kids-add-label">New Kids Game</span>
+											</button>
+										</div>
+									</div>
+									<div class="kids-games-toolbar">
+										<div class="kids-games-filter-bar" id="kidsGamesFilterBar">
+											<div class="kids-filter-row">
+												<div class="kids-filter-group">
+													<label for="kidsGameFilterGameType">Game Type</label>
+													<select id="kidsGameFilterGameType" class="form-control">
+														<option value="">All Types</option>
+														<option value="bubble-pop">🫧 Bubble Pop</option>
+														<option value="star-collector">🌟 Star Collector</option>
+														<option value="leap-frog">🐸 Leap Frog</option>
+														<option value="sort-it-out">🧺 Sort It Out</option>
+														<option value="pair-party">🎴 Pair Party</option>
+														<option value="build-a-tower">🏗️ Build-a-Tower</option>
+														<option value="magic-words">🪄 Magic Words</option>
+														<option value="code-explorer">🔭 Code Explorer</option>
+													</select>
+												</div>
+												<div class="kids-filter-group">
+													<label for="kidsGameFilterGrade">Grade</label>
+													<select id="kidsGameFilterGrade" class="form-control">
+														<option value="">All Grades</option>
+														<option value="maternelle">Maternelle</option>
+														<option value="cp">CP</option>
+														<option value="ce1">CE1</option>
+														<option value="ce2">CE2</option>
+														<option value="cm1">CM1</option>
+														<option value="cm2">CM2</option>
+													</select>
+												</div>
+												<div class="kids-filter-group">
+													<label for="kidsGameFilterSubject">Subject</label>
+													<input type="text" id="kidsGameFilterSubject" class="form-control" placeholder="Filter by subject..." />
+												</div>
+												<div class="kids-filter-group">
+													<label for="kidsGameFilterStatus">Status</label>
+													<select id="kidsGameFilterStatus" class="form-control">
+														<option value="">All Status</option>
+														<option value="draft">Draft</option>
+														<option value="published">Published</option>
+														<option value="archived">Archived</option>
+													</select>
+												</div>
+												<div class="kids-filter-group" id="kidsGameFilterTeacherGroup" hidden>
+													<label for="kidsGameFilterTeacher">Teacher</label>
+													<select id="kidsGameFilterTeacher" class="form-control">
+														<option value="">All Teachers</option>
+													</select>
+												</div>
+												<div class="kids-filter-group">
+													<label for="kidsGameFilterSearch">Search</label>
+													<input type="search" id="kidsGameFilterSearch" class="form-control" placeholder="Search games..." />
+												</div>
+												<div class="kids-filter-group kids-filter-actions">
+													<button type="button" class="btn btn-sm btn-secondary kids-reset-btn" id="kidsGameFilterReset" onclick="resetKidsGameFilters()"><span aria-hidden="true">✕</span> Reset</button>
+												</div>
+										</div>
+									</div>
+								</div>
+								<div id="kidsGameList" class="kids-game-grid"></div>
+								</div>
+							</div>
+						</div>
+
 						<div class="games-studio-pane" data-games-studio-pane="tournament-studio">
 							<!-- Tournament Studio -->
 							<div class="game-admin-full-width">
@@ -2890,6 +2978,276 @@
 						</div>
 					</div>
 				</section>
+			<!-- ═══════════════════════════════════════════════════════════════════
+     Kids Games Studio overlays.
+     TOP-LEVEL on purpose: these must NOT live inside a tab pane or
+     studio pane, otherwise they inherit display:none and appear broken.
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="kidsGameWizardModal" class="modal arena-editor-modal kids-modal" aria-hidden="true">
+	<div class="modal-content modal-xl kids-wizard-content">
+		<div class="modal-header kids-wizard-header">
+			<div class="kids-wizard-title-row">
+				<div>
+					<span class="arena-eyebrow">Kids Games Studio</span>
+					<h2 id="kidsWizardTitle">Create Kids Game</h2>
+				</div>
+				<button type="button" class="arena-modal-close" id="closeKidsWizardBtn" aria-label="Close">×</button>
+			</div>
+			<ol class="kids-wizard-progress" id="kidsWizardProgress">
+				<li class="kw-step active" data-step="1" title="Choose a game type"><span class="kw-num">1</span><span class="kw-label">Game Type</span></li>
+				<li class="kw-step" data-step="2" title="Choose a visual theme"><span class="kw-num">2</span><span class="kw-label">Theme</span></li>
+				<li class="kw-step" data-step="3" title="Add questions"><span class="kw-num">3</span><span class="kw-label">Questions</span></li>
+				<li class="kw-step" data-step="4" title="Name, grade and rules"><span class="kw-num">4</span><span class="kw-label">Config</span></li>
+				<li class="kw-step" data-step="5" title="Publish and share the PIN"><span class="kw-num">5</span><span class="kw-label">Publish</span></li>
+			</ol>
+		</div>
+		<form id="kidsGameWizardForm" class="kids-wizard-form">
+			<input type="hidden" id="kidsGameWizardId" value="" />
+			<input type="hidden" id="kidsGameWizardStep" value="1" />
+			<div class="kids-wizard-body">
+				<!-- Step 1: Game Type -->
+				<div class="kw-step-panel active" data-step="1">
+					<div class="kw-step-header">
+						<h3>What will the kids play?</h3>
+						<p>Each game wraps an existing question type in a kid-friendly world.</p>
+					</div>
+					<div class="kids-game-type-grid" id="kidsGameTypeGrid"></div>
+				</div>
+
+				<!-- Step 2: Theme -->
+				<div class="kw-step-panel" data-step="2">
+					<div class="kw-step-header">
+						<h3>Pick a world</h3>
+						<p>The background, mascot and colors follow this theme.</p>
+					</div>
+					<div class="kids-theme-grid" id="kidsThemeGrid"></div>
+				</div>
+
+				<!-- Step 3: Questions -->
+				<div class="kw-step-panel" data-step="3">
+					<div class="kw-step-header">
+						<h3>Add questions <span class="kw-count-pill"><span id="kidsSelectedCount">0</span> selected</span></h3>
+						<p>From your bank, generated by AI, or written by hand.</p>
+					</div>
+					<div class="kids-question-source-tabs" role="tablist">
+						<button type="button" class="kids-q-source-btn active" data-source="bank">Question Bank</button>
+						<button type="button" class="kids-q-source-btn" data-source="ai">AI Generate</button>
+						<button type="button" class="kids-q-source-btn" data-source="manual">Manual Entry</button>
+					</div>
+
+					<div class="kids-q-source-panel active" data-source="bank">
+						<div class="kids-bank-controls">
+							<select id="kidsWizardCategorySelect" class="form-control"><option value="">All Categories</option></select>
+							<input type="text" id="kidsWizardQuestionSearch" class="form-control" placeholder="Search questions..." />
+						</div>
+						<div class="kids-bank-type-filters" id="kidsWizardTypeFilters"></div>
+						<div id="kidsWizardQuestionBank" class="kids-question-bank-list"></div>
+						<div class="kids-selected-questions">
+							<h4>Selected questions</h4>
+							<div id="kidsSelectedQuestionsList" class="kids-selected-list"></div>
+						</div>
+					</div>
+
+											<div class="kids-q-source-panel" data-source="ai">
+												<div class="kids-ai-wizard">
+													<div class="kids-ai-model-row">
+														<div class="form-group">
+															<label for="kidsAIModel">AI model</label>
+															<select id="kidsAIModel" class="form-control">
+																<option value="">Loading models…</option>
+															</select>
+														</div>
+														<button type="button" class="btn btn-secondary" id="kidsAIModelSettingsBtn" title="Manage AI models in Settings">⚙️ Models</button>
+													</div>
+													<div id="kidsAINoModel" class="kids-ai-warning" hidden>
+														<strong>No AI model available.</strong>
+														<p>Ask an admin to add a shared model in <b>Settings → AI Generation</b>, or add your own personal model there. You can still use the Question Bank or Manual Entry tabs.</p>
+														<button type="button" class="btn btn-secondary" id="kidsAIOpenSettingsBtn">Open AI Settings</button>
+													</div>
+													<div id="kidsAIError" class="kids-ai-error" hidden></div>
+													<div class="form-row">
+														<div class="form-group half">
+															<label for="kidsAITopic">Topic</label>
+															<input type="text" id="kidsAITopic" class="form-control" placeholder="e.g. Farm animals, Numbers 1-10, Colors" />
+														</div>
+														<div class="form-group half">
+															<label for="kidsAICount">Number of questions</label>
+															<input type="number" id="kidsAICount" class="form-control" min="1" max="20" value="5" />
+														</div>
+													</div>
+							<div class="form-row">
+								<div class="form-group half">
+									<label for="kidsAIGrade">Grade</label>
+									<select id="kidsAIGrade" class="form-control">
+										<option value="maternelle">Maternelle</option>
+										<option value="cp" selected>CP</option>
+										<option value="ce1">CE1</option>
+										<option value="ce2">CE2</option>
+										<option value="cm1">CM1</option>
+										<option value="cm2">CM2</option>
+									</select>
+								</div>
+								<div class="form-group half">
+									<label for="kidsAILanguage">Language</label>
+									<select id="kidsAILanguage" class="form-control">
+										<option value="fr">Français</option>
+										<option value="en">English</option>
+										<option value="es">Español</option>
+									</select>
+								</div>
+							</div>
+											<div class="kids-ai-actions">
+												<button type="button" class="btn btn-primary" id="kidsAIGenerateBtn">
+													<span class="btn-loader" hidden></span> Generate Questions
+												</button>
+											</div>
+											<div id="kidsAIGeneratedQuestions" class="kids-ai-results" hidden>
+												<h4>Generated questions</h4>
+												<div id="kidsAIGeneratedList"></div>
+												<div class="kids-ai-actions">
+													<button type="button" class="btn btn-primary" id="kidsAIAddAllBtn">Add All to Game</button>
+												</div>
+											</div>
+						</div>
+					</div>
+
+					<div class="kids-q-source-panel" data-source="manual">
+						<div id="kidsManualQuestionForm" class="kids-manual-form"></div>
+						<button type="button" class="btn btn-secondary" id="kidsAddManualQuestionBtn">Add Question to List</button>
+						<div class="kids-selected-questions">
+							<h4>Added questions (<span id="kidsManualSelectedCount">0</span>)</h4>
+							<div id="kidsManualSelectedList" class="kids-selected-list"></div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Step 4: Config -->
+				<div class="kw-step-panel" data-step="4">
+					<div class="kw-step-header">
+						<h3>Name it and tune the rules</h3>
+						<p>How the game behaves for the kids.</p>
+					</div>
+					<div class="form-row">
+						<div class="form-group half">
+							<label for="kidsGameName">Game name</label>
+							<input type="text" id="kidsGameName" class="form-control" placeholder="e.g. Ocean Animals Adventure" required />
+						</div>
+						<div class="form-group half">
+							<label for="kidsGameSubject">Subject</label>
+							<input type="text" id="kidsGameSubject" class="form-control" placeholder="e.g. Sciences, Mathématiques" />
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group half">
+							<label for="kidsGameGrade">Grade</label>
+							<select id="kidsGameGrade" class="form-control">
+								<option value="">Not specified</option>
+								<option value="maternelle">Maternelle</option>
+								<option value="cp">CP</option>
+								<option value="ce1">CE1</option>
+								<option value="ce2">CE2</option>
+								<option value="cm1">CM1</option>
+								<option value="cm2">CM2</option>
+							</select>
+						</div>
+						<div class="form-group half">
+							<label for="kidsGameTimePerQ">Time per question (seconds)</label>
+							<input type="number" id="kidsGameTimePerQ" class="form-control" min="5" max="120" value="15" />
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group half">
+							<label for="kidsGameMaxHints">Max hints</label>
+							<input type="number" id="kidsGameMaxHints" class="form-control" min="0" max="3" value="1" />
+						</div>
+						<div class="form-group half">
+							<label for="kidsGameMascotTheme">Mascot theme</label>
+							<select id="kidsGameMascotTheme" class="form-control">
+								<option value="">Same as background</option>
+								<option value="jungle">Jungle</option>
+								<option value="space">Space</option>
+								<option value="ocean">Ocean</option>
+								<option value="farm">Farm</option>
+								<option value="castle">Castle</option>
+								<option value="dinosaur">Dinosaur</option>
+								<option value="forest">Forest</option>
+								<option value="city">City</option>
+								<option value="circus">Circus</option>
+								<option value="magic">Magic</option>
+								<option value="school">School</option>
+								<option value="superhero">Superhero</option>
+							</select>
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="form-group half">
+							<label class="toggle-label">
+								<span>Allow replay</span>
+								<div class="switch-container">
+									<input type="checkbox" id="kidsGameAllowReplay" class="switch-checkbox" checked />
+									<span class="switch-slider"></span>
+								</div>
+							</label>
+						</div>
+						<div class="form-group half">
+							<label class="toggle-label">
+								<span>Show explanations</span>
+								<div class="switch-container">
+									<input type="checkbox" id="kidsGameShowExplanations" class="switch-checkbox" checked />
+									<span class="switch-slider"></span>
+								</div>
+							</label>
+						</div>
+					</div>
+					<div class="form-group">
+						<label for="kidsGameDescription">Description <span class="text-muted">(for other teachers)</span></label>
+						<textarea id="kidsGameDescription" class="form-control" rows="2" placeholder="Optional description..."></textarea>
+					</div>
+				</div>
+
+				<!-- Step 5: Publish & Share -->
+				<div class="kw-step-panel" data-step="5">
+					<div class="kw-step-header">
+						<h3>Ready to publish?</h3>
+						<p>Publishing generates the 4-letter PIN the kids type to play.</p>
+					</div>
+					<div id="kidsWizardPreview" class="kids-wizard-preview"></div>
+				</div>
+			</div>
+			<div class="kids-wizard-footer">
+				<button type="button" class="btn btn-secondary" id="kidsWizardBackBtn">← Back</button>
+				<span class="kids-wizard-step-hint" id="kidsWizardStepHint">Step 1 of 5</span>
+				<button type="button" class="btn btn-primary" id="kidsWizardNextBtn">Next →</button>
+				<button type="button" class="btn btn-success" id="kidsWizardPublishBtn" hidden>Publish Game 🚀</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<div id="kidsGameShareModal" class="modal arena-editor-modal kids-modal" aria-hidden="true">
+	<div class="modal-content modal-lg kids-share-content">
+		<div class="modal-header kids-share-header">
+			<div>
+				<span class="arena-eyebrow">Kids Games Studio</span>
+				<h2>Share Game PIN</h2>
+			</div>
+			<button type="button" class="arena-modal-close" id="closeKidsShareBtn" aria-label="Close">×</button>
+		</div>
+		<div class="kids-share-body">
+			<div class="kids-share-pin-card">
+				<div class="kids-pin-display" id="kidsSharePin">XXXX</div>
+				<div class="kids-pin-qr" id="kidsShareQR"></div>
+				<div class="kids-share-url">Play at: <span id="kidsShareUrl">—</span></div>
+			</div>
+			<div class="kids-share-actions">
+				<button type="button" class="btn btn-primary" id="kidsSharePrintBtn">Print PIN Card</button>
+				<button type="button" class="btn btn-secondary" id="kidsShareCopyBtn">Copy Link</button>
+				<button type="button" class="btn btn-secondary" id="kidsSharePreviewBtn">Preview Game</button>
+			</div>
+		</div>
+	</div>
+</div>
+
 			</main>
 		</div>
 

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🧸 Kids Games — Enter your PIN</title>
+<link rel="stylesheet" href="/kids/kids-player.css" />
+</head>
+<body class="kid-body">
+<div class="kid-wrap">
+	<div class="kid-card" style="margin-top:8vh">
+		<div class="kid-hero">🧸</div>
+		<h2>Kids Games</h2>
+		<p class="hint">Ask your teacher for the <b>4-letter game PIN</b> and type it here! 🎮</p>
+		<input id="pinInput" class="kid-pin-input" maxlength="4" autocomplete="off"
+			placeholder="••••" aria-label="Game PIN" />
+		<br />
+		<button id="pinGoBtn" class="kid-btn">Let's Play! ▶</button>
+		<div id="pinError" class="kid-error" role="alert"></div>
+	</div>
+	<div class="kid-footer">Made for primary &amp; preschool classrooms 🌈</div>
+</div>
+<script>
+(function () {
+	'use strict';
+	var input = document.getElementById('pinInput');
+	var btn = document.getElementById('pinGoBtn');
+	var err = document.getElementById('pinError');
+	function go() {
+		var pin = String(input.value || '').trim().toUpperCase();
+		if (!/^[A-Z2-9]{4}$/.test(pin)) {
+			err.textContent = 'Hmm, a PIN has 4 letters or numbers. Try again! 🔍';
+			return;
+		}
+		err.textContent = '';
+		window.location.href = '/kids/play/' + encodeURIComponent(pin);
+	}
+	btn.addEventListener('click', go);
+	input.addEventListener('keydown', function (e) { if (e.key === 'Enter') go(); });
+	input.focus();
+})();
+</script>
+</body>
+</html>

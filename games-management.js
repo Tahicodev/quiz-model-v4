@@ -28,6 +28,25 @@
 			lastSyncAt: '',
 		},
 		tournamentSyncEventsBound: false,
+		// Kids Games
+		kidsGamesTab: 'kids-games-studio',
+		kidsWizardStep: 1,
+		kidsWizardData: {
+			game_type: null,
+			theme: 'jungle',
+			questions: [],
+			config: {},
+		},
+		kidsGamesFilters: {
+			game_type: '',
+			grade: '',
+			subject: '',
+			status: '',
+			teacher_id: '',
+			search: '',
+		},
+		kidsSelectedQuestions: [],
+		kidsManualQuestions: [],
 	};
 	const TOURNAMENT_PLANNER_WORKING_STATE_KEY =
 		'quizTournamentPlannerWorkingState';
@@ -48,6 +67,35 @@
 		'hot-potato': 'Hot Potato',
 		'last-survivor': 'Last Survivor',
 	};
+
+	// Kids Games Constants
+	const KIDS_GAME_TYPES = [
+		{ id: 'bubble-pop', label: 'Bubble Pop', icon: '🫧', desc: 'Tap the correct floating bubble', questionType: 'multiple-choice', assets: ['bg-ocean', 'bg-jungle'] },
+		{ id: 'star-collector', label: 'Star Collector', icon: '🌟', desc: 'Tap ALL stars that are correct', questionType: 'multiple-choice', multi: true, assets: ['bg-space', 'bg-magic'] },
+		{ id: 'leap-frog', label: 'Leap Frog', icon: '🐸', desc: 'Swipe frog LEFT (false) or RIGHT (true)', questionType: 'true-false', assets: ['bg-forest', 'bg-farm'] },
+		{ id: 'sort-it-out', label: 'Sort It Out', icon: '🧺', desc: 'Find the item that does not belong', questionType: 'odd-one-out', assets: ['bg-circus'] },
+		{ id: 'pair-party', label: 'Pair Party', icon: '🎴', desc: 'Drag lines to match pairs', questionType: 'matching', assets: ['bg-school', 'bg-castle'] },
+		{ id: 'build-a-tower', label: 'Build-a-Tower', icon: '🏗️', desc: 'Stack blocks in the correct order', questionType: 'draggable', assets: ['bg-city', 'bg-castle'] },
+		{ id: 'magic-words', label: 'Magic Words', icon: '🪄', desc: 'Drag words into blanks', questionType: 'fill-blank', assets: ['bg-magic'] },
+		{ id: 'code-explorer', label: 'Code Explorer', icon: '🔭', desc: 'Code puzzles with space theme', questionType: 'code', assets: ['bg-space', 'bg-dinosaur'] },
+	];
+
+	const KIDS_THEMES = [
+		{ id: 'jungle', label: 'Jungle', bg: 'bg-jungle' },
+		{ id: 'space', label: 'Space', bg: 'bg-space' },
+		{ id: 'ocean', label: 'Ocean', bg: 'bg-ocean' },
+		{ id: 'farm', label: 'Farm', bg: 'bg-farm' },
+		{ id: 'castle', label: 'Castle', bg: 'bg-castle' },
+		{ id: 'dinosaur', label: 'Dinosaur', bg: 'bg-dinosaur' },
+		{ id: 'forest', label: 'Forest', bg: 'bg-forest' },
+		{ id: 'city', label: 'City', bg: 'bg-city' },
+		{ id: 'circus', label: 'Circus', bg: 'bg-circus' },
+		{ id: 'magic', label: 'Magic', bg: 'bg-magic' },
+		{ id: 'school', label: 'School', bg: 'bg-school' },
+		{ id: 'superhero', label: 'Superhero', bg: 'bg-superhero' },
+	];
+
+	const KIDS_GRADES = ['maternelle', 'cp', 'ce1', 'ce2', 'cm1', 'cm2'];
 
 	async function copyGameJoinCode(code, button) {
 		const value = String(code || '').trim().toUpperCase();
@@ -7202,8 +7250,15 @@ function buildLobbyHtml(gameId) {
 		const normalized = String(tabKey || 'games-studio')
 			.trim()
 			.toLowerCase();
+		// Kids Games Studio is a third studio tab (plan §5.1) — it must be
+		// recognized explicitly, otherwise it collapses back to games-studio
+		// and its pane can never activate.
 		const activeTab =
-			normalized === 'tournament-studio' ? 'tournament-studio' : 'games-studio';
+			normalized === 'tournament-studio'
+				? 'tournament-studio'
+				: normalized === 'kids-games-studio' || normalized === 'kids-games'
+					? 'kids-games-studio'
+					: 'games-studio';
 
 		// Update header text
 		const titleEl = byId('gamesTabTitle');
@@ -7213,6 +7268,10 @@ function buildLobbyHtml(gameId) {
 				titleEl.textContent = 'Tournament Studio';
 				subtitleEl.textContent =
 					'Plan tournament format, rounds, scoring, and rewards with full control.';
+			} else if (activeTab === 'kids-games-studio') {
+				titleEl.textContent = 'Kids Games Studio';
+				subtitleEl.textContent =
+					'Themed educational games for primary and preschool — kids play with a PIN, no login needed.';
 			} else {
 				titleEl.textContent = 'Games Control Center';
 				subtitleEl.textContent =
@@ -7249,6 +7308,14 @@ function buildLobbyHtml(gameId) {
 			initTournamentStudioTabs();
 			setTournamentStudioTab(state.tournamentStudioTab || 'planner');
 			updateTournamentSyncStatus();
+		}
+
+		if (activeTab === 'kids-games-studio') {
+			// Kids list module loads after this file — call it lazily and
+			// guarded so tab switching never throws when it is absent.
+			if (window.KidsGames && typeof window.KidsGames.renderList === 'function') {
+				try { window.KidsGames.renderList(); } catch (_) { /* list shows its own error */ }
+			}
 		}
 	}
 
@@ -11549,18 +11616,21 @@ function buildLobbyHtml(gameId) {
 	window.advanceTournamentRound = advanceTournamentRound;
 	window.deleteTournament = deleteTournament;
 	window.editTournament = editTournament;
-	window.openGameEditorModal = openGameEditorModal;
-	window.closeGameEditorModal = closeGameEditorModal;
-	window.switchGameEditorTab = switchGameEditorTab;
-	window.openTournamentPlannerModal = openTournamentPlannerModal;
-	window.closeTournamentPlannerModal = closeTournamentPlannerModal;
-	window.openTournamentAssignmentsModal = openTournamentAssignmentsModal;
-	window.closeTournamentAssignmentsModal = closeTournamentAssignmentsModal;
-	window.openTournamentWatchModal = openTournamentWatchModal;
-	window.closeTournamentWatchModal = closeTournamentWatchModal;
-	window.enableTournament = enableTournament;
-	window.loadGamificationUI = loadGamificationUI;
-	window.renderTournamentLeaderboard = renderTournamentPanels;
+window.openGameEditorModal = openGameEditorModal;
+window.closeGameEditorModal = closeGameEditorModal;
+window.switchGameEditorTab = switchGameEditorTab;
+window.openTournamentPlannerModal = openTournamentPlannerModal;
+window.closeTournamentPlannerModal = closeTournamentPlannerModal;
+window.openTournamentAssignmentsModal = openTournamentAssignmentsModal;
+window.closeTournamentAssignmentsModal = closeTournamentAssignmentsModal;
+window.openTournamentWatchModal = openTournamentWatchModal;
+window.closeTournamentWatchModal = closeTournamentWatchModal;
+window.enableTournament = enableTournament;
+window.loadGamificationUI = loadGamificationUI;
+window.renderTournamentLeaderboard = renderTournamentPanels;
+
+	// NOTE: Kids Games UI lives in kids-games-management.js, which publishes
+	// its own window globals. Nothing kids-related is exported here.
 
 	document.addEventListener('DOMContentLoaded', () => {
 		setTimeout(loadGamificationUI, 500); // Allow DOM elements to settle

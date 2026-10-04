@@ -5027,3 +5027,161 @@ html[data-theme='dark'] #settingsModal .settings-tab-btn {
 	border: 1px solid rgb(66, 103, 148) !important;
 }
 }
+
+/* ── Kids Games Studio (dark) ─────────────────────────────────────────────
+   Mirrors the light kids palette onto the dark theme tokens. */
+
+/* Library: toolbar, filters, cards */
+html[data-theme='dark'] .kids-games-toolbar {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-filter-group label { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-game-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-game-card-name { color: var(--text-main); }
+html[data-theme='dark'] .kids-game-card-meta .meta-item {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .kids-game-card-stats {
+	color: var(--text-secondary);
+	border-top-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-game-card-actions {
+	background: var(--bg-surface-alt);
+	border-top-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-mini-btn {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .kids-mini-btn:hover {
+	border-color: #4f46e5;
+	color: #a5b4fc;
+	background: rgba(79, 70, 229, 0.15);
+}
+html[data-theme='dark'] .kids-mini-btn.danger:hover {
+	border-color: #ef4444;
+	color: #fca5a5;
+	background: rgba(239, 68, 68, 0.12);
+}
+html[data-theme='dark'] .kids-game-card-type-badge { color: #1f2937; }
+html[data-theme='dark'] .kids-game-card-status.draft {
+	background: rgba(251, 191, 36, 0.15);
+	color: #fcd34d;
+}
+html[data-theme='dark'] .kids-game-card-status.published {
+	background: rgba(34, 197, 94, 0.15);
+	color: #86efac;
+}
+html[data-theme='dark'] .kids-game-card-status.archived {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+
+/* Wizard: panels, cards, lists */
+html[data-theme='dark'] .kids-wizard-footer {
+	background: var(--bg-surface);
+	border-top-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-wizard-step-hint { color: var(--text-secondary); }
+html[data-theme='dark'] .kw-step-header h3 { color: var(--text-main); }
+html[data-theme='dark'] .kw-step-header p { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-game-type-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-game-type-card:hover { border-color: #4f46e5; }
+html[data-theme='dark'] .kids-game-type-card.selected { background: rgba(79, 70, 229, 0.18); }
+html[data-theme='dark'] .kids-game-type-name { color: var(--text-main); }
+html[data-theme='dark'] .kids-game-type-desc { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-question-source-tabs {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-q-source-btn { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-q-source-btn:hover { color: var(--text-main); }
+html[data-theme='dark'] .kids-q-source-btn.active {
+	background: rgba(79, 70, 229, 0.25);
+	color: #c7d2fe;
+	box-shadow: none;
+}
+html[data-theme='dark'] .kids-bank-type-filters .filter-badge {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .kids-bank-type-filters .filter-badge.active {
+	background: #4f46e5;
+	border-color: #4f46e5;
+	color: #fff;
+}
+html[data-theme='dark'] .kids-question-bank-list {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-bank-question-item { border-bottom-color: var(--border-color); }
+html[data-theme='dark'] .kids-bank-question-item:hover { background: var(--bg-surface-alt); }
+html[data-theme='dark'] .kids-bank-question-item.selected { background: rgba(79, 70, 229, 0.18); }
+html[data-theme='dark'] .kids-bank-question-text { color: var(--text-main); }
+html[data-theme='dark'] .kids-bank-question-type {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .kids-bank-question-item.selected .kids-bank-question-type {
+	background: #4f46e5;
+	color: #fff;
+}
+html[data-theme='dark'] .kids-selected-questions {
+	background: rgba(79, 70, 229, 0.08);
+	border-color: rgba(79, 70, 229, 0.35);
+}
+html[data-theme='dark'] .kids-selected-questions h4 { color: #a5b4fc; }
+html[data-theme='dark'] .kids-selected-item {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-main);
+}
+html[data-theme='dark'] .kids-selected-item small { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-ai-warning {
+	background: rgba(251, 191, 36, 0.1);
+	border-color: rgba(251, 191, 36, 0.4);
+	color: #fcd34d;
+}
+html[data-theme='dark'] .kids-ai-error {
+	background: rgba(239, 68, 68, 0.1);
+	border-color: rgba(239, 68, 68, 0.4);
+	color: #fca5a5;
+}
+html[data-theme='dark'] .kids-ai-results { border-top-color: var(--border-color); }
+html[data-theme='dark'] .kids-ai-question-item {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-main);
+}
+html[data-theme='dark'] .kids-ai-question-text small { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-manual-form {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-manual-form label,
+html[data-theme='dark'] .kids-ai-model-row .form-group label { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-wizard-preview {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-wizard-preview .preview-label { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-wizard-preview .preview-value { color: var(--text-main); }
+html[data-theme='dark'] .kw-count-pill {
+	background: rgba(79, 70, 229, 0.25);
+	color: #c7d2fe;
+}
+/* Mobile tooltip stays readable on dark (light chip). */
+html[data-theme='dark'] #addKidsGameBtn::after {
+	background: #e2e8f0;
+	color: #0f172a;
+}
