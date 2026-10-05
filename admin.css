@@ -2825,7 +2825,6 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-library-header > div:first-child { flex: 1 1 auto; min-width: 0; }
 .kids-library-header .panel-header-actions { flex: 0 0 auto; }
 #addKidsGameBtn { white-space: nowrap; }
-#addKidsGameBtn .kids-add-icon { line-height: 1; }
 .kids-games-toolbar {
 	margin: 16px 0;
 	padding: 16px;
@@ -2965,6 +2964,26 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	color: #64748b;
 }
 .kids-game-card-stats .stat { display: flex; align-items: center; gap: 4px; }
+/* Attribution badges (Questions + Categories tabs): category pill with
+   Kids marker, plus a muted author pill. */
+.q-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 8px;
+}
+.q-owner-badge {
+	display: inline-flex;
+	align-items: center;
+	font-size: 0.68rem;
+	font-weight: 700;
+	padding: 2px 10px;
+	border-radius: 999px;
+	background: #f1f5f9;
+	color: #475569;
+	white-space: nowrap;
+}
+
 /* Card actions: primary row (Edit + Publish/Share) above a compact
    secondary row (Preview / Results / Archive). No more five squeezed buttons. */
 .kids-game-card-actions {
@@ -3468,6 +3487,10 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	line-height: 1;
 }
 .kids-selected-item .remove-btn:hover { background: #fecaca; }
+.kids-selected-item.incompatible {
+	border-color: #fca5a5;
+	background: #fef2f2;
+}
 
 /* AI results */
 .kids-ai-results { margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
@@ -3485,88 +3508,159 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-ai-question-text { flex: 1; font-size: 0.85rem; line-height: 1.45; }
 .kids-ai-question-text small { color: #64748b; }
 
-/* Manual entry card */
-.kids-manual-form {
+/* Manual entry launcher (opens the full question editor). */
+.kids-manual-launcher {
+	background: #f8fafc;
+	border: 1px dashed #c7d2fe;
+	border-radius: 12px;
+	padding: 20px;
+	margin-bottom: 12px;
+	text-align: center;
+}
+.kids-manual-launcher .hint {
+	margin: 0 0 14px;
+	color: #64748b;
+	font-size: 0.85rem;
+	line-height: 1.5;
+}
+
+/* Share Modal — wide card: identity, PIN+QR side by side, steps strip, actions.
+   Strict flex column: fixed header + independently scrolling body, so the
+   action row can never be clipped without a way to reach it. */
+.kids-share-content {
+	max-width: 600px;
+	width: min(600px, 94vw);
+	max-height: calc(100dvh - 48px);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-radius: 12px;
+}
+.kids-share-header { flex: 0 0 auto; }
+.kids-share-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+	padding: 20px 24px max(24px, env(safe-area-inset-bottom));
+}
+.kids-share-actions .btn { margin: 0; }
+.kids-share-game {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 14px;
+	margin-bottom: 14px;
 	background: #f8fafc;
 	border: 1px solid #e2e8f0;
 	border-radius: 12px;
-	padding: 16px;
-	margin-bottom: 12px;
 }
-.kids-manual-form .form-group { margin-bottom: 12px; }
-.kids-manual-form .form-group:last-child { margin-bottom: 0; }
-.kids-manual-form label {
-	display: block;
-	font-size: 0.75rem;
-	font-weight: 700;
-	color: #475569;
-	margin-bottom: 4px;
+.kids-share-game-icon {
+	flex: 0 0 auto;
+	width: 44px;
+	height: 44px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.5rem;
+	background: #eef2ff;
+	border-radius: 50%;
 }
-
-/* Share Modal */
-.kids-share-content { max-width: 500px; }
-.kids-share-body { padding: 24px; text-align: center; }
+.kids-share-game-text { display: flex; flex-direction: column; min-width: 0; }
+.kids-share-game-text strong {
+	font-size: 0.95rem;
+	color: #1f2937;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.kids-share-game-text small { font-size: 0.75rem; color: #64748b; }
 .kids-share-pin-card {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 20px;
+	align-items: center;
 	background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
 	border-radius: 20px;
-	padding: 32px;
-	margin-bottom: 24px;
+	padding: 24px;
+	margin-bottom: 14px;
 	color: #fff;
 	box-shadow: 0 12px 40px rgba(79, 70, 229, 0.3);
+	cursor: pointer;
+	transition: filter 150ms ease;
 }
+.kids-share-pin-card:hover, .kids-share-pin-card:focus-visible { filter: brightness(1.07); outline: none; }
+.kids-pin-main { min-width: 0; text-align: center; }
 .kids-pin-display {
-	font-size: 3.5rem;
+	font-size: 3rem;
 	font-weight: 800;
 	letter-spacing: 0.35em;
 	text-indent: 0.35em;
-	margin-bottom: 20px;
 	font-family: 'Courier New', monospace;
 }
-.kids-pin-qr { margin: 0 auto 20px; }
-.kids-pin-qr img { background: #fff; padding: 8px; border-radius: 12px; }
-.kids-share-url { font-size: 0.9rem; opacity: 0.9; word-break: break-all; }
-.kids-share-url span { font-family: monospace; font-weight: 600; }
-.kids-share-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.kids-pin-hint { font-size: 0.72rem; opacity: 0.8; margin: 2px 0 10px; }
+.kids-pin-qr { min-width: 0; min-height: 24px; text-align: center; }
+.kids-pin-qr img {
+	background: #fff;
+	padding: 8px;
+	border-radius: 12px;
+	max-width: 168px;
+	width: 100%;
+	height: auto;
+}
+.kids-pin-qr a { color: #fff; font-size: 0.8rem; word-break: break-all; }
+.kids-share-url {
+	display: inline-block;
+	color: #fff;
+	font-size: 0.85rem;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	word-break: break-all;
+}
+.kids-share-steps {
+	list-style: none;
+	counter-reset: kids-steps;
+	margin: 0 0 16px;
+	padding: 0;
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+}
+.kids-share-steps li {
+	position: relative;
+	padding-top: 30px;
+	font-size: 0.75rem;
+	line-height: 1.4;
+	color: #475569;
+	text-align: center;
+}
+.kids-share-steps li::before {
+	counter-increment: kids-steps;
+	content: counter(kids-steps);
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: #eef2ff;
+	color: #4f46e5;
+	font-size: 0.72rem;
+	font-weight: 800;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.kids-share-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.kids-share-actions .btn-primary { flex: 1 1 auto; }
 
 /* ── Responsive: tablet + phone ─────────────────────────────────────────── */
 @media (max-width: 768px) {
-	/* Library header stacks; primary action becomes full-width thumb reach. */
-	/* Header stays a row on mobile: title left, compact icon button right. */
-	.kids-library-header { flex-direction: row; align-items: center; }
-	#addKidsGameBtn {
-		position: relative;
-		flex: 0 0 auto;
-		width: 44px;
-		height: 44px;
-		padding: 0;
-		border-radius: 50%;
-		font-size: 1.25rem;
-	}
-	#addKidsGameBtn .kids-add-label { display: none; }
-	/* Tooltip exists ONLY here (mobile viewport): icon-only button needs it. */
-	#addKidsGameBtn::after {
-		content: attr(data-tip);
-		position: absolute;
-		right: calc(100% + 10px);
-		top: 50%;
-		transform: translateY(-50%) translateX(4px);
-		background: #1f2937;
-		color: #fff;
-		font-size: 0.75rem;
-		font-weight: 700;
-		padding: 7px 12px;
-		border-radius: 8px;
-		white-space: nowrap;
-		opacity: 0;
-		pointer-events: none;
-		transition: opacity 150ms ease, transform 150ms ease;
-	}
-	#addKidsGameBtn:active::after,
-	#addKidsGameBtn:hover::after,
-	#addKidsGameBtn:focus-visible::after {
-		opacity: 1;
-		transform: translateY(-50%) translateX(0);
-	}
+	/* Header keeps title + full-text button; wraps only when needed. */
+	.kids-library-header { flex-direction: row; align-items: center; flex-wrap: wrap; }
+	#addKidsGameBtn { flex: 0 0 auto; min-height: 44px; }
 
 	/* Filters: one clean column, 16px inputs (no iOS auto-zoom). */
 	.kids-games-toolbar { padding: 12px; }
@@ -3598,15 +3692,62 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		border-radius: 0;
 	}
 	.kids-wizard-header { border-radius: 0; padding: 14px 16px 0; }
-	.kids-wizard-body { padding: 16px; }
-	.kids-wizard-footer { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+	/* Reduced header: tighter paddings, smaller title, compact stepper. */
+	.kids-wizard-header { padding: 10px 12px 0; }
+	.kids-wizard-title-row { padding-right: 40px; }
+	.kids-wizard-title-row h2 { font-size: 1rem; }
+	.kids-wizard-title-row .arena-eyebrow { font-size: 0.6rem; }
+	#kidsGameWizardModal .arena-modal-close,
+	#kidsGameShareModal .arena-modal-close {
+		top: 10px;
+		right: 10px;
+		width: 32px;
+		height: 32px;
+		font-size: 1.2rem;
+	}
+	.kids-wizard-progress { margin-top: 8px; padding-bottom: 10px; gap: 2px; }
+	.kids-wizard-progress .kw-step { padding: 6px 2px; }
+	.kids-wizard-progress .kw-step .kw-num {
+		width: 22px;
+		height: 22px;
+		font-size: 0.7rem;
+	}
+	.kids-wizard-progress .kw-step.active .kw-label { font-size: 0.72rem; }
+	/* Adaptive title: scales down and wraps instead of overflowing. */
+	.kids-wizard-title-row h2 {
+		font-size: clamp(1rem, 4.5vw, 1.25rem);
+		line-height: 1.2;
+		overflow-wrap: anywhere;
+		min-width: 0;
+	}
+	.kids-wizard-title-row .arena-eyebrow {
+		font-size: 0.68rem;
+		letter-spacing: 0.06em;
+	}
+	.kids-wizard-body { padding: 16px 14px; }
+	/* Footer: Back left, Next/Publish right (hint hidden on phones). */
+	.kids-wizard-footer {
+		padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+		justify-content: space-between;
+	}
 	.kids-wizard-footer .btn { min-height: 46px; }
 	.kids-wizard-step-hint { display: none; }
+	/* Compact step content: smaller cards, headers and rows. */
+	.kw-step-header { margin-bottom: 12px; }
+	.kw-step-header h3 { font-size: 1rem; }
+	.kw-step-header p { font-size: 0.82rem; }
+	.kids-game-type-card { padding: 14px 10px; }
+	.kids-game-type-icon { font-size: 1.9rem; margin-bottom: 6px; }
+	.kids-game-type-name { font-size: 0.85rem; }
+	.kids-game-type-desc { font-size: 0.7rem; }
+	.kids-bank-question-item { padding: 10px; }
+	.kids-bank-question-text { font-size: 0.82rem; }
+	.kids-selected-item { font-size: 0.78rem; }
 	/* Stepper: centered numbers only. */
 	.kids-wizard-progress { max-width: none; }
 	.kids-wizard-progress .kw-step { justify-content: center; padding: 8px 4px; }
+	/* Numbers only on phones — no step labels, not even the active one. */
 	.kids-wizard-progress .kw-step .kw-label { display: none; }
-	.kids-wizard-progress .kw-step.active .kw-label { display: inline; }
 	/* Content grids: breathable two-column touch grids. */
 	.kids-game-type-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 	.kids-theme-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -3616,10 +3757,15 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	.kids-ai-wizard input, .kids-ai-wizard select,
 	.kw-step-panel input, .kw-step-panel select, .kw-step-panel textarea { font-size: 16px; }
 
-	/* Share sheet fits narrow screens. */
+	/* Share sheet fits narrow screens: stack PIN over QR, steps as a list. */
 	.kids-share-content { max-width: 100vw; }
 	.kids-share-body { padding: 20px 16px; }
+	.kids-share-pin-card { grid-template-columns: minmax(0, 1fr); gap: 14px; }
 	.kids-pin-display { font-size: 2.4rem; }
+	.kids-pin-qr { margin: 0 auto; max-width: 200px; }
+	.kids-share-steps { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+	.kids-share-steps li { text-align: left; padding-top: 0; padding-left: 32px; }
+	.kids-share-steps li::before { left: 0; transform: none; }
 	.kids-share-actions .btn { flex: 1 1 100%; min-height: 46px; }
 }
 

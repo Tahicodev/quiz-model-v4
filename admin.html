@@ -1566,6 +1566,7 @@
 										<th>Name</th>
 										<th>Description</th>
 										<th>Questions</th>
+										<th>By</th>
 										<th>Date Created</th>
 										<th>Actions</th>
 									</tr>
@@ -2554,8 +2555,8 @@
 											<p>Create themed educational games for primary/preschool students. Kids play via PIN — no login required.</p>
 										</div>
 										<div class="panel-header-actions">
-											<button type="button" class="btn btn-primary" id="addKidsGameBtn" data-tip="New Kids Game" aria-label="New Kids Game">
-												<span class="kids-add-icon" aria-hidden="true">＋</span><span class="kids-add-label">New Kids Game</span>
+											<button type="button" class="btn btn-primary" id="addKidsGameBtn">
+												<span aria-hidden="true">＋</span> New Kids Game
 											</button>
 										</div>
 									</div>
@@ -3077,7 +3078,7 @@
 													</div>
 							<div class="form-row">
 								<div class="form-group half">
-									<label for="kidsAIGrade">Grade</label>
+															<label for="kidsAIGrade">Grade level (game + AI)</label>
 									<select id="kidsAIGrade" class="form-control">
 										<option value="maternelle">Maternelle</option>
 										<option value="cp" selected>CP</option>
@@ -3111,14 +3112,16 @@
 						</div>
 					</div>
 
-					<div class="kids-q-source-panel" data-source="manual">
-						<div id="kidsManualQuestionForm" class="kids-manual-form"></div>
-						<button type="button" class="btn btn-secondary" id="kidsAddManualQuestionBtn">Add Question to List</button>
-						<div class="kids-selected-questions">
-							<h4>Added questions (<span id="kidsManualSelectedCount">0</span>)</h4>
-							<div id="kidsManualSelectedList" class="kids-selected-list"></div>
-						</div>
-					</div>
+											<div class="kids-q-source-panel" data-source="manual">
+												<div class="kids-manual-launcher">
+													<p class="hint">Write with the full question editor — the same fields as the Questions tab (text &amp; image options, difficulty, points, explanation, code mode…). The finished question lands straight in your game, not in the bank.</p>
+													<button type="button" class="btn btn-primary" id="kidsOpenEditorBtn">Write Question ✏️</button>
+												</div>
+												<div class="kids-selected-questions">
+													<h4>Added questions (<span id="kidsManualSelectedCount">0</span>)</h4>
+													<div id="kidsManualSelectedList" class="kids-selected-list"></div>
+												</div>
+											</div>
 				</div>
 
 				<!-- Step 4: Config -->
@@ -3139,27 +3142,15 @@
 					</div>
 					<div class="form-row">
 						<div class="form-group half">
-							<label for="kidsGameGrade">Grade</label>
-							<select id="kidsGameGrade" class="form-control">
-								<option value="">Not specified</option>
-								<option value="maternelle">Maternelle</option>
-								<option value="cp">CP</option>
-								<option value="ce1">CE1</option>
-								<option value="ce2">CE2</option>
-								<option value="cm1">CM1</option>
-								<option value="cm2">CM2</option>
-							</select>
-						</div>
-						<div class="form-group half">
 							<label for="kidsGameTimePerQ">Time per question (seconds)</label>
 							<input type="number" id="kidsGameTimePerQ" class="form-control" min="5" max="120" value="15" />
 						</div>
-					</div>
-					<div class="form-row">
 						<div class="form-group half">
 							<label for="kidsGameMaxHints">Max hints</label>
 							<input type="number" id="kidsGameMaxHints" class="form-control" min="0" max="3" value="1" />
 						</div>
+					</div>
+					<div class="form-row">
 						<div class="form-group half">
 							<label for="kidsGameMascotTheme">Mascot theme</label>
 							<select id="kidsGameMascotTheme" class="form-control">
@@ -3225,7 +3216,7 @@
 </div>
 
 <div id="kidsGameShareModal" class="modal arena-editor-modal kids-modal" aria-hidden="true">
-	<div class="modal-content modal-lg kids-share-content">
+	<div class="modal-content kids-share-content">
 		<div class="modal-header kids-share-header">
 			<div>
 				<span class="arena-eyebrow">Kids Games Studio</span>
@@ -3234,14 +3225,29 @@
 			<button type="button" class="arena-modal-close" id="closeKidsShareBtn" aria-label="Close">×</button>
 		</div>
 		<div class="kids-share-body">
-			<div class="kids-share-pin-card">
-				<div class="kids-pin-display" id="kidsSharePin">XXXX</div>
-				<div class="kids-pin-qr" id="kidsShareQR"></div>
-				<div class="kids-share-url">Play at: <span id="kidsShareUrl">—</span></div>
+			<div class="kids-share-game">
+				<span class="kids-share-game-icon" id="kidsShareGameIcon">🎮</span>
+				<div class="kids-share-game-text">
+					<strong id="kidsShareGameName">Game</strong>
+					<small id="kidsShareGameMeta">—</small>
+				</div>
 			</div>
+			<div class="kids-share-pin-card" id="kidsSharePinCard" role="button" tabindex="0" title="Click to copy the PIN">
+				<div class="kids-pin-main">
+					<div class="kids-pin-display" id="kidsSharePin">XXXX</div>
+					<div class="kids-pin-hint">Tap the PIN to copy it</div>
+					<a class="kids-share-url" id="kidsShareUrl" href="#" target="_blank" rel="noopener">—</a>
+				</div>
+				<div class="kids-pin-qr" id="kidsShareQR"></div>
+			</div>
+			<ol class="kids-share-steps">
+				<li>Show this PIN on the board</li>
+				<li>Kids open the link and type the PIN</li>
+				<li>No login needed — just a first name</li>
+			</ol>
 			<div class="kids-share-actions">
-				<button type="button" class="btn btn-primary" id="kidsSharePrintBtn">Print PIN Card</button>
-				<button type="button" class="btn btn-secondary" id="kidsShareCopyBtn">Copy Link</button>
+				<button type="button" class="btn btn-primary" id="kidsShareCopyBtn">Copy Link</button>
+				<button type="button" class="btn btn-secondary" id="kidsSharePrintBtn">Print PIN Card</button>
 				<button type="button" class="btn btn-secondary" id="kidsSharePreviewBtn">Preview Game</button>
 			</div>
 		</div>

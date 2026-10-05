@@ -274,7 +274,7 @@
 			buildGameTypeGrid();
 			buildThemeGrid();
 			buildBankTypeFilters();
-			buildManualForm();
+			renderKidsManualQuestions();
 			if (editId) {
 				kidsApi('GET', '/' + encodeURIComponent(editId)).then(function (game) {
 					state.wizard.game_type = game.game_type;
@@ -283,7 +283,7 @@
 					var cfg = parseJsonSafe(game.config_json, {});
 					setFormValue('kidsGameName', game.name || '');
 					setFormValue('kidsGameSubject', game.subject || '');
-					setFormValue('kidsGameGrade', game.grade || '');
+					setFormValue('kidsAIGrade', game.grade || 'cp');
 					setFormValue('kidsGameDescription', game.description || '');
 					if (cfg.time_per_q) setFormValue('kidsGameTimePerQ', cfg.time_per_q);
 					if (cfg.max_hints != null) setFormValue('kidsGameMaxHints', cfg.max_hints);
@@ -297,7 +297,6 @@
 			} else {
 				setFormValue('kidsGameName', '');
 				setFormValue('kidsGameSubject', '');
-				setFormValue('kidsGameGrade', '');
 				setFormValue('kidsGameDescription', '');
 				renderKidsWizardSelectedQuestions();
 				safeLoadKidsBank();
@@ -334,6 +333,10 @@
 	function validateWizardStep(n) {
 		if (n === 1 && !state.wizard.game_type) { toast('Pick a game type first', 'warning'); return false; }
 		if (n === 3 && !state.wizard.questions.length) { toast('Add at least one question', 'warning'); return false; }
+		if (n === 3 && incompatibleSelected().length) {
+			toast(incompatibleSelected().length + ' selected question(s) cannot be played in this game type — remove them first', 'warning');
+			return false;
+		}
 		if (n === 4 && !String(($('kidsGameName') || {}).value || '').trim()) { toast('Give your game a name', 'warning'); return false; }
 		return true;
 	}
@@ -401,7 +404,7 @@
 		state.wizard.game_type = id;
 		buildGameTypeGrid();
 		loadKidsBank();
-		buildManualForm();
+		renderKidsWizardSelectedQuestions();
 	}
 
 	/* Step 2 — theme */
@@ -474,16 +477,81 @@
 	}
 	function filterKidsWizardQuestions() { renderKidsBankList(); }
 	function renderKidsBankList() { renderKidsWizardQuestionBank(); }
+	function kidOptionList(q) {
+		try {
+			var parsed = JSON.parse(q.options_json || '[]');
+			return Array.isArray(parsed) ? parsed : [];
+		} catch (_) { return []; }
+	}
+	/**
+	 * Only questions whose shape a game can actually play are selectable.
+	 * In particular Code Explorer accepts code questions only, Bubble Pop
+	 * needs single-answer options, and Star Collector needs multi-answer ones.
+	 */
+	function isQuestionCompatible(gameType, q) {
+		if (!q) return false;
+		var opts = kidOptionList(q);
+		switch (gameType) {
+			case 'bubble-pop':
+				return q.type === 'multiple-choice' && !q.allowMultipleAnswers && opts.length >= 2;
+			case 'star-collector':
+				return q.type === 'multiple-choice' && !!q.allowMultipleAnswers && opts.length >= 2;
+			case 'leap-frog':
+				return q.type === 'true-false';
+			case 'sort-it-out':
+				return q.type === 'odd-one-out' && opts.length >= 3;
+			case 'pair-party':
+				return q.type === 'matching' && opts.length >= 2;
+			case 'build-a-tower':
+				return q.type === 'draggable' && opts.length >= 2;
+			case 'magic-words':
+				return q.type === 'fill-blank';
+			case 'code-explorer':
+				return q.type === 'code';
+			default:
+				return true;
+		}
+	}
+	function incompatibleSelected() {
+		var bad = [];
+		for (var i = 0; i < state.wizard.questions.length; i++) {
+			if (!isQuestionCompatible(state.wizard.game_type, state.wizard.questions[i])) bad.push(state.wizard.questions[i]);
+		}
+		return bad;
+	}
+	// Code Explorer plays code questions. Automatic intake (AI, and manual
+	// builds whose editor type was switched) is coerced into code shape
+	// instead of being blocked: multiple-choice grading is identical in both
+	// shapes, and every other type maps to its codeAnswerMode twin.
+	var CODE_MODE_FOR_TYPE = {
+		'multiple-choice': 'multiple-choice',
+		'true-false': 'multiple-choice',
+		'matching': 'matching',
+		'matching-pairs': 'matching',
+		'draggable': 'draggable',
+		'order': 'draggable',
+		'fill-blank': 'fill-blank',
+		'odd-one-out': 'odd-one-out'
+	};
+	function coerceToCodeExplorer(q) {
+		if (!q || q.type === 'code') return q;
+		var mode = CODE_MODE_FOR_TYPE[q.type];
+		if (!mode) return q;
+		var out = Object.assign({}, q, { type: 'code', codeAnswerMode: mode });
+		if (!out.codeSnippet) out.codeSnippet = '';
+		if (!out.codeLanguage) out.codeLanguage = 'javascript';
+		return out;
+	}
 	function renderKidsWizardQuestionBank() {
 		var bankEl = $('kidsWizardQuestionBank');
 		if (!bankEl) return;
 		var search = String(($('kidsWizardQuestionSearch') || {}).value || '').toLowerCase();
 		var cat = ($('kidsWizardCategorySelect') || {}).value || '';
-		var wantType = wizardKidType();
 		var selectedIds = {};
 		state.wizard.questions.forEach(function (q) { selectedIds[q.id] = true; });
+		var hiddenIncompatible = 0;
 		var items = state.bank.filter(function (q) {
-			if (state.wizard.game_type !== 'code-explorer' && q.type !== wantType) return false;
+			if (!isQuestionCompatible(state.wizard.game_type, q)) { hiddenIncompatible += 1; return false; }
 			if (state.bankTypeFilter !== 'all' && q.type !== state.bankTypeFilter) return false;
 			if (search && String(q.text || '').toLowerCase().indexOf(search) < 0) return false;
 			if (cat) {
@@ -493,9 +561,15 @@
 			return true;
 		});
 		if (!items.length) {
-			bankEl.innerHTML = '<div class="empty-state-small">No matching questions. Try the 🤖 AI Generate tab.</div>';
+			var hint = state.wizard.game_type === 'code-explorer'
+				? 'No code questions found. Generate some with the AI tab (Code Explorer) or add them manually.'
+				: state.wizard.game_type === 'star-collector'
+					? 'No multi-answer questions found. Generate some with the AI tab or add them manually.'
+					: 'No compatible questions found. Try the AI Generate tab or Manual Entry.';
+			bankEl.innerHTML = '<div class="empty-state-small">' + esc(hint) + '</div>';
 			return;
 		}
+		bankEl.innerHTML = '';
 		bankEl.innerHTML = '';
 		items.slice(0, 120).forEach(function (q) {
 			var row = document.createElement('div');
@@ -511,6 +585,12 @@
 			box.addEventListener('change', function () { toggleKidsWizardQuestionSelect(q.id); });
 			bankEl.appendChild(row);
 		});
+		if (hiddenIncompatible > 0) {
+			var note = document.createElement('div');
+			note.className = 'empty-state-small';
+			note.textContent = hiddenIncompatible + ' incompatible question(s) hidden for this game type.';
+			bankEl.appendChild(note);
+		}
 	}
 	function toggleKidsWizardQuestionSelect(id) {
 		var idx = -1;
@@ -539,9 +619,11 @@
 		}
 		list.innerHTML = '';
 		state.wizard.questions.forEach(function (q) {
+			var compatible = isQuestionCompatible(state.wizard.game_type, q);
 			var row = document.createElement('div');
-			row.className = 'kids-selected-item';
-			row.innerHTML = '<span>' + esc(q.text) + ' <small>(' + esc(q.type) + ')</small></span>';
+			row.className = 'kids-selected-item' + (compatible ? '' : ' incompatible');
+			if (!compatible) row.title = 'Incompatible with this game type — remove it to continue';
+			row.innerHTML = '<span>' + (compatible ? '' : '⚠ ') + esc(q.text) + ' <small>(' + esc(q.type) + ')</small></span>';
 			var btn = document.createElement('button');
 			btn.type = 'button'; btn.className = 'remove-btn'; btn.textContent = '✕';
 			btn.addEventListener('click', function () { removeKidsWizardSelectedQuestion(q.id); });
@@ -697,65 +779,78 @@
 		if (!state.aiResults.length) return;
 		var have = {};
 		state.wizard.questions.forEach(function (q) { have[q.id] = true; });
-		state.aiResults.forEach(function (q) { if (!have[q.id]) state.wizard.questions.push(q); });
+		var coerced = 0;
+		state.aiResults.forEach(function (q) {
+			var nq = state.wizard.game_type === 'code-explorer' ? coerceToCodeExplorer(q) : q;
+			if (nq !== q) coerced += 1;
+			if (!have[nq.id]) { state.wizard.questions.push(nq); have[nq.id] = true; }
+		});
 		renderKidsWizardSelectedQuestions();
-		toast(state.aiResults.length + ' AI questions added', 'success');
+		toast(state.aiResults.length + ' AI questions added' + (coerced ? ' (' + coerced + ' styled for Code Explorer)' : ''), 'success');
 	}
 
-	/* Step 3 — manual entry */
-	function buildManualForm() {
-		var form = $('kidsManualQuestionForm');
-		if (!form) return;
-		var t = wizardKidType();
-		var optionsHint = 'Comma-separated options (first = correct), e.g. Shark, Lion, Eagle';
-		if (t === 'true-false') optionsHint = null;
-		if (t === 'matching') optionsHint = 'One pair per line as "left --> right", e.g. Cat --> Chat';
-		if (t === 'draggable') optionsHint = 'Items in the CORRECT order, comma-separated';
-		if (t === 'fill-blank') optionsHint = 'Word bank, comma-separated (answer = correct word)';
-		form.innerHTML =
-			'<div class="form-group"><label>Question text' + (t === 'fill-blank' ? ' (use ___ for the blank)' : '') + '</label>' +
-			'<input type="text" id="kidsManualText" class="form-control" placeholder="e.g. Which animal lives in the ocean?" /></div>' +
-			(optionsHint ? '<div class="form-group"><label>Options</label>' +
-				(t === 'matching'
-					? '<textarea id="kidsManualOptions" class="form-control" rows="3" placeholder="Cat --> Chat&#10;Dog --> Chien"></textarea>'
-					: '<input type="text" id="kidsManualOptions" class="form-control" placeholder="' + esc(optionsHint) + '" />') + '</div>' : '') +
-			'<div class="form-row"><div class="form-group half"><label>Answer</label>' +
-			(t === 'true-false'
-				? '<select id="kidsManualAnswer" class="form-control"><option value="true">True ✅</option><option value="false">False ❌</option></select>'
-				: '<input type="text" id="kidsManualAnswer" class="form-control" placeholder="Exact correct answer" />') +
-			'</div><div class="form-group half"><label>Points</label>' +
-			'<input type="number" id="kidsManualPoints" class="form-control" min="1" max="10" value="1" /></div></div>';
-		renderKidsManualQuestions();
-	}
-	function addKidsManualQuestion() {
-		var t = wizardKidType();
-		var text = String(($('kidsManualText') || {}).value || '').trim();
-		var answer = String(($('kidsManualAnswer') || {}).value || '').trim();
-		var optionsRaw = ($('kidsManualOptions') || {}).value || '';
-		if (!text || !answer) { toast('Text and answer are required', 'warning'); return; }
-		var options = [];
-		if (t === 'true-false') options = ['True', 'False'];
-		else if (t === 'matching') {
-			options = String(optionsRaw).split('\n').map(function (s) { return String(s).trim(); }).filter(Boolean);
-			answer = options.slice(0, 4).join(',');
-		} else {
-			options = String(optionsRaw).split(',').map(function (s) { return String(s).trim(); }).filter(Boolean);
+	/* Step 3 — manual entry via the real question editor.
+	   Launches the Questions tab's full editor (same fields, validation and
+	   per-type builders) and captures the built object into the game. */
+	var KIDS_EDITOR_TYPE = {
+		'bubble-pop': 'multiple-choice',
+		'star-collector': 'multiple-choice',
+		'leap-frog': 'true-false',
+		'sort-it-out': 'odd-one-out',
+		'pair-party': 'matching-pairs',
+		'build-a-tower': 'draggable',
+		'magic-words': 'fill-blank',
+		'code-explorer': 'code',
+	};
+	function openKidsManualEditor() {
+		if (!state.wizard.game_type) { toast('Pick a game type first (Step 1)', 'warning'); return; }
+		if (typeof window.openQuestionFormModal !== 'function') {
+			toast('Question editor unavailable on this page', 'error');
+			return;
 		}
-		var q = normalizeKidQuestion({
-			type: t, text: text,
-			options_json: JSON.stringify(options),
-			answer: answer,
-			points: Number(($('kidsManualPoints') || {}).value) || 1,
-			difficulty: 'easy',
-		});
-		if (state.wizard.game_type === 'star-collector') q.allowMultipleAnswers = true;
-		state.wizard.questions.push(q);
-		state.manualList.push(q);
-		$('kidsManualText').value = '';
-		if ($('kidsManualOptions')) $('kidsManualOptions').value = '';
-		if ($('kidsManualAnswer') && $('kidsManualAnswer').tagName === 'INPUT') $('kidsManualAnswer').value = '';
-		renderKidsWizardSelectedQuestions();
-		renderKidsManualQuestions();
+		var editorType = KIDS_EDITOR_TYPE[state.wizard.game_type] || 'multiple-choice';
+		window.__kidsManualCapture = function (built) {
+			var q = normalizeKidQuestion(built);
+			if (!q.text || !q.answer) { toast('That question has no usable text/answer', 'warning'); return; }
+			if (!isQuestionCompatible(state.wizard.game_type, q)) {
+				if (state.wizard.game_type === 'code-explorer') {
+					q = coerceToCodeExplorer(q);
+					toast('Converted to Code Explorer format', 'info');
+				} else {
+					toast('That question type cannot be played in this game — pick a matching type', 'warning');
+					return;
+				}
+			}
+			state.wizard.questions.push(q);
+			state.manualList.push(q);
+			renderKidsWizardSelectedQuestions();
+			renderKidsManualQuestions();
+			toast('Question added to the game', 'success');
+		};
+		try {
+			window.openQuestionFormModal(null);
+			var radio = document.querySelector('input[name="questionType"][value="' + editorType + '"]');
+			if (radio) {
+				radio.checked = true;
+				if (typeof window.toggleQuestionType === 'function') {
+					try { window.toggleQuestionType(); } catch (_) { /* editor default stands */ }
+				}
+			}
+			if (state.wizard.game_type === 'star-collector') {
+				var multi = document.getElementById('allow-multiple-answers');
+				if (multi && !multi.checked) {
+					multi.checked = true;
+					try { if (typeof window.toggleMultipleAnswers === 'function') window.toggleMultipleAnswers(); } catch (_) {}
+				}
+			}
+			var titleEl = document.getElementById('question-action-text');
+			if (titleEl) titleEl.textContent = 'Add Question for Kids Game';
+			var saveBtn = document.getElementById('add-update-question-btn');
+			if (saveBtn) saveBtn.textContent = 'Add to Game';
+		} catch (err) {
+			window.__kidsManualCapture = null;
+			toast('Could not open the question editor: ' + (err && err.message), 'error');
+		}
 	}
 	function renderKidsManualQuestions() {
 		var list = $('kidsManualSelectedList');
@@ -780,7 +875,7 @@
 			description: String($('kidsGameDescription').value || '').trim() || null,
 			game_type: state.wizard.game_type,
 			theme: state.wizard.theme || 'jungle',
-			grade: $('kidsGameGrade').value || null,
+			grade: ($('kidsAIGrade') || {}).value || 'cp',
 			subject: String($('kidsGameSubject').value || '').trim() || null,
 			questions_json: JSON.stringify(state.wizard.questions),
 			config_json: JSON.stringify({
@@ -799,7 +894,7 @@
 		prev.innerHTML =
 			'<div class="preview-row"><span class="preview-label">Game</span><span class="preview-value">' + esc(meta.icon || '') + ' ' + esc(meta.label || state.wizard.game_type) + '</span></div>' +
 			'<div class="preview-row"><span class="preview-label">Name</span><span class="preview-value">' + esc($('kidsGameName').value || '—') + '</span></div>' +
-			'<div class="preview-row"><span class="preview-label">Theme / Grade / Subject</span><span class="preview-value">' + esc(state.wizard.theme) + ' · ' + esc($('kidsGameGrade').value || '—') + ' · ' + esc($('kidsGameSubject').value || '—') + '</span></div>' +
+			'<div class="preview-row"><span class="preview-label">Theme / Grade / Subject</span><span class="preview-value">' + esc(state.wizard.theme) + ' · ' + esc(($('kidsAIGrade') || {}).value || '—') + ' · ' + esc($('kidsGameSubject').value || '—') + '</span></div>' +
 			'<div class="preview-row"><span class="preview-label">Questions</span><span class="preview-value">' + state.wizard.questions.length + ' question(s)</span></div>';
 	}
 	function publishKidsGame(presetId) {
@@ -839,8 +934,27 @@
 	function openKidsShareModal(id, preloaded) {
 		var done = function (game) {
 			state.lastPublished = game;
+			var meta = gameTypeMeta(game.game_type) || {};
+			var nameEl = $('kidsShareGameName');
+			if (nameEl) nameEl.textContent = game.name || 'Kids Game';
+			var metaEl = $('kidsShareGameMeta');
+			if (metaEl) {
+				var bits = [];
+				if (meta.label) bits.push(meta.label);
+				if (game.grade) bits.push(String(game.grade).toUpperCase());
+				if (game.subject) bits.push(game.subject);
+				metaEl.textContent = bits.length ? bits.join(' · ') : '—';
+			}
+			var iconEl = $('kidsShareGameIcon');
+			if (iconEl) iconEl.textContent = meta.icon || '🎮';
 			$('kidsSharePin').textContent = game.pin || '----';
-			$('kidsShareUrl').textContent = game.pin ? playUrl(game.pin) : '—';
+			var urlEl = $('kidsShareUrl');
+			if (urlEl) {
+				var url = game.pin ? playUrl(game.pin) : '—';
+				urlEl.textContent = url;
+				if (game.pin) urlEl.href = url;
+				else urlEl.removeAttribute('href');
+			}
 			var qr = $('kidsShareQR');
 			if (qr) {
 				qr.innerHTML = '';
@@ -860,6 +974,32 @@
 		if (preloaded && preloaded.pin) { done(preloaded); return; }
 		kidsApi('GET', '/' + encodeURIComponent(id)).then(done)
 			.catch(function (err) { toast('Could not load game: ' + (err && err.message), 'error'); });
+	}
+	function copyTextToClipboard(text, okMsg) {
+		var done = function () { toast(okMsg || 'Copied', 'success'); };
+		try {
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(String(text)).then(done, function () { toast('Copy failed — select and copy manually', 'warning'); });
+				return;
+			}
+		} catch (_) { /* fall through */ }
+		try {
+			var helper = document.createElement('textarea');
+			helper.value = String(text);
+			helper.setAttribute('readonly', '');
+			helper.style.position = 'fixed';
+			helper.style.opacity = '0';
+			document.body.appendChild(helper);
+			helper.select();
+			document.execCommand('copy');
+			helper.remove();
+			done();
+		} catch (_) { toast('Copy failed — select and copy manually', 'warning'); }
+	}
+	function copyKidsPin() {
+		var game = state.lastPublished;
+		if (!game || !game.pin) { toast('Nothing to copy yet', 'warning'); return; }
+		copyTextToClipboard(game.pin, 'PIN ' + game.pin + ' copied');
 	}
 	function closeKidsShareModal() { setModal('kidsGameShareModal', false); }
 	function printKidsPinCard() {
@@ -881,9 +1021,7 @@
 	function copyKidsShareUrl() {
 		var game = state.lastPublished;
 		if (!game || !game.pin) return;
-		var url = playUrl(game.pin);
-		if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url);
-		toast('Link copied: ' + url, 'success');
+		copyTextToClipboard(playUrl(game.pin), 'Link copied');
 	}
 	function previewKidsGame(id) {
 		var open = function (game) {
@@ -998,8 +1136,8 @@
 		if (aiSettingsBtn && !aiSettingsBtn.__kidsBound) { aiSettingsBtn.__kidsBound = true; aiSettingsBtn.addEventListener('click', openKidsAISettings); }
 		var aiOpenSettings = $('kidsAIOpenSettingsBtn');
 		if (aiOpenSettings && !aiOpenSettings.__kidsBound) { aiOpenSettings.__kidsBound = true; aiOpenSettings.addEventListener('click', openKidsAISettings); }
-		var manAdd = $('kidsAddManualQuestionBtn');
-		if (manAdd && !manAdd.__kidsBound) { manAdd.__kidsBound = true; manAdd.addEventListener('click', addKidsManualQuestion); }
+		var editorBtn = $('kidsOpenEditorBtn');
+		if (editorBtn && !editorBtn.__kidsBound) { editorBtn.__kidsBound = true; editorBtn.addEventListener('click', openKidsManualEditor); }
 		var qSearch = $('kidsWizardQuestionSearch');
 		if (qSearch && !qSearch.__kidsBound) { qSearch.__kidsBound = true; qSearch.addEventListener('input', filterKidsWizardQuestions); }
 		var qCat = $('kidsWizardCategorySelect');
@@ -1038,6 +1176,17 @@
 				previewKidsGame(game && game.id);
 			});
 		}
+		var pinCard = $('kidsSharePinCard');
+		if (pinCard && !pinCard.__kidsBound) {
+			pinCard.__kidsBound = true;
+			pinCard.addEventListener('click', function (e) {
+				if (e.target && e.target.closest && e.target.closest('a')) return;
+				copyKidsPin();
+			});
+			pinCard.addEventListener('keydown', function (e) {
+				if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copyKidsPin(); }
+			});
+		}
 		document.querySelectorAll('#kidsWizardProgress .kw-step').forEach(function (s) {
 			if (s.__kidsBound) return;
 			s.__kidsBound = true;
@@ -1068,13 +1217,14 @@
 	window.generateKidsAIQuestions = generateKidsAIQuestions;
 	window.addKidsAIQuestionsToGame = addKidsAIQuestionsToGame;
 	window.refreshKidsAIModels = refreshKidsAIModels;
-	window.addKidsManualQuestion = addKidsManualQuestion;
+	window.openKidsManualEditor = openKidsManualEditor;
 	window.renderKidsManualQuestions = renderKidsManualQuestions;
 	window.updateKidsWizardPreview = updateKidsWizardPreview;
 	window.publishKidsGame = publishKidsGame;
 	window.openKidsShareModal = openKidsShareModal;
 	window.closeKidsShareModal = closeKidsShareModal;
 	window.printKidsPinCard = printKidsPinCard;
+	window.copyKidsPin = copyKidsPin;
 	window.copyKidsShareUrl = copyKidsShareUrl;
 	window.previewKidsGame = previewKidsGame;
 	window.editKidsGame = editKidsGame;

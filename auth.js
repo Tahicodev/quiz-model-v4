@@ -796,10 +796,18 @@
 		if (isAdmin()) return true;
 
 		if (isTeacher()) {
+			// Ownership spans both vocabularies: legacy `ownerId` and the
+			// server-stamped `created_by`. Absent on both sides means a
+			// historically shared row, which stays visible — mirroring the
+			// backend teacher scope (own + unattributed legacy).
+			const owner = item.ownerId || item.created_by || item.createdBy || null;
 			if (type === 'category') {
-				return item.id === 'uncategorized' || item.ownerId === currentUser.id;
+				return item.id === 'uncategorized' || owner == null || owner === currentUser.id;
 			}
-			if (type === 'question' || type === 'exam') {
+			if (type === 'question') {
+				return owner == null || owner === currentUser.id;
+			}
+			if (type === 'exam') {
 				return item.ownerId === currentUser.id;
 			}
 			if (type === 'class') {

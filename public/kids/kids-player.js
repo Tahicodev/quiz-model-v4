@@ -283,6 +283,12 @@
 		next: function () {
 			var questions = this.game.questions || [];
 			if (this.index >= questions.length) { this.finish(); return; }
+			// A fresh question dismisses the previous toast immediately.
+			try {
+				var oldToast = document.getElementById('kidToast');
+				if (oldToast) oldToast.classList.remove('show');
+				if (this.nudgeTimer) { clearTimeout(this.nudgeTimer); this.nudgeTimer = null; }
+			} catch (_) { /* ignore */ }
 			var q = questions[this.index];
 			this.locked = false;
 			this.questionStart = Date.now();
@@ -335,18 +341,20 @@
 			this.answers.push({ question_id: q.id, given: String(given == null ? '' : given), correct: correct, time_ms: timeMs });
 			var self = this;
 			try { if (this.renderer && this.renderer.lock) this.renderer.lock(correct, given); } catch (_) { }
-			var fb = document.getElementById('kidFeedback');
+			// Every message goes through the mascot toast — no inline text.
 			if (timedOut) {
-				if (fb) { fb.textContent = "Time's up! The answer glows below ⏰"; fb.className = 'kid-feedback bad'; }
+				this.nudge("Time's up! Watch it glow", '⏰');
 				MascotManager.set('encourage');
 				SoundManager.play('retry');
 			} else if (correct) {
-				if (fb) { fb.textContent = ['Bravo! 🎉', 'Awesome! ⭐', 'Super! 🌈'][Math.floor(Math.random() * 3)]; fb.className = 'kid-feedback good'; }
+				var cheers = [['Bravo!', '🎉'], ['Awesome!', '⭐'], ['Super!', '🌈']];
+				var cheer = cheers[Math.floor(Math.random() * cheers.length)];
+				this.nudge(cheer[0], cheer[1]);
 				MascotManager.set(this.score >= 3 ? 'excited' : 'happy');
 				SoundManager.play('correct');
 				this.starsRain(24);
 			} else {
-				if (fb) { fb.textContent = 'Good try! Look at the glowing answer 💡'; fb.className = 'kid-feedback bad'; }
+				this.nudge('Good try! Look at the glowing answer', '💡');
 				MascotManager.set('encourage');
 				SoundManager.play('retry');
 			}
@@ -419,6 +427,36 @@
 					return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
 				});
 			}
+		},
+		/**
+		 * Kid-friendly nudge toast for "do something first" hints (pick an
+		 * option, connect every pair…). Bouncy, auto-dismissing, with a soft
+		 * blip — much harder to miss than static helper text.
+		 */
+		nudge: function (text, icon) {
+			var self = this;
+			var toast = document.getElementById('kidToast');
+			if (!toast) {
+				toast = document.createElement('div');
+				toast.className = 'kid-toast';
+				toast.id = 'kidToast';
+				toast.setAttribute('role', 'status');
+				document.body.appendChild(toast);
+			}
+			toast.innerHTML = '<span class="kid-toast-emoji"></span>' +
+				'<span class="kid-toast-text"></span>';
+			toast.querySelector('.kid-toast-emoji').textContent = String(icon || '👆');
+			toast.querySelector('.kid-toast-text').textContent = String(text || '');
+			toast.classList.remove('show');
+			// Force reflow so re-nudges replay the spring animation.
+			void toast.offsetWidth;
+			toast.classList.add('show');
+			try { SoundManager.play('hint'); } catch (_) { /* silent */ }
+			if (this.nudgeTimer) clearTimeout(this.nudgeTimer);
+			this.nudgeTimer = setTimeout(function () {
+				toast.classList.remove('show');
+				self.nudgeTimer = null;
+			}, 1900);
 		},
 		starsRain: function (n) {
 			var rain = document.getElementById('kidStarsRain');

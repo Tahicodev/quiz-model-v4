@@ -12,6 +12,10 @@ export const CategoryUpdateSchema = CategoryCreateSchema.partial();
 export const CategoryFilterSchema = z.object({
   parent_id: z.string().uuid().optional().nullable(),
   search:    z.string().optional(),
+  // Admin-only: filter by author. Teachers are scoped automatically.
+  created_by: z.string().uuid().optional(),
+  // Set server-side from the JWT (routes overwrite any client value).
+  school_id:  z.string().optional(),
   limit:     z.coerce.number().int().min(1).max(200).default(100),
   offset:    z.coerce.number().int().min(0).default(0),
   orderBy:   z.enum(['name', 'created_at']).default('name'),

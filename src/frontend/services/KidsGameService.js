@@ -121,6 +121,75 @@ function splitTokens(raw) {
   return String(raw ?? '').split(/[|,;]/).map(s => s.trim().toLowerCase()).filter(Boolean);
 }
 
+const KIDS_CATEGORY_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6'];
+
+/** Stable per-name color so auto categories render a visible badge. */
+function kidsCategoryColor(name) {
+  let h = 0;
+  for (const ch of String(name || '')) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+  return KIDS_CATEGORY_COLORS[h % KIDS_CATEGORY_COLORS.length];
+}
+
+function b64encodeUnicode(str) {
+  const bytes = encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  if (typeof btoa === 'function') return btoa(bytes);
+  // Node fallback (this module also runs server-side).
+  return Buffer.from(str, 'utf8').toString('base64');
+}
+
+/**
+ * Canonical kid question → Question-table row (DB vocabulary), mirroring
+ * the api-client.js write mapper: mcq/order + meta::/multi:: answer encoding.
+ * Tags always carry `kids` and `kids:<gameId>` so copies stay traceable.
+ */
+export function toBankQuestion(kidQ, { schoolId, teacherId, categoryId, gameId }) {
+  const labels = optionsToLabels(kidQ.options_json ?? kidQ.options);
+  let type = 'mcq';
+  let answer = String(kidQ.answer ?? '').trim();
+  const meta = {};
+  switch (kidQ.type) {
+    case 'multiple-choice':
+      type = 'mcq';
+      if (kidQ.allowMultipleAnswers) {
+        const toks = answer.split(',').map(s => s.trim()).filter(Boolean);
+        answer = 'multi::' + toks.join('|');
+      }
+      break;
+    case 'true-false': type = 'true-false'; break;
+    case 'odd-one-out': type = 'mcq'; meta.odd = true; break;
+    case 'matching': type = 'matching'; break;
+    case 'draggable': type = 'order'; meta.drag = true; break;
+    case 'fill-blank': type = 'fill-blank'; break;
+    case 'code':
+      type = 'mcq';
+      meta.code = {
+        snippet: String(kidQ.codeSnippet || ''),
+        language: String(kidQ.codeLanguage || 'javascript'),
+        mode: String(kidQ.codeAnswerMode || 'multiple-choice'),
+      };
+      break;
+    default: type = 'mcq';
+  }
+  if (Object.keys(meta).length) {
+    answer = 'meta::' + b64encodeUnicode(JSON.stringify(meta)) + '::' + answer;
+  }
+  const media = kidQ.media_url ?? null;
+  return {
+    school_id: schoolId,
+    category_id: categoryId,
+    type,
+    text: String(kidQ.text ?? '').slice(0, 2000),
+    options_json: JSON.stringify(labels),
+    answer,
+    explanation: kidQ.explanation != null ? String(kidQ.explanation).slice(0, 2000) : null,
+    points: Math.min(100, Math.max(1, Number(kidQ.points) || 1)),
+    difficulty: ['easy', 'medium', 'hard'].includes(kidQ.difficulty) ? kidQ.difficulty : 'easy',
+    tags: `kids,kids:${gameId}`,
+    media_url: media && String(media).trim() ? String(media) : null,
+    created_by: teacherId,
+  };
+}
+
 function checkAnswer(question, given) {
   const type = KID_TYPE_ALIASES[question.type] || question.type;
   const answer = String(question.answer ?? '').trim();
@@ -270,7 +339,12 @@ export class KidsGameService {
     }
 
     const updated = await this.#repo.update('kidsGames', id, parsed.data);
-    return { ...updated, questions_json: parseJson(updated.questions_json, []), config_json: parseJson(updated.config_json, {}) };
+    const result = { ...updated, questions_json: parseJson(updated.questions_json, []), config_json: parseJson(updated.config_json, {}) };
+    // Keep published bank copies in sync when a live game is edited.
+    if (result.status === 'published') {
+      try { await this.#syncBank(result, currentUser); } catch (_) { /* bank sync is best-effort */ }
+    }
+    return result;
   }
 
   async delete(id, currentUser) {
@@ -282,7 +356,124 @@ export class KidsGameService {
       await this.#repo.delete('kidsGameSessions', session.id);
     }
 
+    await this.#removeBankCopies(existing, true);
     await this.#repo.delete('kidsGames', id);
+  }
+
+  // ─── Bank sync: published games file their question copies under a
+  // subject category (`Kids · <subject>`, shared by all of a teacher's games
+  // in that subject), so games surface in the Category and Question tabs
+  // with teacher attribution (created_by). Copies carry a `kids:<gameId>`
+  // tag so each game's set stays individually replaceable/removable.
+
+  #bankTag(gameId) {
+    return `kids:${gameId}`;
+  }
+
+  #bankCategoryName(game) {
+    const subject = String(game.subject || '').trim() || 'General';
+    return `Kids · ${subject}`.slice(0, 100);
+  }
+
+  async #ensureBankCategory(game, schoolId, teacherId) {
+    // A linked category is only reusable while it still matches the game's
+    // subject — categories are shared, so they are never renamed (a rename
+    // would relabel other games' questions too).
+    if (game.category_id) {
+      try {
+        const current = await this.#repo.getById('categories', game.category_id);
+        if (current && current.school_id === schoolId && current.name === this.#bankCategoryName(game)) {
+          if (!current.color) {
+            try { await this.#repo.update('categories', current.id, { color: kidsCategoryColor(current.name) }); } catch (_) { /* cosmetic */ }
+          }
+          return current.id;
+        }
+      } catch { /* gone or moved on — resolve below */ }
+    }
+    const base = this.#bankCategoryName(game);
+    for (let i = 0; i < 25; i++) {
+      const candidate = (i === 0 ? base : `${base.slice(0, 94)} (${i + 1})`).slice(0, 100);
+      const { data } = await this.#repo.getAll('categories', {
+        filters: { school_id: schoolId, name: candidate },
+        limit: 1,
+      });
+      if (!data?.length) {
+        const created = await this.#repo.create('categories', {
+          school_id: schoolId,
+          name: candidate,
+          color: kidsCategoryColor(candidate),
+          created_by: teacherId,
+        });
+        return created.id;
+      }
+      // Same teacher's own subject bucket: reuse it — every game's copies
+      // are tagged per game, and pruning only ever removes empty buckets.
+      // Backfill a color on older colorless buckets so the bank badge renders.
+      if (data[0].created_by === teacherId) {
+        if (!data[0].color) {
+          try { await this.#repo.update('categories', data[0].id, { color: kidsCategoryColor(data[0].name) }); } catch (_) { /* cosmetic */ }
+        }
+        return data[0].id;
+      }
+    }
+    throw new ConflictError('Could not allocate a bank category for this game');
+  }
+
+  /** Delete an auto (`Kids · …`) category, but only when fully empty. */
+  async #pruneCategoryIfEmpty(categoryId) {
+    if (!categoryId) return;
+    try {
+      const cat = await this.#repo.getById('categories', categoryId);
+      if (!cat || !String(cat.name || '').startsWith('Kids · ')) return;
+      const { total } = await this.#repo.getAll('questions', {
+        filters: { category_id: categoryId },
+        limit: 1,
+      });
+      if (!total) await this.#repo.delete('categories', categoryId);
+    } catch { /* in use or gone — leave it */ }
+  }
+
+  async #removeBankCopies(game, pruneCategory = false) {
+    if (!game.category_id) return;
+    const tag = this.#bankTag(game.id);
+    const { data: rows } = await this.#repo.getAll('questions', {
+      filters: { category_id: game.category_id },
+      limit: 1000,
+    });
+    for (const row of rows || []) {
+      const tags = String(row.tags || '').split(',').map(s => s.trim());
+      if (tags.includes(tag)) {
+        try { await this.#repo.delete('questions', row.id); } catch (_) { /* already gone */ }
+      }
+    }
+    // Prune the old subject bucket only when the whole game is deleted
+    // (never during a re-sync — the fresh copies are inserted right after).
+    if (!pruneCategory) return;
+    await this.#pruneCategoryIfEmpty(game.category_id);
+  }
+
+  async #syncBank(game, currentUser) {
+    const schoolId = currentUser?.school_id ?? game.school_id;
+    const teacherId = currentUser?.id ?? game.teacher_id;
+    if (!schoolId || !teacherId) return;
+    const oldCategoryId = game.category_id || null;
+    const categoryId = await this.#ensureBankCategory(game, schoolId, teacherId);
+    if (oldCategoryId && oldCategoryId !== categoryId) {
+      // Game moved to another subject: drop its copies from the old bucket.
+      await this.#removeBankCopies({ ...game, category_id: oldCategoryId });
+      await this.#pruneCategoryIfEmpty(oldCategoryId);
+    }
+    if (game.category_id !== categoryId) {
+      await this.#repo.update('kidsGames', game.id, { category_id: categoryId });
+      game.category_id = categoryId;
+    }
+    await this.#removeBankCopies({ ...game, category_id: categoryId });
+    const questions = Array.isArray(game.questions_json) ? game.questions_json : parseJson(game.questions_json, []);
+    for (const q of questions) {
+      await this.#repo.create('questions', toBankQuestion(q, {
+        schoolId, teacherId, categoryId, gameId: game.id,
+      }));
+    }
   }
 
   // ─── Publish / PIN ───
@@ -292,7 +483,9 @@ export class KidsGameService {
     this.#requireOwnerOrAdmin(existing, currentUser);
 
     if (existing.status === 'published') {
-      return existing;
+      // Backfill bank copies for games published before bank sync existed.
+      try { await this.#syncBank(existing, currentUser); } catch (_) { /* best-effort */ }
+      return this.getById(id, currentUser.school_id);
     }
 
     let pin;
@@ -309,7 +502,11 @@ export class KidsGameService {
       pin,
     });
 
-    return { ...updated, questions_json: parseJson(updated.questions_json, []), config_json: parseJson(updated.config_json, {}) };
+    const result = { ...updated, questions_json: parseJson(updated.questions_json, []), config_json: parseJson(updated.config_json, {}) };
+    // Publishing pushes a category + tagged question copies into the bank
+    // (Category / Question tabs). Best-effort: the PIN flow must not fail.
+    try { await this.#syncBank(result, currentUser); } catch (_) { /* best-effort */ }
+    return this.getById(id, currentUser.school_id);
   }
 
   async archive(id, currentUser) {

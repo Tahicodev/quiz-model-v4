@@ -224,6 +224,10 @@ function createQuestionRow(question, index) {
 	// Use renderQuestionContent for the merged column
 	const questionType = normalizeQuestionTypeForStorage(question.type, question);
 
+	// Author badge only. The category already renders via
+	// renderQuestionContent's own category badge — do NOT duplicate it here.
+	const badgeOwnerHtml = `<span class="q-owner-badge" title="Created by">${escapeHtml(getOwnerLabel(getOwnerId(question)))}</span>`;
+
 	row.innerHTML = `
         <td class="checkbox-cell" data-label="Select">
             <input type="checkbox" 
@@ -244,6 +248,7 @@ function createQuestionRow(question, index) {
 									false
 								)}
             </div>
+            <div class="q-badges">${badgeOwnerHtml}</div>
         </td>
         <td class="options-cell" data-label="Options">
             ${(() => {
@@ -1419,6 +1424,19 @@ async function addOrUpdateQuestion() {
 			JSON.stringify(questionObj, null, 2)
 		);
 
+		// Kids Games Studio capture: when the wizard's Manual tab opened this
+		// editor, hand the fully-built object back to the wizard instead of
+		// saving it into the bank. One-shot — always cleared after use.
+		if (window.__kidsManualCapture) {
+			const capture = window.__kidsManualCapture;
+			window.__kidsManualCapture = null;
+			try { closeQuestionFormModal(); } catch (_) { /* ignore */ }
+			try { capture(questionObj); } catch (err) {
+				console.error('[questions] kids capture failed:', err);
+			}
+			return;
+		}
+
 		if (editIndex === -1) {
 			// Add creation date for activity feed
 			questionObj.dateCreated = new Date().toISOString();
@@ -1557,11 +1575,15 @@ function renderQuestionContent(
 		(cat) => cat.id === categoryId || cat.name === categoryId
 	) || { name: 'Uncategorized', color: '#9ca3af' };
 
-	// Create category badge
+	// Create category badge — always with a valid background and a
+	// luminance-picked text color so it stays readable (never invisible).
+	const badgeColors = (typeof badgeColorsFor === 'function')
+		? badgeColorsFor(category.color)
+		: { background: category.color || '#4f46e5', color: 'white' };
 	const categoryBadge = `
         <span class="category-badge" style="background-color: ${
-					category.color
-				}; color: white;">
+					badgeColors.background
+				}; color: ${badgeColors.color};">
             ${escapeHtml(category.name)}
         </span>
     `;
@@ -4334,6 +4356,9 @@ function closeQuestionFormModal() {
 		document.getElementById('questionForm').reset();
 		editIndex = -1;
 		closeQuestionModalTimer = null;
+		// Never leak a Kids Studio capture into a later bank save: closing
+		// without saving simply discards the pending capture.
+		try { window.__kidsManualCapture = null; } catch (_) { /* ignore */ }
 	}, 300);
 }
 

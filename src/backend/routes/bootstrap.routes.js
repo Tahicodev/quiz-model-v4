@@ -477,6 +477,11 @@ router.get('/', async (req, res, next) => {
             query.filters.class_id = req.user.class_id ?? '__none__';
           }
         }
+        // Teachers see their own bank rows plus unattributed legacy rows
+        // (created_by NULL = historically shared content). Admins see all.
+        if (req.user?.role === ROLES.TEACHER && (table === 'questions' || table === 'categories')) {
+          query.or = [{ created_by: req.user.id }, { created_by: null }];
+        }
         const { data: rows } = await repo.getAll(table, { ...query, limit: 100000 });
         data[table] = rows;
       } catch (err) {

@@ -12,8 +12,7 @@
 		this.root.innerHTML = '<div class="kid-card"><p class="kid-question">' + esc(this.question.text || 'Build the tower in order! 🏗️') + '</p>' +
 			'<p class="hint">Use ▲ ▼ to move the blocks, then press Build!</p>' +
 			'<div class="kid-tower" id="kidTower"></div>' +
-			'<button class="kid-btn green" id="kidCheck">Build! 🏗️</button>' +
-			'<div id="kidFeedback" class="kid-feedback"></div></div>';
+			'<button class="kid-btn green" id="kidCheck">Build! 🏗️</button></div>';
 		this.draw();
 		this.root.querySelector('#kidCheck').addEventListener('click', function () {
 			if (self.done) return;

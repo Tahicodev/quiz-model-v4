@@ -25,7 +25,20 @@ export const KidsGameCreateSchema = z.object({
   status:         z.enum(KIDS_STATUS).default('draft'),
 });
 
-export const KidsGameUpdateSchema = KidsGameCreateSchema.partial();
+// NOTE: intentionally NOT `KidsGameCreateSchema.partial()` — .partial()
+// keeps .default() values, so any PATCH omitting `status`/`theme` would
+// silently reset them to draft/jungle (unpublishing live games).
+export const KidsGameUpdateSchema = z.object({
+  name:           z.string().min(1).max(200).optional(),
+  description:    z.string().max(1000).optional().nullable(),
+  game_type:      z.enum(KIDS_GAME_TYPES).optional(),
+  theme:          z.enum(KIDS_THEMES).optional(),
+  grade:          z.enum(KIDS_GRADES).optional().nullable(),
+  subject:        z.string().max(100).optional().nullable(),
+  questions_json: z.string().min(2).optional(),
+  config_json:    z.string().optional().nullable(),
+  status:         z.enum(KIDS_STATUS).optional(),
+});
 
 export const KidsGameFilterSchema = z.object({
   game_type:  z.enum(KIDS_GAME_TYPES).optional(),

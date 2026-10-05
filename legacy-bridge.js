@@ -688,7 +688,12 @@
         url = base + '/' + encodeURIComponent(payload.id);
       } else {
         // 'bulk' — used by setAll_sync / setValue_sync.
-        if (!payload || (Array.isArray(payload) && payload.length === 0 && !SNAPSHOT_TABLES[table])) return;
+        // Nothing to send (e.g. a cleared non-snapshot store): resolve like
+        // any other skip. Callers chain .then() unconditionally, so a bare
+        // return here surfaces as "Cannot read properties of undefined".
+        if (!payload || (Array.isArray(payload) && payload.length === 0 && !SNAPSHOT_TABLES[table])) {
+          return Promise.resolve({ skipped: true });
+        }
         init.method = 'POST';
         var body = Array.isArray(payload)
           ? { items: payload }

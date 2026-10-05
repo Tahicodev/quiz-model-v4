@@ -16,8 +16,7 @@
 				if (self.question.media_url && opts.length <= 4) { /* per-option images unsupported: show shared media */ }
 				return '<button class="kid-tile" data-opt="' + escAttr(o) + '">' + img + esc(o) + '</button>';
 			}).join('') + '</div>' +
-			'<button class="kid-btn green" id="kidCheck">That one! 👆</button>' +
-			'<div id="kidFeedback" class="kid-feedback"></div></div>';
+			'<button class="kid-btn green" id="kidCheck">That one! 👆</button></div>';
 		this.root.querySelectorAll('.kid-tile').forEach(function (t) {
 			t.addEventListener('click', function () {
 				if (self.done) return;
@@ -27,7 +26,11 @@
 			});
 		});
 		this.root.querySelector('#kidCheck').addEventListener('click', function () {
-			if (self.done || self.picked == null) return;
+			if (self.done) return;
+			if (self.picked == null) {
+				self.engine.nudge('Which one is different? Tap it!', '🧺');
+				return;
+			}
 			self.done = true;
 			self.engine.answer(self.picked);
 		});

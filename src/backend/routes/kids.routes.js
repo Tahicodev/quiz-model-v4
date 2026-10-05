@@ -162,21 +162,45 @@ router.get('/:id/sessions', async (req, res, next) => {
 // Wraps the existing AI pipeline: game_type → question type, kid audience
 // params injected, output converted to canonical kid questions.
 
+/**
+ * Pull code parts out of an AI draft. The generator is asked for a snippet
+ * plus metadata, but older outputs embed fenced blocks in the question text —
+ * both shapes are accepted here.
+ */
+function extractDraftCode(draft) {
+  let snippet = draft.codeSnippet ?? draft.snippet ?? draft.code ?? '';
+  let language = draft.codeLanguage ?? draft.language ?? 'javascript';
+  let mode = draft.codeAnswerMode ?? draft.answerMode ?? draft.answer_mode ?? null;
+  let prompt = draft.question ?? draft.text ?? '';
+  if (!String(snippet).trim() && typeof prompt === 'string') {
+    const fenced = prompt.match(/```(\w*)\s*\n([\s\S]*?)```/);
+    if (fenced) {
+      if (fenced[1]) language = fenced[1];
+      snippet = fenced[2].trim();
+      prompt = prompt.replace(fenced[0], '').trim();
+    }
+  }
+  return { snippet: String(snippet || ''), language: String(language || 'javascript'), mode, prompt: String(prompt || '') };
+}
+
 /** AI-service draft shape → canonical kid question (plan §2.3). */
 function aiDraftToKidQuestion(draft, extra = {}) {
   const options = Array.isArray(draft.options)
     ? draft.options.map((o) => (o && typeof o === 'object' ? String(o.label ?? o.text ?? '') : String(o ?? '')).trim()).filter(Boolean)
     : [];
+  const isCode = (draft.type || '') === 'code';
+  const code = isCode ? extractDraftCode(draft) : null;
   return normalizeKidQuestion({
     id: draft.id || randomUUID(),
     type: draft.type || 'multiple-choice',
-    text: draft.question || draft.text || '',
+    text: isCode ? (code.prompt || draft.question || draft.text || '') : (draft.question || draft.text || ''),
     options_json: JSON.stringify(options),
     answer: draft.answer || '',
     explanation: draft.explanation || '',
     points: draft.points ?? 1,
     difficulty: draft.difficulty || 'easy',
     media_url: draft.media_url || null,
+    ...(isCode ? { codeSnippet: code.snippet, codeLanguage: code.language, codeAnswerMode: code.mode } : {}),
     ...extra,
   });
 }

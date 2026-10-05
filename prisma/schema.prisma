@@ -167,6 +167,8 @@ model Category {
   parent_id  String?
   icon       String?
   color      String? // hex color for UI
+  // Author (teacher/admin user id). NULL = legacy shared row, visible to all.
+  created_by String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -174,10 +176,12 @@ model Category {
   parent    Category?  @relation("CategoryTree", fields: [parent_id], references: [id], onDelete: SetNull)
   children  Category[] @relation("CategoryTree")
   questions Question[]
+  kidsGames KidsGame[]
 
   @@unique([school_id, name])
   @@index([school_id])
   @@index([parent_id])
+  @@index([created_by])
 }
 
 model Question {
@@ -193,6 +197,8 @@ model Question {
   difficulty   String   @default("medium")
   tags         String? // comma-separated tags for filtering
   media_url    String? // optional image/audio attachment
+  // Author (teacher/admin user id). NULL = legacy shared row, visible to all.
+  created_by   String?
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
@@ -204,6 +210,7 @@ model Question {
   @@index([category_id])
   @@index([type])
   @@index([difficulty])
+  @@index([created_by])
 }
 
 // ─── Exams ───────────────────────────────────────────────────────────────────
@@ -648,11 +655,14 @@ model KidsGame {
   status         String   @default("draft") // draft | published | archived
   pin            String?  @unique // 4-char uppercase, set on publish
   play_count     Int      @default(0)
+  // Auto-created bank category holding this game's published question copies.
+  category_id    String?
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
 
   school   School            @relation(fields: [school_id], references: [id], onDelete: Cascade)
   teacher  User              @relation("KidsGameTeacher", fields: [teacher_id], references: [id], onDelete: Cascade)
+  category Category?         @relation(fields: [category_id], references: [id], onDelete: SetNull)
   sessions KidsGameSession[]
 
   @@index([school_id])

@@ -20,6 +20,55 @@ function escapeHtml(unsafe) {
 }
 
 /**
+ * Author attribution helpers (teacher-owned content).
+ * Server rows carry `created_by` (nullable user id); legacy cached rows may
+ * carry `ownerId` instead. NULL/absent = historically shared content.
+ * @returns {string|null} owner user id or null when shared
+ */
+function getOwnerId(item) {
+    if (!item) return null;
+    const id = item.ownerId || item.created_by || item.createdBy || null;
+    return id != null && String(id) !== '' ? String(id) : null;
+}
+
+/**
+ * Human label for an owner id: "You" for the current user, the user's name
+ * for anyone else (resolved from the cached users table), "Shared" for
+ * unattributed legacy rows.
+ */
+function getOwnerLabel(ownerId) {
+    if (!ownerId) return 'Shared';
+    try {
+        const me = window.Auth && window.Auth.getCurrentUser ? window.Auth.getCurrentUser() : null;
+        const myId = me && (me.id || me.userId);
+        if (myId && String(myId) === String(ownerId)) return 'You';
+        const users = (window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo && window.__DI_CONTAINER__.repo.getAll_sync)
+            ? window.__DI_CONTAINER__.repo.getAll_sync('users') || []
+            : [];
+        const found = users.find((u) => String(u.id) === String(ownerId));
+        if (found) return found.name || found.username || 'Teacher';
+    } catch (_) { /* fall through */ }
+    return 'Teacher';
+}
+
+/**
+ * Picks a readable text color (near-black or white) for a given background
+ * hex color, using relative luminance. Falls back to a brand indigo
+ * background when the input is missing or invalid — badges never render
+ * invisible (transparent background + wrong-colored text).
+ * @returns {{background: string, color: string}}
+ */
+function badgeColorsFor(background, fallback = '#4f46e5') {
+    let bg = String(background || '').trim();
+    if (!/^#[0-9A-Fa-f]{6}$/.test(bg)) bg = fallback;
+    const r = parseInt(bg.slice(1, 3), 16) / 255;
+    const g = parseInt(bg.slice(3, 5), 16) / 255;
+    const b = parseInt(bg.slice(5, 7), 16) / 255;
+    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return { background: bg, color: lum > 0.55 ? '#1f2937' : '#ffffff' };
+}
+
+/**
  * Generates a random UUID v4
  * @returns {string} A UUID string
  */

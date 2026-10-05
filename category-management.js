@@ -1866,6 +1866,7 @@ function updateCategoryList(categoriesList = categories) {
             </td>
             <td>${escapeHtml(category.description || '')}</td>
             <td>${category.questionCount}</td>
+            <td data-label="By"><span class="q-owner-badge" title="Created by">${escapeHtml(getOwnerLabel(getOwnerId(category)))}</span></td>
             <td>${(() => {
 							const rawCreatedAt =
 								category.dateCreated ||

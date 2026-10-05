@@ -11,10 +11,11 @@ export class QuestionService {
   constructor(repo) { this.#repo = repo; }
 
   async list(filters = {}, pagination = {}) {
-    const parsed = QuestionFilterSchema.safeParse({ ...filters, ...pagination });
+    const { or = null, ...restFilters } = filters;
+    const parsed = QuestionFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
-    return this.#repo.getAll('questions', { filters: rest, limit, offset, orderBy, direction, search });
+    return this.#repo.getAll('questions', { filters: rest, limit, offset, orderBy, direction, search, ...(or ? { or } : {}) });
   }
 
   async getById(id) {
@@ -30,6 +31,9 @@ export class QuestionService {
     return this.#repo.create('questions', {
       ...parsed.data,
       school_id: currentUser?.school_id,
+      // Author attribution for teacher-scoped libraries (admin badge display
+      // + "my questions" filtering). NULL-safe: legacy callers omit it.
+      ...(currentUser?.id ? { created_by: currentUser.id } : {}),
     });
   }
 
@@ -76,6 +80,7 @@ export class QuestionService {
       const created = await this.#repo.create('questions', {
         ...parsed.data,
         school_id: currentUser?.school_id,
+        ...(currentUser?.id ? { created_by: currentUser.id } : {}),
       });
       imported.push(created);
     }

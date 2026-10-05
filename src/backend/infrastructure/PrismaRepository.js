@@ -121,6 +121,10 @@ export class PrismaRepository extends IStorageRepository {
 		table,
 		{
 			filters = {},
+			// Optional extra OR group AND-ed with everything else, e.g.
+			// [{ created_by: me }, { created_by: null }] for teacher scoping.
+			// Kept separate from `search` so both can combine safely.
+			or = null,
 			limit = 50,
 			offset = 0,
 			orderBy = DEFAULT_ORDER_BY[table] ?? 'created_at',
@@ -130,15 +134,21 @@ export class PrismaRepository extends IStorageRepository {
 	) {
 		// Exact-match filters pass straight through.
 		const where = { ...filters };
+		const ors = [];
 
 		if (search) {
 			const fields = SEARCH_FIELDS[MODEL_MAP[table] ?? table] ?? [];
 			if (fields.length) {
-				where.OR = fields.map((field) => ({
-					[field]: { contains: search },
-				}));
+				ors.push({
+					OR: fields.map((field) => ({
+						[field]: { contains: search },
+					})),
+				});
 			}
 		}
+		if (Array.isArray(or) && or.length) ors.push({ OR: or });
+		if (ors.length === 1) Object.assign(where, ors[0]);
+		else if (ors.length > 1) where.AND = ors;
 
 		const order = { [orderBy]: direction };
 

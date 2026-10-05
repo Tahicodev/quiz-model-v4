@@ -12,17 +12,40 @@ import { requireRole } from '../middleware/role.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { QuestionCreateSchema, QuestionUpdateSchema, QuestionFilterSchema } from '../../shared/schemas/question.schema.js';
 import { ROLES } from '../../shared/constants.js';
+import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
 
+/**
+ * Teachers are confined to their own rows. Legacy unattributed rows
+ * (created_by NULL = historically shared content) stay visible to them;
+ * anything authored by another teacher is forbidden.
+ */
+function assertOwnership(row, user) {
+  if (!row) return;
+  if (user.role !== ROLES.TEACHER) return;
+  if (row.created_by && row.created_by !== user.id) {
+    throw new ForbiddenError('Not your question');
+  }
+}
+
 // GET /api/v1/questions
 router.get('/', validateQuery(QuestionFilterSchema), async (req, res, next) => {
   try {
     const { questionSvc } = getContainer();
-    const { limit, offset, orderBy, direction, search, ...filters } = req.query;
-    const result = await questionSvc.list({ ...filters, school_id: req.schoolId }, { limit, offset, orderBy, direction, search });
+    const { limit, offset, orderBy, direction, search, created_by, ...filters } = req.query;
+    // Teachers see their own rows plus unattributed legacy rows
+    // (created_by NULL = historically shared content). Admins see all,
+    // optionally narrowed to one author via ?created_by=.
+    const or = req.user.role === ROLES.TEACHER
+      ? [{ created_by: req.user.id }, { created_by: null }]
+      : null;
+    const result = await questionSvc.list(
+      { ...filters, school_id: req.schoolId, ...(created_by && req.user.role !== ROLES.TEACHER ? { created_by } : {}), ...(or ? { or } : {}) },
+      { limit, offset, orderBy, direction, search },
+    );
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -32,6 +55,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { questionSvc } = getContainer();
     const q = await questionSvc.getById(req.params.id);
+    assertOwnership(q, req.user);
     res.json(q);
   } catch (err) { next(err); }
 });
@@ -50,6 +74,7 @@ router.post('/', requireRole([ROLES.ADMIN, ROLES.TEACHER]), validate(QuestionCre
 router.patch('/:id', requireRole([ROLES.ADMIN, ROLES.TEACHER]), validate(QuestionUpdateSchema), async (req, res, next) => {
   try {
     const { questionSvc, auditSvc } = getContainer();
+    assertOwnership(await questionSvc.getById(req.params.id), req.user);
     const updated = await questionSvc.update(req.params.id, req.body, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'question', entityId: updated.id, action: 'update', ip: req.ip });
     res.json(updated);
@@ -60,6 +85,7 @@ router.patch('/:id', requireRole([ROLES.ADMIN, ROLES.TEACHER]), validate(Questio
 router.delete('/:id', requireRole([ROLES.ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const { questionSvc, auditSvc } = getContainer();
+    assertOwnership(await questionSvc.getById(req.params.id), req.user);
     await questionSvc.delete(req.params.id, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'question', entityId: req.params.id, action: 'delete', ip: req.ip });
     res.status(204).send();

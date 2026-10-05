@@ -12,7 +12,7 @@
 			'<button class="kid-pad pad-false" data-v="false">❌<br>FALSE</button>' +
 			'<div class="kid-frog" id="kidFrog">🐸</div>' +
 			'<button class="kid-pad pad-true" data-v="true">✅<br>TRUE</button>' +
-			'</div><div id="kidFeedback" class="kid-feedback"></div></div>';
+			'</div></div>';
 		this.root.querySelectorAll('.kid-pad').forEach(function (p) {
 			p.addEventListener('click', function () {
 				if (self.hopped) return;

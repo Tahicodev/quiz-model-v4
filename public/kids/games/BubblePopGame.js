@@ -16,7 +16,7 @@
 				return '<div class="kid-bubble" data-opt="' + escAttr(o) + '" data-i="' + i + '" ' +
 					'style="width:' + size + 'px;height:' + size + 'px;font-size:' + (size > 130 ? 1 : 0.85) + 'rem;' +
 					'background:' + KP.colors[i % KP.colors.length] + ';animation-delay:' + (i * 0.35) + 's">' + esc(o) + '</div>';
-			}).join('') + '</div><div id="kidFeedback" class="kid-feedback"></div></div>';
+			}).join('') + '</div></div>';
 		this.root.innerHTML = html;
 		// Scatter bubbles pseudo-randomly inside the stage.
 		var stage = this.root.querySelector('#kidStage');

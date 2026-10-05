@@ -15,8 +15,7 @@
 			opts.map(function (o) {
 				return '<button class="kid-star" data-opt="' + escAttr(o) + '"><span class="star-ico">⭐</span>' + esc(o) + '</button>';
 			}).join('') + '</div>' +
-			'<button class="kid-btn green" id="kidCheck">Check! ✅</button>' +
-			'<div id="kidFeedback" class="kid-feedback"></div></div>';
+			'<button class="kid-btn green" id="kidCheck">Check! ✅</button></div>';
 		this.root.querySelectorAll('.kid-star').forEach(function (s) {
 			s.addEventListener('click', function () {
 				if (self.done) return;
@@ -28,6 +27,10 @@
 		});
 		this.root.querySelector('#kidCheck').addEventListener('click', function () {
 			if (self.done) return;
+			if (!Object.keys(self.selected).length) {
+				self.engine.nudge('Tap all the correct stars!', '⭐');
+				return;
+			}
 			self.done = true;
 			self.engine.answer(Object.keys(self.selected).join(','));
 		});

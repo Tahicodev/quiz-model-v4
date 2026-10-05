@@ -25,6 +25,10 @@ export const QuestionFilterSchema = z.object({
   difficulty:  z.enum(difficultyValues).optional(),
   search:      z.string().optional(),
   tags:        z.string().optional(),
+  // Admin-only: filter by author. Teachers are scoped automatically.
+  created_by:  z.string().uuid().optional(),
+  // Set server-side from the JWT (routes overwrite any client value).
+  school_id:   z.string().optional(),
   limit:       z.coerce.number().int().min(1).max(200).default(50),
   offset:      z.coerce.number().int().min(0).default(0),
   orderBy:     z.enum(['created_at', 'text', 'difficulty', 'points']).default('created_at'),

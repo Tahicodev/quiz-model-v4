@@ -32,16 +32,14 @@
 			rights.map(function (r) { return '<button class="kid-pair-item" data-side="right" data-v="' + escAttr(r) + '">' + esc(r) + '</button>'; }).join('') +
 			'</div></div>' +
 			'<div class="kid-links" id="kidLinks"></div>' +
-			'<button class="kid-btn green" id="kidCheck">Check! ✅</button>' +
-			'<div id="kidFeedback" class="kid-feedback"></div></div>';
+			'<button class="kid-btn green" id="kidCheck">Check! ✅</button></div>';
 		this.root.querySelectorAll('.kid-pair-item').forEach(function (el) {
 			el.addEventListener('click', function () { self.tap(el); });
 		});
 		this.root.querySelector('#kidCheck').addEventListener('click', function () {
 			if (self.done) return;
 			if (self.links.length !== self.pairs.length) {
-				var fb = self.root.querySelector('#kidFeedback');
-				if (fb) { fb.textContent = 'Connect every pair first! 🔗'; fb.className = 'kid-feedback bad'; }
+				self.engine.nudge('Connect every pair first!', '🔗');
 				return;
 			}
 			self.done = true;

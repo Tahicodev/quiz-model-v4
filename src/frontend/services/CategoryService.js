@@ -12,10 +12,11 @@ export class CategoryService {
   constructor(repo) { this.#repo = repo; }
 
   async list(filters = {}, pagination = {}) {
-    const parsed = CategoryFilterSchema.safeParse({ ...filters, ...pagination });
+    const { or = null, ...restFilters } = filters;
+    const parsed = CategoryFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
-    return this.#repo.getAll('categories', { filters: rest, limit, offset, orderBy, direction, search });
+    return this.#repo.getAll('categories', { filters: rest, limit, offset, orderBy, direction, search, ...(or ? { or } : {}) });
   }
 
   /**
@@ -56,6 +57,8 @@ export class CategoryService {
     return this.#repo.create('categories', {
       ...parsed.data,
       school_id: currentUser?.school_id,
+      // Author attribution for teacher-scoped libraries (see QuestionService).
+      ...(currentUser?.id ? { created_by: currentUser.id } : {}),
     });
   }
 

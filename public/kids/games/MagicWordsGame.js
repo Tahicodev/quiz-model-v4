@@ -31,8 +31,7 @@
 			bank.map(function (w) { return '<button class="kid-word" data-w="' + escAttr(w) + '">' + esc(w) + '</button>'; }).join('') +
 			'</div>' +
 			(!bank.length ? '<div style="margin-top:12px"><input id="kidTyped" class="kid-name-input" placeholder="Type the magic word…" autocomplete="off" /></div>' : '') +
-			'<br><button class="kid-btn green" id="kidCheck">Cast the spell! ✨</button>' +
-			'<div id="kidFeedback" class="kid-feedback"></div></div>';
+			'<br><button class="kid-btn green" id="kidCheck">Cast the spell! ✨</button></div>';
 		this.root.querySelectorAll('.kid-word').forEach(function (chip) {
 			chip.addEventListener('click', function () {
 				if (self.done || chip.classList.contains('used')) return;
@@ -65,11 +64,10 @@
 			var given;
 			if (typed) {
 				given = String(typed.value || '').trim();
-				if (!given) return;
+				if (!given) { self.engine.nudge('Type the magic word!', '✏️'); return; }
 			} else {
 				if (self.slots.some(function (s) { return !s; })) {
-					var fb = self.root.querySelector('#kidFeedback');
-					if (fb) { fb.textContent = 'Fill every blank first! ✨'; fb.className = 'kid-feedback bad'; }
+					self.engine.nudge('Fill every blank first!', '✨');
 					return;
 				}
 				given = self.slots.length > 1
