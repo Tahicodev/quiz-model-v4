@@ -23,8 +23,10 @@ const DEFAULT_SETTINGS = {
 	realtimeSyncInterval: 5,
 	// Training mode setting
 	trainingPresetId: '',
-	// Teacher access controls
+	// Teacher access controls (rev stamps the defaults revision — see auth.js
+	// getTeacherAccessSettings; bumped whenever a default flips meaning).
 	teacherAccess: {
+		rev: 2,
 		tabs: {
 			overview: true,
 			questions: true,
@@ -32,17 +34,21 @@ const DEFAULT_SETTINGS = {
 			exams: true,
 			classes: true,
 			games: true,
+			kidsGames: true,
 			results: true,
-			activity: true,
-			monitoring: true,
+			// Activity Log and Monitoring are admin-only views, hard-hidden
+			// for teachers in every gate (no toggle exists for them).
+			activity: false,
+			monitoring: false,
 		},
 		settings: true,
 		settingsTabs: {
 			general: true,
+			profile: true,
 			presets: true,
-			// Data and Realtime are school-wide admin concerns
-			// (full backups, LAN server config) — off for teachers by default.
-			data: false,
+			// The Data tab carries a teacher-scoped "My Data" section; the
+			// school-wide backup groups inside it stay markup-gated to admins.
+			data: true,
 			realtime: false,
 			'ai-generation': true,
 			users: true,
@@ -175,6 +181,29 @@ function openSettingsModal() {
 			}
 			return;
 		}
+	}
+	// No signed-in identity means role gating never ran for this page load.
+	// Refuse instead of exposing the admin-only tabs (Realtime, Setup,
+	// Teacher Access) to what should be a teacher session.
+	if (
+		window.Auth &&
+		typeof window.Auth.getCurrentUser === 'function' &&
+		!window.Auth.getCurrentUser()
+	) {
+		if (typeof showToast === 'function') showToast('Access denied', 'error');
+		return;
+	}
+	// Re-apply role gating every time the modal opens so the admin-only
+	// tabs stay hidden for teachers even if an earlier UI pass was skipped
+	// by an error elsewhere on the page.
+	if (window.Auth && typeof window.Auth.applyRolePermissions === 'function') {
+		window.Auth.applyRolePermissions();
+	}
+	// School Information is admin-only editable: teachers get the panel as
+	// read-only information (fields disabled + notice). Re-applied on every
+	// open so a mid-session role change can't leave the fields editable.
+	if (typeof applyGeneralTabPermissions === 'function') {
+		applyGeneralTabPermissions();
 	}
 	const modal = document.getElementById('settingsModal');
 	if (!modal) return;
@@ -512,12 +541,12 @@ function populateTeacherAccessForm() {
 		exams: 'teacher-access-exams',
 		classes: 'teacher-access-classes',
 		games: 'teacher-access-games',
-		monitoring: 'teacher-access-monitoring',
+		kidsGames: 'teacher-access-kidsgames',
 		results: 'teacher-access-results',
-		activity: 'teacher-access-activity',
 	};
 	const settingsMap = {
 		general: 'teacher-access-settings-general',
+		profile: 'teacher-access-settings-profile',
 		presets: 'teacher-access-settings-presets',
 		data: 'teacher-access-settings-data',
 		realtime: 'teacher-access-settings-realtime',
@@ -562,12 +591,12 @@ function readTeacherAccessForm() {
 		exams: 'teacher-access-exams',
 		classes: 'teacher-access-classes',
 		games: 'teacher-access-games',
+		kidsGames: 'teacher-access-kidsgames',
 		results: 'teacher-access-results',
-		activity: 'teacher-access-activity',
-		monitoring: 'teacher-access-monitoring',
 	};
 	const settingsMap = {
 		general: 'teacher-access-settings-general',
+		profile: 'teacher-access-settings-profile',
 		presets: 'teacher-access-settings-presets',
 		data: 'teacher-access-settings-data',
 		realtime: 'teacher-access-settings-realtime',
@@ -577,6 +606,7 @@ function readTeacherAccessForm() {
 	};
 
 	const nextAccess = {
+		rev: 2,
 		tabs: { ...access.tabs },
 		settings: access.settings,
 		settingsTabs: { ...access.settingsTabs },
@@ -600,7 +630,7 @@ function readTeacherAccessForm() {
 
 // Switch Tabs
 function switchSettingsTab(event, tabName) {
-	// Role guard: admin-only tabs (teacher-access, data, realtime) can never be
+	// Role guard: admin-only tabs (teacher-access, realtime, setup) can never be
 	// opened by a teacher, even via console calls or stale cached buttons.
 	if (
 		typeof window.Auth === 'object' &&
@@ -657,6 +687,9 @@ function switchSettingsTab(event, tabName) {
 		// Refresh school-year archives when the Data tab opens.
 		if (tabName === 'data' && window.archivesRefresh) {
 			window.archivesRefresh();
+		}
+		if (tabName === 'profile' && typeof populateOwnProfile === 'function') {
+			populateOwnProfile();
 		}
 	}
 
@@ -1014,15 +1047,27 @@ window.switchSettingsTab = switchSettingsTab;
  * general/realtime/presets settings (which closes the modal when done).
  */
 async function saveAllSettings() {
-	const schoolName = (
-		document.getElementById('setting-schoolName')?.value || ''
-	).trim();
-	if (schoolName && typeof saveSchoolInfoForm === 'function') {
-		try {
-			await saveSchoolInfoForm();
-		} catch (err) {
-			console.warn('[settings] school info save failed:', err);
+	// School info is admin-only (the saveSchoolInfoForm guard would just
+	// toast an error) — skip the PUT entirely for teacher sessions.
+	const canEditSchoolInfo =
+		typeof window.Auth?.isAdmin === 'function' &&
+		window.Auth.isAdmin() === true;
+	if (canEditSchoolInfo && typeof saveSchoolInfoForm === 'function') {
+		const schoolName = (
+			document.getElementById('setting-schoolName')?.value || ''
+		).trim();
+		if (schoolName) {
+			try {
+				await saveSchoolInfoForm();
+			} catch (err) {
+				console.warn('[settings] school info save failed:', err);
+			}
 		}
+	}
+	// The My Profile card has no button of its own — it rides along here.
+	if (typeof saveOwnProfileIfDirty === 'function') {
+		const profileOk = await saveOwnProfileIfDirty(false);
+		if (!profileOk) return;
 	}
 	await saveSettingsForm({ closeModal: true, notify: true });
 }
@@ -2237,6 +2282,28 @@ window.refreshTrainingPresetDropdown = refreshTrainingPresetDropdown;
 // The General tab is now the School Information panel only. Fields are stored
 // on the server via /school/profile (same endpoint the Quick Start wizard
 // uses). We re-fetch on modal open so the form always shows server truth.
+//
+// Admin-only editing: PUT /school/profile is requireRole(ADMIN, SUPER_ADMIN),
+// so teachers must see the panel as pure information. applyGeneralTabPermissions
+// disables every field, flips the section into .read-only and shows the
+// "View only" notice; saveAllSettings/saveSchoolInfoForm skip the PUT for
+// non-admins so pressing Save never fires a guaranteed 403.
+
+function applyGeneralTabPermissions() {
+	const section = document.getElementById('general-settings');
+	if (!section) return false;
+	const canEdit =
+		typeof window.Auth?.isAdmin === 'function' && window.Auth.isAdmin() === true;
+	section.classList.toggle('read-only', !canEdit);
+	section.querySelectorAll('input, select, textarea').forEach((el) => {
+		el.disabled = !canEdit;
+	});
+	const notice = document.getElementById('generalReadOnlyNotice');
+	if (notice) notice.hidden = canEdit;
+	return canEdit;
+}
+
+window.applyGeneralTabPermissions = applyGeneralTabPermissions;
 
 let schoolInfoLoadPromise = null;
 
@@ -2268,6 +2335,17 @@ function loadSchoolInfoForm() {
 }
 
 function saveSchoolInfoForm() {
+	// Client-side mirror of the server's requireRole(ADMIN, SUPER_ADMIN):
+	// never attempt the PUT for a teacher session.
+	if (
+		typeof window.Auth?.isAdmin !== 'function' ||
+		window.Auth.isAdmin() !== true
+	) {
+		if (typeof showToast === 'function') {
+			showToast('Only administrators can edit school information', 'error');
+		}
+		return;
+	}
 	const name = (document.getElementById('setting-schoolName')?.value || '')
 		.trim();
 	if (!name) {
@@ -2535,3 +2613,460 @@ function importAIQuestions(inputElement) {
 }
 
 window.importAIQuestions = importAIQuestions;
+
+// ?? My Profile (self-service account) ?????????????????????????????????????
+// Visible to admins and teachers (students use the workspace profile).
+// Name/title/contacts go through PATCH /users/me; passwords through
+// POST /auth/change-password. Role, status and classes stay admin-managed.
+function populateOwnProfile() {
+	const user = window.Auth?.getCurrentUser?.();
+	if (!user) return;
+	const setVal = (id, value) => {
+		const el = document.getElementById(id);
+		if (el) el.value = value ?? "";
+	};
+	setVal("profileTitle", user.title === "Mr" || user.title === "Mme" ? user.title : "");
+	setVal("profileName", user.name || "");
+	setVal("profileEmail", user.email || "");
+	setVal("profilePhone", user.phone || "");
+	// Students have no self-service title/contacts � teachers/admins do.
+	const staff =
+		window.Auth?.isAdmin?.() ||
+		window.Auth?.isTeacher?.() ||
+		String(user.role || "").toLowerCase() !== "student";
+	for (const id of ["profileTitleGroup", "profileEmailGroup", "profilePhoneGroup"]) {
+		const group = document.getElementById(id);
+		if (group) group.style.display = staff ? "" : "none";
+	}
+	for (const id of ["profileCurrentPassword", "profileNewPassword", "profileConfirmPassword"]) {
+		const el = document.getElementById(id);
+		if (el) el.value = "";
+	}
+}
+
+// Persist the My Profile card as part of the global Save Settings button.
+// Only PATCHes when something actually changed; returns false on validation
+// or server failure so the global save can abort before closing the modal.
+async function saveOwnProfileIfDirty(notify = false) {
+	const user = window.Auth?.getCurrentUser?.();
+	if (!user) {
+		if (notify) showToast("Not signed in", "error");
+		return false;
+	}
+	const name = (document.getElementById("profileName")?.value || "").trim();
+	if (!name) {
+		if (notify) showToast("Full name is required", "error");
+		return false;
+	}
+	const titleValue = (document.getElementById("profileTitle")?.value || "").trim();
+	const body = {
+		name,
+		title: titleValue === "Mr" || titleValue === "Mme" ? titleValue : null,
+		email: (document.getElementById("profileEmail")?.value || "").trim() || null,
+		phone: (document.getElementById("profilePhone")?.value || "").trim() || null,
+	};
+	const unchanged =
+		String(user.name || "") === body.name &&
+		(user.title || null) === body.title &&
+		(user.email || null) === body.email &&
+		(user.phone || null) === body.phone;
+	if (unchanged) return true;
+	try {
+		const updated = await window.API.raw("PATCH", "/users/me", body);
+		// Refresh the signed-in identity in place (same object reference
+		// the rest of the app already holds) and repaint role chrome.
+		Object.assign(user, {
+			name: updated?.name ?? name,
+			title: updated?.title ?? null,
+			email: updated?.email ?? null,
+			phone: updated?.phone ?? null,
+		});
+		if (window.Auth?.applyRolePermissions) window.Auth.applyRolePermissions();
+		if (notify) showToast("Profile saved", "success");
+		return true;
+	} catch (err) {
+		showToast("Could not save profile: " + (err?.message || "server error"), "error");
+		return false;
+	}
+}
+
+async function changeOwnPassword() {
+	const user = window.Auth?.getCurrentUser?.();
+	if (!user) {
+		showToast("Not signed in", "error");
+		return;
+	}
+	const current = document.getElementById("profileCurrentPassword")?.value || "";
+	const next = document.getElementById("profileNewPassword")?.value || "";
+	const confirm = document.getElementById("profileConfirmPassword")?.value || "";
+	if (!current || !next) {
+		showToast("Please fill all password fields", "error");
+		return;
+	}
+	if (next.length < 6) {
+		showToast("New password must be at least 6 characters", "error");
+		return;
+	}
+	if (next !== confirm) {
+		showToast("Passwords do not match", "error");
+		return;
+	}
+	try {
+		const result = await window.Auth.updateUserPassword(user.id, current, next);
+		if (result && result.ok) {
+			for (const id of ["profileCurrentPassword", "profileNewPassword", "profileConfirmPassword"]) {
+				const el = document.getElementById(id);
+				if (el) el.value = "";
+			}
+			showToast("Password updated successfully", "success");
+		} else {
+			showToast(result?.message || "Password update failed", "error");
+		}
+	} catch (err) {
+		showToast("Password update failed: " + (err?.message || "server error"), "error");
+	}
+}
+
+// ?? My Data: teacher-scoped backup (own content only) ?????????????????????
+// Export downloads the teacher's own questions, categories, games, exams
+// (with question links) and kids games as one JSON file. Import recreates
+// them as NEW copies under the importing teacher's account — nothing is
+// ever overwritten or deleted, and server-side ownership checks still
+// apply (a teacher can only ever create their own rows).
+function ownDataSnapshot() {
+	const me = window.Auth?.getCurrentUser?.();
+	const uid = String(me?.id || "");
+	const repo = window.__DI_CONTAINER__?.repo;
+	const all = (table) => {
+		try {
+			const rows = repo?.getAll_sync(table);
+			return Array.isArray(rows) ? rows : [];
+		} catch (_) {
+			return [];
+		}
+	};
+	// Only rows explicitly authored by this teacher travel. Rows without
+	// authorship stay behind � re-importing them would silently reattribute
+	// someone else's content to the importer.
+	const isMine = (row) =>
+		!!uid &&
+		["created_by", "creator_id", "teacher_id", "ownerId", "creatorId"].some(
+			(key) => String(row?.[key] || "") === uid,
+		);
+	const questions = all("questions").filter(isMine);
+	const categories = all("categories").filter(isMine);
+	const games = all("games").filter(isMine);
+	const exams = all("exams").filter(isMine);
+	const kidsGames = all("kidsGames").filter(isMine);
+	const examIds = new Set(exams.map((e) => String(e.id)));
+	const examLinks = all("exam_questions")
+		.filter((link) => link && examIds.has(String(link.exam_id)))
+		.map((link) => ({
+			examId: link.exam_id,
+			questionId: link.question_id,
+			order: Number(link.order_index) || 0,
+		}));
+	return {
+		version: 1,
+		kind: "teacher-own-data",
+		exportedAt: new Date().toISOString(),
+		exportedBy: uid,
+		questions,
+		categories,
+		games,
+		exams,
+		examLinks,
+		kidsGames,
+	};
+}
+
+function downloadOwnDataSnapshot() {
+	const snapshot = ownDataSnapshot();
+	const blob = new Blob([JSON.stringify(snapshot, null, 2)], {
+		type: "application/json;charset=utf-8;",
+	});
+	const url = URL.createObjectURL(blob);
+	const link = document.createElement("a");
+	link.href = url;
+	link.download = `my-data-${new Date().toISOString().slice(0, 10)}.json`;
+	document.body.appendChild(link);
+	link.click();
+	link.remove();
+	setTimeout(() => URL.revokeObjectURL(url), 5000);
+	const counts = ["questions", "categories", "games", "exams", "kidsGames"].map(
+		(key) => `${snapshot[key].length} ${key}`,
+	);
+	showToast(`Exported your data (${counts.join(", ")})`, "success");
+}
+
+function exportOwnData() {
+	try {
+		downloadOwnDataSnapshot();
+	} catch (err) {
+		showToast("Export failed: " + (err?.message || "unknown error"), "error");
+	}
+}
+
+// Legacy question type names (long form) ? server enum (short form),
+// mirroring the bulk sanitizer's TYPE_MAP.
+const OWN_DATA_TYPE_MAP = {
+	"multiple-choice": "mcq",
+	mcq: "mcq",
+	"true-false": "true-false",
+	true_false: "true-false",
+	"matching-pairs": "matching",
+	matching: "matching",
+	ordering: "order",
+	draggable: "order",
+	order: "order",
+	"fill-blank": "fill-blank",
+	fill_blank: "fill-blank",
+	MCQ: "mcq",
+	TRUE_FALSE: "true-false",
+	MATCHING: "matching",
+	ORDER: "order",
+	FILL_BLANK: "fill-blank",
+};
+
+function ownDataQuestionOptions(row) {
+	let options = [];
+	try {
+		if (typeof row.options_json === "string" && row.options_json.trim()) {
+			const parsed = JSON.parse(row.options_json);
+			if (Array.isArray(parsed)) options = parsed;
+		}
+	} catch (_) {}
+	if (!options.length && Array.isArray(row.optionData)) {
+		options = row.optionData.map((o) =>
+			o && typeof o === "object" ? String(o.text ?? "") : String(o ?? ""),
+		);
+	}
+	if (!options.length && Array.isArray(row.options)) {
+		options = row.options.map((o) => String(o ?? ""));
+	}
+	return options.map((o) => String(o)).filter((o) => o.trim() !== "");
+}
+
+async function importOwnDataFile(input) {
+	try {
+		const file = input?.files?.[0];
+		if (!file) return;
+		const text = await file.text();
+		let data;
+		try {
+			data = JSON.parse(text);
+		} catch (_) {
+			showToast("That file is not valid JSON", "error");
+			return;
+		}
+		if (!data || data.kind !== "teacher-own-data" || !Array.isArray(data.questions)) {
+			showToast("Not a teacher data file (expected Export My Data JSON)", "error");
+			return;
+		}
+		if (!window.API?.raw && !window.API?.create) {
+			showToast("Import needs a server connection", "error");
+			return;
+		}
+		showToast("Importing your data � this can take a moment�", "info");
+		const summary = await importOwnDataSnapshot(data);
+		const parts = [
+			`${summary.categories} categories`,
+			`${summary.questions} questions`,
+			`${summary.games} games`,
+			`${summary.exams} exams`,
+			`${summary.kidsGames} kids games`,
+		];
+		if (summary.skipped) parts.push(`${summary.skipped} skipped`);
+		showToast(`Import complete: ${parts.join(", ")}`, summary.errors ? "warning" : "success");
+		if (summary.errors) console.warn("[settings] own-data import notes:", summary.errors.slice(0, 5));
+		// Refresh every list from the server so the copies show up at once.
+		if (typeof window.__legacyBridgeBootstrap === "function") {
+			try { await window.__legacyBridgeBootstrap(); } catch (_) {}
+		}
+	} catch (err) {
+		showToast("Import failed: " + (err?.message || "unknown error"), "error");
+	} finally {
+		if (input) input.value = "";
+	}
+}
+
+async function importOwnDataSnapshot(data) {
+	const summary = { categories: 0, questions: 0, games: 0, exams: 0, kidsGames: 0, skipped: 0, errors: 0 };
+	// Direct REST posts (not API.create): import payloads are already
+	// server-shaped, and the legacy UI mappers would strip fields
+	// (question options, exam flags) they do not understand.
+	const apiCreate = (path, payload) => window.API.raw("POST", path, payload);
+	const fail = (what) => {
+		summary.skipped += 1;
+		summary.errors += 1;
+	};
+	const repo = window.__DI_CONTAINER__?.repo;
+	const me = window.Auth?.getCurrentUser?.();
+	const uid = String(me?.id || "");
+	const myCategoryName = (name) => {
+		try {
+			const rows = repo?.getAll_sync("categories") || [];
+			return rows.find(
+				(c) => String(c.name || "") === String(name) && String(c.created_by || c.ownerId || "") === uid,
+			);
+		} catch (_) {
+			return null;
+		}
+	};
+	// 1. Categories (school-unique per name): reuse the teacher's own
+	// matching category, else create, else suffixed copy.
+	const categoryMap = new Map();
+	for (const cat of data.categories || []) {
+		const name = String(cat?.name || "").trim();
+		if (!name) { fail("category"); continue; }
+	 try {
+			const existing = myCategoryName(name);
+			if (existing) {
+				categoryMap.set(String(cat.id), String(existing.id));
+				continue;
+			}
+			const created = await apiCreate("/categories", {
+				name,
+				icon: cat.icon || undefined,
+				color: cat.color || undefined,
+			});
+			if (created?.id) {
+				categoryMap.set(String(cat.id), String(created.id));
+				summary.categories += 1;
+			} else {
+				fail("category");
+			}
+		} catch (_) {
+			// Name clash with another teacher's category - suffixed copy.
+			try {
+				const created = await apiCreate("/categories", { name: `${name} (imported)` });
+				if (created?.id) {
+					categoryMap.set(String(cat.id), String(created.id));
+					summary.categories += 1;
+				} else {
+					fail("category");
+				}
+			} catch (_) {
+				fail("category");
+			}
+		}
+	}
+	// 2. Questions (always new copies; legacy shapes normalized).
+	const questionMap = new Map();
+	for (const q of data.questions || []) {
+		try {
+			const type = OWN_DATA_TYPE_MAP[String(q?.type || "")] || null;
+			const text = String(q?.text || q?.question || "").trim();
+			const answer = String(q?.answer ?? "").trim();
+			if (!type || !text || !answer) { fail("question"); continue; }
+			const options = ownDataQuestionOptions(q);
+			const payload = {
+				type,
+				text,
+				answer,
+				options_json: options.length ? JSON.stringify(options) : undefined,
+				explanation: q?.explanation || undefined,
+				points: Number(q?.points) || 1,
+				difficulty: q?.difficulty || "medium",
+				category_id: (q?.category_id && categoryMap.get(String(q.category_id))) || undefined,
+			};
+			if (typeof q?.media_url === "string" && /^https?:\/\//i.test(q.media_url)) {
+				payload.media_url = q.media_url;
+			}
+			const created = await apiCreate("/questions", payload);
+			if (created?.id) {
+				questionMap.set(String(q.id), String(created.id));
+				summary.questions += 1;
+			} else {
+				fail("question");
+			}
+		} catch (_) {
+			fail("question");
+		}
+	}
+	// 3. Games (remapped question ids; skipped when nothing resolvable).
+	for (const g of data.games || []) {
+		try {
+			const ids = (Array.isArray(g?.question_ids)
+				? g.question_ids
+				: (() => { try { return JSON.parse(g?.question_ids || "[]"); } catch (_) { return []; } })()
+			)
+				.map((id) => questionMap.get(String(id)))
+				.filter(Boolean);
+			if (!String(g?.name || "").trim() || !ids.length) { fail("game"); continue; }
+			const created = await apiCreate("/games", {
+				name: String(g.name),
+				type: g.type || "quiz",
+				settings_json: typeof g.settings_json === "string" ? g.settings_json : undefined,
+				question_ids: ids,
+			});
+			if (created?.id) summary.games += 1;
+			else fail("game");
+		} catch (_) {
+			fail("game");
+		}
+	}
+	// 4. Exams (+ ordered question links).
+	const examLinks = Array.isArray(data.examLinks) ? data.examLinks : [];
+	for (const e of data.exams || []) {
+		try {
+			if (!String(e?.name || "").trim()) { fail("exam"); continue; }
+			const created = await apiCreate("/exams", {
+				name: String(e.name),
+				description: e.description || undefined,
+				duration: e.duration ?? undefined,
+				passing_score: e.passing_score ?? undefined,
+				is_training: !!e.is_training,
+				randomize: !!e.randomize,
+			});
+			if (!created?.id) { fail("exam"); continue; }
+			summary.exams += 1;
+			const links = examLinks
+				.filter((l) => String(l?.examId) === String(e.id) && questionMap.get(String(l?.questionId)))
+				.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+			let order = 0;
+			for (const link of links) {
+				try {
+					await window.API.raw("POST", `/exams/${encodeURIComponent(created.id)}/questions`, {
+						question_id: questionMap.get(String(link.questionId)),
+						order_index: order++,
+					});
+				} catch (_) {
+					summary.errors += 1;
+				}
+			}
+		} catch (_) {
+			fail("exam");
+		}
+	}
+	// 5. Kids games (imported as drafts � the teacher reviews and publishes,
+	// which mints a fresh PIN).
+	for (const k of data.kidsGames || []) {
+		try {
+			const questionsJson =
+				typeof k?.questions_json === "string" ? k.questions_json : JSON.stringify(k?.questions_json ?? []);
+			if (!String(k?.name || "").trim() || !String(k?.game_type || "").trim() || questionsJson.length < 2) {
+				fail("kids game");
+				continue;
+			}
+			const created = await window.API.raw("POST", "/kids", {
+				name: String(k.name),
+				description: k.description || undefined,
+				game_type: String(k.game_type),
+				theme: k.theme || undefined,
+				grade: k.grade || undefined,
+				subject: k.subject || undefined,
+				questions_json: questionsJson,
+				config_json: typeof k.config_json === "string" ? k.config_json : undefined,
+			});
+			if (created?.id) summary.kidsGames += 1;
+			else fail("kids game");
+		} catch (_) {
+			fail("kids game");
+		}
+	}
+	return summary;
+}
+
+window.exportOwnData = exportOwnData;
+window.importOwnDataFile = importOwnDataFile;

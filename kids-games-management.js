@@ -157,6 +157,12 @@
 		state.filters.search = String(($('kidsGameFilterSearch') || {}).value || '').trim();
 	}
 	function applyKidsGameFilters() { readFilters(); renderKidsGameList(); }
+	function kidsStudioDenied() {
+		try {
+			return typeof window.Auth?.canAccessKidsStudio === 'function' &&
+				!window.Auth.canAccessKidsStudio();
+		} catch (_) { return false; }
+	}
 	function resetKidsGameFilters() {
 		state.filters = { game_type: '', grade: '', subject: '', status: '', teacher_id: '', search: '' };
 		['kidsGameFilterGameType', 'kidsGameFilterGrade', 'kidsGameFilterSubject', 'kidsGameFilterStatus', 'kidsGameFilterTeacher', 'kidsGameFilterSearch'].forEach(function (id) {
@@ -169,6 +175,10 @@
 	function renderKidsGameList() {
 		var container = $('kidsGameList');
 		if (!container) return;
+		if (kidsStudioDenied()) {
+			container.innerHTML = '<div class="empty-state">Kids Games are not enabled for your account. Ask an admin to grant access in Settings → Teacher Access.</div>';
+			return;
+		}
 		readFilters();
 		var qs = { limit: 100, offset: 0 };
 		Object.keys(state.filters).forEach(function (k) { if (state.filters[k]) qs[k] = state.filters[k]; });
@@ -259,6 +269,10 @@
 		if (el) el.checked = !!checked;
 	}
 	function openKidsGameWizard(editId) {
+		if (kidsStudioDenied()) {
+			toast('Kids Games are not enabled for your account. Ask an admin to grant access.', 'error');
+			return;
+		}
 		// The modal opens FIRST so a failure in any data-loading step can
 		// never leave the teacher with a dead button and no feedback.
 		try {

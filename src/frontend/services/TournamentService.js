@@ -17,9 +17,13 @@ export class TournamentService {
   }
 
   async list(filters = {}, pagination = {}) {
-    const parsed = TournamentFilterSchema.safeParse({ ...filters, ...pagination });
+    // `creator_id` is server-derived (route-enforced teacher scope / admin
+    // author filter), not client input — validate the rest, then re-attach.
+    const { creator_id = undefined, ...restFilters } = filters;
+    const parsed = TournamentFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+    if (creator_id !== undefined) rest.creator_id = creator_id;
     return this.#repo.getAll('tournaments', { filters: rest, limit, offset, orderBy, direction, search });
   }
 
@@ -33,6 +37,7 @@ export class TournamentService {
     this.#requireAdmin(currentUser);
     const parsed = TournamentCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    await this.#assertKidsGame(parsed.data.kids_game_id, currentUser?.school_id);
 
     return this.#repo.create('tournaments', {
       ...parsed.data,
@@ -52,8 +57,23 @@ export class TournamentService {
 
     const parsed = TournamentUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    if (parsed.data.kids_game_id !== undefined) {
+      await this.#assertKidsGame(parsed.data.kids_game_id, existing.school_id);
+    }
 
     return this.#repo.update('tournaments', id, parsed.data);
+  }
+
+  /** A linked kids game must exist, be published, and belong to the school. */
+  async #assertKidsGame(kidsGameId, schoolId) {
+    if (kidsGameId == null || kidsGameId === '') return;
+    const game = await this.#repo.getById('kidsGames', kidsGameId);
+    if (!game || (schoolId && game.school_id !== schoolId)) {
+      throw new ValidationError({ kids_game_id: ['Unknown kids game'] });
+    }
+    if (game.status !== 'published') {
+      throw new ValidationError({ kids_game_id: ['Kids game must be published first'] });
+    }
   }
 
   async open(id, currentUser) {

@@ -284,6 +284,8 @@
         role: u.role,
         status: u.status || 'active',
       };
+      // Civility for greetings/display (Mr | Mme) — null clears it.
+      if (u.title !== undefined) out.title = u.title || null;
       // Only send password when caller supplied a NEW one. The API bcrypts
       // it server-side; never send our client-side passwordHash.
       if (u.password) out.password = u.password;

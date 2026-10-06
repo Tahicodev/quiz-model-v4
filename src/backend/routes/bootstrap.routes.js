@@ -14,6 +14,7 @@ import { enforceTenant } from '../middleware/tenant.js';
 import { getContainer } from '../container.js';
 import { logger } from '../logger.js';
 import { ROLES } from '../../shared/constants.js';
+import { getTeacherClassIds } from './users.routes.js';
 
 const router = Router();
 
@@ -213,7 +214,8 @@ function hydrateLegacyPayload(data) {
       userId: result.user_id,
       examName: payload.examTitle || payload.examName || '',
       numero: payload.numero || '',
-      studentName: payload.studentName || payload.name || '',
+      // Anonymous kids-game plays carry their display name here (no user FK).
+      studentName: payload.studentName || payload.name || payload.playerName || payload.player_name || '',
       classId: payload.classId || '',
       className: payload.class || payload.className || '',
       // Game-run results are persisted with their identity inside
@@ -477,13 +479,47 @@ router.get('/', async (req, res, next) => {
             query.filters.class_id = req.user.class_id ?? '__none__';
           }
         }
-        // Teachers see their own bank rows plus unattributed legacy rows
-        // (created_by NULL = historically shared content). Admins see all.
+        // Teachers receive only their own bank rows. Legacy unattributed
+        // rows (created_by NULL) stay admin-only. Admins see all.
         if (req.user?.role === ROLES.TEACHER && (table === 'questions' || table === 'categories')) {
-          query.or = [{ created_by: req.user.id }, { created_by: null }];
+          query.or = [{ created_by: req.user.id }];
+        }
+        // Teachers receive only students in their assigned classes — never
+        // staff rows, never other classes, and never password hashes (a
+        // teacher browser has no legitimate use for them). The teacher's
+        // OWN row is always included: the login session is validated
+        // against this cache, and dropping self would lock the teacher
+        // out on the next reload. Admins see all.
+        let stripPasswords = false;
+        if (req.user?.role === ROLES.TEACHER && table === 'users') {
+          const classIds = new Set(
+            await getTeacherClassIds(req.schoolId, req.user.id),
+          );
+          query.or = [
+            { role: 'student', class_id: { in: [...classIds] } },
+            { id: req.user.id },
+          ];
+          stripPasswords = true;
         }
         const { data: rows } = await repo.getAll(table, { ...query, limit: 100000 });
-        data[table] = rows;
+        // Teachers receive only requests in their scope: profile requests of
+        // students they can manage, account requests targeting their classes.
+        // Account rows carry password hashes — strip them for teachers.
+        if (req.user?.role === ROLES.TEACHER && (table === 'profile_requests' || table === 'account_requests')) {
+          if (table === 'profile_requests') {
+            const allowedUsers = new Set(((data.users || []).map((u) => String(u.id))));
+            data[table] = rows.filter((r) => allowedUsers.has(String(r.user_id)));
+          } else {
+            const classIds = new Set(await getTeacherClassIds(req.schoolId, req.user.id));
+            data[table] = rows
+              .filter((r) => r.class_id && classIds.has(String(r.class_id)))
+              .map(({ password_hash, ...safe }) => safe);
+          }
+        } else {
+          data[table] = stripPasswords
+            ? rows.map(({ password_hash, password, ...safe }) => safe)
+            : rows;
+        }
       } catch (err) {
         logger.warn({ err, table }, 'Bootstrap: per-table read failed');
         data[table] = [];

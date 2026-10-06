@@ -197,6 +197,19 @@
 			var q = new URLSearchParams(window.location.search).get('pin');
 			return q ? q.toUpperCase() : null;
 		},
+		tournamentFromUrl: function () {
+			var q = new URLSearchParams(window.location.search).get('tournament');
+			return q ? String(q) : null;
+		},
+		/** Logged-in students play linked (results count); else anonymous PIN. */
+		storedToken: function () {
+			try {
+				if (window.__authToken) return window.__authToken;
+				var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
+				if (s && s.token) return s.token;
+			} catch (_) { /* ignore */ }
+			try { return localStorage.getItem('quizAuthToken') || null; } catch (_) { return null; }
+		},
 		screen: function (html) {
 			document.getElementById('kidScreen').innerHTML = html;
 		},
@@ -231,8 +244,11 @@
 		welcome: function () {
 			var self = this;
 			var n = (this.game.questions || []).length;
+			var badges = '';
+			if (this.tournamentFromUrl()) badges += '<p class="hint">Tournament mode 🏆 — your score feeds the leaderboard!</p>';
+			if (this.storedToken()) badges += '<p class="hint">Logged in ✅ — your score will count like every other game!</p>';
 			var html = '<div class="kid-card"><h2>Hi! 👋</h2>' +
-				'<p class="hint">This game has <b>' + n + '</b> question' + (n === 1 ? '' : 's') + '. What is your first name?</p>' +
+				'<p class="hint">This game has <b>' + n + '</b> question' + (n === 1 ? '' : 's') + '. What is your first name?</p>' + badges +
 				'<input id="kidName" class="kid-name-input" maxlength="50" placeholder="Your name" autocomplete="off" />' +
 				'<div class="kid-avatar-row" id="kidAvatars">' +
 				AVATARS.map(function (a, i) { return '<button class="kid-avatar' + (i === 0 ? ' selected' : '') + '" data-a="' + a + '">' + a + '</button>'; }).join('') +
@@ -258,12 +274,32 @@
 		createSession: function () {
 			var self = this;
 			this.screen('<div class="kid-card"><h2>Get ready… 🚀</h2><p class="hint">Starting your adventure!</p></div>');
-			fetch(API + '/play/' + encodeURIComponent(this.pin) + '/session', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ player_name: this.player.name, avatar: this.player.avatar }),
-			}).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-				.then(function (res) {
+			var token = this.storedToken();
+			var tournamentId = this.tournamentFromUrl();
+			// Logged-in play first (links results + EXP + tournaments); any
+			// failure falls back to anonymous PIN play.
+			var authed = token && this.game && this.game.id
+				? fetch(API + '/games/' + encodeURIComponent(this.game.id) + '/session', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+					body: JSON.stringify({
+						player_name: this.player.name,
+						avatar: this.player.avatar,
+						tournament_id: tournamentId || undefined,
+					}),
+				}).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+				: Promise.resolve({ ok: false });
+			authed.then(function (res) {
+				if (res.ok && res.j && res.j.session) {
+					self.loggedIn = true;
+					return res;
+				}
+				return fetch(API + '/play/' + encodeURIComponent(self.pin) + '/session', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ player_name: self.player.name, avatar: self.player.avatar }),
+				}).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+			}).then(function (res) {
 					if (!res.ok) throw new Error((res.j && res.j.message) || 'Could not start');
 					self.sessionId = res.j.session.id;
 					self.index = 0;

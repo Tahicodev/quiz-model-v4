@@ -39,7 +39,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-09-24-r7" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-06-r3" />
 		<link rel="stylesheet" href="admin.css?v=2026-09-24-r17" />
 		<link rel="stylesheet" href="theme.css?v=2026-09-24-r17" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r2" />
@@ -132,10 +132,10 @@
 
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
-		<script src="api-client.js?v=2026-09-15-r2" defer></script>
-		<script src="auth.js?v=2026-09-22-r5" defer></script>
+		<script src="api-client.js?v=2026-10-06-r1" defer></script>
+		<script src="auth.js?v=2026-10-06-r2" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-09-24-r9" defer></script>
+		<script src="settings.js?v=2026-10-06-r3" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -149,13 +149,13 @@
 		<script src="exam-management.js?v=2026-09-17-r2" defer></script>
 		<script src="class-management.js?v=2026-09-17-r1" defer></script>
 		<script src="results-management.js" defer></script>
-		<script src="overview-dashboard.js" defer></script>
+		<script src="overview-dashboard.js?v=2026-10-06-r1" defer></script>
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
-		<script src="games-management.js?v=2026-09-24-r14" defer></script>
-		<script src="kids-games-management.js?v=2026-10-03-r1" defer></script>
+		<script src="games-management.js?v=2026-10-06-r2" defer></script>
+		<script src="kids-games-management.js?v=2026-10-06-r1" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
@@ -2695,6 +2695,14 @@
 													</select>
 												</div>
 											</div>
+											<div class="form-row" id="tournamentKidsGameRow" hidden>
+												<div class="form-group">
+													<label for="tournamentKidsGame">Linked Kids Game <span class="text-muted">(primaire — students play it in the kid player, scores feed this tournament)</span></label>
+													<select id="tournamentKidsGame" class="form-control">
+														<option value="">No kids game (classic tournament)</option>
+													</select>
+												</div>
+											</div>
 											<div class="form-row">
 												<div class="form-group half">
 													<label for="tournamentFormat">Format</label>
@@ -4207,11 +4215,15 @@
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
 									General
 								</button>
+								<button type="button" class="settings-tab-btn" title="My Profile" data-roles="admin,teacher" data-settings-tab="profile" onclick="switchSettingsTab(event, 'profile')">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+									My Profile
+								</button>
 								<button type="button" class="settings-tab-btn" title="Presets" data-roles="admin,teacher" data-settings-tab="presets" onclick="switchSettingsTab(event, 'presets')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
 									Presets
 								</button>
-								<button type="button" class="settings-tab-btn" title="Data" data-roles="admin" data-settings-tab="data" onclick="switchSettingsTab(event, 'data')">
+								<button type="button" class="settings-tab-btn" title="Data" data-roles="admin,teacher" data-settings-tab="data" onclick="switchSettingsTab(event, 'data')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
 									Data
 								</button>
@@ -4249,6 +4261,11 @@
 							</div>
 
 							<p class="text-muted" style="margin-bottom: 16px; font-size: 0.9em;">This identifies your school on the login page and powers the School Year Archives folder. Quiz, training and theme presets are configured under the <strong>Presets</strong> tab.</p>
+
+							<div id="generalReadOnlyNotice" class="settings-readonly-notice" hidden>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+								<span><strong>View only.</strong> School information can only be edited by an administrator. The current values are shown below.</span>
+							</div>
 
 							<div class="form-row">
 								<div class="form-group half">
@@ -4328,6 +4345,66 @@
 							<small class="text-muted" style="display: block; margin-top: 8px;">Saved to the server by the Save Settings button above — also used by Quick Start and the login page branding.</small>
 						</div>
 
+						</div>
+
+						<!-- My Profile Settings -->
+						<div id="profile-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="profile">
+							<div class="settings-group">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+									<span style="background: #ede9fe; color: #7c3aed; padding: 6px; border-radius: 8px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+									</span>
+									<h3 style="margin: 0; font-size: 1.1rem;">My Profile</h3>
+								</div>
+								<p class="text-muted" style="margin-bottom: 16px; font-size: 0.9em;">Your own account information. Role, status and class assignments are managed by an administrator.</p>
+								<div class="form-row">
+									<div class="form-group half" id="profileTitleGroup">
+										<label for="profileTitle">Title</label>
+										<select id="profileTitle" class="form-control">
+											<option value="">—</option>
+											<option value="Mr">Mr</option>
+											<option value="Mme">Mme</option>
+										</select>
+									</div>
+									<div class="form-group half">
+										<label for="profileName">Full Name</label>
+										<input type="text" id="profileName" class="form-control" />
+									</div>
+								</div>
+								<div class="form-group" id="profileEmailGroup">
+									<label for="profileEmail">Email</label>
+									<input type="email" id="profileEmail" class="form-control" />
+								</div>
+								<div class="form-group" id="profilePhoneGroup">
+									<label for="profilePhone">Phone</label>
+									<input type="tel" id="profilePhone" class="form-control" />
+								</div>
+								<small class="text-muted" style="display: block; margin-top: 4px;">Saved together with the rest of the settings via the Save Settings button above.</small>
+							</div>
+
+							<div class="settings-group">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+									<span style="background: #fef3c7; color: #b45309; padding: 6px; border-radius: 8px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+									</span>
+									<h3 style="margin: 0; font-size: 1.1rem;">Change Password</h3>
+								</div>
+								<div class="form-group">
+									<label for="profileCurrentPassword">Current Password</label>
+									<input type="password" id="profileCurrentPassword" class="form-control" autocomplete="current-password" />
+								</div>
+								<div class="form-row">
+									<div class="form-group half">
+										<label for="profileNewPassword">New Password</label>
+										<input type="password" id="profileNewPassword" class="form-control" autocomplete="new-password" />
+									</div>
+									<div class="form-group half">
+										<label for="profileConfirmPassword">Confirm New Password</label>
+										<input type="password" id="profileConfirmPassword" class="form-control" autocomplete="new-password" />
+									</div>
+								</div>
+								<button type="button" class="btn btn-secondary" onclick="changeOwnPassword()">Update Password</button>
+							</div>
 						</div>
 
 						<!-- Presets Settings -->
@@ -4874,8 +4951,31 @@
 						</div>
 
 						<!-- Data Settings -->
-						<div id="data-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="data">
-							<div class="settings-group">
+						<div id="data-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="data">
+							<div class="settings-group" data-roles="teacher">
+								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+									<span style="background: #ede9fe; color: #7c3aed; padding: 6px; border-radius: 8px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+									</span>
+									<h3 style="margin: 0; font-size: 1.1rem;">My Data</h3>
+								</div>
+								<p class="text-muted" style="margin-bottom: 16px;">
+									Download or restore <strong>only your own content</strong> — your questions, categories, games, exams and kids games. Student records are managed from the Students and Results tabs.
+								</p>
+								<div style="display: flex; flex-wrap: wrap; gap: 10px;">
+									<button type="button" class="btn btn-primary" onclick="exportOwnData()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+										Export My Data
+									</button>
+									<button type="button" class="btn btn-secondary" onclick="document.getElementById('importOwnDataInput').click()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+										Import My Data
+									</button>
+									<input type="file" id="importOwnDataInput" accept=".json,application/json" style="display: none" onchange="importOwnDataFile(this)" />
+								</div>
+								<p class="text-muted" style="margin-top: 12px; font-size: 0.9em;">Import creates copies under your account — your existing content is never overwritten or deleted.</p>
+							</div>
+							<div class="settings-group" data-roles="admin">
 								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
 									<span style="background: #f0f9ff; color: #0284c7; padding: 6px; border-radius: 8px;">
 										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -4898,7 +4998,7 @@
 									<p class="text-muted" style="margin-top: 12px; font-size: 0.9em;">The ZIP includes the <strong>uploads</strong> folder with the image files, so questions keep their pictures when you restore the backup on another machine. (Requires internet to the server.)</p>
 							</div>
 
-							<div class="settings-group">
+							<div class="settings-group" data-roles="admin">
 								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
 									<span style="background: #fef2f2; color: #dc2626; padding: 6px; border-radius: 8px;">
 										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
@@ -4939,7 +5039,7 @@
 									</div>
 								</div>
 
-								<div class="settings-group" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);">
+								<div class="settings-group" data-roles="admin" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);">
 									<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
 										<span style="background: #fee2e2; color: #b91c1c; padding: 6px; border-radius: 8px;">
 											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
@@ -4956,7 +5056,7 @@
 </div>
 
 							<!-- School Year Archives -->
-							<div class="settings-group" id="archivesSettingsGroup">
+							<div class="settings-group" id="archivesSettingsGroup" data-roles="admin">
 								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
 									<span style="background: #ffedd5; color: #ea580c; padding: 6px; border-radius: 8px;">
 										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 20V8H2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2z"></path><path d="M2 4h20"></path><path d="M12 8v4"></path><line x1="12" y1="12" x2="12" y2="16"></line></svg>
@@ -4986,7 +5086,7 @@
 								</div>
 							</div>
 
-							<div class="settings-group" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
+							<div class="settings-group" data-roles="admin" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);">
 									<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
 										<span style="background: #dc2626; color: white; padding: 6px; border-radius: 8px;">
 											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -5396,7 +5496,7 @@
 								Pending Imports
 								<span id="pendingImportsBadge" class="settings-tab-badge hidden">0</span>
 							</button>
-							<button type="button" id="users-requests-tab" class="user-settings-tab-btn" role="tab" aria-selected="false" aria-controls="users-requests-panel" tabindex="-1" data-user-tab="requests" onclick="switchUsersSettingsTab(event, 'requests')">
+							<button type="button" id="users-requests-tab" class="user-settings-tab-btn" role="tab" aria-selected="false" aria-controls="users-requests-panel" tabindex="-1" data-user-tab="requests" data-roles="admin,teacher" onclick="switchUsersSettingsTab(event, 'requests')">
 								Profile &amp; Account Requests
 							</button>
 						</div>
@@ -5554,6 +5654,20 @@
 								<div class="empty-state">No profile requests yet.</div>
 							</div>
 						</div>
+						<div class="settings-group account-requests-group">
+							<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+								<div>
+									<h3 style="margin: 0; font-size: 1.1rem;">Account Requests</h3>
+									<small class="text-muted">New student accounts registered from a browser, waiting for review.</small>
+								</div>
+								<button type="button" class="btn btn-secondary" onclick="renderAccountRequests()">
+									Refresh
+								</button>
+							</div>
+							<div id="accountRequestsList" class="profile-request-list">
+								<div class="empty-state">No account requests yet.</div>
+							</div>
+						</div>
 						</div>
 					</div>
 
@@ -5567,7 +5681,7 @@
 								<h3 style="margin: 0; font-size: 1.1rem;">Teacher Access Control</h3>
 							</div>
 							<p class="text-muted" style="margin-bottom: 16px; font-size: 0.9em;">
-								Choose which dashboard tabs and settings teachers can access. Defaults are fully enabled.
+								Choose which dashboard tabs and settings teachers can access. Activity Log and Monitoring are always admin-only.
 							</p>
 							<div class="teacher-access-grid">
 								<label class="switch-label">
@@ -5613,23 +5727,16 @@
 									</div>
 								</label>
 								<label class="switch-label">
+									<span class="switch-text">Kids Games</span>
+									<div class="switch-container">
+										<input type="checkbox" id="teacher-access-kidsgames" class="switch-checkbox" />
+										<span class="switch-slider"></span>
+									</div>
+								</label>
+								<label class="switch-label">
 									<span class="switch-text">Results</span>
 									<div class="switch-container">
 										<input type="checkbox" id="teacher-access-results" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Activity Log</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-activity" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Monitoring</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-monitoring" class="switch-checkbox" />
 										<span class="switch-slider"></span>
 									</div>
 								</label>
@@ -5648,6 +5755,13 @@
 									<span class="switch-text">General</span>
 									<div class="switch-container">
 										<input type="checkbox" id="teacher-access-settings-general" class="switch-checkbox" />
+										<span class="switch-slider"></span>
+									</div>
+								</label>
+								<label class="switch-label">
+									<span class="switch-text">My Profile</span>
+									<div class="switch-container">
+										<input type="checkbox" id="teacher-access-settings-profile" class="switch-checkbox" />
 										<span class="switch-slider"></span>
 									</div>
 								</label>
@@ -5844,7 +5958,7 @@
 							</svg>
 						</div>
 						<div class="modal-header-text">
-							<h2>User Account</h2>
+							<h2 id="userModalTitle">New User</h2>
 							<p class="modal-header-subtitle">
 								Create or update an account and its role
 							</p>
@@ -5854,44 +5968,71 @@
 				</div>
 				<div class="modal-body">
 					<form id="userForm">
-						<div class="form-group">
-							<label for="userName">Full Name</label>
-							<input type="text" id="userName" class="form-control" required />
-						</div>
-						<div class="form-group">
-							<label for="userUsername">Username (Email)</label>
-							<input type="text" id="userUsername" class="form-control" required />
-						</div>
-						<div class="form-group">
-							<label for="userPassword">Password</label>
-							<input type="password" id="userPassword" class="form-control" placeholder="Leave blank to keep current password" />
-						</div>
-						<div class="form-row">
-							<div class="form-group half">
-								<label for="userRole">Role</label>
-								<select id="userRole" class="form-control">
-									<option value="admin">Admin</option>
-									<option value="teacher">Teacher</option>
-									<option value="student" selected>Student</option>
-								</select>
-							</div>
-							<div class="form-group half">
-								<label for="userStatus">Status</label>
-								<select id="userStatus" class="form-control">
-									<option value="active">Active</option>
-									<option value="disabled">Disabled</option>
-								</select>
+						<div class="user-modal-hero">
+							<div class="user-modal-avatar" id="userModalAvatar" data-role="student">?</div>
+							<div class="user-modal-identity">
+								<div class="user-modal-name" id="userModalNamePreview">New user</div>
+								<div class="user-modal-meta" id="userModalMetaPreview">Student · Active</div>
 							</div>
 						</div>
 
-						<div id="teacherFields" class="settings-group" style="display: none;">
-							<h4 style="margin-bottom: 10px;">Teacher Profile</h4>
-							<div class="form-row">
-								<div class="form-group half">
+						<div class="user-modal-card">
+							<h4 class="user-modal-card-title">Identity</h4>
+							<div class="user-modal-grid user-modal-grid-identity">
+								<div class="form-group">
+									<label for="userTitle">Title</label>
+									<select id="userTitle" class="form-control">
+										<option value="">—</option>
+										<option value="Mr">Mr</option>
+										<option value="Mme">Mme</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label for="userName">Full Name</label>
+									<input type="text" id="userName" class="form-control" required placeholder="e.g. Karim Haddad" />
+								</div>
+							</div>
+							<div class="form-group">
+								<label for="userUsername">Username (Email)</label>
+								<input type="text" id="userUsername" class="form-control" required placeholder="e.g. karim.haddad@school.com" autocomplete="username" />
+							</div>
+							<div class="form-group">
+								<label for="userPassword">Password</label>
+								<input type="password" id="userPassword" class="form-control" placeholder="Leave blank to keep current password" autocomplete="new-password" />
+								<small class="text-muted">Required for a new account, optional when editing.</small>
+							</div>
+						</div>
+
+						<div class="user-modal-card">
+							<h4 class="user-modal-card-title">Access &amp; Role</h4>
+							<div class="user-modal-grid user-modal-grid-2">
+								<div class="form-group">
+									<label for="userRole">Role</label>
+									<select id="userRole" class="form-control">
+										<option value="admin">Admin</option>
+										<option value="teacher">Teacher</option>
+										<option value="student" selected>Student</option>
+									</select>
+								</div>
+								<div class="form-group">
+									<label for="userStatus">Status</label>
+									<select id="userStatus" class="form-control">
+										<option value="active">Active</option>
+										<option value="disabled">Disabled</option>
+									</select>
+								</div>
+							</div>
+							<p class="user-modal-hint" id="userAccessHint"></p>
+						</div>
+
+						<div id="teacherFields" class="user-modal-card" style="display: none;">
+							<h4 class="user-modal-card-title">Teacher Profile</h4>
+							<div class="user-modal-grid user-modal-grid-2">
+								<div class="form-group">
 									<label for="teacherNumeroField">Teacher Numero</label>
 									<input type="text" id="teacherNumeroField" class="form-control" placeholder="e.g. T-1042" />
 								</div>
-								<div class="form-group half">
+								<div class="form-group">
 									<label for="teacherPhoneField">Phone Number</label>
 									<input type="tel" id="teacherPhoneField" class="form-control" placeholder="+212 6 12 34 56 78" />
 								</div>
@@ -5905,19 +6046,22 @@
 								<input type="text" id="teacherSubjectsField" class="form-control" placeholder="Math, Physics, Informatics" />
 								<small class="text-muted">Comma-separated list of subjects this teacher covers.</small>
 							</div>
-							<h4 style="margin-bottom: 10px;">Assign Classes</h4>
+							<h4 class="user-modal-card-title">Assign Classes</h4>
 							<div id="teacherClassList" class="checkbox-list"></div>
 							<small class="text-muted">Teachers can only manage assigned classes and their content.</small>
 						</div>
 
-						<div id="studentFields" class="settings-group" style="display: none;">
-							<div class="form-group">
-								<label for="studentNumberField">Student Number</label>
-								<input type="text" id="studentNumberField" class="form-control" />
-							</div>
-							<div class="form-group">
-								<label for="studentClassSelect">Class</label>
-								<select id="studentClassSelect" class="form-control"></select>
+						<div id="studentFields" class="user-modal-card" style="display: none;">
+							<h4 class="user-modal-card-title">Student Details</h4>
+							<div class="user-modal-grid user-modal-grid-2">
+								<div class="form-group">
+									<label for="studentNumberField">Student Number</label>
+									<input type="text" id="studentNumberField" class="form-control" />
+								</div>
+								<div class="form-group">
+									<label for="studentClassSelect">Class</label>
+									<select id="studentClassSelect" class="form-control"></select>
+								</div>
 							</div>
 						</div>
 

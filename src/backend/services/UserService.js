@@ -1,8 +1,9 @@
 /**
  * src/backend/services/UserService.js
  *
- * User CRUD. Admin-only mutations (enforced by route middleware, re-checked here).
- * Hashes passwords with bcrypt (rounds from config) and never returns password_hash.
+ * User CRUD. Mutations accept admin and teacher actors — the routes enforce
+ * the teacher scope (own-class students only); status/class assignment and
+ * password resets stay admin-only. Never returns password_hash.
  */
 
 import bcrypt from 'bcrypt';
@@ -26,9 +27,13 @@ export class UserService {
   }
 
   async list(filters = {}, pagination = {}) {
-    const parsed = UserFilterSchema.safeParse({ ...filters, ...pagination });
+    // `class_id` may carry a server-derived { in: [...] } scope (teacher's
+    // classes) — not client input. Validate the rest, then re-attach.
+    const { class_id = undefined, ...restFilters } = filters;
+    const parsed = UserFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+    if (class_id !== undefined) rest.class_id = class_id;
     const result = await this.#repo.getAll('users', { filters: rest, limit, offset, orderBy, direction, search });
     return { data: result.data.map(this.#stripPassword), total: result.total };
   }
@@ -40,7 +45,7 @@ export class UserService {
   }
 
   async create(data, currentUser) {
-    this.#requireAdmin(currentUser);
+    this.#requireStaff(currentUser);
     const parsed = UserCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
@@ -57,6 +62,7 @@ export class UserService {
       school_id: currentUser.school_id,
       username: parsed.data.username,
       name: parsed.data.name,
+      title: parsed.data.title ?? null,
       password_hash: passwordHash,
       role: parsed.data.role,
       numero: parsed.data.numero,
@@ -73,7 +79,7 @@ export class UserService {
   }
 
   async update(id, data, currentUser) {
-    this.#requireAdmin(currentUser);
+    this.#requireStaff(currentUser);
     const existing = await this.#repo.getById('users', id);
     if (!existing) throw new NotFoundError('User');
 
@@ -93,7 +99,7 @@ export class UserService {
   }
 
   async delete(id, currentUser) {
-    this.#requireAdmin(currentUser);
+    this.#requireStaff(currentUser);
     if (id === currentUser.id) {
       throw new ValidationError({ id: ['Cannot delete your own account'] });
     }
@@ -154,8 +160,54 @@ export class UserService {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
+  /**
+   * Self-service profile edit. Any authenticated user may update their own
+   * display fields; role, status, class, numero and credentials never flow
+   * through here (passwords use POST /auth/change-password).
+   */
+  async updateOwnProfile(id, data, currentUser) {
+    const existing = await this.#repo.getById('users', id);
+    if (!existing || existing.school_id !== currentUser.school_id) {
+      throw new NotFoundError('User');
+    }
+    const patch = {};
+    if (data.name !== undefined) {
+      const name = String(data.name || '').trim();
+      if (!name) throw new ValidationError({ name: ['Required'] });
+      patch.name = name.slice(0, 100);
+    }
+    if (data.title !== undefined) {
+      patch.title = data.title === 'Mr' || data.title === 'Mme' ? data.title : null;
+    }
+    // Staff contacts — students have no use for them and cannot set them.
+    if (currentUser.role !== ROLES.STUDENT) {
+      if (data.email !== undefined) {
+        const email = String(data.email || '').trim();
+        patch.email = email || null;
+      }
+      if (data.phone !== undefined) {
+        const phone = String(data.phone || '').trim();
+        patch.phone = phone || null;
+      }
+    }
+    if (!Object.keys(patch).length) {
+      throw new ValidationError({ _global: ['Nothing to update'] });
+    }
+    const updated = await this.#repo.update('users', id, patch);
+    this.#logger.info({ userId: id }, 'Own profile updated');
+    return this.#stripPassword(updated);
+  }
+
   #requireAdmin(user) {
     if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(user.role)) {
+      throw new ForbiddenError();
+    }
+  }
+
+  // Teachers reach create/update/delete only through the scoped user routes
+  // (own-class students); direct service callers must still be staff.
+  #requireStaff(user) {
+    if (!user || ![ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER].includes(user.role)) {
       throw new ForbiddenError();
     }
   }

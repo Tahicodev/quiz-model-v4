@@ -9,6 +9,9 @@ export const TournamentCreateSchema = z.object({
   settings_json: z.string().optional().nullable(),
   starts_at:     z.string().datetime().optional().nullable(),
   ends_at:       z.string().datetime().optional().nullable(),
+  // Optional linked kids game (primaire): played in the kid player, each
+  // completion accumulates into the player's tournament entry.
+  kids_game_id:  z.string().uuid().optional().nullable(),
 });
 
 export const TournamentUpdateSchema = TournamentCreateSchema.partial().extend({
@@ -16,7 +19,10 @@ export const TournamentUpdateSchema = TournamentCreateSchema.partial().extend({
 });
 
 export const TournamentFilterSchema = z.object({
-  status:    z.enum(statusValues).optional(),
+  // The list route narrows student visibility with { in: [...] }; accept
+  // that Prisma-shaped filter alongside the plain enum.
+  status:    z.union([z.enum(statusValues), z.object({ in: z.array(z.enum(statusValues)) })]).optional(),
+  creator_id: z.string().uuid().optional(),
   search:    z.string().optional(),
   limit:     z.coerce.number().int().min(1).max(200).default(50),
   offset:    z.coerce.number().int().min(0).default(0),

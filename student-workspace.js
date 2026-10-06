@@ -6504,6 +6504,12 @@
 			showToast('Enter the game code shared by your teacher.', 'error');
 			return;
 		}
+		// 4-character codes are Kids Game PINs — open the kid player directly
+		// (it handles unknown PINs with a friendly retry screen).
+		if (code.length === 4) {
+			openKidsPlay(code);
+			return;
+		}
 		const localGame = findGameByJoinCode(code);
 		if (localGame) {
 			joinGame(localGame.id, context).then((response) => {
@@ -7446,7 +7452,120 @@
 			})
 			.join('');
 		setInnerHTMLForIds(listIds, html);
+		renderStudentKidsSection(context);
 	}
+
+	// ── Kids Games for primaire students ──────────────────────────────────
+	// Published kids games (kid-styled) + open kids-tournaments, playable in
+	// the kid player with the student's login so results count like others.
+	let kidsSectionToken = 0;
+
+	function openKidsPlay(pin, tournamentId) {
+		let url = `/kids/play.html?pin=${encodeURIComponent(String(pin || '').toUpperCase())}`;
+		if (tournamentId) {
+			url += `&tournament=${encodeURIComponent(tournamentId)}`;
+		}
+		window.open(url, '_blank');
+	}
+
+	async function renderStudentKidsSection(context) {
+		const box = byId('studentKidsGames');
+		if (!box) return;
+		const user = context?.user;
+		if (!user || String(user.role || '').toLowerCase() !== 'student') {
+			box.innerHTML = '';
+			return;
+		}
+		const myToken = ++kidsSectionToken;
+		try {
+			if (state.kidsSchoolPrimaire === undefined) {
+				try {
+					const profile = await window.API.raw('GET', '/school/profile/full');
+					state.kidsSchoolPrimaire =
+						String(profile?.school_type || '').toLowerCase() === 'primaire';
+				} catch (_) {
+					state.kidsSchoolPrimaire = false;
+				}
+			}
+			if (!state.kidsSchoolPrimaire) {
+				if (myToken === kidsSectionToken) box.innerHTML = '';
+				return;
+			}
+			const [gamesRes, toursRes] = await Promise.all([
+				window.API.raw('GET', '/kids/browse?limit=50').catch(() => null),
+				window.API.raw('GET', '/tournaments?limit=50').catch(() => null),
+			]);
+			if (myToken !== kidsSectionToken) return;
+			const games = Array.isArray(gamesRes?.data) ? gamesRes.data : [];
+			const kidsTournaments = (
+				Array.isArray(toursRes?.data) ? toursRes.data : []
+			).filter(
+				(t) =>
+					t?.kidsGame &&
+					['open', 'active'].includes(String(t.status || '').toLowerCase()),
+			);
+			if (!games.length && !kidsTournaments.length) {
+				box.innerHTML = '';
+				return;
+			}
+			const gameCards = games
+				.map(
+					(g) => `
+				<div class="game-card open">
+					<div class="game-card-header">
+						<div>
+							<h3>${escapeHtml(g.name)}</h3>
+							<p class="game-type-badges">
+								<span class="game-badge">Kids Game</span>
+								<span class="game-badge ghost">${escapeHtml(g.game_type || 'game')}</span>
+								${g.grade ? `<span class="game-badge ghost">${escapeHtml(String(g.grade).toUpperCase())}</span>` : ''}
+							</p>
+						</div>
+						<span class="game-pill open">PIN ${escapeHtml(g.pin || '')}</span>
+					</div>
+					<div class="game-meta">
+						<span>${Number(g.question_count) || 0} questions</span>
+						<span>${Number(g.play_count) || 0} plays</span>
+					</div>
+					<div class="game-actions">
+						<button class="workspace-btn small" onclick="playKidsGame('${escapeHtml(g.pin || '')}')">Play</button>
+					</div>
+				</div>`,
+				)
+				.join('');
+			const tournamentCards = kidsTournaments
+				.map(
+					(t) => `
+				<div class="game-card open">
+					<div class="game-card-header">
+						<div>
+							<h3>${escapeHtml(t.name)}</h3>
+							<p class="game-type-badges">
+								<span class="game-badge">Kids Tournament</span>
+								<span class="game-badge ghost">${escapeHtml(t.kidsGame?.name || '')}</span>
+							</p>
+						</div>
+						<span class="game-pill ${escapeHtml(t.status)}">${escapeHtml(t.status)}</span>
+					</div>
+					<div class="game-actions">
+						<button class="workspace-btn small" onclick="playKidsGame('${escapeHtml(t.kidsGame?.pin || '')}', '${escapeHtml(t.id)}')">Play Tournament Game</button>
+					</div>
+				</div>`,
+				)
+				.join('');
+			box.innerHTML = `
+				<div class="kids-games-heading">
+					<h3>Kids Games</h3>
+					<p>Playful games from your teachers — results count like every other game.</p>
+				</div>
+				<div class="game-card-list">${tournamentCards}${gameCards}</div>`;
+		} catch (_) {
+			if (myToken === kidsSectionToken) box.innerHTML = '';
+		}
+	}
+
+	window.playKidsGame = openKidsPlay;
+	window.renderStudentKidsSection = renderStudentKidsSection;
 
 	function renderGameStage(context) {
 		const stage = byId('studentGameStage');

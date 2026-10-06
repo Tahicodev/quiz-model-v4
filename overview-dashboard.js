@@ -38,7 +38,22 @@ function updateGreeting() {
 	else if (hours < 18) greeting = 'Good afternoon';
 	else greeting = 'Good evening';
 
-	greetingEl.textContent = `${greeting}, Admin`;
+	// "Good afternoon, Mme Karim Haddad" — title + full name of the
+	// signed-in user (title is set per account by an admin). Falls back to
+	// the previous generic label when nobody is signed in.
+	let label = 'Admin';
+	try {
+		const user = window.Auth?.getCurrentUser?.() || window.currentUser || null;
+		label =
+			window.Auth?.getUserDisplayName?.(user) ||
+			user?.name ||
+			user?.username ||
+			'Admin';
+	} catch (_) {
+		// Fail-open: keep the generic label rather than blanking the header.
+	}
+
+	greetingEl.textContent = `${greeting}, ${label}`;
 }
 
 // Centralized mapping for activity type styles (badge class + icon color)

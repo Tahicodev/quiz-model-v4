@@ -15070,11 +15070,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   // src/shared/schemas/user.schema.js
   var roleValues = Object.values(ROLES);
   var optionalContact = (max) => external_exports.string().max(max).optional().nullable().transform((v) => v == null || v.trim() === "" ? null : v.trim());
+  var optionalTitle = external_exports.preprocess(
+    (v) => v === "" ? void 0 : v,
+    external_exports.enum(["Mr", "Mme"]).optional().nullable()
+  );
   var subjectsField = external_exports.array(external_exports.string().max(100)).max(20).optional().nullable().transform((v) => v == null ? null : v.map((s) => s.trim()).filter(Boolean));
   var UserCreateSchema = external_exports.object({
     username: external_exports.string().min(2).max(50),
     password: external_exports.string().min(6).max(100),
     name: external_exports.string().min(1).max(100),
+    title: optionalTitle,
     role: external_exports.enum(roleValues).default("student"),
     class_id: external_exports.string().min(1).max(100).optional().nullable(),
     numero: external_exports.string().max(50).optional().nullable(),
@@ -15088,6 +15093,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   });
   var UserUpdateSchema = external_exports.object({
     name: external_exports.string().min(1).max(100).optional(),
+    title: optionalTitle,
     role: external_exports.enum(roleValues).optional(),
     class_id: external_exports.string().min(1).max(100).optional().nullable(),
     numero: external_exports.string().max(50).optional().nullable(),
@@ -15462,6 +15468,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     difficulty: external_exports.enum(difficultyValues).optional(),
     search: external_exports.string().optional(),
     tags: external_exports.string().optional(),
+    // Admin-only: filter by author. Teachers are scoped automatically.
+    created_by: external_exports.string().uuid().optional(),
+    // Set server-side from the JWT (routes overwrite any client value).
+    school_id: external_exports.string().optional(),
     limit: external_exports.coerce.number().int().min(1).max(200).default(50),
     offset: external_exports.coerce.number().int().min(0).default(0),
     orderBy: external_exports.enum(["created_at", "text", "difficulty", "points"]).default("created_at"),
@@ -15475,10 +15485,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#repo = repo;
     }
     async list(filters = {}, pagination = {}) {
-      const parsed = QuestionFilterSchema.safeParse({ ...filters, ...pagination });
+      const { or = null, created_by = void 0, ...restFilters } = filters;
+      const parsed = QuestionFilterSchema.safeParse({ ...restFilters, ...pagination });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
-      return this.#repo.getAll("questions", { filters: rest, limit, offset, orderBy, direction, search });
+      if (created_by !== void 0) rest.created_by = created_by;
+      return this.#repo.getAll("questions", { filters: rest, limit, offset, orderBy, direction, search, ...or ? { or } : {} });
     }
     async getById(id) {
       const q = await this.#repo.getById("questions", id);
@@ -15491,7 +15503,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       return this.#repo.create("questions", {
         ...parsed.data,
-        school_id: currentUser?.school_id
+        school_id: currentUser?.school_id,
+        // Author attribution for teacher-scoped libraries (admin badge display
+        // + "my questions" filtering). NULL-safe: legacy callers omit it.
+        ...currentUser?.id ? { created_by: currentUser.id } : {}
       });
     }
     async update(id, data, currentUser) {
@@ -15529,7 +15544,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
         const created = await this.#repo.create("questions", {
           ...parsed.data,
-          school_id: currentUser?.school_id
+          school_id: currentUser?.school_id,
+          ...currentUser?.id ? { created_by: currentUser.id } : {}
         });
         imported.push(created);
       }
@@ -15601,9 +15617,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#repo = repo;
     }
     async list(filters = {}, pagination = {}) {
-      const parsed = ExamFilterSchema.safeParse({ ...filters, ...pagination });
+      const { creator_id = void 0, ...restFilters } = filters;
+      const parsed = ExamFilterSchema.safeParse({ ...restFilters, ...pagination });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+      if (creator_id !== void 0) rest.creator_id = creator_id;
       return this.#repo.getAll("exams", { filters: rest, limit, offset, orderBy, direction, search });
     }
     async getById(id) {
@@ -16061,6 +16079,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var CategoryFilterSchema = external_exports.object({
     parent_id: external_exports.string().uuid().optional().nullable(),
     search: external_exports.string().optional(),
+    // Admin-only: filter by author. Teachers are scoped automatically.
+    created_by: external_exports.string().uuid().optional(),
+    // Set server-side from the JWT (routes overwrite any client value).
+    school_id: external_exports.string().optional(),
     limit: external_exports.coerce.number().int().min(1).max(200).default(100),
     offset: external_exports.coerce.number().int().min(0).default(0),
     orderBy: external_exports.enum(["name", "created_at"]).default("name"),
@@ -16074,17 +16096,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#repo = repo;
     }
     async list(filters = {}, pagination = {}) {
-      const parsed = CategoryFilterSchema.safeParse({ ...filters, ...pagination });
+      const { or = null, created_by = void 0, ...restFilters } = filters;
+      const parsed = CategoryFilterSchema.safeParse({ ...restFilters, ...pagination });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
-      return this.#repo.getAll("categories", { filters: rest, limit, offset, orderBy, direction, search });
+      if (created_by !== void 0) rest.created_by = created_by;
+      return this.#repo.getAll("categories", { filters: rest, limit, offset, orderBy, direction, search, ...or ? { or } : {} });
     }
     /**
      * Retrieves the full category tree for the given school.
-     * Useful for building UI category pickers.
+     * Useful for building UI category pickers. Teachers receive only the
+     * categories they authored; admins receive all.
      */
-    async getTree() {
-      const { data: all } = await this.#repo.getAll("categories", { limit: 9999, orderBy: "name" });
+    async getTree(schoolId = null, { teacherId = null } = {}) {
+      const { data: all } = await this.#repo.getAll("categories", {
+        filters: {
+          ...schoolId ? { school_id: schoolId } : {},
+          ...teacherId ? { created_by: teacherId } : {}
+        },
+        limit: 9999,
+        orderBy: "name"
+      });
       const lookup = new Map(all.map((c) => [c.id, { ...c, children: [] }]));
       const roots = [];
       for (const cat of lookup.values()) {
@@ -16111,7 +16143,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return this.#repo.create("categories", {
         ...parsed.data,
-        school_id: currentUser?.school_id
+        school_id: currentUser?.school_id,
+        // Author attribution for teacher-scoped libraries (see QuestionService).
+        ...currentUser?.id ? { created_by: currentUser.id } : {}
       });
     }
     async update(id, data, currentUser) {
@@ -16186,6 +16220,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var GameFilterSchema = external_exports.object({
     type: gameTypeSchema.optional(),
     status: external_exports.enum(statusValues2).optional(),
+    creator_id: external_exports.string().uuid().optional(),
     search: external_exports.string().optional(),
     limit: external_exports.coerce.number().int().min(1).max(200).default(50),
     offset: external_exports.coerce.number().int().min(0).default(0),
@@ -16245,9 +16280,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#repo = repo;
     }
     async list(filters = {}, pagination = {}) {
-      const parsed = GameFilterSchema.safeParse({ ...filters, ...pagination });
+      const { creator_id = void 0, ...restFilters } = filters;
+      const parsed = GameFilterSchema.safeParse({ ...restFilters, ...pagination });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+      if (creator_id !== void 0) rest.creator_id = creator_id;
       return this.#repo.getAll("games", { filters: rest, limit, offset, orderBy, direction, search });
     }
     async getById(id, schoolId = null) {
@@ -16586,13 +16623,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     description: external_exports.string().max(1e3).optional().nullable(),
     settings_json: external_exports.string().optional().nullable(),
     starts_at: external_exports.string().datetime().optional().nullable(),
-    ends_at: external_exports.string().datetime().optional().nullable()
+    ends_at: external_exports.string().datetime().optional().nullable(),
+    // Optional linked kids game (primaire): played in the kid player, each
+    // completion accumulates into the player's tournament entry.
+    kids_game_id: external_exports.string().uuid().optional().nullable()
   });
   var TournamentUpdateSchema = TournamentCreateSchema.partial().extend({
     status: external_exports.enum(statusValues3).optional()
   });
   var TournamentFilterSchema = external_exports.object({
-    status: external_exports.enum(statusValues3).optional(),
+    // The list route narrows student visibility with { in: [...] }; accept
+    // that Prisma-shaped filter alongside the plain enum.
+    status: external_exports.union([external_exports.enum(statusValues3), external_exports.object({ in: external_exports.array(external_exports.enum(statusValues3)) })]).optional(),
+    creator_id: external_exports.string().uuid().optional(),
     search: external_exports.string().optional(),
     limit: external_exports.coerce.number().int().min(1).max(200).default(50),
     offset: external_exports.coerce.number().int().min(0).default(0),
@@ -16613,9 +16656,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#gameService = gameService;
     }
     async list(filters = {}, pagination = {}) {
-      const parsed = TournamentFilterSchema.safeParse({ ...filters, ...pagination });
+      const { creator_id = void 0, ...restFilters } = filters;
+      const parsed = TournamentFilterSchema.safeParse({ ...restFilters, ...pagination });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+      if (creator_id !== void 0) rest.creator_id = creator_id;
       return this.#repo.getAll("tournaments", { filters: rest, limit, offset, orderBy, direction, search });
     }
     async getById(id) {
@@ -16627,6 +16672,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const parsed = TournamentCreateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      await this.#assertKidsGame(parsed.data.kids_game_id, currentUser?.school_id);
       return this.#repo.create("tournaments", {
         ...parsed.data,
         school_id: currentUser?.school_id,
@@ -16643,7 +16689,21 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       const parsed = TournamentUpdateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      if (parsed.data.kids_game_id !== void 0) {
+        await this.#assertKidsGame(parsed.data.kids_game_id, existing.school_id);
+      }
       return this.#repo.update("tournaments", id, parsed.data);
+    }
+    /** A linked kids game must exist, be published, and belong to the school. */
+    async #assertKidsGame(kidsGameId, schoolId) {
+      if (kidsGameId == null || kidsGameId === "") return;
+      const game = await this.#repo.getById("kidsGames", kidsGameId);
+      if (!game || schoolId && game.school_id !== schoolId) {
+        throw new ValidationError({ kids_game_id: ["Unknown kids game"] });
+      }
+      if (game.status !== "published") {
+        throw new ValidationError({ kids_game_id: ["Kids game must be published first"] });
+      }
     }
     async open(id, currentUser) {
       this.#requireAdmin(currentUser);
@@ -18004,6 +18064,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           role: u.role,
           status: u.status || "active"
         };
+        if (u.title !== void 0) out.title = u.title || null;
         if (u.password) out.password = u.password;
         if (u.classId) out.class_id = u.classId;
         if (u.class_id) out.class_id = u.class_id;
@@ -18407,6 +18468,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const sanitized = users.filter(
         (user) => user && user.id && user.username && String(user.role || "").toLowerCase() !== ROLE_ADMIN
       ).map((user) => normalizeUser(user));
+      const scoped = (() => {
+        if (!isTeacher()) return sanitized;
+        const ids = getTeacherClassIds();
+        if (!ids.length) return sanitized;
+        return sanitized.filter(
+          (u) => canManageUser(u) || String(u.id || "") === String(currentUser?.id || "")
+        );
+      })();
       const existing = getUsers();
       const adminUsers = existing.filter(
         (user) => String(user.role || "").toLowerCase() === ROLE_ADMIN
@@ -18415,7 +18484,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       adminUsers.forEach((user) => {
         mergedMap.set(user.id, user);
       });
-      sanitized.forEach((user) => {
+      scoped.forEach((user) => {
         mergedMap.set(user.id, user);
       });
       saveUsers(Array.from(mergedMap.values()));
@@ -18441,6 +18510,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return {
         id: user.id || genId(),
         name: (user.name || "").trim(),
+        // Civility for greetings/display (Mr | Mme). Anything else is
+        // treated as unset so stray values never leak into the UI.
+        title: user.title === "Mr" || user.title === "Mme" ? user.title : "",
         username: (user.username || user.email || "").trim(),
         role: user.role || ROLE_STUDENT,
         status: user.status || "active",
@@ -18448,7 +18520,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         avatar: user.avatar || user.profileImage || "",
         classIds: Array.isArray(user.classIds) ? user.classIds : [],
         studentNumber: user.studentNumber || user.numero || "",
-        classId: user.classId || "",
+        // Server rows use snake_case class_id; legacy rows use classId.
+        classId: user.classId || user.class_id || "",
         className: user.className || "",
         // Teacher/staff contacts (kept in the local cache so the user modal
         // can pre-fill them between bootstraps).
@@ -18840,6 +18913,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function getCurrentUser() {
       return currentUser;
     }
+    function getUserDisplayName(user) {
+      if (!user) return "";
+      const title = user.title === "Mr" || user.title === "Mme" ? user.title : "";
+      const name = String(user.name || user.username || "").trim();
+      return [title, name].filter(Boolean).join(" ");
+    }
     function getCurrentRole() {
       return currentUser ? currentUser.role : null;
     }
@@ -18932,6 +19011,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       };
     }
     const DEFAULT_TEACHER_ACCESS = {
+      // rev stamps the shape/semantics of these defaults. Bump it whenever
+      // a default flips meaning (e.g. the Data tab growing a teacher-safe
+      // view) so previously auto-saved maps cannot pin stale values.
+      rev: 2,
       tabs: {
         overview: true,
         questions: true,
@@ -18939,46 +19022,84 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         exams: true,
         classes: true,
         games: true,
+        kidsGames: true,
         results: true,
-        activity: true,
-        monitoring: true
+        // Activity Log and Monitoring are admin-only views, hard-hidden
+        // for teachers in every gate below — no toggle exists for them.
+        activity: false,
+        monitoring: false
       },
       settings: true,
       settingsTabs: {
         general: true,
+        profile: true,
         presets: true,
-        // Data and Realtime manage school-wide datasets and the LAN server —
-        // admin-only by default now (markup gates them with data-roles="admin").
-        data: false,
+        // The Data tab carries a teacher-scoped "My Data" section; the
+        // school-wide backup groups inside it stay markup-gated to admins.
+        data: true,
         realtime: false,
         "ai-generation": true,
         users: true
       }
     };
     function getTeacherAccessSettings() {
-      const settings = safeJsonParse(
-        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("settings")),
-        {}
-      );
-      const stored = settings.teacherAccess || {};
-      return {
-        tabs: { ...DEFAULT_TEACHER_ACCESS.tabs, ...stored.tabs || {} },
-        settings: stored.settings === void 0 ? DEFAULT_TEACHER_ACCESS.settings : stored.settings,
-        settingsTabs: {
-          ...DEFAULT_TEACHER_ACCESS.settingsTabs,
-          ...stored.settingsTabs || {}
+      let stored = {};
+      try {
+        const repo = window.__DI_CONTAINER__?.repo;
+        const rows = repo ? repo.getAll_sync("settings") : [];
+        const list = Array.isArray(rows) ? rows : [];
+        const row = list.find((r) => r && r.key === "teacherAccess");
+        if (row && typeof row.value === "string") {
+          const parsed = JSON.parse(row.value || "{}");
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            stored = parsed;
+          }
         }
+      } catch (_) {
+        stored = {};
+      }
+      if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+        stored = {};
+      }
+      if (!Object.keys(stored).length) {
+        try {
+          const local = safeJsonParse(localStorage.getItem("quizSettings"), {});
+          if (local && typeof local.teacherAccess === "object" && !Array.isArray(local.teacherAccess)) {
+            stored = local.teacherAccess;
+          }
+        } catch (_) {
+        }
+      }
+      const mergedTabs = { ...DEFAULT_TEACHER_ACCESS.tabs, ...stored.tabs || {} };
+      mergedTabs.activity = false;
+      mergedTabs.monitoring = false;
+      const mergedSettingsTabs = {
+        ...DEFAULT_TEACHER_ACCESS.settingsTabs,
+        ...stored.settingsTabs || {}
+      };
+      if (stored.rev !== DEFAULT_TEACHER_ACCESS.rev && mergedSettingsTabs.data === false) {
+        mergedSettingsTabs.data = DEFAULT_TEACHER_ACCESS.settingsTabs.data;
+      }
+      return {
+        tabs: mergedTabs,
+        settings: stored.settings === void 0 ? DEFAULT_TEACHER_ACCESS.settings : stored.settings,
+        settingsTabs: mergedSettingsTabs
       };
     }
     function canAccessItem(type, item) {
       if (!currentUser || !item) return false;
       if (isAdmin()) return true;
       if (isTeacher()) {
+        const owner = item.ownerId || item.created_by || item.createdBy || null;
         if (type === "category") {
-          return item.id === "uncategorized" || item.ownerId === currentUser.id;
+          return item.id === "uncategorized" || String(owner) === String(currentUser.id);
         }
-        if (type === "question" || type === "exam") {
-          return item.ownerId === currentUser.id;
+        if (type === "question") {
+          return String(owner) === String(currentUser.id);
+        }
+        if (type === "exam") {
+          const examOwner = item.ownerId || item.creator_id || item.creatorId || null;
+          return String(examOwner) === String(currentUser.id);
         }
         if (type === "class") {
           const classIds = getTeacherClassIds();
@@ -19065,10 +19186,72 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!roles.length) return true;
       return roles.includes(currentUser?.role);
     }
+    function swapTextLabel(el, teacherLabel) {
+      if (!el) return;
+      if (el.dataset.origText === void 0) el.dataset.origText = el.textContent;
+      const target = isTeacher() ? teacherLabel : el.dataset.origText;
+      let swapped = false;
+      el.childNodes.forEach((node) => {
+        if (node.nodeType === 3 && node.textContent.trim()) {
+          node.textContent = swapped ? "" : target;
+          swapped = true;
+        }
+      });
+      if (!swapped) el.textContent = target;
+    }
+    function applyTeacherTabLabels() {
+      const usersBtn = document.querySelector(
+        '.settings-tab-btn[data-settings-tab="users"]'
+      );
+      swapTextLabel(usersBtn, "Students");
+      if (usersBtn) usersBtn.title = isTeacher() ? "Students" : "Users";
+      swapTextLabel(
+        document.querySelector("#users-settings .settings-section-title h3"),
+        "Students"
+      );
+      swapTextLabel(
+        document.querySelector("#users-settings .users-settings-intro small"),
+        "Manage your students and review their profile or account requests from one place."
+      );
+      swapTextLabel(
+        document.getElementById("users-management-tab"),
+        "Student Management"
+      );
+      swapTextLabel(
+        document.querySelector("#users-management-panel .user-management-header h3"),
+        "Student Management"
+      );
+      swapTextLabel(
+        document.querySelector("#users-management-panel .user-management-header small"),
+        "Create and manage the students in your classes."
+      );
+      swapTextLabel(
+        document.querySelector("#add-user-btn span"),
+        "Add Student"
+      );
+      const roleFilterGroup = document.getElementById("userRoleFilter")?.closest(".form-group");
+      if (roleFilterGroup) {
+        if (isTeacher()) {
+          roleFilterGroup.style.display = "none";
+          const roleFilter = document.getElementById("userRoleFilter");
+          if (roleFilter) roleFilter.value = "";
+        } else {
+          roleFilterGroup.style.display = "";
+        }
+      }
+    }
+    function canAccessKidsStudio() {
+      if (isAdmin()) return true;
+      if (isTeacher()) {
+        const access = getTeacherAccessSettings();
+        return !(access.tabs && access.tabs.kidsGames === false);
+      }
+      return true;
+    }
     function canAccessSettingsTab(tabName) {
       if (isAdmin()) return true;
       if (isTeacher()) {
-        if (tabName === "teacher-access" || tabName === "data" || tabName === "realtime" || tabName === "setup") {
+        if (tabName === "teacher-access" || tabName === "realtime" || tabName === "setup") {
           return false;
         }
         const access = getTeacherAccessSettings();
@@ -19116,7 +19299,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-tab-btn[data-settings-tab]").forEach((btn) => {
         const key = btn.dataset.settingsTab;
         if (!key) return;
-        if (key === "teacher-access" || key === "data" || key === "realtime" || key === "setup") {
+        if (key === "teacher-access" || key === "realtime" || key === "setup") {
           btn.classList.add("role-hidden");
           return;
         }
@@ -19129,7 +19312,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-section[data-settings-tab]").forEach((section) => {
         const key = section.dataset.settingsTab;
         if (!key) return;
-        if (key === "teacher-access" || key === "data" || key === "realtime" || key === "setup") {
+        if (key === "teacher-access" || key === "realtime" || key === "setup") {
           section.classList.add("role-hidden");
           return;
         }
@@ -19187,12 +19370,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       applySchoolBranding();
     }
     function applyRolePermissions() {
+      try {
+        applyTeacherTabLabels();
+      } catch (e) {
+        console.error("[auth] applyTeacherTabLabels failed:", e);
+      }
       if (!currentUser) return;
-      applyRoleVisibility();
-      applyTeacherAccess();
+      try {
+        applyRoleVisibility();
+      } catch (e) {
+        console.error("[auth] applyRoleVisibility failed:", e);
+      }
+      try {
+        applyTeacherAccess();
+      } catch (e) {
+        console.error("[auth] applyTeacherAccess failed:", e);
+      }
       const nameEl = document.getElementById("currentUserName");
       if (nameEl) {
-        nameEl.textContent = currentUser.name || currentUser.username || "User";
+        nameEl.textContent = getUserDisplayName(currentUser) || "User";
       }
       const emailEl = document.getElementById("currentUserEmail");
       if (emailEl) {
@@ -19205,7 +19401,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       const greetingEl = document.getElementById("dashboardGreeting");
       if (greetingEl) {
-        const label = currentUser.name || currentUser.username || "User";
+        const label = getUserDisplayName(currentUser) || "User";
         greetingEl.textContent = `Welcome back, ${label}`;
       }
       const titleEl = document.getElementById("dashboardTitle");
@@ -19216,19 +19412,27 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (mobileTitleEl) {
         mobileTitleEl.textContent = currentUser.role === ROLE_TEACHER ? "Teacher Dashboard" : "Admin Dashboard";
       }
-      applySchoolBranding();
-      const navButtons = Array.from(document.querySelectorAll(".nav-tab"));
-      const allowedButtons = navButtons.filter((btn) => {
-        const tabName = btn.dataset.tab || "";
-        return tabName ? canAccessTab(tabName) : true;
-      });
-      const activeTab = document.querySelector(".tab-content.active");
-      const activeTabId = activeTab ? activeTab.id : null;
-      if (activeTabId && !canAccessTab(activeTabId)) {
-        if (allowedButtons.length > 0 && typeof openTab === "function") {
-          openTab(null, allowedButtons[0].dataset.tab);
-          allowedButtons[0].classList.add("active");
+      try {
+        applySchoolBranding();
+      } catch (e) {
+        console.error("[auth] applySchoolBranding failed:", e);
+      }
+      try {
+        const navButtons = Array.from(document.querySelectorAll(".nav-tab"));
+        const allowedButtons = navButtons.filter((btn) => {
+          const tabName = btn.dataset.tab || "";
+          return tabName ? canAccessTab(tabName) : true;
+        });
+        const activeTab = document.querySelector(".tab-content.active");
+        const activeTabId = activeTab ? activeTab.id : null;
+        if (activeTabId && !canAccessTab(activeTabId)) {
+          if (allowedButtons.length > 0 && typeof openTab === "function") {
+            openTab(null, allowedButtons[0].dataset.tab);
+            allowedButtons[0].classList.add("active");
+          }
         }
+      } catch (e) {
+        console.error("[auth] nav role gating failed:", e);
       }
     }
     async function handleLogin(formEl, allowedRole) {
@@ -20374,6 +20578,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function renderUsersTable() {
       const tableBody = document.getElementById("usersTableBody");
       if (!tableBody) return;
+      const usersTable = document.getElementById("usersTable");
+      if (usersTable) usersTable.classList.toggle("teacher-view", isTeacher());
       refreshUserClassFilter();
       const classes = safeJsonParse(
         JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
@@ -20423,6 +20629,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const studentNumberDisplay = u.role === ROLE_STUDENT ? u.studentNumber || "" : "";
         const usernameDisplay = u.role === ROLE_STUDENT && u.studentNumber && String(u.username || "") === String(u.studentNumber || "") ? "" : u.username || "";
         const isSelected = selectedUserIds.has(u.id);
+        const baseName = u.name || rosterNameMap.get(`${u.classId}::${u.studentNumber}`) || u.username || "User";
         return `
         <tr class="${isSelected ? "is-selected" : ""}">
 						<td class="checkbox-cell">
@@ -20434,9 +20641,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								${isSelected ? "checked" : ""}
 							/>
 						</td>
-            <td>${escapeHtml(
-          u.name || rosterNameMap.get(`${u.classId}::${u.studentNumber}`) || u.username || "User"
-        )}</td>
+            <td>${escapeHtml(getUserDisplayName({ title: u.title, name: baseName }) || baseName)}</td>
             <td>${usernameDisplay ? escapeHtml(usernameDisplay) : emptyCell}</td>
             <td>${studentNumberDisplay ? escapeHtml(studentNumberDisplay) : emptyCell}</td>
             <td>${classDisplay ? escapeHtml(classDisplay) : emptyCell}</td>
@@ -20633,6 +20838,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const studentClassSelect = document.getElementById("studentClassSelect");
       if (nameInput) nameInput.value = user?.name || "";
       if (usernameInput) usernameInput.value = user?.username || "";
+      const titleSelect = document.getElementById("userTitle");
+      if (titleSelect) {
+        const t = user?.title === "Mr" || user?.title === "Mme" ? user.title : "";
+        titleSelect.value = t;
+      }
       const isTeacherUser = isTeacher();
       if (roleSelect) {
         roleSelect.value = user?.role || ROLE_STUDENT;
@@ -20645,7 +20855,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       if (statusSelect) statusSelect.value = user?.status || "active";
       if (studentNumberInput)
-        studentNumberInput.value = user?.studentNumber || "";
+        studentNumberInput.value = user?.studentNumber || user?.numero || "";
       const teacherNumeroInput = document.getElementById("teacherNumeroField");
       const teacherPhoneInput = document.getElementById("teacherPhoneField");
       const teacherEmailInput = document.getElementById("teacherEmailField");
@@ -20670,8 +20880,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         studentClassSelect.innerHTML = '<option value="">Select class</option>' + classes.map(
           (c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`
         ).join("");
-        if (user?.classId) studentClassSelect.value = user.classId;
-        if (!user?.classId && classes.length === 1) {
+        if (user?.classId || user?.class_id) studentClassSelect.value = user.classId || user.class_id;
+        if (!user?.classId && !user?.class_id && classes.length === 1) {
           studentClassSelect.value = classes[0].id;
         }
       }
@@ -20709,6 +20919,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (studentFields) {
         studentFields.style.display = role === ROLE_STUDENT ? "block" : "none";
       }
+      const hint = document.getElementById("userAccessHint");
+      if (hint) {
+        hint.textContent = role === ROLE_ADMIN ? "Full access \u2014 manages every account, class and school setting." : role === ROLE_TEACHER ? "Manages students in assigned classes and their content only." : "Class-bound account \u2014 sees assigned work in the student workspace.";
+      }
+      updateUserModalPreview();
+    }
+    function updateUserModalPreview() {
+      const modal = document.getElementById("userModal");
+      if (!modal) return;
+      const title = document.getElementById("userTitle")?.value === "Mr" || document.getElementById("userTitle")?.value === "Mme" ? document.getElementById("userTitle").value : "";
+      const name = (document.getElementById("userName")?.value || "").trim();
+      const role = document.getElementById("userRole")?.value || ROLE_STUDENT;
+      const status = document.getElementById("userStatus")?.value || "active";
+      const roleLabel = role === ROLE_ADMIN ? "Admin" : role === ROLE_TEACHER ? "Teacher" : "Student";
+      const avatar = document.getElementById("userModalAvatar");
+      if (avatar) {
+        avatar.textContent = name ? name.charAt(0).toUpperCase() : "?";
+        avatar.dataset.role = role;
+      }
+      const namePreview = document.getElementById("userModalNamePreview");
+      if (namePreview) {
+        namePreview.textContent = [title, name].filter(Boolean).join(" ") || "New user";
+      }
+      const metaPreview = document.getElementById("userModalMetaPreview");
+      if (metaPreview) {
+        metaPreview.textContent = `${roleLabel} \xB7 ${status === "disabled" ? "Disabled" : "Active"}`;
+      }
     }
     function serverUserToLegacy(remote) {
       if (!remote) return null;
@@ -20721,6 +20958,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return {
         id: remote.id || "",
         name: remote.name || "",
+        title: remote.title === "Mr" || remote.title === "Mme" ? remote.title : "",
         username: remote.username || "",
         role: remote.role || ROLE_STUDENT,
         status: remote.status || "active",
@@ -20738,6 +20976,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     async function openUserModal(userId) {
       const modal = document.getElementById("userModal");
       if (!modal) return;
+      const titleEl = document.getElementById("userModalTitle");
+      if (titleEl) titleEl.textContent = userId ? "Edit User" : "New User";
       let user = null;
       if (userId) {
         const users = getUsers();
@@ -20778,6 +21018,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const passwordInput = document.getElementById("userPassword");
       const name = nameInput ? nameInput.value.trim() : "";
       const username = usernameInput ? usernameInput.value.trim() : "";
+      const titleSelect = document.getElementById("userTitle");
+      const titleValue = titleSelect ? String(titleSelect.value || "").trim() : "";
+      const title = titleValue === "Mr" || titleValue === "Mme" ? titleValue : "";
       let role = roleSelect ? roleSelect.value : ROLE_STUDENT;
       const status = statusSelect ? statusSelect.value : "active";
       const password = passwordInput ? passwordInput.value : "";
@@ -20806,6 +21049,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       let updatedUser = normalizeUser({
         ...existingUser,
         name,
+        title,
         username,
         role,
         status
@@ -20884,6 +21128,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const payload = {
         username: updatedUser.username,
         name: updatedUser.name,
+        title: updatedUser.title || null,
         role: updatedUser.role,
         status: updatedUser.status || "active"
       };
@@ -20912,6 +21157,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             updatedUser.studentNumber = serverUser.numero || updatedUser.studentNumber || "";
             updatedUser.email = serverUser.email || "";
             updatedUser.phone = serverUser.phone || "";
+            updatedUser.title = serverUser.title === "Mr" || serverUser.title === "Mme" ? serverUser.title : "";
             updatedUser.subjects = Array.isArray(serverUser.subjects) ? serverUser.subjects : updatedUser.subjects || [];
             updatedUser.createdAt = serverUser.created_at || updatedUser.createdAt;
             updatedUser.updatedAt = serverUser.updated_at || updatedUser.updatedAt;
@@ -21391,7 +21637,37 @@ A new temporary password will be generated and shown to you once so you can shar
     }
     function getProfileRequests() {
       var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-      return r ? r.getValue_sync("profile_requests", []) : safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
+      var raw = r ? r.getValue_sync("profile_requests", []) : safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
+      return (Array.isArray(raw) ? raw : []).map(normalizeProfileRequest);
+    }
+    function normalizeProfileRequest(req) {
+      if (!req || typeof req !== "object") return req;
+      const out = Object.assign({}, req);
+      if (out.userId == null && out.user_id != null) out.userId = out.user_id;
+      if (out.changes == null && out.changes_json != null) {
+        try {
+          out.changes = typeof out.changes_json === "string" ? JSON.parse(out.changes_json) : out.changes_json;
+        } catch (_) {
+          out.changes = {};
+        }
+      }
+      if (out.currentSnapshot == null && out.snapshot_json != null) {
+        try {
+          out.currentSnapshot = typeof out.snapshot_json === "string" ? JSON.parse(out.snapshot_json) : out.snapshot_json;
+        } catch (_) {
+          out.currentSnapshot = {};
+        }
+      }
+      const pairs = [
+        ["created_at", "createdAt"],
+        ["reviewer_id", "reviewerId"],
+        ["reviewed_at", "reviewedAt"],
+        ["review_note", "reviewNote"]
+      ];
+      for (const [snake, camel] of pairs) {
+        if (out[camel] == null && out[snake] != null) out[camel] = out[snake];
+      }
+      return out;
     }
     function saveProfileRequests(requests) {
       var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
@@ -21993,9 +22269,23 @@ A new temporary password will be generated and shown to you once so you can shar
       if (!user) {
         return { ok: false, message: "User not found" };
       }
-      const currentHash = await hashPassword(currentPassword || "");
-      if (currentHash !== user.passwordHash) {
-        return { ok: false, message: "Current password is incorrect" };
+      let serverAccepted = false;
+      if (window.API && typeof window.API.raw === "function" && window.__authToken) {
+        try {
+          await window.API.raw("POST", "/auth/change-password", {
+            oldPassword: currentPassword || "",
+            newPassword: newPassword || ""
+          });
+          serverAccepted = true;
+        } catch (err) {
+          return { ok: false, message: err?.message || "Password update failed" };
+        }
+      }
+      if (!serverAccepted) {
+        const currentHash = await hashPassword(currentPassword || "");
+        if (currentHash !== user.passwordHash) {
+          return { ok: false, message: "Current password is incorrect" };
+        }
       }
       user.passwordHash = await hashPassword(newPassword || "");
       user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -22009,11 +22299,12 @@ A new temporary password will be generated and shown to you once so you can shar
       const users = getUsers();
       const user = users.find((u) => u.id === request.userId);
       if (!user) {
-        request.status = "rejected";
-        request.reviewNote = "User not found";
+        request.status = "approved";
+        request.reviewNote = note;
+        request.reviewerId = reviewerId || "";
         request.reviewedAt = (/* @__PURE__ */ new Date()).toISOString();
         saveProfileRequests(requests);
-        return null;
+        return request;
       }
       if (!canManageUser(user) && !isAdmin()) {
         showToast2("Access denied", "error");
@@ -22070,6 +22361,48 @@ A new temporary password will be generated and shown to you once so you can shar
       request.reviewedAt = (/* @__PURE__ */ new Date()).toISOString();
       saveProfileRequests(requests);
       return request;
+    }
+    function renderAccountRequests() {
+      const container = document.getElementById("accountRequestsList");
+      if (!container) return;
+      const requests = getAccountRequests();
+      const scoped = isTeacher() ? requests.filter((req) => canReviewAccountRequest(req)) : requests;
+      if (!scoped.length) {
+        container.innerHTML = '<div class="empty-state">No account requests yet.</div>';
+        return;
+      }
+      const classes = safeJsonParse(
+        JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+        []
+      );
+      const classMap = buildClassNameMap(classes);
+      container.innerHTML = scoped.slice(0, 20).map((req) => {
+        const className = classMap.get(String(req.classId || "")) || req.className || "\u2014";
+        const meta3 = [
+          req.username ? `Username: ${req.username}` : "",
+          req.studentNumber ? `Student #: ${req.studentNumber}` : "",
+          `Class: ${className}`
+        ].filter(Boolean).map((m) => `<span>${escapeHtml(m)}</span>`).join("");
+        return `
+				<div class="profile-request-card ${escapeHtml(req.status)}">
+					<div class="request-main">
+						<div>
+							<div class="request-title">${escapeHtml(req.fullName || "Student")}</div>
+							<div class="request-meta">${req.createdAt ? new Date(req.createdAt).toLocaleString() : ""}</div>
+							<div class="request-changes">${meta3}</div>
+							${req.note ? `<div class="request-note">${escapeHtml(req.note)}</div>` : ""}
+						</div>
+						<div class="request-status ${escapeHtml(req.status)}">${escapeHtml(req.status)}</div>
+					</div>
+					${req.status === "pending" && canReviewAccountRequest(req) ? `
+						<div class="request-actions">
+							<button class="btn btn-primary" onclick="reviewAccountRequest('${escapeHtml(req.id)}', true)">Approve</button>
+							<button class="btn btn-danger-soft" onclick="reviewAccountRequest('${escapeHtml(req.id)}', false)">Reject</button>
+						</div>
+					` : req.reviewNote ? `<div class="request-review-note">${escapeHtml(req.reviewNote)}</div>` : ""}
+				</div>
+			`;
+      }).join("");
     }
     function renderProfileRequests() {
       const container = document.getElementById("profileRequestsList");
@@ -22128,13 +22461,19 @@ A new temporary password will be generated and shown to you once so you can shar
       }).join("");
     }
     async function checkAuthState() {
-      await ensureDefaultAdmin();
+      let result = null;
       let wrongRoleDetected = null;
-      const result = loadSession([ROLE_ADMIN, ROLE_TEACHER], {
-        onWrongRole: (role) => {
-          wrongRoleDetected = role;
-        }
-      });
+      try {
+        await ensureDefaultAdmin();
+        result = loadSession([ROLE_ADMIN, ROLE_TEACHER], {
+          onWrongRole: (role) => {
+            wrongRoleDetected = role;
+          }
+        });
+      } catch (e) {
+        console.error("[auth] checkAuthState: session restore failed:", e);
+        result = null;
+      }
       if (!result) {
         sessionStorage.removeItem("adminLoggedIn");
         if (wrongRoleDetected === ROLE_STUDENT) {
@@ -22153,12 +22492,30 @@ A new temporary password will be generated and shown to you once so you can shar
         window.location.replace("index.html");
         return;
       }
-      setCurrentUser(result.user, result.session);
-      sessionStorage.setItem("adminLoggedIn", "true");
-      ensureOwnershipDefaults();
-      applyRolePermissions();
-      notifyAuthChange();
-      hideAuthModal();
+      try {
+        setCurrentUser(result.user, result.session);
+        sessionStorage.setItem("adminLoggedIn", "true");
+        ensureOwnershipDefaults();
+        applyRolePermissions();
+        notifyAuthChange();
+        hideAuthModal();
+      } catch (e) {
+        console.error("[auth] checkAuthState: applying session failed:", e);
+        if (currentUser) {
+          try {
+            applyRolePermissions();
+            hideAuthModal();
+          } catch (inner) {
+            console.error("[auth] role gating failed:", inner);
+          }
+        } else {
+          try {
+            showAuthModal();
+          } catch (inner) {
+            console.error("[auth] showAuthModal failed:", inner);
+          }
+        }
+      }
     }
     async function checkStudentAuthState() {
       await ensureDefaultAdmin();
@@ -22283,6 +22640,16 @@ A new temporary password will be generated and shown to you once so you can shar
       if (roleSelect) {
         roleSelect.addEventListener("change", updateUserRoleFields);
       }
+      const userFormLive = document.getElementById("userForm");
+      if (userFormLive && !userFormLive.dataset.previewBound) {
+        userFormLive.dataset.previewBound = "true";
+        userFormLive.addEventListener("input", () => {
+          updateUserModalPreview();
+        });
+        userFormLive.addEventListener("change", () => {
+          updateUserModalPreview();
+        });
+      }
       const searchInput = document.getElementById("userSearchInput");
       if (searchInput) {
         searchInput.addEventListener("input", () => renderUsersTable());
@@ -22317,8 +22684,16 @@ A new temporary password will be generated and shown to you once so you can shar
       }
     }
     document.addEventListener("DOMContentLoaded", () => {
-      bindAuthUI();
-      populateStudentAccountRequestClassSelect();
+      try {
+        bindAuthUI();
+      } catch (e) {
+        console.error("[auth] bindAuthUI failed:", e);
+      }
+      try {
+        populateStudentAccountRequestClassSelect();
+      } catch (e) {
+        console.error("[auth] populateStudentAccountRequestClassSelect failed:", e);
+      }
       if (document.getElementById("authModal")) {
         checkAuthState();
       }
@@ -22326,7 +22701,11 @@ A new temporary password will be generated and shown to you once so you can shar
         checkStudentAuthState();
       }
       if (document.getElementById("usersTableBody")) {
-        renderUsersTable();
+        try {
+          renderUsersTable();
+        } catch (e) {
+          console.error("[auth] renderUsersTable failed:", e);
+        }
       }
     });
     window.Auth = {
@@ -22353,6 +22732,8 @@ A new temporary password will be generated and shown to you once so you can shar
       refreshSchoolBranding,
       canAccessTab,
       canAccessSettingsTab,
+      canAccessKidsStudio,
+      getUserDisplayName,
       updateUserById,
       updateUserPassword,
       getProfileRequests,
@@ -22397,9 +22778,23 @@ A new temporary password will be generated and shown to you once so you can shar
     window.addEventListener("quiz:bootstrap-ready", () => {
       renderUsersTable();
       renderProfileRequests();
+      renderAccountRequests();
       renderPendingImports();
     });
     window.renderProfileRequests = renderProfileRequests;
+    window.renderAccountRequests = renderAccountRequests;
+    window.reviewAccountRequest = async function(requestId, approve) {
+      const reviewerId = currentUser?.id || "";
+      const result = approve ? await approveAccountRequest(requestId, reviewerId) : await rejectAccountRequest(requestId, reviewerId);
+      if (result) {
+        showToast2(
+          approve ? "Account request approved" : "Account request rejected",
+          approve ? "success" : "info"
+        );
+        renderAccountRequests();
+        renderUsersTable();
+      }
+    };
     window.renderPendingImports = renderPendingImports;
     window.approvePendingImport = async function(importId) {
       const result = await applyPendingImport(importId);
@@ -22434,8 +22829,20 @@ A new temporary password will be generated and shown to you once so you can shar
     window.bulkSuspendUsers = bulkSuspendUsers;
     window.bulkDeleteUsers = bulkDeleteUsers;
     window.handleStudentAuthClose = handleStudentAuthClose;
-    window.approveProfileRequest = function(requestId) {
+    window.approveProfileRequest = async function(requestId) {
       const reviewerId = currentUser?.id || "";
+      if (window.API?.raw && window.__authToken && requestId) {
+        try {
+          await window.API.raw(
+            "POST",
+            "/profile-requests/" + encodeURIComponent(requestId) + "/approve",
+            {}
+          );
+        } catch (err) {
+          showToast2("Could not approve: " + (err?.message || "server error"), "error");
+          return;
+        }
+      }
       const result = approveProfileRequest(requestId, reviewerId);
       if (result) {
         showToast2("Profile request approved", "success");
@@ -22443,8 +22850,20 @@ A new temporary password will be generated and shown to you once so you can shar
         renderUsersTable();
       }
     };
-    window.rejectProfileRequest = function(requestId) {
+    window.rejectProfileRequest = async function(requestId) {
       const reviewerId = currentUser?.id || "";
+      if (window.API?.raw && window.__authToken && requestId) {
+        try {
+          await window.API.raw(
+            "POST",
+            "/profile-requests/" + encodeURIComponent(requestId) + "/reject",
+            {}
+          );
+        } catch (err) {
+          showToast2("Could not reject: " + (err?.message || "server error"), "error");
+          return;
+        }
+      }
       const result = rejectProfileRequest(requestId, reviewerId);
       if (result) {
         showToast2("Profile request rejected", "info");

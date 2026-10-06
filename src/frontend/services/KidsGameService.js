@@ -262,9 +262,13 @@ export class KidsGameService {
   // ─── Teacher/Admin CRUD ───
 
   async list(filters = {}, pagination = {}) {
-    const parsed = KidsGameFilterSchema.safeParse({ ...filters, ...pagination });
+    // `teacher_id` is server-derived (route-enforced teacher scope / admin
+    // author filter), not client input — validate the rest, then re-attach.
+    const { teacher_id = undefined, ...restFilters } = filters;
+    const parsed = KidsGameFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+    if (teacher_id !== undefined) rest.teacher_id = teacher_id;
     return this.#repo.getAll('kidsGames', { filters: rest, limit, offset, orderBy, direction, search });
   }
 
@@ -526,6 +530,7 @@ export class KidsGameService {
 
     return {
       id: game.id,
+      school_id: game.school_id,
       name: game.name,
       game_type: game.game_type,
       theme: game.theme,
@@ -549,6 +554,7 @@ export class KidsGameService {
 
     const session = await this.#repo.create('kidsGameSessions', {
       game_id: game.id,
+      school_id: game.school_id,
       player_name: parsed.data.player_name,
       avatar: parsed.data.avatar ?? null,
       score: 0,
@@ -560,13 +566,111 @@ export class KidsGameService {
     return { session, game, totalPoints };
   }
 
-  async submitAnswers(sessionId, data, totalPoints) {
+  /**
+   * Logged-in play (students in session, teacher preview): the session is
+   * linked to the user so results, leaderboards and gamification treat it
+   * like any other game. Optional tournament_id joins an open tournament
+   * and registers the entry.
+   */
+  async startUserSession(gameId, user, { player_name, avatar, tournament_id } = {}) {
+    if (!user || !user.id) throw new ForbiddenError();
+    const game = await this.getById(gameId, user.school_id);
+    if (!game || game.status !== 'published') throw new ValidationError({ status: ['Game is not published'] });
+
+    let tournamentId = null;
+    if (tournament_id) {
+      const t = await this.#repo.getById('tournaments', tournament_id);
+      if (!t || (user.school_id && t.school_id !== user.school_id)) throw new NotFoundError('Tournament');
+      if (!['open', 'active'].includes(t.status)) {
+        throw new ValidationError({ tournament_id: ['Tournament is not open'] });
+      }
+      if (t.kids_game_id && t.kids_game_id !== game.id) {
+        throw new ValidationError({ tournament_id: ['This tournament is linked to another game'] });
+      }
+      tournamentId = t.id;
+      try {
+        const { data: existing } = await this.#repo.getAll('tournament_entries', {
+          filters: { tournament_id: t.id, user_id: user.id },
+          limit: 1,
+        });
+        if (!existing?.length) {
+          await this.#repo.create('tournament_entries', {
+            tournament_id: t.id,
+            user_id: user.id,
+            school_id: game.school_id,
+            score: 0,
+            completed: false,
+            registered_at: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        if (e?.code !== 'CONFLICT') throw e;
+      }
+    }
+
+    const session = await this.#repo.create('kidsGameSessions', {
+      game_id: game.id,
+      user_id: user.id,
+      school_id: game.school_id,
+      tournament_id: tournamentId,
+      player_name: String(player_name || user.name || 'Player').slice(0, 50),
+      avatar: avatar ?? null,
+      score: 0,
+      stars: 0,
+      answers_json: '[]',
+      completed: false,
+    });
+
+    const pub = await this.getByPin(game.pin);
+    const totalPoints = pub.questions.reduce((sum, q) => sum + (q.points || 1), 0);
+    return { session, game: pub, totalPoints };
+  }
+
+  /** Published games for players (primaire students): meta only, no answers. */
+  async listPublished(schoolId, { search = '', limit = 20, offset = 0, teacherId = null } = {}) {
+    const { data, total } = await this.#repo.getAll('kidsGames', {
+      filters: {
+        school_id: schoolId,
+        status: 'published',
+        // Teachers previewing browse only their own games; students and
+        // admins see every published game in the school.
+        ...(teacherId ? { teacher_id: teacherId } : {}),
+      },
+      limit: Math.min(Math.max(Number(limit) || 20, 1), 100),
+      offset: Math.max(Number(offset) || 0, 0),
+      orderBy: 'created_at',
+      direction: 'desc',
+      search: search || null,
+    });
+    return {
+      data: data.map((g) => ({
+        id: g.id,
+        name: g.name,
+        description: g.description,
+        game_type: g.game_type,
+        theme: g.theme,
+        grade: g.grade,
+        subject: g.subject,
+        pin: g.pin,
+        play_count: g.play_count,
+        question_count: parseJson(g.questions_json, []).length,
+        updated_at: g.updated_at,
+      })),
+      total,
+    };
+  }
+
+  async submitAnswers(sessionId, data, totalPoints, opts = {}) {
     const parsed = KidsSessionCompleteSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
     const session = await this.#repo.getById('kidsGameSessions', sessionId);
     if (!session) throw new NotFoundError('Session');
     if (session.completed) throw new ValidationError({ status: ['Session already completed'] });
+    // A user-linked session can only be completed by its owner.
+    if (session.user_id && opts.userId && session.user_id !== opts.userId) {
+      throw new ForbiddenError();
+    }
 
     const game = await this.getById(session.game_id);
     const questions = parseJson(game.questions_json, []);
@@ -605,13 +709,113 @@ export class KidsGameService {
       play_count: (Number(game.play_count) || 0) + 1,
     });
 
+    // Unified results: every completion (anonymous PIN included) is recorded
+    // like any other game so dashboards, history and tournaments all see it.
+    let resultId = null;
+    try {
+      const record = await this.#recordResult({ session, game, detailedAnswers, score, stars, totalPoints });
+      resultId = record?.id ?? null;
+    } catch { /* results must never break the play flow */ }
+
     return {
       score,
       stars,
       totalPoints,
       percent: totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0,
       answers: detailedAnswers,
+      result_id: resultId,
     };
+  }
+
+  /**
+   * Write the standard Result row for a kids completion, accumulate
+   * tournament entries, and award EXP to logged-in players — the same
+   * treatment normal games get.
+   */
+  async #recordResult({ session, game, detailedAnswers, score, stars, totalPoints }) {
+    const percent = totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0;
+    const timeMs = detailedAnswers.reduce((s, a) => s + (Number(a.time_ms) || 0), 0);
+    const mode = session.tournament_id ? 'tournament' : 'game';
+
+    let attempt = 1;
+    try {
+      const idFilter = session.user_id ? { user_id: session.user_id } : { player_name: session.player_name };
+      const { data: prior } = await this.#repo.getAll('kidsGameSessions', {
+        filters: { game_id: game.id, completed: true, ...idFilter },
+        limit: 1000,
+      });
+      attempt = (prior || []).filter((s) => s.id !== session.id).length + 1;
+    } catch { /* default attempt 1 */ }
+
+    const row = await this.#repo.create('results', {
+      school_id: game.school_id,
+      exam_id: null,
+      user_id: session.user_id || null,
+      score: percent,
+      total_points: totalPoints,
+      earned_points: score,
+      time_spent: Math.round(timeMs / 1000),
+      answers_json: JSON.stringify({
+        mode,
+        source: 'kids-game',
+        kidsGameId: game.id,
+        gameName: game.name,
+        gameType: game.game_type,
+        playerName: session.player_name,
+        avatar: session.avatar || null,
+        pin: game.pin || null,
+        tournamentId: session.tournament_id || null,
+        totalPoints,
+        percent,
+        stars,
+        answers: detailedAnswers,
+      }),
+      mode,
+      passed: percent >= 50,
+      attempt_number: attempt,
+    });
+
+    // Tournament accumulation (entries are per-user by design).
+    if (session.tournament_id && session.user_id) {
+      try {
+        const { data: entries } = await this.#repo.getAll('tournament_entries', {
+          filters: { tournament_id: session.tournament_id, user_id: session.user_id },
+          limit: 1,
+        });
+        const entry = entries?.[0];
+        if (entry) {
+          await this.#repo.update('tournament_entries', entry.id, {
+            score: Number(entry.score || 0) + score,
+          });
+        }
+      } catch { /* leaderboard stays as-is */ }
+    }
+
+    // EXP for logged-in players (mirrors the student-workspace scoring).
+    if (session.user_id) {
+      try { await this.#awardExp(game.school_id, session.user_id, detailedAnswers); } catch { /* ignore */ }
+    }
+    return row;
+  }
+
+  async #awardExp(schoolId, userId, detailedAnswers) {
+    const correct = detailedAnswers.filter((a) => a.correct).length;
+    if (!correct) return;
+    let rate = 10;
+    try {
+      const model = this.#repo.modelFor ? this.#repo.modelFor('gamification') : null;
+      const cfg = model ? await model.findUnique({ where: { school_id: schoolId } }) : null;
+      if (cfg && Number(cfg.exp_per_correct) > 0) rate = Number(cfg.exp_per_correct);
+    } catch { /* default rate */ }
+    const user = await this.#repo.getById('users', userId);
+    if (!user) return;
+    let gam = {};
+    try {
+      gam = JSON.parse(user.gamification_json || '{}');
+      if (!gam || typeof gam !== 'object') gam = {};
+    } catch { gam = {}; }
+    gam.exp = (Number(gam.exp) || 0) + correct * rate;
+    await this.#repo.update('users', userId, { gamification_json: JSON.stringify(gam) });
   }
 
   // ─── Sessions / Results ───

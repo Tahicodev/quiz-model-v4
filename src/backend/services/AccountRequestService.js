@@ -62,10 +62,19 @@ export class AccountRequestService {
     }
   }
 
-  async listForCaller(user, { status, limit = 100, offset = 0 } = {}) {
-    this.#requireAdmin(user);
+  async listForCaller(user, { status, limit = 100, offset = 0, teacherClassIds = null } = {}) {
+    // Teachers are scoped by the route (own classes); everyone else must be
+    // an admin. Password hashes never leave the server.
+    if (user.role !== ROLES.TEACHER) this.#requireAdmin(user);
     const filters = { school_id: user.school_id };
     if (status) filters.status = status;
+    // Teachers see only requests targeting their assigned classes.
+    // Class-less requests stay admin-only (no scope to attach them to).
+    if (user.role === ROLES.TEACHER) {
+      const ids = (Array.isArray(teacherClassIds) ? teacherClassIds : []).map(String).filter(Boolean);
+      if (!ids.length) return { data: [], total: 0 };
+      filters.class_id = { in: ids };
+    }
     const { data, total } = await this.#repo.getAll('account_requests', {
       filters, limit, offset, orderBy: 'created_at', direction: 'desc',
     });
@@ -74,7 +83,7 @@ export class AccountRequestService {
   }
 
   async getOwned(id, user) {
-    this.#requireAdmin(user);
+    if (![ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER].includes(user.role)) throw new ForbiddenError();
     const req = await this.#repo.getById('account_requests', id);
     if (!req || req.school_id !== user.school_id) throw new NotFoundError('AccountRequest');
     return req;
@@ -83,6 +92,12 @@ export class AccountRequestService {
   async approve(id, user, { note = null } = {}) {
     const req = await this.getOwned(id, user);
     if (req.status !== 'pending') throw new ValidationError({ status: ['Request already reviewed'] });
+
+    // The username may have been taken since the request was submitted.
+    const { total: taken } = await this.#repo.getAll('users', {
+      filters: { school_id: req.school_id, username: req.username }, limit: 1,
+    });
+    if (taken > 0) throw new ValidationError({ username: ['Username already taken'] });
 
     // Create the user (password already bcrypt-hashed at submit time)
     const created = await this.#repo.modelFor('users').create({

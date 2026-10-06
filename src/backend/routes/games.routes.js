@@ -9,6 +9,7 @@ import { requireRole } from '../middleware/role.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { GameCreateSchema, GameUpdateSchema, GameFilterSchema, GameJoinSchema, GameAnswerSchema } from '../../shared/schemas/game.schema.js';
 import { ROLES, SOCKET_EVENTS } from '../../shared/constants.js';
+import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 import { getIO } from '../realtime/socket.server.js';
 import { ROOM } from '../realtime/socket.rooms.js';
@@ -16,11 +17,30 @@ import { ROOM } from '../realtime/socket.rooms.js';
 const router = Router();
 router.use(requireAuth, enforceTenant);
 
+/**
+ * Teachers see and manage only the games they created. Admins see all.
+ */
+function assertGameOwnership(game, user) {
+  if (!game) return;
+  if (user.role !== ROLES.TEACHER) return;
+  if (game.creator_id !== user.id) {
+    throw new ForbiddenError('Not your game');
+  }
+}
+
 router.get('/', validateQuery(GameFilterSchema), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
-    const { limit, offset, orderBy, direction, search, ...filters } = req.query;
-    const result = await gameSvc.list({ ...filters, school_id: req.schoolId }, { limit, offset, orderBy, direction, search });
+    const { limit, offset, orderBy, direction, search, creator_id, ...filters } = req.query;
+    const result = await gameSvc.list({
+      ...filters,
+      school_id: req.schoolId,
+      // Teachers are confined to their own games; a client-supplied
+      // creator_id is ignored for them. Admins may filter by author.
+      ...(req.user.role === ROLES.TEACHER
+        ? { creator_id: req.user.id }
+        : (creator_id ? { creator_id } : {})),
+    }, { limit, offset, orderBy, direction, search });
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -29,6 +49,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
     const game = await gameSvc.getById(req.params.id, req.schoolId);
+    assertGameOwnership(game, req.user);
     res.json(game);
   } catch (err) { next(err); }
 });
@@ -51,6 +72,7 @@ router.post('/', requireRole(GAME_CRUD_ROLES), validate(GameCreateSchema), async
 router.patch('/:id', requireRole(GAME_CRUD_ROLES), validate(GameUpdateSchema), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
+    assertGameOwnership(await gameSvc.getById(req.params.id, req.schoolId), req.user);
     const updated = await gameSvc.update(req.params.id, req.body, req.user);
     res.json(updated);
   } catch (err) { next(err); }
@@ -59,6 +81,7 @@ router.patch('/:id', requireRole(GAME_CRUD_ROLES), validate(GameUpdateSchema), a
 router.delete('/:id', requireRole(GAME_CRUD_ROLES), async (req, res, next) => {
   try {
     const { gameSvc, auditSvc } = getContainer();
+    assertGameOwnership(await gameSvc.getById(req.params.id, req.schoolId), req.user);
     await gameSvc.delete(req.params.id, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'game', entityId: req.params.id, action: 'delete', ip: req.ip });
     res.status(204).send();
@@ -102,6 +125,7 @@ router.post('/join', validate(GameJoinSchema), async (req, res, next) => {
 router.post('/:id/start', requireRole(GAME_CRUD_ROLES), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
+    assertGameOwnership(await gameSvc.getById(req.params.id, req.schoolId), req.user);
     const game = await gameSvc.start(req.params.id, req.user);
     try {
       const io = getIO();
@@ -138,6 +162,7 @@ router.get('/:id/scores', async (req, res, next) => {
 router.post('/:id/finish', requireRole(GAME_CRUD_ROLES), async (req, res, next) => {
   try {
     const { gameSvc } = getContainer();
+    assertGameOwnership(await gameSvc.getById(req.params.id, req.schoolId), req.user);
     const game = await gameSvc.finish(req.params.id, req.user);
     try {
       const io = getIO();

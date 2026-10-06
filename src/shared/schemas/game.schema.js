@@ -44,6 +44,7 @@ export const GameUpdateSchema = z.object({
 export const GameFilterSchema = z.object({
   type:      gameTypeSchema.optional(),
   status:    z.enum(statusValues).optional(),
+  creator_id: z.string().uuid().optional(),
   search:    z.string().optional(),
   limit:     z.coerce.number().int().min(1).max(200).default(50),
   offset:    z.coerce.number().int().min(0).default(0),

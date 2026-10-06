@@ -11,6 +11,14 @@ const optionalContact = (max) =>
 		.nullable()
 		.transform((v) => (v == null || v.trim() === '' ? null : v.trim()));
 
+// Civility for greetings/display. Blank input is treated as "not provided"
+// (undefined) so PATCH callers can clear it with explicit null without
+// blank strings wiping it by accident.
+const optionalTitle = z.preprocess(
+	(v) => (v === '' ? undefined : v),
+	z.enum(['Mr', 'Mme']).optional().nullable(),
+);
+
 	// Raw strings are accepted and cleaned in the transform (trim + drop
 	// empties) — a per-item min(1) would reject "Math, ," before cleanup.
 	const subjectsField = z
@@ -24,6 +32,7 @@ export const UserCreateSchema = z.object({
 	username: z.string().min(2).max(50),
 	password: z.string().min(6).max(100),
 	name: z.string().min(1).max(100),
+	title: optionalTitle,
 	role: z.enum(roleValues).default('student'),
 	class_id: z.string().min(1).max(100).optional().nullable(),
 	numero: z.string().max(50).optional().nullable(),
@@ -44,6 +53,7 @@ export const UserCreateSchema = z.object({
 
 export const UserUpdateSchema = z.object({
 	name: z.string().min(1).max(100).optional(),
+	title: optionalTitle,
 	role: z.enum(roleValues).optional(),
 	class_id: z.string().min(1).max(100).optional().nullable(),
 	numero: z.string().max(50).optional().nullable(),

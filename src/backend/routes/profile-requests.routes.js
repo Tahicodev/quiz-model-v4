@@ -7,17 +7,47 @@ import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/role.js';
 import { ROLES } from '../../shared/constants.js';
+import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
+import { assertTeacherStudent, getTeacherClassIds } from './users.routes.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
 
 const adminOnly = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
+const reviewerRoles = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]);
+
+/**
+ * Teachers review only requests of students in their assigned classes, and
+ * may not move a student out of scope via a class change. Admins review all.
+ */
+async function assertTeacherRequestScope(req) {
+  if (req.user.role !== ROLES.TEACHER) return;
+  const { profileRequestSvc, repo } = getContainer();
+  const pr = await profileRequestSvc.getOwned(req.params.id, req.user);
+  const target = await repo.getById('users', pr.user_id);
+  await assertTeacherStudent(target, req);
+  let changes = {};
+  try {
+    changes = JSON.parse(pr.changes_json || '{}') || {};
+  } catch {
+    changes = {};
+  }
+  if (changes.classId) {
+    const classIds = await getTeacherClassIds(req.schoolId, req.user.id);
+    if (!classIds.includes(String(changes.classId))) {
+      throw new ForbiddenError('Cannot move a student out of your classes');
+    }
+  }
+}
 
 router.get('/', async (req, res, next) => {
   try {
     const { profileRequestSvc } = getContainer();
-    const result = await profileRequestSvc.listForCaller(req.user, { status: req.query.status });
+    const teacherClassIds = req.user.role === ROLES.TEACHER
+      ? await getTeacherClassIds(req.schoolId, req.user.id)
+      : null;
+    const result = await profileRequestSvc.listForCaller(req.user, { status: req.query.status, teacherClassIds });
     res.json(result.data);
   } catch (err) { next(err); }
 });
@@ -53,8 +83,9 @@ router.delete('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/approve', adminOnly, async (req, res, next) => {
+router.post('/:id/approve', reviewerRoles, async (req, res, next) => {
   try {
+    await assertTeacherRequestScope(req);
     const { profileRequestSvc } = getContainer();
     res.json(await profileRequestSvc.review(req.params.id, req.user, {
       approve: true, note: req.body?.note ?? null,
@@ -62,8 +93,9 @@ router.post('/:id/approve', adminOnly, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/:id/reject', adminOnly, async (req, res, next) => {
+router.post('/:id/reject', reviewerRoles, async (req, res, next) => {
   try {
+    await assertTeacherRequestScope(req);
     const { profileRequestSvc } = getContainer();
     res.json(await profileRequestSvc.review(req.params.id, req.user, {
       approve: false, note: req.body?.note ?? null,

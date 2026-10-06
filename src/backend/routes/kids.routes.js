@@ -10,6 +10,7 @@
 
 import { randomUUID } from 'crypto';
 import { Router } from 'express';
+import jwt from 'jsonwebtoken';
 import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/role.js';
@@ -22,10 +23,40 @@ import {
   KidsSessionCreateSchema,
   KidsSessionCompleteSchema,
   KidsAIGenerateSchema,
+  KidsBrowseSchema,
+  KidsAuthedSessionSchema,
 } from '../../shared/schemas/kids-game.schema.js';
 import { normalizeKidQuestion, KidsGameService } from '../../frontend/services/KidsGameService.js';
 import { getContainer } from '../container.js';
-import { NotFoundError } from '../../shared/errors.js';
+import { config } from '../config.js';
+import { ForbiddenError, NotFoundError } from '../../shared/errors.js';
+
+/**
+ * Kids Games exist for primaire schools only. Creation, management, AI and
+ * logged-in play are refused elsewhere; anonymous PIN play of already
+ * published games keeps working (shared links never break).
+ */
+async function requirePrimaire(req, res, next) {
+  try {
+    const { repo } = getContainer();
+    const school = await repo.getById('schools', req.schoolId);
+    if (!school || String(school.school_type || '').toLowerCase() !== 'primaire') {
+      throw new ForbiddenError('Kids Games are available for primaire schools only.');
+    }
+    next();
+  } catch (err) { next(err); }
+}
+
+/** Best-effort auth: attaches req.user when a valid Bearer token is present. */
+function attachUserIfPresent(req, res, next) {
+  try {
+    const header = req.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+      req.user = jwt.verify(header.slice(7), config.jwtSecret);
+    }
+  } catch { /* anonymous — capability model (session id) still applies */ }
+  next();
+}
 
 const router = Router();
 
@@ -53,7 +84,8 @@ publicRouter.post('/:pin/session', validate(KidsSessionCreateSchema), async (req
 });
 
 // PATCH /api/v1/kids/play/session/:sessionId — Submit answers + complete session
-publicRouter.patch('/session/:sessionId', validate(KidsSessionCompleteSchema), async (req, res, next) => {
+// Works anonymously (PIN capability) and logged-in (ownership enforced).
+publicRouter.patch('/session/:sessionId', attachUserIfPresent, validate(KidsSessionCompleteSchema), async (req, res, next) => {
   try {
     const { kidsGameSvc, repo } = getContainer();
     const session = await repo.getById('kidsGameSessions', req.params.sessionId);
@@ -63,7 +95,7 @@ publicRouter.patch('/session/:sessionId', validate(KidsSessionCompleteSchema), a
     const questions = Array.isArray(game.questions_json) ? game.questions_json : [];
     const totalPoints = questions.reduce((sum, q) => sum + (Number(q.points) || 1), 0);
 
-    const result = await kidsGameSvc.submitAnswers(req.params.sessionId, req.body, totalPoints);
+    const result = await kidsGameSvc.submitAnswers(req.params.sessionId, req.body, totalPoints, { userId: req.user?.id });
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -71,11 +103,39 @@ publicRouter.patch('/session/:sessionId', validate(KidsSessionCompleteSchema), a
 router.use('/play', publicRouter);
 
 // ─── Teacher/Admin Endpoints (auth required, plan §6.1) ───
-router.use(requireAuth, enforceTenant);
+router.use(requireAuth, enforceTenant, requirePrimaire);
 
 const KIDS_CRUD_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
+const KIDS_PLAY_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER, ROLES.STUDENT];
 
-router.get('/', validateQuery(KidsGameFilterSchema), async (req, res, next) => {
+/**
+ * GET /api/v1/kids/browse — Published games for players (students in
+ * session, teachers previewing). Answers never leave the server here.
+ */
+router.get('/browse', requireRole(KIDS_PLAY_ROLES), validateQuery(KidsBrowseSchema), async (req, res, next) => {
+  try {
+    const { kidsGameSvc } = getContainer();
+    const { search, limit, offset } = req.query;
+    // Teachers previewing browse only their own published games; students
+    // (and admins) see every published game in the school.
+    const teacherId = req.user.role === ROLES.TEACHER ? req.user.id : null;
+    res.json(await kidsGameSvc.listPublished(req.schoolId, { search, limit, offset, teacherId }));
+  } catch (err) { next(err); }
+});
+
+/**
+ * POST /api/v1/kids/games/:id/session — Logged-in play. Links the session
+ * to the user (results, leaderboards, EXP) and optionally joins a tournament.
+ */
+router.post('/games/:id/session', requireRole(KIDS_PLAY_ROLES), validate(KidsAuthedSessionSchema), async (req, res, next) => {
+  try {
+    const { kidsGameSvc } = getContainer();
+    const { session, game, totalPoints } = await kidsGameSvc.startUserSession(req.params.id, req.user, req.body);
+    res.status(201).json({ session: { id: session.id, gameId: session.game_id }, game, totalPoints });
+  } catch (err) { next(err); }
+});
+
+router.get('/', requireRole(KIDS_CRUD_ROLES), validateQuery(KidsGameFilterSchema), async (req, res, next) => {
   try {
     const { kidsGameSvc } = getContainer();
     const { limit, offset, orderBy, direction, search, teacher_id, ...filters } = req.query;
@@ -102,7 +162,7 @@ router.post('/', requireRole(KIDS_CRUD_ROLES), validate(KidsGameCreateSchema), a
   } catch (err) { next(err); }
 });
 
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requireRole(KIDS_CRUD_ROLES), async (req, res, next) => {
   try {
     const { kidsGameSvc } = getContainer();
     const game = await kidsGameSvc.getById(req.params.id, req.schoolId);
@@ -150,7 +210,7 @@ router.post('/:id/archive', requireRole(KIDS_CRUD_ROLES), async (req, res, next)
   } catch (err) { next(err); }
 });
 
-router.get('/:id/sessions', async (req, res, next) => {
+router.get('/:id/sessions', requireRole(KIDS_CRUD_ROLES), async (req, res, next) => {
   try {
     const { kidsGameSvc } = getContainer();
     const sessions = await kidsGameSvc.getSessions(req.params.id, req.user);

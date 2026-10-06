@@ -89,6 +89,21 @@
 					String(user.role || '').toLowerCase() !== ROLE_ADMIN,
 			)
 			.map((user) => normalizeUser(user));
+		// Teachers keep only students they can manage. (The table render
+		// enforces the same rule; this keeps the local cache from filling
+		// with out-of-scope rows relayed over the realtime bridge.) The
+		// teacher's own row is always kept: the login session is validated
+		// against this cache, and pruning self would lock the teacher out
+		// on the next reload. Skipped while the teacher has no assigned
+		// classes so an empty assignment snapshot can never wipe the cache.
+		const scoped = (() => {
+			if (!isTeacher()) return sanitized;
+			const ids = getTeacherClassIds();
+			if (!ids.length) return sanitized;
+			return sanitized.filter(
+				(u) => canManageUser(u) || String(u.id || '') === String(currentUser?.id || ''),
+			);
+		})();
 		const existing = getUsers();
 		const adminUsers = existing.filter(
 			(user) => String(user.role || '').toLowerCase() === ROLE_ADMIN,
@@ -97,7 +112,7 @@
 		adminUsers.forEach((user) => {
 			mergedMap.set(user.id, user);
 		});
-		sanitized.forEach((user) => {
+		scoped.forEach((user) => {
 			mergedMap.set(user.id, user);
 		});
 		saveUsers(Array.from(mergedMap.values()));
@@ -133,6 +148,9 @@
 		return {
 			id: user.id || genId(),
 			name: (user.name || '').trim(),
+			// Civility for greetings/display (Mr | Mme). Anything else is
+			// treated as unset so stray values never leak into the UI.
+			title: user.title === 'Mr' || user.title === 'Mme' ? user.title : '',
 			username: (user.username || user.email || '').trim(),
 			role: user.role || ROLE_STUDENT,
 			status: user.status || 'active',
@@ -140,7 +158,8 @@
 			avatar: user.avatar || user.profileImage || '',
 			classIds: Array.isArray(user.classIds) ? user.classIds : [],
 			studentNumber: user.studentNumber || user.numero || '',
-			classId: user.classId || '',
+			// Server rows use snake_case class_id; legacy rows use classId.
+			classId: user.classId || user.class_id || '',
 			className: user.className || '',
 			// Teacher/staff contacts (kept in the local cache so the user modal
 			// can pre-fill them between bootstraps).
@@ -634,6 +653,16 @@
 		return currentUser;
 	}
 
+	// "Mme Karim Haddad" / "Mr Karim Haddad" / "Karim Haddad" — the display
+	// name used by the dashboard greeting, the header chip and the users
+	// table. Unknown titles are ignored, never printed.
+	function getUserDisplayName(user) {
+		if (!user) return '';
+		const title = user.title === 'Mr' || user.title === 'Mme' ? user.title : '';
+		const name = String(user.name || user.username || '').trim();
+		return [title, name].filter(Boolean).join(' ');
+	}
+
 	function getCurrentRole() {
 		return currentUser ? currentUser.role : null;
 	}
@@ -748,6 +777,10 @@
 	}
 
 	const DEFAULT_TEACHER_ACCESS = {
+		// rev stamps the shape/semantics of these defaults. Bump it whenever
+		// a default flips meaning (e.g. the Data tab growing a teacher-safe
+		// view) so previously auto-saved maps cannot pin stale values.
+		rev: 2,
 		tabs: {
 			overview: true,
 			questions: true,
@@ -755,17 +788,21 @@
 			exams: true,
 			classes: true,
 			games: true,
+			kidsGames: true,
 			results: true,
-			activity: true,
-			monitoring: true,
+			// Activity Log and Monitoring are admin-only views, hard-hidden
+			// for teachers in every gate below — no toggle exists for them.
+			activity: false,
+			monitoring: false,
 		},
 		settings: true,
 		settingsTabs: {
 			general: true,
+			profile: true,
 			presets: true,
-			// Data and Realtime manage school-wide datasets and the LAN server —
-			// admin-only by default now (markup gates them with data-roles="admin").
-			data: false,
+			// The Data tab carries a teacher-scoped "My Data" section; the
+			// school-wide backup groups inside it stay markup-gated to admins.
+			data: true,
 			realtime: false,
 			'ai-generation': true,
 			users: true,
@@ -773,21 +810,59 @@
 	};
 
 	function getTeacherAccessSettings() {
-		const settings = safeJsonParse(
-			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('settings')),
-			{},
-		);
-		const stored = settings.teacherAccess || {};
+		// Settings arrive as ROWS ([{key, value, ...}]) — find the teacherAccess
+		// row and parse it. Falls back to the localStorage mirror (same shape,
+		// synced from the server) and finally to the defaults below.
+		let stored = {};
+		try {
+			const repo = window.__DI_CONTAINER__?.repo;
+			const rows = repo ? repo.getAll_sync('settings') : [];
+			const list = Array.isArray(rows) ? rows : [];
+			const row = list.find((r) => r && r.key === 'teacherAccess');
+			if (row && typeof row.value === 'string') {
+				const parsed = JSON.parse(row.value || '{}');
+				if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+					stored = parsed;
+				}
+			}
+		} catch (_) {
+			stored = {};
+		}
+		if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+			stored = {};
+		}
+		if (!Object.keys(stored).length) {
+			try {
+				const local = safeJsonParse(localStorage.getItem('quizSettings'), {});
+				if (local && typeof local.teacherAccess === 'object' && !Array.isArray(local.teacherAccess)) {
+					stored = local.teacherAccess;
+				}
+			} catch (_) {}
+		}
+		const mergedTabs = { ...DEFAULT_TEACHER_ACCESS.tabs, ...(stored.tabs || {}) };
+		// Activity/Monitoring are hard admin-only: a stored `true` (saved
+		// when the default was still on, or hand-edited) must never reopen
+		// them for teachers.
+		mergedTabs.activity = false;
+		mergedTabs.monitoring = false;
+		const mergedSettingsTabs = {
+			...DEFAULT_TEACHER_ACCESS.settingsTabs,
+			...(stored.settingsTabs || {}),
+		};
+		// The Data toggle changed meaning (teacher-safe "My Data" view did
+		// not exist when `false` was the default and got auto-saved). A stored
+		// false from a map that predates the current revision cannot be an
+		// explicit revoke — fall back to the default (visible).
+		if (stored.rev !== DEFAULT_TEACHER_ACCESS.rev && mergedSettingsTabs.data === false) {
+			mergedSettingsTabs.data = DEFAULT_TEACHER_ACCESS.settingsTabs.data;
+		}
 		return {
-			tabs: { ...DEFAULT_TEACHER_ACCESS.tabs, ...(stored.tabs || {}) },
+			tabs: mergedTabs,
 			settings:
 				stored.settings === undefined
 					? DEFAULT_TEACHER_ACCESS.settings
 					: stored.settings,
-			settingsTabs: {
-				...DEFAULT_TEACHER_ACCESS.settingsTabs,
-				...(stored.settingsTabs || {}),
-			},
+			settingsTabs: mergedSettingsTabs,
 		};
 	}
 
@@ -797,18 +872,21 @@
 
 		if (isTeacher()) {
 			// Ownership spans both vocabularies: legacy `ownerId` and the
-			// server-stamped `created_by`. Absent on both sides means a
-			// historically shared row, which stays visible — mirroring the
-			// backend teacher scope (own + unattributed legacy).
+			// server-stamped `created_by`. Teachers see ONLY their own rows —
+			// unattributed legacy rows (NULL author) are admin-only, mirroring
+			// the backend teacher scope. The one exception is the built-in
+			// 'uncategorized' pseudo-category, which is structural, not data.
 			const owner = item.ownerId || item.created_by || item.createdBy || null;
 			if (type === 'category') {
-				return item.id === 'uncategorized' || owner == null || owner === currentUser.id;
+				return item.id === 'uncategorized' || String(owner) === String(currentUser.id);
 			}
 			if (type === 'question') {
-				return owner == null || owner === currentUser.id;
+				return String(owner) === String(currentUser.id);
 			}
 			if (type === 'exam') {
-				return item.ownerId === currentUser.id;
+				// Server rows carry creator_id; legacy local rows carry ownerId.
+				const examOwner = item.ownerId || item.creator_id || item.creatorId || null;
+				return String(examOwner) === String(currentUser.id);
 			}
 			if (type === 'class') {
 				const classIds = getTeacherClassIds();
@@ -916,17 +994,102 @@
 		return roles.includes(currentUser?.role);
 	}
 
+	// Teachers manage only their own students (see canManageUser), so the
+	// shared Users surface is relabeled Students in teacher sessions:
+	// settings tab button, section header + subtitle, and the management
+	// sub-tab. Admins (and signed-out states) keep the original labels.
+	function swapTextLabel(el, teacherLabel) {
+		if (!el) return;
+		if (el.dataset.origText === undefined) el.dataset.origText = el.textContent;
+		const target = isTeacher() ? teacherLabel : el.dataset.origText;
+		let swapped = false;
+		el.childNodes.forEach((node) => {
+			// TEXT_NODE === 3 (avoid the Node global: not present in all envs).
+			if (node.nodeType === 3 && node.textContent.trim()) {
+				node.textContent = swapped ? '' : target;
+				swapped = true;
+			}
+		});
+		if (!swapped) el.textContent = target;
+	}
+
+	function applyTeacherTabLabels() {
+		const usersBtn = document.querySelector(
+			'.settings-tab-btn[data-settings-tab="users"]',
+		);
+		swapTextLabel(usersBtn, 'Students');
+		if (usersBtn) usersBtn.title = isTeacher() ? 'Students' : 'Users';
+
+		swapTextLabel(
+			document.querySelector('#users-settings .settings-section-title h3'),
+			'Students',
+		);
+		swapTextLabel(
+			document.querySelector('#users-settings .users-settings-intro small'),
+			'Manage your students and review their profile or account requests from one place.',
+		);
+		swapTextLabel(
+			document.getElementById('users-management-tab'),
+			'Student Management',
+		);
+
+		// The management panel header promises admin/teacher/student
+		// accounts — teachers only ever handle students.
+		swapTextLabel(
+			document.querySelector('#users-management-panel .user-management-header h3'),
+			'Student Management',
+		);
+		swapTextLabel(
+			document.querySelector('#users-management-panel .user-management-header small'),
+			'Create and manage the students in your classes.',
+		);
+		swapTextLabel(
+			document.querySelector('#add-user-btn span'),
+			'Add Student',
+		);
+
+		// Teachers see students only — the role filter has a single
+		// meaningful value for them, so it is hidden, not just locked.
+		const roleFilterGroup = document
+			.getElementById('userRoleFilter')
+			?.closest('.form-group');
+		if (roleFilterGroup) {
+			if (isTeacher()) {
+				roleFilterGroup.style.display = 'none';
+				const roleFilter = document.getElementById('userRoleFilter');
+				if (roleFilter) roleFilter.value = '';
+			} else {
+				roleFilterGroup.style.display = '';
+			}
+		}
+	}
+
+	// Kids Games studio guard (sub-tab inside Games). Teachers see it unless
+	// the admin revoked the `kidsGames` teacher-access toggle; admins and
+	// anonymous/pre-login states fail open (the login + primaire gates still
+	// apply separately).
+	function canAccessKidsStudio() {
+		if (isAdmin()) return true;
+		if (isTeacher()) {
+			const access = getTeacherAccessSettings();
+			return !(access.tabs && access.tabs.kidsGames === false);
+		}
+		return true;
+	}
+
 	// Settings-section guard (mirror of canAccessTab for .settings-section).
-	// Some sections are school-wide admin concerns (teacher access control,
-	// data backup/import, LAN realtime server) and must never open for a
-	// teacher even if a stale teacherAccess settings value says otherwise.
+	// Teacher Access, Data-backup/Realtime/Setup are school-wide admin
+	// concerns (access control, LAN server, full backups) and must never
+	// open for a teacher even if a stale teacherAccess settings value says
+	// otherwise. Note the Data TAB itself stays visible to teachers: it now
+	// carries a scoped "My Data" import/export section, while every
+	// school-wide group inside it is markup-gated data-roles="admin".
 	// The rest honor the admin-configurable teacherAccess.settingsTabs map.
 	function canAccessSettingsTab(tabName) {
 		if (isAdmin()) return true;
 		if (isTeacher()) {
 			if (
 				tabName === 'teacher-access' ||
-				tabName === 'data' ||
 				tabName === 'realtime' ||
 				tabName === 'setup'
 			) {
@@ -988,8 +1151,9 @@
 				const key = btn.dataset.settingsTab;
 				if (!key) return;
 				// Admin-only sections must stay hidden for teachers regardless of
-				// the settingsTabs map (which never lists them).
-				if (key === 'teacher-access' || key === 'data' || key === 'realtime' || key === 'setup') {
+				// the settingsTabs map (which never lists them). Data is NOT in
+				// this list: teachers get a scoped "My Data" view there.
+				if (key === 'teacher-access' || key === 'realtime' || key === 'setup') {
 					btn.classList.add('role-hidden');
 					return;
 				}
@@ -1005,8 +1169,9 @@
 			.forEach((section) => {
 				const key = section.dataset.settingsTab;
 				if (!key) return;
-				// Same admin-only protection for the section panels themselves.
-				if (key === 'teacher-access' || key === 'data' || key === 'realtime' || key === 'setup') {
+				// Same admin-only protection for the section panels themselves
+				// (Data excepted — teachers see its scoped groups only).
+				if (key === 'teacher-access' || key === 'realtime' || key === 'setup') {
 					section.classList.add('role-hidden');
 					return;
 				}
@@ -1085,13 +1250,32 @@
 	}
 
 	function applyRolePermissions() {
+		// Teacher sessions manage students only — relabel the shared Users
+		// surface as Students so the UI says what it does. Runs before the
+		// login guard so logging out restores the default labels.
+		try {
+			applyTeacherTabLabels();
+		} catch (e) {
+			console.error('[auth] applyTeacherTabLabels failed:', e);
+		}
 		if (!currentUser) return;
-		applyRoleVisibility();
-		applyTeacherAccess();
+		// Role gating is isolated from the cosmetic refresh below: even when
+		// a later step throws, admin-only settings tabs (Realtime, Setup,
+		// Teacher Access) must stay hidden in teacher sessions.
+		try {
+			applyRoleVisibility();
+		} catch (e) {
+			console.error('[auth] applyRoleVisibility failed:', e);
+		}
+		try {
+			applyTeacherAccess();
+		} catch (e) {
+			console.error('[auth] applyTeacherAccess failed:', e);
+		}
 
 		const nameEl = document.getElementById('currentUserName');
 		if (nameEl) {
-			nameEl.textContent = currentUser.name || currentUser.username || 'User';
+			nameEl.textContent = getUserDisplayName(currentUser) || 'User';
 		}
 
 		const emailEl = document.getElementById('currentUserEmail');
@@ -1107,7 +1291,7 @@
 
 		const greetingEl = document.getElementById('dashboardGreeting');
 		if (greetingEl) {
-			const label = currentUser.name || currentUser.username || 'User';
+			const label = getUserDisplayName(currentUser) || 'User';
 			greetingEl.textContent = `Welcome back, ${label}`;
 		}
 
@@ -1127,21 +1311,31 @@
 					: 'Admin Dashboard';
 		}
 
-		applySchoolBranding();
+		try {
+			applySchoolBranding();
+		} catch (e) {
+			console.error('[auth] applySchoolBranding failed:', e);
+		}
 
-		const navButtons = Array.from(document.querySelectorAll('.nav-tab'));
-		const allowedButtons = navButtons.filter((btn) => {
-			const tabName = btn.dataset.tab || '';
-			return tabName ? canAccessTab(tabName) : true;
-		});
+		// Nav gating is last and isolated: its failure must never propagate
+		// (callers such as checkAuthState rely on finishing the auth flow).
+		try {
+			const navButtons = Array.from(document.querySelectorAll('.nav-tab'));
+			const allowedButtons = navButtons.filter((btn) => {
+				const tabName = btn.dataset.tab || '';
+				return tabName ? canAccessTab(tabName) : true;
+			});
 
-		const activeTab = document.querySelector('.tab-content.active');
-		const activeTabId = activeTab ? activeTab.id : null;
-		if (activeTabId && !canAccessTab(activeTabId)) {
-			if (allowedButtons.length > 0 && typeof openTab === 'function') {
-				openTab(null, allowedButtons[0].dataset.tab);
-				allowedButtons[0].classList.add('active');
+			const activeTab = document.querySelector('.tab-content.active');
+			const activeTabId = activeTab ? activeTab.id : null;
+			if (activeTabId && !canAccessTab(activeTabId)) {
+				if (allowedButtons.length > 0 && typeof openTab === 'function') {
+					openTab(null, allowedButtons[0].dataset.tab);
+					allowedButtons[0].classList.add('active');
+				}
 			}
+		} catch (e) {
+			console.error('[auth] nav role gating failed:', e);
 		}
 	}
 
@@ -2526,6 +2720,10 @@
 	function renderUsersTable() {
 		const tableBody = document.getElementById('usersTableBody');
 		if (!tableBody) return;
+		// Teacher student view: every row is a student by construction, so
+		// the Role column is hidden via CSS (admins keep the full table).
+		const usersTable = document.getElementById('usersTable');
+		if (usersTable) usersTable.classList.toggle('teacher-view', isTeacher());
 		refreshUserClassFilter();
 
 		const classes = safeJsonParse(
@@ -2599,6 +2797,11 @@
 						? ''
 						: u.username || '';
 				const isSelected = selectedUserIds.has(u.id);
+				const baseName =
+					u.name ||
+					rosterNameMap.get(`${u.classId}::${u.studentNumber}`) ||
+					u.username ||
+					'User';
 				return `
         <tr class="${isSelected ? 'is-selected' : ''}">
 						<td class="checkbox-cell">
@@ -2610,12 +2813,7 @@
 								${isSelected ? 'checked' : ''}
 							/>
 						</td>
-            <td>${escapeHtml(
-							u.name ||
-								rosterNameMap.get(`${u.classId}::${u.studentNumber}`) ||
-								u.username ||
-								'User',
-						)}</td>
+            <td>${escapeHtml(getUserDisplayName({ title: u.title, name: baseName }) || baseName)}</td>
             <td>${usernameDisplay ? escapeHtml(usernameDisplay) : emptyCell}</td>
             <td>${studentNumberDisplay ? escapeHtml(studentNumberDisplay) : emptyCell}</td>
             <td>${classDisplay ? escapeHtml(classDisplay) : emptyCell}</td>
@@ -2853,6 +3051,11 @@
 
 		if (nameInput) nameInput.value = user?.name || '';
 		if (usernameInput) usernameInput.value = user?.username || '';
+		const titleSelect = document.getElementById('userTitle');
+		if (titleSelect) {
+			const t = user?.title === 'Mr' || user?.title === 'Mme' ? user.title : '';
+			titleSelect.value = t;
+		}
 		const isTeacherUser = isTeacher();
 		if (roleSelect) {
 			roleSelect.value = user?.role || ROLE_STUDENT;
@@ -2864,8 +3067,10 @@
 			}
 		}
 		if (statusSelect) statusSelect.value = user?.status || 'active';
+		// Server rows use snake_case (numero / class_id); legacy rows use
+		// camelCase — accept both so the editor pre-fills after a bootstrap.
 		if (studentNumberInput)
-			studentNumberInput.value = user?.studentNumber || '';
+			studentNumberInput.value = user?.studentNumber || user?.numero || '';
 
 		// Teacher/staff contacts (numero doubles as the teacher staff number).
 		const teacherNumeroInput = document.getElementById('teacherNumeroField');
@@ -2898,8 +3103,8 @@
 							`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`,
 					)
 					.join('');
-			if (user?.classId) studentClassSelect.value = user.classId;
-			if (!user?.classId && classes.length === 1) {
+			if (user?.classId || user?.class_id) studentClassSelect.value = user.classId || user.class_id;
+			if (!user?.classId && !user?.class_id && classes.length === 1) {
 				studentClassSelect.value = classes[0].id;
 			}
 		}
@@ -2949,6 +3154,50 @@
 		if (studentFields) {
 			studentFields.style.display = role === ROLE_STUDENT ? 'block' : 'none';
 		}
+
+		// Pro modal: explain what each role can do, right where it is picked.
+		const hint = document.getElementById('userAccessHint');
+		if (hint) {
+			hint.textContent =
+				role === ROLE_ADMIN
+					? 'Full access — manages every account, class and school setting.'
+					: role === ROLE_TEACHER
+						? 'Manages students in assigned classes and their content only.'
+						: 'Class-bound account — sees assigned work in the student workspace.';
+		}
+		updateUserModalPreview();
+	}
+
+	// Pro modal: live profile hero (avatar initial + name + role line) that
+	// follows what the admin types. Purely presentational — never blocks save.
+	function updateUserModalPreview() {
+		const modal = document.getElementById('userModal');
+		if (!modal) return;
+		const title =
+			document.getElementById('userTitle')?.value === 'Mr' ||
+			document.getElementById('userTitle')?.value === 'Mme'
+				? document.getElementById('userTitle').value
+				: '';
+		const name = (document.getElementById('userName')?.value || '').trim();
+		const role = document.getElementById('userRole')?.value || ROLE_STUDENT;
+		const status = document.getElementById('userStatus')?.value || 'active';
+		const roleLabel =
+			role === ROLE_ADMIN ? 'Admin' : role === ROLE_TEACHER ? 'Teacher' : 'Student';
+
+		const avatar = document.getElementById('userModalAvatar');
+		if (avatar) {
+			avatar.textContent = name ? name.charAt(0).toUpperCase() : '?';
+			avatar.dataset.role = role;
+		}
+		const namePreview = document.getElementById('userModalNamePreview');
+		if (namePreview) {
+			namePreview.textContent =
+				[title, name].filter(Boolean).join(' ') || 'New user';
+		}
+		const metaPreview = document.getElementById('userModalMetaPreview');
+		if (metaPreview) {
+			metaPreview.textContent = `${roleLabel} · ${status === 'disabled' ? 'Disabled' : 'Active'}`;
+		}
 	}
 
 	function serverUserToLegacy(remote) {
@@ -2962,6 +3211,7 @@
 		return {
 			id: remote.id || '',
 			name: remote.name || '',
+			title: remote.title === 'Mr' || remote.title === 'Mme' ? remote.title : '',
 			username: remote.username || '',
 			role: remote.role || ROLE_STUDENT,
 			status: remote.status || 'active',
@@ -2980,6 +3230,8 @@
 	async function openUserModal(userId) {
 		const modal = document.getElementById('userModal');
 		if (!modal) return;
+		const titleEl = document.getElementById('userModalTitle');
+		if (titleEl) titleEl.textContent = userId ? 'Edit User' : 'New User';
 		let user = null;
 		if (userId) {
 			const users = getUsers();
@@ -3030,6 +3282,9 @@
 
 		const name = nameInput ? nameInput.value.trim() : '';
 		const username = usernameInput ? usernameInput.value.trim() : '';
+		const titleSelect = document.getElementById('userTitle');
+		const titleValue = titleSelect ? String(titleSelect.value || '').trim() : '';
+		const title = titleValue === 'Mr' || titleValue === 'Mme' ? titleValue : '';
 		let role = roleSelect ? roleSelect.value : ROLE_STUDENT;
 		const status = statusSelect ? statusSelect.value : 'active';
 		const password = passwordInput ? passwordInput.value : '';
@@ -3065,6 +3320,7 @@
 		let updatedUser = normalizeUser({
 			...existingUser,
 			name,
+			title,
 			username,
 			role,
 			status,
@@ -3169,6 +3425,7 @@
 		const payload = {
 			username: updatedUser.username,
 			name: updatedUser.name,
+			title: updatedUser.title || null,
 			role: updatedUser.role,
 			status: updatedUser.status || 'active',
 		};
@@ -3204,6 +3461,10 @@
 						serverUser.numero || updatedUser.studentNumber || '';
 					updatedUser.email = serverUser.email || '';
 					updatedUser.phone = serverUser.phone || '';
+					updatedUser.title =
+						serverUser.title === 'Mr' || serverUser.title === 'Mme'
+							? serverUser.title
+							: '';
 					updatedUser.subjects = Array.isArray(serverUser.subjects)
 						? serverUser.subjects
 						: updatedUser.subjects || [];
@@ -3798,9 +4059,50 @@
 
 	function getProfileRequests() {
 		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
-		return r
+		var raw = r
 			? r.getValue_sync('profile_requests', [])
 			: safeJsonParse(localStorage.getItem(PROFILE_REQUESTS_KEY), []);
+		return (Array.isArray(raw) ? raw : []).map(normalizeProfileRequest);
+	}
+
+	// Server rows come back snake_case (user_id, changes_json, snapshot_json,
+	// created_at, reviewer_id, ...) while the queue UI reads camelCase.
+	// Normalize once here so server-fetched requests render and review
+	// exactly like locally-submitted mirrors.
+	function normalizeProfileRequest(req) {
+		if (!req || typeof req !== 'object') return req;
+		const out = Object.assign({}, req);
+		if (out.userId == null && out.user_id != null) out.userId = out.user_id;
+		if (out.changes == null && out.changes_json != null) {
+			try {
+				out.changes =
+					typeof out.changes_json === 'string'
+						? JSON.parse(out.changes_json)
+						: out.changes_json;
+			} catch (_) {
+				out.changes = {};
+			}
+		}
+		if (out.currentSnapshot == null && out.snapshot_json != null) {
+			try {
+				out.currentSnapshot =
+					typeof out.snapshot_json === 'string'
+						? JSON.parse(out.snapshot_json)
+						: out.snapshot_json;
+			} catch (_) {
+				out.currentSnapshot = {};
+			}
+		}
+		const pairs = [
+			['created_at', 'createdAt'],
+			['reviewer_id', 'reviewerId'],
+			['reviewed_at', 'reviewedAt'],
+			['review_note', 'reviewNote'],
+		];
+		for (const [snake, camel] of pairs) {
+			if (out[camel] == null && out[snake] != null) out[camel] = out[snake];
+		}
+		return out;
 	}
 
 	function saveProfileRequests(requests) {
@@ -4512,9 +4814,28 @@
 		if (!user) {
 			return { ok: false, message: 'User not found' };
 		}
-		const currentHash = await hashPassword(currentPassword || '');
-		if (currentHash !== user.passwordHash) {
-			return { ok: false, message: 'Current password is incorrect' };
+		// Server-first: the server hash is what the next login verifies, so
+		// a local-only change would lock the user out on their next sign-in.
+		// When the server accepts the old password it is authoritative — the
+		// local mirror follows unconditionally. Offline (no API/token) keeps
+		// the legacy local verification behavior.
+		let serverAccepted = false;
+		if (window.API && typeof window.API.raw === 'function' && window.__authToken) {
+			try {
+				await window.API.raw('POST', '/auth/change-password', {
+					oldPassword: currentPassword || '',
+					newPassword: newPassword || '',
+				});
+				serverAccepted = true;
+			} catch (err) {
+				return { ok: false, message: err?.message || 'Password update failed' };
+			}
+		}
+		if (!serverAccepted) {
+			const currentHash = await hashPassword(currentPassword || '');
+			if (currentHash !== user.passwordHash) {
+				return { ok: false, message: 'Current password is incorrect' };
+			}
 		}
 		user.passwordHash = await hashPassword(newPassword || '');
 		user.updatedAt = new Date().toISOString();
@@ -4530,11 +4851,15 @@
 		const users = getUsers();
 		const user = users.find((u) => u.id === request.userId);
 		if (!user) {
-			request.status = 'rejected';
-			request.reviewNote = 'User not found';
+			// User row not in this browser's cache (e.g. a scoped teacher
+			// cache): still record the decision locally so the queue clears.
+			// The server already applied the user changes when online.
+			request.status = 'approved';
+			request.reviewNote = note;
+			request.reviewerId = reviewerId || '';
 			request.reviewedAt = new Date().toISOString();
 			saveProfileRequests(requests);
-			return null;
+			return request;
 		}
 
 		if (!canManageUser(user) && !isAdmin()) {
@@ -4605,10 +4930,72 @@
 		return request;
 	}
 
+	// Account requests queue (self-registered students). Admins review all;
+	// teachers review only requests targeting their assigned classes
+	// (canReviewAccountRequest). Approving materializes the student account
+	// on the server first, then mirrors locally.
+	function renderAccountRequests() {
+		const container = document.getElementById('accountRequestsList');
+		if (!container) return;
+		const requests = getAccountRequests();
+		const scoped = isTeacher()
+			? requests.filter((req) => canReviewAccountRequest(req))
+			: requests;
+		if (!scoped.length) {
+			container.innerHTML =
+				'<div class="empty-state">No account requests yet.</div>';
+			return;
+		}
+		const classes = safeJsonParse(
+			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+			[],
+		);
+		const classMap = buildClassNameMap(classes);
+		container.innerHTML = scoped
+			.slice(0, 20)
+			.map((req) => {
+				const className =
+					classMap.get(String(req.classId || '')) || req.className || '—';
+				const meta = [
+					req.username ? `Username: ${req.username}` : '',
+					req.studentNumber ? `Student #: ${req.studentNumber}` : '',
+					`Class: ${className}`,
+				]
+					.filter(Boolean)
+					.map((m) => `<span>${escapeHtml(m)}</span>`)
+					.join('');
+				return `
+				<div class="profile-request-card ${escapeHtml(req.status)}">
+					<div class="request-main">
+						<div>
+							<div class="request-title">${escapeHtml(req.fullName || 'Student')}</div>
+							<div class="request-meta">${req.createdAt ? new Date(req.createdAt).toLocaleString() : ''}</div>
+							<div class="request-changes">${meta}</div>
+							${req.note ? `<div class="request-note">${escapeHtml(req.note)}</div>` : ''}
+						</div>
+						<div class="request-status ${escapeHtml(req.status)}">${escapeHtml(req.status)}</div>
+					</div>
+					${
+						req.status === 'pending' && canReviewAccountRequest(req)
+							? `
+						<div class="request-actions">
+							<button class="btn btn-primary" onclick="reviewAccountRequest('${escapeHtml(req.id)}', true)">Approve</button>
+							<button class="btn btn-danger-soft" onclick="reviewAccountRequest('${escapeHtml(req.id)}', false)">Reject</button>
+						</div>
+					`
+							: req.reviewNote
+								? `<div class="request-review-note">${escapeHtml(req.reviewNote)}</div>`
+								: ''
+					}
+				</div>
+			`;
+			})
+			.join('');
+	}
+
 	function renderProfileRequests() {
 		const container = document.getElementById('profileRequestsList');
-		if (!container) return;
-		const requests = getProfileRequests();
+		if (!container) return;		const requests = getProfileRequests();
 		const users = getUsers();
 		const classes = safeJsonParse(
 			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
@@ -4688,13 +5075,22 @@
 	}
 
 	async function checkAuthState() {
-		await ensureDefaultAdmin();
+		let result = null;
 		let wrongRoleDetected = null;
-		const result = loadSession([ROLE_ADMIN, ROLE_TEACHER], {
-			onWrongRole: (role) => {
-				wrongRoleDetected = role;
-			},
-		});
+		// Session restore is best-effort: a throw here must never leave the
+		// dashboard chrome up WITHOUT role gating — a teacher would otherwise
+		// see the admin-only Realtime/Setup/Teacher Access settings tabs.
+		try {
+			await ensureDefaultAdmin();
+			result = loadSession([ROLE_ADMIN, ROLE_TEACHER], {
+				onWrongRole: (role) => {
+					wrongRoleDetected = role;
+				},
+			});
+		} catch (e) {
+			console.error('[auth] checkAuthState: session restore failed:', e);
+			result = null;
+		}
 		if (!result) {
 			sessionStorage.removeItem('adminLoggedIn');
 			// Hard role gate: a student session on the admin portal must not
@@ -4722,12 +5118,33 @@
 			return;
 		}
 
-		setCurrentUser(result.user, result.session);
-		sessionStorage.setItem('adminLoggedIn', 'true');
-		ensureOwnershipDefaults();
-		applyRolePermissions();
-		notifyAuthChange();
-		hideAuthModal();
+		// Finalize: always gate the UI by role and settle the auth modal, even
+		// if one of these steps throws — a half-applied session must not show
+		// admin-only surfaces (settings tabs) to a teacher.
+		try {
+			setCurrentUser(result.user, result.session);
+			sessionStorage.setItem('adminLoggedIn', 'true');
+			ensureOwnershipDefaults();
+			applyRolePermissions();
+			notifyAuthChange();
+			hideAuthModal();
+		} catch (e) {
+			console.error('[auth] checkAuthState: applying session failed:', e);
+			if (currentUser) {
+				try {
+					applyRolePermissions();
+					hideAuthModal();
+				} catch (inner) {
+					console.error('[auth] role gating failed:', inner);
+				}
+			} else {
+				try {
+					showAuthModal();
+				} catch (inner) {
+					console.error('[auth] showAuthModal failed:', inner);
+				}
+			}
+		}
 	}
 
 	async function checkStudentAuthState() {
@@ -4873,6 +5290,19 @@
 			roleSelect.addEventListener('change', updateUserRoleFields);
 		}
 
+		// Pro user modal: live hero preview follows typing (role changes
+		// already flow through updateUserRoleFields; status uses change).
+		const userFormLive = document.getElementById('userForm');
+		if (userFormLive && !userFormLive.dataset.previewBound) {
+			userFormLive.dataset.previewBound = 'true';
+			userFormLive.addEventListener('input', () => {
+				updateUserModalPreview();
+			});
+			userFormLive.addEventListener('change', () => {
+				updateUserModalPreview();
+			});
+		}
+
 		const searchInput = document.getElementById('userSearchInput');
 		if (searchInput) {
 			searchInput.addEventListener('input', () => renderUsersTable());
@@ -4916,8 +5346,20 @@
 	}
 
 	document.addEventListener('DOMContentLoaded', () => {
-		bindAuthUI();
-		populateStudentAccountRequestClassSelect();
+		// Each step is isolated on purpose: a throw in one (e.g. a DOM node a
+		// bridge script replaced) must never skip checkAuthState(), or the
+		// page keeps its chrome with NO role gating and teachers would see
+		// the admin-only Realtime/Setup/Teacher Access settings tabs.
+		try {
+			bindAuthUI();
+		} catch (e) {
+			console.error('[auth] bindAuthUI failed:', e);
+		}
+		try {
+			populateStudentAccountRequestClassSelect();
+		} catch (e) {
+			console.error('[auth] populateStudentAccountRequestClassSelect failed:', e);
+		}
 		if (document.getElementById('authModal')) {
 			checkAuthState();
 		}
@@ -4925,7 +5367,11 @@
 			checkStudentAuthState();
 		}
 		if (document.getElementById('usersTableBody')) {
-			renderUsersTable();
+			try {
+				renderUsersTable();
+			} catch (e) {
+				console.error('[auth] renderUsersTable failed:', e);
+			}
 		}
 	});
 
@@ -4953,6 +5399,8 @@
 		refreshSchoolBranding,
 		canAccessTab,
 		canAccessSettingsTab,
+		canAccessKidsStudio,
+		getUserDisplayName,
 		updateUserById,
 		updateUserPassword,
 		getProfileRequests,
@@ -5004,9 +5452,25 @@
 	window.addEventListener('quiz:bootstrap-ready', () => {
 		renderUsersTable();
 		renderProfileRequests();
+		renderAccountRequests();
 		renderPendingImports();
 	});
 	window.renderProfileRequests = renderProfileRequests;
+	window.renderAccountRequests = renderAccountRequests;
+	window.reviewAccountRequest = async function (requestId, approve) {
+		const reviewerId = currentUser?.id || '';
+		const result = approve
+			? await approveAccountRequest(requestId, reviewerId)
+			: await rejectAccountRequest(requestId, reviewerId);
+		if (result) {
+			showToast(
+				approve ? 'Account request approved' : 'Account request rejected',
+				approve ? 'success' : 'info',
+			);
+			renderAccountRequests();
+			renderUsersTable();
+		}
+	};
 	window.renderPendingImports = renderPendingImports;
 	window.approvePendingImport = async function (importId) {
 		const result = await applyPendingImport(importId);
@@ -5041,8 +5505,22 @@
 	window.bulkSuspendUsers = bulkSuspendUsers;
 	window.bulkDeleteUsers = bulkDeleteUsers;
 	window.handleStudentAuthClose = handleStudentAuthClose;
-	window.approveProfileRequest = function (requestId) {
+	window.approveProfileRequest = async function (requestId) {
 		const reviewerId = currentUser?.id || '';
+		// Server-first when online so the decision (and the applied user
+		// changes) survives the next bootstrap; local-only offline.
+		if (window.API?.raw && window.__authToken && requestId) {
+			try {
+				await window.API.raw(
+					'POST',
+					'/profile-requests/' + encodeURIComponent(requestId) + '/approve',
+					{},
+				);
+			} catch (err) {
+				showToast('Could not approve: ' + (err?.message || 'server error'), 'error');
+				return;
+			}
+		}
 		const result = approveProfileRequest(requestId, reviewerId);
 		if (result) {
 			showToast('Profile request approved', 'success');
@@ -5050,8 +5528,20 @@
 			renderUsersTable();
 		}
 	};
-	window.rejectProfileRequest = function (requestId) {
+	window.rejectProfileRequest = async function (requestId) {
 		const reviewerId = currentUser?.id || '';
+		if (window.API?.raw && window.__authToken && requestId) {
+			try {
+				await window.API.raw(
+					'POST',
+					'/profile-requests/' + encodeURIComponent(requestId) + '/reject',
+					{},
+				);
+			} catch (err) {
+				showToast('Could not reject: ' + (err?.message || 'server error'), 'error');
+				return;
+			}
+		}
 		const result = rejectProfileRequest(requestId, reviewerId);
 		if (result) {
 			showToast('Profile request rejected', 'info');

@@ -2573,12 +2573,20 @@
 	}
 
 	function buildTournamentDbPayload(tournament) {
+		// Linked kids game (primaire): the planner select is the source of
+		// truth at save time; fall back to the legacy object if present.
+		const kidsGameSelect = typeof document !== 'undefined' ? document.getElementById('tournamentKidsGame') : null;
+		const kidsGameId =
+			(kidsGameSelect && String(kidsGameSelect.value || '').trim()) ||
+			String(tournament?.kidsGameId || tournament?.kids_game_id || '').trim() ||
+			null;
 		return {
 			name: String(tournament?.name || '').trim() || 'Untitled tournament',
 			description:
 				String(
 					tournament?.notes || tournament?.description || '',
 				).trim() || null,
+			kids_game_id: kidsGameId,
 			settings_json: JSON.stringify({
 				...tournament,
 				legacyId: String(tournament?.id || ''),
@@ -7253,12 +7261,34 @@ function buildLobbyHtml(gameId) {
 		// Kids Games Studio is a third studio tab (plan §5.1) — it must be
 		// recognized explicitly, otherwise it collapses back to games-studio
 		// and its pane can never activate.
-		const activeTab =
+		let activeTab =
 			normalized === 'tournament-studio'
 				? 'tournament-studio'
 				: normalized === 'kids-games-studio' || normalized === 'kids-games'
 					? 'kids-games-studio'
 					: 'games-studio';
+
+		// Land on a studio whose pane is actually visible (hidden panes keep
+		// .active but render nothing — a blank Games tab). Hidden panes:
+		// - kids: non-primaire school, or the kidsGames teacher-access toggle
+		//   was revoked (checked live here too, so the guard works before the
+		//   availability refresh has run);
+		// - games/tournament: primaire teachers — Kids Games is their entire
+		//   Games tab, so programmatic switches (lobby reopen, deep link)
+		//   land on kids instead of a hidden pane.
+		const paneHidden = (key) =>
+			document.querySelector(`[data-games-studio-pane="${key}"]`)?.style
+				.display === 'none';
+		const kidsAccessDenied =
+			typeof window.Auth?.canAccessKidsStudio === 'function' &&
+			!window.Auth.canAccessKidsStudio();
+		const kidsUsable = !kidsAccessDenied && !paneHidden('kids-games-studio');
+		const gamesUsable = !paneHidden('games-studio');
+		if (activeTab === 'kids-games-studio') {
+			if (!kidsUsable && gamesUsable) activeTab = 'games-studio';
+		} else if (!gamesUsable && kidsUsable) {
+			activeTab = 'kids-games-studio';
+		}
 
 		// Update header text
 		const titleEl = byId('gamesTabTitle');
@@ -7332,6 +7362,69 @@ function buildLobbyHtml(gameId) {
 			});
 		});
 		setGamesStudioTab(state.gamesStudioTab || 'games-studio');
+		refreshKidsStudioAvailability();
+	}
+
+	/**
+	 * Studio visibility for the Games tab:
+	 * - Kids Games exists for primaire schools only. Non-primaire schools never
+	 *   see the tab (fail-open on errors so a profile hiccup can't hide it).
+	 *   Teachers additionally lose the tab when the admin revokes the
+	 *   `kidsGames` teacher-access toggle (Settings → Teacher Access).
+	 * - Teachers at a primaire school get Kids Games as the ONLY studio:
+	 *   Games Studio and Tournament Studio are hidden for them, and the tab
+	 *   opens on Kids Games. Admins keep all three studios.
+	 */
+	async function refreshKidsStudioAvailability() {
+		try {
+			if (!window.API || typeof window.API.raw !== 'function') return;
+			const profile = await window.API.raw('GET', '/school/profile/full');
+			const isPrimaire = String(profile?.school_type || '').toLowerCase() === 'primaire';
+			const accessDenied =
+				typeof window.Auth?.canAccessKidsStudio === 'function' &&
+				!window.Auth.canAccessKidsStudio();
+			const isTeacher =
+				typeof window.Auth?.isTeacher === 'function' && window.Auth.isTeacher();
+			// Kids-only mode requires the kids studio to actually be usable,
+			// so a revoked kidsGames toggle falls back to the full studio set
+			// instead of leaving the teacher with an empty Games tab.
+			const kidsOnly = isPrimaire && isTeacher && !accessDenied;
+			const btn = document.querySelector('[data-games-studio-tab="kids-games-studio"]');
+			const pane = document.querySelector('[data-games-studio-pane="kids-games-studio"]');
+			if (!isPrimaire || accessDenied) {
+				if (btn) btn.style.display = 'none';
+				if (pane) pane.style.display = 'none';
+				if ((state.gamesStudioTab || '') === 'kids-games-studio') {
+					setGamesStudioTab('games-studio');
+				}
+			} else {
+				if (btn) btn.style.display = '';
+				if (pane) pane.style.display = '';
+			}
+
+			// Primaire teachers: hide the other two studios (and restore them
+			// if the session later resolves without kids-only mode).
+			['games-studio', 'tournament-studio'].forEach((key) => {
+				const tabBtn = document.querySelector(`[data-games-studio-tab="${key}"]`);
+				const tabPane = document.querySelector(`[data-games-studio-pane="${key}"]`);
+				if (tabBtn) tabBtn.style.display = kidsOnly ? 'none' : '';
+				if (tabPane) tabPane.style.display = kidsOnly ? 'none' : '';
+			});
+			if (kidsOnly && (state.gamesStudioTab || '') !== 'kids-games-studio') {
+				setGamesStudioTab('kids-games-studio');
+			}
+		} catch (_) {
+			// Fail-open: leave the tab visible rather than hiding it on error.
+		}
+	}
+	window.refreshKidsStudioAvailability = refreshKidsStudioAvailability;
+	window.setGamesStudioTab = setGamesStudioTab;
+	if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+		// Teacher-access settings land with the bootstrap payload, which can
+		// arrive after the studio tabs initialize — re-evaluate then.
+		window.addEventListener('quiz:bootstrap-ready', () => {
+			try { refreshKidsStudioAvailability(); } catch (_) {}
+		});
 	}
 
 	function setTournamentStudioTab(tabKey) {
@@ -7539,7 +7632,51 @@ function buildLobbyHtml(gameId) {
 		setTournamentPlannerFormLocked(false);
 		const title = byId('tournamentEditorTitle');
 		if (title) title.textContent = target ? 'Edit tournament' : 'Create tournament';
+		loadTournamentKidsGameOptions(target?.dbTournamentId || '');
 		setArenaModal('tournamentPlannerModal', true);
+	}
+
+	/**
+	 * Linked-kids-game picker (primaire only). Lists published kids games;
+	 * hidden entirely when the school has none (non-primaire → 403).
+	 * On edit, the DB row is the source of truth for the current link.
+	 */
+	async function loadTournamentKidsGameOptions(dbTournamentId = '') {
+		const sel = byId('tournamentKidsGame');
+		const row = byId('tournamentKidsGameRow');
+		if (!sel) return;
+		const showRow = (games, preselect) => {
+			sel.innerHTML =
+				'<option value="">No kids game (classic tournament)</option>' +
+				games
+					.map(
+						(g) =>
+							`<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}${g.pin ? ` (PIN ${escapeHtml(g.pin)})` : ''}</option>`,
+					)
+					.join('');
+			if (preselect) sel.value = String(preselect);
+			if (row) row.hidden = !games.length;
+		};
+		try {
+			if (!window.API || typeof window.API.raw !== 'function') throw new Error('no api');
+			const res = await window.API.raw('GET', '/kids?status=published&limit=100');
+			const games = Array.isArray(res?.data) ? res.data : [];
+			let preselect = '';
+			if (dbTournamentId) {
+				try {
+					const detail = await window.API.raw(
+						'GET',
+						`/tournaments/${encodeURIComponent(dbTournamentId)}`,
+					);
+					if (detail?.kids_game_id) preselect = String(detail.kids_game_id);
+				} catch (_) {
+					// Detail unavailable — keep the fresh list without preselect.
+				}
+			}
+			showRow(games, preselect);
+		} catch (_) {
+			if (row) row.hidden = true;
+		}
 	}
 
 	function closeTournamentPlannerModal() {

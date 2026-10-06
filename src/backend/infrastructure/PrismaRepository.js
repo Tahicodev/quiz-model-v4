@@ -121,9 +121,9 @@ export class PrismaRepository extends IStorageRepository {
 		table,
 		{
 			filters = {},
-			// Optional extra OR group AND-ed with everything else, e.g.
-			// [{ created_by: me }, { created_by: null }] for teacher scoping.
-			// Kept separate from `search` so both can combine safely.
+		// Optional extra OR group AND-ed with everything else, e.g.
+		// [{ created_by: me }] for teacher scoping.
+		// Kept separate from `search` so both can combine safely.
 			or = null,
 			limit = 50,
 			offset = 0,

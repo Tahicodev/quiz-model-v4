@@ -19,14 +19,14 @@ const router = Router();
 router.use(requireAuth, enforceTenant);
 
 /**
- * Teachers are confined to their own rows. Legacy unattributed rows
- * (created_by NULL = historically shared content) stay visible to them;
- * anything authored by another teacher is forbidden.
+ * Teachers are strictly confined to their own rows. Legacy unattributed
+ * rows (created_by NULL) are NOT visible to teachers — every teacher sees
+ * only the questions they authored; admins see all.
  */
 function assertOwnership(row, user) {
   if (!row) return;
   if (user.role !== ROLES.TEACHER) return;
-  if (row.created_by && row.created_by !== user.id) {
+  if (row.created_by !== user.id) {
     throw new ForbiddenError('Not your question');
   }
 }
@@ -36,11 +36,10 @@ router.get('/', validateQuery(QuestionFilterSchema), async (req, res, next) => {
   try {
     const { questionSvc } = getContainer();
     const { limit, offset, orderBy, direction, search, created_by, ...filters } = req.query;
-    // Teachers see their own rows plus unattributed legacy rows
-    // (created_by NULL = historically shared content). Admins see all,
-    // optionally narrowed to one author via ?created_by=.
+    // Teachers see only their own rows. Admins see all, optionally
+    // narrowed to one author via ?created_by=.
     const or = req.user.role === ROLES.TEACHER
-      ? [{ created_by: req.user.id }, { created_by: null }]
+      ? [{ created_by: req.user.id }]
       : null;
     const result = await questionSvc.list(
       { ...filters, school_id: req.schoolId, ...(created_by && req.user.role !== ROLES.TEACHER ? { created_by } : {}), ...(or ? { or } : {}) },
@@ -64,6 +63,14 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', requireRole([ROLES.ADMIN, ROLES.TEACHER]), validate(QuestionCreateSchema), async (req, res, next) => {
   try {
     const { questionSvc, auditSvc } = getContainer();
+    // Teachers may only file new questions under their own categories.
+    if (req.user.role === ROLES.TEACHER && req.body?.category_id) {
+      const { categorySvc } = getContainer();
+      const cat = await categorySvc.getById(req.body.category_id);
+      if (!cat || cat.created_by !== req.user.id) {
+        throw new ForbiddenError('Not your category');
+      }
+    }
     const question = await questionSvc.create(req.body, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'question', entityId: question.id, action: 'create', ip: req.ip });
     res.status(201).json(question);
@@ -75,6 +82,14 @@ router.patch('/:id', requireRole([ROLES.ADMIN, ROLES.TEACHER]), validate(Questio
   try {
     const { questionSvc, auditSvc } = getContainer();
     assertOwnership(await questionSvc.getById(req.params.id), req.user);
+    // Teachers may only file their questions under their own categories.
+    if (req.user.role === ROLES.TEACHER && req.body?.category_id) {
+      const { categorySvc } = getContainer();
+      const cat = await categorySvc.getById(req.body.category_id);
+      if (!cat || cat.created_by !== req.user.id) {
+        throw new ForbiddenError('Not your category');
+      }
+    }
     const updated = await questionSvc.update(req.params.id, req.body, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'question', entityId: updated.id, action: 'update', ip: req.ip });
     res.json(updated);

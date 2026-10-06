@@ -9,6 +9,7 @@ import { requireRole } from '../middleware/role.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { ExamCreateSchema, ExamUpdateSchema, ExamFilterSchema, ExamAddQuestionSchema, ExamReorderSchema, ExamAssignClassSchema } from '../../shared/schemas/exam.schema.js';
 import { ROLES } from '../../shared/constants.js';
+import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 
 const router = Router();
@@ -19,11 +20,28 @@ router.use(requireAuth, enforceTenant);
 // class assignment stay admin-only because they affect the whole school.
 const EXAM_AUTHORING_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
 
+/** Teachers see and manage only the exams they created. Admins see all. */
+function assertExamOwnership(exam, user) {
+  if (!exam) return;
+  if (user.role !== ROLES.TEACHER) return;
+  if (exam.creator_id !== user.id) {
+    throw new ForbiddenError('Not your exam');
+  }
+}
+
 router.get('/', validateQuery(ExamFilterSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
-    const { limit, offset, orderBy, direction, search, ...filters } = req.query;
-    const result = await examSvc.list({ ...filters, school_id: req.schoolId }, { limit, offset, orderBy, direction, search });
+    const { limit, offset, orderBy, direction, search, creator_id, ...filters } = req.query;
+    const result = await examSvc.list({
+      ...filters,
+      school_id: req.schoolId,
+      // Teachers are confined to their own exams; a client-supplied
+      // creator_id is ignored for them. Admins may filter by author.
+      ...(req.user.role === ROLES.TEACHER
+        ? { creator_id: req.user.id }
+        : (creator_id ? { creator_id } : {})),
+    }, { limit, offset, orderBy, direction, search });
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -35,6 +53,7 @@ router.get('/:id', async (req, res, next) => {
     if (req.user?.role === ROLES.STUDENT && exam.status !== 'active') {
       return res.status(404).json({ message: 'Exam not found' });
     }
+    assertExamOwnership(exam, req.user);
     res.json(exam);
   } catch (err) { next(err); }
 });
@@ -46,6 +65,7 @@ router.get('/:id/questions', async (req, res, next) => {
     if (req.user?.role === ROLES.STUDENT && exam.status !== 'active') {
       return res.status(404).json({ message: 'Exam not found' });
     }
+    assertExamOwnership(exam, req.user);
     res.json(exam);
   } catch (err) { next(err); }
 });
@@ -76,6 +96,7 @@ router.post('/', requireRole(EXAM_AUTHORING_ROLES), validate(ExamCreateSchema), 
 router.patch('/:id', requireRole(EXAM_AUTHORING_ROLES), validate(ExamUpdateSchema), async (req, res, next) => {
   try {
     const { examSvc, auditSvc } = getContainer();
+    assertExamOwnership(await examSvc.getById(req.params.id), req.user);
     const updated = await examSvc.update(req.params.id, req.body, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'exam', entityId: updated.id, action: 'update', ip: req.ip });
     res.json(updated);
@@ -94,7 +115,15 @@ router.delete('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req,
 // Question management
 router.post('/:id/questions', requireRole(EXAM_AUTHORING_ROLES), validate(ExamAddQuestionSchema), async (req, res, next) => {
   try {
-    const { examSvc } = getContainer();
+    const { examSvc, questionSvc } = getContainer();
+    assertExamOwnership(await examSvc.getById(req.params.id), req.user);
+    // Teachers may only attach their own questions to their exams.
+    if (req.user.role === ROLES.TEACHER) {
+      const q = await questionSvc.getById(req.body.question_id);
+      if (!q || q.created_by !== req.user.id) {
+        throw new ForbiddenError('Not your question');
+      }
+    }
     const link = await examSvc.addQuestion(req.params.id, req.body.question_id, req.body.order_index, req.user);
     res.status(201).json(link);
   } catch (err) { next(err); }
@@ -103,6 +132,7 @@ router.post('/:id/questions', requireRole(EXAM_AUTHORING_ROLES), validate(ExamAd
 router.delete('/:id/questions/:questionId', requireRole(EXAM_AUTHORING_ROLES), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
+    assertExamOwnership(await examSvc.getById(req.params.id), req.user);
     await examSvc.removeQuestion(req.params.id, req.params.questionId, req.user);
     res.status(204).send();
   } catch (err) { next(err); }
@@ -111,6 +141,7 @@ router.delete('/:id/questions/:questionId', requireRole(EXAM_AUTHORING_ROLES), a
 router.put('/:id/questions/order', requireRole(EXAM_AUTHORING_ROLES), validate(ExamReorderSchema), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
+    assertExamOwnership(await examSvc.getById(req.params.id), req.user);
     await examSvc.reorderQuestions(req.params.id, req.body.question_ids, req.user);
     res.json({ message: 'Questions reordered' });
   } catch (err) { next(err); }
@@ -120,6 +151,7 @@ router.put('/:id/questions/order', requireRole(EXAM_AUTHORING_ROLES), validate(E
 router.post('/:id/publish', requireRole(EXAM_AUTHORING_ROLES), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
+    assertExamOwnership(await examSvc.getById(req.params.id), req.user);
     const exam = await examSvc.publish(req.params.id, req.user);
     res.json(exam);
   } catch (err) { next(err); }
@@ -128,6 +160,7 @@ router.post('/:id/publish', requireRole(EXAM_AUTHORING_ROLES), async (req, res, 
 router.post('/:id/archive', requireRole(EXAM_AUTHORING_ROLES), async (req, res, next) => {
   try {
     const { examSvc } = getContainer();
+    assertExamOwnership(await examSvc.getById(req.params.id), req.user);
     const exam = await examSvc.archive(req.params.id, req.user);
     res.json(exam);
   } catch (err) { next(err); }

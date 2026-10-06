@@ -65,6 +65,20 @@ export const KidsSessionCompleteSchema = z.object({
   completed:    z.boolean().default(true),
 });
 
+export const KidsBrowseSchema = z.object({
+  search: z.string().optional(),
+  limit:  z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
+// Logged-in play (students in session, teacher preview): identity is linked
+// so results, leaderboards and gamification treat it like any other game.
+export const KidsAuthedSessionSchema = z.object({
+  player_name:   z.string().min(1).max(50).optional(),
+  avatar:        z.string().max(10).optional(),
+  tournament_id: z.string().uuid().optional(),
+});
+
 export const KidsAIGenerateSchema = z.object({
   game_type:   z.enum(KIDS_GAME_TYPES),
   topic:       z.string().min(1).max(500),

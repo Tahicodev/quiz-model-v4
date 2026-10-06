@@ -29,6 +29,7 @@ import { ROLES } from '../../shared/constants.js';
 import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 import { logger } from '../logger.js';
+import { getTeacherClassIds } from './users.routes.js';
 
 const router = Router();
 
@@ -65,13 +66,16 @@ const TEACHER_WRITABLE_TABLES = new Set([
   'tournaments',
   'teacher_messages',
   'teacher_assignments',
+  // Teachers may import results, but every row is ownership-checked below —
+  // only results belonging to students in their assigned classes persist.
+  'results',
 ]);
 
 // Keys that must NOT be writable by teachers. If a teacher bulk-writes settings
 // containing any of these, they are silently dropped (the other keys still go
 // through). This matches the existing UI policy: only admins rotate the
 // adminSecret and recoveryCode.
-const TEACHER_BLOCKED_SETTINGS_KEYS = new Set(['adminSecret', 'recoveryCode']);
+const TEACHER_BLOCKED_SETTINGS_KEYS = new Set(['adminSecret', 'recoveryCode', 'teacherAccess']);
 // Only stable, complete collections may request deletion reconciliation.
 const SNAPSHOT_TABLES = new Set(['categories', 'questions', 'exams', 'results']);
 
@@ -173,6 +177,10 @@ const SANITIZERS = {
       ...(passwordHash && { password_hash: String(passwordHash) }),
       role: pickStr(row.role) || 'student',
       name: pickStr(row.name) || pickStr(row.username) || 'Unknown',
+      // Civility for greetings/display (Mr | Mme) — anything else is dropped.
+      ...(row.title != null && String(row.title).trim() !== '' && {
+        title: ['Mr', 'Mme'].includes(String(row.title).trim()) ? String(row.title).trim() : undefined,
+      }),
       ...(row.numero != null && { numero: pickStr(row.numero) }),
       ...(row.studentNumber != null && { numero: pickStr(row.studentNumber) }),
       // Teacher/staff contacts (legacy UI may send them camelCase or snake).
@@ -1197,6 +1205,29 @@ router.post('/:table', async (req, res, next) => {
     const droppedPerRow = [];
     let missingRequiredCount = 0;
     let foreignStudentRows = 0;
+    let foreignTeacherRows = 0;
+    // Lazily resolved on first teacher results row: ids of students in the
+    // teacher's assigned classes. Rows outside this set are dropped.
+    let teacherStudentIds = null;
+    const loadTeacherStudentIds = async () => {
+      const ids = new Set();
+      try {
+        const classIds = new Set(await getTeacherClassIds(req.schoolId, req.user.id));
+        if (!classIds.size) return ids;
+        const { data: students } = await repo.getAll('users', {
+          filters: { school_id: req.schoolId, role: 'student' },
+          limit: 100000,
+        });
+        for (const s of students || []) {
+          if (s?.id && s.class_id && classIds.has(String(s.class_id))) {
+            ids.add(String(s.id));
+          }
+        }
+      } catch (err) {
+        logger.warn('bulk.routes: teacher student scope lookup failed', { error: err?.message });
+      }
+      return ids;
+    };
 
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
@@ -1225,6 +1256,32 @@ router.post('/:table', async (req, res, next) => {
         continue;
       }
 
+      // Teachers own only their own rows. A teacher client only ever holds
+      // its own tournaments/messages/assignments (bootstrap is scoped), so
+      // a row attributed to anyone else is spoofed or stale — drop it.
+      // Messages/assignments are additionally stamped with the actor so a
+      // teacher can never broadcast under another teacher's identity.
+      // Results imports keep only rows belonging to students in the
+      // teacher's assigned classes (resolved below on first use).
+      if (req.user?.role === ROLES.TEACHER) {
+        if (table === 'tournaments') {
+          if (String(cleaned.creator_id || '') !== String(req.user.id)) {
+            foreignTeacherRows += 1;
+            continue;
+          }
+        } else if (table === 'teacher_messages' || table === 'teacher_assignments') {
+          cleaned.teacher_id = String(req.user.id);
+        } else if (table === 'results') {
+          if (teacherStudentIds === null) {
+            teacherStudentIds = await loadTeacherStudentIds();
+          }
+          if (!teacherStudentIds.has(String(cleaned.user_id || ''))) {
+            foreignTeacherRows += 1;
+            continue;
+          }
+        }
+      }
+
       // Pre-flight required-field guard: drop the row (and count it) rather
       // than letting Prisma reject the entire batch with P2009/P2003.
       const missing = required.filter((f) => cleaned[f] == null || cleaned[f] === '');
@@ -1249,7 +1306,7 @@ router.post('/:table', async (req, res, next) => {
       scoped.push(cleaned);
     }
 
-    if (replaceSnapshot && scoped.length !== items.length - foreignStudentRows) {
+    if (replaceSnapshot && scoped.length !== items.length - foreignStudentRows - foreignTeacherRows) {
       return res.status(400).json({
         code: 'INVALID_SNAPSHOT',
         message: 'The snapshot contains rows that could not be saved; no rows were removed.',

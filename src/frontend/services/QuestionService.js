@@ -11,10 +11,13 @@ export class QuestionService {
   constructor(repo) { this.#repo = repo; }
 
   async list(filters = {}, pagination = {}) {
-    const { or = null, ...restFilters } = filters;
+    // `or` and author ids are server-derived (route-enforced), not client
+    // input — keep them out of the query-shape validation and re-attach.
+    const { or = null, created_by = undefined, ...restFilters } = filters;
     const parsed = QuestionFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+    if (created_by !== undefined) rest.created_by = created_by;
     return this.#repo.getAll('questions', { filters: rest, limit, offset, orderBy, direction, search, ...(or ? { or } : {}) });
   }
 

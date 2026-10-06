@@ -88,6 +88,7 @@ model User {
   password_hash String
   role          String    @default("student") // ROLES constant
   name          String
+  title         String? // civility for greetings/display: Mr | Mme
   numero        String? // student registration / teacher staff number
   email         String? // contact email (teachers, admins)
   phone         String? // contact phone
@@ -116,6 +117,7 @@ model User {
   teacherMessages          TeacherMessage[]
   teacherAssignments       TeacherAssignment[]
   kidsGames                KidsGame[]          @relation("KidsGameTeacher")
+  kidsGameSessions         KidsGameSession[]   @relation("KidsSessionPlayer")
 
   @@unique([school_id, username])
   @@index([school_id])
@@ -167,7 +169,8 @@ model Category {
   parent_id  String?
   icon       String?
   color      String? // hex color for UI
-  // Author (teacher/admin user id). NULL = legacy shared row, visible to all.
+  // Author (teacher/admin user id). NULL = legacy unattributed row,
+  // visible to admins only (teachers see strictly their own rows).
   created_by String?
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -197,7 +200,8 @@ model Question {
   difficulty   String   @default("medium")
   tags         String? // comma-separated tags for filtering
   media_url    String? // optional image/audio attachment
-  // Author (teacher/admin user id). NULL = legacy shared row, visible to all.
+  // Author (teacher/admin user id). NULL = legacy unattributed row,
+  // visible to admins only (teachers see strictly their own rows).
   created_by   String?
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
@@ -316,7 +320,9 @@ model Result {
   // normalized store can accept legacy rows without fabricating exams; the
   // restful results API still writes real exam ids.
   exam_id        String?
-  user_id        String
+  // Nullable so anonymous kids-game plays (PIN, no account) are recorded
+  // like every other result; identity travels in answers_json context.
+  user_id        String?
   score          Float // percentage 0–100
   total_points   Int
   earned_points  Int
@@ -330,7 +336,8 @@ model Result {
   school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
   // Optional relation — null for training/game results.
   exam   Exam?  @relation(fields: [exam_id], references: [id], onDelete: SetNull)
-  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  // Optional relation — null for anonymous kids-game plays.
+  user   User?  @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([school_id])
   @@index([user_id])
@@ -401,13 +408,20 @@ model Tournament {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 
+  // Optional linked kids game (primaire schools): students play it with the
+  // kid player and each completion accumulates into their tournament entry.
+  kids_game_id String?
+
   school  School            @relation(fields: [school_id], references: [id], onDelete: Cascade)
   creator User?             @relation("TournamentCreator", fields: [creator_id], references: [id], onDelete: SetNull)
+  kidsGame KidsGame?        @relation(fields: [kids_game_id], references: [id], onDelete: SetNull)
   entries TournamentEntry[]
+  kidsSessions KidsGameSession[]
 
   @@index([school_id])
   @@index([status])
   @@index([creator_id])
+  @@index([kids_game_id])
 }
 
 // Completed-tournament archive, written by the legacy UI's
@@ -664,6 +678,7 @@ model KidsGame {
   teacher  User              @relation("KidsGameTeacher", fields: [teacher_id], references: [id], onDelete: Cascade)
   category Category?         @relation(fields: [category_id], references: [id], onDelete: SetNull)
   sessions KidsGameSession[]
+  tournaments Tournament[]
 
   @@index([school_id])
   @@index([teacher_id])
@@ -676,8 +691,13 @@ model KidsGame {
 model KidsGameSession {
   id           String   @id @default(uuid())
   game_id      String
-  player_name  String   // kid enters just their first name — no account needed
+  player_name  String   // first name — typed for PIN play, user name for logged-in play
   avatar       String?  // chosen animal emoji / color token
+  // Logged-in student link (NULL = anonymous PIN play). Tenant + tournament
+  // links let sessions feed leaderboards and unified results.
+  user_id      String?
+  school_id    String?
+  tournament_id String?
   score        Int      @default(0)
   stars        Int      @default(0)  // 0-3 star rating based on score %
   answers_json String?  // [{question_id, given, correct, time_ms}]
@@ -685,8 +705,13 @@ model KidsGameSession {
   created_at   DateTime @default(now())
 
   game  KidsGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
+  user  User?    @relation("KidsSessionPlayer", fields: [user_id], references: [id], onDelete: SetNull)
+  tournament Tournament? @relation(fields: [tournament_id], references: [id], onDelete: SetNull)
 
   @@index([game_id])
+  @@index([user_id])
+  @@index([school_id])
+  @@index([tournament_id])
   @@index([created_at])
 }
 

@@ -65,7 +65,7 @@ router.patch('/:key', requireRole(SETTINGS_SHARED_ROLES), validate(SettingUpdate
     // is the real authority.
     if (
       req.user.role === ROLES.TEACHER &&
-      ['adminSecret', 'recoveryCode'].includes(key)
+      ['adminSecret', 'recoveryCode', 'teacherAccess'].includes(key)
     ) {
       return next(new ForbiddenError('Only admins can modify this setting'));
     }
@@ -97,7 +97,7 @@ router.post('/bulk', requireRole(SETTINGS_SHARED_ROLES), validate(SettingsBulkUp
     // stay safe.
     if (req.user.role === ROLES.TEACHER && Array.isArray(req.body?.settings)) {
       req.body.settings = req.body.settings.filter(
-        (s) => s && !['adminSecret', 'recoveryCode'].includes(s.key),
+        (s) => s && !['adminSecret', 'recoveryCode', 'teacherAccess'].includes(s.key),
       );
     }
     const results = await settingsSvc.bulkUpdate(req.schoolId, req.body.settings);

@@ -52,9 +52,13 @@ export class GameService {
   }
 
   async list(filters = {}, pagination = {}) {
-    const parsed = GameFilterSchema.safeParse({ ...filters, ...pagination });
+    // `creator_id` is server-derived (route-enforced teacher scope / admin
+    // author filter), not client input — validate the rest, then re-attach.
+    const { creator_id = undefined, ...restFilters } = filters;
+    const parsed = GameFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+    if (creator_id !== undefined) rest.creator_id = creator_id;
     return this.#repo.getAll('games', { filters: rest, limit, offset, orderBy, direction, search });
   }
 

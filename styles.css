@@ -234,6 +234,13 @@ html.auth-pending.auth-ready body {
 	color: #166534;
 }
 
+/* Teacher student view: every row is a student by construction, so the
+Role column is hidden (toggled by renderUsersTable for teacher sessions). */
+#usersTable.teacher-view th:nth-child(6),
+#usersTable.teacher-view td:nth-child(6) {
+	display: none;
+}
+
 .user-controls {
 	display: flex;
 	flex-direction: column;
@@ -38099,4 +38106,192 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	#assignCategoryQuestionsModal .modal-body > .form-actions {
 		padding: 10px 14px max(10px, env(safe-area-inset-bottom));
 	}
+}
+
+/* ?? User Account modal (pro layout) ?????????????????????????????????????
+   Sectioned cards + live profile hero. All rules are scoped to #userModal
+   so the unified add-modal geometry above keeps applying untouched. */
+#userModal .user-modal-hero {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 16px;
+	margin-bottom: 16px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-lg);
+	background:
+		linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(59, 130, 246, 0.07)),
+		var(--bg-surface);
+}
+
+#userModal .user-modal-avatar {
+	width: 52px;
+	height: 52px;
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	font-size: 1.35rem;
+	font-weight: 700;
+	color: #ffffff;
+	background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+	box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+}
+
+#userModal .user-modal-avatar[data-role="admin"] {
+	background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+}
+
+#userModal .user-modal-avatar[data-role="teacher"] {
+	background: linear-gradient(135deg, #0ea5e9, #0284c7);
+}
+
+#userModal .user-modal-avatar[data-role="student"] {
+	background: linear-gradient(135deg, #10b981, #059669);
+}
+
+#userModal .user-modal-identity {
+	min-width: 0;
+}
+
+#userModal .user-modal-name {
+	font-weight: 700;
+	font-size: 1.05rem;
+	letter-spacing: -0.01em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#userModal .user-modal-meta {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	margin-top: 2px;
+}
+
+#userModal .user-modal-card {
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-lg);
+	padding: 16px;
+	margin-bottom: 16px;
+	background: var(--bg-surface);
+}
+
+#userModal .user-modal-card-title {
+	margin: 0 0 12px;
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--text-muted);
+}
+
+#userModal .user-modal-grid {
+	display: grid;
+	gap: 14px;
+}
+
+#userModal .user-modal-grid-2 {
+	grid-template-columns: 1fr 1fr;
+}
+
+#userModal .user-modal-grid-identity {
+	grid-template-columns: 130px 1fr;
+}
+
+#userModal .user-modal-card > .form-group,
+#userModal .user-modal-card > .user-modal-grid {
+	margin-bottom: 14px;
+}
+
+#userModal .user-modal-card > .form-group:last-child,
+#userModal .user-modal-card > .user-modal-grid:last-child,
+#userModal .user-modal-card > small.text-muted:last-child {
+	margin-bottom: 0;
+}
+
+#userModal .user-modal-hint {
+	margin: 12px 0 0;
+	padding: 8px 12px;
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	background: var(--bg-surface-alt);
+	border-radius: var(--radius-md);
+}
+
+#userModal .user-modal-hint:empty {
+	display: none;
+}
+
+@media (max-width: 560px) {
+	#userModal .user-modal-grid-2,
+	#userModal .user-modal-grid-identity {
+		grid-template-columns: 1fr;
+	}
+
+	#userModal .user-modal-hero {
+		padding: 12px;
+	}
+
+	#userModal .user-modal-avatar {
+		width: 44px;
+		height: 44px;
+		font-size: 1.15rem;
+	}
+}
+
+/* ==========================================================================
+   School Information (General tab) read-only mode for teachers.
+   Only admins may edit /school/profile (the route is requireRole ADMIN,
+   SUPER_ADMIN); when a teacher opens Settings we disable the fields and
+   show this notice instead of letting them hit a guaranteed 403.
+   ========================================================================== */
+.settings-readonly-notice {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin-bottom: 16px;
+	padding: 10px 12px;
+	border: 1px solid #bfdbfe;
+	border-radius: 10px;
+	background: #eff6ff;
+	color: #1d4ed8;
+	font-size: 0.86em;
+	line-height: 1.5;
+}
+
+.settings-readonly-notice svg {
+	flex: none;
+	margin-top: 2px;
+}
+
+/* The hidden attribute must beat the display:flex above. */
+.settings-readonly-notice[hidden] {
+	display: none !important;
+}
+
+#general-settings.read-only .form-control {
+	background: var(--bg-secondary, #f8fafc);
+	color: var(--text-muted, #64748b);
+	opacity: 0.9;
+	cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Role-gating overrides - MUST stay at the end of this file.
+   `.role-hidden` (specificity 0,1,0) was being outranked by the settings
+   modal's layout rules, e.g. `#settingsModal .settings-tab-btn { display:
+   flex !important }` (1,1,0): the class WAS applied to the admin-only tabs
+   (Realtime, Setup, Teacher Access) but the computed display stayed flex,
+   so teacher sessions still saw them. These ID-scoped selectors outrank
+   every layout rule above regardless of source order or media query.
+   ========================================================================== */
+#settingsModal .role-hidden,
+#settingsModal [data-roles].role-hidden,
+#settingsModal .settings-tab-btn.role-hidden,
+#settingsModal .settings-section.role-hidden,
+#settingsModal .settings-group.role-hidden,
+#settingsModal .user-settings-tab-btn.role-hidden {
+	display: none !important;
 }

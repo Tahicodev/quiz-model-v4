@@ -16,14 +16,14 @@ const router = Router();
 router.use(requireAuth, enforceTenant);
 
 /**
- * Teachers are confined to their own rows. Legacy unattributed rows
- * (created_by NULL = historically shared content) stay visible to them;
- * anything authored by another teacher is forbidden.
+ * Teachers are strictly confined to their own rows. Legacy unattributed
+ * rows (created_by NULL) are NOT visible to teachers — every teacher sees
+ * only the categories they authored; admins see all.
  */
 function assertOwnership(row, user) {
   if (!row) return;
   if (user.role !== ROLES.TEACHER) return;
-  if (row.created_by && row.created_by !== user.id) {
+  if (row.created_by !== user.id) {
     throw new ForbiddenError('Not your category');
   }
 }
@@ -33,7 +33,7 @@ router.get('/', validateQuery(CategoryFilterSchema), async (req, res, next) => {
     const { categorySvc } = getContainer();
     const { limit, offset, orderBy, direction, search, created_by, ...filters } = req.query;
     const or = req.user.role === ROLES.TEACHER
-      ? [{ created_by: req.user.id }, { created_by: null }]
+      ? [{ created_by: req.user.id }]
       : null;
     const result = await categorySvc.list(
       { ...filters, school_id: req.schoolId, ...(created_by && req.user.role !== ROLES.TEACHER ? { created_by } : {}), ...(or ? { or } : {}) },
@@ -46,7 +46,9 @@ router.get('/', validateQuery(CategoryFilterSchema), async (req, res, next) => {
 router.get('/tree', async (req, res, next) => {
   try {
     const { categorySvc } = getContainer();
-    const tree = await categorySvc.getTree(req.schoolId);
+    const tree = await categorySvc.getTree(req.schoolId, {
+      teacherId: req.user.role === ROLES.TEACHER ? req.user.id : null,
+    });
     res.json(tree);
   } catch (err) { next(err); }
 });
