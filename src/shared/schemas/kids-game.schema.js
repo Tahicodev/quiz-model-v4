@@ -63,6 +63,10 @@ export const KidsSessionCompleteSchema = z.object({
   score:        z.number().int().min(0),
   stars:        z.number().int().min(0).max(3),
   completed:    z.boolean().default(true),
+  // Optional Kids Championship link: the lobby opens play.html with
+  // ?championship=<id>, the player echoes it back on completion and the
+  // server records the (server-graded) score against that championship.
+  championship_id: z.string().uuid().optional(),
 });
 
 export const KidsBrowseSchema = z.object({

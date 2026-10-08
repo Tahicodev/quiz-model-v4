@@ -1440,6 +1440,13 @@ function clearAllSelectedForCategory() {
 /* This function was incorrectly placed here and has been removed - see category-management.js */
 
 function filterExams() {
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'examTeacherFilter',
+			'examTeacherFilterWrap',
+			() => filterExams(),
+		);
+	}
 	const searchEl = document.getElementById('examSearch');
 	const searchTerm = searchEl ? String(searchEl.value).toLowerCase() : '';
 	const filteredExams = exams.filter((exam) =>
@@ -1509,9 +1516,32 @@ function examHasValidQuestions(exam) {
 // Update exam list table
 function updateExamList(examsList = exams) {
 	const tbody = document.querySelector('#examList tbody');
-	const visibleExams = examsList.filter((exam) =>
-		window.Auth?.canAccessItem ? window.Auth.canAccessItem('exam', exam) : true,
-	);
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'examTeacherFilter',
+			'examTeacherFilterWrap',
+			() => filterExams(),
+		);
+	}
+	const examTeacherScope = window.TeacherFilter
+		? window.TeacherFilter.getSelectedTeacher('examTeacherFilter')
+		: '';
+	const visibleExams = examsList.filter((exam) => {
+		if (
+			window.Auth?.canAccessItem &&
+			!window.Auth.canAccessItem('exam', exam)
+		) {
+			return false;
+		}
+		if (
+			examTeacherScope &&
+			window.TeacherFilter &&
+			!window.TeacherFilter.matchesOwner(exam, examTeacherScope)
+		) {
+			return false;
+		}
+		return true;
+	});
 	console.log('updateExamList called with', visibleExams.length, 'exams');
 	if (!tbody) {
 		console.error('exam list tbody not found');
@@ -1537,12 +1567,24 @@ function updateExamList(examsList = exams) {
 			// Escape content
 			const safeName = escapeHtml(exam.name);
 
+			// Owner badge is admin-only (hidden via hide-owner-col CSS).
+			const ownerBadgeHtml = window.TeacherFilter
+				? window.TeacherFilter.ownerBadge(exam)
+				: '';
+
 			return `
             <tr data-id="${exam.id}">
+                <td class="checkbox-cell" data-label="Select">
+                    <input type="checkbox"
+                        class="exam-checkbox"
+                        data-id="${exam.id}"
+                        onchange="toggleBulkRowSelection(this,'exams')">
+                </td>
                 <td>${safeName}</td>
                 <td>${dateCreated}</td>
                 <td>${questionCount}</td>
                 <td>${duration} min</td>
+                <td class="owner-col" data-label="By">${ownerBadgeHtml}</td>
                 <td class="actions-cell">
                     <div class="exam-actions">
                         <button class="exam-action-btn exam-edit-btn" onclick="editExam('${
@@ -1601,6 +1643,18 @@ function updateExamList(examsList = exams) {
 		})
 		.join('');
 
+	// Owner badges are admin-only (see teacher-filter.js + hide-owner-col CSS).
+	const examTable = document.getElementById('examList');
+	if (examTable) {
+		const admin = window.TeacherFilter
+			? window.TeacherFilter.isAdminSession()
+			: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+		examTable.classList.toggle('hide-owner-col', !admin);
+	}
+
+	// Restore bulk selection (filter/sort safe) + refresh bulk bar
+	if (window.BulkSelect) window.BulkSelect.restore('exams');
+
 	// Add mobile click listeners after rows are rendered
 	visibleExams.forEach((exam) => {
 		const row = tbody.querySelector(`tr[data-id="${exam.id}"]`);
@@ -1608,6 +1662,7 @@ function updateExamList(examsList = exams) {
 			row.addEventListener('click', (e) => {
 				if (window.innerWidth > 768) return;
 				if (e.target.closest('button')) return;
+				if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
 				e.stopPropagation();
 
 				const safeName = escapeHtml(exam.name);
@@ -2303,6 +2358,74 @@ async function archiveExamLegacy(examId) {
 	}
 }
 
+// ============================================
+// BULK SELECTION - DELETE SELECTED (question-tab style)
+// Exams with recorded results cannot be hard-deleted (server rule), so
+// those are archived instead — results stay intact.
+// ============================================
+async function deleteSelectedExams() {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('exams')
+		: [];
+	const targets = ids.filter((id) =>
+		exams.some((e) => String(e.id) === String(id)),
+	);
+	if (!targets.length) {
+		showToast('No exams selected', 'error');
+		return;
+	}
+	const withResults = targets.filter((id) => countExamResults(id) > 0);
+	const deletable = targets.filter((id) => countExamResults(id) === 0);
+	let message = `Are you sure you want to delete ${targets.length} exam(s)?`;
+	if (withResults.length) {
+		message =
+			`${withResults.length} of the ${targets.length} selected exam(s) have recorded results and will be ARCHIVED (not deleted) so results are preserved.\n\n` +
+			`Continue with ${deletable.length} deletion(s) + ${withResults.length} archive(s)?`;
+	}
+	if (!confirm(message)) return;
+
+	let deleted = 0;
+	let archived = 0;
+	const failed = [];
+	for (const examId of deletable) {
+		try {
+			if (window.API && typeof window.API.remove === 'function') {
+				await window.API.remove('exams', examId);
+			}
+			exams = exams.filter((e) => String(e.id) !== String(examId));
+			deleted++;
+		} catch (apiErr) {
+			console.warn('[exams] bulk API delete failed:', apiErr);
+			failed.push(examId);
+		}
+	}
+	for (const examId of withResults) {
+		try {
+			const exam = exams.find((e) => String(e.id) === String(examId));
+			if (!exam) continue;
+			if (window.API && typeof window.API.update === 'function') {
+				await window.API.update('exams', examId, { status: 'archived' });
+			}
+			exam.status = 'archived';
+			archived++;
+		} catch (apiErr) {
+			console.warn('[exams] bulk archive failed:', apiErr);
+			failed.push(examId);
+		}
+	}
+	saveExams();
+	updateExamList();
+	if (window.BulkSelect) window.BulkSelect.clear('exams');
+	if (window.initDashboard) window.initDashboard();
+	const parts = [];
+	if (deleted) parts.push(`Deleted ${deleted}`);
+	if (archived) parts.push(`Archived ${archived}`);
+	showToast(
+		parts.length ? `${parts.join(', ')}!` : 'No exams changed',
+		failed.length ? 'error' : 'success',
+	);
+}
+
 function generateUUID() {
 	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
 		const r = (Math.random() * 16) | 0;
@@ -2963,6 +3086,7 @@ window.saveExam = saveExamForm;
 window.editExam = editExam;
 window.renderExamPresetSummary = renderExamPresetSummary;
 window.deleteExam = deleteExam;
+window.deleteSelectedExams = deleteSelectedExams;
 window.openAssignExamQuestions = openAssignExamQuestions;
 window.closeAssignExamQuestions = closeAssignExamQuestions;
 window.saveAssignExamQuestions = saveAssignExamQuestions;

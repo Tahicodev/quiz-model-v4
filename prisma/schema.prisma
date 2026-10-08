@@ -55,6 +55,7 @@ model School {
   teacherAssignments TeacherAssignment[]
   aiConfigs          AIConfig[]
   kidsGames          KidsGame[]
+  kidsChampionships  KidsChampionship[]
 }
 
 // ─── School Year Archives ────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ model User {
   teacherAssignments       TeacherAssignment[]
   kidsGames                KidsGame[]          @relation("KidsGameTeacher")
   kidsGameSessions         KidsGameSession[]   @relation("KidsSessionPlayer")
+  createdKidsChampionships KidsChampionship[]  @relation("KidsChampionshipCreator")
 
   @@unique([school_id, username])
   @@index([school_id])
@@ -403,6 +405,9 @@ model Tournament {
   description   String?
   status        String    @default("draft") // TOURNAMENT_STATUS constant
   settings_json String?
+  // Ordered question IDs the tournament scores against (JSON: string[]).
+  // Mirrors Game.question_ids so answers can be validated server-side.
+  question_ids  String    @default("[]")
   starts_at     DateTime?
   ends_at       DateTime?
   created_at    DateTime  @default(now())
@@ -452,6 +457,9 @@ model TournamentEntry {
   score         Float     @default(0)
   rank          Int?
   completed     Boolean   @default(false)
+  // Per-question answers, keyed by question id: { "<qid>": { value, correct } }.
+  // Makes answer submission idempotent and audit-friendly.
+  answers_json  String    @default("{}")
   registered_at DateTime  @default(now())
   completed_at  DateTime?
 
@@ -713,6 +721,59 @@ model KidsGameSession {
   @@index([school_id])
   @@index([tournament_id])
   @@index([created_at])
+}
+
+// ─── Kids Championship ──────────────────────────────────────────────────────
+// A kid-friendly tournament built on Kids Games — completely separate from
+// the collège/lycée Tournament stack (no rounds, brackets, multipliers).
+// A championship is a fixed list of published kids games ("challenges").
+// Kids join with a 4-char code + their first name (no login required).
+// Each challenge is worth up to 100 championship points (score percent),
+// the best run per challenge counts, so replays are encouraged.
+// Leaderboard: points desc → stars desc → challenges completed desc.
+model KidsChampionship {
+  id          String   @id @default(uuid())
+  school_id   String
+  creator_id  String?
+  name        String
+  emoji       String   @default("🏆")
+  description String?
+  code        String   @unique // 4-char join code, same alphabet as kids PINs
+  status      String   @default("active") // active | finished
+  game_ids    String   @default("[]")     // JSON array of KidsGame ids (challenge order)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  school  School  @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  creator User?   @relation("KidsChampionshipCreator", fields: [creator_id], references: [id], onDelete: SetNull)
+  scores  KidsChampionshipScore[]
+
+  @@index([school_id, status])
+  @@index([status])
+}
+
+// One row per player per challenge — best run wins (replay friendly).
+// player_name is the kid identity (first name typed at the lobby), so
+// anonymous PIN play scores exactly like logged-in play.
+model KidsChampionshipScore {
+  id              String   @id @default(uuid())
+  championship_id String
+  school_id       String
+  player_name     String
+  avatar          String?
+  game_id         String
+  points          Int      @default(0) // 0-100 challenge points (score %)
+  score           Int      @default(0) // raw in-game score of the best run
+  stars           Int      @default(0) // 0-3 star rating of the best run
+  session_id      String?  // the session that set this best
+  played_at       DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  championship KidsChampionship @relation(fields: [championship_id], references: [id], onDelete: Cascade)
+
+  @@unique([championship_id, player_name, game_id])
+  @@index([championship_id])
+  @@index([school_id])
 }
 
 // ─── AI Configurations ──────────────────────────────────────────────────────

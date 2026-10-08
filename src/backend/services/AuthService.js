@@ -50,15 +50,45 @@ export class AuthService {
    * @param {string} password
    * @returns {Promise<{ user: object, accessToken: string, refreshToken: string }>}
    */
-  async login(username, password, { ip = null, userAgent = null } = {}) {
+  async login(username, password, { ip = null, userAgent = null, schoolSlug = null, schoolId = null } = {}) {
     const parsed = LoginSchema.safeParse({ username, password });
     if (!parsed.success) {
       throw new ValidationError(parsed.error.flatten().fieldErrors);
     }
 
-    const { data: users } = await this.#repo.getAll('users', {
-      filters: { username: username.trim() },
+    // Tenant scoping: usernames are only unique per school, so resolving a
+    // login by username alone is ambiguous the moment two schools share an
+    // "admin". Prefer an explicit tenant (slug or id); otherwise fall back to
+    // the deployment's default school. Username-only lookup remains as a last
+    // resort for single-tenant installs that never set DEFAULT_SCHOOL_ID.
+    const trimmedUsername = String(username ?? '').trim();
+    let resolvedSchoolId = schoolId || null;
+    if (!resolvedSchoolId && schoolSlug) {
+      const { data: schools } = await this.#repo.getAll('schools', {
+        filters: { slug: String(schoolSlug).trim() },
+        limit: 1,
+      });
+      resolvedSchoolId = schools[0]?.id || null;
+    }
+    if (!resolvedSchoolId) resolvedSchoolId = process.env.DEFAULT_SCHOOL_ID || null;
+
+    const userFilters = { username: trimmedUsername };
+    if (resolvedSchoolId) userFilters.school_id = resolvedSchoolId;
+
+    let { data: users } = await this.#repo.getAll('users', {
+      filters: userFilters,
+      limit: 1,
     });
+    // The deployment default is a hint, not a tenant the caller chose: if it
+    // points at a school that does not hold this username (multi-school
+    // installs, DEFAULT_SCHOOL_ID left over from .env), fall back to the
+    // username-only lookup instead of rejecting a valid login outright.
+    if (!users.length && resolvedSchoolId && !schoolId && !schoolSlug) {
+      ({ data: users } = await this.#repo.getAll('users', {
+        filters: { username: trimmedUsername },
+        limit: 1,
+      }));
+    }
     const user = users[0];
     if (!user) {
       securityLog('login_failure', { username, reason: 'unknown_user', ip });

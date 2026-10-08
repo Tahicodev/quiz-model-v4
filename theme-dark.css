@@ -4925,6 +4925,13 @@ html[data-theme='dark'] #question-list-table tbody tr.question-row-selected {
 	border-color: rgb(32, 103, 182);
 	background: rgb(31, 57, 91);
 }
+html[data-theme='dark'] #categoryList tbody tr.question-row-selected,
+html[data-theme='dark'] #examList tbody tr.question-row-selected,
+html[data-theme='dark'] #classList tbody tr.question-row-selected,
+html[data-theme='dark'] #results-table tbody tr.question-row-selected {
+	border-color: rgb(32, 103, 182);
+	background: rgb(31, 57, 91);
+}
 html[data-theme='dark'] #question-list-table tbody tr.detail-row td {
 	border: 1px solid rgb(32, 96, 182);
 	background: var(--bg-surface);

@@ -680,25 +680,85 @@
 	}
 
 	// Teacher → class assignments persisted server-side in the settings table
-	// (key "teacherClassAssignments": { userId: [classId, ...] }). The local
-	// mirror is written by saveUserForm and refreshed by bootstrap.
-	function getTeacherClassAssignments() {
+	// (key "teacherClassAssignments": { userId: [classId, ...] }).
+	//
+	// Freshness contract (a stale map hides real students/classes, so read
+	// order matters). The canonical class list for a teacher is the UNION
+	// of the fresher assignments map and their user row:
+	// - repo settings cache — rewritten on every bootstrap, and bootstrap
+	//   delivers the settings rows to all roles. This is how a
+	//   server-side change (e.g. a teacher auto-assigned on class
+	//   creation) reaches browsers;
+	// - localStorage mirror — only newer than the repo inside a tab that
+	//   just saved/refreshed assignments itself (tracked by the
+	//   quizTeacherClassAssignmentsDirty session flag, cleared on every
+	//   bootstrap).
+	// Every writer (user-modal save, class create/delete merges) updates
+	// the row and the mirror together, so the union can't resurrect a
+	// deliberately removed class — while a stale single source can no
+	// longer hide one either.
+	function readAssignmentsMirror() {
 		try {
 			const raw = localStorage.getItem('quizTeacherClassAssignments');
 			const parsed = raw ? JSON.parse(raw) : {};
 			return parsed && typeof parsed === 'object' ? parsed : {};
-		} catch (e) {
+		} catch (_) {
 			return {};
 		}
 	}
+	function readAssignmentsRepo() {
+		try {
+			const repo =
+				window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+			if (repo && typeof repo.getValue_sync === 'function') {
+				const raw = repo.getValue_sync('settings', {});
+				const row = Array.isArray(raw?.settings)
+					? raw.settings.find(
+							(s) => s && s.key === 'teacherClassAssignments',
+						)
+					: null;
+				if (row?.value) {
+					const parsed = JSON.parse(row.value);
+					if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+						return parsed;
+					}
+				}
+			}
+		} catch (_) {
+			/* fall through */
+		}
+		return null;
+	}
+	function assignmentsMirrorIsDirty() {
+		try {
+			return (
+				sessionStorage.getItem('quizTeacherClassAssignmentsDirty') === '1'
+			);
+		} catch (_) {
+			return false;
+		}
+	}
+	function fresherAssignmentsMap() {
+		if (assignmentsMirrorIsDirty()) return readAssignmentsMirror();
+		return readAssignmentsRepo() || readAssignmentsMirror();
+	}
+	function assignedTeacherClassIds(teacherId) {
+		const key = String(teacherId || '');
+		if (!key) return [];
+		const map = fresherAssignmentsMap();
+		const fromMap = Array.isArray(map[key]) ? map[key].map(String) : [];
+		const teacher = getUsers().find(
+			(u) => String(u.id) === key && u.role === ROLE_TEACHER,
+		);
+		const fromRow = Array.isArray(teacher?.classIds)
+			? teacher.classIds.map(String)
+			: [];
+		return [...new Set([...fromMap, ...fromRow])];
+	}
 
 	function getTeacherClassIds(user = currentUser) {
-		const own = Array.isArray(user?.classIds) ? user.classIds : [];
-		if (own.length > 0) return own;
-		// Fallback: the local assignments mirror (survives reloads even when
-		// the users row lost its classIds during a sync round trip).
-		const mirrored = getTeacherClassAssignments()[user?.id || ''];
-		return Array.isArray(mirrored) ? mirrored : [];
+		const own = Array.isArray(user?.classIds) ? user.classIds.map(String) : [];
+		return [...new Set([...own, ...assignedTeacherClassIds(user?.id)])];
 	}
 
 	function getAccessibleClasses() {
@@ -1878,18 +1938,87 @@
 		return importUsersWithClasses();
 	}
 
+	function refreshUserTeacherFilter() {
+		const teacherFilter = document.getElementById('userTeacherFilter');
+		const group = document.getElementById('userTeacherFilterGroup');
+		// Teachers already see only their own students — this view is for admins.
+		if (group) group.hidden = !isAdmin();
+		if (!teacherFilter) return;
+		const current = teacherFilter.value;
+		const teachers = getUsers()
+			.filter((u) => u.role === ROLE_TEACHER)
+			.sort((a, b) =>
+				String(a.name || a.username || '').localeCompare(
+					String(b.name || b.username || ''),
+				),
+			);
+		teacherFilter.innerHTML =
+			'<option value="">All Teachers</option>' +
+			teachers
+				.map(
+					(t) =>
+						`<option value="${escapeHtml(t.id)}">${escapeHtml(
+							t.name || t.username || 'Teacher',
+						)}</option>`,
+				)
+				.join('');
+		const hasCurrent =
+			!current || teachers.some((t) => String(t.id) === String(current));
+		teacherFilter.value = hasCurrent ? current : '';
+	}
+
+	// Admin "view as teacher" scope: the picked teacher's assigned classes.
+	// Source of truth is the teacherClassAssignments setting mirror; falls
+	// back to the teacher row's own classIds for older caches. Null = no
+	// teacher picked (or dropdown absent).
+	function getSelectedTeacherScope() {
+		const teacherFilter = document.getElementById('userTeacherFilter');
+		const teacherId = teacherFilter ? String(teacherFilter.value || '') : '';
+		if (!teacherId) return null;
+		return { teacherId, classIds: assignedTeacherClassIds(teacherId) };
+	}
+
+	// Inverse index: class id → assigned teacher names, from the same
+	// canonical union as every other teacher-scope reader. Built once
+	// per render.
+	function buildTeacherNamesByClass() {
+		const users = getUsers();
+		const teacherRows = users.filter((u) => u.role === ROLE_TEACHER);
+		const nameById = new Map(
+			teacherRows.map((t) => [String(t.id), t.name || t.username || 'Teacher']),
+		);
+		const byClass = new Map();
+		teacherRows.forEach((t) => {
+			const tid = String(t.id);
+			assignedTeacherClassIds(tid).forEach((cid) => {
+				if (!cid) return;
+				const key = String(cid);
+				if (!byClass.has(key)) byClass.set(key, []);
+				byClass.get(key).push(nameById.get(tid));
+			});
+		});
+		return byClass;
+	}
+
 	function refreshUserClassFilter() {
 		const classFilter = document.getElementById('userClassFilter');
 		if (!classFilter) return;
 		const current = classFilter.value;
 		const classes = getAccessibleClasses();
+		// With a teacher picked, the Class dropdown shows only their classes.
+		const teacherScope = isAdmin() ? getSelectedTeacherScope() : null;
+		const scoped = teacherScope
+			? classes.filter((cls) =>
+					teacherScope.classIds.includes(String(cls.id)),
+				)
+			: classes;
 		const options = [
 			{ value: '', label: 'All Classes' },
 			{
 				value: USER_CLASS_GUEST_VALUE,
 				label: `${GUEST_CLASS_NAME} (no class)`,
 			},
-			...classes.map((cls) => ({
+			...scoped.map((cls) => ({
 				value: cls.id,
 				label: cls.name,
 			})),
@@ -1975,6 +2104,14 @@
 			);
 		} else if (scope.mode === 'guest') {
 			scopedClasses = [];
+		}
+		// Teacher-view export ("current filters"): only their classes —
+		// the students were already narrowed by getFilteredUsers above.
+		const exportTeacherScope = isAdmin() ? getSelectedTeacherScope() : null;
+		if (exportTeacherScope && scope.mode === 'all') {
+			scopedClasses = scopedClasses.filter((cls) =>
+				exportTeacherScope.classIds.includes(String(cls.id)),
+			);
 		}
 
 		const guestUsers = scopedStudents.filter((u) => !u.classId);
@@ -2096,6 +2233,14 @@
 			);
 		} else if (scope.mode === 'guest') {
 			scopedClasses = [];
+		}
+		// Teacher-view export: only their classes (students and teacher rows
+		// were already narrowed by getFilteredUsers above).
+		const exportAllTeacherScope = isAdmin() ? getSelectedTeacherScope() : null;
+		if (exportAllTeacherScope && scope.mode === 'all') {
+			scopedClasses = scopedClasses.filter((cls) =>
+				exportAllTeacherScope.classIds.includes(String(cls.id)),
+			);
 		}
 
 		const guestUsers = scopedStudents.filter((u) => !u.classId);
@@ -2685,10 +2830,26 @@
 		const role = roleFilter?.value || '';
 		const status = statusFilter?.value || '';
 		const classScope = classFilter?.value || '';
+		// Admin "view as teacher": show the teacher's own row plus the
+		// students of their assigned classes. Combines with the other
+		// filters (e.g. Role=Student → just their students).
+		const teacherScope = getSelectedTeacherScope();
+		// Teacher-name search: build the inverse index only when needed.
+		const teacherNamesByClass = term ? buildTeacherNamesByClass() : null;
 
 		return users.filter((u) => {
 			if (role && u.role !== role) return false;
 			if (status && u.status !== status) return false;
+			if (teacherScope) {
+				if (String(u.id) === teacherScope.teacherId) {
+					// keep the teacher row itself — fall through to search
+				} else if (
+					u.role !== ROLE_STUDENT ||
+					!teacherScope.classIds.includes(String(u.classId || ''))
+				) {
+					return false;
+				}
+			}
 			if (classScope) {
 				if (classScope === USER_CLASS_GUEST_VALUE) {
 					if (u.role !== ROLE_STUDENT || u.classId) return false;
@@ -2702,13 +2863,18 @@
 				}
 			}
 
-			if (!term) return true;
+		if (!term) return true;
+			const termTeacherNames =
+				u.role === ROLE_STUDENT && teacherNamesByClass
+					? teacherNamesByClass.get(String(u.classId || '')) || []
+					: [];
 			const haystack = [
 				u.name,
 				u.username,
 				u.studentNumber,
 				u.className,
 				u.role,
+				...termTeacherNames,
 			]
 				.filter(Boolean)
 				.join(' ')
@@ -2724,6 +2890,7 @@
 		// the Role column is hidden via CSS (admins keep the full table).
 		const usersTable = document.getElementById('usersTable');
 		if (usersTable) usersTable.classList.toggle('teacher-view', isTeacher());
+		refreshUserTeacherFilter();
 		refreshUserClassFilter();
 
 		const classes = safeJsonParse(
@@ -2761,12 +2928,25 @@
 
 		if (users.length === 0) {
 			tableBody.innerHTML =
-				'<tr><td colspan="8" class="text-center">No users found.</td></tr>';
+				'<tr><td colspan="9" class="text-center">No users found.</td></tr>';
 			updateBulkSelectionState();
 			return;
 		}
 
 		const emptyCell = '<span class="text-muted">-</span>';
+
+		// Per-class student totals over the whole roster (not the filtered
+		// view) for the teacher rows' Student # cells.
+		const studentCountByClass = new Map();
+		getUsers().forEach((x) => {
+			if (x.role === ROLE_STUDENT && x.classId) {
+				const key = String(x.classId);
+				studentCountByClass.set(key, (studentCountByClass.get(key) || 0) + 1);
+			}
+		});
+
+		// Teacher names per class for the Teacher column (and search).
+		const teacherNamesByClass = buildTeacherNamesByClass();
 
 		tableBody.innerHTML = users
 			.map((u) => {
@@ -2786,10 +2966,43 @@
 				const statusClass =
 					u.status === 'disabled' ? 'btn-secondary' : 'btn-danger-soft';
 				const className = resolveUserClassName(u, classMap);
-				const classDisplay =
-					u.role === ROLE_STUDENT ? className || GUEST_CLASS_NAME : '';
-				const studentNumberDisplay =
-					u.role === ROLE_STUDENT ? u.studentNumber || '' : '';
+				let classCellHtml = emptyCell;
+				let studentNumberCellHtml = emptyCell;
+				if (u.role === ROLE_STUDENT) {
+					if (u.studentNumber) {
+						studentNumberCellHtml = escapeHtml(u.studentNumber);
+					}
+					classCellHtml = escapeHtml(className || GUEST_CLASS_NAME);
+				} else if (u.role === ROLE_TEACHER) {
+					// Their classes — or an explicit empty state when none are
+					// assigned yet — plus their total student count.
+					const teacherClassIds = assignedTeacherClassIds(u.id);
+					const teacherClassNames = teacherClassIds
+						.map((id) => classMap.get(String(id)))
+						.filter(Boolean);
+					classCellHtml = teacherClassNames.length
+						? escapeHtml(teacherClassNames.join(', '))
+						: '<span class="text-muted">No class assigned</span>';
+					const total = teacherClassIds.reduce(
+						(sum, id) => sum + (studentCountByClass.get(String(id)) || 0),
+						0,
+					);
+					studentNumberCellHtml =
+						'<span title="' +
+						total +
+						' student' +
+						(total === 1 ? '' : 's') +
+						' assigned">' +
+						total +
+						'</span>';
+				}
+				const rowTeachers =
+					u.role === ROLE_STUDENT
+						? teacherNamesByClass.get(String(u.classId || '')) || []
+						: [];
+				const teacherCellHtml = rowTeachers.length
+					? escapeHtml(rowTeachers.join(', '))
+					: emptyCell;
 				const usernameDisplay =
 					u.role === ROLE_STUDENT &&
 					u.studentNumber &&
@@ -2815,8 +3028,9 @@
 						</td>
             <td>${escapeHtml(getUserDisplayName({ title: u.title, name: baseName }) || baseName)}</td>
             <td>${usernameDisplay ? escapeHtml(usernameDisplay) : emptyCell}</td>
-            <td>${studentNumberDisplay ? escapeHtml(studentNumberDisplay) : emptyCell}</td>
-            <td>${classDisplay ? escapeHtml(classDisplay) : emptyCell}</td>
+            <td>${studentNumberCellHtml}</td>
+            <td>${classCellHtml}</td>
+            <td>${teacherCellHtml}</td>
             <td><span class="user-role ${escapeHtml(u.role)}">${roleLabel}</span></td>
             <td><span class="${statusBadge}">${escapeHtml(statusLabel)}</span></td>
             <td>
@@ -2848,6 +3062,48 @@
 			})
 			.join('');
 		updateBulkSelectionState();
+		maybeRefreshTeacherAssignments();
+	}
+
+	// One attempt per picked teacher: if the admin chose a teacher but local
+	// caches resolve zero classes (stale session — the assignment changed
+	// server-side after this browser bootstrapped), pull the admin settings
+	// once and re-render. Teachers can't use this path (the assignments key
+	// is admin-visibility); their freshness comes from bootstrap plus the
+	// class-creation merge in class-management.js.
+	let teacherAssignmentsRefreshFor = null;
+	function maybeRefreshTeacherAssignments() {
+		if (!isAdmin()) return;
+		const sel = document.getElementById('userTeacherFilter');
+		const teacherId = sel ? String(sel.value || '') : '';
+		if (!teacherId) {
+			teacherAssignmentsRefreshFor = null;
+			return;
+		}
+		const scope = getSelectedTeacherScope();
+		if (scope && scope.classIds.length) return;
+		if (teacherAssignmentsRefreshFor === teacherId) return;
+		if (!window.API || typeof window.API.raw !== 'function') return;
+		teacherAssignmentsRefreshFor = teacherId;
+		window.API.raw('GET', '/settings/admin')
+			.then((res) => {
+				const rows = Array.isArray(res) ? res : res?.data || res?.settings || [];
+				const row = rows.find((s) => s && s.key === 'teacherClassAssignments');
+				if (!row?.value) return;
+				const parsed = JSON.parse(row.value);
+				if (!parsed || typeof parsed !== 'object') return;
+				try {
+					localStorage.setItem(
+						'quizTeacherClassAssignments',
+						JSON.stringify(parsed),
+					);
+					sessionStorage.setItem('quizTeacherClassAssignmentsDirty', '1');
+				} catch (_) {}
+				renderUsersTable();
+			})
+			.catch(() => {
+				/* keep the stale view; a page refresh will heal it */
+			});
 	}
 
 	function updateBulkSelectionState() {
@@ -3119,9 +3375,17 @@
 			// .custom-checkmark from styles.css) so the box is actually visible.
 			// The native input stays zero-sized and is toggled by the
 			// makeCheckboxItemsClickable() label handler in admin-main.js.
-			const assignedClassIds = Array.isArray(user?.classIds)
-				? user.classIds
-				: getTeacherClassAssignments()[user?.id] || [];
+			// UNION of every local source: the row alone can be stale (a class
+			// assigned server-side after this browser cached the row), and
+			// the map alone can lag a just-completed modal save. Saving the
+			// union back can never wipe a class the way a stale single
+			// source does.
+			const assignedClassIds = [
+				...new Set([
+					...(Array.isArray(user?.classIds) ? user.classIds : []),
+					...assignedTeacherClassIds(user?.id),
+				].map(String)),
+			];
 			teacherClassList.innerHTML = classes
 				.map((c) => {
 					const checked = assignedClassIds.includes(c.id) ? 'checked' : '';
@@ -3516,8 +3780,13 @@
 							});
 						}
 						// Mirror locally so the modal shows the right state
-						// before the next bootstrap.
+						// before the next bootstrap — and mark this tab's
+						// mirror as newer than the repo cache (see
+						// getTeacherClassAssignments) until bootstrap clears it.
 						localStorage.setItem('quizTeacherClassAssignments', serialized);
+						try {
+							sessionStorage.setItem('quizTeacherClassAssignmentsDirty', '1');
+						} catch (_) {}
 					} catch (assignmentErr) {
 						console.warn(
 							'[auth] teacher class assignments save failed:',
@@ -5323,6 +5592,11 @@
 			classFilter.addEventListener('change', () => renderUsersTable());
 		}
 
+		const teacherFilter = document.getElementById('userTeacherFilter');
+		if (teacherFilter) {
+			teacherFilter.addEventListener('change', () => renderUsersTable());
+		}
+
 		bindAuthPasswordToggles();
 		setStudentAuthMode('signin');
 
@@ -5450,6 +5724,11 @@
 	window.closeResetPasswordModal = closeResetPasswordModal;
 	window.renderUsersTable = renderUsersTable;
 	window.addEventListener('quiz:bootstrap-ready', () => {
+		// Fresh repo settings just landed — they outrank any tab-local
+		// mirror from here on (see getTeacherClassAssignments).
+		try {
+			sessionStorage.removeItem('quizTeacherClassAssignmentsDirty');
+		} catch (_) {}
 		renderUsersTable();
 		renderProfileRequests();
 		renderAccountRequests();

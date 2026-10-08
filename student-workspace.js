@@ -7504,10 +7504,28 @@
 					t?.kidsGame &&
 					['open', 'active'].includes(String(t.status || '').toLowerCase()),
 			);
-			if (!games.length && !kidsTournaments.length) {
-				box.innerHTML = '';
-				return;
-			}
+			// The championship lives at /kids/championship (code-based, no
+			// login). Students don't need the roster API — just the door.
+			const champCard = `
+				<a class="game-card championship-cta open" href="/kids/championship" style="text-decoration:none">
+					<div class="game-card-header">
+						<div>
+							<h3>🏆 Kids Championship</h3>
+							<p class="game-type-badges">
+								<span class="game-badge">Class Challenge</span>
+								<span class="game-badge ghost">Be the champion!</span>
+							</p>
+						</div>
+						<span class="game-pill open">Join</span>
+					</div>
+					<div class="game-meta">
+						<span>Play every challenge</span>
+						<span>100 points each</span>
+					</div>
+					<div class="game-actions">
+						<span class="workspace-btn small">Open Championship ⭐</span>
+					</div>
+				</a>`;
 			const gameCards = games
 				.map(
 					(g) => `
@@ -7558,7 +7576,7 @@
 					<h3>Kids Games</h3>
 					<p>Playful games from your teachers — results count like every other game.</p>
 				</div>
-				<div class="game-card-list">${tournamentCards}${gameCards}</div>`;
+				<div class="game-card-list">${champCard}${tournamentCards}${gameCards}</div>`;
 		} catch (_) {
 			if (myToken === kidsSectionToken) box.innerHTML = '';
 		}

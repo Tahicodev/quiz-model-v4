@@ -32,6 +32,19 @@ describe('ClassService', () => {
         .rejects.toBeInstanceOf(ForbiddenError);
     });
 
+    it('allows teachers to create classes (stamps their school)', async () => {
+      repo.create.mockResolvedValue({ id: 'c-2', name: 'Class B', school_id: 's-1' });
+      const result = await service.create(
+        { name: 'Class B' },
+        { id: 'u-9', role: ROLES.TEACHER, school_id: 's-1' },
+      );
+      expect(result.name).toBe('Class B');
+      expect(repo.create).toHaveBeenCalledWith('classes', expect.objectContaining({
+        name: 'Class B',
+        school_id: 's-1',
+      }));
+    });
+
     it('creates a class successfully', async () => {
       repo.create.mockResolvedValue({ id: 'c-1', name: 'Class A' });
       const result = await service.create({ name: 'Class A' }, ADMIN);

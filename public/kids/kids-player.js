@@ -201,6 +201,10 @@
 			var q = new URLSearchParams(window.location.search).get('tournament');
 			return q ? String(q) : null;
 		},
+		championshipFromUrl: function () {
+			var q = new URLSearchParams(window.location.search).get('championship');
+			return q ? String(q) : null;
+		},
 		/** Logged-in students play linked (results count); else anonymous PIN. */
 		storedToken: function () {
 			try {
@@ -246,6 +250,7 @@
 			var n = (this.game.questions || []).length;
 			var badges = '';
 			if (this.tournamentFromUrl()) badges += '<p class="hint">Tournament mode 🏆 — your score feeds the leaderboard!</p>';
+			if (this.championshipFromUrl()) badges += '<p class="hint">Kids Championship 🏆 — this run counts for your best score, so every point helps!</p>';
 			if (this.storedToken()) badges += '<p class="hint">Logged in ✅ — your score will count like every other game!</p>';
 			var html = '<div class="kid-card"><h2>Hi! 👋</h2>' +
 				'<p class="hint">This game has <b>' + n + '</b> question' + (n === 1 ? '' : 's') + '. What is your first name?</p>' + badges +
@@ -270,6 +275,20 @@
 			};
 			document.getElementById('kidStart').addEventListener('click', start);
 			document.getElementById('kidName').addEventListener('keydown', function (e) { if (e.key === 'Enter') start(); });
+			// Championship flow: pre-fill the lobby identity so the kid only
+			// has to press Start (no retyping their name + avatar).
+			if (this.championshipFromUrl()) {
+				try {
+					var pre = JSON.parse(localStorage.getItem('kidChampionshipPlayer') || 'null');
+					if (pre && pre.name) {
+						document.getElementById('kidName').value = pre.name;
+						if (pre.avatar) {
+							chosen = pre.avatar;
+							document.querySelectorAll('.kid-avatar').forEach(function (x) { x.classList.toggle('selected', x.dataset.a === pre.avatar); });
+						}
+					}
+				} catch (_) { /* ignore */ }
+			}
 		},
 		createSession: function () {
 			var self = this;
@@ -423,7 +442,13 @@
 			fetch(API + '/play/session/' + encodeURIComponent(this.sessionId), {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ answers_json: JSON.stringify(this.answers), score: this.score, stars: clientStars, completed: true }),
+				body: JSON.stringify({
+					answers_json: JSON.stringify(this.answers),
+					score: this.score,
+					stars: clientStars,
+					completed: true,
+					championship_id: this.championshipFromUrl() || undefined,
+				}),
 			}).then(function (r) { return r.json(); })
 				.then(function (res) { self.results(res); })
 				.catch(function () { self.results({ score: self.score, stars: clientStars, totalPoints: totalPoints, percent: 0 }); });
@@ -441,6 +466,7 @@
 					return '<span class="' + (i < stars ? 'lit' : 'dim') + '">⭐</span>';
 				}).join('') + '</div>' +
 				'<p class="hint">Score: <b>' + res.score + '</b> / ' + total + ' questions</p>' +
+				championshipStrip(res) +
 				'<img class="kid-badge" id="kidBadge" alt="Badge" style="display:none" />' +
 				'<div><button class="kid-btn green" id="kidAgain">Play Again 🔁</button> ' +
 				'<a class="kid-btn" href="/kids/">New PIN</a></div></div>';
@@ -458,6 +484,21 @@
 				self.index = 0; self.answers = []; self.score = 0;
 				self.createSession();
 			});
+			function championshipStrip(res) {
+				var ch = res.championship;
+				if (!ch || !ch.recorded) return '';
+				var my = ch.my;
+				var back = '/kids/championship?id=' + encodeURIComponent(self.championshipFromUrl());
+				var rank = my
+					? 'You are <b>#' + my.rank + '</b>' +
+						(my.rank === 1 ? ' — champion of the championship! 🏆' : ' of ' + (ch.leaderboard ? ch.leaderboard.length : '?') + ' players')
+					: '';
+				return '<div class="kid-champ-strip">🏆 <b>+' + ch.points + ' pts</b>' +
+					(ch.improved ? ' — your best yet! 🎉' : '') +
+					'<br>' + rank + '</div>' +
+					'<a class="kid-btn" href="' + escapeName(back) + '">Back to Championship 🏆</a>';
+			}
+
 			function escapeName(s) {
 				return String(s).replace(/[&<>"']/g, function (c) {
 					return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];

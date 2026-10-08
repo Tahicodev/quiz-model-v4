@@ -5,7 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { recordRequest } from './server-metrics.js';
@@ -140,17 +140,27 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-// Stricter rate limit for auth endpoints (login, register, refresh)
-const authLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 20,
-	standardHeaders: true,
-	legacyHeaders: false,
-	message: {
-		code: 'RATE_LIMITED',
-		message: 'Too many authentication attempts. Try again later.',
-	},
-});
+// Rate limit for auth endpoints (login, register, refresh). Successful
+// requests are NOT counted, so a classroom logging in from one NAT/proxy can't
+// lock itself out; only failed attempts accumulate. Keyed per IP+username so
+// one student's typos never throttle another's. Bypassed under test and when
+// RATE_LIMIT_DISABLED=true (recommended for trusted LAN installs).
+const authLimiter =
+	process.env.NODE_ENV === 'test' || process.env.RATE_LIMIT_DISABLED === 'true'
+		? (req, res, next) => next()
+		: rateLimit({
+			windowMs: 15 * 60 * 1000, // 15 minutes
+			max: 50,
+			skipSuccessfulRequests: true,
+			keyGenerator: (req) =>
+				`${ipKeyGenerator(req.ip)}:${String(req.body?.username ?? '').trim().toLowerCase()}`,
+			standardHeaders: true,
+			legacyHeaders: false,
+			message: {
+				code: 'RATE_LIMITED',
+				message: 'Too many authentication attempts. Try again later.',
+			},
+		});
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
@@ -187,6 +197,7 @@ import archivesRoutes from './routes/archives.routes.js';
 import exportsRoutes from './routes/exports.routes.js';
 import importsRoutes from './routes/imports.routes.js';
 import kidsRoutes from './routes/kids.routes.js';
+import kidsChampionshipsRoutes from './routes/kids-championships.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -260,6 +271,18 @@ app.get('/kids/play/:pin', (req, res) => {
 	}
 });
 
+// Kids Championship lobby — kid-friendly tournament (join code entry,
+// podium, challenges). Served as plain static HTML like the other pages.
+const kidsChampionshipPath = resolve(__dirname, '../../public/kids/championship.html');
+
+app.get(['/kids/championship', '/kids/championship/'], (req, res) => {
+	try {
+		res.type('html').send(readEntryHtml(kidsChampionshipPath));
+	} catch {
+		res.status(404).json({ code: 'NOT_FOUND', message: 'Kids championship not installed' });
+	}
+});
+
 app.use('/api/v1/auth', authLimiter, authRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/classes', classesRoutes);
@@ -288,6 +311,7 @@ app.use('/api/v1/teacher-assignments', teacherAssignmentRoutes);
 app.use('/api/v1/archives', archivesRoutes);
 app.use('/api/v1/exports', exportsRoutes);
 app.use('/api/v1/imports', importsRoutes);
+app.use('/api/v1/kids/championships', kidsChampionshipsRoutes);
 app.use('/api/v1/kids', kidsRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────

@@ -8,9 +8,11 @@ import { enforceTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/role.js';
 import { validate, validateQuery } from '../middleware/validate.js';
 import { TournamentCreateSchema, TournamentUpdateSchema, TournamentFilterSchema, TournamentAnswerSchema } from '../../shared/schemas/tournament.schema.js';
-import { ROLES } from '../../shared/constants.js';
+import { ROLES, SOCKET_EVENTS } from '../../shared/constants.js';
 import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
+import { getIO } from '../realtime/socket.server.js';
+import { ROOM } from '../realtime/socket.rooms.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -181,6 +183,18 @@ router.post('/:id/answer', validate(TournamentAnswerSchema), async (req, res, ne
       questionId: req.body.question_id,
       answer: req.body.answer,
     });
+    // REST answers are the socket fallback — broadcast the refreshed
+    // leaderboard so every peer (and a room made entirely of REST clients)
+    // stays current, mirroring the socket handler's TOURNAMENT_SCORES emit.
+    try {
+      const io = getIO();
+      io.to(ROOM.tournament(req.params.id)).emit(
+        SOCKET_EVENTS.TOURNAMENT_SCORES,
+        await tournamentSvc.getLeaderboard(req.params.id),
+      );
+    } catch {
+      // Socket.io not initialized (tests / maintenance) — REST path still works.
+    }
     res.json(result);
   } catch (err) { next(err); }
 });

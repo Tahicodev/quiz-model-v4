@@ -99,6 +99,25 @@ function parseJson(value, fallback) {
 }
 
 /**
+ * Students receive a projected view of learning content: the correct `answer`
+ * and the `explanation` must never reach a student browser (they would be
+ * readable from the cache even before the question is shown). Strip them from
+ * both the flat question bank and every game's embedded question list.
+ */
+function stripStudentQuestion({ answer, explanation, ...rest }) {
+  return rest;
+}
+
+function sanitizeStudentPayload(payload) {
+  payload.questions = (payload.questions || []).map(stripStudentQuestion);
+  payload.games = (payload.games || []).map((game) => ({
+    ...game,
+    questions: (game.questions || []).map(stripStudentQuestion),
+  }));
+  return payload;
+}
+
+/**
  * Restore question metadata that the Prisma schema cannot store. The write
  * paths (api-client.js mapper, bulk.routes.js sanitizer) encode the legacy
  * flags (allowMultipleAnswers, isDraggable, odd-one-out, code metadata)
@@ -472,11 +491,32 @@ router.get('/', async (req, res, next) => {
       if (isStudent && SKIP_FOR_STUDENT.has(table)) { data[table] = []; continue; }
       try {
         const query = queryForTable(table, req.schoolId);
+        // Settings are always filtered by visibility. SYSTEM-visibility rows
+        // (recovery-code hash, backup key) must never reach ANY client - not
+        // even an admin's browser cache. Students see public settings only;
+        // staff see public/teacher/admin.
+        if (table === 'settings') {
+          query.filters.visibility = isStudent
+            ? 'public'
+            : { in: ['public', 'teacher', 'admin'] };
+        }
         // Role-scoped narrowing on top of the school filter.
         if (isStudent) {
           if (table === 'profile_requests') query.filters.user_id = req.user.id;
           if (table === 'teacher_messages' || table === 'teacher_assignments') {
             query.filters.class_id = req.user.class_id ?? '__none__';
+          }
+          // A student may see only their own class's roster plus themselves -
+          // never other classes, never staff. Enforced server-side because the
+          // legacy workspace historically trusted the full user list. The two
+          // conditions go through `or` (an OR group, not a filter): `or` is
+          // AND-ed with the school filter, so putting `class_id` in `filters`
+          // as well would collapse it to "only myself".
+          if (table === 'users') {
+            query.or = [
+              { class_id: req.user.class_id ?? '__none__' },
+              { id: req.user.id },
+            ];
           }
         }
         // Teachers receive only their own bank rows. Legacy unattributed
@@ -501,6 +541,10 @@ router.get('/', async (req, res, next) => {
           ];
           stripPasswords = true;
         }
+        // A student's browser only ever displays the roster: bcrypt hashes
+        // must never land in its localStorage cache (they are offline-crackable
+        // and were shipped with the legacy full-user-list payload).
+        if (isStudent && table === 'users') stripPasswords = true;
         const { data: rows } = await repo.getAll(table, { ...query, limit: 100000 });
         // Teachers receive only requests in their scope: profile requests of
         // students they can manage, account requests targeting their classes.
@@ -579,7 +623,11 @@ router.get('/', async (req, res, next) => {
         ['open', 'active', 'finished'].includes(tournament.status),
       );
     }
-    res.json({ school_id: req.schoolId, data: hydrateLegacyPayload(data) });
+    const payload = hydrateLegacyPayload(data);
+    res.json({
+      school_id: req.schoolId,
+      data: isStudent ? sanitizeStudentPayload(payload) : payload,
+    });
   } catch (err) {
     next(err);
   }

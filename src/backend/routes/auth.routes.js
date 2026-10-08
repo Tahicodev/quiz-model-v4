@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { logger, securityLog } from '../logger.js';
 import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
@@ -18,14 +18,19 @@ import { getContainer } from '../container.js';
 
 const router = Router();
 
-// Stricter rate limit for auth endpoints (10 requests per 15 minutes per IP).
-// Disabled under test (tests/setup.js pins NODE_ENV=test) — integration
-// tests make 15+ auth calls in a single file.
-const authLimiter = process.env.NODE_ENV === 'test'
+// Stricter rate limit for auth endpoints. Keyed per IP+username and counting
+// only FAILED attempts: a whole classroom logging in from one NAT/proxy — or a
+// student refreshing tabs — must never exhaust the budget, while brute-force
+// attempts still get throttled. Disabled under test and whenever
+// RATE_LIMIT_DISABLED is set (recommended for trusted LAN installs).
+const authLimiter = (process.env.NODE_ENV === 'test' || process.env.RATE_LIMIT_DISABLED === 'true')
   ? (req, res, next) => next()
   : rateLimit({
       windowMs: 15 * 60 * 1000,
-      max: 10,
+      max: 20,
+      skipSuccessfulRequests: true,
+      keyGenerator: (req) =>
+        `${ipKeyGenerator(req.ip)}:${String(req.body?.username ?? '').trim().toLowerCase()}`,
       standardHeaders: true,
       legacyHeaders: false,
       message: { code: 'RATE_LIMITED', message: 'Too many attempts, try again later' },
@@ -63,10 +68,11 @@ function refreshCookieName(portal) {
 router.post('/login', authLimiter, validate(LoginSchema), async (req, res, next) => {
 	try {
 		const { authSvc } = getContainer();
-		const { username, password, portal } = req.body;
+		const { username, password, portal, schoolSlug } = req.body;
 		const { user, accessToken, refreshToken } = await authSvc.login(username, password, {
 			ip: req.ip,
 			userAgent: req.headers['user-agent'],
+			schoolSlug,
 		});
 
 		// Set refresh token as httpOnly cookie (SaaS mode; in local mode it's optional)

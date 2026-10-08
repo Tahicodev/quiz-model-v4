@@ -3,7 +3,7 @@
  * Manages Class entities and student assignments.
  */
 
-import { NotFoundError, ForbiddenError, ValidationError }         from '../../shared/errors.js';
+import { NotFoundError, ForbiddenError, ValidationError, ConflictError } from '../../shared/errors.js';
 import { ClassCreateSchema, ClassUpdateSchema, ClassFilterSchema } from '../../shared/schemas/class.schema.js';
 import { ROLES }                                                   from '../../shared/constants.js';
 
@@ -28,6 +28,16 @@ export class ClassService {
     this.#requireAdmin(currentUser);
     const parsed = ClassCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    // Class names are unique within a school (see @@unique([school_id, name])).
+    // Check first so callers get a clean 409 with a readable message instead of
+    // an opaque unique-constraint error from the database.
+    const { data: duplicates } = await this.#repo.getAll('classes', {
+      filters: { school_id: currentUser?.school_id, name: parsed.data.name },
+      limit: 1,
+    });
+    if (duplicates?.length) {
+      throw new ConflictError(`A class named "${parsed.data.name}" already exists`);
+    }
     return this.#repo.create('classes', {
       ...parsed.data,
       school_id: currentUser?.school_id,
@@ -66,6 +76,30 @@ export class ClassService {
       await this.#repo.delete('exam_classes', ec.id);
     }
 
+    // Drop the class from every teacher's assignment list so the deleted
+    // id stops matching in teacher views (best-effort: never fail the
+    // delete itself because of this).
+    try {
+      const { data: settings } = await this.#repo.getAll('settings', {
+        filters: { school_id: existing.school_id, key: 'teacherClassAssignments' },
+        limit: 10,
+      });
+      for (const row of settings || []) {
+        let map = {};
+        try { map = JSON.parse(row.value || '{}') || {}; } catch { map = {}; }
+        let changed = false;
+        for (const teacherId of Object.keys(map)) {
+          if (Array.isArray(map[teacherId]) && map[teacherId].map(String).includes(String(id))) {
+            map[teacherId] = map[teacherId].map(String).filter((cid) => cid !== String(id));
+            changed = true;
+          }
+        }
+        if (changed) {
+          await this.#repo.update('settings', row.id, { value: JSON.stringify(map) });
+        }
+      }
+    } catch { /* ignore */ }
+
     await this.#repo.delete('classes', id);
   }
 
@@ -81,7 +115,7 @@ export class ClassService {
   }
 
   #requireAdmin(user) {
-    if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
+    if (!user || ![ROLES.ADMIN, ROLES.TEACHER].includes(user.role)) {
       throw new ForbiddenError();
     }
   }

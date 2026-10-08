@@ -96,6 +96,24 @@ publicRouter.patch('/session/:sessionId', attachUserIfPresent, validate(KidsSess
     const totalPoints = questions.reduce((sum, q) => sum + (Number(q.points) || 1), 0);
 
     const result = await kidsGameSvc.submitAnswers(req.params.sessionId, req.body, totalPoints, { userId: req.user?.id });
+
+    // Kids Championship: the lobby opens play.html with ?championship=<id>
+    // and the player echoes it back here. The score that gets recorded is
+    // the one submitAnswers just graded server-side — never the client's.
+    // A stale/foreign id degrades to { recorded:false } and play continues.
+    if (req.body.championship_id) {
+      try {
+        const { kidsChampionshipSvc } = getContainer();
+        result.championship = await kidsChampionshipSvc.recordScore({
+          championshipId: req.body.championship_id,
+          session,
+          score: result.score,
+          stars: result.stars,
+          totalPoints: result.totalPoints,
+        });
+      } catch { /* championship scoring must never break completion */ }
+    }
+
     res.json(result);
   } catch (err) { next(err); }
 });

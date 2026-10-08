@@ -11,10 +11,14 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.js'],
     setupFiles: ['tests/setup.js'],
-    // The Prisma contract test needs a moment to bring up its throwaway sqlite
-    // DB; give the whole suite a generous timeout rather than tuning per-test.
-    testTimeout: 20_000,
-    hookTimeout: 20_000,
+    // Each integration file boots its own throwaway sqlite DB by running
+    // `prisma migrate deploy` (a full child process). Vitest runs the files in
+    // parallel, so those child processes contend for CPU: a setup that takes
+    // ~4s alone measures ~13s under load, and before the module import of
+    // helpers/app.js the hook lands past the default 20s budget. The budget is
+    // for setup cost only — assertions are unchanged.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
     // Keep test output readable in a terminal.
     reporter: 'default',
   },

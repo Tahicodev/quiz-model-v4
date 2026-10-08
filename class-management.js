@@ -117,10 +117,22 @@ function promoteClassModal(modal) {
 	modal.style.setProperty('display', 'flex', 'important');
 	modal.style.setProperty('position', 'fixed', 'important');
 	modal.style.setProperty('inset', '0', 'important');
-	modal.style.setProperty('z-index', '2147483000', 'important');
+	// Escalating z-index: every promoted modal used to share one hardcoded
+	// value, so any two open modals tied and DOM order decided — opening an
+	// assign modal while another promoted modal was up could leave it
+	// hidden behind. The most recently opened modal always wins now.
+	modal.style.setProperty('z-index', String(nextModalZIndex()), 'important');
 	modal.style.setProperty('opacity', '1', 'important');
 	modal.style.setProperty('visibility', 'visible', 'important');
 	modal.style.setProperty('pointer-events', 'auto', 'important');
+}
+
+// Modal stacking order. Monotonic (never reused) and capped at the
+// previous hardcoded max, so long sessions can't wrap around.
+let modalTopZIndex = 3000;
+function nextModalZIndex() {
+	modalTopZIndex = Math.min(2147483000, modalTopZIndex + 10);
+	return modalTopZIndex;
 }
 
 // Generic open/close for the dedicated assign modals: same promotion treatment
@@ -360,6 +372,13 @@ function getStudentClassFilterValue() {
 	return value || 'all';
 }
 
+function getStudentPickerSearchValue() {
+	const searchInput = document.getElementById('studentPickerSearch');
+	return String(searchInput?.value || '')
+		.trim()
+		.toLowerCase();
+}
+
 function populateStudentClassFilterOptions(users = getStudentUsersForPicker()) {
 	const filterSelect = document.getElementById('studentClassFilter');
 	if (!filterSelect) return;
@@ -408,12 +427,20 @@ function populateStudentClassFilterOptions(users = getStudentUsersForPicker()) {
 
 function getFilteredStudentUsersForPicker(users = getStudentUsersForPicker()) {
 	const filterValue = getStudentClassFilterValue();
-	if (filterValue === 'all') return users;
-
+	const term = getStudentPickerSearchValue();
 	const classById = getClassLookupMap();
 	return users.filter((user) => {
-		const classMeta = getUserClassMeta(user, classById);
-		return classMeta.classKey === filterValue;
+		if (filterValue !== 'all') {
+			if (getUserClassMeta(user, classById).classKey !== filterValue) {
+				return false;
+			}
+		}
+		if (term) {
+			const haystack =
+				`${user.studentNumber || ''} ${user.name || ''} ${user.username || ''}`.toLowerCase();
+			if (!haystack.includes(term)) return false;
+		}
+		return true;
 	});
 }
 
@@ -464,6 +491,7 @@ function populateStudentUserPicker() {
 		picker.innerHTML =
 			'<option value="" disabled>No student users available</option>';
 		enableStudentPickerClickSelection(picker);
+		updateStudentPickerCount(0);
 		return;
 	}
 
@@ -474,6 +502,15 @@ function populateStudentUserPicker() {
 		)
 		.join('');
 	enableStudentPickerClickSelection(picker);
+	updateStudentPickerCount(availableUsers.length);
+}
+
+function updateStudentPickerCount(n) {
+	const countEl = document.getElementById('studentPickerCount');
+	if (!countEl) return;
+	countEl.textContent = n
+		? `${n} available — select, then Add Selected`
+		: '';
 }
 
 function onStudentClassFilterChange() {
@@ -625,6 +662,12 @@ function renderStudentRosterTable() {
 
 	if (summary) {
 		summary.textContent = `${rows.length} student${rows.length === 1 ? '' : 's'}`;
+	}
+	const saveBtn = document.getElementById('saveAssignClassStudentsBtn');
+	if (saveBtn) {
+		saveBtn.textContent = rows.length
+			? `Save Roster (${rows.length})`
+			: 'Save Roster';
 	}
 
 	if (!rows.length) {
@@ -778,6 +821,11 @@ function setupClassEventListeners() {
 	document
 		.getElementById('classSearch')
 		.addEventListener('keyup', filterClasses);
+
+	const teacherFilterEl = document.getElementById('classTeacherFilter');
+	if (teacherFilterEl) {
+		teacherFilterEl.addEventListener('change', filterClasses);
+	}
 }
 
 async function saveClassForm() {
@@ -838,6 +886,33 @@ async function saveClassForm() {
 					(c) => c.id === currentClassId || c.name === classData.name,
 				);
 				if (i !== -1) classes[i] = classData;
+				// Teachers may only place students in assigned classes, and the
+				// server just auto-assigned this new class to them — mirror
+				// that here so their Users view works immediately instead of
+				// waiting for the next bootstrap/refresh.
+				try {
+					const me = window.Auth?.getCurrentUser?.();
+					if (
+						me &&
+						String(me.role || '').toLowerCase() === 'teacher' &&
+						!currentClassId
+					) {
+						const raw = localStorage.getItem('quizTeacherClassAssignments');
+						const map = raw ? JSON.parse(raw) : {};
+						const ids = new Set(
+							(Array.isArray(map[me.id]) ? map[me.id] : []).map(String),
+						);
+						ids.add(String(saved.id));
+						map[me.id] = [...ids];
+						localStorage.setItem(
+							'quizTeacherClassAssignments',
+							JSON.stringify(map),
+						);
+						sessionStorage.setItem('quizTeacherClassAssignmentsDirty', '1');
+					}
+				} catch (_) {
+					/* mirror is best-effort; the server holds the truth */
+				}
 			}
 		} catch (apiErr) {
 			console.warn('[classes] API save failed:', apiErr);
@@ -948,6 +1023,8 @@ function openAssignClassStudents(classId) {
 	});
 	const classFilter = document.getElementById('studentClassFilter');
 	if (classFilter) classFilter.value = 'all';
+	const pickerSearch = document.getElementById('studentPickerSearch');
+	if (pickerSearch) pickerSearch.value = '';
 	const rosterSearch = document.getElementById('studentRosterSearch');
 	if (rosterSearch) rosterSearch.value = '';
 	const rosterStatus = document.getElementById('studentRosterStatusFilter');
@@ -1250,15 +1327,150 @@ async function deleteClass(classId) {
 				window.Auth.saveUsers(users);
 			}
 		}
+		// ... and from the local assignments mirror (flagged newer than the
+		// repo cache) so the deleted id stops matching in every teacher view.
+		try {
+			const raw = localStorage.getItem('quizTeacherClassAssignments');
+			if (raw) {
+				const map = JSON.parse(raw) || {};
+				let changed = false;
+				Object.keys(map).forEach((tid) => {
+					if (
+						Array.isArray(map[tid]) &&
+						map[tid].map(String).includes(String(classId))
+					) {
+						map[tid] = map[tid]
+							.map(String)
+							.filter((id) => id !== String(classId));
+						changed = true;
+					}
+				});
+				if (changed) {
+					localStorage.setItem(
+						'quizTeacherClassAssignments',
+						JSON.stringify(map),
+					);
+					sessionStorage.setItem('quizTeacherClassAssignmentsDirty', '1');
+				}
+			}
+		} catch (_) {
+			/* mirror is best-effort; the server holds the truth */
+		}
 	}
+}
+
+function getClassTeacherIndex() {
+	const users = window.Auth?.getUsers ? window.Auth.getUsers() : [];
+	const teachers = users
+		.filter((u) => String(u.role || '').toLowerCase() === 'teacher')
+		.sort((a, b) =>
+			String(a.name || a.username || '').localeCompare(
+				String(b.name || b.username || ''),
+			),
+		);
+	const nameById = new Map(
+		teachers.map((t) => [String(t.id), t.name || t.username || 'Teacher']),
+	);
+	// Same freshness contract as the users table: the fresher assignments
+	// map (mirror if this tab saved after bootstrap, else repo cache),
+	// unioned with each teacher row — a stale single source must never
+	// hide a class.
+	let dirty = false;
+	try {
+		dirty =
+			sessionStorage.getItem('quizTeacherClassAssignmentsDirty') === '1';
+	} catch (_) {}
+	let map = {};
+	const readMirror = () => {
+		try {
+			const raw = localStorage.getItem('quizTeacherClassAssignments');
+			const parsed = raw ? JSON.parse(raw) : {};
+			return parsed && typeof parsed === 'object' ? parsed : {};
+		} catch (_) {
+			return {};
+		}
+	};
+	if (!dirty) {
+		try {
+			const repo = window.__DI_CONTAINER__?.repo;
+			const raw = repo?.getValue_sync?.('settings', {});
+			const row =
+				raw && Array.isArray(raw.settings)
+					? raw.settings.find((s) => s && s.key === 'teacherClassAssignments')
+					: null;
+			if (row?.value) {
+				const parsed = JSON.parse(row.value);
+				if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+					map = parsed;
+				}
+			}
+		} catch (_) {}
+	}
+	if (!Object.keys(map).length) map = readMirror();
+	const namesByClass = new Map();
+	const classIdsByTeacher = new Map();
+	teachers.forEach((t) => {
+		const tid = String(t.id);
+		const ids = [
+			...new Set([
+				...((map[tid] || []).map(String)),
+				...((t.classIds || []).map(String)),
+			]),
+		];
+		classIdsByTeacher.set(tid, ids);
+		ids.forEach((cid) => {
+			if (!cid) return;
+			if (!namesByClass.has(cid)) namesByClass.set(cid, []);
+			namesByClass.get(cid).push(nameById.get(tid));
+		});
+	});
+	return {
+		teachers: teachers.map((t) => ({
+			id: String(t.id),
+			name: nameById.get(String(t.id)),
+		})),
+		namesByClass,
+		classIdsByTeacher,
+	};
+}
+
+function refreshClassTeacherFilter() {
+	const sel = document.getElementById('classTeacherFilter');
+	if (!sel) return;
+	const wrap = document.getElementById('classTeacherFilterWrap');
+	const admin = !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+	if (wrap) wrap.style.display = admin ? '' : 'none';
+	if (!admin) {
+		sel.value = '';
+		return;
+	}
+	const current = sel.value;
+	const { teachers } = getClassTeacherIndex();
+	sel.innerHTML =
+		'<option value="">All Teachers</option>' +
+		teachers
+			.map(
+				(t) =>
+					`<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`,
+			)
+			.join('');
+	sel.value = teachers.some((t) => t.id === String(current)) ? current : '';
 }
 
 function filterClasses() {
 	const searchTerm = (
 		document.getElementById('classSearch').value || ''
 	).toLowerCase();
-	const filteredClasses = classes.filter(
-		(c) =>
+	const teacherEl = document.getElementById('classTeacherFilter');
+	const teacherScope = teacherEl ? String(teacherEl.value || '') : '';
+	let teacherClassIds = null;
+	if (teacherScope) {
+		const { classIdsByTeacher } = getClassTeacherIndex();
+		teacherClassIds = new Set(classIdsByTeacher.get(teacherScope) || []);
+	}
+	const filteredClasses = classes.filter((c) => {
+		if (teacherClassIds && !teacherClassIds.has(String(c.id))) return false;
+		return (
 			String(c.name || '')
 				.toLowerCase()
 				.includes(searchTerm) ||
@@ -1270,8 +1482,9 @@ function filterClasses() {
 					String((s && (s.number ?? s.numero)) || '')
 						.toLowerCase()
 						.includes(searchTerm),
-			),
-	);
+			)
+		);
+	});
 	updateClassList(filteredClasses);
 }
 
@@ -1305,18 +1518,21 @@ function sortClasses() {
 	rows.sort((a, b) => {
 		let aValue, bValue;
 
+		// NOTE: first <td> is the bulk checkbox cell — data cells start after it.
+		const dataCells = (row) =>
+			Array.from(row.querySelectorAll('td:not(.checkbox-cell)'));
 		switch (sortBy) {
 			case 'name':
-				aValue = a.querySelector('td:first-child').textContent;
-				bValue = b.querySelector('td:first-child').textContent;
+				aValue = dataCells(a)[0]?.textContent || '';
+				bValue = dataCells(b)[0]?.textContent || '';
 				break;
 			case 'date':
-				aValue = new Date(a.querySelector('td:nth-child(2)').textContent);
-				bValue = new Date(b.querySelector('td:nth-child(2)').textContent);
+				aValue = new Date(dataCells(a)[1]?.textContent || '');
+				bValue = new Date(dataCells(b)[1]?.textContent || '');
 				break;
 			case 'students':
-				aValue = parseInt(a.querySelector('td:nth-child(3)').textContent);
-				bValue = parseInt(b.querySelector('td:nth-child(3)').textContent);
+				aValue = parseInt(dataCells(a)[2]?.textContent || '0');
+				bValue = parseInt(dataCells(b)[2]?.textContent || '0');
 				break;
 		}
 
@@ -1338,13 +1554,55 @@ function sortClasses() {
 function updateClassList(classesList = classes) {
 	const tbody = document.querySelector('#classList tbody');
 	const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams');
+	const teacherIndex = getClassTeacherIndex();
+	refreshClassTeacherFilter();
+	const classTable = document.getElementById('classList');
+	if (classTable) {
+		// Teachers see only their own classes — a Teacher column repeating
+		// their name on every row is noise, so hide it for them (same
+		// pattern as the users table teacher-view).
+		classTable.classList.toggle(
+			'teacher-view',
+			!!(window.Auth?.isTeacher && window.Auth.isTeacher()),
+		);
+	}
 
 	// Clear existing table rows
 	tbody.innerHTML = '';
 
-	const visibleClasses = classesList.filter((cls) =>
-		window.Auth?.canAccessItem ? window.Auth.canAccessItem('class', cls) : true,
-	);
+	// Admin-only teacher scope (the class filter dropdown is hidden for
+	// non-admins by refreshClassTeacherFilter, so this is a no-op for them).
+	const classTeacherScope = (() => {
+		try {
+			if (!(window.Auth?.isAdmin && window.Auth.isAdmin())) return '';
+			const el = document.getElementById('classTeacherFilter');
+			return el ? String(el.value || '') : '';
+		} catch (_) {
+			return '';
+		}
+	})();
+
+	const visibleClasses = classesList.filter((cls) => {
+		if (
+			window.Auth?.canAccessItem &&
+			!window.Auth.canAccessItem('class', cls)
+		) {
+			return false;
+		}
+		if (classTeacherScope) {
+			if (window.TeacherFilter) {
+				if (!window.TeacherFilter.matchesClass(cls, classTeacherScope)) {
+					return false;
+				}
+			} else {
+				const scoped = new Set(
+					teacherIndex.classIdsByTeacher.get(classTeacherScope) || [],
+				);
+				if (!scoped.has(String(cls.id))) return false;
+			}
+		}
+		return true;
+	});
 
 	// Sort logic (using visibleClasses for role-safe display)
 	const sortedClasses = [...visibleClasses].sort((a, b) => {
@@ -1390,6 +1648,7 @@ function updateClassList(classesList = classes) {
 
 			// Don't trigger if clicking action button directly
 			if (e.target.closest('button')) return;
+			if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
 			e.stopPropagation();
 
 			// Open mobile action sheet
@@ -1425,6 +1684,11 @@ function updateClassList(classesList = classes) {
 		});
 
 		const studentCount = cls.students ? cls.students.length : 0;
+		const classTeachers =
+			teacherIndex.namesByClass.get(String(cls.id)) || [];
+		const teacherCell = classTeachers.length
+			? escapeHtml(classTeachers.join(', '))
+			: '<span class="text-muted">Unassigned</span>';
 		const assignedExams = exams
 			.filter((e) => e.classes?.includes(cls.id))
 			.filter((e) =>
@@ -1447,15 +1711,23 @@ function updateClassList(classesList = classes) {
 				: '-';
 
 		row.innerHTML = `
+            <td class="checkbox-cell" data-label="Select">
+                <input type="checkbox"
+                    class="class-checkbox"
+                    data-id="${cls.id}"
+                    onchange="toggleBulkRowSelection(this,'classes')">
+            </td>
             <td>${escapeHtml(cls.name)}</td>
             <td>${dateCreated}</td>
             <td>${studentCount}</td>
+            <td>${teacherCell}</td>
             <td>${examCount}</td>
             <td class="class-assigned-games-cell">${
 							window.renderClassGamesCell
 								? window.renderClassGamesCell(cls.id)
 								: 'No games'
 						}</td>
+            <td class="owner-col" data-label="By">${window.TeacherFilter ? window.TeacherFilter.ownerBadge(cls) : ''}</td>
             <td class="actions-cell">
                 <div class="exam-actions">
                     <button class="exam-action-btn exam-classes-btn" onclick="openClassGamesModal('${
@@ -1510,6 +1782,17 @@ function updateClassList(classesList = classes) {
         `;
 		tbody.appendChild(row);
 	});
+
+	// Owner badges are admin-only (see teacher-filter.js + hide-owner-col CSS).
+	if (classTable) {
+		const admin = window.TeacherFilter
+			? window.TeacherFilter.isAdminSession()
+			: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+		classTable.classList.toggle('hide-owner-col', !admin);
+	}
+
+	// Restore bulk selection (filter/sort safe) + refresh bulk bar
+	if (window.BulkSelect) window.BulkSelect.restore('classes');
 }
 
 // Function to render exam items in class modal
@@ -1781,6 +2064,97 @@ window.openAssignClassExams = openAssignClassExams;
 window.closeAssignClassExams = closeAssignClassExams;
 window.saveAssignClassExams = saveAssignClassExams;
 window.updateAssignClassExamsCount = updateAssignClassExamsCount;
+
+// ============================================
+// BULK SELECTION - DELETE SELECTED (question-tab style)
+// ============================================
+async function deleteSelectedClasses() {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('classes')
+		: [];
+	const targets = ids.filter((id) =>
+		classes.some((c) => String(c.id) === String(id)),
+	);
+	if (!targets.length) {
+		showToast('No classes selected', 'error');
+		return;
+	}
+	if (
+		!confirm(
+			`Are you sure you want to delete ${targets.length} class(es)?`,
+		)
+	) {
+		return;
+	}
+	const failed = [];
+	for (const classId of targets) {
+		if (window.API && typeof window.API.remove === 'function') {
+			try {
+				await window.API.remove('classes', classId);
+			} catch (apiErr) {
+				console.warn('[classes] bulk API delete failed:', apiErr);
+				failed.push(classId);
+				continue;
+			}
+		}
+	}
+	const okIds = new Set(targets.filter((id) => !failed.includes(id)));
+	if (okIds.size) {
+		// Mirror deleteClass local cleanup in one pass.
+		const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams') || [];
+		exams.forEach((exam) => {
+			if (Array.isArray(exam.classes)) {
+				exam.classes = exam.classes.filter((id) => !okIds.has(String(id)));
+			}
+		});
+		window.__DI_CONTAINER__.repo.setAll_sync('exams', exams);
+		classes = classes.filter((c) => !okIds.has(String(c.id)));
+		saveClasses();
+		updateClassList();
+		if (window.BulkSelect) window.BulkSelect.clear('classes');
+		if (typeof logActivity === 'function') {
+			logActivity('class', `${okIds.size} Classes`, 'deleted', {
+				count: okIds.size,
+			});
+		}
+		try {
+			const raw = localStorage.getItem('quizTeacherClassAssignments');
+			if (raw) {
+				const map = JSON.parse(raw) || {};
+				let changed = false;
+				Object.keys(map).forEach((tid) => {
+					if (Array.isArray(map[tid])) {
+						const next = map[tid]
+							.map(String)
+							.filter((id) => !okIds.has(id));
+						if (next.length !== map[tid].length) {
+							map[tid] = next;
+							changed = true;
+						}
+					}
+				});
+				if (changed) {
+					localStorage.setItem(
+						'quizTeacherClassAssignments',
+						JSON.stringify(map),
+					);
+					sessionStorage.setItem('quizTeacherClassAssignmentsDirty', '1');
+				}
+			}
+		} catch (_) {
+			/* mirror is best-effort */
+		}
+	}
+	if (failed.length) {
+		showToast(
+			`Deleted ${okIds.size}; ${failed.length} failed on server — kept locally so you can retry`,
+			'error',
+		);
+	} else {
+		showToast(`Deleted ${okIds.size} class(es)!`);
+	}
+}
+window.deleteSelectedClasses = deleteSelectedClasses;
 
 // Import staging for the Assign Students modal: admins add rows directly;
 // teachers hand the parsed roster to the admin confirmation queue instead

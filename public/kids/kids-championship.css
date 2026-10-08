@@ -1,0 +1,221 @@
+/* kids-championship.css — Kid Championship lobby (extends kids-player.css) */
+.kid-card.kid-card-wide {
+	max-width: 720px;
+}
+
+.kc-code-input {
+	font-size: clamp(2rem, 9vw, 3.2rem);
+	letter-spacing: 0.35em;
+	text-align: center;
+	text-transform: uppercase;
+	width: min(360px, 86vw);
+	margin: 8px auto 14px;
+}
+
+/* Identity: name + avatar */
+.kc-avatar-row {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.kc-emoji {
+	width: 44px;
+	height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.6rem;
+	border: 3px solid transparent;
+	border-radius: 14px;
+	background: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+	transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.kc-emoji.selected {
+	border-color: #f59e0b;
+	transform: scale(1.12);
+}
+
+/* Lobby header */
+.kc-lobby-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 14px;
+	transform: translateX(-18px);
+}
+
+.kc-lobby-emoji {
+	font-size: 2.6rem;
+	line-height: 1;
+}
+
+.kc-lobby-title h2 {
+	margin: 0;
+	font-size: clamp(1.3rem, 4.5vw, 1.8rem);
+}
+
+.kc-lobby-title p {
+	margin: 2px 0 0;
+	font-size: 0.9rem;
+	opacity: 0.85;
+}
+
+.kc-rank-badge {
+	margin-left: auto;
+	background: #fef3c7;
+	color: #92400e;
+	border: 2px solid #fbbf24;
+	padding: 8px 12px;
+	border-radius: 999px;
+	font-weight: 800;
+	font-size: 0.95rem;
+	white-space: nowrap;
+}
+
+.kc-status-chip {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 800;
+	margin-left: 6px;
+	vertical-align: middle;
+}
+
+.kc-status-chip.live { background: #dcfce7; color: #15803d; }
+.kc-status-chip.done { background: #e2e8f0; color: #475569; }
+
+/* Podium */
+.kc-podium {
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	gap: 8px;
+	margin: 18px 0 22px;
+}
+
+.kc-podium-step {
+	flex: 0 1 130px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+	text-align: center;
+	padding: 12px 6px 10px;
+	border-radius: 18px;
+	background: rgba(255, 255, 255, 0.82);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+
+.kc-podium-step.kc-medal-1 { transform: translateY(-14px); background: linear-gradient(#fef9c3, #fde047); }
+.kc-podium-step.kc-medal-2 { background: linear-gradient(#f8fafc, #e2e8f0); }
+.kc-podium-step.kc-medal-3 { background: linear-gradient(#fff7ed, #fdba74); }
+
+.kc-podium-step.kc-me { outline: 4px solid #f59e0b; }
+
+.kc-podium-avatar { font-size: 2.4rem; line-height: 1; }
+.kc-podium-name { font-size: 0.85rem; font-weight: 800; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kc-podium-medal { font-size: 1.5rem; }
+.kc-podium-points { font-size: 0.8rem; font-weight: 700; }
+
+/* Challenges */
+.kc-section-title {
+	font-size: 1.05rem;
+	font-weight: 800;
+	margin: 18px 0 10px;
+}
+
+.kc-challenges {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 10px;
+}
+
+.kc-challenge {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	background: rgba(255, 255, 255, 0.9);
+	border-radius: 16px;
+	padding: 12px;
+	box-shadow: 0 3px 12px rgba(0, 0, 0, 0.1);
+}
+
+.kc-challenge-icon {
+	flex: none;
+	width: 46px;
+	height: 46px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.6rem;
+	border-radius: 13px;
+	background: #e0f2fe;
+}
+
+.kc-challenge-done .kc-challenge-icon { background: #dcfce7; }
+
+.kc-challenge-info { flex: 1; min-width: 0; }
+.kc-challenge-name { font-weight: 800; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kc-challenge-best { font-size: 0.8rem; opacity: 0.8; }
+
+.kc-challenge button {
+	flex: none;
+}
+
+/* Standings */
+.kc-standings {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 6px;
+}
+
+.kc-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	background: rgba(255, 255, 255, 0.9);
+	border-radius: 12px;
+	padding: 8px 12px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.kc-row.kc-me {
+	outline: 3px solid #f59e0b;
+	background: #fffbeb;
+}
+
+.kc-rank { font-weight: 800; width: 26px; text-align: center; flex: none; }
+.kc-avatar { font-size: 1.3rem; flex: none; }
+.kc-name { flex: 1; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kc-points { font-weight: 800; }
+.kc-stars { opacity: 0.85; width: 70px; text-align: right; flex: none; }
+
+/* Celebration flash */
+.kc-flash {
+	animation: kcFlash 1.6s ease;
+}
+
+.kc-banner {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 14px;
+	border-radius: 14px;
+	margin-bottom: 14px;
+	font-weight: 800;
+}
+
+.kc-banner.live { background: #dcfce7; color: #15803d; }
+.kc-banner.finished { background: #fef3c7; color: #92400e; }
+
+@keyframes kcFlash {
+	0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.9); }
+	100% { box-shadow: 0 0 0 24px rgba(245, 158, 11, 0); }
+}

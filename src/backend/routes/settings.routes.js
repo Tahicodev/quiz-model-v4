@@ -13,7 +13,6 @@ import { requireRole } from '../middleware/role.js';
 import { validate } from '../middleware/validate.js';
 import { SettingUpdateSchema, SettingsBulkUpdateSchema } from '../../shared/schemas/settings.schema.js';
 import { ROLES, SETTINGS_VISIBILITY } from '../../shared/constants.js';
-import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
 
 const router = Router();
@@ -60,16 +59,10 @@ router.patch('/:key', requireRole(SETTINGS_SHARED_ROLES), validate(SettingUpdate
     const { settingsSvc, auditSvc } = getContainer();
     const { key } = req.params;
     const { value, visibility } = req.body;
-    // The SettingsService should refuse to update admin-only keys for a
-    // teacher; the per-route role gate is a fast guard, the per-key check
-    // is the real authority.
-    if (
-      req.user.role === ROLES.TEACHER &&
-      ['adminSecret', 'recoveryCode', 'teacherAccess'].includes(key)
-    ) {
-      return next(new ForbiddenError('Only admins can modify this setting'));
-    }
-    const setting = await settingsSvc.updateSetting(req.schoolId, key, value, visibility);
+    // Visibility tier enforcement lives in SettingsService.updateSetting —
+    // it compares the tier of the target row (or the requested tier) against
+    // the caller's role, so a teacher can never write an admin/system key.
+    const setting = await settingsSvc.updateSetting(req.schoolId, key, value, visibility, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'setting', entityId: setting.id, action: 'update', ip: req.ip });
     res.json(setting);
   } catch (err) { next(err); }
@@ -100,7 +93,7 @@ router.post('/bulk', requireRole(SETTINGS_SHARED_ROLES), validate(SettingsBulkUp
         (s) => s && !['adminSecret', 'recoveryCode', 'teacherAccess'].includes(s.key),
       );
     }
-    const results = await settingsSvc.bulkUpdate(req.schoolId, req.body.settings);
+    const results = await settingsSvc.bulkUpdate(req.schoolId, req.body.settings, req.user);
     res.json(results);
   } catch (err) { next(err); }
 });

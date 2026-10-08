@@ -191,6 +191,10 @@ function createQuestionRow(question, index) {
 	row.setAttribute('data-category', categoryId);
 	row.setAttribute('data-difficulty', question.difficulty || 'medium');
 	row.setAttribute('data-instruction', question.instruction || ''); // Add instruction attribute
+	row.setAttribute(
+		'data-owner',
+		question.ownerId || question.created_by || question.createdBy || '',
+	);
 
 	// Store optionData as JSON string if it exists
 	if (question.optionData && Array.isArray(question.optionData)) {
@@ -3851,9 +3855,29 @@ function updateQuestionList() {
 
 	questionList.innerHTML = '';
 
+	// Admin-only teacher scope (see teacher-filter.js). Teachers keep their
+	// role-scoped view; admins can narrow to one teacher's activities.
+	const questionTeacherScope = window.TeacherFilter
+		? window.TeacherFilter.getSelectedTeacher('questionTeacherFilter')
+		: '';
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'questionTeacherFilter',
+			'questionTeacherFilterWrap',
+			() => window.filterQuestions && window.filterQuestions(),
+		);
+	}
+
 	let visibleCount = 0;
 	questions.forEach((q, index) => {
 		if (window.Auth?.canAccessItem && !window.Auth.canAccessItem('question', q)) {
+			return;
+		}
+		if (
+			questionTeacherScope &&
+			window.TeacherFilter &&
+			!window.TeacherFilter.matchesOwner(q, questionTeacherScope)
+		) {
 			return;
 		}
 		const normalizedType = normalizeQuestionTypeForStorage(q.type || q.questionType, q);
@@ -3867,6 +3891,15 @@ function updateQuestionList() {
 		addQuestionToList(q, index);
 		visibleCount += 1;
 	});
+
+	// Owner badges are admin-only (see teacher-filter.js + hide-owner CSS).
+	const questionsSection = document.getElementById('questions');
+	if (questionsSection) {
+		const admin = window.TeacherFilter
+			? window.TeacherFilter.isAdminSession()
+			: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+		questionsSection.classList.toggle('hide-owner', !admin);
+	}
 
 	if (visibleCount === 0) {
 		questionList.innerHTML =

@@ -175,6 +175,10 @@
 	function renderKidsGameList() {
 		var container = $('kidsGameList');
 		if (!container) return;
+		// Owner badges are admin-only (hide-owner CSS).
+		try {
+			container.classList.toggle('hide-owner', !isAdmin());
+		} catch (_) { /* ignore */ }
 		if (kidsStudioDenied()) {
 			container.innerHTML = '<div class="empty-state">Kids Games are not enabled for your account. Ask an admin to grant access in Settings → Teacher Access.</div>';
 			return;
@@ -224,6 +228,17 @@
 		var subject = game.subject ? '<span class="meta-item">📚 ' + esc(game.subject) + '</span>' : '';
 		var pin = game.pin ? '<span class="meta-item">🔑 PIN ' + esc(game.pin) + '</span>' : '';
 		var bg = THEME_BG[game.theme] || THEME_BG.jungle;
+		// Owner badge (admin-only via hide-owner CSS on the list container).
+		var ownerBadge = '';
+		try {
+			var ownerTid = String(game.teacher_id || game.teacherId || '');
+			if (ownerTid) {
+				var ownerName = window.TeacherFilter
+					? window.TeacherFilter.resolveOwnerName({ ownerId: ownerTid })
+					: ownerTid;
+				ownerBadge = '<span class="q-owner-badge" title="Created by">' + esc(ownerName) + '</span>';
+			}
+		} catch (_) { ownerBadge = ''; }
 		return '' +
 			'<div class="kids-game-card">' +
 			'<div class="kids-game-card-thumb" style="background:' + bg + '">' +
@@ -233,7 +248,7 @@
 			'<div class="kids-game-card-body">' +
 			'<h4 class="kids-game-card-name">' + esc(game.name) + '</h4>' +
 			'<div class="kids-game-card-meta">' + grade + subject + pin +
-			'<span class="meta-item">❓ ' + questions.length + ' questions</span></div>' +
+			'<span class="meta-item">❓ ' + questions.length + ' questions</span>' + ownerBadge + '</div>' +
 			'<div class="kids-game-card-stats">' +
 			'<span class="stat">▶️ ' + (Number(game.play_count) || 0) + ' plays</span>' +
 			'</div></div>' +

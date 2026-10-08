@@ -45,6 +45,8 @@ const MODEL_MAP = {
 	teacher_assignments: 'teacherAssignment',
 	kidsGames: 'kidsGame',
 	kidsGameSessions: 'kidsGameSession',
+	kidsChampionships: 'kidsChampionship',
+	kidsChampionshipScores: 'kidsChampionshipScore',
 	// NOTE: Prisma camelCases "AIConfig" to "aIConfig" on the client delegate.
 	ai_configs: 'aIConfig',
 };
@@ -80,6 +82,8 @@ const DEFAULT_ORDER_BY = {
 	game_sessions: 'joined_at',
 	kidsGames: 'created_at',
 	kidsGameSessions: 'created_at',
+	kidsChampionships: 'created_at',
+	kidsChampionshipScores: 'created_at',
 	tournaments: 'created_at',
 	tournament_entries: 'registered_at',
 	exam_sessions: 'started_at',
@@ -132,6 +136,16 @@ export class PrismaRepository extends IStorageRepository {
 			search = null,
 		} = {},
 	) {
+		// Express hands query params over as strings and routes without a
+		// query schema pass them through untouched; Prisma rejects both.
+		// Coerce pagination here so a stray ?limit=50 can never 500.
+		const safeLimit = Number.isFinite(Number(limit)) && Number(limit) >= 0
+			? Math.min(Math.floor(Number(limit)), 100000)
+			: 50;
+		const safeOffset = Number.isFinite(Number(offset)) && Number(offset) >= 0
+			? Math.floor(Number(offset))
+			: 0;
+
 		// Exact-match filters pass straight through.
 		const where = { ...filters };
 		const ors = [];
@@ -150,13 +164,13 @@ export class PrismaRepository extends IStorageRepository {
 		if (ors.length === 1) Object.assign(where, ors[0]);
 		else if (ors.length > 1) where.AND = ors;
 
-		const order = { [orderBy]: direction };
+		const order = { [orderBy]: direction === 'asc' ? 'asc' : 'desc' };
 
 		const [data, total] = await Promise.all([
 			this.#model(table).findMany({
 				where,
-				skip: offset,
-				take: limit,
+				skip: safeOffset,
+				take: safeLimit,
 				orderBy: order,
 			}),
 			this.#model(table).count({ where }),

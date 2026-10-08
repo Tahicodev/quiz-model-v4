@@ -50,9 +50,35 @@ router.get('/:id', async (req, res, next) => {
     const { gameSvc } = getContainer();
     const game = await gameSvc.getById(req.params.id, req.schoolId);
     assertGameOwnership(game, req.user);
+    // Students only need to know what the lobby is, how many questions it has
+    // and its gameplay knobs. The ordered `question_ids` list and the author
+    // identity are authoring detail: leaking them lets a student rehearse the
+    // exact order (and, with the answer key, the answers) before joining.
+    if (req.user.role === ROLES.STUDENT) {
+      return res.json(studentGameView(game));
+    }
     res.json(game);
   } catch (err) { next(err); }
 });
+
+function studentGameView(game) {
+  let ids = [];
+  try { ids = JSON.parse(game.question_ids ?? '[]'); } catch { ids = []; }
+  return {
+    id: game.id,
+    school_id: game.school_id,
+    name: game.name,
+    type: game.type,
+    status: game.status,
+    join_code: game.join_code,
+    settings_json: game.settings_json,
+    questionCount: Array.isArray(ids) ? ids.length : 0,
+    started_at: game.started_at,
+    ended_at: game.ended_at,
+    created_at: game.created_at,
+    updated_at: game.updated_at,
+  };
+}
 
 // Games CRUD is shared between admins and teachers. The legacy admin panel
 // has been used by both roles since v3, and the realtime settings panel
@@ -147,6 +173,15 @@ router.post('/:id/answer', validate(GameAnswerSchema), async (req, res, next) =>
     const { gameSvc } = getContainer();
     const { question_id, answer } = req.body;
     const result = await gameSvc.recordAnswer({ gameId: req.params.id, schoolId: req.schoolId, userId: req.user.id, questionId: question_id, answer });
+    // REST answers are the documented fallback for clients that cannot hold a
+    // socket — the room still has to see the updated scoreboard, exactly like
+    // the socket handler does. Best-effort: never fail the answer write.
+    try {
+      const io = getIO();
+      io.to(ROOM.game(req.params.id)).emit(SOCKET_EVENTS.GAME_SCORES, await gameSvc.getScores(req.params.id, req.schoolId));
+    } catch {
+      // Socket.io not initialized (tests / maintenance) — REST path still works.
+    }
     res.json(result);
   } catch (err) { next(err); }
 });

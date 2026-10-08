@@ -302,6 +302,25 @@ body.kid-body::before {
 .kid-stars-rain span { position: absolute; top: -30px; font-size: 1.6rem; animation: kid-fall linear forwards; }
 @keyframes kid-fall { to { transform: translateY(110vh) rotate(360deg); } }
 
+/* Championship results strip (play page) */
+.kid-champ-strip {
+	display: inline-block;
+	background: linear-gradient(135deg, #fef9c3, #fde68a);
+	border: 3px solid #f59e0b;
+	border-radius: 16px;
+	padding: 10px 16px;
+	margin: 10px auto 12px;
+	font-family: var(--kid-font);
+	font-size: 1rem;
+	color: #92400e;
+	box-shadow: 0 6px 18px rgba(245, 158, 11, 0.35);
+	animation: kc-pop 0.5s ease;
+}
+@keyframes kc-pop {
+	from { transform: scale(0.7) rotate(-2deg); opacity: 0; }
+	to { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
 /* Mascot nudge toast — big, bouncy, impossible to miss. Used for
    "you need to do something first" hints (not answer results). */
 .kid-toast {

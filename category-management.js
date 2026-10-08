@@ -1778,11 +1778,33 @@ function updateCategoryList(categoriesList = categories) {
 		);
 	}
 
-	const visibleCategories = categoriesList.filter((category) =>
-		window.Auth?.canAccessItem
-			? window.Auth.canAccessItem('category', category)
-			: true,
-	);
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'categoryTeacherFilter',
+			'categoryTeacherFilterWrap',
+			() => filterCategories(),
+		);
+	}
+	const categoryTeacherScope = window.TeacherFilter
+		? window.TeacherFilter.getSelectedTeacher('categoryTeacherFilter')
+		: '';
+
+	const visibleCategories = categoriesList.filter((category) => {
+		if (
+			window.Auth?.canAccessItem &&
+			!window.Auth.canAccessItem('category', category)
+		) {
+			return false;
+		}
+		if (
+			categoryTeacherScope &&
+			window.TeacherFilter &&
+			!window.TeacherFilter.matchesOwner(category, categoryTeacherScope)
+		) {
+			return false;
+		}
+		return true;
+	});
 
 	// Count questions for each category - handle both category ID and name for backward compatibility
 	visibleCategories.forEach((category) => {
@@ -1831,6 +1853,7 @@ function updateCategoryList(categoriesList = categories) {
 		row.addEventListener('click', (e) => {
 			if (window.innerWidth <= 768) {
 				if (e.target.closest('button')) return;
+				if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
 				e.stopPropagation();
 				MobileActionSheet.open(`Category: ${escapeHtml(category.name)}`, [
 					{
@@ -1858,6 +1881,12 @@ function updateCategoryList(categoriesList = categories) {
 		});
 
 		row.innerHTML = `
+            <td class="checkbox-cell" data-label="Select">
+                <input type="checkbox"
+                    class="category-checkbox"
+                    data-id="${category.id}"
+                    ${category.isSystem || category.id === 'uncategorized' ? 'disabled title="System category cannot be deleted"' : `onchange="toggleBulkRowSelection(this,'categories')"`}>
+            </td>
             <td>
                 <div class="category-info">
                     <div class="category-color" style="background-color: ${category.color}"></div>
@@ -1866,7 +1895,7 @@ function updateCategoryList(categoriesList = categories) {
             </td>
             <td>${escapeHtml(category.description || '')}</td>
             <td>${category.questionCount}</td>
-            <td data-label="By"><span class="q-owner-badge" title="Created by">${escapeHtml(getOwnerLabel(getOwnerId(category)))}</span></td>
+            <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Created by">${escapeHtml(getOwnerLabel(getOwnerId(category)))}</span></td>
             <td>${(() => {
 							const rawCreatedAt =
 								category.dateCreated ||
@@ -1915,6 +1944,18 @@ function updateCategoryList(categoriesList = categories) {
 		tbody.appendChild(row);
 	});
 
+	// Owner badges are admin-only (see teacher-filter.js + hide-owner-col CSS).
+	const categoryTable = document.getElementById('categoryList');
+	if (categoryTable) {
+		const admin = window.TeacherFilter
+			? window.TeacherFilter.isAdminSession()
+			: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+		categoryTable.classList.toggle('hide-owner-col', !admin);
+	}
+
+	// Restore bulk selection (filter/sort safe) + refresh bulk bar
+	if (window.BulkSelect) window.BulkSelect.restore('categories');
+
 	// Add CSS for system categories if it doesn't exist
 	if (!document.getElementById('system-category-styles')) {
 		const styleElement = document.createElement('style');
@@ -1934,6 +1975,13 @@ function updateCategoryList(categoriesList = categories) {
 }
 
 function filterCategories() {
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'categoryTeacherFilter',
+			'categoryTeacherFilterWrap',
+			() => filterCategories(),
+		);
+	}
 	const searchTerm = (
 		document.getElementById('categorySearch').value || ''
 	).toLowerCase();
@@ -3782,6 +3830,75 @@ function saveInlineCategory() {
 	toggleInlineCategoryInput(); // Switch back to select
 }
 
+// ============================================
+// BULK SELECTION - DELETE SELECTED (question-tab style)
+// ============================================
+async function deleteSelectedCategories() {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('categories')
+		: [];
+	const deletable = ids.filter((id) => {
+		if (!id || id === 'uncategorized') return false;
+		const cat = categories.find((c) => String(c.id) === String(id));
+		return cat && !cat.isSystem && !cat.isDefault;
+	});
+	if (!deletable.length) {
+		showToast('No deletable categories selected', 'error');
+		return;
+	}
+	if (
+		!confirm(
+			`Are you sure you want to delete ${deletable.length} categor${deletable.length === 1 ? 'y' : 'ies'}? All questions in them will become uncategorized.`,
+		)
+	) {
+		return;
+	}
+
+	// Server-first per row (same contract as deleteCategory), then a single
+	// local pass so counts/questions stay consistent.
+	const failed = [];
+	for (const categoryId of deletable) {
+		if (window.API && typeof window.API.remove === 'function') {
+			try {
+				await window.API.remove('categories', categoryId);
+			} catch (apiErr) {
+				console.warn('[categories] bulk API delete failed:', apiErr);
+				failed.push(categoryId);
+				continue;
+			}
+		}
+	}
+
+	const okIds = new Set(deletable.filter((id) => !failed.includes(id)));
+	if (okIds.size) {
+		const savedQuestions =
+			window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
+		savedQuestions.forEach((question) => {
+			if (okIds.has(String(question.category))) question.category = '';
+		});
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
+		categories = categories.filter((c) => !okIds.has(String(c.id)));
+		saveCategories();
+		updateCategoryList();
+		loadCategoriesIntoFilters();
+		if (window.BulkSelect) window.BulkSelect.clear('categories');
+		if (typeof logActivity === 'function') {
+			logActivity('category', `${okIds.size} Categories`, 'deleted', {
+				count: okIds.size,
+			});
+		}
+	}
+	if (failed.length) {
+		showToast(
+			`Deleted ${okIds.size}; ${failed.length} failed on server — kept locally so you can retry`,
+			'error',
+		);
+	} else {
+		showToast(`Deleted ${okIds.size} categor${okIds.size === 1 ? 'y' : 'ies'}!`);
+	}
+}
+
 // Expose to window
 window.toggleInlineCategoryInput = toggleInlineCategoryInput;
 window.saveInlineCategory = saveInlineCategory;
+window.deleteSelectedCategories = deleteSelectedCategories;

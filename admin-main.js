@@ -702,6 +702,11 @@ function filterQuestions(resetPage = true) {
 
 	const typeFilter = document.getElementById('typeFilterMain');
 	const selectedType = typeFilter ? typeFilter.value : 'all';
+	// Admin-only teacher scope (see teacher-filter.js). Empty for teachers
+	// and non-admin sessions, so their views are unchanged.
+	const teacherScope = window.TeacherFilter
+		? window.TeacherFilter.getSelectedTeacher('questionTeacherFilter')
+		: '';
 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i];
@@ -721,7 +726,11 @@ function filterQuestions(resetPage = true) {
 
 		const matchesType = selectedType === 'all' || questionType === selectedType;
 
-		if (matchesSearch && matchesType) {
+		const matchesTeacher =
+			!teacherScope ||
+			String(row.getAttribute('data-owner') || '') === String(teacherScope);
+
+		if (matchesSearch && matchesType && matchesTeacher) {
 			row.classList.remove('filtered-out');
 		} else {
 			row.classList.add('filtered-out');
@@ -1849,9 +1858,15 @@ const MobileActionSheet = {
 
 		this.overlay.classList.add('hidden');
 		this.sheet.classList.add('hidden');
-		this.overlay?.style.removeProperty('pointer-events');
-		this.sheet?.style.removeProperty('pointer-events');
-		this.sheet?.style.removeProperty('visibility');
+		// promote() sets inline !important props (z-index, visibility,
+		// pointer-events) that would otherwise survive the .hidden class
+		// and keep a closed sheet intercepting clicks above later modals.
+		['position', 'inset', 'z-index', 'visibility', 'pointer-events'].forEach(
+			(prop) => {
+				this.overlay?.style.removeProperty(prop);
+				this.sheet?.style.removeProperty(prop);
+			},
+		);
 		document.documentElement.classList.remove('mobile-action-sheet-open');
 		document.body.classList.remove('mobile-action-sheet-open');
 		document.body.style.overflow = '';

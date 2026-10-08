@@ -9,7 +9,7 @@
 
 import { NotFoundError, ForbiddenError, ValidationError, ConflictError } from '../../shared/errors.js';
 import { GameCreateSchema, GameUpdateSchema, GameFilterSchema, GameJoinSchema } from '../../shared/schemas/game.schema.js';
-import { ROLES, GAME_STATUS } from '../../shared/constants.js';
+import { ROLES, GAME_STATUS, RESULT_MODE } from '../../shared/constants.js';
 
 const RESERVED_INDEX_KEY = '__currentQuestionIndex';
 const RESERVED_COMPLETE_KEY = '__completed';
@@ -81,7 +81,7 @@ export class GameService {
     const parsed = GameCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
-    await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
+    await this.#assertQuestionSet(parsed.data.question_ids, currentUser);
     const joinCode = await this.#generateJoinCode();
 
     // question_ids stays an array at the service/API boundary; this service is
@@ -109,7 +109,7 @@ export class GameService {
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
     if (parsed.data.question_ids) {
-      await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
+      await this.#assertQuestionSet(parsed.data.question_ids, currentUser);
     }
 
     const updated = await this.#repo.update('games', id, {
@@ -340,6 +340,53 @@ export class GameService {
       });
     }
 
+    // Persist one Result per player (mode 'game') so a finished game survives
+    // session cleanup and shows up in each student's history / admin results.
+    // Best-effort: a failed archive must never block finishing the game.
+    // `modelFor` marks the Prisma-backed repository: the generic browser repo
+    // exposes a REST `create` too, so it must be excluded (match TournamentService).
+    if (typeof this.#repo.modelFor === 'function') {
+      const ids = questionIds(game);
+      let totalPoints = 0;
+      for (const qid of ids) {
+        try {
+          const q = await this.#getQuestion(qid, game.school_id);
+          totalPoints += Number(q?.points) || 1;
+        } catch { /* question removed after start - ignore */ }
+      }
+      for (let i = 0; i < sessions.length; i++) {
+        const session = sessions[i];
+        const earned = Number(session.score) || 0;
+        const percent = totalPoints > 0
+          ? Math.round((earned / totalPoints) * 10000) / 100
+          : 0;
+        try {
+          await this.#repo.create('results', {
+            school_id: game.school_id,
+            exam_id: null,
+            user_id: session.user_id ?? null,
+            score: percent,
+            total_points: totalPoints,
+            earned_points: earned,
+            time_spent: null,
+            answers_json: JSON.stringify({
+              ...parseObject(session.answers_json),
+              gameId: game.id,
+              gameName: game.name,
+              gameType: game.type,
+              mode: RESULT_MODE.GAME,
+              rank: i + 1,
+              totalQuestions: ids.length,
+            }),
+            mode: RESULT_MODE.GAME,
+            passed: percent >= 50,
+            attempt_number: 1,
+            date_taken: new Date().toISOString(),
+          });
+        } catch { /* best-effort archive */ }
+      }
+    }
+
     return this.#repo.update('games', gameId, {
       status: GAME_STATUS.FINISHED,
       ended_at: new Date().toISOString(),
@@ -422,20 +469,33 @@ export class GameService {
     return safeQuestion(question, index, ids.length);
   }
 
-  async #assertQuestionSet(ids, schoolId) {
+  async #assertQuestionSet(ids, currentUser) {
+    const schoolId = currentUser?.school_id ?? null;
     const uniqueIds = [...new Set((ids ?? []).map(String))];
     if (uniqueIds.length !== (ids ?? []).length) {
       throw new ValidationError({ question_ids: ['Questions must not be duplicated'] });
     }
 
+    const isTeacher = currentUser?.role === ROLES.TEACHER;
     const missing = [];
+    const foreign = [];
     for (const id of uniqueIds) {
-      try { await this.#getQuestion(id, schoolId); }
-      catch { missing.push(id); }
+      let question = null;
+      try { question = await this.#getQuestion(id, schoolId); }
+      catch { missing.push(id); continue; }
+      // Teachers may only build games over questions THEY authored; legacy
+      // unattributed rows (created_by NULL) stay admin-only. Admins may use
+      // any question in their school.
+      if (isTeacher && question.created_by !== currentUser.id) foreign.push(id);
     }
     if (missing.length) {
       throw new ValidationError({
         question_ids: ['Unknown or inaccessible question(s): ' + missing.join(', ')],
+      });
+    }
+    if (foreign.length) {
+      throw new ValidationError({
+        question_ids: ['Not your question(s): ' + foreign.join(', ')],
       });
     }
   }

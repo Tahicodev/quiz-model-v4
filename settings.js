@@ -327,6 +327,8 @@ function openSettingsModal() {
 	if (typeof window.renderProfileRequests === 'function') {
 		window.renderProfileRequests();
 	}
+
+	syncSettingsAddUserFab();
 }
 
 // Close Settings Modal
@@ -341,6 +343,7 @@ function closeSettingsModal(options = {}) {
 	const modal = document.getElementById('settingsModal');
 	if (modal) modal.style.display = 'none';
 	unlockSettingsPageScroll();
+	syncSettingsAddUserFab();
 }
 
 function lockSettingsPageScroll() {
@@ -489,6 +492,47 @@ function isMobileSettingsViewport() {
 		window.matchMedia?.('(max-width: 760px)').matches ||
 		window.innerWidth <= 760,
 	);
+}
+
+// The Add User control morphs on small screens: the header button is hidden
+// and a floating "+" pinned to the page's right-bottom corner takes its place
+// while the App Settings → Users → User Management view is the active one.
+// The FAB lives outside the settings modal (see admin.html) so position:fixed
+// keeps it glued to the viewport corner instead of the modal's scroll area.
+function syncSettingsAddUserFab() {
+	const fab = document.getElementById('settingsUsersFab');
+	if (!fab) return;
+	const modal = document.getElementById('settingsModal');
+	const settingsOpen = Boolean(modal && modal.style.display !== 'none');
+	const activeSettingsTab = document.querySelector(
+		'#settingsModal .settings-tab-btn.active',
+	)?.dataset?.settingsTab;
+	const activeUsersTab = document.querySelector(
+		'#users-settings .user-settings-tab-btn.active',
+	)?.dataset?.userTab;
+	const show =
+		settingsOpen &&
+		activeSettingsTab === 'users' &&
+		activeUsersTab === 'management' &&
+		isMobileSettingsViewport();
+	fab.classList.toggle('hidden', !show);
+}
+
+{
+	const fab = document.getElementById('settingsUsersFab');
+	if (fab) {
+		fab.addEventListener('click', () => {
+			if (typeof window.openUserModal === 'function') window.openUserModal();
+		});
+	}
+	window.addEventListener('resize', syncSettingsAddUserFab);
+	// Defer the first evaluation until the role filter has marked the tabs;
+	// a stale FAB would otherwise need a resize event to clear.
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', syncSettingsAddUserFab);
+	} else {
+		syncSettingsAddUserFab();
+	}
 }
 
 function applySettingsSidebarState(collapsed) {
@@ -715,6 +759,8 @@ function switchSettingsTab(event, tabName) {
 			else btn.classList.remove('active');
 		});
 	}
+
+	syncSettingsAddUserFab();
 }
 
 function switchUsersSettingsTab(event, tabName) {
@@ -770,6 +816,8 @@ function switchUsersSettingsTab(event, tabName) {
 	) {
 		window.renderProfileRequests();
 	}
+
+	syncSettingsAddUserFab();
 }
 
 function switchPresetSettingsTab(event, tabName) {

@@ -369,6 +369,8 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
 		await wipe('tournament_entries');
 		await wipe('tournament_history');
 		await wipe('tournaments');
+		await wipe('kidsChampionshipScores');
+		await wipe('kidsChampionships');
 		await wipe('games');
 		await wipe('exam_sessions');
 		await wipe('exam_questions');

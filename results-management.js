@@ -428,6 +428,21 @@ function loadResults() {
 	if (window.Auth?.filterItemsByRole) {
 		results = window.Auth.filterItemsByRole('result', results);
 	}
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'resultTeacherFilter',
+			'resultTeacherFilterWrap',
+			() => filterResults(),
+		);
+		const teacherScope = window.TeacherFilter.getSelectedTeacher(
+			'resultTeacherFilter',
+		);
+		if (teacherScope) {
+			results = results.filter((r) =>
+				window.TeacherFilter.matchesResult(r, teacherScope),
+			);
+		}
+	}
 	results.sort(
 		(a, b) => new Date(getResultDate(b)) - new Date(getResultDate(a)),
 	);
@@ -451,6 +466,23 @@ function filterResults() {
 	);
 	if (window.Auth?.filterItemsByRole) {
 		results = window.Auth.filterItemsByRole('result', results);
+	}
+
+	// Admin-only teacher scope (see teacher-filter.js)
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'resultTeacherFilter',
+			'resultTeacherFilterWrap',
+			() => filterResults(),
+		);
+		const teacherScope = window.TeacherFilter.getSelectedTeacher(
+			'resultTeacherFilter',
+		);
+		if (teacherScope) {
+			results = results.filter((r) =>
+				window.TeacherFilter.matchesResult(r, teacherScope),
+			);
+		}
 	}
 
 	// Apply filters
@@ -546,10 +578,20 @@ function displayResults(results) {
 	const tbody = document.getElementById('results-list');
 	if (!tbody) return;
 
+	// Owner badges are admin-only (see teacher-filter.js + hide-owner-col CSS).
+	const resultsTable = document.getElementById('results-table');
+	if (resultsTable) {
+		const admin = window.TeacherFilter
+			? window.TeacherFilter.isAdminSession()
+			: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+		resultsTable.classList.toggle('hide-owner-col', !admin);
+	}
+
 	if (results.length === 0) {
 		tbody.innerHTML =
-			'<tr><td colspan="7" class="text-center">No results found.</td></tr>';
+			'<tr><td colspan="10" class="text-center">No results found.</td></tr>';
 		renderResultsKpis(results);
+		if (window.BulkSelect) window.BulkSelect.updateBar('results');
 		return;
 	}
 
@@ -561,6 +603,10 @@ function displayResults(results) {
 	const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
 	const participantIndex = buildGameParticipantIndex(results);
+	// Teacher behind each result (admin-only By column). Built once per render.
+	const resultTeacherMap = window.TeacherFilter
+		? window.TeacherFilter.buildClassTeacherMap()
+		: new Map();
 
 	tbody.innerHTML = results
 		.map((result) => {
@@ -617,6 +663,12 @@ function displayResults(results) {
 
 			return `
             <tr data-result-id="${escapeHtml(resultId)}">
+                <td class="checkbox-cell" data-label="Select">
+                    <input type="checkbox"
+                        class="result-checkbox"
+                        data-id="${escapeHtml(resultId)}"
+                        onchange="toggleBulkRowSelection(this,'results')">
+                </td>
                 <td title="${resultDate ? new Date(resultDate).toLocaleString() : ''}">${
 									resultDate ? new Date(resultDate).toLocaleDateString() : '-'
 								}</td>
@@ -644,6 +696,7 @@ function displayResults(results) {
 										? `<span class="device-source-badge" style="font-size: 0.85em; padding: 2px 6px; background: #f1f5f9; border-radius: 4px; color: #64748b; border: 1px solid #e2e8f0;">${escapeHtml(result.deviceName)}${result.deviceIp ? ` (@${result.deviceIp})` : ''}</span>`
 										: '<span style="color: #9ca3af; font-size: 0.85em;">Local</span>'
 								}</td>
+                <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Teacher">${escapeHtml(window.TeacherFilter ? window.TeacherFilter.resolveResultTeacherNames(result, resultTeacherMap) : '—')}</span></td>
                 <td class="actions-cell">
                     <div class="exam-actions">
                         <button class="exam-action-btn" onclick="viewResultDetails('${escapeHtml(
@@ -681,6 +734,7 @@ function displayResults(results) {
 			row.addEventListener('click', (e) => {
 				if (window.innerWidth > 768) return;
 				if (e.target.closest('button')) return;
+				if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
 				e.stopPropagation();
 
 				const studentShort = resolveStudentDisplay(result, users);
@@ -708,6 +762,9 @@ function displayResults(results) {
 
 	// Refresh the KPI cards whenever the table is (re)rendered.
 	renderResultsKpis(results);
+
+	// Restore bulk selection (filter safe) + refresh bulk bar
+	if (window.BulkSelect) window.BulkSelect.restore('results');
 }
 
 // ── KPI cards ─────────────────────────────────────────────────────────────────
@@ -1156,11 +1213,77 @@ function escapeHtml(unsafe) {
 		.replace(/'/g, '&#039;');
 }
 
+// ============================================
+// BULK SELECTION - DELETE SELECTED (question-tab style)
+// ============================================
+async function deleteSelectedResults() {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('results')
+		: [];
+	if (!ids.length) {
+		showToast('No results selected', 'error');
+		return;
+	}
+	if (
+		!confirm(
+			`Are you sure you want to delete ${ids.length} result(s)? This action cannot be undone.`,
+		)
+	) {
+		return;
+	}
+	const idSet = new Set(ids.map(String));
+	let results = window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
+	const targets = results.filter((r) => {
+		const rid = String(r.id || `${r.numero}-${getResultDate(r)}`);
+		return idSet.has(rid);
+	});
+	if (!targets.length) {
+		showToast('Selected results not found — refresh the list', 'error');
+		return;
+	}
+	// Server-first for UUID rows (same contract as deleteResult).
+	const failed = [];
+	for (const target of targets) {
+		if (
+			window.API?.remove &&
+			window.__authToken &&
+			target?.id &&
+			/^[0-9a-f-]{36}$/i.test(target.id)
+		) {
+			try {
+				await window.API.remove('results', target.id);
+			} catch (error) {
+				console.warn('[results] bulk API delete failed:', error);
+				failed.push(String(target.id));
+			}
+		}
+	}
+	const failedSet = new Set(failed);
+	results = results.filter((r) => {
+		const rid = String(r.id || `${r.numero}-${getResultDate(r)}`);
+		if (!idSet.has(rid)) return true;
+		if (r.id && failedSet.has(String(r.id))) return true;
+		return false;
+	});
+	window.__DI_CONTAINER__.repo.setAll_sync('results', results);
+	if (window.BulkSelect) window.BulkSelect.clear('results');
+	loadResults();
+	if (failed.length) {
+		showToast(
+			`Deleted ${targets.length - failed.length}; ${failed.length} failed on server — kept locally`,
+			'error',
+		);
+	} else {
+		showToast(`Deleted ${targets.length} result(s)!`);
+	}
+}
+
 // Expose to global scope
 window.filterResults = filterResults;
 window.loadResults = loadResults;
 window.viewResultDetails = viewResultDetails;
 window.deleteResult = deleteResult;
+window.deleteSelectedResults = deleteSelectedResults;
 window.clearAllResultFilters = clearAllResultFilters;
 window.escapeHtml = escapeHtml;
 window.exportResultsCSV = exportResultsCSV;

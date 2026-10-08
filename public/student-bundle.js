@@ -16020,6 +16020,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const parsed = ClassCreateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      const { data: duplicates } = await this.#repo.getAll("classes", {
+        filters: { school_id: currentUser?.school_id, name: parsed.data.name },
+        limit: 1
+      });
+      if (duplicates?.length) {
+        throw new ConflictError(`A class named "${parsed.data.name}" already exists`);
+      }
       return this.#repo.create("classes", {
         ...parsed.data,
         school_id: currentUser?.school_id
@@ -16049,6 +16056,31 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       for (const ec of examClasses) {
         await this.#repo.delete("exam_classes", ec.id);
       }
+      try {
+        const { data: settings } = await this.#repo.getAll("settings", {
+          filters: { school_id: existing.school_id, key: "teacherClassAssignments" },
+          limit: 10
+        });
+        for (const row of settings || []) {
+          let map2 = {};
+          try {
+            map2 = JSON.parse(row.value || "{}") || {};
+          } catch {
+            map2 = {};
+          }
+          let changed = false;
+          for (const teacherId of Object.keys(map2)) {
+            if (Array.isArray(map2[teacherId]) && map2[teacherId].map(String).includes(String(id))) {
+              map2[teacherId] = map2[teacherId].map(String).filter((cid) => cid !== String(id));
+              changed = true;
+            }
+          }
+          if (changed) {
+            await this.#repo.update("settings", row.id, { value: JSON.stringify(map2) });
+          }
+        }
+      } catch {
+      }
       await this.#repo.delete("classes", id);
     }
     async getStudents(classId) {
@@ -16062,7 +16094,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     }
     #requireAdmin(user) {
-      if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
+      if (!user || ![ROLES.ADMIN, ROLES.TEACHER].includes(user.role)) {
         throw new ForbiddenError();
       }
     }
@@ -16303,7 +16335,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const parsed = GameCreateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
+      await this.#assertQuestionSet(parsed.data.question_ids, currentUser);
       const joinCode = await this.#generateJoinCode();
       const created = await this.#repo.create("games", {
         ...parsed.data,
@@ -16324,7 +16356,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const parsed = GameUpdateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       if (parsed.data.question_ids) {
-        await this.#assertQuestionSet(parsed.data.question_ids, currentUser.school_id);
+        await this.#assertQuestionSet(parsed.data.question_ids, currentUser);
       }
       const updated = await this.#repo.update("games", id, {
         ...parsed.data,
@@ -16513,6 +16545,47 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           completed_at: (/* @__PURE__ */ new Date()).toISOString()
         });
       }
+      if (typeof this.#repo.create === "function") {
+        const ids = questionIds(game);
+        let totalPoints = 0;
+        for (const qid of ids) {
+          try {
+            const q = await this.#getQuestion(qid, game.school_id);
+            totalPoints += Number(q?.points) || 1;
+          } catch {
+          }
+        }
+        for (let i = 0; i < sessions.length; i++) {
+          const session = sessions[i];
+          const earned = Number(session.score) || 0;
+          const percent = totalPoints > 0 ? Math.round(earned / totalPoints * 1e4) / 100 : 0;
+          try {
+            await this.#repo.create("results", {
+              school_id: game.school_id,
+              exam_id: null,
+              user_id: session.user_id ?? null,
+              score: percent,
+              total_points: totalPoints,
+              earned_points: earned,
+              time_spent: null,
+              answers_json: JSON.stringify({
+                ...parseObject(session.answers_json),
+                gameId: game.id,
+                gameName: game.name,
+                gameType: game.type,
+                mode: RESULT_MODE.GAME,
+                rank: i + 1,
+                totalQuestions: ids.length
+              }),
+              mode: RESULT_MODE.GAME,
+              passed: percent >= 50,
+              attempt_number: 1,
+              date_taken: (/* @__PURE__ */ new Date()).toISOString()
+            });
+          } catch {
+          }
+        }
+      }
       return this.#repo.update("games", gameId, {
         status: GAME_STATUS.FINISHED,
         ended_at: (/* @__PURE__ */ new Date()).toISOString()
@@ -16583,22 +16656,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const question = await this.#getQuestion(ids[index], schoolId);
       return safeQuestion(question, index, ids.length);
     }
-    async #assertQuestionSet(ids, schoolId) {
+    async #assertQuestionSet(ids, currentUser) {
+      const schoolId = currentUser?.school_id ?? null;
       const uniqueIds = [...new Set((ids ?? []).map(String))];
       if (uniqueIds.length !== (ids ?? []).length) {
         throw new ValidationError({ question_ids: ["Questions must not be duplicated"] });
       }
+      const isTeacher = currentUser?.role === ROLES.TEACHER;
       const missing = [];
+      const foreign = [];
       for (const id of uniqueIds) {
+        let question = null;
         try {
-          await this.#getQuestion(id, schoolId);
+          question = await this.#getQuestion(id, schoolId);
         } catch {
           missing.push(id);
+          continue;
         }
+        if (isTeacher && question.created_by !== currentUser.id) foreign.push(id);
       }
       if (missing.length) {
         throw new ValidationError({
           question_ids: ["Unknown or inaccessible question(s): " + missing.join(", ")]
+        });
+      }
+      if (foreign.length) {
+        throw new ValidationError({
+          question_ids: ["Not your question(s): " + foreign.join(", ")]
         });
       }
     }
@@ -16648,6 +16732,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   });
 
   // src/frontend/services/TournamentService.js
+  function parseJson2(value, fallback) {
+    if (value == null || value === "") return fallback;
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  function parseObject2(value) {
+    const parsed = parseJson2(value, {});
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  }
+  function questionSetOf(tournament) {
+    const column = parseJson2(tournament?.question_ids, []);
+    if (Array.isArray(column) && column.length) return column.map(String).filter(Boolean);
+    const fromSettings = parseObject2(tournament?.settings_json).question_ids;
+    if (Array.isArray(fromSettings) && fromSettings.length) return fromSettings.map(String).filter(Boolean);
+    return [];
+  }
   var TournamentService = class {
     #repo;
     #gameService;
@@ -16673,8 +16777,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const parsed = TournamentCreateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       await this.#assertKidsGame(parsed.data.kids_game_id, currentUser?.school_id);
+      const setIds = parseObject2(parsed.data.settings_json).question_ids;
+      const questionIds2 = Array.isArray(setIds) ? setIds.map(String).filter(Boolean) : [];
+      await this.#assertQuestionSet(questionIds2, currentUser);
       return this.#repo.create("tournaments", {
         ...parsed.data,
+        question_ids: JSON.stringify(questionIds2),
         school_id: currentUser?.school_id,
         creator_id: currentUser?.id ?? "system",
         status: TOURNAMENT_STATUS.DRAFT
@@ -16692,7 +16800,46 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (parsed.data.kids_game_id !== void 0) {
         await this.#assertKidsGame(parsed.data.kids_game_id, existing.school_id);
       }
-      return this.#repo.update("tournaments", id, parsed.data);
+      const patch = { ...parsed.data };
+      if (parsed.data.settings_json !== void 0) {
+        const setIds = parseObject2(parsed.data.settings_json).question_ids;
+        const questionIds2 = Array.isArray(setIds) ? setIds.map(String).filter(Boolean) : [];
+        await this.#assertQuestionSet(questionIds2, currentUser);
+        patch.question_ids = JSON.stringify(questionIds2);
+      }
+      return this.#repo.update("tournaments", id, patch);
+    }
+    /**
+     * Validate a tournament's question set: every id must exist in the school
+     * (admins may pick any), and a teacher may only pick questions they authored
+     * — the same rule questions.routes.js applies to the bank itself.
+     */
+    async #assertQuestionSet(questionIds2, currentUser) {
+      if (!questionIds2.length) return;
+      const schoolId = currentUser?.school_id ?? null;
+      const isTeacher = currentUser?.role === ROLES.TEACHER;
+      const missing = [];
+      const foreign = [];
+      for (const id of questionIds2) {
+        let question = null;
+        try {
+          question = await this.#repo.getById("questions", id);
+        } catch {
+          missing.push(id);
+          continue;
+        }
+        if (!question || schoolId && question.school_id !== schoolId) {
+          missing.push(id);
+          continue;
+        }
+        if (isTeacher && question.created_by !== currentUser.id) foreign.push(id);
+      }
+      if (missing.length) {
+        throw new ValidationError({ question_ids: ["Unknown question(s): " + missing.join(", ")] });
+      }
+      if (foreign.length) {
+        throw new ValidationError({ question_ids: ["Not your question(s): " + foreign.join(", ")] });
+      }
     }
     /** A linked kids game must exist, be published, and belong to the school. */
     async #assertKidsGame(kidsGameId, schoolId) {
@@ -16746,10 +16893,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     }
     async getLeaderboard(tournamentId, limit = 50) {
+      const parsedLimit = Number(limit);
+      const safeLimit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(Math.floor(parsedLimit), 5e3) : 50;
       if (typeof this.#repo.getTournamentLeaderboard === "function") {
-        return this.#repo.getTournamentLeaderboard(tournamentId, limit);
+        return this.#repo.getTournamentLeaderboard(tournamentId, safeLimit);
       }
-      return this.#repo.query("tournament.leaderboard", { tournamentId, limit });
+      return this.#repo.query("tournament.leaderboard", { tournamentId, limit: safeLimit });
     }
     /**
      * Score a single tournament answer (used by the realtime tournament handler).
@@ -16768,26 +16917,44 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (t.status !== TOURNAMENT_STATUS.ACTIVE) {
         throw new ValidationError({ status: ["Tournament is not active"] });
       }
+      const setIds = questionSetOf(t);
+      if (setIds.length && !setIds.includes(String(questionId))) {
+        throw new ValidationError({ question_id: ["Question is not part of this tournament"] });
+      }
       const { data: entries } = await this.#repo.getAll("tournament_entries", {
         filters: { tournament_id: tournamentId, user_id: userId }
       });
       const entry = entries[0];
       if (!entry) throw new NotFoundError("TournamentEntry (not registered)");
+      const answers = parseObject2(entry.answers_json);
+      if (Object.prototype.hasOwnProperty.call(answers, questionId)) {
+        return {
+          correct: Boolean(answers[questionId]?.correct),
+          points: 0,
+          score: Number(entry.score) || 0,
+          showAnswer: false,
+          correctAnswer: null,
+          alreadyAnswered: true
+        };
+      }
       const question = await this.#repo.getById("questions", questionId);
       if (!question) throw new NotFoundError("Question");
       const isCorrect = String(answer).trim().toLowerCase() === String(question.answer).trim().toLowerCase();
       const points = isCorrect ? question.points ?? 1 : 0;
+      answers[questionId] = { value: String(answer), correct: isCorrect };
       await this.#repo.update("tournament_entries", entry.id, {
-        score: entry.score + points
+        score: (Number(entry.score) || 0) + points,
+        answers_json: JSON.stringify(answers)
       });
-      const settings = JSON.parse(t.settings_json || "{}");
+      const settings = parseObject2(t.settings_json);
       const showAnswer = settings.show_answers_immediately ?? false;
       return {
         correct: isCorrect,
         points,
-        score: entry.score + points,
+        score: (Number(entry.score) || 0) + points,
         showAnswer,
-        correctAnswer: showAnswer ? question.answer : null
+        correctAnswer: showAnswer ? question.answer : null,
+        alreadyAnswered: false
       };
     }
     async finish(id, currentUser) {
@@ -16801,6 +16968,46 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           completed: true,
           completed_at: (/* @__PURE__ */ new Date()).toISOString()
         });
+      }
+      if (typeof this.#repo.modelFor === "function") {
+        const ids = questionSetOf(t);
+        let totalPoints = 0;
+        for (const qid of ids) {
+          try {
+            const question = await this.#repo.getById("questions", qid);
+            totalPoints += Number(question?.points) || 1;
+          } catch {
+          }
+        }
+        for (let i = 0; i < entries.length; i++) {
+          const entry = entries[i];
+          const earned = Number(entry.score) || 0;
+          const percent = totalPoints > 0 ? Math.round(earned / totalPoints * 1e4) / 100 : 0;
+          try {
+            await this.#repo.create("results", {
+              school_id: t.school_id,
+              exam_id: null,
+              user_id: entry.user_id ?? null,
+              score: percent,
+              total_points: totalPoints,
+              earned_points: earned,
+              time_spent: null,
+              answers_json: JSON.stringify({
+                ...parseObject2(entry.answers_json),
+                tournamentId: t.id,
+                tournamentName: t.name,
+                mode: RESULT_MODE.TOURNAMENT,
+                rank: i + 1,
+                totalQuestions: ids.length
+              }),
+              mode: RESULT_MODE.TOURNAMENT,
+              passed: percent >= 50,
+              attempt_number: 1,
+              date_taken: (/* @__PURE__ */ new Date()).toISOString()
+            });
+          } catch {
+          }
+        }
       }
       return this.#repo.update("tournaments", id, { status: TOURNAMENT_STATUS.FINISHED });
     }
@@ -16842,6 +17049,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   });
 
   // src/frontend/services/SettingsService.js
+  var VISIBILITY_RANK = Object.freeze({
+    [SETTINGS_VISIBILITY.PUBLIC]: 0,
+    [SETTINGS_VISIBILITY.TEACHER]: 1,
+    [SETTINGS_VISIBILITY.ADMIN]: 2,
+    [SETTINGS_VISIBILITY.SYSTEM]: 3
+  });
+  var rankOf = (visibility) => VISIBILITY_RANK[visibility] ?? VISIBILITY_RANK[SETTINGS_VISIBILITY.ADMIN];
   var SettingsService = class {
     #repo;
     constructor(repo) {
@@ -16872,16 +17086,28 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     // System settings (e.g. API keys, DB config) are never sent to the client.
     /**
      * Update a single setting.
+     * @param {object|null} actor  the authenticated user; when present the
+     *   visibility tier of the target setting is enforced against the role.
      */
-    async updateSetting(schoolId, key, value, visibility) {
+    async updateSetting(schoolId, key, value, visibility, actor = null) {
       const parsed = SettingUpdateSchema.safeParse({ key, value, visibility });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       if (typeof this.#repo.updateSetting === "function") {
         return this.#repo.updateSetting(parsed.data.key, parsed.data);
       }
       const { data: existing } = await this.#repo.getAll("settings", {
-        filters: { school_id: schoolId, key: parsed.data.key }
+        filters: { school_id: schoolId, key: parsed.data.key },
+        limit: 1
       });
+      if (actor) {
+        const effectiveVisibility = rankOf(parsed.data.visibility) > rankOf(existing[0]?.visibility) ? parsed.data.visibility : existing[0]?.visibility ?? parsed.data.visibility ?? SETTINGS_VISIBILITY.ADMIN;
+        if (effectiveVisibility === SETTINGS_VISIBILITY.SYSTEM) {
+          throw new ForbiddenError("System settings are managed server-side");
+        }
+        if (actor.role === ROLES.TEACHER && rankOf(effectiveVisibility) > rankOf(SETTINGS_VISIBILITY.TEACHER)) {
+          throw new ForbiddenError("Only admins can modify this setting");
+        }
+      }
       if (existing.length > 0) {
         return this.#repo.update("settings", existing[0].id, {
           value: parsed.data.value,
@@ -16911,14 +17137,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     /**
      * Bulk update multiple settings at once.
      * Expected format: [{ key: 'app.name', value: 'New Name' }, ...]
+     * @param {object|null} actor  authenticated user; visibility tier is
+     *   enforced per row (see updateSetting).
      */
-    async bulkUpdate(schoolId, settingsArray) {
+    async bulkUpdate(schoolId, settingsArray, actor = null) {
       const parsed = SettingsBulkUpdateSchema.safeParse({ settings: settingsArray });
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
       const results = [];
       for (const item of parsed.data.settings) {
-        const res = await this.updateSetting(schoolId, item.key, item.value, item.visibility);
-        results.push(res);
+        try {
+          results.push(await this.updateSetting(schoolId, item.key, item.value, item.visibility, actor));
+        } catch (err) {
+          if (actor?.role === ROLES.TEACHER && err?.code === "FORBIDDEN") continue;
+          throw err;
+        }
       }
       return results;
     }
@@ -18931,20 +19163,59 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function isStudent() {
       return isStudentLikeUser(currentUser);
     }
-    function getTeacherClassAssignments() {
+    function readAssignmentsMirror() {
       try {
         const raw = localStorage.getItem("quizTeacherClassAssignments");
         const parsed = raw ? JSON.parse(raw) : {};
         return parsed && typeof parsed === "object" ? parsed : {};
-      } catch (e) {
+      } catch (_) {
         return {};
       }
     }
+    function readAssignmentsRepo() {
+      try {
+        const repo = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
+        if (repo && typeof repo.getValue_sync === "function") {
+          const raw = repo.getValue_sync("settings", {});
+          const row = Array.isArray(raw?.settings) ? raw.settings.find(
+            (s) => s && s.key === "teacherClassAssignments"
+          ) : null;
+          if (row?.value) {
+            const parsed = JSON.parse(row.value);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              return parsed;
+            }
+          }
+        }
+      } catch (_) {
+      }
+      return null;
+    }
+    function assignmentsMirrorIsDirty() {
+      try {
+        return sessionStorage.getItem("quizTeacherClassAssignmentsDirty") === "1";
+      } catch (_) {
+        return false;
+      }
+    }
+    function fresherAssignmentsMap() {
+      if (assignmentsMirrorIsDirty()) return readAssignmentsMirror();
+      return readAssignmentsRepo() || readAssignmentsMirror();
+    }
+    function assignedTeacherClassIds(teacherId) {
+      const key = String(teacherId || "");
+      if (!key) return [];
+      const map2 = fresherAssignmentsMap();
+      const fromMap = Array.isArray(map2[key]) ? map2[key].map(String) : [];
+      const teacher = getUsers().find(
+        (u) => String(u.id) === key && u.role === ROLE_TEACHER
+      );
+      const fromRow = Array.isArray(teacher?.classIds) ? teacher.classIds.map(String) : [];
+      return [.../* @__PURE__ */ new Set([...fromMap, ...fromRow])];
+    }
     function getTeacherClassIds(user = currentUser) {
-      const own = Array.isArray(user?.classIds) ? user.classIds : [];
-      if (own.length > 0) return own;
-      const mirrored = getTeacherClassAssignments()[user?.id || ""];
-      return Array.isArray(mirrored) ? mirrored : [];
+      const own = Array.isArray(user?.classIds) ? user.classIds.map(String) : [];
+      return [.../* @__PURE__ */ new Set([...own, ...assignedTeacherClassIds(user?.id)])];
     }
     function getAccessibleClasses() {
       const classes = safeJsonParse(
@@ -19882,18 +20153,65 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return importUsersWithClasses();
     }
+    function refreshUserTeacherFilter() {
+      const teacherFilter = document.getElementById("userTeacherFilter");
+      const group = document.getElementById("userTeacherFilterGroup");
+      if (group) group.hidden = !isAdmin();
+      if (!teacherFilter) return;
+      const current = teacherFilter.value;
+      const teachers = getUsers().filter((u) => u.role === ROLE_TEACHER).sort(
+        (a, b) => String(a.name || a.username || "").localeCompare(
+          String(b.name || b.username || "")
+        )
+      );
+      teacherFilter.innerHTML = '<option value="">All Teachers</option>' + teachers.map(
+        (t) => `<option value="${escapeHtml(t.id)}">${escapeHtml(
+          t.name || t.username || "Teacher"
+        )}</option>`
+      ).join("");
+      const hasCurrent = !current || teachers.some((t) => String(t.id) === String(current));
+      teacherFilter.value = hasCurrent ? current : "";
+    }
+    function getSelectedTeacherScope() {
+      const teacherFilter = document.getElementById("userTeacherFilter");
+      const teacherId = teacherFilter ? String(teacherFilter.value || "") : "";
+      if (!teacherId) return null;
+      return { teacherId, classIds: assignedTeacherClassIds(teacherId) };
+    }
+    function buildTeacherNamesByClass() {
+      const users = getUsers();
+      const teacherRows = users.filter((u) => u.role === ROLE_TEACHER);
+      const nameById = new Map(
+        teacherRows.map((t) => [String(t.id), t.name || t.username || "Teacher"])
+      );
+      const byClass = /* @__PURE__ */ new Map();
+      teacherRows.forEach((t) => {
+        const tid = String(t.id);
+        assignedTeacherClassIds(tid).forEach((cid) => {
+          if (!cid) return;
+          const key = String(cid);
+          if (!byClass.has(key)) byClass.set(key, []);
+          byClass.get(key).push(nameById.get(tid));
+        });
+      });
+      return byClass;
+    }
     function refreshUserClassFilter() {
       const classFilter = document.getElementById("userClassFilter");
       if (!classFilter) return;
       const current = classFilter.value;
       const classes = getAccessibleClasses();
+      const teacherScope = isAdmin() ? getSelectedTeacherScope() : null;
+      const scoped = teacherScope ? classes.filter(
+        (cls) => teacherScope.classIds.includes(String(cls.id))
+      ) : classes;
       const options = [
         { value: "", label: "All Classes" },
         {
           value: USER_CLASS_GUEST_VALUE,
           label: `${GUEST_CLASS_NAME} (no class)`
         },
-        ...classes.map((cls) => ({
+        ...scoped.map((cls) => ({
           value: cls.id,
           label: cls.name
         }))
@@ -19969,6 +20287,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         );
       } else if (scope.mode === "guest") {
         scopedClasses = [];
+      }
+      const exportTeacherScope = isAdmin() ? getSelectedTeacherScope() : null;
+      if (exportTeacherScope && scope.mode === "all") {
+        scopedClasses = scopedClasses.filter(
+          (cls) => exportTeacherScope.classIds.includes(String(cls.id))
+        );
       }
       const guestUsers = scopedStudents.filter((u) => !u.classId);
       const needsGuest = scope.mode === "guest" || scope.mode === "all" && guestUsers.length;
@@ -20073,6 +20397,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         );
       } else if (scope.mode === "guest") {
         scopedClasses = [];
+      }
+      const exportAllTeacherScope = isAdmin() ? getSelectedTeacherScope() : null;
+      if (exportAllTeacherScope && scope.mode === "all") {
+        scopedClasses = scopedClasses.filter(
+          (cls) => exportAllTeacherScope.classIds.includes(String(cls.id))
+        );
       }
       const guestUsers = scopedStudents.filter((u) => !u.classId);
       const needsGuest = scope.mode === "guest" || scope.mode === "all" && guestUsers.length;
@@ -20551,9 +20881,17 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const role = roleFilter?.value || "";
       const status = statusFilter?.value || "";
       const classScope = classFilter?.value || "";
+      const teacherScope = getSelectedTeacherScope();
+      const teacherNamesByClass = term ? buildTeacherNamesByClass() : null;
       return users.filter((u) => {
         if (role && u.role !== role) return false;
         if (status && u.status !== status) return false;
+        if (teacherScope) {
+          if (String(u.id) === teacherScope.teacherId) {
+          } else if (u.role !== ROLE_STUDENT || !teacherScope.classIds.includes(String(u.classId || ""))) {
+            return false;
+          }
+        }
         if (classScope) {
           if (classScope === USER_CLASS_GUEST_VALUE) {
             if (u.role !== ROLE_STUDENT || u.classId) return false;
@@ -20565,12 +20903,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           }
         }
         if (!term) return true;
+        const termTeacherNames = u.role === ROLE_STUDENT && teacherNamesByClass ? teacherNamesByClass.get(String(u.classId || "")) || [] : [];
         const haystack = [
           u.name,
           u.username,
           u.studentNumber,
           u.className,
-          u.role
+          u.role,
+          ...termTeacherNames
         ].filter(Boolean).join(" ").toLowerCase();
         return haystack.includes(term);
       });
@@ -20580,6 +20920,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!tableBody) return;
       const usersTable = document.getElementById("usersTable");
       if (usersTable) usersTable.classList.toggle("teacher-view", isTeacher());
+      refreshUserTeacherFilter();
       refreshUserClassFilter();
       const classes = safeJsonParse(
         JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
@@ -20612,11 +20953,19 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         }
       });
       if (users.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="8" class="text-center">No users found.</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" class="text-center">No users found.</td></tr>';
         updateBulkSelectionState();
         return;
       }
       const emptyCell = '<span class="text-muted">-</span>';
+      const studentCountByClass = /* @__PURE__ */ new Map();
+      getUsers().forEach((x) => {
+        if (x.role === ROLE_STUDENT && x.classId) {
+          const key = String(x.classId);
+          studentCountByClass.set(key, (studentCountByClass.get(key) || 0) + 1);
+        }
+      });
+      const teacherNamesByClass = buildTeacherNamesByClass();
       tableBody.innerHTML = users.map((u) => {
         const roleLabel = u.role === ROLE_ADMIN ? "Admin" : u.role === ROLE_TEACHER ? "Teacher" : "Student";
         const statusLabel = u.status === "disabled" ? "Disabled" : "Active";
@@ -20625,8 +20974,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const statusAction = u.status === "disabled" ? "Activate" : "Suspend";
         const statusClass = u.status === "disabled" ? "btn-secondary" : "btn-danger-soft";
         const className = resolveUserClassName(u, classMap);
-        const classDisplay = u.role === ROLE_STUDENT ? className || GUEST_CLASS_NAME : "";
-        const studentNumberDisplay = u.role === ROLE_STUDENT ? u.studentNumber || "" : "";
+        let classCellHtml = emptyCell;
+        let studentNumberCellHtml = emptyCell;
+        if (u.role === ROLE_STUDENT) {
+          if (u.studentNumber) {
+            studentNumberCellHtml = escapeHtml(u.studentNumber);
+          }
+          classCellHtml = escapeHtml(className || GUEST_CLASS_NAME);
+        } else if (u.role === ROLE_TEACHER) {
+          const teacherClassIds = assignedTeacherClassIds(u.id);
+          const teacherClassNames = teacherClassIds.map((id) => classMap.get(String(id))).filter(Boolean);
+          classCellHtml = teacherClassNames.length ? escapeHtml(teacherClassNames.join(", ")) : '<span class="text-muted">No class assigned</span>';
+          const total = teacherClassIds.reduce(
+            (sum, id) => sum + (studentCountByClass.get(String(id)) || 0),
+            0
+          );
+          studentNumberCellHtml = '<span title="' + total + " student" + (total === 1 ? "" : "s") + ' assigned">' + total + "</span>";
+        }
+        const rowTeachers = u.role === ROLE_STUDENT ? teacherNamesByClass.get(String(u.classId || "")) || [] : [];
+        const teacherCellHtml = rowTeachers.length ? escapeHtml(rowTeachers.join(", ")) : emptyCell;
         const usernameDisplay = u.role === ROLE_STUDENT && u.studentNumber && String(u.username || "") === String(u.studentNumber || "") ? "" : u.username || "";
         const isSelected = selectedUserIds.has(u.id);
         const baseName = u.name || rosterNameMap.get(`${u.classId}::${u.studentNumber}`) || u.username || "User";
@@ -20643,8 +21009,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 						</td>
             <td>${escapeHtml(getUserDisplayName({ title: u.title, name: baseName }) || baseName)}</td>
             <td>${usernameDisplay ? escapeHtml(usernameDisplay) : emptyCell}</td>
-            <td>${studentNumberDisplay ? escapeHtml(studentNumberDisplay) : emptyCell}</td>
-            <td>${classDisplay ? escapeHtml(classDisplay) : emptyCell}</td>
+            <td>${studentNumberCellHtml}</td>
+            <td>${classCellHtml}</td>
+            <td>${teacherCellHtml}</td>
             <td><span class="user-role ${escapeHtml(u.role)}">${roleLabel}</span></td>
             <td><span class="${statusBadge}">${escapeHtml(statusLabel)}</span></td>
             <td>
@@ -20659,6 +21026,39 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       `;
       }).join("");
       updateBulkSelectionState();
+      maybeRefreshTeacherAssignments();
+    }
+    let teacherAssignmentsRefreshFor = null;
+    function maybeRefreshTeacherAssignments() {
+      if (!isAdmin()) return;
+      const sel = document.getElementById("userTeacherFilter");
+      const teacherId = sel ? String(sel.value || "") : "";
+      if (!teacherId) {
+        teacherAssignmentsRefreshFor = null;
+        return;
+      }
+      const scope = getSelectedTeacherScope();
+      if (scope && scope.classIds.length) return;
+      if (teacherAssignmentsRefreshFor === teacherId) return;
+      if (!window.API || typeof window.API.raw !== "function") return;
+      teacherAssignmentsRefreshFor = teacherId;
+      window.API.raw("GET", "/settings/admin").then((res) => {
+        const rows = Array.isArray(res) ? res : res?.data || res?.settings || [];
+        const row = rows.find((s) => s && s.key === "teacherClassAssignments");
+        if (!row?.value) return;
+        const parsed = JSON.parse(row.value);
+        if (!parsed || typeof parsed !== "object") return;
+        try {
+          localStorage.setItem(
+            "quizTeacherClassAssignments",
+            JSON.stringify(parsed)
+          );
+          sessionStorage.setItem("quizTeacherClassAssignmentsDirty", "1");
+        } catch (_) {
+        }
+        renderUsersTable();
+      }).catch(() => {
+      });
     }
     function updateBulkSelectionState() {
       const bulkBar = document.getElementById("usersBulkActions");
@@ -20891,7 +21291,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
           []
         );
-        const assignedClassIds = Array.isArray(user?.classIds) ? user.classIds : getTeacherClassAssignments()[user?.id] || [];
+        const assignedClassIds = [
+          ...new Set([
+            ...Array.isArray(user?.classIds) ? user.classIds : [],
+            ...assignedTeacherClassIds(user?.id)
+          ].map(String))
+        ];
         teacherClassList.innerHTML = classes.map((c) => {
           const checked = assignedClassIds.includes(c.id) ? "checked" : "";
           return `
@@ -21193,6 +21598,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
                 });
               }
               localStorage.setItem("quizTeacherClassAssignments", serialized);
+              try {
+                sessionStorage.setItem("quizTeacherClassAssignmentsDirty", "1");
+              } catch (_) {
+              }
             } catch (assignmentErr) {
               console.warn(
                 "[auth] teacher class assignments save failed:",
@@ -22666,6 +23075,10 @@ A new temporary password will be generated and shown to you once so you can shar
       if (classFilter) {
         classFilter.addEventListener("change", () => renderUsersTable());
       }
+      const teacherFilter = document.getElementById("userTeacherFilter");
+      if (teacherFilter) {
+        teacherFilter.addEventListener("change", () => renderUsersTable());
+      }
       bindAuthPasswordToggles();
       setStudentAuthMode("signin");
       const usersTable = document.getElementById("usersTable");
@@ -22776,6 +23189,10 @@ A new temporary password will be generated and shown to you once so you can shar
     window.closeResetPasswordModal = closeResetPasswordModal;
     window.renderUsersTable = renderUsersTable;
     window.addEventListener("quiz:bootstrap-ready", () => {
+      try {
+        sessionStorage.removeItem("quizTeacherClassAssignmentsDirty");
+      } catch (_) {
+      }
       renderUsersTable();
       renderProfileRequests();
       renderAccountRequests();

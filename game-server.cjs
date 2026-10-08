@@ -4360,7 +4360,12 @@ function registerGameEngine(io) {
 				const resolvedGame = gameId ? getTrackedGame(gameId) : getTrackedGameByJoinCode(joinCode);
 				const game = resolvedGame;
 				if (!game) {
-					if (typeof ack === 'function') ack({ error: 'Game not found' });
+					// Not an in-memory MPA lobby. The Prisma-backed handler
+					// (src/backend/realtime/handlers/game.handler.js) listens on
+					// the same event and acks SaaS games itself — it also answers
+					// the not-found case. Awaiting the ack here would race it and
+					// hand the client a premature "Game not found", so defer
+					// silently instead.
 					return;
 				}
 				// Late-join policy: a student who opens the workspace after the

@@ -32,7 +32,10 @@ function assertOwnership(row, user) {
 }
 
 // GET /api/v1/questions
-router.get('/', validateQuery(QuestionFilterSchema), async (req, res, next) => {
+// Questions carry their `answer` and `explanation` fields, so the bank is
+// staff-only. Students never call this route — they receive a projected,
+// answer-stripped question list from /bootstrap (and during an exam session).
+router.get('/', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), validateQuery(QuestionFilterSchema), async (req, res, next) => {
   try {
     const { questionSvc } = getContainer();
     const { limit, offset, orderBy, direction, search, created_by, ...filters } = req.query;
@@ -50,7 +53,7 @@ router.get('/', validateQuery(QuestionFilterSchema), async (req, res, next) => {
 });
 
 // GET /api/v1/questions/:id
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
     const { questionSvc } = getContainer();
     const q = await questionSvc.getById(req.params.id);

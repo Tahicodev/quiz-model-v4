@@ -3635,7 +3635,7 @@
 		};
 	}
 
-	let gameFilters = { search: '', status: '', classId: '', type: '' };
+	let gameFilters = { search: '', status: '', classId: '', type: '', teacherId: '' };
 
 	function getGameClassIdList(game) {
 		return [
@@ -3647,6 +3647,13 @@
 	}
 
 	function buildGameFilterOptions() {
+		if (window.TeacherFilter) {
+			window.TeacherFilter.populate(
+				'gameTeacherFilter',
+				'gameTeacherFilterWrap',
+				() => applyGameFilters(),
+			);
+		}
 		const classSel = byId('gameFilterClass');
 		const typeSel = byId('gameFilterType');
 		const games = Array.isArray(GameCore.getQuizGames())
@@ -3737,11 +3744,16 @@
 			'';
 		gameFilters.classId = byId('gameFilterClass')?.value || '';
 		gameFilters.type = byId('gameFilterType')?.value || '';
+		// Admin-only teacher scope (see teacher-filter.js). Empty for
+		// non-admin sessions, so teacher views are unchanged.
+		gameFilters.teacherId = window.TeacherFilter
+			? window.TeacherFilter.getSelectedTeacher('gameTeacherFilter')
+			: '';
 		renderGameList();
 	}
 
 	function resetGameFilters() {
-		gameFilters = { search: '', status: '', classId: '', type: '' };
+		gameFilters = { search: '', status: '', classId: '', type: '', teacherId: '' };
 		const search = byId('gameFilterSearch');
 		if (search) search.value = '';
 		const status = byId('gameFilterStatus');
@@ -3758,6 +3770,8 @@
 		if (classSel) classSel.value = '';
 		const typeSel = byId('gameFilterType');
 		if (typeSel) typeSel.value = '';
+		const teacherSel = byId('gameTeacherFilter');
+		if (teacherSel) teacherSel.value = '';
 		renderGameList();
 		if (typeof showToast === 'function') {
 			showToast('Game filters cleared', 'info');
@@ -3767,6 +3781,11 @@
 	function renderGameList() {
 		const container = byId('gameList');
 		if (!container) return;
+		// Owner badges are admin-only (see teacher-filter.js + hide-owner CSS).
+		const admin = window.TeacherFilter
+			? window.TeacherFilter.isAdminSession()
+			: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+		container.classList.toggle('hide-owner', !admin);
 		updateGamesSplitLayout();
 		buildGameFilterOptions();
 		const games = GameCore.getQuizGames();
@@ -3787,6 +3806,11 @@
 				'<div class="empty-state">No games created yet.</div>';
 			return;
 		}
+		// Admin-only teacher scope: read live from the dropdown so typing in
+		// other filters never drops the teacher narrowing.
+		const gameTeacherScope = window.TeacherFilter
+			? window.TeacherFilter.getSelectedTeacher('gameTeacherFilter')
+			: '';
 		const filteredGames = visibleGames.filter((game) => {
 			if (gameFilters.search) {
 				const haystack = `${String(game.name || '')} ${getGameTypeLabel(
@@ -3812,13 +3836,21 @@
 			if (gameFilters.type && (game.type || '') !== gameFilters.type) {
 				return false;
 			}
+			if (
+				gameTeacherScope &&
+				window.TeacherFilter &&
+				!window.TeacherFilter.matchesOwner(game, gameTeacherScope)
+			) {
+				return false;
+			}
 			return true;
 		});
 		const filtersActive = Boolean(
 			gameFilters.search ||
 				gameFilters.status ||
 				gameFilters.classId ||
-				gameFilters.type,
+				gameFilters.type ||
+				gameTeacherScope,
 		);
 		if (!filteredGames.length) {
 			container.innerHTML = filtersActive
@@ -3871,6 +3903,7 @@
 								<span class="game-badge ghost">${escapeHtml(lobbyLabel)}</span>
 								${tournamentRoundBadge}
 								<span class="game-badge game-code-badge" title="Share this code with students">Code ${escapeHtml(game.joinCode || game.join_code || '------')}</span>
+								${window.TeacherFilter ? window.TeacherFilter.ownerBadge(game) : ''}
 							</div>
 						</div>
 						<span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
@@ -7260,13 +7293,16 @@ function buildLobbyHtml(gameId) {
 			.toLowerCase();
 		// Kids Games Studio is a third studio tab (plan §5.1) — it must be
 		// recognized explicitly, otherwise it collapses back to games-studio
-		// and its pane can never activate.
+		// and its pane can never activate. Kids Championships is a fourth
+		// studio tab with its own pane (same visibility rules as kids).
 		let activeTab =
 			normalized === 'tournament-studio'
 				? 'tournament-studio'
-				: normalized === 'kids-games-studio' || normalized === 'kids-games'
-					? 'kids-games-studio'
-					: 'games-studio';
+				: normalized === 'kids-championships' || normalized === 'kids-championship'
+					? 'kids-championships'
+					: normalized === 'kids-games-studio' || normalized === 'kids-games'
+						? 'kids-games-studio'
+						: 'games-studio';
 
 		// Land on a studio whose pane is actually visible (hidden panes keep
 		// .active but render nothing — a blank Games tab). Hidden panes:
@@ -7284,7 +7320,7 @@ function buildLobbyHtml(gameId) {
 			!window.Auth.canAccessKidsStudio();
 		const kidsUsable = !kidsAccessDenied && !paneHidden('kids-games-studio');
 		const gamesUsable = !paneHidden('games-studio');
-		if (activeTab === 'kids-games-studio') {
+		if (activeTab === 'kids-games-studio' || activeTab === 'kids-championships') {
 			if (!kidsUsable && gamesUsable) activeTab = 'games-studio';
 		} else if (!gamesUsable && kidsUsable) {
 			activeTab = 'kids-games-studio';
@@ -7298,6 +7334,10 @@ function buildLobbyHtml(gameId) {
 				titleEl.textContent = 'Tournament Studio';
 				subtitleEl.textContent =
 					'Plan tournament format, rounds, scoring, and rewards with full control.';
+			} else if (activeTab === 'kids-championships') {
+				titleEl.textContent = 'Kids Championships';
+				subtitleEl.textContent =
+					'Simple class tournaments over your kids games — pick the challenges, share the 4-letter code, watch the podium.';
 			} else if (activeTab === 'kids-games-studio') {
 				titleEl.textContent = 'Kids Games Studio';
 				subtitleEl.textContent =
@@ -7347,6 +7387,13 @@ function buildLobbyHtml(gameId) {
 				try { window.KidsGames.renderList(); } catch (_) { /* list shows its own error */ }
 			}
 		}
+
+		if (activeTab === 'kids-championships') {
+			// Kids Championships module (separate file) — same lazy pattern.
+			if (window.KidsChampionships && typeof window.KidsChampionships.render === 'function') {
+				try { window.KidsChampionships.render(); } catch (_) { /* panel shows its own error */ }
+			}
+		}
 	}
 
 	function initGamesStudioTabs() {
@@ -7389,18 +7436,22 @@ function buildLobbyHtml(gameId) {
 			// so a revoked kidsGames toggle falls back to the full studio set
 			// instead of leaving the teacher with an empty Games tab.
 			const kidsOnly = isPrimaire && isTeacher && !accessDenied;
-			const btn = document.querySelector('[data-games-studio-tab="kids-games-studio"]');
-			const pane = document.querySelector('[data-games-studio-pane="kids-games-studio"]');
-			if (!isPrimaire || accessDenied) {
-				if (btn) btn.style.display = 'none';
-				if (pane) pane.style.display = 'none';
-				if ((state.gamesStudioTab || '') === 'kids-games-studio') {
-					setGamesStudioTab('games-studio');
+			// Kids Championships shares the kids studio's visibility rules
+			// (primaire only, same teacher-access toggle and kids-only mode).
+			['kids-games-studio', 'kids-championships'].forEach((key) => {
+				const btn = document.querySelector(`[data-games-studio-tab="${key}"]`);
+				const pane = document.querySelector(`[data-games-studio-pane="${key}"]`);
+				if (!isPrimaire || accessDenied) {
+					if (btn) btn.style.display = 'none';
+					if (pane) pane.style.display = 'none';
+					if ((state.gamesStudioTab || '') === key) {
+						setGamesStudioTab('games-studio');
+					}
+				} else {
+					if (btn) btn.style.display = '';
+					if (pane) pane.style.display = '';
 				}
-			} else {
-				if (btn) btn.style.display = '';
-				if (pane) pane.style.display = '';
-			}
+			});
 
 			// Primaire teachers: hide the other two studios (and restore them
 			// if the session later resolves without kids-only mode).
@@ -11817,12 +11868,15 @@ window.renderTournamentLeaderboard = renderTournamentPanels;
 		const gameFilterBar = byId('gameFiltersBar');
 		if (gameFilterBar && gameFilterBar.dataset.bound !== 'true') {
 			gameFilterBar.dataset.bound = 'true';
-			['gameFilterStatus', 'gameFilterClass', 'gameFilterType'].forEach(
-				(id) => {
-					const el = byId(id);
-					if (el) el.addEventListener('change', applyGameFilters);
-				},
-			);
+			[
+				'gameFilterStatus',
+				'gameFilterClass',
+				'gameFilterType',
+				'gameTeacherFilter',
+			].forEach((id) => {
+				const el = byId(id);
+				if (el) el.addEventListener('change', applyGameFilters);
+			});
 			const statusChips = document.querySelectorAll(
 				'.game-status-row .filter-chip',
 			);

@@ -39,7 +39,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-06-r3" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-06-r13" />
 		<link rel="stylesheet" href="admin.css?v=2026-09-24-r17" />
 		<link rel="stylesheet" href="theme.css?v=2026-09-24-r17" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r2" />
@@ -133,7 +133,7 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
 		<script src="api-client.js?v=2026-10-06-r1" defer></script>
-		<script src="auth.js?v=2026-10-06-r2" defer></script>
+		<script src="auth.js?v=2026-10-06-r4" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="settings.js?v=2026-10-06-r3" defer></script>
 
@@ -144,23 +144,26 @@
 		<script src="realtime-admin.js?v=2026-09-15-r1" defer></script>
 
 		<!-- Admin page scripts -->
+		<script src="bulk-selection.js?v=2026-10-08-r1" defer></script>
+		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
 		<script src="category-management.js?v=2026-09-17-r1" defer></script>
 		<script src="questions-management.js?v=2026-09-27-r3" defer></script>
 		<script src="exam-management.js?v=2026-09-17-r2" defer></script>
-		<script src="class-management.js?v=2026-09-17-r1" defer></script>
+		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="overview-dashboard.js?v=2026-10-06-r1" defer></script>
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
-		<script src="games-management.js?v=2026-10-06-r2" defer></script>
+		<script src="games-management.js?v=2026-10-06-r3" defer></script>
 		<script src="kids-games-management.js?v=2026-10-06-r1" defer></script>
+<script src="kids-championships-management.js?v=2026-10-06-r4" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
-		<script src="admin-main.js?v=2026-09-17-r4" defer></script>
+		<script src="admin-main.js?v=2026-09-17-r5" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -1338,6 +1341,15 @@
 									onkeyup="filterQuestions()"
 								/>
 							</div>
+							<div class="sort-wrapper" id="questionTeacherFilterWrap">
+								<select
+									id="questionTeacherFilter"
+									title="Filter by teacher"
+									onchange="filterQuestions()"
+								>
+									<option value="">All Teachers</option>
+								</select>
+							</div>
 						</div>
 
 						<div class="toolbar-right">
@@ -1502,6 +1514,36 @@
 						<div class="toolbar">
 							<div class="toolbar-header-group">
 								<h2>Category Management</h2>
+								<div
+									id="bulk-actions-categories"
+									class="bulk-actions-container hidden"
+								>
+									<span class="selection-info">
+										<span id="selected-count-categories">0</span> selected
+									</span>
+									<button
+										type="button"
+										class="btn btn-danger-soft"
+										onclick="deleteSelectedCategories()"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<polyline points="3 6 5 6 21 6"></polyline>
+											<path
+												d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+											></path>
+										</svg>
+										<span>Delete Selected</span>
+									</button>
+									<div class="divider-vertical"></div>
+								</div>
 								<button
 									id="add-category-btn"
 									class="btn btn-primary"
@@ -1530,6 +1572,15 @@
 										placeholder="Search categories..."
 										onkeyup="filterCategories()"
 									/>
+								</div>
+								<div class="sort-wrapper" id="categoryTeacherFilterWrap">
+									<select
+										id="categoryTeacherFilter"
+										title="Filter by teacher"
+										onchange="filterCategories()"
+									>
+										<option value="">All Teachers</option>
+									</select>
 								</div>
 								<div class="sort-wrapper">
 									<select id="categorySortBy" onchange="sortCategories()">
@@ -1563,10 +1614,17 @@
 							<table id="categoryList">
 								<thead>
 									<tr>
+										<th style="width: 40px">
+											<input
+												type="checkbox"
+												id="selectAllCategories"
+												onchange="toggleBulkSelectAllGeneric(this, 'categories')"
+											/>
+										</th>
 										<th>Name</th>
 										<th>Description</th>
 										<th>Questions</th>
-										<th>By</th>
+										<th class="owner-col">By</th>
 										<th>Date Created</th>
 										<th>Actions</th>
 									</tr>
@@ -1585,6 +1643,36 @@
 						<div class="toolbar">
 							<div class="toolbar-header-group">
 								<h2>Exam Management</h2>
+								<div
+									id="bulk-actions-exams"
+									class="bulk-actions-container hidden"
+								>
+									<span class="selection-info">
+										<span id="selected-count-exams">0</span> selected
+									</span>
+									<button
+										type="button"
+										class="btn btn-danger-soft"
+										onclick="deleteSelectedExams()"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<polyline points="3 6 5 6 21 6"></polyline>
+											<path
+												d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+											></path>
+										</svg>
+										<span>Delete Selected</span>
+									</button>
+									<div class="divider-vertical"></div>
+								</div>
 								<button
 									id="create-exam-btn"
 									class="btn btn-primary"
@@ -1612,6 +1700,15 @@
 										id="examSearch"
 										placeholder="Search exams..."
 									/>
+								</div>
+								<div class="sort-wrapper" id="examTeacherFilterWrap">
+									<select
+										id="examTeacherFilter"
+										title="Filter by teacher"
+										onchange="filterExams()"
+									>
+										<option value="">All Teachers</option>
+									</select>
 								</div>
 								<div class="sort-wrapper">
 									<select id="examSortBy" onchange="sortExams()">
@@ -1644,10 +1741,18 @@
 							<table id="examList">
 								<thead>
 									<tr>
+										<th style="width: 40px">
+											<input
+												type="checkbox"
+												id="selectAllExams"
+												onchange="toggleBulkSelectAllGeneric(this, 'exams')"
+											/>
+										</th>
 										<th>Name</th>
 										<th>Date Created</th>
 										<th>Questions</th>
 										<th>Duration</th>
+										<th class="owner-col">By</th>
 										<th>Actions</th>
 									</tr>
 								</thead>
@@ -1665,6 +1770,36 @@
 						<div class="toolbar">
 							<div class="toolbar-header-group">
 								<h2>Class Management</h2>
+								<div
+									id="bulk-actions-classes"
+									class="bulk-actions-container hidden"
+								>
+									<span class="selection-info">
+										<span id="selected-count-classes">0</span> selected
+									</span>
+									<button
+										type="button"
+										class="btn btn-danger-soft"
+										onclick="deleteSelectedClasses()"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<polyline points="3 6 5 6 21 6"></polyline>
+											<path
+												d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+											></path>
+										</svg>
+										<span>Delete Selected</span>
+									</button>
+									<div class="divider-vertical"></div>
+								</div>
 								<button
 									id="create-class-btn"
 									class="btn btn-primary"
@@ -1718,17 +1853,31 @@
 										</svg>
 									</button>
 								</div>
+								<div class="sort-wrapper" id="classTeacherFilterWrap">
+									<select id="classTeacherFilter" title="Filter by teacher">
+										<option value="">All Teachers</option>
+									</select>
+								</div>
 							</div>
 						</div>
 						<div class="table-container">
 							<table id="classList">
 								<thead>
 									<tr>
+										<th style="width: 40px">
+											<input
+												type="checkbox"
+												id="selectAllClasses"
+												onchange="toggleBulkSelectAllGeneric(this, 'classes')"
+											/>
+										</th>
 										<th>Name</th>
 										<th>Date Created</th>
 										<th>Students</th>
+										<th>Teacher</th>
 										<th>Assigned Exams</th>
 										<th>Assigned Games</th>
+										<th class="owner-col">By</th>
 										<th>Actions</th>
 									</tr>
 								</thead>
@@ -1786,9 +1935,45 @@
 										<option value="gte10">>= 10</option>
 									</select>
 								</div>
+								<div class="filter-group" id="resultTeacherFilterWrap">
+									<label>Teacher</label>
+									<select id="resultTeacherFilter" onchange="filterResults()">
+										<option value="">All Teachers</option>
+									</select>
+								</div>
 							</div>
 							<div class="results-search-row">
 								<div class="results-actions-row">
+									<div
+										id="bulk-actions-results"
+										class="bulk-actions-container hidden"
+									>
+										<span class="selection-info">
+											<span id="selected-count-results">0</span> selected
+										</span>
+										<button
+											type="button"
+											class="btn btn-danger-soft"
+											onclick="deleteSelectedResults()"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<polyline points="3 6 5 6 21 6"></polyline>
+												<path
+													d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+												></path>
+											</svg>
+											<span>Delete Selected</span>
+										</button>
+										<div class="divider-vertical"></div>
+									</div>
 									<div class="search-group" style="flex: 1">
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -1869,6 +2054,13 @@
 							<table id="results-table">
 								<thead>
 									<tr>
+										<th style="width: 40px">
+											<input
+												type="checkbox"
+												id="selectAllResults"
+												onchange="toggleBulkSelectAllGeneric(this, 'results')"
+											/>
+										</th>
 										<th>Date</th>
 										<th>Student</th>
 										<th>Class</th>
@@ -1876,6 +2068,7 @@
 										<th>Score</th>
 										<th>Time</th>
 										<th>Source</th>
+										<th class="owner-col">By</th>
 										<th>Actions</th>
 									</tr>
 								</thead>
@@ -1918,6 +2111,14 @@
 							>
 								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="6.5" r="2.5"></circle><circle cx="17" cy="6.5" r="2.5"></circle><circle cx="12" cy="13" r="7"></circle><circle cx="9.5" cy="12" r="0.6"></circle><circle cx="14.5" cy="12" r="0.6"></circle><ellipse cx="12" cy="15" rx="1.8" ry="1.4"></ellipse></svg>
 								Kids Games
+							</button>
+							<button
+								type="button"
+								class="games-studio-tab-btn"
+								data-games-studio-tab="kids-championships"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6.1 2h11.8a2 2 0 0 1 1.7.8l1.61 2.14a2 2 0 0 1 .13 2.2L16.79 15"></path><path d="M11 12 5.12 2.2"></path><path d="M13 12 18.88 2.2"></path><path d="M7 15a5 5 0 1 0 10 0"></path></svg>
+								🏆 Kids Championships
 							</button>
 							<button
 								type="button"
@@ -2526,6 +2727,12 @@
 												<option value="">All types</option>
 											</select>
 										</div>
+										<div class="game-filter-input" id="gameTeacherFilterWrap">
+											<label for="gameTeacherFilter">Teacher</label>
+											<select id="gameTeacherFilter" class="form-control">
+												<option value="">All teachers</option>
+											</select>
+										</div>
 										<button
 											type="button"
 											class="btn btn-sm btn-secondary"
@@ -2619,6 +2826,27 @@
 									</div>
 								</div>
 								<div id="kidsGameList" class="kids-game-grid"></div>
+								</div>
+							</div>
+						</div>
+
+						<div class="games-studio-pane" data-games-studio-pane="kids-championships">
+							<!-- 🏆 Kids Championships — kid-friendly tournament over kids games -->
+							<div class="game-admin-full-width">
+								<div class="game-admin-panel kids-championship-panel">
+									<div class="panel-header">
+										<div>
+											<span class="arena-eyebrow">Kids Championship</span>
+											<h3>🏆 Kids Championships</h3>
+											<p>A simple tournament for your kids games: pick the challenges, share the 4-letter code, and every kid who plays climbs the podium. No rounds, no brackets, no login needed.</p>
+										</div>
+										<div class="panel-header-actions">
+											<button type="button" class="btn btn-primary" id="addKidsChampionshipBtn" title="New Championship">
+												<span aria-hidden="true">＋</span> New Championship
+											</button>
+										</div>
+									</div>
+									<div id="kidsChampionshipList" class="kids-championship-list"></div>
 								</div>
 							</div>
 						</div>
@@ -2992,6 +3220,99 @@
      TOP-LEVEL on purpose: these must NOT live inside a tab pane or
      studio pane, otherwise they inherit display:none and appear broken.
      ═══════════════════════════════════════════════════════════════════ -->
+<div id="kidsChampionshipModal" class="modal arena-editor-modal kids-modal" aria-hidden="true">
+	<div class="modal-content modal-lg kids-wizard-content">
+		<div class="modal-header kids-wizard-header">
+			<div class="kids-wizard-title-row">
+				<div>
+					<span class="arena-eyebrow">Kids Championship</span>
+					<h2 id="kidsChampionshipModalTitle">New Championship</h2>
+				</div>
+				<button type="button" class="arena-modal-close" id="closeKidsChampionshipBtn" aria-label="Close">✕</button>
+			</div>
+			<ol class="kids-wizard-progress" id="kidsChampionshipSteps">
+				<li class="kw-step active" data-kc-step-link="1" title="Name, mascot and description"><span class="kw-num">1</span><span class="kw-label">Basics</span></li>
+				<li class="kw-step locked" data-kc-step-link="2" title="Pick the challenge games"><span class="kw-num">2</span><span class="kw-label">Challenges</span></li>
+				<li class="kw-step locked" data-kc-step-link="3" title="Review and start"><span class="kw-num">3</span><span class="kw-label">Review</span></li>
+			</ol>
+		</div>
+		<form id="kidsChampionshipForm" class="kids-wizard-form">
+			<input type="hidden" id="kidsChampionshipId" value="" />
+			<div class="kids-wizard-body" style="padding-bottom:18px;">
+				<!-- Step 1: Basics -->
+				<div class="kw-step-panel active" data-kc-step="1">
+					<div class="kw-step-header">
+						<h3>Name your championship</h3>
+						<p>Kids see this name, mascot and description in their lobby.</p>
+					</div>
+					<div class="form-row">
+						<div class="form-group half">
+							<label for="kidsChampionshipName">Championship Name</label>
+							<input type="text" id="kidsChampionshipName" class="form-control" placeholder="Autumn Champions Cup" style="padding:10px;" maxlength="100" />
+						</div>
+						<div class="form-group half">
+							<label>Mascot / Emoji</label>
+							<div class="kids-championship-emoji-row" id="kidsChampionshipEmoji"></div>
+						</div>
+					</div>
+					<div class="form-group">
+						<label for="kidsChampionshipDescription">Description (optional)</label>
+						<input type="text" id="kidsChampionshipDescription" class="form-control" placeholder="3 challenges — every kid gets a star on the podium! ⭐" maxlength="500" />
+					</div>
+					<div class="form-group">
+						<label>Live preview — what kids will see</label>
+						<div id="kidsChampionshipPreview" class="kc-preview"></div>
+					</div>
+				</div>
+				<!-- Step 2: Challenges -->
+				<div class="kw-step-panel" data-kc-step="2">
+					<div class="kw-step-header">
+						<h3>Pick the challenges</h3>
+						<p>Each challenge is worth up to 100 points. Kids can replay any challenge — only their best score counts.</p>
+					</div>
+					<div class="kids-championship-toolbar">
+						<input type="search" id="kidsChampionshipGameSearch" class="form-control kids-championship-search" placeholder="🔍 Search games…" autocomplete="off" />
+						<button type="button" class="btn btn-sm btn-secondary" id="kidsChampionshipSelectAll">Select all</button>
+						<button type="button" class="btn btn-sm btn-secondary" id="kidsChampionshipClear">Clear</button>
+						<span class="kids-championship-count" id="kidsChampionshipCount">0 selected</span>
+					</div>
+					<div id="kidsChampionshipPicked" class="kids-championship-picked" hidden></div>
+					<div id="kidsChampionshipGames" class="kids-championship-games"><p class="text-muted">Loading games…</p></div>
+					<div id="kidsChampionshipGamesErr" class="kid-error"></div>
+				</div>
+				<!-- Step 3: Review -->
+				<div class="kw-step-panel" data-kc-step="3">
+					<div class="kw-step-header">
+						<h3>Ready to start?</h3>
+						<p>Check everything once — starting generates the 4-letter code for your class.</p>
+					</div>
+					<div id="kidsChampionshipReview"></div>
+				</div>
+			</div>
+			<div class="kids-wizard-footer">
+				<button type="button" class="btn btn-secondary" id="kidsChampionshipBackBtn">← Back</button>
+				<span class="kids-wizard-step-hint" id="kidsChampionshipStepHint">Step 1 of 3</span>
+				<button type="button" class="btn btn-primary" id="kidsChampionshipNextBtn">Next →</button>
+				<button type="submit" class="btn btn-primary" id="saveKidsChampionshipBtn" hidden>Start Championship 🚀</button>
+			</div>
+		</form>
+	</div>
+</div>
+
+<div id="kidsChampionshipResultsModal" class="modal arena-editor-modal" aria-hidden="true">
+	<div class="modal-content modal-lg">
+		<div class="modal-header">
+			<div>
+				<span class="arena-eyebrow">Kids Championship</span>
+				<h2 id="kidsChampionshipResultsTitle">Results</h2>
+			</div>
+			<button type="button" class="arena-modal-close" id="closeKidsChampionshipResultsBtn" aria-label="Close">✕</button>
+		</div>
+		<div id="kidsChampionshipResultsCode" class="kids-championship-code-bar"></div>
+		<div id="kidsChampionshipResults" class="kids-championship-results" style="padding:16px;"></div>
+	</div>
+</div>
+
 <div id="kidsGameWizardModal" class="modal arena-editor-modal kids-modal" aria-hidden="true">
 	<div class="modal-content modal-xl kids-wizard-content">
 		<div class="modal-header kids-wizard-header">
@@ -5538,7 +5859,7 @@
 											type="text"
 											id="userSearchInput"
 											class="form-control"
-											placeholder="Search name, username, class, or student #"
+											placeholder="Search name, username, class, teacher, or student #"
 										/>
 									</div>
 									<div class="user-actions-top">
@@ -5572,6 +5893,12 @@
 										<label for="userClassFilter">Class</label>
 										<select id="userClassFilter" class="form-control">
 											<option value="">All Classes</option>
+										</select>
+									</div>
+									<div class="form-group" id="userTeacherFilterGroup">
+										<label for="userTeacherFilter">Teacher</label>
+										<select id="userTeacherFilter" class="form-control">
+											<option value="">All Teachers</option>
 										</select>
 									</div>
 								</div>
@@ -5609,6 +5936,7 @@
 											<th>Username</th>
 											<th>Student #</th>
 											<th>Class</th>
+											<th>Teacher</th>
 											<th>Role</th>
 											<th>Status</th>
 											<th>Actions</th>
@@ -6913,9 +7241,68 @@
 				</div>
 				<div class="modal-body">
 					<form id="assignClassStudentsForm" onsubmit="return false;">
-						<div class="form-group class-students-group">
-							<div class="class-section-header">
-								<label>Class Roster</label>
+						<!-- Step 1: pick students from user accounts -->
+						<div class="assign-step">
+							<div class="assign-step-title">
+								<span class="assign-step-num">1</span>
+								<span>Add students</span>
+							</div>
+							<div class="class-user-picker-row">
+								<div class="class-filter-row">
+									<label for="studentClassFilter">Filter by Class</label>
+									<select
+										id="studentClassFilter"
+										class="form-control"
+										onchange="onStudentClassFilterChange()"
+									>
+										<option value="all">All Classes</option>
+									</select>
+								</div>
+								<input
+									type="text"
+									id="studentPickerSearch"
+									class="filter-search-input"
+									placeholder="Search students by name or number..."
+									oninput="populateStudentUserPicker()"
+								/>
+								<div class="bulk-student-controls">
+									<select id="studentUserPicker" class="form-control" multiple size="6">
+										<option value="" disabled>No student users available</option>
+									</select>
+									<div class="bulk-student-actions">
+										<button
+											type="button"
+											class="btn btn-primary btn-sm"
+											onclick="addStudentFromUserPicker()"
+											title="Add the highlighted students to the roster below"
+										>
+											Add Selected
+										</button>
+										<button
+											type="button"
+											class="btn btn-secondary btn-sm"
+											onclick="addAllStudentsFromUsers()"
+										>
+											Add All
+										</button>
+										<button
+											type="button"
+											class="btn btn-secondary btn-sm"
+											onclick="deselectAllStudentsInPicker()"
+										>
+											Deselect All
+										</button>
+									</div>
+								</div>
+								<div id="studentPickerCount" class="text-muted"></div>
+							</div>
+						</div>
+
+						<!-- Step 2: review the class roster -->
+						<div class="assign-step">
+							<div class="assign-step-title">
+								<span class="assign-step-num">2</span>
+								<span>Class roster</span>
 								<span class="roster-summary" id="assignClassRosterSummary">0 student(s)</span>
 								<div class="class-section-actions">
 									<button
@@ -6963,7 +7350,7 @@
 								</div>
 							</div>
 
-							<!-- Roster toolbar: search + add existing students -->
+							<!-- Roster toolbar: search + status -->
 							<div class="roster-toolbar">
 								<span class="filter-field-icon">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
@@ -6985,62 +7372,6 @@
 									<option value="disabled">Disabled</option>
 									<option value="no-account">No account yet</option>
 								</select>
-								<button
-									type="button"
-									class="btn btn-ghost filter-undo-btn"
-									onclick="addStudentFromUserPicker()"
-									title="Add every student user picked below"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
-									Add from users
-								</button>
-							</div>
-
-							<!-- Pick existing student users (hidden helper, still drives addStudentFromUserPicker) -->
-							<div class="class-user-picker-row">
-								<div class="class-filter-row">
-									<label for="studentClassFilter">Filter by Class</label>
-									<select
-										id="studentClassFilter"
-										class="form-control"
-										onchange="onStudentClassFilterChange()"
-									>
-										<option value="all">All Classes</option>
-									</select>
-								</div>
-								<div class="bulk-student-controls">
-									<select id="studentUserPicker" class="form-control" multiple size="6">
-										<option value="" disabled>No student users available</option>
-									</select>
-									<div class="bulk-student-actions">
-										<button
-											type="button"
-											class="btn btn-secondary"
-											onclick="addStudentFromUserPicker()"
-										>
-											Add Selected
-										</button>
-										<button
-											type="button"
-											class="btn btn-secondary"
-											onclick="addAllStudentsFromUsers()"
-										>
-											Add All
-										</button>
-										<button
-											type="button"
-											class="btn btn-secondary"
-											onclick="deselectAllStudentsInPicker()"
-										>
-											Deselect All
-										</button>
-									</div>
-								</div>
-							</div>
-
-							<div class="text-muted class-helper-text">
-								Students join via signup or are created in Settings → Users. Passwords and
-								credentials are managed there, never in this roster.
 							</div>
 
 							<!-- Full roster table -->
@@ -7062,6 +7393,11 @@
 								</div>
 							</div>
 						</div>
+
+						<div class="text-muted class-helper-text">
+							Students join via signup or are created in Settings → Users. Passwords and
+							credentials are managed there, never in this roster.
+						</div>
 						<div class="form-actions">
 							<button
 								type="button"
@@ -7073,6 +7409,7 @@
 							<button
 								type="button"
 								class="btn btn-primary"
+								id="saveAssignClassStudentsBtn"
 								onclick="saveAssignClassStudents()"
 							>
 								Save Roster
@@ -7992,10 +8329,22 @@
 			</div>
 			<div class="lobby-dock__panes" id="lobbyDockPanes"></div>
 		</div>
-		<div id="lobbyTaskbar" class="lobby-taskbar" aria-hidden="false">
+<div id="lobbyTaskbar" class="lobby-taskbar" aria-hidden="false">
 			<span class="lobby-taskbar__label">Lobbies <b id="lobbyTaskbarCount"></b></span>
 			<div class="lobby-taskbar__tokens" id="lobbyTaskbarTokens"></div>
-			<button type="button" class="lobby-taskbar__btn" data-lobby-restore-all title="Restore windows">▲</button>
+			<button type="button" class="lobby-taskbar__btn" data-lobby-restore-all title="Restore windows">�?�</button>
 		</div>
+
+		<!-- Add User floating button: lives outside the settings modal body so
+		     it can pin to the viewport corner on phones. Shown (via JS) only
+		     while the App Settings → Users tab is open on a small screen. -->
+		<button
+			type="button"
+			id="settingsUsersFab"
+			class="settings-users-fab hidden"
+			aria-label="Add User"
+		>
+			<span aria-hidden="true">+</span>
+		</button>
 	</body>
 </html>

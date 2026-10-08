@@ -234,10 +234,107 @@ html.auth-pending.auth-ready body {
 	color: #166534;
 }
 
-/* Teacher student view: every row is a student by construction, so the
-Role column is hidden (toggled by renderUsersTable for teacher sessions). */
+/* Teacher student view: every row is one of their own students by
+construction, so the Teacher and Role columns are hidden (toggled by
+renderUsersTable for teacher sessions). */
 #usersTable.teacher-view th:nth-child(6),
-#usersTable.teacher-view td:nth-child(6) {
+#usersTable.teacher-view td:nth-child(6),
+#usersTable.teacher-view th:nth-child(7),
+#usersTable.teacher-view td:nth-child(7) {
+	display: none;
+}
+
+/* Class Management: the Teacher column repeats the viewer's own name on
+every row for teachers, so hide it there (toggled by updateClassList).
+NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
+#classList.teacher-view th:nth-child(5),
+#classList.teacher-view td:nth-child(5) {
+	display: none;
+}
+
+/* ============================================
+   BULK SELECTION — shared question-tab style
+   Applies the Questions tab checkbox + bulk bar + selected-row look
+   to Categories / Exams / Classes / Results on all viewports.
+   ============================================ */
+#categoryList .checkbox-cell,
+#examList .checkbox-cell,
+#classList .checkbox-cell,
+#results-table .checkbox-cell {
+	width: 44px;
+	text-align: center;
+}
+
+.category-checkbox,
+.exam-checkbox,
+.class-checkbox,
+.result-checkbox,
+#selectAllCategories,
+#selectAllExams,
+#selectAllClasses,
+#selectAllResults {
+	width: 16px;
+	height: 16px;
+	accent-color: #2563eb;
+	cursor: pointer;
+}
+
+.category-checkbox:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+}
+
+/* Selected-row highlight is intentionally the same class as questions */
+#categoryList tbody tr.question-row-selected,
+#examList tbody tr.question-row-selected,
+#classList tbody tr.question-row-selected,
+#results-table tbody tr.question-row-selected {
+	background-color: var(--primary-light) !important;
+}
+
+#categoryList tbody tr.question-row-selected td:first-child,
+#examList tbody tr.question-row-selected td:first-child,
+#classList tbody tr.question-row-selected td:first-child,
+#results-table tbody tr.question-row-selected td:first-child {
+	border-left: 3px solid var(--primary);
+}
+
+/* Toolbar header groups wrap the bulk bar + New button like questions */
+.toolbar-header-group {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.toolbar-header-group .bulk-actions-container {
+	flex: 0 1 auto;
+}
+
+.results-actions-row .bulk-actions-container {
+	flex: 0 0 auto;
+}
+
+/* ============================================
+   OWNER BADGES — admin session only
+   Each list renderer toggles hide-owner-col (tables) or hide-owner
+   (questions section / games list) when the session is not admin,
+   so teachers keep their clean role-scoped views.
+   ============================================ */
+#categoryList.hide-owner-col th.owner-col,
+#categoryList.hide-owner-col td.owner-col,
+#examList.hide-owner-col th.owner-col,
+#examList.hide-owner-col td.owner-col,
+#classList.hide-owner-col th.owner-col,
+#classList.hide-owner-col td.owner-col,
+#results-table.hide-owner-col th.owner-col,
+#results-table.hide-owner-col td.owner-col {
+	display: none;
+}
+
+#questions.hide-owner .q-owner-badge,
+#gameList.hide-owner .q-owner-badge,
+#kidsGameList.hide-owner .q-owner-badge {
 	display: none;
 }
 
@@ -15679,6 +15776,21 @@ td.actions-cell {
 .toolbar-left {
 	flex: 1;
 	min-width: 250px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.toolbar-left .search-group {
+	flex: 1 1 220px;
+}
+
+/* Admin-only teacher scope dropdowns (hidden for non-admins by JS) */
+#questionTeacherFilterWrap select,
+#categoryTeacherFilterWrap select,
+#examTeacherFilterWrap select {
+	max-width: 180px;
 }
 
 .toolbar-right {
@@ -26991,6 +27103,123 @@ tr[data-id],
 	}
 }
 
+/* ============================================================
+   Bulk tables — mobile card layout (same design as questions)
+   Categories / Exams / Classes / Results become cards with the
+   select checkbox pinned top-right, like the question cards.
+   ============================================================ */
+@media (max-width: 768px) {
+	#categories .table-container,
+	#exams .table-container,
+	#classes .table-container,
+	#results .table-container {
+		overflow: visible;
+		background: transparent;
+		border: 0;
+		border-radius: 0;
+		box-shadow: none;
+		margin-top: 12px;
+	}
+
+	#categoryList,
+	#examList,
+	#classList,
+	#results-table,
+	#categoryList tbody,
+	#examList tbody,
+	#classList tbody,
+	#results-table tbody {
+		display: block;
+		width: 100%;
+	}
+
+	#categoryList thead,
+	#examList thead,
+	#classList thead,
+	#results-table thead {
+		display: none;
+	}
+
+	#categoryList tbody tr,
+	#examList tbody tr,
+	#classList tbody tr,
+	#results-table tbody tr {
+		display: block;
+		position: relative;
+		margin: 0 0 10px;
+		padding: 12px;
+		padding-top: 40px;
+		background: #ffffff;
+		border: 1px solid #e2e8f0;
+		border-radius: 10px;
+		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+	}
+
+	#categoryList tbody tr.question-row-selected,
+	#examList tbody tr.question-row-selected,
+	#classList tbody tr.question-row-selected,
+	#results-table tbody tr.question-row-selected {
+		border-color: #93c5fd;
+		background: #eff6ff;
+	}
+
+	#categoryList tbody tr td,
+	#examList tbody tr td,
+	#classList tbody tr td,
+	#results-table tbody tr td {
+		display: block;
+		width: 100%;
+		padding: 4px 0;
+		border: 0;
+		text-align: left;
+		white-space: normal;
+		overflow-wrap: anywhere;
+		font-size: 0.8rem;
+		line-height: 1.4;
+		color: #334155;
+	}
+
+	#categoryList tbody tr td.checkbox-cell,
+	#examList tbody tr td.checkbox-cell,
+	#classList tbody tr td.checkbox-cell,
+	#results-table tbody tr td.checkbox-cell {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		display: flex !important;
+		align-items: center;
+		justify-content: flex-end;
+		width: auto;
+		padding: 0;
+	}
+
+	#categoryList .category-checkbox,
+	#examList .exam-checkbox,
+	#classList .class-checkbox,
+	#results-table .result-checkbox {
+		width: 18px;
+		height: 18px;
+		margin: 0;
+		accent-color: #2563eb;
+	}
+
+	#categoryList tbody tr td.actions-cell,
+	#examList tbody tr td.actions-cell,
+	#classList tbody tr td.actions-cell,
+	#results-table tbody tr td.actions-cell {
+		padding-top: 8px;
+		margin-top: 4px;
+		border-top: 1px solid #f1f5f9;
+	}
+
+	.toolbar-header-group .bulk-actions-container,
+	.results-actions-row .bulk-actions-container {
+		width: 100%;
+		justify-content: space-between;
+		order: 3;
+	}
+}
+
 @media (max-width: 480px) {
 	#questions .questions-type-filters .type-filter-badge {
 		flex-basis: calc(50% - 6px);
@@ -35315,6 +35544,72 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	margin: 8px 0 10px;
 }
 
+/* Two-step layout: 1 Add students → 2 review roster. */
+#assignClassStudentsModal .assign-step {
+	border: 1px solid #dbe4f0;
+	border-radius: 14px;
+	background: #f8fafc;
+	padding: 12px;
+	margin-bottom: 12px;
+}
+
+#assignClassStudentsModal .assign-step-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 700;
+	color: #0f172a;
+	margin-bottom: 10px;
+	flex-wrap: wrap;
+}
+
+#assignClassStudentsModal .assign-step-num {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	font-size: 0.78rem;
+	font-weight: 800;
+	background: var(--primary, #2563eb);
+	color: #fff;
+	border-radius: 50%;
+}
+
+#assignClassStudentsModal .assign-step-title .roster-summary {
+	margin-left: auto;
+}
+
+#assignClassStudentsModal .assign-step-title .class-section-actions {
+	margin-left: 0;
+}
+
+#assignClassStudentsModal #studentPickerSearch {
+	margin-bottom: 10px;
+}
+
+#assignClassStudentsModal #studentPickerCount {
+	margin-top: 8px;
+	font-size: 0.8rem;
+}
+
+#assignClassStudentsModal .roster-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 10px;
+}
+
+#assignClassStudentsModal .roster-toolbar .filter-search-input {
+	flex: 1 1 200px;
+}
+
+#assignClassStudentsModal .roster-toolbar .filter-field-icon {
+	flex: none;
+}
+
 #assignClassStudentsModal .selected-list {
 	/* tbody of the roster table — the generic .selected-list card styles
 	   (flex/border/padding) must not apply to a table body. */
@@ -38278,6 +38573,821 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	cursor: not-allowed;
 }
 
+.kids-championship-panel .panel-header {
+	border-bottom: 1px solid rgba(120, 120, 160, 0.14);
+	align-items: center;
+}
+
+/* Keep the action button on the same row as the title block — the generic
+   #games tablet rule flips panel headers to column, which would drop the
+   button under the title. */
+#games .kids-championship-panel .panel-header {
+	flex-direction: row;
+}
+
+.kids-championship-panel .panel-header-actions {
+	flex: none;
+	margin-left: auto;
+}
+
+#addKidsChampionshipBtn {
+	white-space: nowrap;
+	flex: none;
+}
+
+.kids-championship-list {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 384px), 1fr));
+	gap: 14px;
+	margin-top: 14px;
+}
+
+.kids-championship-card {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	background: var(--bg-surface, #fff);
+	border: 1px solid rgba(120, 120, 160, 0.16);
+	border-top: 3px solid rgba(120, 120, 160, 0.3);
+	border-radius: 14px;
+	padding: 14px 14px 10px;
+	transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.kids-championship-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 22px rgba(15, 23, 42, 0.1);
+}
+
+.kids-championship-card.status-active {
+	border-top-color: #22c55e;
+}
+
+.kids-championship-card.status-finished {
+	border-top-color: #94a3b8;
+	background: linear-gradient(to bottom, rgba(241, 245, 249, 0.5), var(--bg-surface, #fff) 40%);
+}
+
+.kids-championship-card.status-finished .kids-championship-logo {
+	filter: saturate(0.6);
+}
+
+.kcc-top {
+	display: flex;
+	gap: 12px;
+}
+
+.kids-championship-logo {
+	flex: none;
+	width: 52px;
+	height: 52px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.8rem;
+	background: linear-gradient(135deg, #fef3c7, #fde68a);
+	border-radius: 14px;
+}
+
+.kids-championship-info {
+	flex: 1;
+	min-width: 0;
+}
+
+.kids-championship-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.kids-championship-head h4 {
+	margin: 0;
+	font-size: 1rem;
+}
+
+.kids-championship-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	padding: 3px 8px;
+	border-radius: 999px;
+}
+
+.kids-championship-chip.active::before {
+	content: '';
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: #16a34a;
+	animation: kcc-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes kcc-pulse {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+.kids-championship-chip.active {
+	background: #dcfce7;
+	color: #15803d;
+}
+
+.kids-championship-chip.finished {
+	background: #f1f5f9;
+	color: #475569;
+}
+
+.kids-championship-code {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	font-size: 0.85rem;
+	color: var(--text-muted, #64748b);
+}
+
+.kids-championship-code b {
+	font-size: 1rem;
+	letter-spacing: 0.12em;
+	color: var(--text, #0f172a);
+}
+
+.kids-championship-meta {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 8px;
+	font-size: 0.8rem;
+	color: var(--text-muted, #64748b);
+}
+
+.kcc-stat {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	background: rgba(120, 120, 160, 0.09);
+	padding: 3px 9px;
+	border-radius: 999px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.kcc-copy {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.75rem;
+	font-weight: 700;
+	padding: 3px 9px;
+	border-radius: 999px;
+	border: 1px solid rgba(37, 99, 235, 0.35);
+	background: rgba(37, 99, 235, 0.07);
+	color: var(--primary, #2563eb);
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+
+.kcc-copy:hover {
+	background: rgba(37, 99, 235, 0.16);
+}
+
+.kids-championship-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	row-gap: 8px;
+	margin-top: 12px;
+	padding-top: 10px;
+	border-top: 1px dashed rgba(120, 120, 160, 0.25);
+}
+
+.kcc-sep {
+	flex: 1;
+}
+
+.kcc-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.82rem;
+	font-weight: 700;
+	padding: 7px 13px;
+	border-radius: 10px;
+	border: 1px solid transparent;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: transform 0.1s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.kcc-btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+}
+
+.kcc-btn:active {
+	transform: translateY(0);
+	box-shadow: none;
+}
+
+.kcc-btn-results {
+	background: var(--primary, #2563eb);
+	color: #fff;
+}
+
+.kcc-btn-results:hover {
+	background: #1d4ed8;
+}
+
+.kcc-btn-finish {
+	background: rgba(245, 158, 11, 0.14);
+	color: #92400e;
+	border-color: rgba(245, 158, 11, 0.45);
+}
+
+.kcc-btn-finish:hover {
+	background: rgba(245, 158, 11, 0.25);
+}
+
+.kcc-btn-reopen {
+	background: rgba(34, 197, 94, 0.14);
+	color: #15803d;
+	border-color: rgba(34, 197, 94, 0.45);
+}
+
+.kcc-btn-reopen:hover {
+	background: rgba(34, 197, 94, 0.25);
+}
+
+.kcc-btn-edit {
+	background: rgba(120, 120, 160, 0.1);
+	color: var(--text, #0f172a);
+	border-color: rgba(120, 120, 160, 0.3);
+}
+
+.kcc-btn-edit:hover {
+	background: rgba(120, 120, 160, 0.2);
+}
+
+.kcc-btn-delete {
+	background: rgba(239, 68, 68, 0.08);
+	color: #b91c1c;
+	border-color: rgba(239, 68, 68, 0.3);
+}
+
+.kcc-btn-delete:hover {
+	background: rgba(239, 68, 68, 0.18);
+}
+
+/* ── Championship cards on small screens: single column, buttons become
+   roomy two-per-row touch targets instead of overflowing ── */
+@media (max-width: 640px) {
+	.kids-championship-list {
+		grid-template-columns: 1fr;
+	}
+
+	.kids-championship-card {
+		padding: 12px 12px 10px;
+	}
+
+	.kids-championship-logo {
+		width: 44px;
+		height: 44px;
+		font-size: 1.5rem;
+		border-radius: 12px;
+	}
+
+	.kids-championship-head h4 {
+		font-size: 0.95rem;
+		overflow-wrap: anywhere;
+	}
+
+	.kids-championship-actions .kcc-sep {
+		display: none;
+	}
+
+	.kids-championship-actions .kcc-btn {
+		flex: 1 1 40%;
+		justify-content: center;
+		min-height: 44px;
+		font-size: 0.85rem;
+	}
+}
+
+/* New-Championship becomes a floating "+" on tablets and phones (same
+   768px breakpoint as the rest of the admin). It sits above the
+   scroll-to-top button (44px at bottom:20px → top edge at 64px, so
+   bottom:76px leaves a 12px gap and never covers it). Hidden panes are
+   display:none, so the FAB only shows on the championship tab. */
+@media (max-width: 768px) {
+	#addKidsChampionshipBtn {
+		position: fixed;
+		bottom: 76px;
+		right: 20px;
+		width: 56px;
+		height: 56px;
+		padding: 0;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0;
+		line-height: 0;
+		z-index: 990;
+		box-shadow: 0 8px 22px rgba(37, 99, 235, 0.45);
+	}
+
+	#addKidsChampionshipBtn span {
+		font-size: 1.6rem;
+		line-height: 1;
+	}
+}
+
+/* ── Create/edit modal ── */
+.kids-championship-emoji-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding-top: 4px;
+}
+
+.kids-championship-emoji {
+	width: 40px;
+	height: 40px;
+	font-size: 1.3rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 2px solid transparent;
+	border-radius: 12px;
+	background: rgba(120, 120, 160, 0.08);
+	cursor: pointer;
+}
+
+.kids-championship-emoji.selected {
+	border-color: var(--primary, #2563eb);
+	background: rgba(37, 99, 235, 0.1);
+}
+
+.kids-championship-games {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+	gap: 8px;
+	max-height: 300px;
+	overflow: auto;
+	padding: 4px;
+}
+
+.kids-championship-game {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px;
+	border: 1px solid rgba(120, 120, 160, 0.2);
+	border-radius: 12px;
+	cursor: pointer;
+}
+
+.kids-championship-game.checked {
+	border-color: var(--primary, #2563eb);
+	background: rgba(37, 99, 235, 0.07);
+}
+
+.kids-championship-game .kcg-icon {
+	font-size: 1.2rem;
+}
+
+.kids-championship-game .kcg-name {
+	flex: 1;
+	font-size: 0.9rem;
+	font-weight: 600;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kids-championship-game .kcg-meta {
+	font-size: 0.75rem;
+	color: var(--text-muted, #64748b);
+	flex: none;
+}
+
+.kids-championship-game input[type="checkbox"] {
+	accent-color: var(--primary, #2563eb);
+	width: 16px;
+	height: 16px;
+	flex: none;
+	cursor: pointer;
+}
+
+/* ── Challenges picker toolbar ── */
+.kids-championship-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 10px;
+}
+
+.kids-championship-search {
+	flex: 1;
+	min-width: 160px;
+}
+
+.kids-championship-count {
+	margin-left: auto;
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: var(--text-muted, #64748b);
+	background: rgba(120, 120, 160, 0.1);
+	padding: 4px 10px;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+.kids-championship-count.full {
+	background: rgba(37, 99, 235, 0.12);
+	color: var(--primary, #2563eb);
+}
+
+.kids-championship-picked {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-bottom: 10px;
+	padding: 8px 10px;
+	background: rgba(37, 99, 235, 0.05);
+	border: 1px dashed rgba(37, 99, 235, 0.3);
+	border-radius: 12px;
+}
+
+.kcg-picked-label {
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: var(--text-muted, #64748b);
+}
+
+.kcg-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	padding: 4px 10px 4px 4px;
+	border: 1px solid rgba(37, 99, 235, 0.35);
+	background: #fff;
+	color: var(--text, #0f172a);
+	border-radius: 999px;
+	cursor: pointer;
+}
+
+.kcg-chip:hover {
+	background: rgba(239, 68, 68, 0.08);
+	border-color: rgba(239, 68, 68, 0.4);
+}
+
+.kcg-chip-num {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	font-size: 0.7rem;
+	font-weight: 800;
+	background: var(--primary, #2563eb);
+	color: #fff;
+	border-radius: 50%;
+}
+
+/* ── Wizard preview + review ── */
+.kc-preview {
+	margin-top: 6px;
+}
+
+.kc-preview-card {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	background: linear-gradient(135deg, #fffbeb, #fef3c7);
+	border: 1px solid #fbbf24;
+	border-radius: 14px;
+	padding: 12px 14px;
+}
+
+.kc-preview-emoji {
+	flex: none;
+	font-size: 2rem;
+	line-height: 1;
+}
+
+.kc-preview-info {
+	min-width: 0;
+}
+
+.kc-preview-name {
+	font-weight: 800;
+	font-size: 1rem;
+}
+
+.kc-preview-desc {
+	font-size: 0.85rem;
+	color: var(--text-muted, #64748b);
+	margin-top: 2px;
+}
+
+.kc-preview-meta {
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: #92400e;
+	margin-top: 4px;
+}
+
+.kc-review-hero {
+	margin-bottom: 12px;
+}
+
+.kc-review-code {
+	font-size: 0.85rem;
+	padding: 8px 12px;
+	margin-bottom: 10px;
+	background: rgba(37, 99, 235, 0.07);
+	border: 1px dashed rgba(37, 99, 235, 0.35);
+	border-radius: 10px;
+}
+
+.kc-review-code b {
+	letter-spacing: 0.12em;
+}
+
+.kc-review-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 260px;
+	overflow: auto;
+	padding: 2px;
+}
+
+.kc-review-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	background: #fff;
+	border: 1px solid rgba(120, 120, 160, 0.2);
+	border-radius: 10px;
+}
+
+.kc-review-num {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	font-size: 0.72rem;
+	font-weight: 800;
+	background: var(--primary, #2563eb);
+	color: #fff;
+	border-radius: 50%;
+}
+
+.kc-review-name {
+	flex: 1;
+	min-width: 0;
+	font-weight: 600;
+	font-size: 0.9rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.kc-review-meta {
+	flex: none;
+	font-size: 0.75rem;
+	color: var(--text-muted, #64748b);
+}
+
+/* ── Results modal ── */
+.kids-championship-code-bar {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 10px 16px;
+	background: rgba(120, 120, 160, 0.07);
+	border-bottom: 1px solid rgba(120, 120, 160, 0.12);
+	font-size: 0.85rem;
+}
+
+.kids-championship-code-bar b {
+	font-size: 1rem;
+	letter-spacing: 0.12em;
+}
+
+.kids-championship-podium {
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	gap: 10px;
+	margin: 8px 0 18px;
+}
+
+.kcp-step {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+	text-align: center;
+	flex: 0 1 140px;
+	padding: 10px 6px;
+	border-radius: 14px;
+}
+
+.kcp-1 { background: linear-gradient(135deg, #fef9c3, #fde047); transform: translateY(-8px); }
+.kcp-2 { background: linear-gradient(135deg, #eef2ff, #c7d2fe); }
+.kcp-3 { background: linear-gradient(135deg, #fff7ed, #fed7aa); }
+
+.kcp-avatar { font-size: 2rem; line-height: 1; }
+.kcp-name { font-size: 0.85rem; font-weight: 700; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kcp-medal { font-size: 1.4rem; }
+.kcp-points { font-size: 0.75rem; color: var(--text-muted, #475569); }
+
+.kids-championship-table-wrap {
+	overflow: auto;
+	max-height: 420px;
+	border: 1px solid rgba(120, 120, 160, 0.14);
+	border-radius: 12px;
+}
+
+.kids-championship-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.88rem;
+}
+
+.kids-championship-table th,
+.kids-championship-table td {
+	padding: 8px 12px;
+	text-align: left;
+	border-bottom: 1px solid rgba(120, 120, 160, 0.1);
+}
+
+.kids-championship-table th {
+	background: rgba(120, 120, 160, 0.07);
+	font-weight: 700;
+	position: sticky;
+	top: 0;
+}
+
+.kids-championship-table tr.kct-first td {
+	background: rgba(250, 204, 21, 0.12);
+}
+
+/* Student portal — Kids Championship entry card */
+.game-card.championship-cta {
+	background: linear-gradient(135deg, #fffbeb, #fef3c7);
+	border-color: #fbbf24;
+	box-shadow: 0 4px 14px rgba(217, 119, 6, 0.15);
+}
+
+.game-card.championship-cta:hover {
+	border-color: #f59e0b;
+	box-shadow: 0 6px 18px rgba(217, 119, 6, 0.25);
+}
+
+.game-card.championship-cta h3 {
+	color: #92400e;
+}
+
+/* ==========================================================================
+   APP SETTINGS — ADD USER: a normal labeled button on desktops, and a
+   floating "+" (with an "Add User" tooltip) pinned to the page's
+   right-bottom corner on phones.
+   The compact round "+"-only control below (styles.css ~28948) applies at
+   every width; here desktop restores a real labeled pill in the header
+   again, phones drop the header control, and the body-level
+   #settingsUsersFab takes over as a fixed action button. 760px matches
+   isMobileSettingsViewport() in settings.js, which drives the JS visibility.
+   ========================================================================== */
+
+/* Desktop: back to a normal labeled pill inside the header actions. */
+@media (min-width: 761px) {
+	#settingsModal #add-user-btn {
+		position: relative !important;
+		inset: auto !important;
+		width: auto !important;
+		min-width: 140px !important;
+		height: 44px !important;
+		padding: 0 18px !important;
+		border-radius: 999px !important;
+		gap: 8px !important;
+		box-shadow: none !important;
+		z-index: auto !important;
+	}
+
+	/* Restore the real label (the round-only rules stub it out). */
+	#settingsModal #add-user-btn span {
+		position: static !important;
+		width: auto !important;
+		height: auto !important;
+		padding: 0 !important;
+		margin: 0 !important;
+		overflow: visible !important;
+		clip: auto !important;
+		white-space: normal !important;
+		display: inline-block !important;
+		font-weight: 600 !important;
+	}
+
+	/* No "+" glyph, no tooltip bubble on desktop. */
+	#settingsModal #add-user-btn::before,
+	#settingsModal #add-user-btn::after {
+		display: none !important;
+	}
+}
+
+/* Phones: the header control disappears entirely; the FAB replaces it
+   (including on the Imports/Requests sub-tabs, where adding is out of
+   scope anyway). */
+@media (max-width: 760px) {
+	#settingsModal .user-header-actions {
+		display: none !important;
+	}
+}
+
+/* The floating Add User button itself (mobile only). */
+.settings-users-fab {
+	position: fixed;
+	right: 18px;
+	bottom: max(18px, env(safe-area-inset-bottom));
+	z-index: 3060; /* above the 3000 settings modal, below flex modals (99999) */
+	width: 58px;
+	height: 58px;
+	padding: 0;
+	border: none;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--primary, #2563eb);
+	color: #ffffff;
+	cursor: pointer;
+	box-shadow: 0 10px 26px rgba(37, 99, 235, 0.45);
+	transition:
+		transform 0.15s ease,
+		box-shadow 0.15s ease,
+		opacity 0.15s ease;
+}
+
+.settings-users-fab span {
+	font-size: 1.6rem;
+	font-weight: 600;
+	line-height: 1;
+	transform: translateY(-1px);
+}
+
+/* Tooltip label, kept always visible above the FAB. */
+.settings-users-fab::after {
+	content: 'Add User';
+	position: absolute;
+	right: 0;
+	bottom: calc(100% + 10px);
+	padding: 7px 10px;
+	border-radius: 8px;
+	background: #0f172a;
+	color: #ffffff;
+	font-size: 0.72rem;
+	font-weight: 700;
+	line-height: 1.1;
+	white-space: nowrap;
+	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
+	pointer-events: none;
+}
+
+.settings-users-fab:hover,
+.settings-users-fab:focus-visible {
+	transform: translateY(-3px);
+	box-shadow: 0 14px 30px rgba(37, 99, 235, 0.55);
+}
+
+.settings-users-fab:active {
+	transform: scale(0.94);
+}
+
+/* The FAB never appears on desktop; `hidden` (JS) also blanks it whenever
+   the Users tab is not the active one. */
+@media (min-width: 761px) {
+	.settings-users-fab {
+		display: none !important;
+	}
+}
+
 /* ==========================================================================
    Role-gating overrides - MUST stay at the end of this file.
    `.role-hidden` (specificity 0,1,0) was being outranked by the settings
@@ -38294,4 +39404,185 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 #settingsModal .settings-group.role-hidden,
 #settingsModal .user-settings-tab-btn.role-hidden {
 	display: none !important;
+}
+
+/* ============================================================
+   Desktop-only one-line toolbars (questions / categories /
+   exams / classes). Everything — title, search, teacher filter,
+   sort and action buttons — shares a single row; siblings are
+   shrunk so the teacher filter has room. Mobile/tablet stacking
+   (max-width: 850px and below) is untouched.
+   ============================================================ */
+@media (min-width: 851px) {
+	/* ---- Questions ---- */
+	#questions .questions-toolbar {
+		flex-wrap: nowrap;
+		gap: 10px;
+		padding: 12px 16px;
+	}
+
+	#questions .toolbar-header-group {
+		flex: 0 0 auto;
+		margin-bottom: 0;
+		padding-right: 0;
+	}
+
+	#questions .toolbar-header-group h2 {
+		font-size: 1rem;
+		white-space: nowrap;
+	}
+
+	#questions .toolbar-left {
+		flex: 1 1 auto;
+		min-width: 0;
+		flex-wrap: nowrap;
+		gap: 8px;
+	}
+
+	#questions .toolbar-left .search-group {
+		flex: 1 1 auto;
+		min-width: 110px;
+		max-width: none;
+	}
+
+	#questions .toolbar-left .search-group input {
+		height: 38px;
+		padding: 8px 12px 8px 38px;
+		font-size: 0.82rem;
+	}
+
+	#questions .toolbar-left .search-icon {
+		left: 12px;
+		width: 16px;
+		height: 16px;
+	}
+
+	#questionTeacherFilterWrap {
+		flex: 0 0 auto;
+	}
+
+	#questionTeacherFilterWrap select {
+		height: 38px;
+		max-width: 150px;
+		padding: 6px 8px;
+		font-size: 0.8rem;
+	}
+
+	#questions .toolbar-right {
+		flex: 0 0 auto;
+		flex-wrap: nowrap;
+		gap: 8px;
+	}
+
+	#questions .toolbar-right .btn {
+		height: 38px;
+		padding: 0 12px;
+		font-size: 0.8rem;
+		gap: 6px;
+		white-space: nowrap;
+	}
+
+	#questions .toolbar-right .btn svg {
+		width: 14px;
+		height: 14px;
+	}
+
+	#questions .bulk-actions-container {
+		flex-wrap: nowrap;
+		gap: 8px;
+		padding: 4px 8px;
+	}
+
+	#questions .selection-info {
+		font-size: 12px;
+		white-space: nowrap;
+	}
+
+	/* ---- Categories / Exams / Classes ---- */
+	#categories .toolbar,
+	#exams .toolbar,
+	#classes .toolbar {
+		flex-wrap: nowrap;
+		gap: 10px;
+	}
+
+	#categories .toolbar-header-group,
+	#exams .toolbar-header-group,
+	#classes .toolbar-header-group {
+		flex: 1 1 auto;
+		min-width: 0;
+		flex-wrap: nowrap;
+		gap: 8px;
+		margin-bottom: 0;
+		padding-right: 0;
+	}
+
+	#categories .toolbar-header-group h2,
+	#exams .toolbar-header-group h2,
+	#classes .toolbar-header-group h2 {
+		font-size: 1rem;
+		white-space: nowrap;
+	}
+
+	#categories .toolbar-controls,
+	#exams .toolbar-controls,
+	#classes .toolbar-controls {
+		flex: 0 0 auto;
+		flex-wrap: nowrap;
+		gap: 8px;
+		width: auto;
+	}
+
+	#categories .search-wrapper,
+	#exams .search-wrapper,
+	#classes .search-wrapper {
+		flex: 0 1 auto;
+	}
+
+	#categories .search-wrapper input,
+	#exams .search-wrapper input,
+	#classes .search-wrapper input {
+		height: 38px;
+		max-width: 170px;
+		font-size: 0.82rem;
+	}
+
+	#categories .sort-wrapper,
+	#exams .sort-wrapper,
+	#classes .sort-wrapper {
+		flex: 0 0 auto;
+	}
+
+	#categories .sort-wrapper select,
+	#exams .sort-wrapper select,
+	#classes .sort-wrapper select {
+		height: 38px;
+		max-width: 150px;
+		padding: 6px 8px;
+		font-size: 0.8rem;
+	}
+
+	#categories .toolbar-header-group .btn,
+	#exams .toolbar-header-group .btn,
+	#classes .toolbar-header-group .btn {
+		padding: 8px 12px;
+		font-size: 0.8rem;
+		gap: 6px;
+		white-space: nowrap;
+	}
+
+	#categories .toolbar-header-group .btn svg,
+	#exams .toolbar-header-group .btn svg,
+	#classes .toolbar-header-group .btn svg {
+		width: 14px;
+		height: 14px;
+	}
+
+	#categories .bulk-actions-container,
+	#exams .bulk-actions-container,
+	#classes .bulk-actions-container {
+		flex-wrap: nowrap;
+		gap: 8px;
+		padding: 4px 8px;
+	}
 }
