@@ -376,6 +376,14 @@
       if (mappedType === 'mcq' && q.allowMultipleAnswers) meta.multi = true;
       if (type === 'draggable' || q.isDraggable) meta.drag = true;
       if (type === 'odd-one-out') meta.odd = true;
+      // Matching columns shuffle unless explicitly disabled (opt-out only,
+      // so canonical `L-->R|L-->R` answers stay readable in the database).
+      if (
+        (mappedType === 'matching' || type === 'matching-pairs') &&
+        q.shufflePairs === false
+      ) {
+        meta.matchShuffle = false;
+      }
       if (type === 'code' || q.codeSnippet || q.codeAnswerMode) {
         meta.code = {
           snippet: String(q.codeSnippet || ''),
@@ -442,6 +450,22 @@
       if (e.randomize != null) out.randomize = !!e.randomize;
       if (e.max_attempts != null) out.max_attempts = Number(e.max_attempts);
       if (e.maxAttempts != null) out.max_attempts = Number(e.maxAttempts);
+      // Question assignment mirror: only genuine question UUIDs are forwarded
+      // to the top-level `questions` field (persisted by ExamService into the
+      // exam_questions junction). Legacy numeric indices never qualify and
+      // stay in options_json below, so an exam still carrying local indices
+      // can never be rejected by the ExamUpdateSchema uuid validation.
+      var qIds = Array.isArray(e.questions)
+        ? e.questions
+            .map(function (q) {
+              return (q && typeof q === 'object') ? (q.id || q.question_id) : q;
+            })
+            .filter(function (q) {
+              return typeof q === 'string' &&
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+            })
+        : [];
+      if (qIds.length) out.questions = qIds;
       // Preserve legacy arrays in options_json so nothing is lost.
       var legacy = {};
       if (Array.isArray(e.questions)) legacy.questions = e.questions;

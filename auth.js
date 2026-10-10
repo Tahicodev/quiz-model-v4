@@ -1148,11 +1148,10 @@
 	function canAccessSettingsTab(tabName) {
 		if (isAdmin()) return true;
 		if (isTeacher()) {
-			if (
-				tabName === 'teacher-access' ||
-				tabName === 'realtime' ||
-				tabName === 'setup'
-			) {
+			// NOTE: the realtime tab IS open to teachers (they need it to
+			// push games/exams to their students' devices); admin-only
+			// controls inside it are markup-gated via data-teacher-hide.
+			if (tabName === 'teacher-access' || tabName === 'setup') {
 				return false;
 			}
 			const access = getTeacherAccessSettings();

@@ -1374,33 +1374,77 @@ function showQuestion(index) {
       </div>
     `;
 	} else if (questionType === 'matching-pairs') {
-		// ... (matching pairs code remains unchanged) ...
-		// Parse the answer to get the pairs
-		const answer = q.answer || '';
-		const pairs = (
-			answer.includes('|') ? answer.split('|') : answer.split(',')
-		).map((pair) => {
-			// Support '→', '-->', and ':' separators
-			let left, right;
-			if (pair.includes('→')) {
-				[left, right] = pair.split('→').map((item) => item.trim());
-			} else if (pair.includes('-->')) {
-				[left, right] = pair.split('-->').map((item) => item.trim());
-			} else if (pair.includes(':')) {
-				[left, right] = pair.split(':').map((item) => item.trim());
-			} else {
-				[left, right] = [pair.trim(), ''];
+		// Parse the answer to get the pairs (any stored shape: `|`,
+		// comma or newline separated; `-->`, `->`, `=>`, `→`, `::`,
+		// `=`, `:` within pairs; `meta::` prefix stripped). Falls back
+		// to flat options when the answer carries no usable pairs.
+		const parseLegacyPairs = (text) => {
+			const out = [];
+			const pushToken = (token) => {
+				const raw = String(token || '').trim();
+				if (!raw) return;
+				const seps = ['-->', '->', '=>', '→', '::', '='];
+				for (const sep of seps) {
+					const idx = raw.indexOf(sep);
+					if (idx > 0) {
+						const left = raw.slice(0, idx).trim();
+						const right = raw.slice(idx + sep.length).trim();
+						if (left && right) out.push({ left, right });
+						return;
+					}
+				}
+				const cIdx = raw.indexOf(':');
+				if (cIdx > 0) {
+					const left = raw.slice(0, cIdx).trim();
+					const right = raw.slice(cIdx + 1).trim();
+					if (left && right) out.push({ left, right });
+				}
+			};
+			let src = String(text || '')
+				.trim()
+				.replace(/^meta::[A-Za-z0-9+/=]+::/, '');
+			if (!src) return out;
+			let tokens = [];
+			src.split(/\r?\n/).forEach((line) => {
+				line.split('|').forEach((chunk) => {
+					const t = chunk.trim();
+					if (t) tokens.push(t);
+				});
+			});
+			if (tokens.length === 1 && tokens[0].includes(',')) {
+				tokens = tokens[0]
+					.split(',')
+					.map((t) => t.trim())
+					.filter(Boolean);
 			}
-			return { left, right };
-		});
+			tokens.forEach(pushToken);
+			return out;
+		};
+		let pairs = parseLegacyPairs(q.answer);
+		if (!pairs.length && Array.isArray(q.options) && q.options.length) {
+			const flat = q.options
+				.map((o) => String((o && o.text) || o || '').trim())
+				.filter((t) => t && !/-->|->|=>|→|::/.test(t));
+			if (flat.length >= 4 && flat.length % 2 === 0) {
+				for (let pi = 0; pi + 1 < flat.length; pi += 2) {
+					pairs.push({ left: flat[pi], right: flat[pi + 1] });
+				}
+			} else {
+				pairs = parseLegacyPairs(flat.join('|'));
+			}
+		}
 
 		// Create unique lists for left and right columns
 		let leftItems = [...new Set(pairs.map((p) => p.left))];
 		let rightItems = [...new Set(pairs.map((p) => p.right))];
 
-		// Shuffle both columns independently for variety
-		shuffleArray(leftItems);
-		shuffleArray(rightItems);
+		// Shuffle both columns independently when enabled (per-question
+		// shufflePairs flag; rows without the flag shuffle, matching the
+		// historical behavior of this player).
+		if (!q || q.shufflePairs !== false) {
+			shuffleArray(leftItems);
+			shuffleArray(rightItems);
+		}
 
 		// Helper to find image for an item
 		const getItemImage = (text) => {

@@ -183,9 +183,26 @@
 		return socket;
 	}
 
+	function isSignInModalOpen() {
+		const modal = byId('studentAuthModal');
+		return Boolean(
+			modal &&
+				(modal.classList.contains('active') ||
+					modal.style.display === 'flex'),
+		);
+	}
+
+	function sendToSignIn() {
+		// Expired session: take the student straight to the sign-in modal
+		// instead of leaving them on a dead workspace. Re-login fires
+		// `auth:changed`, which re-renders and resumes pending joins.
+		if (isSignInModalOpen()) return;
+		showAuthModal();
+	}
+
 	function notifyRealtimeDisconnected() {
 		if (window.__AUTH_SESSION_EXPIRED__) {
-			showToast('Your session expired. Please sign in again.', 'warning');
+			sendToSignIn();
 			return;
 		}
 		const now = Date.now();
@@ -199,7 +216,7 @@
 	}
 
 	window.addEventListener('quiz:auth-expired', () => {
-		showToast('Your session expired. Please sign in again.', 'warning');
+		sendToSignIn();
 	});
 
 	function hasStudentRestApi() {
@@ -1701,6 +1718,132 @@
 		}
 	}
 
+	// ── Kids (primaire) account summary ───────────────────────────────────
+	// The standard Overview / Level Progress / Session Record / Performance
+	// Snapshot blocks are built from normal-game conventions (a "winner"
+	// label for wins, `user.tournamentScores` for arena points) that kids
+	// games and championships never produce, so primaire students would
+	// always see "0 wins • 0% win rate" and "0 tournament points". The kids
+	// view derives everything from kids results (source: 'kids-game') plus
+	// the joinable championships list instead.
+	function parseStoredResultMeta(row) {
+		let meta = row?.answersJson ?? row?.answers_json ?? null;
+		if (typeof meta === 'string') {
+			try {
+				meta = JSON.parse(meta);
+			} catch (_) {
+				meta = null;
+			}
+		}
+		return meta && typeof meta === 'object' ? meta : {};
+	}
+
+	function isKidsGameResult(row) {
+		if (!row || typeof row !== 'object') return false;
+		const meta = parseStoredResultMeta(row);
+		if (String(meta.source || '').toLowerCase() === 'kids-game') return true;
+		if (meta.kidsGameId) return true;
+		return Boolean(meta.gameName) && Number(meta.stars) > 0;
+	}
+
+	function getStudentKidsStats(context) {
+		const userId = String(context?.user?.id || '').trim();
+		let rows = [];
+		try {
+			rows = window.__DI_CONTAINER__.repo.getAll_sync('results') || [];
+		} catch (_) {
+			rows = [];
+		}
+		const mine = (Array.isArray(rows) ? rows : []).filter(
+			(row) => String(row?.userId || row?.user_id || '').trim() === userId,
+		);
+		const kids = mine.filter(isKidsGameResult);
+		const percents = kids.map((row) => {
+			const meta = parseStoredResultMeta(row);
+			const percent = Number(meta.percent);
+			if (Number.isFinite(percent)) {
+				return Math.max(0, Math.min(100, Math.round(percent)));
+			}
+			return Math.max(0, Math.min(100, Math.round(Number(row?.score) || 0)));
+		});
+		const stars = kids.reduce(
+			(sum, row) => sum + Math.max(Number(parseStoredResultMeta(row).stars) || 0, 0),
+			0,
+		);
+		const badges = Array.isArray(context?.user?.badges)
+			? context.user.badges.slice()
+			: [];
+		const latestBadge = badges
+			.slice()
+			.sort((a, b) => Number(b?.earnedAt || 0) - Number(a?.earnedAt || 0))[0];
+		const latest = kids.length ? kids[kids.length - 1] : null;
+		return {
+			gamesPlayed: kids.length,
+			stars,
+			badges: badges.length,
+			bestScore: percents.length ? Math.max(...percents) : 0,
+			averageScore: percents.length
+				? Math.round(percents.reduce((a, b) => a + b, 0) / percents.length)
+				: 0,
+			latestGame: latest
+				? String(parseStoredResultMeta(latest).gameName || 'Kids game')
+				: '',
+			latestReward: latestBadge?.name || 'No reward yet',
+		};
+	}
+
+	function renderKidsAccount(context) {
+		const stats = getStudentKidsStats(context);
+		const setText = (id, value) => {
+			const el = byId(id);
+			if (el) el.textContent = value;
+		};
+		setText(
+			'studentKidsGamesPlayedValue',
+			formatCompactProfileMetric(stats.gamesPlayed),
+		);
+		setText(
+			'studentKidsGamesPlayedCopy',
+			formatCompactProfileMetric(stats.gamesPlayed),
+		);
+		setText('studentKidsStarsValue', formatCompactProfileMetric(stats.stars));
+		setText('studentKidsBadgesValue', formatCompactProfileMetric(stats.badges));
+		setText(
+			'studentKidsBestScoreValue',
+			formatCompactProfileMetric(stats.bestScore),
+		);
+		setText(
+			'studentKidsAverageScoreValue',
+			formatCompactProfileMetric(stats.averageScore),
+		);
+		setText('studentKidsLatestGameValue', stats.latestGame || 'No games yet');
+		setText('studentKidsLatestRewardValue', stats.latestReward);
+		const bestFill = byId('studentKidsBestScoreFill');
+		if (bestFill) bestFill.style.width = `${stats.bestScore}%`;
+		const avgBar = byId('studentKidsAverageScoreBar');
+		if (avgBar) avgBar.style.width = `${stats.averageScore}%`;
+		// Joinable championships — best effort; a failure just keeps the
+		// last rendered count (or the initial 0).
+		try {
+			if (window.API?.raw) {
+				window.API.raw('GET', '/kids/championships/browse?limit=50')
+					.then((res) => {
+						const count = Array.isArray(res?.data) ? res.data.length : 0;
+						const el = byId('studentKidsChampionshipsValue');
+						if (el) el.textContent = formatCompactProfileMetric(count);
+					})
+					.catch(() => {});
+			}
+		} catch (_) {
+			/* ignore */
+		}
+	}
+
+	function applyStudentAccountScope() {
+		const modal = byId('studentProfileModal');
+		if (modal) modal.classList.toggle('sa-account-kids', isKidsModeStudent());
+	}
+
 	function populateProfileForm(context) {
 		const user = context.user;
 		const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
@@ -1789,6 +1932,11 @@
 	function renderProfileSection(context) {
 		populateProfileForm(context);
 		renderProfileStatus(context);
+		// Primaire students get the kids summary instead of the normal
+		// Overview/Session/Performance blocks. Scope resolves async; the
+		// modal re-renders once `ensureKidsPrimaireStatus` settles.
+		applyStudentAccountScope();
+		if (isKidsModeStudent()) renderKidsAccount(context);
 	}
 
 	function openStudentProfileModal() {
@@ -1804,6 +1952,14 @@
 		closeStudentDropdown();
 		modal.style.display = 'flex';
 		modal.classList.add('active');
+		// The primaire flag may still be in flight on first open; re-render
+		// the account scope once it is known so kids never see the normal
+		// competitive blocks.
+		ensureKidsPrimaireStatus().then(() => {
+			if (!modal.classList.contains('active')) return;
+			const current = getStudentContext();
+			if (current) renderProfileSection(current);
+		});
 	}
 
 	function closeStudentProfileModal() {
@@ -4905,7 +5061,11 @@
 				return;
 			}
 
-			const raw = String(candidate || '').trim();
+			let raw = String(candidate || '').trim();
+			if (!raw) return;
+			// Local (pre-bootstrap) rows may still carry the persistence
+			// `meta::<base64>::` answer prefix — it is metadata, not a pair.
+			raw = raw.replace(/^meta::[A-Za-z0-9+/=]+::/, '').trim();
 			if (!raw) return;
 			if (
 				(raw.startsWith('[') && raw.endsWith(']')) ||
@@ -4990,6 +5150,22 @@
 
 		collect(value, 0);
 		return dedupeMatchingPairs(collected);
+	}
+
+	function shuffledCopy(items) {
+		const arr = (items || []).slice();
+		for (let i = arr.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[arr[i], arr[j]] = [arr[j], arr[i]];
+		}
+		return arr;
+	}
+
+	// Matching columns shuffle unless the question opts out
+	// (shufflePairs === false). Rows without the flag shuffle, matching
+	// the legacy player behavior.
+	function shouldShuffleMatchingPairs(question) {
+		return !question || question.shufflePairs !== false;
 	}
 
 	function extractMatchingPairs(question) {
@@ -5793,16 +5969,24 @@
 						</div>
 				`;
 			} else {
-				const leftItems = pairs.map((pair, index) => ({
-					key: `left-${index}`,
+				// Shuffle each column independently when enabled. Keys are
+				// regenerated per displayed position; pairing is
+				// value/key-based, never positional.
+				const shuffleColumns = shouldShuffleMatchingPairs(question);
+				const orderedLeft = pairs.map((pair) => ({
 					value: pair.left,
 					option: findQuestionOptionEntryByToken(options, pair.left),
 				}));
-				const rightItems = pairs.map((pair, index) => ({
-					key: `right-${index}`,
+				const orderedRight = pairs.map((pair) => ({
 					value: pair.right,
 					option: findQuestionOptionEntryByToken(options, pair.right),
 				}));
+				const leftItems = (
+					shuffleColumns ? shuffledCopy(orderedLeft) : orderedLeft
+				).map((item, index) => ({ ...item, key: `left-${index}` }));
+				const rightItems = (
+					shuffleColumns ? shuffledCopy(orderedRight) : orderedRight
+				).map((item, index) => ({ ...item, key: `right-${index}` }));
 				body = `
 				<div class="matching-pairs-quiz game-match-board" data-total-pairs="${pairs.length}" data-pairs="[]">
 					<div class="matching-columns">
@@ -7279,6 +7463,14 @@
 			);
 			return;
 		}
+		// Primaire students get kids games only — never the normal lobby
+		// list (see renderStudentKidsSection).
+		if (isKidsModeStudent()) {
+			setGamesPanelKidsMode(true);
+			renderStudentKidsSection(context);
+			return;
+		}
+		setGamesPanelKidsMode(false);
 		syncKnownGames(context, 12000);
 		const games = getAvailableGames(context);
 		games.forEach(cacheGameSnapshot);
@@ -7455,17 +7647,91 @@
 		renderStudentKidsSection(context);
 	}
 
-	// ── Kids Games for primaire students ──────────────────────────────────
-	// Published kids games (kid-styled) + open kids-tournaments, playable in
-	// the kid player with the student's login so results count like others.
+	// ── Kids mode for primaire students ───────────────────────────────────
+	// Students whose school is primaire see kids games + kids championships
+	// in their workspace instead of the normal games/tournaments. Detection
+	// is cached in state.kidsSchoolPrimaire (fetched once per load).
 	let kidsSectionToken = 0;
+	let kidsPrimairePromise = null;
+
+	function ensureKidsPrimaireStatus() {
+		if (state.kidsSchoolPrimaire !== undefined) {
+			return Promise.resolve(state.kidsSchoolPrimaire);
+		}
+		if (!kidsPrimairePromise) {
+			kidsPrimairePromise = (async () => {
+				try {
+					if (!window.API?.raw) return false;
+					const profile = await window.API.raw('GET', '/school/profile/full');
+					return String(profile?.school_type || '').toLowerCase() === 'primaire';
+				} catch (_) {
+					return false;
+				}
+			})().then((value) => {
+				state.kidsSchoolPrimaire = value;
+				kidsPrimairePromise = null;
+				return value;
+			});
+		}
+		return kidsPrimairePromise;
+	}
+
+	function isKidsModeStudent() {
+		return state.kidsSchoolPrimaire === true;
+	}
+
+	function refreshKidsModePanels() {
+		try {
+			const context = getStudentContext();
+			if (!context) return;
+			if (String(state.workspaceTab || '').toLowerCase() === 'games') {
+				renderGamesPanel(context);
+			}
+			if (String(state.workspaceTab || '').toLowerCase() === 'tournament') {
+				renderGamificationUI(context);
+			}
+			// Keep an open Student Account modal in sync once the primaire
+			// flag resolves (kids vs normal account blocks).
+			const accountModal = byId('studentProfileModal');
+			if (accountModal && accountModal.classList.contains('active')) {
+				renderProfileSection(context);
+			}
+		} catch (_) {
+			/* ignore */
+		}
+	}
 
 	function openKidsPlay(pin, tournamentId) {
-		let url = `/kids/play.html?pin=${encodeURIComponent(String(pin || '').toUpperCase())}`;
+		// Canonical share URL (same as the teacher's QR/print links). The
+		// player resolves the PIN from the path; the student login (if any)
+		// is picked up there so results count.
+		let url = `/kids/play/${encodeURIComponent(String(pin || '').toUpperCase())}`;
 		if (tournamentId) {
-			url += `&tournament=${encodeURIComponent(tournamentId)}`;
+			url += `?tournament=${encodeURIComponent(tournamentId)}`;
 		}
 		window.open(url, '_blank');
+	}
+
+	function openKidsChampionship(code) {
+		const url = code
+			? `/kids/championship?code=${encodeURIComponent(String(code).toUpperCase())}`
+			: '/kids/championship';
+		window.open(url, '_blank');
+	}
+
+	function setGamesPanelKidsMode(kidsOn) {
+		const panel = document.querySelector(
+			'.games-panel[data-workspace-section="games"]',
+		);
+		if (panel) panel.classList.toggle('kids-mode', !!kidsOn);
+		const title = panel?.querySelector('.panel-header h2');
+		if (title) title.textContent = kidsOn ? '🎮 My Kids Games' : 'My Games';
+		const subtitle = panel?.querySelector('.panel-header p');
+		if (subtitle) {
+			subtitle.textContent = kidsOn
+				? 'Playful games from your teachers — results count'
+				: 'Track live games and recent results';
+		}
 	}
 
 	async function renderStudentKidsSection(context) {
@@ -7478,57 +7744,20 @@
 		}
 		const myToken = ++kidsSectionToken;
 		try {
-			if (state.kidsSchoolPrimaire === undefined) {
-				try {
-					const profile = await window.API.raw('GET', '/school/profile/full');
-					state.kidsSchoolPrimaire =
-						String(profile?.school_type || '').toLowerCase() === 'primaire';
-				} catch (_) {
-					state.kidsSchoolPrimaire = false;
-				}
-			}
-			if (!state.kidsSchoolPrimaire) {
+			await ensureKidsPrimaireStatus();
+			if (!isKidsModeStudent()) {
 				if (myToken === kidsSectionToken) box.innerHTML = '';
 				return;
 			}
-			const [gamesRes, toursRes] = await Promise.all([
-				window.API.raw('GET', '/kids/browse?limit=50').catch(() => null),
-				window.API.raw('GET', '/tournaments?limit=50').catch(() => null),
-			]);
+			const gamesRes = await window.API.raw('GET', '/kids/browse?limit=50').catch(
+				() => null,
+			);
 			if (myToken !== kidsSectionToken) return;
 			const games = Array.isArray(gamesRes?.data) ? gamesRes.data : [];
-			const kidsTournaments = (
-				Array.isArray(toursRes?.data) ? toursRes.data : []
-			).filter(
-				(t) =>
-					t?.kidsGame &&
-					['open', 'active'].includes(String(t.status || '').toLowerCase()),
-			);
-			// The championship lives at /kids/championship (code-based, no
-			// login). Students don't need the roster API — just the door.
-			const champCard = `
-				<a class="game-card championship-cta open" href="/kids/championship" style="text-decoration:none">
-					<div class="game-card-header">
-						<div>
-							<h3>🏆 Kids Championship</h3>
-							<p class="game-type-badges">
-								<span class="game-badge">Class Challenge</span>
-								<span class="game-badge ghost">Be the champion!</span>
-							</p>
-						</div>
-						<span class="game-pill open">Join</span>
-					</div>
-					<div class="game-meta">
-						<span>Play every challenge</span>
-						<span>100 points each</span>
-					</div>
-					<div class="game-actions">
-						<span class="workspace-btn small">Open Championship ⭐</span>
-					</div>
-				</a>`;
-			const gameCards = games
-				.map(
-					(g) => `
+			const gameCards = games.length
+				? games
+						.map(
+							(g) => `
 				<div class="game-card open">
 					<div class="game-card-header">
 						<div>
@@ -7549,41 +7778,120 @@
 						<button class="workspace-btn small" onclick="playKidsGame('${escapeHtml(g.pin || '')}')">Play</button>
 					</div>
 				</div>`,
-				)
-				.join('');
-			const tournamentCards = kidsTournaments
-				.map(
-					(t) => `
-				<div class="game-card open">
-					<div class="game-card-header">
-						<div>
-							<h3>${escapeHtml(t.name)}</h3>
-							<p class="game-type-badges">
-								<span class="game-badge">Kids Tournament</span>
-								<span class="game-badge ghost">${escapeHtml(t.kidsGame?.name || '')}</span>
-							</p>
-						</div>
-						<span class="game-pill ${escapeHtml(t.status)}">${escapeHtml(t.status)}</span>
-					</div>
-					<div class="game-actions">
-						<button class="workspace-btn small" onclick="playKidsGame('${escapeHtml(t.kidsGame?.pin || '')}', '${escapeHtml(t.id)}')">Play Tournament Game</button>
-					</div>
-				</div>`,
-				)
-				.join('');
+						)
+						.join('')
+				: '<div class="empty-state">No kids games yet — ask your teacher to publish one. 🧸</div>';
 			box.innerHTML = `
 				<div class="kids-games-heading">
 					<h3>Kids Games</h3>
 					<p>Playful games from your teachers — results count like every other game.</p>
 				</div>
-				<div class="game-card-list">${champCard}${tournamentCards}${gameCards}</div>`;
+				<div class="game-card-list">${gameCards}</div>`;
 		} catch (_) {
 			if (myToken === kidsSectionToken) box.innerHTML = '';
 		}
 	}
 
+	// ── Kids championships (tournament tab in kids mode) ──────────────────
+	let kidsToursToken = 0;
+
+	function setTournamentPanelKidsMode(kidsOn) {
+		const panel = document.querySelector(
+			'.games-panel[data-workspace-section="tournament"]',
+		);
+		if (panel) panel.classList.toggle('kids-mode', !!kidsOn);
+		const title = panel?.querySelector('.panel-header h2');
+		if (title) title.textContent = kidsOn ? '🏆 Kids Championships' : 'Tournament Arena';
+		let box = byId('studentKidsChampionships');
+		if (kidsOn && !box && panel) {
+			box = document.createElement('div');
+			box.id = 'studentKidsChampionships';
+			panel.appendChild(box);
+		}
+		if (!kidsOn && box) box.innerHTML = '';
+	}
+
+	async function renderKidsTournamentPanel(context) {
+		setTournamentPanelKidsMode(true);
+		const box = byId('studentKidsChampionships');
+		if (!box) return;
+		const user = context?.user;
+		if (!user || String(user.role || '').toLowerCase() !== 'student') {
+			box.innerHTML = '';
+			return;
+		}
+		const myToken = ++kidsToursToken;
+		try {
+			await ensureKidsPrimaireStatus();
+			if (!isKidsModeStudent()) {
+				if (myToken === kidsToursToken) box.innerHTML = '';
+				return;
+			}
+			const res = await window.API.raw(
+				'GET',
+				'/kids/championships/browse?limit=50',
+			).catch(() => null);
+			if (myToken !== kidsToursToken) return;
+			const rows = Array.isArray(res?.data) ? res.data : [];
+			const desc = byId('studentActiveTournamentDesc');
+			if (desc) {
+				desc.textContent = rows.length
+					? `${rows.length} championship${rows.length === 1 ? '' : 's'} to play — your best score counts!`
+					: 'No championships yet — ask your teacher for a join code.';
+			}
+			const badge = byId('studentTournamentBadge');
+			if (badge) {
+				badge.textContent = rows.length ? 'Active' : 'Inactive';
+				badge.classList.toggle('inactive', !rows.length);
+			}
+			if (!rows.length) {
+				box.innerHTML =
+					'<div class="empty-state">No championships yet. Ask your teacher for a join code. 🏆</div>';
+				return;
+			}
+			box.innerHTML = `
+				<div class="game-card-list">${rows
+					.map((c) => {
+						let challengeCount = 0;
+						try {
+							const ids =
+								typeof c.game_ids === 'string'
+									? JSON.parse(c.game_ids)
+									: c.game_ids;
+							challengeCount = Array.isArray(ids) ? ids.length : 0;
+						} catch (_) {
+							challengeCount = 0;
+						}
+						return `
+				<div class="game-card open">
+					<div class="game-card-header">
+						<div>
+							<h3>${escapeHtml(c.emoji || '🏆')} ${escapeHtml(c.name || 'Championship')}</h3>
+							<p class="game-type-badges">
+								<span class="game-badge">Kids Championship</span>
+								<span class="game-badge ghost">${challengeCount} challenges</span>
+								${c.code ? `<span class="game-badge ghost">Code ${escapeHtml(c.code)}</span>` : ''}
+							</p>
+						</div>
+						<span class="game-pill open">${escapeHtml(c.status || 'active')}</span>
+					</div>
+					<div class="game-actions">
+						<button class="workspace-btn small" onclick="openKidsChampionship('${escapeHtml(c.code || '')}')">Play ⭐</button>
+					</div>
+				</div>`;
+					})
+					.join('')}</div>`;
+		} catch (_) {
+			if (myToken === kidsToursToken) box.innerHTML = '';
+		}
+	}
+
 	window.playKidsGame = openKidsPlay;
+	window.openKidsChampionship = openKidsChampionship;
 	window.renderStudentKidsSection = renderStudentKidsSection;
+	window.renderKidsTournamentPanel = renderKidsTournamentPanel;
+	window.isKidsModeStudent = isKidsModeStudent;
+	window.ensureKidsPrimaireStatus = ensureKidsPrimaireStatus;
 
 	function renderGameStage(context) {
 		const stage = byId('studentGameStage');
@@ -12739,6 +13047,13 @@
 	}
 
 	function renderGamificationUI(context) {
+		// Primaire students get kids championships only — never the normal
+		// tournament arena (see renderKidsTournamentPanel).
+		if (isKidsModeStudent()) {
+			renderKidsTournamentPanel(context);
+			return;
+		}
+		setTournamentPanelKidsMode(false);
 		renderGamificationUIV2(context);
 		return;
 		const exp = context.user?.exp || 0;
@@ -14372,11 +14687,67 @@
 		if (img) img.removeAttribute('src');
 	};
 
+	// ── Training categories ───────────────────────────────────────────────
+	// Which categories feed training mode. Mirrors the admin resolution in
+	// category-management.js: explicit `categoryTrainingMap` settings-row
+	// entries win, otherwise Uncategorized defaults to enabled (legacy).
+	// When no map exists at all (legacy data), every question is eligible.
+	function getStudentTrainingMap() {
+		try {
+			const repo = window.__DI_CONTAINER__?.repo;
+			if (!repo) return null;
+			let rows = [];
+			if (typeof repo.getAll_sync === 'function') {
+				const all = repo.getAll_sync('settings') || [];
+				rows = Array.isArray(all) ? all : all.settings || [];
+			} else if (typeof repo.getValue_sync === 'function') {
+				rows = repo.getValue_sync('settings', {}).settings || [];
+			}
+			const row = (Array.isArray(rows) ? rows : []).find(
+				(s) => s && s.key === 'categoryTrainingMap',
+			);
+			if (row?.value) {
+				const parsed = JSON.parse(row.value);
+				if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+					return parsed;
+				}
+			}
+		} catch (_) {
+			/* ignore */
+		}
+		return null;
+	}
+
+	function isStudentTrainingCategory(categoryId) {
+		const id = String(categoryId || 'uncategorized');
+		const map = getStudentTrainingMap();
+		if (!map) return true; // legacy: no map configured → everything eligible
+		if (Object.prototype.hasOwnProperty.call(map, id)) {
+			return map[id] === true;
+		}
+		return id === 'uncategorized';
+	}
+
+	function filterStudentTrainingQuestions(questionList) {
+		const list = Array.isArray(questionList) ? questionList : [];
+		const map = getStudentTrainingMap();
+		if (!map) return list;
+		return list.filter((q) => {
+			const raw = q?.category ?? q?.categoryId ?? q?.category_id ?? '';
+			return isStudentTrainingCategory(String(raw).trim() || 'uncategorized');
+		});
+	}
+
 	// ── Public API ──────────────────────────────────────────────────────────
 	window.openTrainingMode = function (examId) {
 		let questions =
 			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
 		let trainingExamName = 'Training Practice Test';
+		if (!examId) {
+			// Free training serves the training-enabled categories only.
+			// (Exam-based training below keeps the exam's own question set.)
+			questions = filterStudentTrainingQuestions(questions);
+		}
 		if (examId) {
 			const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
 			const exam = exams.find((e) => e.id === examId);
@@ -14388,7 +14759,12 @@
 			}
 		}
 		if (!questions.length) {
-			showToast('No training questions available.', 'warning');
+			showToast(
+				!examId && getStudentTrainingMap()
+					? 'No training questions available — ask your teacher to enable a category for training.'
+					: 'No training questions available.',
+				'warning',
+			);
 			return;
 		}
 
@@ -14771,22 +15147,21 @@
 	// item breaks the connection. No "Save Pairs" button — the user just
 	// clicks Next when they're done.
 	function renderTrainingMatching(q, options) {
-		const answer = String(q.answer || '');
-		const pairs = (answer.includes('|') ? answer.split('|') : answer.split(','))
-			.map((pair) => {
-				let left, right;
-				if (pair.includes('→'))
-					[left, right] = pair.split('→').map((s) => s.trim());
-				else if (pair.includes('-->'))
-					[left, right] = pair.split('-->').map((s) => s.trim());
-				else if (pair.includes(':'))
-					[left, right] = pair.split(':').map((s) => s.trim());
-				else [left, right] = [pair.trim(), ''];
-				return { left, right };
-			})
-			.filter((p) => p.left);
+		// Resolve pairs the same robust way the game lobby does (answer in
+		// any stored format, options fallback). The old inline parser only
+		// understood q.answer and rendered empty left/right columns for
+		// every other shape.
+		const pairs = extractMatchingPairs(q);
+		// Shuffle each column independently when enabled so answers can't
+		// be matched by row position. Matching is value-based, so display
+		// order never affects grading.
+		const shuffleColumns = shouldShuffleMatchingPairs(q);
 		const leftItems = [...new Set(pairs.map((p) => p.left))];
 		const rightItems = [...new Set(pairs.map((p) => p.right))];
+		const displayLeft = shuffleColumns ? shuffledCopy(leftItems) : leftItems;
+		const displayRight = shuffleColumns
+			? shuffledCopy(rightItems)
+			: rightItems;
 		const idx = trainingState.currentIndex;
 		const savedRaw = String(trainingState.userAnswers[idx] || '');
 		const savedPairs = [];
@@ -14800,7 +15175,7 @@
 		// Persist the visible state (which left is currently selected, and
 		// which pair a left/right is currently in) on the dataset of the
 		// question container so the click handlers can read it.
-		const leftHtml = leftItems
+		const leftHtml = displayLeft
 			.map(
 				(left) => `
 				<div class="matching-quiz-item quiz-item matching-left"
@@ -14810,7 +15185,7 @@
 				</div>`,
 			)
 			.join('');
-		const rightHtml = rightItems
+		const rightHtml = displayRight
 			.map(
 				(right) => `
 				<div class="matching-quiz-item quiz-item matching-right"
@@ -15703,23 +16078,23 @@
 				return userOrder.join('|') === correctOrder.join('|');
 			}
 			case 'matching-pairs': {
-				const userMap = new Map();
-				u.split('|').forEach((p) => {
-					if (p.includes('→')) {
-						const [l, r] = p.split('→');
-						userMap.set(l.trim(), r.trim());
-					}
-				});
-				const correctMap = new Map();
-				c.split('|').forEach((p) => {
-					if (p.includes('→')) {
-						const [l, r] = p.split('→');
-						correctMap.set(l.trim(), r.trim());
-					} else if (p.includes(':')) {
-						const [l, r] = p.split(':');
-						correctMap.set(l.trim(), r.trim());
-					}
-				});
+				// Parse both sides with the shared robust parser: user
+				// answers arrive as `left→right|…`, while stored correct
+				// answers may use any admin format (`-->`, `,`, `:`, …).
+				// The old inline parser only understood `→`/`:` and marked
+				// every admin-format answer incorrect.
+				const toPairMap = (entries) => {
+					const map = new Map();
+					(entries || []).forEach((p) => {
+						const left = String(p?.left || '').trim();
+						const right = String(p?.right || '').trim();
+						if (left && right) map.set(left, right);
+					});
+					return map;
+				};
+				const userMap = toPairMap(parseMatchingPairsAnswer(u));
+				const correctMap = toPairMap(parseMatchingPairsAnswer(c));
+				if (!correctMap.size) return false;
 				if (userMap.size !== correctMap.size) return false;
 				for (const [k, v] of correctMap) {
 					if (userMap.get(k) !== v) return false;
@@ -16220,6 +16595,44 @@
 		});
 	}
 
+	// Direct links must land logged in: when a join/play URL is opened
+	// without a session (kids player links bounce here via ?login=1&next=),
+	// open the sign-in modal immediately instead of showing empty states.
+	// The existing one-shot bootstrap/auth listeners then continue the
+	// join once the student signs in.
+	function handleLoginRequiredQuery() {
+		try {
+			const params = new URLSearchParams(window.location.search);
+			const wantsLogin = params.has('login');
+			const wantsJoin =
+				params.has('game') || params.has('examId') || params.has('join');
+			if (!wantsLogin && !wantsJoin) return;
+			if (getStudentContext()) {
+				continuePendingLoginRedirect();
+				return;
+			}
+			showAuthModal();
+		} catch (_) {
+			/* ignore */
+		}
+	}
+
+	// After a ?login=1&next=<url> sign-in, continue to the original link.
+	let pendingLoginRedirectDone = false;
+	function continuePendingLoginRedirect() {
+		if (pendingLoginRedirectDone) return;
+		try {
+			const params = new URLSearchParams(window.location.search);
+			const next = params.get('next');
+			if (!next) return;
+			if (!getStudentContext()) return;
+			pendingLoginRedirectDone = true;
+			window.location.href = next;
+		} catch (_) {
+			/* ignore */
+		}
+	}
+
 	// Dedicated play window (student-workspace.html?game=GameId&join=1):
 	// automatically join and render the lobby stage in this window instead of
 	// redirecting the student's normal workspace.
@@ -16258,7 +16671,11 @@
 		renderWorkspace();
 		openExamFromQuery();
 		openLobbyFromQuery();
+		handleLoginRequiredQuery();
 		queueStickyProfileDockUpdate();
+		// Resolve kids mode early so primaire students land on the right
+		// lists; refresh the visible panels once known.
+		ensureKidsPrimaireStatus().then(() => refreshKidsModePanels());
 	});
 
 	// Bootstrap is intentionally asynchronous. Re-render once the normalized
@@ -16268,6 +16685,7 @@
 		try {
 			bindGameSocket();
 			renderWorkspace();
+			ensureKidsPrimaireStatus().then(() => refreshKidsModePanels());
 		} catch (_) {
 			/* Keep the already-rendered cached workspace usable. */
 		}
@@ -16275,7 +16693,14 @@
 
 	window.addEventListener('auth:changed', () => {
 		bindGameSocket();
+		// Identity may have changed (login/logout): drop the cached
+		// primaire detection (a logged-out fetch always resolves false)
+		// and re-resolve for the new session.
+		state.kidsSchoolPrimaire = undefined;
+		kidsPrimairePromise = null;
 		renderWorkspace();
+		ensureKidsPrimaireStatus().then(() => refreshKidsModePanels());
+		continuePendingLoginRedirect();
 	});
 
 	// Safety net: the SaaS login bridge may succeed without firing the

@@ -14,7 +14,7 @@ import { enforceTenant } from '../middleware/tenant.js';
 import { getContainer } from '../container.js';
 import { logger } from '../logger.js';
 import { ROLES } from '../../shared/constants.js';
-import { getTeacherClassIds } from './users.routes.js';
+import { getTeacherClassIds, getStudentContentScope, isAuthorVisibleToStudent } from './users.routes.js';
 
 const router = Router();
 
@@ -149,10 +149,11 @@ function decodeQuestionMetadata(question) {
       const payload = rest.slice(separatorIndex + 2);
       try {
         const meta = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
-        const decoded = { ...question, answer: payload };
-        if (meta.multi) decoded.allowMultipleAnswers = true;
-        if (meta.drag) decoded.isDraggable = true;
-        if (meta.odd) decoded.oddOneOut = true;
+          const decoded = { ...question, answer: payload };
+          if (meta.multi) decoded.allowMultipleAnswers = true;
+          if (meta.drag) decoded.isDraggable = true;
+          if (meta.odd) decoded.oddOneOut = true;
+          if (meta.matchShuffle === false) decoded.shufflePairs = false;
         if (meta.code) {
           decoded.codeSnippet = meta.code.snippet || '';
           decoded.codeLanguage = meta.code.language || 'javascript';
@@ -577,6 +578,13 @@ router.get('/', async (req, res, next) => {
       const studentClassName = String(
         (data.classes || []).find((classRow) => String(classRow.id) === studentClassId)?.name || '',
       ).trim().toLowerCase();
+      const preScopeTotals = {
+        questions: (data.questions || []).length,
+        categories: (data.categories || []).length,
+        exams: (data.exams || []).length,
+        games: (data.games || []).length,
+        tournaments: (data.tournaments || []).length,
+      };
       const assignedClassesByExam = new Map();
       for (const link of data.exam_classes || []) {
         const examId = String(link.exam_id || '').trim();
@@ -584,19 +592,52 @@ router.get('/', async (req, res, next) => {
         if (!assignedClassesByExam.has(examId)) assignedClassesByExam.set(examId, []);
         assignedClassesByExam.get(examId).push(String(link.class_id || '').trim());
       }
+      // Strict teacher scoping: a student sees ONLY content authored by
+      // their own teachers — never admins', never other teachers'.
+      // Unattributed legacy rows stay visible (fail-open; gaps surface in
+      // the diagnostics log below). `byAuthor` reads every known author
+      // spelling across the Prisma/legacy shapes. A scope outage (null)
+      // keeps the legacy unscoped delivery instead of hiding content.
+      let contentScope = null;
+      try {
+        contentScope = await getStudentContentScope(req.schoolId, studentClassId);
+      } catch (scopeErr) {
+        logger.warn({ err: scopeErr }, 'Bootstrap: content scope unavailable, delivering unscoped');
+      }
+      const byAuthor = (item, ...keys) => {
+        for (const key of keys) {
+          const value = item?.[key];
+          if (value !== undefined && value !== null && String(value).trim() !== '') {
+            return isAuthorVisibleToStudent(value, contentScope);
+          }
+        }
+        return true;
+      };
+      // Question bank + categories: only the student's own teachers.
+      data.questions = (data.questions || []).filter((question) =>
+        byAuthor(question, 'created_by', 'creator_id', 'ownerId'),
+      );
+      data.categories = (data.categories || []).filter((category) =>
+        byAuthor(category, 'created_by', 'creator_id', 'ownerId'),
+      );
       data.exams = (data.exams || []).filter((exam) => {
         if (exam.status !== 'active') return false;
         // If an exam has normalized class assignments, expose it only to a
-        // student in one of those classes. Exams without assignments remain
-        // visible for backwards compatibility with legacy published exams.
+        // student in one of those classes (a miss stays hidden even when
+        // the author is the student's own teacher). Unassigned exams fall
+        // back to the author rule instead of leaking school-wide.
         const assigned = assignedClassesByExam.get(String(exam.id)) || [];
-        if (!assigned.length || !studentClassId) return true;
-        if (assigned.includes(studentClassId)) return true;
-        const legacyClasses = parseJson(exam.options_json, {}).classes;
-        return Array.isArray(legacyClasses) && legacyClasses.some((value) => {
-          const normalized = String(value?.id || value?.classId || value?.name || value || '').trim().toLowerCase();
-          return normalized === studentClassId.toLowerCase() || normalized === studentClassName;
-        });
+        if (assigned.length) {
+          if (studentClassId && assigned.includes(studentClassId)) return true;
+          const legacyClasses = parseJson(exam.options_json, {}).classes;
+          const legacyMatch =
+            Array.isArray(legacyClasses) && legacyClasses.some((value) => {
+              const normalized = String(value?.id || value?.classId || value?.name || value || '').trim().toLowerCase();
+              return normalized === studentClassId.toLowerCase() || normalized === studentClassName;
+            });
+          return legacyMatch === true;
+        }
+        return byAuthor(exam, 'creator_id', 'created_by', 'ownerId');
       });
       // Results are private student records. Other participants remain
       // available through the dedicated game/tournament leaderboard routes.
@@ -604,24 +645,52 @@ router.get('/', async (req, res, next) => {
       data.exam_sessions = (data.exam_sessions || []).filter((session) => String(session.user_id) === String(req.user.id));
       // Games follow the same rule as exams: drafts stay hidden, and a game
       // scoped to specific classes is only delivered to students of those
-      // classes. Games without a class assignment remain visible to everyone
-      // (legacy "all classes" behavior).
+      // classes. Unassigned games fall back to the author rule (own
+      // teachers only) instead of the legacy "visible to everyone".
       const classNamesById = new Map((data.classes || []).map((classRow) => [String(classRow.id), String(classRow.name || '').toLowerCase()]));
       data.games = (data.games || []).filter((game) => {
         const status = String(game.status || '').toLowerCase();
         if (status === 'draft') return false;
         const gameClassIds = Array.isArray(game.classIds) ? game.classIds.map((id) => String(id || '').trim()) : [];
-        if (!gameClassIds.length || !studentClassId) return true;
-        if (gameClassIds.includes(studentClassId)) return true;
-        const studentClassNameKey = studentClassName || String(classNamesById.get(studentClassId) || '').toLowerCase();
-        return gameClassIds.some((value) => {
-          const key = String(value || '').toLowerCase();
-          return key === studentClassNameKey;
-        });
+        if (gameClassIds.length) {
+          if (studentClassId && gameClassIds.includes(studentClassId)) return true;
+          const studentClassNameKey = studentClassName || String(classNamesById.get(studentClassId) || '').toLowerCase();
+          return gameClassIds.some((value) => {
+            const key = String(value || '').toLowerCase();
+            return key === studentClassNameKey;
+          });
+        }
+        return byAuthor(game, 'creator_id', 'created_by', 'ownerId');
       });
-      data.tournaments = (data.tournaments || []).filter((tournament) =>
-        ['open', 'active', 'finished'].includes(tournament.status),
+      data.tournaments = (data.tournaments || []).filter(
+        (tournament) =>
+          ['open', 'active', 'finished'].includes(tournament.status) &&
+          byAuthor(tournament, 'creator_id', 'created_by', 'ownerId'),
       );
+      // Diagnostics: per-student delivery summary. When a student reports
+      // an empty workspace, these lines show whether the scope resolved
+      // (teachersFound), and how many rows each filter withheld.
+      try {
+        const delivered = {
+          questions: (data.questions || []).length,
+          categories: (data.categories || []).length,
+          exams: (data.exams || []).length,
+          games: (data.games || []).length,
+          tournaments: (data.tournaments || []).length,
+        };
+        logger.info(
+          {
+            studentId: req.user?.id,
+            classId: studentClassId || '(none)',
+            teachersFound: contentScope ? contentScope.myTeacherIds.size : -1,
+            schoolTotal: preScopeTotals,
+            delivered,
+          },
+          'Bootstrap: student content scope applied',
+        );
+      } catch (_) {
+        /* diagnostics must never break delivery */
+      }
     }
     const payload = hydrateLegacyPayload(data);
     res.json({

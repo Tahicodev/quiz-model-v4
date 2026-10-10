@@ -83,12 +83,12 @@ const DEFAULT_ORDER_BY = {
 	kidsGames: 'created_at',
 	kidsGameSessions: 'created_at',
 	kidsChampionships: 'created_at',
-	kidsChampionshipScores: 'created_at',
+  	kidsChampionshipScores: 'played_at',
 	tournaments: 'created_at',
 	tournament_entries: 'registered_at',
 	exam_sessions: 'started_at',
 	settings: 'updated_at',
-	audit_logs: 'created_at',
+  	audit_logs: 'occurred_at',
 	refresh_tokens: 'created_at',
 };
 

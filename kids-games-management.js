@@ -1097,30 +1097,63 @@
 					if (a.correct) acc[a.question_id].ok += 1;
 				});
 			});
-			var qRows = questions.map(function (q) {
-				var st = acc[q.id] || { ok: 0, n: 0 };
-				var pct = st.n ? Math.round((st.ok / st.n) * 100) : null;
-				return '<tr><td>' + esc(String(q.text || '').slice(0, 80)) + '</td><td>' + (pct == null ? '—' : pct + '% (' + st.ok + '/' + st.n + ')') + '</td></tr>';
-			}).join('');
-			var sRows = sessions.slice(0, 100).map(function (s) {
-				return '<tr><td>' + esc(s.player_name || '—') + ' ' + esc(s.avatar || '') + '</td><td>' + esc(s.score) + '</td><td>' + esc(s.stars) + '⭐</td><td>' + esc(String(s.created_at || '').slice(0, 16).replace('T', ' ')) + '</td></tr>';
-			}).join('');
-			var overlay = document.createElement('div');
-			overlay.className = 'modal arena-editor-modal';
-			overlay.style.display = 'flex';
-			overlay.innerHTML = '<div class="modal-content modal-lg arena-editor-content" style="max-width:720px">' +
-				'<div class="modal-header arena-editor-header"><div><span class="arena-eyebrow">Kids Games Studio</span>' +
-				'<h2>Results — ' + esc(game ? game.name : '') + '</h2></div>' +
-				'<button type="button" class="arena-modal-close" aria-label="Close">×</button></div>' +
-				'<div style="padding:20px;overflow-y:auto;max-height:65vh">' +
-				'<p><b>' + totalPlays + '</b> plays · avg score <b>' + avgScore.toFixed(1) + '</b> · avg <b>' + avgStars.toFixed(1) + '⭐</b></p>' +
-				'<h4>Per-question accuracy</h4><div class="table-container"><table class="data-table"><thead><tr><th>Question</th><th>Accuracy</th></tr></thead><tbody>' + (qRows || '<tr><td colspan="2">No data yet</td></tr>') + '</tbody></table></div>' +
-				'<h4 style="margin-top:16px">Sessions</h4><div class="table-container"><table class="data-table"><thead><tr><th>Player</th><th>Score</th><th>Stars</th><th>Date</th></tr></thead><tbody>' + (sRows || '<tr><td colspan="4">No plays yet</td></tr>') + '</tbody></table></div>' +
-				'</div></div>';
-			document.body.appendChild(overlay);
-			var close = function () { overlay.remove(); };
-			overlay.querySelector('.arena-modal-close').addEventListener('click', close);
-			overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+		var bestScore = sessions.reduce(function (m, s) { return Math.max(m, Number(s.score) || 0); }, 0);
+		var accClass = function (pct) {
+			if (pct == null) return 'kres-acc-none';
+			if (pct >= 80) return 'kres-acc-high';
+			if (pct >= 50) return 'kres-acc-mid';
+			return 'kres-acc-low';
+		};
+		var qRows = questions.map(function (q) {
+			var st = acc[q.id] || { ok: 0, n: 0 };
+			var pct = st.n ? Math.round((st.ok / st.n) * 100) : null;
+			return '<div class="kres-qrow">' +
+				'<div class="kres-qrow-top"><span class="kres-qtext">' + esc(String(q.text || '').slice(0, 80)) + '</span>' +
+				'<span class="kres-acc-badge ' + accClass(pct) + '">' + (pct == null ? '—' : pct + '%') + '</span></div>' +
+				'<div class="kres-acc-bar"><span style="width:' + (pct == null ? 0 : pct) + '%"></span></div>' +
+				'<div class="kres-qcount">' + (st.n ? st.ok + '/' + st.n + ' correct' : 'No answers yet') + '</div>' +
+				'</div>';
+		}).join('');
+		var ranked = sessions.slice(0, 100);
+		var rankMedal = function (i) {
+			return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '#' + (i + 1);
+		};
+		var sRows = ranked.map(function (s, i) {
+			var isBest = Number(s.score) === bestScore && totalPlays > 0;
+			return '<div class="kres-srow' + (isBest ? ' kres-best' : '') + '">' +
+				'<span class="kres-rank">' + rankMedal(i) + '</span>' +
+				'<span class="kres-avatar">' + esc(s.avatar || '🦊') + '</span>' +
+				'<span class="kres-pname">' + esc(s.player_name || '—') + (isBest ? '<span class="kres-best-tag">Best</span>' : '') + '</span>' +
+				'<span class="kres-score">' + esc(s.score) + ' pts</span>' +
+				'<span class="kres-stars">' + esc(s.stars) + '⭐</span>' +
+				'<span class="kres-date">' + esc(String(s.created_at || '').slice(0, 16).replace('T', ' ')) + '</span>' +
+				'</div>';
+		}).join('');
+		var overlay = document.createElement('div');
+		overlay.className = 'modal arena-editor-modal kids-modal kids-results-modal';
+		overlay.style.display = 'flex';
+		overlay.innerHTML = '<div class="modal-content modal-lg kids-wizard-content">' +
+			'<div class="modal-header kids-wizard-header"><div class="kids-wizard-title-row"><div>' +
+			'<span class="arena-eyebrow">Kids Games Studio</span>' +
+			'<h2>Results — ' + esc(game ? game.name : '') + '</h2></div>' +
+			'<button type="button" class="arena-modal-close" aria-label="Close">×</button></div></div>' +
+			'<div class="kres-body">' +
+			'<div class="kres-stats">' +
+			'<div class="kres-stat"><span class="kres-stat-num">' + totalPlays + '</span><span class="kres-stat-label">Plays</span></div>' +
+			'<div class="kres-stat"><span class="kres-stat-num">' + avgScore.toFixed(1) + '</span><span class="kres-stat-label">Avg score</span></div>' +
+			'<div class="kres-stat"><span class="kres-stat-num">' + avgStars.toFixed(1) + '⭐</span><span class="kres-stat-label">Avg stars</span></div>' +
+			'</div>' +
+			'<h4 class="kres-section-title">Per-question accuracy</h4>' +
+			(totalPlays ? '<div class="kres-qlist">' + qRows + '</div>' : '<div class="kres-empty">No data yet — share the PIN and let the kids play! 🎮</div>') +
+			'<h4 class="kres-section-title">Sessions</h4>' +
+			(ranked.length ? '<div class="kres-slist">' + sRows + '</div>' : '<div class="kres-empty">No plays yet. 🧸</div>') +
+			'<div class="kres-footer"><button type="button" class="btn btn-secondary">Close</button></div>' +
+			'</div></div>';
+		document.body.appendChild(overlay);
+		var close = function () { overlay.remove(); };
+		overlay.querySelector('.arena-modal-close').addEventListener('click', close);
+		overlay.querySelector('.kres-footer .btn').addEventListener('click', close);
+		overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
 		}).catch(function (err) { toast('Could not load results: ' + (err && err.message), 'error'); });
 	}
 

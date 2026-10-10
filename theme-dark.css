@@ -3373,10 +3373,16 @@ html[data-theme='dark'] #examModal.is-open .modal-content {
 html[data-theme='dark'] #classModal.is-open .modal-content {
 	border: 1px solid rgb(66, 103, 148) !important;
 }
+html[data-theme='dark'] #categoryModal.is-open .modal-content {
+	border: 1px solid rgb(66, 103, 148) !important;
+}
 html[data-theme='dark'] #examModal.is-open .modal-header {
 	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
 }
 html[data-theme='dark'] #classModal.is-open .modal-header {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
+}
+html[data-theme='dark'] #categoryModal.is-open .modal-header {
 	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
 }
 html[data-theme='dark'] #examModal.is-open .exam-filters-container {
@@ -3993,6 +3999,93 @@ html[data-theme='dark'] #studentProfileModal .profile-tabs-v2 .profile-tab-btn:h
 	color: rgb(142, 167, 235);
 	background: rgba(16, 26, 44, 0.85);
 	border-color: rgb(32, 96, 182);
+}
+/* Student Account — stat tiles, insight cards, form surfaces. */
+html[data-theme='dark'] #studentProfileModal .profile-stat-tile span {
+	color: rgb(165, 180, 252);
+}
+html[data-theme='dark'] #studentProfileModal .profile-stat-tile strong,
+html[data-theme='dark'] #studentProfileModal .profile-insight-value,
+html[data-theme='dark'] #studentProfileModal .profile-insight-copy strong {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-card.accent-blue {
+	background: linear-gradient(180deg, rgba(59, 130, 246, 0.14), rgba(59, 130, 246, 0.05));
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-card.accent-gold {
+	background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.05));
+}
+html[data-theme='dark'] #studentProfileModal .profile-insight-card.accent-emerald {
+	background: linear-gradient(180deg, rgba(16, 185, 129, 0.14), rgba(16, 185, 129, 0.05));
+}
+html[data-theme='dark'] #studentProfileModal .profile-form {
+	background: rgba(16, 26, 44, 0.5);
+	border-color: var(--border-color);
+	box-shadow: none;
+}
+html[data-theme='dark'] #studentProfileModal .profile-form .form-control {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #studentProfileModal .profile-form .form-control::placeholder {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #studentProfileModal .profile-request-status {
+	background: rgba(16, 26, 44, 0.6);
+	border-color: var(--border-color);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #studentProfileModal .profile-chip {
+	background: rgba(99, 102, 241, 0.16);
+	border-color: rgba(99, 102, 241, 0.35);
+	color: rgb(165, 180, 252);
+}
+html[data-theme='dark'] #studentProfileModal .profile-chip.profile-chip-points {
+	background: rgba(16, 185, 129, 0.16);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] #studentProfileModal .profile-chip.profile-chip-badges {
+	background: rgba(245, 158, 11, 0.16);
+	color: rgb(241, 193, 157);
+}
+/* Stat tile tinted numerals stay readable on dark tiles. */
+html[data-theme='dark'] #studentProfileModal .profile-stat-tile:nth-child(1) strong {
+	color: rgb(165, 180, 252);
+}
+html[data-theme='dark'] #studentProfileModal .profile-stat-tile:nth-child(2) strong {
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] #studentProfileModal .profile-stat-tile:nth-child(3) strong {
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] #studentProfileModal .profile-stat-tile:nth-child(4) strong {
+	color: rgb(240, 171, 200);
+}
+/* Request status card + pills. */
+html[data-theme='dark'] #studentProfileModal .request-status-card {
+	background: rgba(16, 26, 44, 0.6);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] #studentProfileModal .request-status-card .request-title {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] #studentProfileModal .request-status-card .request-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #studentProfileModal .request-pill.pending {
+	background: rgba(245, 158, 11, 0.18);
+	color: rgb(241, 193, 157);
+}
+html[data-theme='dark'] #studentProfileModal .request-pill.approved {
+	background: rgba(16, 185, 129, 0.18);
+	color: rgb(163, 235, 190);
+}
+html[data-theme='dark'] #studentProfileModal .request-pill.rejected {
+	background: rgba(239, 68, 68, 0.18);
+	color: rgb(240, 158, 158);
+}
+/* Security intro copy. */
+html[data-theme='dark'] #studentProfileModal .profile-security-intro h3 {
+	color: rgb(185, 196, 213);
 }
 html[data-theme='dark'] .exam-classes-btn {
 	color: rgb(157, 241, 232);
@@ -4932,6 +5025,31 @@ html[data-theme='dark'] #results-table tbody tr.question-row-selected {
 	border-color: rgb(32, 103, 182);
 	background: rgb(31, 57, 91);
 }
+/* Mobile card bodies (base uses var(--bg-surface) now; text still needs
+   an explicit dark tone). */
+html[data-theme='dark'] #categoryList tbody tr td,
+html[data-theme='dark'] #examList tbody tr td,
+html[data-theme='dark'] #classList tbody tr td,
+html[data-theme='dark'] #results-table tbody tr td {
+	color: rgb(185, 196, 213);
+}
+/* Kids Results modal: readable text on dark surfaces. */
+html[data-theme='dark'] .kres-stat-num,
+html[data-theme='dark'] .kres-qtext,
+html[data-theme='dark'] .kres-pname {
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .kres-score {
+	color: rgb(165, 180, 252);
+}
+/* System rows (Uncategorized) follow the dark surface like other rows
+   instead of the light #f9fafb fallback. */
+html[data-theme='dark'] #categoryList tbody tr.system-category {
+	background-color: var(--bg-surface-alt);
+}
+html[data-theme='dark'] #categoryList tbody tr.system-category .category-name {
+	color: var(--text-secondary);
+}
 html[data-theme='dark'] #question-list-table tbody tr.detail-row td {
 	border: 1px solid rgb(32, 96, 182);
 	background: var(--bg-surface);
@@ -5204,3 +5322,45 @@ html[data-theme='dark'] .q-owner-badge {
 	background: var(--bg-surface-alt);
 	color: var(--text-secondary);
 }
+
+/* Student Account v3 — dark surfaces (complements the light-first v3 block in styles.css). */
+html[data-theme='dark'] #studentProfileModal.sa-modal-wrap .modal-content.sa-modal,
+html[data-theme='dark'] #studentProfileModal .modal-content.sa-modal {
+	background: #0f172a;
+	box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+html[data-theme='dark'] #studentProfileModal .sa-body {
+	background: radial-gradient(600px 200px at 50% -60px, rgba(99,102,241,0.18), transparent 70%), #0f172a;
+}
+html[data-theme='dark'] #studentProfileModal .sa-tabs-sticky {
+	background: linear-gradient(#0f172a 78%, transparent);
+}
+html[data-theme='dark'] #studentProfileModal .sa-tabs {
+	background: #1e293b !important;
+	border-color: rgba(148,163,184,0.25) !important;
+}
+html[data-theme='dark'] #studentProfileModal .sa-tabs .profile-tab-btn { color: #94a3b8 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-tabs .profile-tab-btn:hover:not(.active) { background: rgba(99,102,241,0.15) !important; color: #e2e8f0 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-section-head h4 { color: #e2e8f0; }
+html[data-theme='dark'] #studentProfileModal .sa-section-head p { color: #94a3b8; }
+html[data-theme='dark'] #studentProfileModal .sa-stats { background: #1e293b !important; }
+html[data-theme='dark'] #studentProfileModal .sa-stat { background: linear-gradient(180deg, #1e293b, #0f172a) !important; border-color: rgba(148,163,184,0.22) !important; }
+html[data-theme='dark'] #studentProfileModal .sa-stat small { color: #94a3b8 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-insight { background: #1e293b !important; border-color: rgba(148,163,184,0.22) !important; }
+html[data-theme='dark'] #studentProfileModal .sa-insight .profile-insight-value { color: #f1f5f9 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-insight .profile-insight-copy,
+html[data-theme='dark'] #studentProfileModal .sa-insight .profile-progress-copy { color: #94a3b8 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-card { background: #1e293b !important; border-color: rgba(148,163,184,0.22) !important; }
+html[data-theme='dark'] #studentProfileModal .sa-card-head { border-bottom-color: rgba(148,163,184,0.22) !important; }
+html[data-theme='dark'] #studentProfileModal .sa-card-head h3 { color: #f1f5f9 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-card-head p { color: #94a3b8 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-field label { color: #94a3b8 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-field .form-control { background: #0f172a !important; border-color: rgba(148,163,184,0.28) !important; color: #e2e8f0 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-field .form-control:focus { background: #0b1222 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-secure-intro { background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(16,185,129,0.12)) !important; }
+html[data-theme='dark'] #studentProfileModal .sa-secure-intro h3 { color: #f1f5f9 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-secure-intro p { color: #94a3b8 !important; }
+html[data-theme='dark'] #studentProfileModal .sa-tips { background: #0f172a; border-color: rgba(148,163,184,0.3); color: #94a3b8; }
+html[data-theme='dark'] #studentProfileModal .sa-btn-ghost { background: #0f172a !important; color: #cbd5e1 !important; border-color: rgba(148,163,184,0.35) !important; }
+html[data-theme='dark'] #studentProfileModal .sa-pw-toggle { background: rgba(99,102,241,0.2); color: #c7d2fe; }
+html[data-theme='dark'] #studentProfileModal .profile-request-status:not(:empty) { background: #0f172a !important; border-color: rgba(148,163,184,0.28) !important; color: #cbd5e1 !important; }

@@ -674,8 +674,10 @@ function readTeacherAccessForm() {
 
 // Switch Tabs
 function switchSettingsTab(event, tabName) {
-	// Role guard: admin-only tabs (teacher-access, realtime, setup) can never be
+	// Role guard: admin-only tabs (teacher-access, setup) can never be
 	// opened by a teacher, even via console calls or stale cached buttons.
+	// The realtime tab is shared (teachers get a scoped view) — enforced in
+	// Auth.canAccessSettingsTab.
 	if (
 		typeof window.Auth === 'object' &&
 		window.Auth &&
@@ -697,6 +699,15 @@ function switchSettingsTab(event, tabName) {
 	const target = document.getElementById(`${tabName}-settings`);
 	if (target) {
 		target.classList.remove('hidden');
+		// Teachers share the realtime tab with a scoped view (admin-only
+		// controls hide via the teacher-view class).
+		if (tabName === 'realtime' && window.applyRealtimeTeacherScope) {
+			try {
+				window.applyRealtimeTeacherScope();
+			} catch (_) {
+				/* ignore */
+			}
+		}
 		// Dynamically refresh the training preset dropdown when entering
 		// the Presets tab (the Training Mode group now lives there).
 		if (tabName === 'presets' && window.refreshTrainingPresetDropdown) {

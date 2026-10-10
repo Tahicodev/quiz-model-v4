@@ -269,6 +269,7 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 .exam-checkbox,
 .class-checkbox,
 .result-checkbox,
+.training-checkbox,
 #selectAllCategories,
 #selectAllExams,
 #selectAllClasses,
@@ -277,6 +278,15 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	height: 16px;
 	accent-color: #2563eb;
 	cursor: pointer;
+}
+
+#categoryList .training-cell {
+	width: 70px;
+	text-align: center;
+}
+
+.training-checkbox {
+	accent-color: #10b981;
 }
 
 .category-checkbox:disabled {
@@ -336,6 +346,13 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 #gameList.hide-owner .q-owner-badge,
 #kidsGameList.hide-owner .q-owner-badge {
 	display: none;
+}
+
+/* Realtime settings: scoped teacher view — admin-only controls
+   (server host, recovery code, user sync, global toggles, sync-all)
+   stay hidden for teachers. See data-teacher-hide in admin.html. */
+#realtime-settings.teacher-view [data-teacher-hide] {
+	display: none !important;
 }
 
 .user-controls {
@@ -1349,6 +1366,29 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	border-radius: 999px;
 	background: linear-gradient(90deg, #fde047, #f59e0b);
 	transition: width 0.4s ease;
+	position: relative;
+	overflow: hidden;
+}
+
+.profile-season-bar span::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+	transform: translateX(-100%);
+	animation: profile-season-shimmer 2.8s ease-in-out infinite;
+}
+
+@keyframes profile-season-shimmer {
+	0% { transform: translateX(-100%); }
+	55%, 100% { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.profile-season-bar span::after {
+		animation: none;
+	}
 }
 .profile-season-reward {
 	flex: 0 0 auto;
@@ -2281,7 +2321,7 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 .profile-progress-copy {
 	display: block;
 	margin-top: 8px;
-	color: #64748b;
+	color: var(--text-secondary, #64748b);
 	line-height: 1.5;
 }
 
@@ -2294,6 +2334,44 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 	gap: 14px;
 	margin-bottom: 18px;
+}
+
+/* Icon medallions per accent (decorative, emoji). */
+.profile-insight-card {
+	position: relative;
+	padding-left: 64px;
+}
+
+.profile-insight-card::before {
+	content: '📊';
+	position: absolute;
+	left: 14px;
+	top: 14px;
+	width: 38px;
+	height: 38px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.15rem;
+	border-radius: 12px;
+	background: rgba(99, 102, 241, 0.12);
+}
+
+.profile-insight-card.accent-gold::before {
+	content: '🏆';
+	background: rgba(245, 158, 11, 0.14);
+}
+
+.profile-insight-card.accent-emerald::before {
+	content: '⚡';
+	background: rgba(16, 185, 129, 0.14);
+}
+
+.profile-insight-card .profile-insight-kicker,
+.profile-insight-card .profile-insight-value,
+.profile-insight-card .profile-insight-copy,
+.profile-insight-card .profile-progress-copy {
+	position: relative;
 }
 
 .profile-insight-card.accent-blue {
@@ -2358,11 +2436,11 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	font-weight: 700;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
-	color: #475569;
+	color: var(--text-secondary, #475569);
 }
 
 .profile-form .form-control {
-	background: #ffffff;
+	background: var(--bg-surface, #ffffff);
 	border: 1px solid rgba(148, 163, 184, 0.32);
 	border-radius: 12px;
 	padding: 0.65rem 0.85rem;
@@ -2595,7 +2673,7 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 }
 
 .profile-stats-card > .profile-hero-stats {
-	background: #ffffff;
+	background: var(--bg-surface, #ffffff);
 	border-radius: 22px;
 	padding: 20px;
 	display: grid;
@@ -2605,7 +2683,7 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 
 /* Stat tiles — high contrast, large numbers */
 .profile-stat-tile {
-	background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+	background: linear-gradient(180deg, var(--bg-surface, #f8fafc) 0%, var(--bg-surface-alt, #eef2ff) 100%);
 	border: 1px solid rgba(99, 102, 241, 0.18);
 	border-radius: 16px;
 	padding: 18px 16px;
@@ -2640,6 +2718,40 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	letter-spacing: -0.02em;
 }
 
+/* Per-tile top accent + tinted numerals (order: Level, Experience,
+   Tournament Points, Rewards). Purely decorative. */
+.profile-stat-tile {
+	position: relative;
+	overflow: hidden;
+}
+
+.profile-stat-tile::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 4px;
+	background: linear-gradient(90deg, #6366f1, #8b5cf6);
+}
+
+.profile-stat-tile:nth-child(2)::before {
+	background: linear-gradient(90deg, #10b981, #06b6d4);
+}
+
+.profile-stat-tile:nth-child(3)::before {
+	background: linear-gradient(90deg, #f59e0b, #f97316);
+}
+
+.profile-stat-tile:nth-child(4)::before {
+	background: linear-gradient(90deg, #ec4899, #8b5cf6);
+}
+
+.profile-stat-tile:nth-child(1) strong { color: #4338ca; }
+.profile-stat-tile:nth-child(2) strong { color: #047857; }
+.profile-stat-tile:nth-child(3) strong { color: #b45309; }
+.profile-stat-tile:nth-child(4) strong { color: #be185d; }
+
 .profile-stat-tile small {
 	color: #64748b;
 	font-size: 0.78rem;
@@ -2649,13 +2761,49 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 /* Form card with colored left-border accent and header */
 .profile-form-card {
 	position: relative;
-	background: #ffffff;
+	background: var(--bg-surface, #ffffff);
 	border-radius: 22px;
 	padding: 22px 24px;
 	margin-bottom: 18px;
 	border: 1px solid rgba(148, 163, 184, 0.22);
 	border-left: 5px solid #6366f1;
 	box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.profile-security-intro {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 14px 16px;
+	margin-bottom: 16px;
+	border-radius: 18px;
+	border: 1px solid rgba(99, 102, 241, 0.22);
+	background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.06));
+}
+
+.profile-security-medal {
+	flex: 0 0 auto;
+	width: 46px;
+	height: 46px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.4rem;
+	border-radius: 14px;
+	background: linear-gradient(135deg, #4f46e5, #7c3aed);
+	box-shadow: 0 8px 18px rgba(79, 70, 229, 0.35);
+}
+
+.profile-security-intro h3 {
+	margin: 0 0 2px;
+	font-size: 0.98rem;
+}
+
+.profile-security-intro p {
+	margin: 0;
+	font-size: 0.82rem;
+	color: var(--text-secondary, #64748b);
+	line-height: 1.45;
 }
 
 .profile-form-card-header {
@@ -2694,25 +2842,61 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 
 .profile-tabs {
 	display: flex;
-	gap: 10px;
-	margin-bottom: 16px;
-	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 18px;
+	padding: 4px;
+	border-radius: 16px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	background: var(--bg-surface-alt, #f1f5f9);
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.profile-tabs::-webkit-scrollbar {
+	display: none;
 }
 
 .profile-tab-btn {
-	border: 1px solid #e2e8f0;
-	background: #f8fafc;
-	border-radius: 999px;
-	padding: 6px 14px;
+	flex: 1 1 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	white-space: nowrap;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-secondary, #475569);
+	border-radius: 12px;
+	padding: 9px 14px;
 	font-size: 0.85rem;
 	cursor: pointer;
-	font-weight: 600;
+	font-weight: 700;
+	transition:
+		background 0.18s ease,
+		color 0.18s ease,
+		box-shadow 0.18s ease;
+}
+
+.profile-tab-btn svg {
+	flex: 0 0 auto;
+}
+
+.profile-tab-btn:hover:not(.active) {
+	background: rgba(99, 102, 241, 0.1);
+	color: var(--text-main, #0f172a);
+}
+
+.profile-tab-btn:focus-visible {
+	outline: 2px solid var(--primary, #4f46e5);
+	outline-offset: 2px;
 }
 
 .profile-tab-btn.active {
-	background: var(--primary);
+	background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
 	color: #ffffff;
-	border-color: var(--primary);
+	border-color: transparent;
+	box-shadow: 0 8px 18px rgba(79, 70, 229, 0.35);
 }
 
 .profile-section.hidden {
@@ -2753,6 +2937,61 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	gap: 18px;
 }
 
+/* Gradient account header (kids-studio language): eyebrow + title on the
+   left, circular absolute close at the top-right corner. */
+#studentProfileModal .modal-header.student-account-header {
+	position: relative;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 20px 24px 18px;
+	padding-right: 72px;
+	border-bottom: none;
+	border-radius: 12px 12px 0 0;
+	background: linear-gradient(135deg, #1e3a8a 0%, #4f46e5 55%, #7c3aed 100%);
+	color: #fff;
+}
+
+#studentProfileModal .student-account-header .arena-eyebrow {
+	display: block;
+	margin-bottom: 4px;
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+#studentProfileModal .student-account-header h2 {
+	color: #fff;
+}
+
+#studentProfileModal .student-account-header .arena-modal-close {
+	position: absolute;
+	top: 14px;
+	right: 14px;
+	width: 36px;
+	height: 36px;
+	margin: 0;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.35);
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.12);
+	color: #fff;
+	font-size: 1.4rem;
+	line-height: 1;
+	cursor: pointer;
+	transition:
+		background 150ms ease,
+		transform 150ms ease;
+	z-index: 2;
+}
+
+#studentProfileModal .student-account-header .arena-modal-close:hover {
+	background: rgba(255, 255, 255, 0.25);
+	border-color: rgba(255, 255, 255, 0.6);
+	transform: rotate(90deg);
+}
+
 @media (max-width: 768px) {
 	#studentProfileModal .modal-content {
 		width: 100%;
@@ -2762,7 +3001,7 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 		border-radius: 0;
 	}
 
-	#studentProfileModal .modal-header {
+	#studentProfileModal .modal-header:not(.student-account-header) {
 		padding: 14px 16px;
 		position: sticky;
 		top: 0;
@@ -2772,6 +3011,14 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 
 	#studentProfileModal .modal-header h2 {
 		font-size: 1.1rem;
+	}
+
+	#studentProfileModal .modal-header.student-account-header {
+		padding: 16px 16px 14px;
+		padding-right: 64px;
+		position: sticky;
+		top: 0;
+		z-index: 5;
 	}
 
 	#studentProfileModal .modal-body {
@@ -2958,18 +3205,33 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
+	gap: 10px;
 	padding: 12px 14px;
 	border-radius: 12px;
-	background: #f8fafc;
-	border: 1px solid #e2e8f0;
+	background: var(--bg-body, #f8fafc);
+	border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.request-status-card .request-title {
+	font-weight: 700;
+	font-size: 0.85rem;
+	color: #0f172a;
+}
+
+.request-status-card .request-subtitle {
+	font-size: 0.75rem;
+	color: #64748b;
+	margin-top: 2px;
 }
 
 .request-pill {
+	flex: 0 0 auto;
 	padding: 4px 10px;
 	border-radius: 999px;
 	font-size: 0.75rem;
 	text-transform: capitalize;
-	font-weight: 600;
+	font-weight: 700;
+	white-space: nowrap;
 }
 
 .request-pill.pending {
@@ -3010,6 +3272,64 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 	gap: 16px;
 	margin-bottom: 20px;
+}
+
+/* ============================================
+   WORKSPACE KIDS MODE (primaire students)
+   Kids games + kids championships replace the normal lobby lists.
+   Toggled via the kids-mode class by student-workspace.js.
+   ============================================ */
+.games-panel.kids-mode .panel-filters,
+.games-panel.kids-mode .game-quick-join,
+.games-panel.kids-mode #studentGameStatsMain,
+.games-panel.kids-mode #studentGameListMain,
+.games-panel.kids-mode #studentGameResultsMain,
+.games-panel.kids-mode .student-tournament-grid,
+.games-panel.kids-mode #studentTournamentMeta,
+.games-panel.kids-mode #studentTournamentActions,
+.games-panel.kids-mode #studentTournamentJourney,
+.games-panel.kids-mode .student-tournament-layout,
+.games-panel.kids-mode #studentTournamentHowItWorks {
+	display: none;
+}
+
+#studentKidsGames:empty,
+#studentKidsChampionships:empty {
+	display: none;
+}
+
+.kids-games-heading {
+	margin: 4px 0 12px;
+}
+
+.kids-games-heading h3 {
+	margin: 0 0 4px;
+	font-size: 1.05rem;
+}
+
+.kids-games-heading p {
+	margin: 0;
+	color: var(--text-secondary);
+	font-size: 0.85rem;
+}
+
+#studentKidsChampionships {
+	margin-top: 4px;
+}
+
+/* Student Account — primaire (kids) scope. The normal Overview / Season /
+   Session Record / Performance blocks are hidden and the kids summary is
+   shown instead. Toggled by student-workspace.js on #studentProfileModal. */
+.sa-kids-account {
+	display: none;
+}
+
+#studentProfileModal.sa-account-kids .sa-kids-account {
+	display: block;
+}
+
+#studentProfileModal.sa-account-kids .sa-normal-only {
+	display: none !important;
 }
 
 .workspace-grid--full-width .games-panel .game-card-list {
@@ -8801,6 +9121,420 @@ textarea {
 	display: flex;
 	justify-content: flex-end;
 	gap: var(--space-md);
+}
+
+/* ── Exam Analysis modal (per-question accuracy + students) ───────────── */
+.exam-analysis-modal {
+	display: flex;
+	position: fixed;
+	z-index: 3050;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	overflow: auto;
+	background-color: rgba(0, 0, 0, 0.5);
+	backdrop-filter: blur(4px);
+	align-items: center;
+	justify-content: center;
+}
+
+.exam-analysis-modal .modal-content {
+	background-color: var(--bg-surface);
+	margin: var(--space-md) auto;
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-lg);
+	width: 96%;
+	max-width: 980px;
+	position: relative;
+	display: flex;
+	flex-direction: column;
+}
+
+.exam-analysis-modal .modal-header {
+	padding: var(--space-md) var(--space-lg);
+	border-bottom: 1px solid var(--border-color);
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-sm);
+}
+
+.exam-analysis-modal .modal-header h2 {
+	margin: 0;
+	font-size: var(--text-lg);
+}
+
+.exam-analysis-modal .close-btn {
+	color: var(--text-muted);
+	font-size: 28px;
+	font-weight: bold;
+	cursor: pointer;
+	line-height: 1;
+	background: none;
+	border: none;
+}
+
+.exam-analysis-modal .close-btn:hover {
+	color: var(--text-main);
+}
+
+.eas-subtitle {
+	margin: 2px 0 0;
+	font-size: 0.9rem;
+	color: var(--text-muted);
+}
+
+.eas-tabs {
+	display: flex;
+	gap: 6px;
+	padding: var(--space-md) var(--space-lg) 0;
+	border-bottom: 1px solid var(--border-color);
+	overflow-x: auto;
+	flex-wrap: wrap;
+}
+
+.eas-tab-btn {
+	padding: 9px 18px;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-md) var(--radius-md) 0 0;
+	color: var(--text-secondary);
+	font-weight: 500;
+	cursor: pointer;
+	transition: all var(--transition-fast);
+	font-size: 0.95rem;
+	white-space: nowrap;
+	border-bottom: 2px solid transparent;
+}
+
+.eas-tab-btn:hover {
+	background-color: var(--bg-surface-alt);
+	color: var(--text-main);
+}
+
+.eas-tab-btn.active {
+	color: var(--primary);
+	font-weight: 600;
+	border-bottom-color: var(--primary);
+	background-color: var(--primary-light);
+}
+
+.exam-analysis-modal .eas-body {
+	padding: var(--space-lg);
+	max-height: 70vh;
+	overflow-y: auto;
+}
+
+.eas-panel {
+	display: none;
+}
+
+.eas-panel.active {
+	display: block;
+	animation: fadeIn 0.2s ease;
+}
+
+.eas-empty {
+	padding: 48px 16px;
+	text-align: center;
+	color: var(--text-muted);
+	background: var(--bg-surface-alt);
+	border: 1px dashed var(--border-color);
+	border-radius: var(--radius-md);
+}
+
+.eas-kpis {
+	display: flex;
+	gap: var(--space-md);
+	margin-bottom: var(--space-md);
+	flex-wrap: wrap;
+}
+
+.eas-kpi {
+	flex: 1 1 120px;
+	background: var(--bg-surface-alt);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-md);
+	padding: var(--space-md);
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+
+.eas-kpi-num {
+	font-size: 1.5rem;
+	font-weight: 700;
+	color: var(--primary);
+}
+
+.eas-kpi-label {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+}
+
+.eas-table-wrap {
+	overflow-x: auto;
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-md);
+}
+
+.eas-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.92rem;
+}
+
+.eas-table th {
+	text-align: left;
+	padding: 10px 12px;
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	font-weight: 600;
+	font-size: 0.82rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	border-bottom: 1px solid var(--border-color);
+	white-space: nowrap;
+}
+
+.eas-table td {
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--border-color-light);
+	vertical-align: top;
+}
+
+.eas-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.eas-q-row {
+	cursor: pointer;
+	transition: background-color var(--transition-fast);
+}
+
+.eas-q-row:hover {
+	background-color: var(--bg-surface-alt);
+}
+
+.eas-q-text {
+	max-width: 320px;
+	min-width: 180px;
+	line-height: 1.35;
+}
+
+.eas-cat-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--primary-light);
+	color: var(--primary);
+	font-size: 0.78rem;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.eas-type-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: var(--radius-sm);
+	background: var(--bg-surface-alt);
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+	font-size: 0.78rem;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.eas-pts {
+	font-weight: 600;
+	color: var(--text-main);
+	white-space: nowrap;
+}
+
+.eas-acc-cell {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 130px;
+}
+
+.eas-acc-bar {
+	flex: 1;
+	background: var(--bg-surface-alt);
+	border-radius: 999px;
+	height: 8px;
+	overflow: hidden;
+	min-width: 60px;
+}
+
+.eas-acc-fill {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background: var(--primary);
+}
+
+.eas-acc-fill.eas-acc-high {
+	background: var(--success, #10b981);
+}
+
+.eas-acc-fill.eas-acc-mid {
+	background: #f59e0b;
+}
+
+.eas-acc-fill.eas-acc-low {
+	background: var(--danger, #ef4444);
+}
+
+.eas-acc-count {
+	font-size: 0.8rem;
+	color: var(--text-secondary);
+	white-space: nowrap;
+}
+
+.eas-acc-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 0.82rem;
+	font-weight: 700;
+	white-space: nowrap;
+	min-width: 52px;
+	text-align: center;
+}
+
+.eas-acc-high {
+	background: rgba(16, 185, 129, 0.15);
+	color: #059669;
+}
+
+.eas-acc-mid {
+	background: rgba(245, 158, 11, 0.15);
+	color: #b45309;
+}
+
+.eas-acc-low {
+	background: rgba(239, 68, 68, 0.15);
+	color: #dc2626;
+}
+
+.eas-acc-none {
+	background: var(--bg-surface-alt);
+	color: var(--text-muted);
+}
+
+.eas-toggle-hint {
+	color: var(--text-muted);
+	font-size: 0.8rem;
+	margin-left: 4px;
+}
+
+.eas-detail-row td {
+	background: var(--bg-surface-alt);
+}
+
+.eas-people {
+	margin-bottom: 8px;
+}
+
+.eas-people:last-child {
+	margin-bottom: 0;
+}
+
+.eas-people-title {
+	display: block;
+	font-size: 0.8rem;
+	font-weight: 700;
+	margin-bottom: 2px;
+}
+
+.eas-people-correct .eas-people-title {
+	color: #059669;
+}
+
+.eas-people-wrong .eas-people-title {
+	color: #dc2626;
+}
+
+.eas-people-list {
+	font-size: 0.88rem;
+	line-height: 1.5;
+	color: var(--text-main);
+}
+
+.eas-hint {
+	margin-top: var(--space-sm);
+	font-size: 0.8rem;
+	color: var(--text-muted);
+}
+
+.eas-student-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-weight: 600;
+}
+
+.eas-cell-sub {
+	display: block;
+	font-size: 0.78rem;
+	font-weight: 400;
+	color: var(--text-muted);
+}
+
+.eas-cell-has-sub {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.eas-score {
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.eas-score.eas-green {
+	color: #059669;
+}
+
+.eas-score.eas-red {
+	color: #dc2626;
+}
+
+.eas-badge {
+	display: inline-block;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 0.78rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.eas-badge-green {
+	background: rgba(16, 185, 129, 0.15);
+	color: #059669;
+}
+
+.eas-badge-red {
+	background: rgba(239, 68, 68, 0.15);
+	color: #dc2626;
+}
+
+@media (max-width: 768px) {
+	.exam-analysis-modal .modal-content {
+		width: 98%;
+	}
+	.eas-table th,
+	.eas-table td {
+		padding: 8px;
+	}
+	.eas-q-text {
+		min-width: 140px;
+	}
 }
 
 .lightbox-content {
@@ -16821,7 +17555,7 @@ select.form-control {
 	/* Transform Table Rows into Cards */
 	#questionTable tbody tr {
 		display: block;
-		background: #ffffff;
+		background: var(--bg-surface);
 		border-radius: 16px;
 		box-shadow:
 			0 4px 6px -1px rgba(0, 0, 0, 0.05),
@@ -16829,7 +17563,7 @@ select.form-control {
 		margin-bottom: 16px;
 		padding: 16px;
 		position: relative;
-		border: 1px solid #f1f5f9;
+		border: 1px solid var(--bg-surface-alt);
 		transition:
 			transform 0.2s,
 			box-shadow 0.2s;
@@ -16837,7 +17571,7 @@ select.form-control {
 
 	#questionTable tbody tr:active {
 		transform: scale(0.99);
-		background-color: #f8fafc;
+		background-color: var(--bg-body);
 	}
 
 	/* Cell Layout */
@@ -16846,7 +17580,7 @@ select.form-control {
 		justify-content: space-between;
 		align-items: center;
 		padding: 8px 0;
-		border-bottom: 1px solid #f8fafc;
+		border-bottom: 1px solid var(--bg-body);
 		text-align: right;
 	}
 
@@ -16889,7 +17623,7 @@ select.form-control {
 		padding-bottom: 12px;
 		padding-top: 0;
 		margin-bottom: 8px;
-		border-bottom: 2px solid #f1f5f9;
+		border-bottom: 2px solid var(--bg-surface-alt);
 		padding-right: 30px; /* Space for checkbox */
 	}
 
@@ -26665,8 +27399,8 @@ tr[data-id],
 		gap: 8px 10px;
 		margin: 0 0 10px;
 		padding: 12px;
-		background: #ffffff;
-		border: 1px solid #e2e8f0;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-color);
 		border-radius: 10px;
 		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 	}
@@ -26696,7 +27430,7 @@ tr[data-id],
 		border: 1px solid #dbeafe;
 		border-top: 0;
 		border-radius: 0 0 10px 10px;
-		background: #f8fafc;
+		background: var(--bg-body);
 		font-size: 0.78rem;
 		line-height: 1.4;
 	}
@@ -26740,10 +27474,10 @@ tr[data-id],
 		gap: 4px;
 		width: auto;
 		padding: 2px 7px;
-		border: 1px solid #e2e8f0;
+		border: 1px solid var(--border-color);
 		border-radius: 999px;
-		background: #f8fafc;
-		color: #475569;
+		background: var(--bg-body);
+		color: var(--text-secondary);
 		font-size: 0.7rem;
 		font-weight: 700;
 	}
@@ -27149,8 +27883,8 @@ tr[data-id],
 		margin: 0 0 10px;
 		padding: 12px;
 		padding-top: 40px;
-		background: #ffffff;
-		border: 1px solid #e2e8f0;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-color);
 		border-radius: 10px;
 		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 	}
@@ -27196,11 +27930,16 @@ tr[data-id],
 	#categoryList .category-checkbox,
 	#examList .exam-checkbox,
 	#classList .class-checkbox,
-	#results-table .result-checkbox {
+	#results-table .result-checkbox,
+	#categoryList .training-checkbox {
 		width: 18px;
 		height: 18px;
 		margin: 0;
 		accent-color: #2563eb;
+	}
+
+	#categoryList .training-checkbox {
+		accent-color: #10b981;
 	}
 
 	#categoryList tbody tr td.actions-cell,
@@ -27209,7 +27948,7 @@ tr[data-id],
 	#results-table tbody tr td.actions-cell {
 		padding-top: 8px;
 		margin-top: 4px;
-		border-top: 1px solid #f1f5f9;
+		border-top: 1px solid var(--bg-surface-alt);
 	}
 
 	.toolbar-header-group .bulk-actions-container,
@@ -27345,9 +28084,9 @@ tr[data-id],
 		gap: 8px 10px;
 		margin-bottom: 10px;
 		padding: 12px;
-		border: 1px solid #e2e8f0;
+		border: 1px solid var(--border-color);
 		border-radius: 10px;
-		background: #ffffff;
+		background: var(--bg-surface);
 		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 	}
 
@@ -28310,9 +29049,9 @@ tr[data-id],
 		gap: 8px 10px;
 		margin-bottom: 10px;
 		padding: 12px;
-		border: 1px solid #e2e8f0;
+		border: 1px solid var(--border-color);
 		border-radius: 10px;
-		background: #ffffff;
+		background: var(--bg-surface);
 		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 	}
 
@@ -30465,7 +31204,8 @@ body.modal-open {
 }
 
 #examModal.is-open,
-#classModal.is-open {
+#classModal.is-open,
+#categoryModal.is-open {
 	display: flex !important;
 	position: fixed !important;
 	inset: 0 !important;
@@ -30485,7 +31225,8 @@ body.modal-open {
 }
 
 #examModal.is-open .modal-content,
-#classModal.is-open .modal-content {
+#classModal.is-open .modal-content,
+#categoryModal.is-open .modal-content {
 	display: flex !important;
 	flex-direction: column !important;
 	width: min(100%, 1180px) !important;
@@ -30505,8 +31246,13 @@ body.modal-open {
 	width: min(100%, 1280px) !important;
 }
 
+#categoryModal.is-open .modal-content {
+	width: min(100%, 640px) !important;
+}
+
 #examModal.is-open .modal-header,
-#classModal.is-open .modal-header {
+#classModal.is-open .modal-header,
+#categoryModal.is-open .modal-header {
 	min-height: 62px !important;
 	display: flex !important;
 	align-items: center !important;
@@ -30520,7 +31266,8 @@ body.modal-open {
 }
 
 #examModal.is-open .modal-header h2,
-#classModal.is-open .modal-header h2 {
+#classModal.is-open .modal-header h2,
+#categoryModal.is-open .modal-header h2 {
 	margin: 0 !important;
 	color: #0f172a !important;
 	font-size: 1.12rem !important;
@@ -30531,7 +31278,8 @@ body.modal-open {
 
 #userModal .close,
 #examModal.is-open .close,
-#classModal.is-open .close {
+#classModal.is-open .close,
+#categoryModal.is-open .close {
 	width: 38px !important;
 	height: 38px !important;
 	display: inline-grid !important;
@@ -30547,7 +31295,8 @@ body.modal-open {
 
 #userModal .close::before,
 #examModal.is-open .close::before,
-#classModal.is-open .close::before {
+#classModal.is-open .close::before,
+#categoryModal.is-open .close::before {
 	content: '×';
 	display: block;
 	color: currentColor;
@@ -30560,19 +31309,22 @@ body.modal-open {
 #settingsModal .close::before,
 #userModal .close::before,
 #examModal.is-open .close::before,
-#classModal.is-open .close::before {
+#classModal.is-open .close::before,
+#categoryModal.is-open .close::before {
 	content: '\00d7' !important;
 }
 
 #userModal .close:hover,
 #examModal.is-open .close:hover,
-#classModal.is-open .close:hover {
+#classModal.is-open .close:hover,
+#categoryModal.is-open .close:hover {
 	background: #fee2e2 !important;
 	color: #b91c1c !important;
 }
 
 #examModal.is-open .modal-body,
-#classModal.is-open .modal-body {
+#classModal.is-open .modal-body,
+#categoryModal.is-open .modal-body {
 	flex: 1 1 auto !important;
 	min-height: 0 !important;
 	max-height: none !important;
@@ -30595,6 +31347,18 @@ body.modal-open {
 }
 
 #examModal.is-open #examForm > .form-group {
+	margin-bottom: 0;
+}
+
+#categoryModal.is-open #categoryForm {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	width: 100%;
+	min-width: 0;
+}
+
+#categoryModal.is-open #categoryForm > .form-group {
 	margin-bottom: 0;
 }
 
@@ -30664,7 +31428,8 @@ body.modal-open {
 }
 
 #examModal.is-open .form-actions,
-#classModal.is-open .form-actions {
+#classModal.is-open .form-actions,
+#categoryModal.is-open .form-actions {
 	display: flex;
 	justify-content: flex-end;
 	gap: 10px;
@@ -30674,38 +31439,44 @@ body.modal-open {
 }
 
 #examModal.is-open .form-actions .btn,
-#classModal.is-open .form-actions .btn {
+#classModal.is-open .form-actions .btn,
+#categoryModal.is-open .form-actions .btn {
 	min-width: 116px;
 }
 
 @media (max-width: 860px) {
 	#examModal.is-open,
-	#classModal.is-open {
+	#classModal.is-open,
+	#categoryModal.is-open {
 		align-items: stretch !important;
 		padding: 10px !important;
 	}
 
 	#examModal.is-open .modal-content,
-	#classModal.is-open .modal-content {
+	#classModal.is-open .modal-content,
+	#categoryModal.is-open .modal-content {
 		width: 100% !important;
 		max-height: calc(100dvh - 20px) !important;
 		border-radius: 14px !important;
 	}
 
 	#examModal.is-open .modal-header,
-	#classModal.is-open .modal-header {
+	#classModal.is-open .modal-header,
+	#categoryModal.is-open .modal-header {
 		min-height: 56px !important;
 		padding: 12px 14px !important;
 		border-radius: 14px 14px 0 0 !important;
 	}
 
 	#examModal.is-open .modal-header h2,
-	#classModal.is-open .modal-header h2 {
+	#classModal.is-open .modal-header h2,
+	#categoryModal.is-open .modal-header h2 {
 		font-size: 1rem !important;
 	}
 
 	#examModal.is-open .modal-body,
-	#classModal.is-open .modal-body {
+	#classModal.is-open .modal-body,
+	#categoryModal.is-open .modal-body {
 		padding: 14px !important;
 		padding-bottom: 84px !important;
 	}
@@ -30728,7 +31499,8 @@ body.modal-open {
 	}
 
 	#examModal.is-open .form-actions,
-	#classModal.is-open .form-actions {
+	#classModal.is-open .form-actions,
+	#categoryModal.is-open .form-actions {
 		position: absolute !important;
 		left: 0 !important;
 		right: 0 !important;
@@ -30746,7 +31518,8 @@ body.modal-open {
 	}
 
 	#examModal.is-open .form-actions .btn,
-	#classModal.is-open .form-actions .btn {
+	#classModal.is-open .form-actions .btn,
+	#categoryModal.is-open .form-actions .btn {
 		width: 100%;
 		min-width: 0;
 	}
@@ -30754,18 +31527,21 @@ body.modal-open {
 
 @media (max-width: 480px) {
 	#examModal.is-open,
-	#classModal.is-open {
+	#classModal.is-open,
+	#categoryModal.is-open {
 		padding: 6px !important;
 	}
 
 	#examModal.is-open .modal-content,
-	#classModal.is-open .modal-content {
+	#classModal.is-open .modal-content,
+	#categoryModal.is-open .modal-content {
 		max-height: calc(100dvh - 12px) !important;
 		border-radius: 12px !important;
 	}
 
 	#examModal.is-open .modal-body,
-	#classModal.is-open .modal-body {
+	#classModal.is-open .modal-body,
+	#categoryModal.is-open .modal-body {
 		padding: 12px !important;
 		padding-bottom: 80px !important;
 	}
@@ -35064,11 +35840,12 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 
 #studentProfileModal .profile-tabs-v2 {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 6px;
 	margin: 0 0 20px;
 	padding: 5px;
 	background: linear-gradient(180deg, #f1f5f9, #f8fafc);
-	border: 1px solid #e2e8f0;
+	border: 1px solid var(--border-color, #e2e8f0);
 	border-radius: 14px;
 	box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 	overflow-x: auto;
@@ -35120,10 +35897,10 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 }
 
 #studentProfileModal .profile-tabs-v2 .profile-tab-btn.active {
-	background: linear-gradient(135deg, #1d4ed8, #2563eb);
-	border-color: #1d4ed8;
+	background: linear-gradient(135deg, #4f46e5, #7c3aed);
+	border-color: transparent;
 	color: #ffffff;
-	box-shadow: 0 8px 18px rgba(37, 99, 235, 0.32);
+	box-shadow: 0 8px 18px rgba(79, 70, 229, 0.35);
 }
 
 #studentProfileModal .profile-tabs-v2 .profile-tab-btn.active svg {
@@ -35145,6 +35922,17 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		min-height: 40px;
 		padding: 8px 8px;
 		font-size: 0.76rem;
+	}
+
+	/* Every tab must stay visible — never clip one behind a scroll
+	   edge. Wrap instead of scrolling on small screens. */
+	#studentProfileModal .profile-tabs-v2 {
+		flex-wrap: wrap;
+		overflow: visible;
+	}
+
+	#studentProfileModal .profile-tabs-v2 .profile-tab-btn {
+		flex: 1 1 150px;
 	}
 
 	#studentProfileModal .profile-tabs-v2 .profile-tab-btn svg {
@@ -39584,5 +40372,1926 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		flex-wrap: nowrap;
 		gap: 8px;
 		padding: 4px 8px;
+	}
+}
+
+/* ============================================================
+   STUDENT ACCOUNT MODAL — v3 REFACTOR (2026-10-09)
+   Single source of truth for #studentProfileModal.
+   Placed LAST so it wins over the legacy scattered blocks above
+   (lines ~1300, ~2150, ~2520, ~34413). Old rules are left intact
+   for safety; everything below re-unifies the design.
+   Design language: deep-indigo header, glass hero, 4-stat grid,
+   insight cards, premium form cards. Fully responsive + dark-ready.
+   ============================================================ */
+
+#studentProfileModal.sa-modal-wrap {
+	--sa-indigo: #4f46e5;
+	--sa-violet: #7c3aed;
+	--sa-cyan: #06b6d4;
+	--sa-emerald: #10b981;
+	--sa-amber: #f59e0b;
+	--sa-ink: #0f172a;
+	--sa-muted: #64748b;
+	--sa-line: #e2e8f0;
+	--sa-surface: #ffffff;
+	--sa-surface-2: #f8fafc;
+	--sa-radius: 22px;
+	--sa-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+	--sa-ring: 0 0 0 4px rgba(99, 102, 241, 0.14);
+}
+
+#studentProfileModal.sa-modal-wrap .modal-content.sa-modal,
+#studentProfileModal .modal-content.sa-modal {
+	width: min(94vw, 880px);
+	max-width: 880px;
+	max-height: min(92dvh, 940px);
+	margin: 3vh auto;
+	padding: 0;
+	border: none;
+	border-radius: 26px;
+	overflow: hidden;
+	background: var(--sa-surface-2);
+	box-shadow: var(--sa-shadow);
+	display: flex;
+	flex-direction: column;
+	animation: sa-rise 0.32s cubic-bezier(0.21, 0.9, 0.35, 1.2);
+}
+
+@keyframes sa-rise {
+	from { opacity: 0; transform: translateY(18px) scale(0.985); }
+	to { opacity: 1; transform: none; }
+}
+
+/* ---------- Header ---------- */
+#studentProfileModal .sa-header {
+	position: relative;
+	overflow: hidden;
+	isolation: isolate;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 22px 24px 20px !important;
+	border: none !important;
+	border-radius: 0 !important;
+	background: linear-gradient(120deg, #0f172a 0%, #1e1b4b 38%, #4c1d95 72%, #6d28d9 100%) !important;
+	color: #fff !important;
+}
+
+#studentProfileModal .sa-header-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+#studentProfileModal .sa-orb { position: absolute; border-radius: 50%; filter: blur(2px); }
+#studentProfileModal .sa-orb-1 { width: 280px; height: 280px; right: -70px; top: -110px; background: radial-gradient(circle, rgba(139,92,246,0.55), transparent 65%); }
+#studentProfileModal .sa-orb-2 { width: 220px; height: 220px; left: 32%; bottom: -120px; background: radial-gradient(circle, rgba(34,211,238,0.32), transparent 65%); }
+#studentProfileModal .sa-orb-3 { width: 140px; height: 140px; left: -30px; top: -40px; background: radial-gradient(circle, rgba(236,72,153,0.3), transparent 65%); }
+#studentProfileModal .sa-grid {
+	position: absolute; inset: 0;
+	background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+	background-size: 28px 28px;
+	mask-image: radial-gradient(ellipse 90% 120% at 70% 20%, black 30%, transparent 75%);
+}
+
+#studentProfileModal .sa-title-block { position: relative; z-index: 1; min-width: 0; }
+#studentProfileModal .sa-eyebrow {
+	display: inline-flex; align-items: center; gap: 6px;
+	font-size: 0.66rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+	color: rgba(255,255,255,0.78);
+	background: rgba(255,255,255,0.12);
+	border: 1px solid rgba(255,255,255,0.2);
+	padding: 5px 11px; border-radius: 999px;
+	margin-bottom: 8px;
+	backdrop-filter: blur(6px);
+}
+#studentProfileModal .sa-header h2,
+#studentProfileModal .sa-header h2#studentAccountTitle {
+	margin: 0 !important; color: #fff !important;
+	font-size: 1.55rem !important; font-weight: 800 !important; letter-spacing: -0.02em !important; line-height: 1.1 !important;
+}
+#studentProfileModal .sa-subtitle { margin: 6px 0 0 !important; color: rgba(255,255,255,0.68) !important; font-size: 0.85rem !important; }
+
+#studentProfileModal .sa-close {
+	position: relative; z-index: 1;
+	flex: 0 0 auto; width: 40px; height: 40px;
+	display: inline-flex; align-items: center; justify-content: center;
+	border-radius: 50% !important; border: 1px solid rgba(255,255,255,0.3) !important;
+	background: rgba(255,255,255,0.12) !important; color: #fff !important;
+	font-size: 1rem !important; cursor: pointer;
+	transition: background 0.18s ease, transform 0.25s ease, border-color 0.18s ease !important;
+}
+#studentProfileModal .sa-close:hover { background: rgba(255,255,255,0.24) !important; border-color: rgba(255,255,255,0.55) !important; transform: rotate(90deg); }
+
+/* ---------- Body + sticky tabs ---------- */
+#studentProfileModal .sa-body {
+	flex: 1 1 auto; min-height: 0; overflow-y: auto;
+	padding: 18px clamp(14px, 3vw, 26px) 30px !important;
+	background:
+		radial-gradient(600px 200px at 50% -60px, rgba(99,102,241,0.1), transparent 70%),
+		var(--sa-surface-2);
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+}
+
+#studentProfileModal .sa-tabs-sticky { position: sticky; top: -18px; z-index: 8; padding: 12px 0 12px; margin: -12px 0 6px; background: linear-gradient(var(--sa-surface-2) 78%, transparent); }
+#studentProfileModal .sa-tabs {
+	display: flex !important; gap: 6px !important; padding: 5px !important; margin: 0 !important;
+	background: #fff !important; border: 1px solid var(--sa-line) !important; border-radius: 16px !important;
+	box-shadow: 0 8px 22px rgba(15,23,42,0.07) !important;
+	overflow: visible !important;
+}
+#studentProfileModal .sa-tabs .profile-tab-btn {
+	flex: 1 1 0 !important; min-height: 44px !important;
+	display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important;
+	border: 1px solid transparent !important; border-radius: 11px !important;
+	background: transparent !important; color: #475569 !important;
+	font-size: 0.86rem !important; font-weight: 700 !important; white-space: nowrap !important;
+	transition: all 0.18s ease !important;
+}
+#studentProfileModal .sa-tabs .profile-tab-btn svg { opacity: 0.7; }
+#studentProfileModal .sa-tabs .profile-tab-btn:hover:not(.active) { background: #f1f5f9 !important; color: var(--sa-ink) !important; }
+#studentProfileModal .sa-tabs .profile-tab-btn.active {
+	background: linear-gradient(135deg, var(--sa-indigo), var(--sa-violet)) !important;
+	color: #fff !important; box-shadow: 0 8px 18px rgba(79,70,229,0.35) !important;
+}
+#studentProfileModal .sa-tabs .profile-tab-btn.active svg { opacity: 1; }
+
+/* ---------- Hero ---------- */
+#studentProfileModal .sa-hero {
+	position: relative; border: none !important; border-radius: var(--sa-radius) !important;
+	overflow: hidden !important; margin: 6px 0 14px !important;
+	box-shadow: 0 18px 44px rgba(30,27,75,0.28) !important;
+}
+#studentProfileModal .sa-hero-cover {
+	position: absolute; inset: 0;
+	background: linear-gradient(130deg, #0f172a 0%, #1e1b4b 45%, #4c1d95 78%, #7c3aed 100%) !important;
+}
+#studentProfileModal .sa-hero-cover::after {
+	content: ''; position: absolute; inset: 0;
+	background-image: radial-gradient(rgba(255,255,255,0.14) 1px, transparent 1.6px);
+	background-size: 22px 22px; opacity: 0.5;
+	mask-image: radial-gradient(ellipse 80% 100% at 80% 0%, black, transparent 75%);
+}
+#studentProfileModal .sa-hero-glow { position: absolute; border-radius: 50%; }
+#studentProfileModal .sa-hero-glow-1 { width: 340px; height: 340px; right: -90px; top: -140px; background: radial-gradient(circle, rgba(139,92,246,0.5), transparent 65%); }
+#studentProfileModal .sa-hero-glow-2 { width: 260px; height: 260px; left: -60px; bottom: -120px; background: radial-gradient(circle, rgba(34,211,238,0.35), transparent 65%); }
+
+#studentProfileModal .sa-hero-inner {
+	position: relative; z-index: 1;
+	display: flex !important; align-items: center !important; gap: 22px !important;
+	padding: 26px 24px !important; flex-wrap: wrap !important; color: #f8fafc !important;
+}
+
+#studentProfileModal .sa-avatar { display: flex; flex-direction: column; align-items: center; gap: 10px; margin: 0 !important; }
+#studentProfileModal .sa-avatar-frame {
+	width: 108px !important; height: 108px !important; border-radius: 32px !important;
+	padding: 4px; background: linear-gradient(135deg, #fff, rgba(255,255,255,0.35)) !important;
+	box-shadow: 0 12px 30px rgba(0,0,0,0.35) !important;
+	position: relative; overflow: visible !important; border: none !important;
+}
+#studentProfileModal .sa-avatar-frame::before { display: none !important; }
+#studentProfileModal .sa-avatar-frame img,
+#studentProfileModal .sa-avatar-frame span#studentProfileAvatarFallback {
+	width: 100%; height: 100%; border-radius: 28px !important; object-fit: cover;
+	background: linear-gradient(135deg, #6366f1, #06b6d4) !important;
+	display: flex !important; align-items: center !important; justify-content: center !important;
+	font-size: 2rem !important; font-weight: 800 !important; color: #fff !important;
+}
+#studentProfileModal .sa-avatar-frame img[src=""] { display: none !important; }
+#studentProfileModal .sa-avatar-status {
+	position: absolute; right: 10px; bottom: 10px; width: 16px; height: 16px; border-radius: 50%;
+	background: #22c55e; border: 3px solid #1e1b4b;
+}
+
+#studentProfileModal .sa-upload {
+	display: inline-flex !important; align-items: center !important; gap: 6px !important;
+	font-size: 0.76rem !important; font-weight: 700 !important;
+	padding: 8px 14px !important; border-radius: 999px !important;
+	background: rgba(255,255,255,0.95) !important; color: var(--sa-indigo) !important;
+	border: none !important; cursor: pointer; box-shadow: 0 6px 16px rgba(0,0,0,0.25) !important;
+	transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+}
+#studentProfileModal .sa-upload:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,0.3) !important; }
+#studentProfileModal .sa-upload input { display: none !important; }
+
+#studentProfileModal .sa-identity { flex: 1 1 260px !important; min-width: 0 !important; gap: 12px !important; }
+#studentProfileModal .sa-name-row { display: flex !important; align-items: center !important; gap: 10px !important; flex-wrap: wrap !important; }
+#studentProfileModal .sa-identity h3 { margin: 0 !important; color: #fff !important; font-size: 1.6rem !important; font-weight: 800 !important; letter-spacing: -0.02em !important; }
+#studentProfileModal .sa-premium {
+	background: linear-gradient(135deg, #fde68a, #f59e0b) !important; color: #451a03 !important;
+	font-size: 0.66rem !important; font-weight: 800 !important; letter-spacing: 0.08em !important; text-transform: uppercase !important;
+	padding: 5px 11px !important; border-radius: 999px !important; box-shadow: 0 4px 14px rgba(245,158,11,0.45) !important;
+}
+#studentProfileModal .sa-class { margin: 4px 0 0 !important; color: rgba(255,255,255,0.72) !important; font-size: 0.9rem !important; }
+
+#studentProfileModal .sa-chips { display: flex !important; flex-wrap: wrap !important; gap: 8px !important; margin-top: 4px !important; }
+#studentProfileModal .sa-chip {
+	display: inline-flex !important; align-items: center !important; gap: 6px !important;
+	padding: 7px 13px !important; border-radius: 999px !important;
+	font-size: 0.76rem !important; font-weight: 700 !important;
+	background: rgba(255,255,255,0.14) !important; color: #fff !important;
+	border: 1px solid rgba(255,255,255,0.24) !important;
+	backdrop-filter: blur(8px) !important;
+}
+#studentProfileModal .sa-chip-points { background: linear-gradient(135deg, #10b981, #059669) !important; border-color: transparent !important; }
+#studentProfileModal .sa-chip-badges { background: linear-gradient(135deg, #f59e0b, #d97706) !important; border-color: transparent !important; }
+
+#studentProfileModal .sa-quick-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+#studentProfileModal .sa-quick-btn {
+	display: inline-flex; align-items: center; gap: 7px;
+	padding: 9px 15px; border-radius: 11px; cursor: pointer;
+	font-size: 0.8rem; font-weight: 700; color: #fff;
+	background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+	transition: background 0.18s ease, transform 0.18s ease;
+}
+#studentProfileModal .sa-quick-btn:hover { background: rgba(255,255,255,0.22); transform: translateY(-1px); }
+
+/* ---------- Season ---------- */
+#studentProfileModal .sa-season {
+	display: flex !important; align-items: center !important; gap: 16px !important;
+	padding: 15px 18px !important; border-radius: 18px !important; margin: 0 0 16px !important;
+	background: linear-gradient(120deg, #1e3a8a, #4338ca 60%, #7c3aed) !important;
+	border: 1px solid rgba(255,255,255,0.14) !important;
+	box-shadow: 0 12px 28px rgba(30,58,138,0.3) !important; color: #fff !important;
+	position: relative; overflow: hidden;
+}
+#studentProfileModal .sa-season::after {
+	content: ''; position: absolute; width: 200px; height: 200px; border-radius: 50%;
+	right: -50px; top: -80px; background: radial-gradient(circle, rgba(253,224,71,0.28), transparent 65%);
+	pointer-events: none;
+}
+#studentProfileModal .sa-season-badge { display: inline-flex; align-items: center; gap: 10px; flex: 0 0 auto; font-weight: 700; }
+#studentProfileModal .sa-season-icon {
+	width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+	border-radius: 13px; background: linear-gradient(135deg, #fbbf24, #f59e0b);
+	box-shadow: 0 6px 16px rgba(245,158,11,0.45); color: #451a03;
+}
+#studentProfileModal .sa-season-label { font-size: 0.86rem; } 
+#studentProfileModal .sa-season-label strong { font-size: 1.1rem; }
+#studentProfileModal .profile-season-track { flex: 1 1 180px !important; min-width: 160px !important; }
+#studentProfileModal .sa-season-pct { font-weight: 800; color: #fde047 !important; }
+#studentProfileModal .sa-season-bar { height: 9px !important; background: rgba(255,255,255,0.22) !important; border-radius: 999px !important; overflow: hidden !important; }
+#studentProfileModal .sa-season-bar span { background: linear-gradient(90deg, #fde047, #f59e0b) !important; border-radius: inherit !important; display: block; height: 100%; transition: width 0.5s ease; }
+#studentProfileModal .sa-season-reward { flex: 0 0 auto; font-size: 0.78rem; background: rgba(255,255,255,0.14); padding: 8px 13px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
+
+/* ---------- Section head / stats ---------- */
+#studentProfileModal .sa-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 4px 2px 12px; }
+#studentProfileModal .sa-section-head h4 { margin: 0; font-size: 0.95rem; font-weight: 800; letter-spacing: -0.01em; color: var(--sa-ink); }
+#studentProfileModal .sa-section-head p { margin: 3px 0 0; font-size: 0.78rem; color: var(--sa-muted); }
+
+#studentProfileModal .sa-stats-card { background: linear-gradient(135deg, rgba(99,102,241,0.5), rgba(6,182,212,0.4)) !important; border: none !important; border-radius: 20px !important; padding: 1.5px !important; margin-bottom: 14px !important; box-shadow: 0 14px 30px rgba(15,23,42,0.08) !important; }
+#studentProfileModal .sa-stats { background: var(--sa-surface) !important; border-radius: 19px !important; padding: 14px !important; gap: 12px !important; display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+#studentProfileModal .sa-stat { position: relative !important; overflow: hidden !important; border: 1px solid var(--sa-line) !important; border-radius: 15px !important; padding: 16px 14px 14px !important; background: linear-gradient(180deg, #fff, #f8fafc) !important; display: flex !important; flex-direction: column !important; gap: 2px !important; transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important; }
+#studentProfileModal .sa-stat::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+#studentProfileModal .sa-stat-level::before { background: linear-gradient(90deg, #6366f1, #8b5cf6); }
+#studentProfileModal .sa-stat-exp::before { background: linear-gradient(90deg, #10b981, #06b6d4); }
+#studentProfileModal .sa-stat-tourney::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
+#studentProfileModal .sa-stat-rewards::before { background: linear-gradient(90deg, #ec4899, #8b5cf6); }
+#studentProfileModal .sa-stat:hover { transform: translateY(-3px); border-color: rgba(99,102,241,0.4) !important; box-shadow: 0 14px 26px rgba(99,102,241,0.16) !important; }
+#studentProfileModal .sa-stat-icon { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 0.95rem; margin-bottom: 8px; background: #eef2ff; }
+#studentProfileModal .sa-stat-level .sa-stat-icon { background: rgba(99,102,241,0.13); }
+#studentProfileModal .sa-stat-exp .sa-stat-icon { background: rgba(16,185,129,0.13); }
+#studentProfileModal .sa-stat-tourney .sa-stat-icon { background: rgba(245,158,11,0.15); }
+#studentProfileModal .sa-stat-rewards .sa-stat-icon { background: rgba(236,72,153,0.13); }
+#studentProfileModal .sa-stat span:not(.sa-stat-icon) { font-size: 0.66rem !important; font-weight: 800 !important; letter-spacing: 0.08em !important; text-transform: uppercase !important; color: #4338ca !important; }
+#studentProfileModal .sa-stat strong { font-size: 1.8rem !important; font-weight: 800 !important; letter-spacing: -0.02em !important; line-height: 1.1 !important; margin-top: 2px !important; }
+#studentProfileModal .sa-stat-level strong { color: #4338ca !important; }
+#studentProfileModal .sa-stat-exp strong { color: #047857 !important; }
+#studentProfileModal .sa-stat-tourney strong { color: #b45309 !important; }
+#studentProfileModal .sa-stat-rewards strong { color: #be185d !important; }
+#studentProfileModal .sa-stat small { color: var(--sa-muted) !important; font-size: 0.75rem !important; line-height: 1.45 !important; margin-top: 4px !important; }
+
+/* ---------- Insights ---------- */
+#studentProfileModal .sa-insights { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 12px !important; margin-bottom: 6px !important; }
+#studentProfileModal .sa-insight { border: 1px solid var(--sa-line) !important; border-radius: 18px !important; padding: 18px 16px 16px !important; padding-top: 20px !important; position: relative !important; overflow: hidden !important; background: #fff !important; transition: transform 0.18s ease, box-shadow 0.18s ease !important; }
+#studentProfileModal .sa-insight::before { height: 4px !important; top: 0 !important; left: 0 !important; right: 0 !important; width: auto !important; position: absolute !important; border-radius: 0 !important; background: none !important; font-size: 0 !important; display: block !important; }
+#studentProfileModal .sa-insight.accent-blue::before { background: linear-gradient(90deg, #3b82f6, #06b6d4) !important; }
+#studentProfileModal .sa-insight.accent-gold::before { background: linear-gradient(90deg, #f59e0b, #fbbf24) !important; }
+#studentProfileModal .sa-insight.accent-emerald::before { background: linear-gradient(90deg, #10b981, #34d399) !important; }
+#studentProfileModal .sa-insight:hover { transform: translateY(-3px); box-shadow: 0 14px 28px rgba(15,23,42,0.1) !important; }
+#studentProfileModal .sa-insight .profile-insight-kicker { display: inline-flex !important; font-size: 0.66rem !important; font-weight: 800 !important; letter-spacing: 0.08em !important; text-transform: uppercase !important; padding: 4px 10px !important; border-radius: 999px !important; margin-bottom: 2px !important; }
+#studentProfileModal .sa-insight .profile-insight-value { margin-top: 10px !important; font-size: 1.3rem !important; font-weight: 800 !important; letter-spacing: -0.02em !important; color: var(--sa-ink) !important; }
+#studentProfileModal .sa-insight .profile-insight-copy,
+#studentProfileModal .sa-insight .profile-progress-copy { margin-top: 8px !important; font-size: 0.82rem !important; color: var(--sa-muted) !important; line-height: 1.5 !important; }
+#studentProfileModal .sa-progress { height: 9px !important; margin-top: 12px !important; background: rgba(148,163,184,0.18) !important; }
+#studentProfileModal .sa-progress .profile-progress-fill { background: linear-gradient(90deg, #3b82f6, #06b6d4) !important; height: 100% !important; border-radius: inherit !important; transition: width 0.4s ease !important; }
+#studentProfileModal .sa-mini-bar { margin-top: 10px; height: 7px; border-radius: 999px; background: rgba(148,163,184,0.18); overflow: hidden; }
+#studentProfileModal .sa-mini-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #f59e0b, #d97706); transition: width 0.4s ease; }
+
+/* ---------- Form cards ---------- */
+#studentProfileModal .sa-card {
+	background: #fff !important; border: 1px solid var(--sa-line) !important; border-left: 5px solid var(--sa-indigo) !important;
+	border-radius: 20px !important; padding: 22px !important; margin: 6px 0 8px !important;
+	box-shadow: 0 12px 28px rgba(15,23,42,0.06) !important;
+}
+#studentProfileModal .sa-card-secure { border-left-color: var(--sa-emerald) !important; }
+#studentProfileModal .sa-card-head { margin: 0 0 16px !important; padding-bottom: 14px !important; border-bottom: 1px dashed #e2e8f0 !important; }
+#studentProfileModal .sa-step { display: inline-flex; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sa-indigo); background: rgba(99,102,241,0.1); padding: 4px 10px; border-radius: 999px; margin-bottom: 8px; }
+#studentProfileModal .sa-card-secure .sa-step, #studentProfileModal .sa-secure-intro .sa-step { color: #047857; background: rgba(16,185,129,0.12); }
+#studentProfileModal .sa-card-head h3 { margin: 0 !important; font-size: 1.1rem !important; font-weight: 800 !important; color: var(--sa-ink) !important; }
+#studentProfileModal .sa-card-head p { margin: 5px 0 0 !important; font-size: 0.84rem !important; color: var(--sa-muted) !important; }
+
+#studentProfileModal .sa-form { background: transparent !important; border: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+#studentProfileModal .sa-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 12px !important; }
+#studentProfileModal .sa-field { display: flex !important; flex-direction: column !important; gap: 7px !important; margin-bottom: 13px !important; min-width: 0 !important; }
+#studentProfileModal .sa-field label { font-size: 0.7rem !important; font-weight: 800 !important; letter-spacing: 0.07em !important; text-transform: uppercase !important; color: #475569 !important; }
+#studentProfileModal .sa-field label em { text-transform: none; letter-spacing: 0; font-style: normal; font-weight: 600; color: #94a3b8; }
+#studentProfileModal .sa-field .form-control {
+	width: 100% !important; background: #f8fafc !important; border: 1.5px solid #e2e8f0 !important;
+	border-radius: 13px !important; padding: 11px 14px !important; font-size: 0.92rem !important; color: var(--sa-ink) !important;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease !important;
+}
+#studentProfileModal .sa-field .form-control::placeholder { color: #94a3b8 !important; }
+#studentProfileModal .sa-field .form-control:focus { outline: none !important; border-color: var(--sa-indigo) !important; background: #fff !important; box-shadow: var(--sa-ring) !important; }
+#studentProfileModal .sa-field textarea.form-control { resize: vertical; min-height: 44px; }
+
+#studentProfileModal .sa-password-wrap { position: relative; display: flex; align-items: center; }
+#studentProfileModal .sa-password-wrap .form-control { padding-right: 70px !important; }
+#studentProfileModal .sa-pw-toggle {
+	position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+	border: none; background: #eef2ff; color: var(--sa-indigo);
+	font-size: 0.72rem; font-weight: 800; padding: 7px 12px; border-radius: 9px; cursor: pointer;
+	transition: background 0.15s ease;
+}
+#studentProfileModal .sa-pw-toggle:hover { background: #e0e7ff; }
+#studentProfileModal .sa-strength { margin-top: 9px; height: 7px; border-radius: 999px; background: #eef2ff; overflow: hidden; }
+#studentProfileModal .sa-strength span { display: block; height: 100%; width: 0; border-radius: inherit; background: #ef4444; transition: width 0.3s ease, background 0.3s ease; }
+#studentProfileModal .sa-strength span[data-level="ok"] { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+#studentProfileModal .sa-strength span[data-level="strong"] { background: linear-gradient(90deg, #10b981, #059669); }
+#studentProfileModal .sa-hint { font-size: 0.75rem !important; color: var(--sa-muted) !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 500 !important; margin-top: 2px; }
+#studentProfileModal .sa-tips { margin: 4px 0 14px; padding: 12px 14px 12px 32px; border-radius: 13px; background: #f8fafc; border: 1px dashed #cbd5e1; font-size: 0.8rem; color: var(--sa-muted); line-height: 1.6; }
+#studentProfileModal .sa-tips li::marker { content: '✓  '; color: var(--sa-emerald); font-weight: 800; }
+
+#studentProfileModal .sa-secure-intro {
+	display: flex !important; gap: 14px !important; align-items: flex-start !important;
+	padding: 16px !important; margin: 6px 0 14px !important; border-radius: 18px !important;
+	background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(16,185,129,0.08)) !important;
+	border: 1px solid rgba(99,102,241,0.2) !important;
+}
+#studentProfileModal .sa-shield {
+	flex: 0 0 auto; width: 48px !important; height: 48px !important; border-radius: 15px !important;
+	display: flex !important; align-items: center !important; justify-content: center !important;
+	background: linear-gradient(135deg, var(--sa-indigo), var(--sa-violet)) !important; color: #fff !important;
+	box-shadow: 0 8px 18px rgba(79,70,229,0.35) !important; font-size: 1.2rem !important;
+}
+#studentProfileModal .sa-secure-intro h3 { margin: 0 0 4px !important; font-size: 0.98rem !important; color: var(--sa-ink) !important; }
+#studentProfileModal .sa-secure-intro p { margin: 0 !important; font-size: 0.82rem !important; color: var(--sa-muted) !important; line-height: 1.55 !important; }
+
+#studentProfileModal .sa-actions { display: flex !important; flex-wrap: wrap !important; gap: 10px !important; margin-top: 8px !important; }
+#studentProfileModal .sa-btn-primary {
+	flex: 1 1 200px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; gap: 9px !important;
+	padding: 13px 20px !important; border-radius: 14px !important; border: none !important;
+	background: linear-gradient(135deg, var(--sa-indigo), #3b82f6) !important; color: #fff !important;
+	font-size: 0.88rem !important; font-weight: 800 !important;
+	box-shadow: 0 10px 22px rgba(99,102,241,0.3) !important; cursor: pointer;
+	transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease !important;
+}
+#studentProfileModal .sa-btn-primary:hover { transform: translateY(-2px); filter: brightness(1.05); box-shadow: 0 14px 28px rgba(99,102,241,0.38) !important; }
+#studentProfileModal .sa-btn-primary:active { transform: translateY(0); }
+#studentProfileModal .sa-btn-ghost {
+	padding: 13px 20px !important; border-radius: 14px !important;
+	background: #f8fafc !important; color: #475569 !important; border: 1px solid #cbd5e1 !important;
+	font-weight: 700 !important; box-shadow: none !important; cursor: pointer;
+}
+#studentProfileModal .sa-btn-ghost:hover { background: #f1f5f9 !important; color: var(--sa-ink) !important; }
+
+#studentProfileModal .profile-request-status:empty { display: none !important; }
+#studentProfileModal .profile-request-status:not(:empty) {
+	margin-top: 14px !important; padding: 13px 15px !important; border-radius: 13px !important;
+	font-size: 0.85rem !important; line-height: 1.55 !important;
+	background: #f8fafc !important; border: 1px solid var(--sa-line) !important; color: #334155 !important;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 760px) {
+	#studentProfileModal.sa-modal-wrap .modal-content.sa-modal,
+	#studentProfileModal .modal-content.sa-modal { width: 100% !important; max-width: none !important; max-height: 100dvh !important; margin: 0 !important; border-radius: 0 !important; }
+	#studentProfileModal .sa-header { padding: 18px 16px 16px !important; }
+	#studentProfileModal .sa-header h2, #studentProfileModal .sa-header h2#studentAccountTitle { font-size: 1.25rem !important; }
+	#studentProfileModal .sa-subtitle { font-size: 0.78rem !important; }
+	#studentProfileModal .sa-body { padding: 14px 12px 26px !important; }
+	#studentProfileModal .sa-hero-inner { flex-direction: column !important; text-align: center !important; align-items: center !important; padding: 24px 16px !important; }
+	#studentProfileModal .sa-identity { align-items: center !important; display: flex !important; flex-direction: column !important; }
+	#studentProfileModal .sa-name-row, #studentProfileModal .sa-chips, #studentProfileModal .sa-quick-actions { justify-content: center !important; }
+	#studentProfileModal .sa-season { flex-wrap: wrap !important; }
+	#studentProfileModal .profile-season-track { min-width: 100% !important; order: 3 !important; flex-basis: 100% !important; }
+	#studentProfileModal .sa-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+	#studentProfileModal .sa-insights { grid-template-columns: 1fr !important; }
+	#studentProfileModal .sa-grid-2 { grid-template-columns: 1fr !important; }
+	#studentProfileModal .sa-tabs .profile-tab-btn { font-size: 0.78rem !important; padding: 9px 8px !important; }
+	#studentProfileModal .sa-card { padding: 16px 14px !important; }
+	#studentProfileModal .sa-btn-primary, #studentProfileModal .sa-btn-ghost { flex: 1 1 100% !important; width: 100% !important; }
+}
+@media (max-width: 420px) {
+	#studentProfileModal .sa-stats { grid-template-columns: 1fr !important; }
+	#studentProfileModal .sa-tabs .profile-tab-btn span { font-size: 0.72rem !important; }
+	#studentProfileModal .sa-avatar-frame { width: 92px !important; height: 92px !important; border-radius: 26px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+	#studentProfileModal .modal-content.sa-modal,
+	#studentProfileModal .sa-stat, #studentProfileModal .sa-insight,
+	#studentProfileModal .sa-btn-primary, #studentProfileModal .sa-quick-btn,
+	#studentProfileModal .sa-close { animation: none !important; transition: none !important; }
+}
+
+/* ========================================================================
+   RESULTS TAB — modern refresh (matches Overview / Games dashboard style)
+   Uses only var(--*) surfaces so light + dark themes follow automatically.
+   ======================================================================== */
+
+#results .results-container {
+	max-width: 1400px;
+}
+
+#results .results-header {
+	align-items: flex-start;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+#results .results-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+#results .results-count-badge {
+	white-space: nowrap;
+}
+
+#results .results-count-badge span {
+	font-weight: 700;
+	color: var(--primary);
+}
+
+#results .results-export-group {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+/* KPI cards: reuse .stat-card; tighten for 4-up results grid */
+#results .results-kpi-grid {
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: var(--space-md);
+}
+
+#results .results-kpi-grid .stat-card {
+	position: relative;
+	overflow: hidden;
+	padding: 18px;
+}
+
+#results .results-kpi-grid .stat-bar {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 3px;
+	border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+#results .results-kpi-grid .stat-card.blue .stat-bar { background: var(--primary); }
+#results .results-kpi-grid .stat-card.green .stat-bar { background: var(--success); }
+#results .results-kpi-grid .stat-card.amber .stat-bar { background: var(--warning); }
+#results .results-kpi-grid .stat-card.purple .stat-bar { background: #9333ea; }
+
+/* Filter + table panels */
+#results .results-filter-panel,
+#results .results-table-panel {
+	background: var(--bg-surface);
+}
+
+#results .results-filter-header h3,
+#results .results-table-header h3 {
+	margin: 0;
+}
+
+#results .results-filter-body {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: var(--space-md) var(--space-lg) var(--space-lg);
+}
+
+#results .results-filters-container {
+	background: var(--bg-surface);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-sm);
+}
+
+#results .results-filters-row {
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+#results .results-filter-body .filter-group label {
+	color: var(--text-muted);
+}
+
+#results .results-filter-body .filter-group select {
+	background: var(--bg-surface);
+	color: var(--text-main);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-md);
+	min-height: 40px;
+}
+
+#results .results-search-row {
+	width: 100%;
+}
+
+#results .results-actions-row {
+	flex-wrap: wrap;
+}
+
+#results .results-search {
+	flex: 1 1 260px;
+	min-width: 220px;
+}
+
+#results .results-search input {
+	background: var(--bg-surface);
+	color: var(--text-main);
+	min-height: 40px;
+}
+
+#results .results-table-wrap {
+	margin-top: 0;
+	border: 0;
+	border-top: 1px solid var(--border-color);
+	border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+	box-shadow: none;
+	overflow-x: auto;
+}
+
+#results-table .result-date {
+	white-space: nowrap;
+	color: var(--text-secondary);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Student cell with avatar */
+#results-table .student-cell {
+	min-width: 180px;
+}
+
+#results-table .student-cell-inner {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+#results-table .student-avatar {
+	flex: 0 0 auto;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: #fff;
+	background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+	letter-spacing: 0.02em;
+}
+
+#results-table .student-avatar.is-game {
+	background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+}
+
+#results-table .student-meta {
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+#results-table .student-name {
+	font-weight: 600;
+	color: var(--text-main);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 220px;
+}
+
+#results-table .student-numero {
+	font-size: var(--text-xs);
+	color: var(--text-muted);
+}
+
+/* Class + exam cells */
+#results-table .class-pill {
+	display: inline-flex;
+	align-items: center;
+	max-width: 160px;
+	padding: 3px 10px;
+	border-radius: var(--radius-full);
+	background: var(--bg-surface-alt);
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#results-table .class-pill.is-empty {
+	opacity: 0.7;
+	font-weight: 500;
+}
+
+#results-table .exam-cell {
+	min-width: 190px;
+	max-width: 300px;
+}
+
+#results-table .exam-cell .result-main {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+#results-table .mode-dot {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--primary);
+}
+
+#results-table .mode-dot.is-training { background: var(--info); }
+#results-table .mode-dot.is-game { background: #8b5cf6; }
+#results-table .mode-dot.is-exam { background: var(--success); }
+
+#results-table .result-subtext {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+/* Score pill with mini progress bar */
+#results-table .score-pill {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 128px;
+	padding: 7px 10px;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface-alt);
+}
+
+#results-table .score-pill.passed {
+	border-color: rgba(16, 185, 129, 0.35);
+	background: rgba(16, 185, 129, 0.1);
+}
+
+#results-table .score-pill.failed {
+	border-color: rgba(239, 68, 68, 0.35);
+	background: rgba(239, 68, 68, 0.08);
+}
+
+#results-table .score-pill-top {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 700;
+	font-size: 0.85rem;
+	white-space: nowrap;
+}
+
+#results-table .score-pill.passed .score-pill-top { color: var(--success); }
+#results-table .score-pill.failed .score-pill-top { color: var(--danger); }
+
+#results-table .score-pill-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+#results-table .score-pill-pct {
+	margin-left: auto;
+	font-weight: 600;
+	font-size: var(--text-xs);
+	opacity: 0.85;
+}
+
+#results-table .score-pill-bar {
+	height: 4px;
+	border-radius: var(--radius-full);
+	background: rgba(148, 163, 184, 0.3);
+	overflow: hidden;
+}
+
+#results-table .score-pill-bar span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: currentColor;
+}
+
+#results-table .score-pill.passed .score-pill-bar span { background: var(--success); }
+#results-table .score-pill.failed .score-pill-bar span { background: var(--danger); }
+
+/* Time + source */
+#results-table .time-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: var(--radius-full);
+	border: 1px solid var(--border-color);
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+
+#results-table .time-pill svg {
+	width: 13px;
+	height: 13px;
+	opacity: 0.8;
+}
+
+#results-table .device-source-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: 170px;
+	padding: 3px 9px;
+	border-radius: var(--radius-full);
+	background: var(--bg-surface-alt);
+	border: 1px solid var(--border-color);
+	color: var(--text-secondary);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#results-table .device-source-badge.is-local {
+	opacity: 0.75;
+	font-weight: 500;
+}
+
+#results-table .q-owner-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 10px;
+	border-radius: var(--radius-full);
+	background: rgba(59, 130, 246, 0.1);
+	border: 1px solid rgba(59, 130, 246, 0.25);
+	color: var(--primary);
+	font-size: var(--text-xs);
+	font-weight: 600;
+	max-width: 140px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+#results-table .exam-action-btn.exam-view-btn {
+	background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(37, 99, 235, 0.14));
+	color: var(--primary);
+}
+
+#results-table .exam-action-btn.exam-view-btn:hover {
+	background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+	color: #fff;
+}
+
+/* Empty state */
+#results-table .results-empty-row td {
+	padding: 0 !important;
+	border-bottom: none !important;
+}
+
+#results .results-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 44px 20px;
+	text-align: center;
+}
+
+#results .results-empty-icon {
+	width: 52px;
+	height: 52px;
+	border-radius: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--primary-light);
+	color: var(--primary);
+}
+
+#results .results-empty h4 {
+	margin: 4px 0 0;
+	color: var(--text-main);
+	font-size: 1rem;
+}
+
+#results .results-empty p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 0.85rem;
+	max-width: 36ch;
+}
+
+/* Modern result detail modal (keeps .result-detail-modal hook) */
+.result-detail-modal .modal-content {
+	overflow: hidden;
+	border: 1px solid var(--border-color);
+}
+
+.result-detail-modal .result-modal-hero {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 18px 20px;
+	background: linear-gradient(135deg, var(--primary-light), var(--bg-surface-alt));
+	border-bottom: 1px solid var(--border-color);
+}
+
+.result-detail-modal .result-modal-avatar {
+	flex: 0 0 auto;
+	width: 48px;
+	height: 48px;
+	border-radius: 14px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 800;
+	color: #fff;
+	background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+}
+
+.result-detail-modal .result-modal-title {
+	min-width: 0;
+	flex: 1;
+}
+
+.result-detail-modal .result-modal-title h3 {
+	margin: 0;
+	font-size: 1.02rem;
+	color: var(--text-main);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.result-detail-modal .result-modal-title p {
+	margin: 3px 0 0;
+	font-size: 0.8rem;
+	color: var(--text-muted);
+}
+
+.result-detail-modal .result-modal-score {
+	text-align: right;
+	flex: 0 0 auto;
+}
+
+.result-detail-modal .result-modal-score strong {
+	display: block;
+	font-size: 1.25rem;
+	line-height: 1;
+}
+
+.result-detail-modal .result-modal-score.passed strong { color: var(--success); }
+.result-detail-modal .result-modal-score.failed strong { color: var(--danger); }
+
+.result-detail-modal .result-modal-score small {
+	color: var(--text-muted);
+	font-weight: 600;
+}
+
+.result-detail-modal .modal-body {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px;
+}
+
+.result-detail-modal .detail-cell {
+	padding: 10px 12px;
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-md);
+	background: var(--bg-surface-alt);
+	min-width: 0;
+}
+
+.result-detail-modal .detail-cell.full {
+	grid-column: 1 / -1;
+}
+
+.result-detail-modal .detail-label {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-muted);
+	margin-bottom: 4px;
+}
+
+.result-detail-modal .detail-value {
+	font-weight: 600;
+	color: var(--text-main);
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+	#results .results-header {
+		flex-direction: column;
+		align-items: stretch;
+	}
+	#results .results-header-actions {
+		justify-content: space-between;
+	}
+	#results .results-export-group {
+		width: 100%;
+	}
+	#results .results-export-group .btn-export {
+		flex: 1 1 auto;
+		justify-content: center;
+	}
+	.result-detail-modal .modal-body {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ========================================================================
+   MOBILE LIST POLISH — exams / categories / classes / results / activity
+   + questions collapsible cards. All var(--*) based (dark-mode safe).
+   ======================================================================== */
+
+/* Desktop: expand toggle never shows */
+.q-expand-btn {
+	display: none;
+}
+
+@media (max-width: 768px) {
+	/* ── Shared card language for every list table ── */
+	#categoryList tbody tr,
+	#examList tbody tr,
+	#classList tbody tr,
+	#results-table tbody tr:not(.results-empty-row),
+	#activityTable tbody tr,
+	#question-list-table tbody tr.question-table-row {
+		position: relative;
+		overflow: hidden;
+		border-radius: 14px !important;
+		border: 1px solid var(--border-color) !important;
+		background: var(--bg-surface) !important;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.05),
+			0 8px 20px -12px rgba(15, 23, 42, 0.25) !important;
+	}
+
+	/* Accent ribbon on top of each card */
+	#categoryList tbody tr::before,
+	#examList tbody tr::before,
+	#classList tbody tr::before,
+	#results-table tbody tr:not(.results-empty-row)::before,
+	#activityTable tbody tr::before,
+	#question-list-table tbody tr.question-table-row::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 3px;
+		background: linear-gradient(90deg, var(--primary), #8b5cf6);
+		pointer-events: none;
+	}
+	#categoryList tbody tr.system-category::before {
+		background: linear-gradient(90deg, #94a3b8, #cbd5e1);
+	}
+	#question-list-table tbody tr.question-table-row.categorized::before {
+		background: linear-gradient(90deg, var(--success), var(--primary));
+	}
+	#question-list-table tbody tr.question-table-row.uncategorized::before {
+		background: linear-gradient(90deg, var(--warning), #fb923c);
+	}
+
+	#categoryList tbody tr.question-row-selected,
+	#examList tbody tr.question-row-selected,
+	#classList tbody tr.question-row-selected,
+	#results-table tbody tr.question-row-selected,
+	#question-list-table tbody tr.question-row-selected {
+		border-color: var(--primary) !important;
+		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18) !important;
+	}
+
+	/* All body text follows theme (old cards hardcoded #334155) */
+	#categoryList tbody tr td,
+	#examList tbody tr td,
+	#classList tbody tr td,
+	#results-table tbody tr td,
+	#activityTable tbody td,
+	#question-list-table tbody tr.question-table-row > td {
+		color: var(--text-main) !important;
+	}
+
+	/* ── Bulk cards: breathing room + pinned checkbox ── */
+	#categoryList tbody tr,
+	#examList tbody tr,
+	#classList tbody tr,
+	#results-table tbody tr:not(.results-empty-row) {
+		padding: 16px 12px 12px !important;
+		padding-top: 46px !important;
+	}
+
+	#categoryList tbody tr td.checkbox-cell,
+	#examList tbody tr td.checkbox-cell,
+	#classList tbody tr td.checkbox-cell,
+	#results-table tbody tr td.checkbox-cell {
+		top: 10px !important;
+		right: 10px !important;
+		left: auto !important;
+	}
+
+	#categoryList tbody tr td.checkbox-cell::before,
+	#examList tbody tr td.checkbox-cell::before,
+	#classList tbody tr td.checkbox-cell::before,
+	#results-table tbody tr td.checkbox-cell::before {
+		display: none !important;
+	}
+
+	/* Card titles (first data cell) */
+	#categoryList tbody tr td:nth-child(2),
+	#examList tbody tr td:nth-child(2),
+	#classList tbody tr td:nth-child(2) {
+		padding-right: 44px !important;
+		font-size: 0.95rem !important;
+		font-weight: 700 !important;
+		line-height: 1.3 !important;
+		color: var(--text-main) !important;
+	}
+
+	/* Section labels inside cards */
+	#categoryList tbody tr td::before,
+	#examList tbody tr td::before,
+	#classList tbody tr td::before,
+	#results-table tbody tr td::before {
+		display: block;
+		margin-bottom: 3px;
+		color: var(--text-muted) !important;
+		font-size: 0.62rem !important;
+		font-weight: 800 !important;
+		letter-spacing: 0.06em !important;
+		text-transform: uppercase !important;
+	}
+
+	/* Hide labels where the cell is already self-explanatory */
+	#categoryList tbody tr td:nth-child(2)::before,
+	#examList tbody tr td:nth-child(2)::before,
+	#classList tbody tr td:nth-child(2)::before,
+	#categoryList tbody tr td.checkbox-cell::before,
+	#examList tbody tr td.checkbox-cell::before,
+	#classList tbody tr td.checkbox-cell::before,
+	#results-table tbody tr td.checkbox-cell::before,
+	#results-table tbody tr td.student-cell::before,
+	#results-table tbody tr td.exam-cell::before {
+		display: none !important;
+	}
+
+	#categoryList tbody tr td:nth-child(3)::before { content: 'Description'; }
+	#categoryList tbody tr td:nth-child(4)::before { content: 'Questions'; }
+	#categoryList tbody tr td:nth-child(5)::before { content: 'Training'; }
+	#categoryList tbody tr td:nth-child(6)::before { content: 'By'; }
+	#categoryList tbody tr td:nth-child(7)::before { content: 'Created'; }
+	#categoryList tbody tr td:nth-child(8)::before { display: none !important; }
+
+	#examList tbody tr td:nth-child(3)::before { content: 'Created'; }
+	#examList tbody tr td:nth-child(4)::before { content: 'Questions'; }
+	#examList tbody tr td:nth-child(5)::before { content: 'Duration'; }
+	#examList tbody tr td:nth-child(6)::before { content: 'By'; }
+	#examList tbody tr td:nth-child(7)::before { display: none !important; }
+
+	#classList tbody tr td:nth-child(3)::before { content: 'Created'; }
+	#classList tbody tr td:nth-child(4)::before { content: 'Students'; }
+	#classList tbody tr td:nth-child(5)::before { content: 'Teacher'; }
+	#classList tbody tr td:nth-child(6)::before { content: 'Exams'; }
+	#classList tbody tr td:nth-child(7)::before { content: 'Games'; }
+	#classList tbody tr td:nth-child(8)::before { content: 'By'; }
+	#classList tbody tr td:nth-child(9)::before { display: none !important; }
+
+	#results-table tbody tr td.result-date::before { content: 'Date'; }
+	#results-table tbody tr td[data-label='Class']::before { content: 'Class'; }
+	#results-table tbody tr td[data-label='Score']::before { content: 'Score'; }
+	#results-table tbody tr td[data-label='Time']::before { content: 'Time'; }
+	#results-table tbody tr td[data-label='Source']::before { content: 'Source'; }
+	#results-table tbody tr td.owner-col::before { content: 'By'; }
+
+	/* Count cells become pills */
+	#categoryList tbody tr td:nth-child(4),
+	#examList tbody tr td:nth-child(4),
+	#examList tbody tr td:nth-child(5),
+	#classList tbody tr td:nth-child(4),
+	#classList tbody tr td:nth-child(6) {
+		font-weight: 800 !important;
+	}
+	#categoryList tbody tr td:nth-child(4)::after,
+	#examList tbody tr td:nth-child(4)::after,
+	#classList tbody tr td:nth-child(4)::after,
+	#classList tbody tr td:nth-child(6)::after {
+		display: inline-block;
+		margin-left: 6px;
+		padding: 1px 8px;
+		border-radius: 999px;
+		background: var(--primary-light);
+		color: var(--primary);
+		font-size: 0.62rem;
+		font-weight: 800;
+		vertical-align: 1px;
+	}
+	#categoryList tbody tr td:nth-child(4)::after { content: 'qs'; }
+	#examList tbody tr td:nth-child(4)::after { content: 'qs'; }
+	#classList tbody tr td:nth-child(4)::after { content: 'students'; }
+	#classList tbody tr td:nth-child(6)::after { content: 'exams'; }
+
+	/* Category identity row */
+	#categoryList .category-info {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	#categoryList .category-color {
+		width: 30px !important;
+		height: 30px !important;
+		border-radius: 10px !important;
+		flex: 0 0 auto;
+		box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+	}
+	#categoryList .category-name {
+		font-weight: 700;
+	}
+
+	/* Training toggle row reads as a control */
+	#categoryList tbody tr td.training-cell {
+		display: flex !important;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		padding: 8px 10px !important;
+		border-radius: 10px;
+		background: var(--bg-surface-alt);
+		border: 1px solid var(--border-color);
+	}
+	#categoryList tbody tr td.training-cell::before {
+		margin-bottom: 0 !important;
+	}
+
+	/* Muted meta */
+	#categoryList tbody tr td:nth-child(7),
+	#examList tbody tr td:nth-child(3),
+	#classList tbody tr td:nth-child(3),
+	#results-table tbody tr td.result-date {
+		color: var(--text-muted) !important;
+		font-size: 0.74rem !important;
+	}
+
+	/* Actions become a clean icon row */
+	#categoryList tbody tr td.actions-cell,
+	#examList tbody tr td.actions-cell,
+	#classList tbody tr td.actions-cell {
+		display: block !important;
+		padding-top: 10px !important;
+		margin-top: 8px !important;
+		border-top: 1px dashed var(--border-color) !important;
+	}
+	#categoryList tbody tr td.actions-cell .exam-actions,
+	#examList tbody tr td.actions-cell .exam-actions,
+	#classList tbody tr td.actions-cell .exam-actions {
+		justify-content: flex-start !important;
+		flex-wrap: wrap;
+		gap: 8px !important;
+	}
+	#categoryList tbody tr td.actions-cell .exam-action-btn,
+	#examList tbody tr td.actions-cell .exam-action-btn,
+	#classList tbody tr td.actions-cell .exam-action-btn {
+		width: 38px !important;
+		height: 38px !important;
+		border-radius: 11px !important;
+	}
+
+	/* Results cards: student + score hero */
+	#results-table tbody tr:not(.results-empty-row) {
+		display: grid !important;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 8px 10px;
+	}
+	#results-table tbody tr:not(.results-empty-row) > td {
+		display: block !important;
+		width: auto !important;
+		padding: 0 !important;
+		border: 0 !important;
+	}
+	#results-table tbody tr td.checkbox-cell {
+		position: absolute !important;
+		grid-column: none;
+	}
+	#results-table tbody tr td.student-cell {
+		grid-column: 1 / -1;
+		padding-right: 40px !important;
+	}
+	#results-table tbody tr td.exam-cell {
+		grid-column: 1 / -1;
+		padding: 8px 10px !important;
+		border-radius: 10px;
+		background: var(--bg-surface-alt);
+		border: 1px solid var(--border-color);
+	}
+	#results-table tbody tr td[data-label='Score'] {
+		grid-column: 1 / -1;
+	}
+	#results-table .score-pill {
+		width: 100%;
+	}
+	#results-table tbody tr td[data-label='Time'],
+	#results-table tbody tr td[data-label='Source'],
+	#results-table tbody tr td.result-date,
+	#results-table tbody tr td[data-label='Class'],
+	#results-table tbody tr td.owner-col {
+		padding-top: 6px !important;
+		border-top: 1px solid var(--border-color) !important;
+	}
+
+	/* Activity cards match the same language */
+	#activityTable tbody tr {
+		padding-top: 14px !important;
+		gap: 8px 10px !important;
+		border-radius: 14px !important;
+	}
+
+	/* ── Questions: corner number badge + collapsed details ── */
+	#question-list-table tbody tr.question-table-row {
+		display: block !important;
+		padding: 46px 12px 12px !important;
+	}
+
+	/* Number badge pinned top-left corner */
+	#question-list-table tbody tr.question-table-row > td.qnum-cell {
+		position: absolute !important;
+		top: 10px !important;
+		left: 12px !important;
+		display: inline-flex !important;
+		align-items: center;
+		gap: 4px;
+		width: auto !important;
+		padding: 3px 10px !important;
+		border-radius: 999px !important;
+		background: var(--primary) !important;
+		border: 1px solid var(--primary-dark) !important;
+		color: #fff !important;
+		font-size: 0.7rem !important;
+		font-weight: 800 !important;
+		box-shadow: 0 4px 10px rgba(59, 130, 246, 0.35);
+	}
+	#question-list-table tbody tr.question-table-row > td.qnum-cell::before {
+		content: 'Q' !important;
+		display: inline !important;
+		margin: 0 !important;
+		color: rgba(255, 255, 255, 0.85) !important;
+		font-size: 0.62rem !important;
+	}
+
+	/* Checkbox pinned top-right corner */
+	#question-list-table tbody tr.question-table-row > .checkbox-cell {
+		position: absolute !important;
+		top: 10px !important;
+		right: 12px !important;
+		left: auto !important;
+		display: flex !important;
+		padding: 0 !important;
+	}
+	#question-list-table tbody tr.question-table-row > .checkbox-cell::before {
+		display: none !important;
+	}
+
+	/* Question + category always visible */
+	#question-list-table tbody tr.question-table-row > .question-cell {
+		display: block !important;
+	}
+	#question-list-table .question-text {
+		-webkit-line-clamp: 5 !important;
+	}
+	#question-list-table .question-meta {
+		display: flex !important;
+		flex-wrap: wrap;
+	}
+
+	/* Collapsed by default: hide heavy cells until toggled */
+	#question-list-table tbody tr.question-table-row:not(.is-expanded) > .options-cell,
+	#question-list-table tbody tr.question-table-row:not(.is-expanded) > .answer-cell,
+	#question-list-table tbody tr.question-table-row:not(.is-expanded) > .image-cell {
+		display: none !important;
+	}
+	#question-list-table tbody tr.question-table-row.is-expanded > .options-cell,
+	#question-list-table tbody tr.question-table-row.is-expanded > .answer-cell,
+	#question-list-table tbody tr.question-table-row.is-expanded > .image-cell {
+		display: block !important;
+		margin-top: 8px;
+		padding: 10px !important;
+		border-radius: 10px;
+		background: var(--bg-surface-alt);
+		border: 1px solid var(--border-color);
+	}
+	#question-list-table tbody tr.question-table-row.is-expanded > .options-cell::before,
+	#question-list-table tbody tr.question-table-row.is-expanded > .answer-cell::before,
+	#question-list-table tbody tr.question-table-row.is-expanded > .image-cell::before {
+		display: block;
+		margin-bottom: 6px;
+		color: var(--text-muted) !important;
+		font-size: 0.62rem;
+		font-weight: 800;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+	}
+	#question-list-table tbody tr.question-table-row.is-expanded > .options-cell::before { content: 'Options'; }
+	#question-list-table tbody tr.question-table-row.is-expanded > .answer-cell::before { content: 'Answer'; }
+	#question-list-table tbody tr.question-table-row.is-expanded > .image-cell::before { content: 'Image'; }
+
+	/* Expand / collapse toggle */
+	#question-list-table .q-expand-btn {
+		display: inline-flex !important;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		width: 100%;
+		margin-top: 10px;
+		min-height: 36px;
+		padding: 8px 12px;
+		border-radius: 10px;
+		border: 1px solid var(--border-color);
+		background: var(--bg-surface-alt);
+		color: var(--primary);
+		font-size: 0.78rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	#question-list-table .q-expand-btn:active {
+		transform: scale(0.99);
+	}
+	#question-list-table tr.is-expanded .q-expand-btn svg {
+		transform: rotate(180deg);
+	}
+	#question-list-table .q-expand-btn svg {
+		transition: transform 0.18s ease;
+	}
+}
+
+/* ========================================================================
+   MOBILE BADGE-LINE ENHANCEMENT — one-line polished pill meta
+   Overrides the stacked label layout above: meta cells become inline
+   pills that flow on one (wrapping) line. Var-based, dark-mode safe.
+   ======================================================================== */
+@media (max-width: 768px) {
+	/* Kill the stacked uppercase labels for badge-ified cells */
+	#categoryList tbody tr td:nth-child(4)::before,
+	#categoryList tbody tr td:nth-child(5)::before,
+	#categoryList tbody tr td:nth-child(6)::before,
+	#categoryList tbody tr td:nth-child(7)::before,
+	#examList tbody tr td:nth-child(3)::before,
+	#examList tbody tr td:nth-child(4)::before,
+	#examList tbody tr td:nth-child(5)::before,
+	#examList tbody tr td:nth-child(6)::before,
+	#classList tbody tr td:nth-child(3)::before,
+	#classList tbody tr td:nth-child(4)::before,
+	#classList tbody tr td:nth-child(5)::before,
+	#classList tbody tr td:nth-child(6)::before,
+	#classList tbody tr td:nth-child(7)::before,
+	#classList tbody tr td:nth-child(8)::before,
+	#results-table tbody tr td.result-date::before,
+	#results-table tbody tr td[data-label='Class']::before,
+	#results-table tbody tr td[data-label='Time']::before,
+	#results-table tbody tr td[data-label='Source']::before,
+	#results-table tbody tr td.owner-col::before {
+		display: none !important;
+		content: none !important;
+	}
+
+	/* Remove old "qs / students" suffix chips — counts are self-styled now */
+	#categoryList tbody tr td:nth-child(4)::after,
+	#examList tbody tr td:nth-child(4)::after,
+	#classList tbody tr td:nth-child(4)::after,
+	#classList tbody tr td:nth-child(6)::after {
+		display: none !important;
+		content: none !important;
+	}
+
+	/* Base pill: inline, glossy, single-line */
+	#categoryList tbody tr td:nth-child(4),
+	#categoryList tbody tr td:nth-child(5),
+	#categoryList tbody tr td:nth-child(6),
+	#categoryList tbody tr td:nth-child(7),
+	#examList tbody tr td:nth-child(3),
+	#examList tbody tr td:nth-child(4),
+	#examList tbody tr td:nth-child(5),
+	#examList tbody tr td:nth-child(6),
+	#classList tbody tr td:nth-child(3),
+	#classList tbody tr td:nth-child(4),
+	#classList tbody tr td:nth-child(5),
+	#classList tbody tr td:nth-child(6),
+	#classList tbody tr td:nth-child(7),
+	#classList tbody tr td:nth-child(8) {
+		display: inline-flex !important;
+		align-items: center !important;
+		gap: 6px !important;
+		width: auto !important;
+		max-width: 100% !important;
+		margin: 6px 6px 0 0 !important;
+		padding: 4px 11px 4px 9px !important;
+		border-radius: 999px !important;
+		border: 1px solid var(--border-color) !important;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
+			var(--bg-surface-alt) !important;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.07),
+			inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+		font-size: 0.68rem !important;
+		font-weight: 700 !important;
+		line-height: 1.25 !important;
+		white-space: nowrap !important;
+		overflow: hidden !important;
+		text-overflow: ellipsis !important;
+		vertical-align: middle !important;
+	}
+
+	/* Leading status dot for every pill */
+	#categoryList tbody tr td:nth-child(4)::before,
+	#categoryList tbody tr td:nth-child(6)::before,
+	#categoryList tbody tr td:nth-child(7)::before,
+	#examList tbody tr td:nth-child(3)::before,
+	#examList tbody tr td:nth-child(4)::before,
+	#examList tbody tr td:nth-child(5)::before,
+	#examList tbody tr td:nth-child(6)::before,
+	#classList tbody tr td:nth-child(3)::before,
+	#classList tbody tr td:nth-child(4)::before,
+	#classList tbody tr td:nth-child(5)::before,
+	#classList tbody tr td:nth-child(6)::before,
+	#classList tbody tr td:nth-child(7)::before,
+	#classList tbody tr td:nth-child(8)::before {
+		content: '' !important;
+		display: inline-block !important;
+		width: 7px !important;
+		height: 7px !important;
+		margin: 0 !important;
+		border-radius: 50% !important;
+		background: currentColor !important;
+		box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18) !important;
+		flex: 0 0 auto !important;
+	}
+
+	/* — Accent tints per meaning — */
+	/* counts: blue */
+	#categoryList tbody tr td:nth-child(4),
+	#examList tbody tr td:nth-child(4),
+	#classList tbody tr td:nth-child(4),
+	#classList tbody tr td:nth-child(6) {
+		color: var(--primary) !important;
+		border-color: rgba(59, 130, 246, 0.32) !important;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 55%),
+			rgba(59, 130, 246, 0.1) !important;
+	}
+	/* duration: amber */
+	#examList tbody tr td:nth-child(5) {
+		color: #b45309 !important;
+		border-color: rgba(245, 158, 11, 0.35) !important;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 55%),
+			rgba(245, 158, 11, 0.12) !important;
+	}
+	html[data-theme='dark'] #examList tbody tr td:nth-child(5) {
+		color: var(--warning) !important;
+	}
+	/* dates: neutral */
+	#categoryList tbody tr td:nth-child(7),
+	#examList tbody tr td:nth-child(3),
+	#classList tbody tr td:nth-child(3) {
+		color: var(--text-muted) !important;
+	}
+	/* owners / teachers: violet */
+	#categoryList tbody tr td:nth-child(6),
+	#examList tbody tr td:nth-child(6),
+	#classList tbody tr td:nth-child(5),
+	#classList tbody tr td:nth-child(8) {
+		color: #7c3aed !important;
+		border-color: rgba(139, 92, 246, 0.32) !important;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 55%),
+			rgba(139, 92, 246, 0.1) !important;
+	}
+	html[data-theme='dark'] #categoryList tbody tr td:nth-child(6),
+	html[data-theme='dark'] #examList tbody tr td:nth-child(6),
+	html[data-theme='dark'] #classList tbody tr td:nth-child(5),
+	html[data-theme='dark'] #classList tbody tr td:nth-child(8) {
+		color: #c4b5fd !important;
+	}
+	/* games: teal */
+	#classList tbody tr td:nth-child(7) {
+		color: #0f766e !important;
+		border-color: rgba(20, 184, 166, 0.32) !important;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 55%),
+			rgba(20, 184, 166, 0.1) !important;
+		max-width: 100% !important;
+		white-space: normal !important;
+	}
+	html[data-theme='dark'] #classList tbody tr td:nth-child(7) {
+		color: #5eead4 !important;
+	}
+
+	/* Description becomes a compact subtitle, not a badge */
+	#categoryList tbody tr td:nth-child(3) {
+		display: block !important;
+		margin-top: 4px !important;
+		color: var(--text-muted) !important;
+		font-size: 0.76rem !important;
+		line-height: 1.4 !important;
+		display: -webkit-box !important;
+		-webkit-box-orient: vertical !important;
+		-webkit-line-clamp: 2 !important;
+		overflow: hidden !important;
+	}
+	#categoryList tbody tr td:nth-child(3)::before {
+		display: none !important;
+	}
+	#categoryList tbody tr td:nth-child(3):empty {
+		display: none !important;
+	}
+
+	/* Training pill keeps its switch inline */
+	#categoryList tbody tr td.training-cell {
+		display: inline-flex !important;
+		align-items: center !important;
+		justify-content: flex-start !important;
+		gap: 8px !important;
+		margin: 6px 6px 0 0 !important;
+		padding: 4px 11px 4px 9px !important;
+		border-radius: 999px !important;
+		color: var(--success) !important;
+		border-color: rgba(16, 185, 129, 0.32) !important;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 55%),
+			rgba(16, 185, 129, 0.1) !important;
+	}
+	#categoryList tbody tr td.training-cell::before {
+		content: '' !important;
+		display: inline-block !important;
+		width: 7px !important;
+		height: 7px !important;
+		margin: 0 !important;
+		border-radius: 50% !important;
+		background: currentColor !important;
+		box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16) !important;
+	}
+
+	/* ── Results: hero stays stacked, meta flows as one badge line ── */
+	#results-table tbody tr:not(.results-empty-row) {
+		display: block !important;
+	}
+	#results-table tbody tr:not(.results-empty-row) > td {
+		display: block !important;
+	}
+	#results-table tbody tr td.result-date,
+	#results-table tbody tr td[data-label='Class'],
+	#results-table tbody tr td[data-label='Time'],
+	#results-table tbody tr td[data-label='Source'],
+	#results-table tbody tr td.owner-col {
+		display: inline-flex !important;
+		align-items: center !important;
+		gap: 6px !important;
+		width: auto !important;
+		max-width: 100% !important;
+		margin: 6px 6px 0 0 !important;
+		padding: 4px 11px 4px 9px !important;
+		border: 1px solid var(--border-color) !important;
+		border-radius: 999px !important;
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
+			var(--bg-surface-alt) !important;
+		box-shadow: 0 1px 2px rgba(15, 23, 42, 0.07) !important;
+		font-size: 0.68rem !important;
+		font-weight: 700 !important;
+		line-height: 1.25 !important;
+		white-space: nowrap !important;
+		overflow: hidden !important;
+		text-overflow: ellipsis !important;
+		vertical-align: middle !important;
+		border-top: 1px solid var(--border-color) !important;
+		color: var(--text-secondary) !important;
+	}
+	#results-table tbody tr td.result-date::before,
+	#results-table tbody tr td[data-label='Time']::before,
+	#results-table tbody tr td[data-label='Source']::before,
+	#results-table tbody tr td[data-label='Class']::before,
+	#results-table tbody tr td.owner-col::before {
+		content: '' !important;
+		display: inline-block !important;
+		width: 7px !important;
+		height: 7px !important;
+		margin: 0 !important;
+		border-radius: 50% !important;
+		background: currentColor !important;
+		opacity: 0.9 !important;
+		flex: 0 0 auto !important;
+	}
+	#results-table tbody tr td[data-label='Time'] { color: #b45309 !important; border-color: rgba(245, 158, 11, 0.32) !important; }
+	html[data-theme='dark'] #results-table tbody tr td[data-label='Time'] { color: var(--warning) !important; }
+	#results-table tbody tr td.owner-col { color: #7c3aed !important; border-color: rgba(139, 92, 246, 0.32) !important; }
+	html[data-theme='dark'] #results-table tbody tr td.owner-col { color: #c4b5fd !important; }
+	/* Keep inner pills borderless inside the badge line */
+	#results-table tbody tr td[data-label='Class'] .class-pill,
+	#results-table tbody tr td[data-label='Source'] .device-source-badge {
+		border: 0 !important;
+		background: transparent !important;
+		padding: 0 !important;
+		box-shadow: none !important;
+		max-width: 150px !important;
+	}
+
+	/* ── Activity: single badge line under the description ── */
+	#activityTable tbody tr {
+		display: block !important;
+	}
+	#activityTable tbody tr td:nth-child(1),
+	#activityTable tbody tr td:nth-child(3),
+	#activityTable tbody tr td:nth-child(4) {
+		display: inline-flex !important;
+		align-items: center !important;
+		width: auto !important;
+		margin: 6px 6px 0 0 !important;
+		padding: 4px 11px !important;
+		border-radius: 999px !important;
+		border: 1px solid var(--border-color) !important;
+		background: var(--bg-surface-alt) !important;
+		font-size: 0.66rem !important;
+		font-weight: 700 !important;
+		white-space: nowrap !important;
+	}
+	#activityTable tbody tr td:nth-child(1)::before,
+	#activityTable tbody tr td:nth-child(3)::before {
+		display: none !important;
+		content: none !important;
+	}
+
+	/* ── Questions: meta + options flow as one polished badge line ── */
+	#question-list-table .question-meta {
+		display: flex !important;
+		flex-wrap: wrap !important;
+		gap: 6px !important;
+		margin-top: 8px !important;
+	}
+	#question-list-table .category-badge,
+	#question-list-table .type-badge,
+	#question-list-table .multiple-indicator,
+	#question-list-table .single-indicator,
+	#question-list-table .q-owner-badge {
+		display: inline-flex !important;
+		align-items: center !important;
+		gap: 5px !important;
+		padding: 4px 10px !important;
+		border-radius: 999px !important;
+		font-size: 0.64rem !important;
+		font-weight: 800 !important;
+		letter-spacing: 0.01em !important;
+		line-height: 1.2 !important;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.08),
+			inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+		white-space: nowrap !important;
+		max-width: 100% !important;
+	}
+	#question-list-table tbody tr.question-table-row.is-expanded > .options-cell,
+	#question-list-table tbody tr.question-table-row.is-expanded > .answer-cell {
+		padding: 10px !important;
+	}
+	#question-list-table .option-badge,
+	#question-list-table .correct-answer-badge,
+	#question-list-table .blank-answer-badge {
+		display: inline-flex !important;
+		align-items: center !important;
+		margin: 0 6px 6px 0 !important;
+		padding: 5px 11px !important;
+		border-radius: 999px !important;
+		font-size: 0.7rem !important;
+		font-weight: 700 !important;
+		line-height: 1.25 !important;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.08),
+			inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+		white-space: normal !important;
+	}
+	#question-list-table .q-badges {
+		display: flex !important;
+		flex-wrap: wrap !important;
+		gap: 6px !important;
+		margin-top: 8px !important;
+	}
+	#question-list-table .q-expand-btn {
+		background:
+			linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 55%),
+			var(--bg-surface-alt) !important;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.08),
+			inset 0 1px 0 rgba(255, 255, 255, 0.55) !important;
+		border-radius: 999px !important;
+	}
+}
+
+/* ========================================================================
+   MOBILE BADGE LABELS — small caps label prefix inside each pill.
+   Keeps the one-line badge flow, adds "Qs · 5" style readability.
+   ======================================================================== */
+@media (max-width: 768px) {
+	/* Label prefix styling shared by every badge pill */
+	#categoryList tbody tr td:nth-child(4)::before,
+	#categoryList tbody tr td:nth-child(5)::before,
+	#categoryList tbody tr td:nth-child(6)::before,
+	#categoryList tbody tr td:nth-child(7)::before,
+	#examList tbody tr td:nth-child(3)::before,
+	#examList tbody tr td:nth-child(4)::before,
+	#examList tbody tr td:nth-child(5)::before,
+	#examList tbody tr td:nth-child(6)::before,
+	#classList tbody tr td:nth-child(3)::before,
+	#classList tbody tr td:nth-child(4)::before,
+	#classList tbody tr td:nth-child(5)::before,
+	#classList tbody tr td:nth-child(6)::before,
+	#classList tbody tr td:nth-child(7)::before,
+	#classList tbody tr td:nth-child(8)::before,
+	#results-table tbody tr td.result-date::before,
+	#results-table tbody tr td[data-label='Class']::before,
+	#results-table tbody tr td[data-label='Time']::before,
+	#results-table tbody tr td[data-label='Source']::before,
+	#results-table tbody tr td.owner-col::before,
+	#activityTable tbody tr td:nth-child(1)::before,
+	#activityTable tbody tr td:nth-child(3)::before {
+		display: inline-block !important;
+		width: auto !important;
+		height: auto !important;
+		margin: 0 6px 0 0 !important;
+		padding: 1px 7px !important;
+		border-radius: 999px !important;
+		background: rgba(148, 163, 184, 0.18) !important;
+		box-shadow: none !important;
+		color: inherit !important;
+		opacity: 0.72 !important;
+		font-size: 0.58rem !important;
+		font-weight: 800 !important;
+		letter-spacing: 0.06em !important;
+		text-transform: uppercase !important;
+		line-height: 1.4 !important;
+		flex: 0 0 auto !important;
+	}
+
+	/* Categories */
+	#categoryList tbody tr td:nth-child(4)::before { content: 'Qs' !important; }
+	#categoryList tbody tr td:nth-child(5)::before { content: 'Training' !important; }
+	#categoryList tbody tr td:nth-child(6)::before { content: 'By' !important; }
+	#categoryList tbody tr td:nth-child(7)::before { content: 'On' !important; }
+
+	/* Exams */
+	#examList tbody tr td:nth-child(3)::before { content: 'On' !important; }
+	#examList tbody tr td:nth-child(4)::before { content: 'Qs' !important; }
+	#examList tbody tr td:nth-child(5)::before { content: 'Min' !important; }
+	#examList tbody tr td:nth-child(6)::before { content: 'By' !important; }
+
+	/* Classes */
+	#classList tbody tr td:nth-child(3)::before { content: 'On' !important; }
+	#classList tbody tr td:nth-child(4)::before { content: 'Students' !important; }
+	#classList tbody tr td:nth-child(5)::before { content: 'Teacher' !important; }
+	#classList tbody tr td:nth-child(6)::before { content: 'Exams' !important; }
+	#classList tbody tr td:nth-child(7)::before { content: 'Games' !important; }
+	#classList tbody tr td:nth-child(8)::before { content: 'By' !important; }
+
+	/* Results */
+	#results-table tbody tr td.result-date::before { content: 'On' !important; }
+	#results-table tbody tr td[data-label='Class']::before { content: 'Class' !important; }
+	#results-table tbody tr td[data-label='Time']::before { content: 'Time' !important; }
+	#results-table tbody tr td[data-label='Source']::before { content: 'From' !important; }
+	#results-table tbody tr td.owner-col::before { content: 'By' !important; }
+
+	/* Activity */
+	#activityTable tbody tr td:nth-child(1)::before { content: 'Type' !important; }
+	#activityTable tbody tr td:nth-child(3)::before { content: 'On' !important; }
+}
+
+/* ========================================================================
+   MOBILE ADD-MODAL SINGLE SCROLL — category / exam / class (+ quick)
+   Problem: overlay (.modal overflow:auto) + content (overflow-y:auto from
+   theme.css + legacy display:block rules) + .modal-body (overflow-y:auto)
+   = 3 nested scrollbars. Fix: overlay + content never scroll; ONLY the
+   .modal-body scrolls. Footer stays sticky with breathing room + safe-area.
+   ======================================================================== */
+@media (max-width: 768px) {
+	/* 1. Overlay: fixed sheet host, never a scroller.
+	   Legacy (non-is-open) dialogs only — is-open modals follow their own
+	   padded-sheet responsive rules above, exactly like exam / class. */
+	#categoryModal:not(.is-open),
+	#examModal:not(.is-open),
+	#classModal:not(.is-open),
+	#quickCategoryModal,
+	#categoryModal:not(.is-open)[style*='block'],
+	#examModal:not(.is-open)[style*='block'],
+	#classModal:not(.is-open)[style*='block'],
+	#quickCategoryModal[style*='block'],
+	#categoryModal:not(.is-open)[style*='flex'],
+	#examModal:not(.is-open)[style*='flex'],
+	#classModal:not(.is-open)[style*='flex'],
+	#quickCategoryModal[style*='flex'] {
+		overflow: hidden !important;
+		padding: 0 !important;
+		align-items: stretch !important;
+		justify-content: center !important;
+	}
+
+	/* 2. Content: full-screen flex sheet, never a scroller itself.
+	   Beats theme.css (.modal-content overflow-y:auto) and the legacy
+	   display:block + overflow-y:auto rules above by order + !important.
+	   Legacy dialogs only — is-open modals use their own sheet rules. */
+	#categoryModal:not(.is-open) .modal-content,
+	#examModal:not(.is-open) .modal-content,
+	#classModal:not(.is-open) .modal-content,
+	#quickCategoryModal .modal-content {
+		display: flex !important;
+		flex-direction: column !important;
+		width: 100% !important;
+		max-width: none !important;
+		height: 100dvh !important;
+		max-height: 100dvh !important;
+		margin: 0 !important;
+		border-radius: 0 !important;
+		overflow: hidden !important;
+		overflow-y: hidden !important;
+	}
+
+	/* 3. Header: fixed, never scrolls away */
+	#categoryModal .modal-header,
+	#examModal .modal-header,
+	#classModal .modal-header,
+	#quickCategoryModal .modal-header {
+		position: sticky !important;
+		top: 0 !important;
+		z-index: 5 !important;
+		flex: 0 0 auto !important;
+	}
+
+	/* 4. Body: THE single scroll container */
+	#categoryModal .modal-body,
+	#examModal .modal-body,
+	#classModal .modal-body,
+	#quickCategoryModal .modal-body {
+		flex: 1 1 auto !important;
+		min-height: 0 !important;
+		overflow-y: auto !important;
+		overflow-x: hidden !important;
+		overscroll-behavior: contain !important;
+		scrollbar-gutter: stable !important;
+		scroll-padding-bottom: 120px !important;
+		padding: 16px 14px 26px !important;
+	}
+
+	/* 5. Actions: sticky bottom bar with real breathing room + safe-area */
+	#categoryModal .form-actions,
+	#examModal .form-actions,
+	#classModal .form-actions,
+	#quickCategoryModal .form-actions {
+		position: sticky !important;
+		bottom: 0 !important;
+		z-index: 6 !important;
+		margin: 20px -14px -26px !important;
+		padding: 14px 14px calc(20px + env(safe-area-inset-bottom)) !important;
+		background: linear-gradient(180deg, rgba(248, 250, 252, 0.92), #f8fafc 42%) !important;
+		backdrop-filter: blur(6px) !important;
+		border-top: 1px solid var(--border-color) !important;
+		gap: 10px !important;
+	}
+
+	#categoryModal .form-actions .btn,
+	#examModal .form-actions .btn,
+	#classModal .form-actions .btn,
+	#quickCategoryModal .form-actions .btn {
+		min-height: 44px !important;
+		flex: 1 1 0 !important;
+	}
+
+	/* Dark theme keeps its tinted footer (beats the light gradient above) */
+	html[data-theme='dark'] #categoryModal .form-actions,
+	html[data-theme='dark'] #examModal .form-actions,
+	html[data-theme='dark'] #classModal .form-actions,
+	html[data-theme='dark'] #quickCategoryModal .form-actions {
+		background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%) !important;
 	}
 }

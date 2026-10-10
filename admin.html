@@ -39,10 +39,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-06-r13" />
-		<link rel="stylesheet" href="admin.css?v=2026-09-24-r17" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-06-r14" />
+		<link rel="stylesheet" href="admin.css?v=2026-09-24-r18" />
 		<link rel="stylesheet" href="theme.css?v=2026-09-24-r17" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r2" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r3" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -151,6 +151,7 @@
 		<script src="exam-management.js?v=2026-09-17-r2" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
+		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="overview-dashboard.js?v=2026-10-06-r1" defer></script>
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
@@ -1624,6 +1625,7 @@
 										<th>Name</th>
 										<th>Description</th>
 										<th>Questions</th>
+										<th>Training</th>
 										<th class="owner-col">By</th>
 										<th>Date Created</th>
 										<th>Actions</th>
@@ -1891,191 +1893,211 @@
 
 				<!-- Results Tab -->
 				<section id="results" class="tab-content" data-roles="admin,teacher">
-					<div class="results-container">
-						<!-- Polished Filter Section -->
-						<!-- Polished Filter Section -->
-						<div class="results-filters-container">
-							<div class="results-filters-row">
-								<div class="filter-group">
-									<label>Exam</label>
-									<select id="resultFilterExam" onchange="filterResults()">
-										<option value="">All Exams</option>
-									</select>
-								</div>
-								<div class="filter-group">
-									<label>Class</label>
-									<select id="resultFilterClass" onchange="filterResults()">
-										<option value="">All Classes</option>
-									</select>
-								</div>
-								<div class="filter-group">
-									<label>Mode</label>
-									<select id="resultFilterMode" onchange="filterResults()">
-										<option value="">All Modes</option>
-										<option value="exam">Exam</option>
-										<option value="training">Training</option>
-										<option value="solo">Solo Practice</option>
-										<option value="game">Games</option>
-									</select>
-								</div>
-								<div class="filter-group">
-									<label>Date Range</label>
-									<select id="resultFilterDate" onchange="filterResults()">
-										<option value="">All Time</option>
-										<option value="today">Today</option>
-										<option value="week">This Week</option>
-										<option value="month">This Month</option>
-									</select>
-								</div>
-								<div class="filter-group">
-									<label>Score</label>
-									<select id="resultFilterScore" onchange="filterResults()">
-										<option value="">All Scores</option>
-										<option value="lt10">< 10</option>
-										<option value="gte10">>= 10</option>
-									</select>
-								</div>
-								<div class="filter-group" id="resultTeacherFilterWrap">
-									<label>Teacher</label>
-									<select id="resultTeacherFilter" onchange="filterResults()">
-										<option value="">All Teachers</option>
-									</select>
-								</div>
+					<div class="dashboard-container results-container">
+						<div class="dashboard-header results-header">
+							<div class="welcome-text">
+								<h2>Results</h2>
+								<p class="text-muted">
+									Track student attempts, grades and pass rates across exams, training and games.
+								</p>
 							</div>
-							<div class="results-search-row">
-								<div class="results-actions-row">
-									<div
-										id="bulk-actions-results"
-										class="bulk-actions-container hidden"
-									>
-										<span class="selection-info">
-											<span id="selected-count-results">0</span> selected
-										</span>
-										<button
-											type="button"
-											class="btn btn-danger-soft"
-											onclick="deleteSelectedResults()"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<polyline points="3 6 5 6 21 6"></polyline>
-												<path
-													d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-												></path>
-											</svg>
-											<span>Delete Selected</span>
-										</button>
-										<div class="divider-vertical"></div>
-									</div>
-									<div class="search-group" style="flex: 1">
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="20"
-											height="20"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<circle cx="11" cy="11" r="8"></circle>
-											<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+							<div class="results-header-actions">
+								<span class="date-badge results-count-badge"><span id="resultsCountBadge">0</span> attempts</span>
+								<div class="results-export-group">
+									<button type="button" class="btn-export" onclick="exportResultsCSV()" title="Export visible results as CSV">
+										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+											<polyline points="7 10 12 15 17 10"></polyline>
+											<line x1="12" y1="15" x2="12" y2="3"></line>
 										</svg>
-										<input
-											type="text"
-											id="resultSearch"
-											placeholder="Search by student name..."
-											onkeyup="filterResults()"
-										/>
-									</div>
-									<button
-										type="button"
-										class="btn btn-secondary"
-										onclick="clearAllResultFilters()"
-									>
-										Clear All Filters
+										CSV
 									</button>
-									<button
-										type="button"
-										class="btn btn-secondary"
-										onclick="exportResultsCSV()"
-									>
-										Export CSV
+									<button type="button" class="btn-export" onclick="exportResultsJSON()" title="Export visible results as JSON">
+										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+											<polyline points="7 10 12 15 17 10"></polyline>
+											<line x1="12" y1="15" x2="12" y2="3"></line>
+										</svg>
+										JSON
 									</button>
-									<button
-										type="button"
-										class="btn btn-secondary"
-										onclick="exportResultsJSON()"
-									>
-										Export JSON
+									<button type="button" class="btn-export" onclick="document.getElementById('importResultsInput').click()" title="Import results from JSON">
+										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+											<polyline points="17 8 12 3 7 8"></polyline>
+											<line x1="12" y1="3" x2="12" y2="15"></line>
+										</svg>
+										Import
 									</button>
-									<button
-										type="button"
-										class="btn btn-secondary"
-										onclick="document.getElementById('importResultsInput').click()"
-									>
-										Import JSON
-									</button>
-									<input
-										type="file"
-										id="importResultsInput"
-										accept=".json"
-										style="display: none"
-										onchange="importResultsJSON(this)"
-									/>
+									<input type="file" id="importResultsInput" accept=".json" style="display: none" onchange="importResultsJSON(this)" />
 								</div>
 							</div>
 						</div>
-						<div class="admin-kpi-grid" id="resultsKpiGrid">
-							<div class="admin-kpi">
-								<div class="admin-kpi__value" id="kpi-results-total">0</div>
-								<div class="admin-kpi__label">Total Attempts</div>
+
+						<div class="kpi-grid results-kpi-grid" id="resultsKpiGrid">
+							<div class="stat-card blue">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+										<polyline points="14 2 14 8 20 8"></polyline>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-total">0</h3>
+									<p>Total Attempts</p>
+								</div>
 							</div>
-							<div class="admin-kpi">
-								<div class="admin-kpi__value" id="kpi-results-avg">0 / 20</div>
-								<div class="admin-kpi__label">Average Grade</div>
+							<div class="stat-card green">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+										<polyline points="22 4 12 14.01 9 11.01"></polyline>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-avg">0 / 20</h3>
+									<p>Average Grade</p>
+								</div>
 							</div>
-							<div class="admin-kpi">
-								<div class="admin-kpi__value" id="kpi-results-pass-rate">0%</div>
-								<div class="admin-kpi__label">Pass Rate (>= 10/20)</div>
+							<div class="stat-card amber">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+										<polyline points="17 6 23 6 23 12"></polyline>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-pass-rate">0%</h3>
+									<p>Pass Rate (≥ 10/20)</p>
+								</div>
 							</div>
-							<div class="admin-kpi">
-								<div class="admin-kpi__value" id="kpi-results-top-class">-</div>
-								<div class="admin-kpi__label">Top Class</div>
+							<div class="stat-card purple">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+										<circle cx="9" cy="7" r="4"></circle>
+										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-top-class">-</h3>
+									<p>Top Class</p>
+								</div>
 							</div>
 						</div>
-						<div class="table-container">
-							<table id="results-table">
-								<thead>
-									<tr>
-										<th style="width: 40px">
-											<input
-												type="checkbox"
-												id="selectAllResults"
-												onchange="toggleBulkSelectAllGeneric(this, 'results')"
-											/>
-										</th>
-										<th>Date</th>
-										<th>Student</th>
-										<th>Class</th>
-										<th>Exam</th>
-										<th>Score</th>
-										<th>Time</th>
-										<th>Source</th>
-										<th class="owner-col">By</th>
-										<th>Actions</th>
-									</tr>
-								</thead>
-								<tbody id="results-list">
-									<!-- Results will be populated here -->
-								</tbody>
-							</table>
+
+						<div class="dashboard-panel results-filter-panel">
+							<div class="panel-header results-filter-header">
+								<h3>Filters</h3>
+								<button type="button" class="btn-text-only" onclick="clearAllResultFilters()">Clear all</button>
+							</div>
+							<div class="panel-body results-filter-body">
+								<div class="results-filters-row">
+									<div class="filter-group">
+										<label for="resultFilterExam">Exam</label>
+										<select id="resultFilterExam" class="form-control" onchange="filterResults()">
+											<option value="">All Exams</option>
+										</select>
+									</div>
+									<div class="filter-group">
+										<label for="resultFilterClass">Class</label>
+										<select id="resultFilterClass" class="form-control" onchange="filterResults()">
+											<option value="">All Classes</option>
+										</select>
+									</div>
+									<div class="filter-group">
+										<label for="resultFilterMode">Mode</label>
+										<select id="resultFilterMode" class="form-control" onchange="filterResults()">
+											<option value="">All Modes</option>
+											<option value="exam">Exam</option>
+											<option value="training">Training</option>
+											<option value="solo">Solo Practice</option>
+											<option value="game">Games</option>
+										</select>
+									</div>
+									<div class="filter-group">
+										<label for="resultFilterDate">Date Range</label>
+										<select id="resultFilterDate" class="form-control" onchange="filterResults()">
+											<option value="">All Time</option>
+											<option value="today">Today</option>
+											<option value="week">This Week</option>
+											<option value="month">This Month</option>
+										</select>
+									</div>
+									<div class="filter-group">
+										<label for="resultFilterScore">Score</label>
+										<select id="resultFilterScore" class="form-control" onchange="filterResults()">
+											<option value="">All Scores</option>
+											<option value="lt10">&lt; 10</option>
+											<option value="gte10">&gt;= 10</option>
+										</select>
+									</div>
+									<div class="filter-group" id="resultTeacherFilterWrap">
+										<label for="resultTeacherFilter">Teacher</label>
+										<select id="resultTeacherFilter" class="form-control" onchange="filterResults()">
+											<option value="">All Teachers</option>
+										</select>
+									</div>
+								</div>
+								<div class="results-search-row">
+									<div class="results-actions-row">
+										<div id="bulk-actions-results" class="bulk-actions-container hidden">
+											<span class="selection-info">
+												<span id="selected-count-results">0</span> selected
+											</span>
+											<button type="button" class="btn btn-danger-soft" onclick="deleteSelectedResults()">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+													<polyline points="3 6 5 6 21 6"></polyline>
+													<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+												</svg>
+												<span>Delete Selected</span>
+											</button>
+											<div class="divider-vertical"></div>
+										</div>
+										<div class="search-group results-search">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<circle cx="11" cy="11" r="8"></circle>
+												<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+											</svg>
+											<input type="text" id="resultSearch" placeholder="Search by student name or number..." onkeyup="filterResults()" />
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="dashboard-panel results-table-panel">
+							<div class="panel-header results-table-header">
+								<h3>Attempts</h3>
+								<span class="text-muted text-xs" id="resultsTableHint">Newest first</span>
+							</div>
+							<div class="table-container results-table-wrap">
+								<table id="results-table" class="data-table">
+									<thead>
+										<tr>
+											<th class="checkbox-cell" style="width: 40px">
+												<input type="checkbox" id="selectAllResults" onchange="toggleBulkSelectAllGeneric(this, 'results')" />
+											</th>
+											<th>Date</th>
+											<th>Student</th>
+											<th>Class</th>
+											<th>Exam</th>
+											<th>Score</th>
+											<th>Time</th>
+											<th>Source</th>
+											<th class="owner-col">By</th>
+											<th class="actions-cell">Actions</th>
+										</tr>
+									</thead>
+									<tbody id="results-list">
+										<!-- Results will be populated here -->
+									</tbody>
+								</table>
+							</div>
 						</div>
 					</div>
 				</section>
@@ -4016,6 +4038,13 @@
 								</div>
 								<!-- Hidden input for storing the matching pairs answer -->
 								<input type="hidden" id="matching-answer" />
+								<div class="form-group" style="margin-top: 10px;">
+									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+										<input type="checkbox" id="shuffleMatchingPairs" checked />
+										<span>Shuffle columns for students</span>
+									</label>
+									<small class="text-muted" style="display: block; margin-left: 24px;">Randomize the left/right item order in training, games and tournaments.</small>
+								</div>
 							</div>
 
 							<!-- Fill in the Blank Answer Builder -->
@@ -4332,6 +4361,14 @@
 							</div>
 						</div>
 
+						<div class="form-group">
+							<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+								<input type="checkbox" id="categoryTraining" />
+								<span>Use in training mode</span>
+							</label>
+							<small class="text-muted" style="display: block; margin-left: 24px;">Checked categories feed training mode (instead of Uncategorized only).</small>
+						</div>
+
 						<!-- Question assignment now lives in its own modal (Assign
 						     Questions button in the categories table). This keeps the
 						     create/edit form focused on category identity only. -->
@@ -4548,7 +4585,7 @@
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
 									Data
 								</button>
-								<button type="button" class="settings-tab-btn" title="Realtime" data-roles="admin" data-settings-tab="realtime" onclick="switchSettingsTab(event, 'realtime')">
+								<button type="button" class="settings-tab-btn" title="Realtime" data-roles="admin,teacher" data-settings-tab="realtime" onclick="switchSettingsTab(event, 'realtime')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
 									Realtime
 								</button>
@@ -5425,7 +5462,7 @@
 							</div>
 
 						<!-- Realtime Settings -->
-						<div id="realtime-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="realtime">
+						<div id="realtime-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="realtime">
 					<!-- Server Configuration -->
 						<div class="settings-group">
 							<label class="switch-label" style="margin-bottom: 15px;">
@@ -5442,7 +5479,7 @@
 							</label>
 							<small class="text-muted" style="display: block; margin-bottom: 15px;">Connect clients to this admin panel for real-time data sync</small>
 
-								<div class="form-group">
+								<div class="form-group" data-teacher-hide>
 									<label for="setting-serverHost">Server Host/Port</label>
 									<div style="display: flex; gap: 10px; align-items: flex-end">
 										<input
@@ -5477,7 +5514,7 @@
 										</div>
 									</div>
 
-									<div class="form-group">
+									<div class="form-group" data-teacher-hide>
 										<label for="setting-recoveryCode">Recovery Code</label>
 									<input
 										type="password"
@@ -5505,7 +5542,7 @@
 										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
 										Refresh
 									</button>
-									<button type="button" class="btn btn-secondary btn-sm" onclick="window.mergeAllDevices()">
+									<button type="button" class="btn btn-secondary btn-sm" data-teacher-hide onclick="window.mergeAllDevices()">
 										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
 										Sync All Data
 									</button>
@@ -5531,7 +5568,7 @@
 									<h3 style="margin: 0; font-size: 1.1rem;">Sync Options</h3>
 								</div>
 
-								<div class="form-group">
+								<div class="form-group" data-teacher-hide>
 									<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
 										<input type="checkbox" id="setting-autoSync" checked />
 										<span>Auto-Sync Results</span>
@@ -5539,7 +5576,7 @@
 									<small class="text-muted" style="display: block; margin-left: 24px;">Automatically sync quiz results to all devices</small>
 								</div>
 
-<div class="form-group">
+<div class="form-group" data-teacher-hide>
 								<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
 									<input type="checkbox" id="setting-broadcastUpdates" checked />
 									<span>Broadcast Updates</span>
@@ -5547,15 +5584,15 @@
 								<small class="text-muted" style="display: block; margin-left: 24px;">Push question/exam updates to connected devices</small>
 							</div>
 
-							<div class="form-group">
+							<div class="form-group" data-teacher-hide>
 								<label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
 									<input type="checkbox" id="setting-autoSyncQuestions" checked />
-									<span>Auto-Sync Questions (uncategorized)</span>
+									<span>Auto-Sync Questions (training categories)</span>
 								</label>
-								<small class="text-muted" style="display: block; margin-left: 24px;">Periodically push uncategorized training questions to connected devices.</small>
+								<small class="text-muted" style="display: block; margin-left: 24px;">Periodically push training-enabled category questions to connected devices.</small>
 							</div>
 
-								<div class="form-group">
+								<div class="form-group" data-teacher-hide>
 									<button type="button" class="btn btn-secondary" onclick="window.syncUsersToClients()">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 										Sync User Accounts
@@ -5570,7 +5607,7 @@
 									<small class="text-muted" style="display: block; margin-top: 6px;">Pushes games to connected student devices.</small>
 								</div>
 
-								<div class="form-group">
+								<div class="form-group" data-teacher-hide>
 									<label
 										for="setting-realtimeSyncInterval"
 										style="display: block; margin-bottom: 8px"

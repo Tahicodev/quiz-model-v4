@@ -384,12 +384,87 @@
 
 	// ─── Boot ─────────────────────────────────────────────────────────────
 
+	function jwtExpiresAt(token) {
+		try {
+			var parts = String(token || '').split('.');
+			if (parts.length !== 3) return null;
+			var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+			return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+		} catch (_) { return null; }
+	}
+
+	// First non-expired token across the known stores. Expired
+	// student-scoped copies are dropped so a stale login forces a
+	// re-sign-in; other portals' copies are never touched.
+	function validLoginToken() {
+		var candidates = [];
+		try {
+			if (window.__authToken) candidates.push({ token: window.__authToken, scoped: false });
+			var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
+			if (s && s.token) candidates.push({ token: s.token, scoped: false });
+		} catch (_) { /* ignore */ }
+		try {
+			var scopedToken = localStorage.getItem('quizAuthToken:student');
+			if (scopedToken) candidates.push({ token: scopedToken, scoped: true });
+			var sessRaw =
+				localStorage.getItem('quizSession:student') ||
+				localStorage.getItem('quizSessionRemember');
+			if (sessRaw) {
+				try {
+					var parsed = JSON.parse(sessRaw);
+					if (parsed && parsed.token) candidates.push({ token: parsed.token, scoped: true });
+				} catch (_) { /* not JSON — ignore */ }
+			}
+		} catch (_) { /* ignore */ }
+		try {
+			var shared = localStorage.getItem('quizAuthToken');
+			if (shared) candidates.push({ token: shared, scoped: false });
+		} catch (_) { /* ignore */ }
+		for (var i = 0; i < candidates.length; i++) {
+			var exp = jwtExpiresAt(candidates[i].token);
+			if (exp !== null && exp <= Date.now()) {
+				if (candidates[i].scoped) {
+					try {
+						localStorage.removeItem('quizAuthToken:student');
+						localStorage.removeItem('quizSession:student');
+					} catch (_) { /* ignore */ }
+				}
+				continue;
+			}
+			return candidates[i].token;
+		}
+		return null;
+	}
+
+	function championshipLoginUrl() {
+		var next = encodeURIComponent(window.location.pathname + window.location.search);
+		return '/student-workspace.html?login=1&next=' + next;
+	}
+
 	function boot() {
 		var soundBtn = $('kcSoundBtn');
 		if (soundBtn) soundBtn.addEventListener('click', function () {
 			state.muted = !state.muted;
 			soundBtn.textContent = state.muted ? '🔇' : '🔊';
 		});
+		// Direct links require a valid (non-expired) login so results
+		// count. Otherwise bounce to the workspace sign-in and back
+		// afterwards; a bounce guard stops redirect loops when sign-in
+		// cannot produce a usable token.
+		if (!validLoginToken()) {
+			var last = 0;
+			try { last = Number(sessionStorage.getItem('kidsLoginBounceAt') || 0); } catch (_) { /* ignore */ }
+			if (Date.now() - last < 3 * 60 * 1000) {
+				screen('<div class="kid-card"><h2>Session expired 😴</h2>' +
+					'<p class="hint">Please sign in again so your score counts!</p>' +
+					'<a class="kid-btn green" href="' + championshipLoginUrl() + '">Sign in</a></div>');
+				return;
+			}
+			try { sessionStorage.setItem('kidsLoginBounceAt', String(Date.now())); } catch (_) { /* ignore */ }
+			window.location.href = championshipLoginUrl();
+			return;
+		}
+		try { sessionStorage.removeItem('kidsLoginBounceAt'); } catch (_) { /* ignore */ }
 		state.player = readStored();
 		var params = new URLSearchParams(window.location.search);
 		var code = params.get('code');

@@ -301,6 +301,10 @@ const SANITIZERS = {
       if (mappedType === 'mcq' && row.allowMultipleAnswers) meta.multi = true;
       if (mappedType === 'order' || row.isDraggable) meta.drag = true;
       if (rawType === 'odd-one-out') meta.odd = true;
+      // Matching columns shuffle unless explicitly disabled (opt-out only).
+      if (mappedType === 'matching' && row.shufflePairs === false) {
+        meta.matchShuffle = false;
+      }
       if (rawType === 'code' || row.codeSnippet || row.codeAnswerMode) {
         meta.code = {
           snippet: String(row.codeSnippet || ''),

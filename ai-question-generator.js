@@ -713,13 +713,17 @@ class AIQuestionGenerator {
 			'matching-pairs': () => ({
 				question: `Match each learning action for ${safeTopic} with its purpose.`,
 				options: [
-					'Define-->Build a shared vocabulary',
-					'Practice-->Strengthen recall',
-					'Apply-->Use the idea in context',
+					'Define',
+					'Build a shared vocabulary',
+					'Practice',
+					'Strengthen recall',
+					'Apply',
+					'Use the idea in context',
 				],
 				answer:
 					'Define-->Build a shared vocabulary|Practice-->Strengthen recall|Apply-->Use the idea in context',
 				explanation: 'Each action supports a different part of learning.',
+				shufflePairs: true,
 			}),
 			code: () => ({
 				question: `What is the safest first step when writing code related to ${safeTopic}?`,
@@ -1651,6 +1655,24 @@ STRICT JSON RULES:
 			case 'draggable':
 				q.isDraggable = true;
 				break;
+			case 'matching-pairs': {
+				// Canonicalize pairs/answer/options so AI blobs
+				// (`NTFS-->WindowsEXT4-->…` in options, mixed separators)
+				// never reach the bank. The shared canonicalizer lives in
+				// questions-management.js (loaded before this script).
+				if (
+					typeof window !== 'undefined' &&
+					typeof window.canonicalizeMatchingQuestion === 'function'
+				) {
+					try {
+						window.canonicalizeMatchingQuestion(q);
+					} catch (e) {
+						this.log('Matching canonicalize failed:', e.message);
+					}
+				}
+				if (q.shufflePairs === undefined) q.shufflePairs = true;
+				break;
+			}
 			case 'fill-blank': {
 				q.useWordBank = q.useWordBank !== false;
 				// Normalize placeholders from [blank] to ___

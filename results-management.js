@@ -588,9 +588,15 @@ function displayResults(results) {
 	}
 
 	if (results.length === 0) {
+		lastVisibleResults = [];
 		tbody.innerHTML =
-			'<tr><td colspan="10" class="text-center">No results found.</td></tr>';
+			'<tr class="results-empty-row"><td colspan="10"><div class="results-empty">' +
+			'<div class="results-empty-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>' +
+			'<h4>No results found</h4><p>Try adjusting the filters or search to see student attempts here.</p>' +
+			'</div></td></tr>';
 		renderResultsKpis(results);
+		const emptyBadge = document.getElementById('resultsCountBadge');
+		if (emptyBadge) emptyBadge.textContent = '0';
 		if (window.BulkSelect) window.BulkSelect.updateBar('results');
 		return;
 	}
@@ -652,16 +658,44 @@ function displayResults(results) {
 				}
 			}
 
-			const examCell = examMetaLines.length
-				? `<div class="result-main">${escapeHtml(examDisplayName)}</div>${examMetaLines
-						.map(
-							(line) =>
-								`<div class="result-subtext">${escapeHtml(line)}</div>`,
-						)
-						.join('')}`
-				: escapeHtml(examDisplayName);
+		const modeKey = gameResult
+				? 'game'
+				: String(result.mode || 'exam').toLowerCase();
+		const modeClass =
+			modeKey === 'training' || modeKey === 'solo'
+				? 'is-training'
+				: modeKey === 'game'
+					? 'is-game'
+					: 'is-exam';
+		const initials = String(student.name || '?')
+				.trim()
+				.split(/\s+/)
+				.slice(0, 2)
+				.map((w) => w.charAt(0).toUpperCase())
+				.join('') || '?';
+		const classLabel = classData
+				? classData.className || classData.name
+				: student.class || '';
+		const passed = parseFloat(scoreOn20) >= 10;
+		const dateTitle = resultDate
+				? new Date(resultDate).toLocaleString()
+				: '';
+		const dateShort = resultDate
+				? new Date(resultDate).toLocaleDateString()
+				: '-';
 
-			return `
+		const examCell = `<div class="result-main"><span class="mode-dot ${modeClass}"></span><span>${escapeHtml(examDisplayName)}</span></div>${examMetaLines
+				.map(
+					(line) =>
+						`<div class="result-subtext">${escapeHtml(line)}</div>`,
+				)
+				.join('')}`;
+
+		const sourceCell = result.deviceName
+				? `<span class="device-source-badge" title="${escapeHtml(result.deviceName)}${result.deviceIp ? ` (@${result.deviceIp})` : ''}">${escapeHtml(result.deviceName)}</span>`
+				: '<span class="device-source-badge is-local">Local</span>';
+
+		return `
             <tr data-result-id="${escapeHtml(resultId)}">
                 <td class="checkbox-cell" data-label="Select">
                     <input type="checkbox"
@@ -669,37 +703,34 @@ function displayResults(results) {
                         data-id="${escapeHtml(resultId)}"
                         onchange="toggleBulkRowSelection(this,'results')">
                 </td>
-                <td title="${resultDate ? new Date(resultDate).toLocaleString() : ''}">${
-									resultDate ? new Date(resultDate).toLocaleDateString() : '-'
+                <td class="result-date" title="${escapeHtml(dateTitle)}">${escapeHtml(dateShort)}</td>
+                <td class="student-cell" data-label="Student">
+                    <div class="student-cell-inner">
+                        <span class="student-avatar${gameResult ? ' is-game' : ''}">${escapeHtml(initials)}</span>
+                        <span class="student-meta">
+                            <span class="student-name">${escapeHtml(student.name)}</span>
+                            ${student.numero ? `<span class="student-numero">N° ${escapeHtml(student.numero)}</span>` : ''}
+                        </span>
+                    </div>
+                </td>
+                <td data-label="Class">${
+									classLabel
+										? `<span class="class-pill">${escapeHtml(classLabel)}</span>`
+										: '<span class="class-pill is-empty">—</span>'
 								}</td>
-                <td>${escapeHtml(
-									student.numero ? student.numero + ' - ' : ''
-								)}${escapeHtml(student.name)}</td>
-                <td>${
-									classData
-										? escapeHtml(classData.className || classData.name)
-										: student.class
-										? escapeHtml(student.class)
-										: '-'
-								}</td>
-                <td>${examCell}</td>
-                <td>
-                    <span class="score-badge ${
-											parseFloat(scoreOn20) >= 10 ? 'passed' : 'failed'
-										}">
-                        ${scoreOn20}/20 (${percentage}%)
+                <td class="exam-cell" data-label="Exam">${examCell}</td>
+                <td data-label="Score">
+                    <span class="score-pill ${passed ? 'passed' : 'failed'}">
+                        <span class="score-pill-top"><span class="score-pill-dot"></span>${scoreOn20}/20<span class="score-pill-pct">${percentage}%</span></span>
+                        <span class="score-pill-bar"><span style="width: ${Math.max(0, Math.min(100, percent)).toFixed(1)}%"></span></span>
                     </span>
                 </td>
-                <td>${timeFormatted}</td>
-                <td>${
-									result.deviceName
-										? `<span class="device-source-badge" style="font-size: 0.85em; padding: 2px 6px; background: #f1f5f9; border-radius: 4px; color: #64748b; border: 1px solid #e2e8f0;">${escapeHtml(result.deviceName)}${result.deviceIp ? ` (@${result.deviceIp})` : ''}</span>`
-										: '<span style="color: #9ca3af; font-size: 0.85em;">Local</span>'
-								}</td>
+                <td data-label="Time"><span class="time-pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${escapeHtml(timeFormatted)}</span></td>
+                <td data-label="Source">${sourceCell}</td>
                 <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Teacher">${escapeHtml(window.TeacherFilter ? window.TeacherFilter.resolveResultTeacherNames(result, resultTeacherMap) : '—')}</span></td>
                 <td class="actions-cell">
                     <div class="exam-actions">
-                        <button class="exam-action-btn" onclick="viewResultDetails('${escapeHtml(
+                        <button class="exam-action-btn exam-view-btn" onclick="viewResultDetails('${escapeHtml(
 													resultId
 												)}')" title="View Details">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -762,6 +793,8 @@ function displayResults(results) {
 
 	// Refresh the KPI cards whenever the table is (re)rendered.
 	renderResultsKpis(results);
+	const countBadge = document.getElementById('resultsCountBadge');
+	if (countBadge) countBadge.textContent = String(results.length);
 
 	// Restore bulk selection (filter safe) + refresh bulk bar
 	if (window.BulkSelect) window.BulkSelect.restore('results');
@@ -1068,7 +1101,22 @@ function viewResultDetails(resultId) {
 			: 'Unknown Exam';
 	}
 
-	// Create detail modal
+	// Create detail modal (modern dashboard-style hero + grid)
+	const passed = parseFloat(scoreOn20) >= 10;
+	const modalInitials = String(student.name || '?')
+		.trim()
+		.split(/\s+/)
+		.slice(0, 2)
+		.map((w) => w.charAt(0).toUpperCase())
+		.join('') || '?';
+	const classLabel = classData
+		? classData.className || classData.name
+		: student.class || '-';
+	const modeLabel = result.mode
+		? result.mode.charAt(0).toUpperCase() + result.mode.slice(1)
+		: gameResult
+			? 'Game'
+			: 'Training';
 	const modal = document.createElement('div');
 	modal.className = 'result-detail-modal';
 	modal.innerHTML = `
@@ -1077,39 +1125,42 @@ function viewResultDetails(resultId) {
                 <h2>Result Details</h2>
                 <button class="close-btn" onclick="this.closest('.result-detail-modal').remove()">✕</button>
             </div>
+            <div class="result-modal-hero">
+                <span class="result-modal-avatar">${escapeHtml(modalInitials)}</span>
+                <div class="result-modal-title">
+                    <h3>${escapeHtml(student.name)}</h3>
+                    <p>${escapeHtml(student.numero ? `N° ${student.numero} · ` : '')}${escapeHtml(classLabel)} · ${escapeHtml(assessmentValue)}</p>
+                </div>
+                <div class="result-modal-score ${passed ? 'passed' : 'failed'}">
+                    <strong>${scoreOn20}/20</strong>
+                    <small>${percentage}% · ${passed ? 'Passed' : 'Failed'}</small>
+                </div>
+            </div>
             <div class="modal-body">
-                <div class="detail-row">
-                    <span class="detail-label">Student:</span>
-                    <span class="detail-value">${escapeHtml(
-											student.numero
-												? `${student.numero} - ${student.name}`
-												: student.name
-										)}</span>
+                <div class="detail-cell">
+                    <span class="detail-label">${assessmentLabel}</span>
+                    <span class="detail-value">${escapeHtml(assessmentValue)}</span>
                 </div>
-                <div class="detail-row">
-                    <span class="detail-label">Student ID:</span>
-                    <span class="detail-value">${escapeHtml(
-											student.numero || '-'
-										)}</span>
+                <div class="detail-cell">
+                    <span class="detail-label">Mode</span>
+                    <span class="detail-value">${escapeHtml(modeLabel)}</span>
                 </div>
-                <div class="detail-row">
-                    <span class="detail-label">Class:</span>
+                <div class="detail-cell">
+                    <span class="detail-label">Class</span>
+                    <span class="detail-value">${escapeHtml(classLabel)}</span>
+                </div>
+                <div class="detail-cell">
+                    <span class="detail-label">Date</span>
                     <span class="detail-value">${
-											classData
-												? escapeHtml(classData.className || classData.name)
-												: student.class
-												? escapeHtml(student.class)
+											getResultDate(result)
+												? escapeHtml(new Date(getResultDate(result)).toLocaleString())
 												: '-'
 										}</span>
                 </div>
-                <div class="detail-row">
-                    <span class="detail-label">${assessmentLabel}:</span>
-                    <span class="detail-value">${escapeHtml(assessmentValue)}</span>
-                </div>
                 ${
 									gameResult && (participantNames.length || participantCount > 0)
-										? `<div class="detail-row">
-                    <span class="detail-label">Participants:</span>
+										? `<div class="detail-cell full">
+                    <span class="detail-label">Participants</span>
                     <span class="detail-value">${escapeHtml(
 											participantNames.length
 												? participantNames.join(', ')
@@ -1120,41 +1171,22 @@ function viewResultDetails(resultId) {
 								}
                 ${
 									gameResult && winnerName
-										? `<div class="detail-row">
-                    <span class="detail-label">Winner:</span>
-                    <span class="detail-value">${escapeHtml(winnerName)}</span>
+										? `<div class="detail-cell">
+                    <span class="detail-label">Winner</span>
+                    <span class="detail-value">🏆 ${escapeHtml(winnerName)}</span>
                 </div>`
 										: ''
 								}
-                <div class="detail-row">
-                    <span class="detail-label">Score:</span>
-                    <span class="detail-value score-value ${
-											parseFloat(scoreOn20) >= 10 ? 'passed' : 'failed'
-										}">${scoreOn20}/20 (${percentage}%)</span>
+                <div class="detail-cell">
+                    <span class="detail-label">Time Spent</span>
+                    <span class="detail-value">${escapeHtml(formatResultTime(result))}</span>
                 </div>
-                <div class="detail-row">
-                    <span class="detail-label">Date:</span>
-                    <span class="detail-value">${
-											getResultDate(result)
-												? new Date(getResultDate(result)).toLocaleString()
-												: '-'
-										}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Device Info:</span>
+                <div class="detail-cell">
+                    <span class="detail-label">Source</span>
                     <span class="detail-value">${
 											result.deviceName
 												? `${escapeHtml(result.deviceName)}${result.deviceIp ? ` (@${result.deviceIp})` : ''}`
-												: '<span style="color: #9ca3af;">Local Submission</span>'
-										}</span>
-                </div>
-                <div class="detail-row">
-                    <span class="detail-label">Mode:</span>
-                    <span class="detail-value">${
-											result.mode
-												? result.mode.charAt(0).toUpperCase() +
-												  result.mode.slice(1)
-												: 'Training'
+												: 'Local Submission'
 										}</span>
                 </div>
             </div>

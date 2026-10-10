@@ -15588,7 +15588,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     randomize: external_exports.boolean().default(false),
     max_attempts: external_exports.coerce.number().int().min(1).optional().nullable()
   });
-  var ExamUpdateSchema = ExamCreateSchema.partial();
+  var ExamUpdateSchema = ExamCreateSchema.partial().extend({
+    // Class assignment mirror (the admin "Assign to Classes" picker sends the
+    // full desired set). Persisted into the exam_classes junction table by
+    // ExamService.update — never stored on the exams row itself.
+    classes: external_exports.array(external_exports.string().uuid()).optional()
+  });
   var ExamFilterSchema = external_exports.object({
     status: external_exports.enum(statusValues).optional(),
     creator_id: external_exports.string().uuid().optional(),
@@ -15656,7 +15661,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       const parsed = ExamUpdateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      return this.#repo.update("exams", id, parsed.data);
+      const { classes, ...rowPatch } = parsed.data;
+      const updated = await this.#repo.update("exams", id, rowPatch);
+      if (classes !== void 0) {
+        await this.#syncExamClasses(id, classes, currentUser);
+      }
+      return updated;
     }
     async delete(id, currentUser) {
       this.#requireAdmin(currentUser);
@@ -15785,6 +15795,59 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     async getAvailableForStudent(userId) {
       return this.#repo.query("exam.availableForStudent", { userId });
+    }
+    // Reconcile the exam_classes junction table with the desired class set
+    // (from the admin "Assign to Classes" picker). Teachers may only link
+    // their own assigned classes; unknown/deleted class ids are dropped so
+    // a stale picker can never hide an exam from every student.
+    async #syncExamClasses(examId, classIds, currentUser) {
+      const wanted = [...new Set((classIds || []).map(String))].filter(Boolean);
+      let allowed = null;
+      if (currentUser?.role === ROLES.TEACHER) {
+        allowed = new Set(await this.#getTeacherClassIds(currentUser));
+      }
+      const finalIds = [];
+      for (const classId of wanted) {
+        if (allowed && !allowed.has(classId)) continue;
+        try {
+          const cls = await this.#repo.getById("classes", classId);
+          if (cls) finalIds.push(classId);
+        } catch {
+        }
+      }
+      const { data: current } = await this.#repo.getAll("exam_classes", {
+        filters: { exam_id: examId },
+        limit: 500
+      });
+      const have = new Map(
+        (current || []).map((row) => [String(row.class_id), row])
+      );
+      for (const classId of finalIds) {
+        if (!have.has(classId)) {
+          await this.assignToClass(examId, classId, currentUser);
+        }
+      }
+      for (const [classId, row] of have) {
+        if (!finalIds.includes(classId)) {
+          await this.#repo.delete("exam_classes", row.id);
+        }
+      }
+    }
+    async #getTeacherClassIds(currentUser) {
+      try {
+        const { data } = await this.#repo.getAll("settings", {
+          filters: {
+            school_id: currentUser?.school_id,
+            key: "teacherClassAssignments"
+          },
+          limit: 1
+        });
+        const map2 = JSON.parse(data?.[0]?.value || "{}");
+        const ids = map2?.[currentUser?.id];
+        return Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+      } catch {
+        return [];
+      }
     }
     #requireAdmin(user) {
       if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) throw new ForbiddenError();
@@ -16545,7 +16608,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           completed_at: (/* @__PURE__ */ new Date()).toISOString()
         });
       }
-      if (typeof this.#repo.create === "function") {
+      if (typeof this.#repo.modelFor === "function") {
         const ids = questionIds(game);
         let totalPoints = 0;
         for (const qid of ids) {
@@ -17100,7 +17163,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         limit: 1
       });
       if (actor) {
-        const effectiveVisibility = rankOf(parsed.data.visibility) > rankOf(existing[0]?.visibility) ? parsed.data.visibility : existing[0]?.visibility ?? parsed.data.visibility ?? SETTINGS_VISIBILITY.ADMIN;
+        const stored = existing[0]?.visibility ?? null;
+        const requested = parsed.data.visibility ?? null;
+        const effectiveVisibility = stored && requested ? rankOf(requested) > rankOf(stored) ? requested : stored : requested ?? stored ?? SETTINGS_VISIBILITY.ADMIN;
         if (effectiveVisibility === SETTINGS_VISIBILITY.SYSTEM) {
           throw new ForbiddenError("System settings are managed server-side");
         }
@@ -18375,6 +18440,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (mappedType === "mcq" && q.allowMultipleAnswers) meta3.multi = true;
         if (type === "draggable" || q.isDraggable) meta3.drag = true;
         if (type === "odd-one-out") meta3.odd = true;
+        if ((mappedType === "matching" || type === "matching-pairs") && q.shufflePairs === false) {
+          meta3.matchShuffle = false;
+        }
         if (type === "code" || q.codeSnippet || q.codeAnswerMode) {
           meta3.code = {
             snippet: String(q.codeSnippet || ""),
@@ -19522,7 +19590,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function canAccessSettingsTab(tabName) {
       if (isAdmin()) return true;
       if (isTeacher()) {
-        if (tabName === "teacher-access" || tabName === "realtime" || tabName === "setup") {
+        if (tabName === "teacher-access" || tabName === "setup") {
           return false;
         }
         const access = getTeacherAccessSettings();
@@ -24234,24 +24302,60 @@ A new temporary password will be generated and shown to you once so you can shar
       </div>
     `;
     } else if (questionType === "matching-pairs") {
-      const answer = q.answer || "";
-      const pairs = (answer.includes("|") ? answer.split("|") : answer.split(",")).map((pair) => {
-        let left, right;
-        if (pair.includes("\u2192")) {
-          [left, right] = pair.split("\u2192").map((item) => item.trim());
-        } else if (pair.includes("-->")) {
-          [left, right] = pair.split("-->").map((item) => item.trim());
-        } else if (pair.includes(":")) {
-          [left, right] = pair.split(":").map((item) => item.trim());
-        } else {
-          [left, right] = [pair.trim(), ""];
+      const parseLegacyPairs = (text) => {
+        const out = [];
+        const pushToken = (token) => {
+          const raw = String(token || "").trim();
+          if (!raw) return;
+          const seps = ["-->", "->", "=>", "\u2192", "::", "="];
+          for (const sep of seps) {
+            const idx = raw.indexOf(sep);
+            if (idx > 0) {
+              const left = raw.slice(0, idx).trim();
+              const right = raw.slice(idx + sep.length).trim();
+              if (left && right) out.push({ left, right });
+              return;
+            }
+          }
+          const cIdx = raw.indexOf(":");
+          if (cIdx > 0) {
+            const left = raw.slice(0, cIdx).trim();
+            const right = raw.slice(cIdx + 1).trim();
+            if (left && right) out.push({ left, right });
+          }
+        };
+        let src = String(text || "").trim().replace(/^meta::[A-Za-z0-9+/=]+::/, "");
+        if (!src) return out;
+        let tokens = [];
+        src.split(/\r?\n/).forEach((line) => {
+          line.split("|").forEach((chunk) => {
+            const t = chunk.trim();
+            if (t) tokens.push(t);
+          });
+        });
+        if (tokens.length === 1 && tokens[0].includes(",")) {
+          tokens = tokens[0].split(",").map((t) => t.trim()).filter(Boolean);
         }
-        return { left, right };
-      });
+        tokens.forEach(pushToken);
+        return out;
+      };
+      let pairs = parseLegacyPairs(q.answer);
+      if (!pairs.length && Array.isArray(q.options) && q.options.length) {
+        const flat = q.options.map((o) => String(o && o.text || o || "").trim()).filter((t) => t && !/-->|->|=>|→|::/.test(t));
+        if (flat.length >= 4 && flat.length % 2 === 0) {
+          for (let pi = 0; pi + 1 < flat.length; pi += 2) {
+            pairs.push({ left: flat[pi], right: flat[pi + 1] });
+          }
+        } else {
+          pairs = parseLegacyPairs(flat.join("|"));
+        }
+      }
       let leftItems = [...new Set(pairs.map((p) => p.left))];
       let rightItems = [...new Set(pairs.map((p) => p.right))];
-      shuffleArray(leftItems);
-      shuffleArray(rightItems);
+      if (!q || q.shufflePairs !== false) {
+        shuffleArray(leftItems);
+        shuffleArray(rightItems);
+      }
       const getItemImage = (text) => {
         if (!q.optionData || !Array.isArray(q.optionData)) return null;
         if (!text) return null;

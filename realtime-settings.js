@@ -33,7 +33,28 @@
 	// Initialize realtime settings UI on document load
 	document.addEventListener('DOMContentLoaded', () => {
 		setupRealtimeUI();
+		applyRealtimeTeacherScope();
 	});
+	window.addEventListener('quiz:bootstrap-ready', () => {
+		try {
+			applyRealtimeTeacherScope();
+		} catch (_) {
+			/* ignore */
+		}
+	});
+
+	// Teachers share the realtime tab (to push games/exams to their
+	// students), but admin-only controls stay hidden for them. The server
+	// enforces the same boundary (settings tiers, staff-only relays).
+	function applyRealtimeTeacherScope() {
+		const section = document.getElementById('realtime-settings');
+		if (!section) return;
+		const isTeacher =
+			typeof window.Auth?.isTeacher === 'function' &&
+			window.Auth.isTeacher();
+		section.classList.toggle('teacher-view', !!isTeacher);
+	}
+	window.applyRealtimeTeacherScope = applyRealtimeTeacherScope;
 
 	/**
 	 * Setup initial UI event listeners
@@ -174,21 +195,26 @@
 
 	function scheduleInitialStaffSync() {
 		if (!realtimeFeatureEnabled) return;
-		const canSyncUsers =
+		const isAdmin =
 			typeof window.Auth?.isAdmin === 'function' && window.Auth.isAdmin();
-		if (!canSyncUsers) return;
+		const isTeacher =
+			typeof window.Auth?.isTeacher === 'function' && window.Auth.isTeacher();
+		if (!isAdmin && !isTeacher) return;
 		const now = Date.now();
 		if (now - lastInitialStaffSyncAt < INITIAL_STAFF_SYNC_COOLDOWN_MS) {
 			return;
 		}
 		lastInitialStaffSyncAt = now;
-		if (typeof window.syncUsersToClients === 'function') {
+		// Users + gamification snapshots stay admin-only (school-wide data).
+		// Teachers push their own scoped games so connected students of
+		// their classes receive them without waiting for an admin.
+		if (isAdmin && typeof window.syncUsersToClients === 'function') {
 			setTimeout(() => window.syncUsersToClients(), 500);
 		}
 		if (typeof window.syncGamesToClients === 'function') {
 			setTimeout(() => window.syncGamesToClients(), 800);
 		}
-		if (typeof window.syncGamificationSettings === 'function') {
+		if (isAdmin && typeof window.syncGamificationSettings === 'function') {
 			setTimeout(() => window.syncGamificationSettings(), 1100);
 		}
 	}
@@ -1193,23 +1219,20 @@
 				'',
 		};
 
-		// Get uncategorized questions for training mode
+		// Training pool: questions whose category is enabled for training
+		// mode (see category-management.js). Legacy default is Uncategorized.
 		const allQuestions = JSON.parse(
 			JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('questions')) ||
 				'[]',
 		);
 
-		// Filter for uncategorized questions (use 'category' field, not 'categoryId')
-		// Questions are saved with 'category' field from questions-management.js
-		let trainingQuestions = allQuestions.filter(
-			(q) => !q.category || q.category === '' || q.category === 'uncategorized',
-		);
-
-		// Fallback: If no uncategorized, use the first 50 questions
-		if (trainingQuestions.length === 0 && allQuestions.length > 0) {
-			console.log('No uncategorized questions found, sending first 50.');
-			trainingQuestions = allQuestions.slice(0, 50);
-		}
+		const trainingQuestions =
+			typeof window.getTrainingQuestions === 'function'
+				? window.getTrainingQuestions(allQuestions)
+				: allQuestions.filter(
+						(q) =>
+							!q.category || q.category === '' || q.category === 'uncategorized',
+					);
 
 		const payload = {
 			quizSettings: settings,
@@ -1219,7 +1242,7 @@
 		console.log('Pushing default settings:', {
 			presetApplied: presetName || 'None',
 			totalQuestionsInAdmin: allQuestions.length,
-			uncategorizedQuestionsPushed: trainingQuestions.length,
+			trainingQuestionsPushed: trainingQuestions.length,
 			settingKeys: Object.keys(settings),
 			settings: settings,
 		});
@@ -1797,15 +1820,17 @@
 		syncDebounceTimer = setTimeout(() => {
 			console.log('Running Refined Broadcast Updates...');
 
-			// 1. TRAINING SYNC: Settings + ONLY Uncategorized Questions
+			// 1. TRAINING SYNC: Settings + training-enabled categories
+			// (see category-management.js; legacy default is Uncategorized).
 			const settings = window.getAppSettings
 				? window.getAppSettings()
 				: window.__DI_CONTAINER__.repo.getAll_sync('settings')[0] || {};
 			const allQuestions =
 				window.__DI_CONTAINER__.repo.getAll_sync('questions');
-			const trainingQuestions = allQuestions.filter(
-				(q) => !q.category && !q.categoryId,
-			);
+			const trainingQuestions =
+				typeof window.getTrainingQuestions === 'function'
+					? window.getTrainingQuestions(allQuestions)
+					: allQuestions.filter((q) => !q.category && !q.categoryId);
 
 			const trainingPayload = {
 				quizSettings: settings,
@@ -1813,7 +1838,7 @@
 			};
 
 			console.log(
-				'Syncing training data (Uncategorized only):',
+				'Syncing training data (training-enabled categories):',
 				trainingQuestions.length,
 			);
 			realtimeSocket.emit('admin:pushSettings', trainingPayload);
@@ -2039,9 +2064,10 @@
 	}
 
 	/**
-	 * Push uncategorized training questions to all connected devices. Student
+	 * Push training-enabled questions to all connected devices. Student
 	 * workspace does not depend on admin settings, so only the question bank
-	 * is pushed here. Used by the periodic Auto-Sync loop.
+	 * is pushed here. Used by the periodic Auto-Sync loop. (Kept the legacy
+	 * function name for existing callers.)
 	 */
 	window.pushUncategorizedQuestions = function (opts = {}) {
 		if (!realtimeSocket || !realtimeSocket.connected) {
@@ -2059,16 +2085,21 @@
 			allQuestions = [];
 		}
 
-		const trainingQuestions = allQuestions.filter(
-			(q) =>
-				!q.category || q.category === '' || q.category === 'uncategorized',
-		);
+		const trainingQuestions =
+			typeof window.getTrainingQuestions === 'function'
+				? window.getTrainingQuestions(allQuestions)
+				: allQuestions.filter(
+						(q) =>
+							!q.category ||
+							q.category === '' ||
+							q.category === 'uncategorized',
+					);
 
 		realtimeSocket.emit('admin:pushSettings', {
 			quizQuestions: trainingQuestions,
 		});
 
-		const message = `Auto-synced ${trainingQuestions.length} uncategorized questions to devices`;
+		const message = `Auto-synced ${trainingQuestions.length} training questions to devices`;
 
 		if (!opts.quiet) {
 			showRealtimeStatus(message, 'success');

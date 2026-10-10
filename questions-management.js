@@ -239,7 +239,7 @@ function createQuestionRow(question, index) {
                    data-index="${index}"
                    onchange="toggleBulkQuestionSelection(this)">
         </td>
-        <td data-label="#">${index + 1}</td>
+        <td class="qnum-cell" data-label="#">${index + 1}</td>
         <td class="question-cell" data-label="Question">
             <div class="question-content-text">
                 ${renderQuestionContent(
@@ -253,6 +253,10 @@ function createQuestionRow(question, index) {
 								)}
             </div>
             <div class="q-badges">${badgeOwnerHtml}</div>
+            <button type="button" class="q-expand-btn" onclick="toggleQuestionExpand(this)" aria-expanded="false">
+                <span class="q-expand-label">Show details</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
         </td>
         <td class="options-cell" data-label="Options">
             ${(() => {
@@ -556,26 +560,20 @@ function formatCorrectAnswers(question) {
 		);
 
 	} else if (type === 'matching-pairs') {
-		// Format Matching Pairs: Key1:Value1|Key2:Value2 or Key1-->Value1|Key2-->Value2
+		// Format Matching Pairs: Key1-->Value1|Key2-->Value2 (canonical;
+		// legacy comma/colon shapes are parsed too).
 		if (!answer) return '<span class="text-muted">Not set</span>';
-		
-		const pairs = answer.split('|');
-		return '<div class="answer-badges-container validation-list" style="display: flex; flex-direction: column; gap: 4px;">' + 
+
+		const pairs = parseMatchingAnswerPairs(answer);
+		if (!pairs.length) return '<span class="text-muted">Not set</span>';
+		return '<div class="answer-badges-container validation-list" style="display: flex; flex-direction: column; gap: 4px;">' +
 			pairs.map(pair => {
-				// Support both : and --> as separators
-				let key, val;
-				if (pair.includes('-->')) {
-					[key, val] = pair.split('-->');
-				} else {
-					[key, val] = pair.split(':');
-				}
-				
 				return `<span class="validation-badge" style="display: inline-flex; align-items: center; background: #f3f4f6; padding: 4px 8px; border-radius: 4px; border: 1px solid #e5e7eb;">
-					<span class="term" style="font-weight: 500;">${escapeHtml((key || '').trim())}</span>
+					<span class="term" style="font-weight: 500;">${escapeHtml(pair.left)}</span>
 					<span class="arrow" style="margin: 0 8px; color: #8b5cf6; font-weight: bold;">→</span>
-					<span class="def">${escapeHtml((val || '').trim())}</span>
+					<span class="def">${escapeHtml(pair.right)}</span>
 				</span>`;
-			}).join('') + 
+			}).join('') +
 			'</div>';
 	} else if (type === 'fill-blank') {
 		// For fill-blank, parse and display blanks with their answers
@@ -948,8 +946,147 @@ function normalizeAnswerTokensForOptionData(answer, optionData = []) {
 		.join(',');
 }
 
+const MATCHING_INLINE_SEPARATORS = ['-->', '->', '=>', '→', '::', '='];
+const MATCHING_ARROW_SEPARATOR_RE = /-->|->|=>|→|::/;
+
+function stripMatchingMetaPrefix(text) {
+	return String(text || '')
+		.trim()
+		.replace(/^meta::[A-Za-z0-9+/=]+::/, '');
+}
+
+// Parse matching pairs from ANY stored shape: `L-->R|L-->R` (canonical),
+// `L-->R,L-->R` (legacy), newline-separated, `L:R`, arrays of pair-strings
+// or {left,right} objects. Never throws; returns [{left, right}].
+function parseMatchingAnswerPairs(text) {
+	const collected = [];
+	const pushToken = (token) => {
+		const raw = String(token || '').trim();
+		if (!raw) return;
+		for (const sep of MATCHING_INLINE_SEPARATORS) {
+			const idx = raw.indexOf(sep);
+			if (idx > 0) {
+				const left = raw.slice(0, idx).trim();
+				const right = raw.slice(idx + sep.length).trim();
+				if (left && right) collected.push({ left, right });
+				return;
+			}
+		}
+		const colonIdx = raw.indexOf(':');
+		if (colonIdx > 0) {
+			const left = raw.slice(0, colonIdx).trim();
+			const right = raw.slice(colonIdx + 1).trim();
+			if (left && right) collected.push({ left, right });
+		}
+	};
+	const src = stripMatchingMetaPrefix(text);
+	if (!src) return [];
+	let tokens = [];
+	src.split(/\r?\n/).forEach((line) => {
+		line.split('|').forEach((chunk) => {
+			const token = chunk.trim();
+			if (token) tokens.push(token);
+		});
+	});
+	if (tokens.length === 1 && tokens[0].includes(',')) {
+		tokens = tokens[0]
+			.split(',')
+			.map((token) => token.trim())
+			.filter(Boolean);
+	}
+	tokens.forEach(pushToken);
+	const seen = new Set();
+	return collected.filter((pair) => {
+		const key = pair.left.toLowerCase() + '=>' + pair.right.toLowerCase();
+		if (seen.has(key)) return false;
+		seen.add(key);
+		return true;
+	});
+}
+
+// Canonical matching shape: answer `L-->R|L-->R`, options flat
+// `[L,R,…]`. Repairs AI/import blobs (pair-strings or concatenated text in
+// options) so the bank, training, games and tournaments all agree. Mutates
+// and returns the given object; preserves option images by text match.
+function canonicalizeMatchingQuestion(question = {}) {
+	const q = question || {};
+	const rawOptions = Array.isArray(q.options) ? q.options : [];
+	const optTexts = rawOptions
+		.map((entry) => String((entry && entry.text) || entry || '').trim())
+		.filter(Boolean);
+	const flatOptions = optTexts.filter(
+		(text) => !MATCHING_ARROW_SEPARATOR_RE.test(text),
+	);
+	let pairs = parseMatchingAnswerPairs(q.answer);
+	if (!pairs.length && optTexts.length) {
+		pairs = parseMatchingAnswerPairs(optTexts.join('|'));
+	}
+	if (!pairs.length) return q;
+	// Drop pairs with unrecoverable concatenation inside a side, then
+	// recover positionally from flat options (items in L,R order).
+	let clean = pairs.filter(
+		(pair) =>
+			!MATCHING_ARROW_SEPARATOR_RE.test(pair.left) &&
+			!MATCHING_ARROW_SEPARATOR_RE.test(pair.right),
+	);
+	if (
+		clean.length < 2 &&
+		flatOptions.length >= 4 &&
+		flatOptions.length % 2 === 0
+	) {
+		const positional = [];
+		for (let i = 0; i + 1 < flatOptions.length; i += 2) {
+			positional.push({ left: flatOptions[i], right: flatOptions[i + 1] });
+		}
+		if (positional.length >= 2) clean = positional;
+	}
+	if (!clean.length) return q;
+	pairs = clean;
+	q.answer = pairs.map((p) => `${p.left}-->${p.right}`).join('|');
+	const optionsArePairStrings =
+		optTexts.length > 0 &&
+		optTexts.every((text) => MATCHING_ARROW_SEPARATOR_RE.test(text));
+	if (!optTexts.length || (pairs.length >= 2 && optionsArePairStrings)) {
+		const flat = [];
+		pairs.forEach((pair) => {
+			flat.push(pair.left, pair.right);
+		});
+		const existingByText = new Map();
+		(Array.isArray(q.optionData) ? q.optionData : []).forEach((entry) => {
+			if (entry && typeof entry === 'object' && entry.text) {
+				if (!existingByText.has(String(entry.text))) {
+					existingByText.set(String(entry.text), entry);
+				}
+			}
+		});
+		q.options = flat;
+		q.optionData = flat.map((text, index) => {
+			const existing = existingByText.get(text);
+			if (existing) return existing;
+			return {
+				text,
+				image: '',
+				isImageOnly: false,
+				id: `opt_${index + 1}`,
+				number: '',
+			};
+		});
+	}
+	return q;
+}
+
 function normalizeQuestionOptionStructure(question = {}) {
 	const normalizedQuestion = { ...(question || {}) };
+	// Canonicalize matching pairs FIRST so options/optionData below are
+	// built from clean pairs (repairs AI/import blobs at save + heal time).
+	const rawTypeForMatching =
+		normalizedQuestion.type || normalizedQuestion.questionType || '';
+	if (
+		normalizeQuestionTypeForStorage(rawTypeForMatching, normalizedQuestion) ===
+		'matching-pairs'
+	) {
+		canonicalizeMatchingQuestion(normalizedQuestion);
+	}
 	let optionData = [];
 
 	if (Array.isArray(normalizedQuestion.optionData)) {
@@ -1347,6 +1484,13 @@ async function addOrUpdateQuestion() {
 		const difficulty = document.getElementById('difficulty').value;
 		const points = parseFloat(document.getElementById('points').value) || 1;
 
+		// Shuffle matching columns for students (per-question toggle,
+		// default on). Legacy rows without the flag shuffle too.
+		const shufflePairs =
+			selectedType === 'matching-pairs'
+				? document.getElementById('shuffleMatchingPairs')?.checked !== false
+				: undefined;
+
 		// Create question object with type property and option images
 		const questionObj = {
 			question: question,
@@ -1365,6 +1509,7 @@ async function addOrUpdateQuestion() {
 			difficulty: difficulty || 'medium',
 			points: points,
 		};
+		if (shufflePairs !== undefined) questionObj.shufflePairs = shufflePairs;
 		Object.assign(questionObj, normalizeQuestionOptionStructure(questionObj));
 		
 		if (selectedType === 'code') {
@@ -2486,6 +2631,12 @@ function populateEditForm(question) {
 		toggleQuestionType();
 	}
 
+	// Shuffle toggle for matching pairs (legacy rows without the flag shuffle).
+	const shuffleMatchingEl = document.getElementById('shuffleMatchingPairs');
+	if (shuffleMatchingEl) {
+		shuffleMatchingEl.checked = question.shufflePairs !== false;
+	}
+
 
 	// Handle image preview
 	if (question.image) {
@@ -2605,8 +2756,19 @@ function toggleBulkQuestionSelection(checkbox) {
 		console.error('Error in toggleBulkQuestionSelection:', error);
 	}
 }
+// Mobile collapsible details: collapsed by default, toggle shows
+// options / image / answer cells to keep each card compact.
+function toggleQuestionExpand(btn) {
+	const row = btn ? btn.closest('tr.question-table-row') : null;
+	if (!row) return;
+	const expanded = row.classList.toggle('is-expanded');
+	btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+	const label = btn.querySelector('.q-expand-label');
+	if (label) label.textContent = expanded ? 'Hide details' : 'Show details';
+}
 // Make function globally accessible
 window.toggleBulkQuestionSelection = toggleBulkQuestionSelection;
+window.toggleQuestionExpand = toggleQuestionExpand;
 
 function updateBulkDeleteButtons() {
 	try {
@@ -4283,6 +4445,8 @@ window.cancelEdit = cancelEdit;
 window.removeQuestionByRow = removeQuestionByRow;
 window.toggleBulkQuestionSelection = toggleBulkQuestionSelection;
 window.updateBulkDeleteButtons = updateBulkDeleteButtons;
+window.parseMatchingAnswerPairs = parseMatchingAnswerPairs;
+window.canonicalizeMatchingQuestion = canonicalizeMatchingQuestion;
 window.toggleBulkSelectAll = toggleBulkSelectAll;
 window.selectAllBulkQuestions = selectAllBulkQuestions;
 window.deselectAllBulkQuestions = deselectAllBulkQuestions;
@@ -5457,10 +5621,10 @@ function updateMatchingAnswer() {
 	const answerInput = document.getElementById('matching-answer');
 	if (!answerInput) return;
 
-	// Format: left1-->right1,left2-->right2
+	// Canonical format: left1-->right1|left2-->right2
 	const answerStr = matchingState.pairs
 		.map((p) => `${p.left}-->${p.right}`)
-		.join(',');
+		.join('|');
 	answerInput.value = answerStr;
 }
 
@@ -7256,6 +7420,7 @@ function normalizeImportedAIQuestion(question, fallbackCategoryId = '') {
 				if (meta.multi) q.allowMultipleAnswers = true;
 				if (meta.drag) q.isDraggable = true;
 				if (meta.odd) q.oddOneOut = true;
+				if (meta.matchShuffle === false) q.shufflePairs = false;
 				if (meta.code) {
 					q.codeSnippet = meta.code.snippet || '';
 					q.codeLanguage = meta.code.language || 'javascript';

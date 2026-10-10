@@ -81,4 +81,87 @@ describe('ExamService', () => {
       expect(repo.delete).not.toHaveBeenCalled();
     });
   });
+
+  describe('update() class assignment sync', () => {
+    const TEACHER = { id: 't-1', role: ROLES.TEACHER, school_id: 's-1' };
+    const CLASS_A = '11111111-1111-4111-8111-111111111111';
+    const CLASS_B = '22222222-2222-4222-8222-222222222222';
+
+    function repoWithLinks(existingLinks = []) {
+      return makeRepo({
+        getById: vi.fn(async (table, id) => {
+          if (table === 'exams' && id === 'e1') {
+            return { id: 'e1', school_id: 's-1', status: EXAM_STATUS.ACTIVE };
+          }
+          if (table === 'classes' && [CLASS_A, CLASS_B].includes(id)) {
+            return { id, school_id: 's-1', name: 'Class' };
+          }
+          return null;
+        }),
+        getAll: vi.fn(async (table, query) => {
+          if (table === 'exam_classes') {
+            return { data: existingLinks, total: existingLinks.length };
+          }
+          if (table === 'settings') {
+            return {
+              data: [
+                { value: JSON.stringify({ 't-1': [CLASS_A] }) },
+              ],
+              total: 1,
+            };
+          }
+          return { data: [], total: 0 };
+        }),
+        create: vi.fn(async (table, row) => ({ id: 'link-1', ...row })),
+        update: vi.fn(async (table, id, patch) => ({ id, ...patch })),
+        delete: vi.fn(async () => ({})),
+      });
+    }
+
+    it('persists class links on update (admin)', async () => {
+      repo = repoWithLinks([]);
+      service = new ExamService(repo);
+      await service.update('e1', { name: 'E', classes: [CLASS_A, CLASS_B] }, ADMIN);
+      expect(repo.create).toHaveBeenCalledWith(
+        'exam_classes',
+        expect.objectContaining({ exam_id: 'e1', class_id: CLASS_A }),
+      );
+      expect(repo.create).toHaveBeenCalledWith(
+        'exam_classes',
+        expect.objectContaining({ exam_id: 'e1', class_id: CLASS_B }),
+      );
+    });
+
+    it('removes links that are no longer assigned', async () => {
+      const stale = { id: 'link-old', exam_id: 'e1', class_id: CLASS_B };
+      repo = repoWithLinks([stale]);
+      service = new ExamService(repo);
+      await service.update('e1', { name: 'E', classes: [] }, ADMIN);
+      expect(repo.delete).toHaveBeenCalledWith('exam_classes', 'link-old');
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('restricts teachers to their own classes', async () => {
+      repo = repoWithLinks([]);
+      service = new ExamService(repo);
+      await service.update('e1', { name: 'E', classes: [CLASS_A, CLASS_B] }, TEACHER);
+      expect(repo.create).toHaveBeenCalledWith(
+        'exam_classes',
+        expect.objectContaining({ exam_id: 'e1', class_id: CLASS_A }),
+      );
+      const createdClassIds = repo.create.mock.calls.map((c) => c[1]?.class_id);
+      expect(createdClassIds).not.toContain(CLASS_B);
+    });
+
+    it('drops unknown class ids instead of hiding the exam', async () => {
+      repo = repoWithLinks([]);
+      service = new ExamService(repo);
+      await service.update(
+        'e1',
+        { name: 'E', classes: ['33333333-3333-4333-8333-333333333333'] },
+        ADMIN,
+      );
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+  });
 });

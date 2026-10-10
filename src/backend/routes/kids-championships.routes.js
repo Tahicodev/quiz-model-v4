@@ -23,6 +23,8 @@ import {
   KidsChampionshipFilterSchema,
 } from '../../shared/schemas/kids-championship.schema.js';
 import { getContainer } from '../container.js';
+import { getStudentContentScope, isAuthorVisibleToStudent } from './users.routes.js';
+import { logger } from '../logger.js';
 import { ForbiddenError } from '../../shared/errors.js';
 
 /** Kids Championships exist for primaire schools only (same gate as kids.routes.js). */
@@ -66,6 +68,60 @@ router.use(publicRouter);
 router.use(requireAuth, enforceTenant, requirePrimaire);
 
 const CHAMPIONSHIP_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
+const CHAMPIONSHIP_PLAY_ROLES = [
+  ROLES.ADMIN,
+  ROLES.SUPER_ADMIN,
+  ROLES.TEACHER,
+  ROLES.STUDENT,
+];
+
+// GET /api/v1/kids/championships/browse — joinable championships for
+// players. Students in a primaire school see ONLY championships run by
+// their own teachers — never admins', never another teacher's. Same
+// lobby-only shape as the staff list (no answers or management fields).
+router.get('/browse', requireRole(CHAMPIONSHIP_PLAY_ROLES), validateQuery(KidsChampionshipFilterSchema), async (req, res, next) => {
+  try {
+    const { kidsChampionshipSvc } = getContainer();
+    const { limit, offset } = req.query;
+    const isStudent = req.user.role === ROLES.STUDENT;
+    const result = await kidsChampionshipSvc.list(
+      req.schoolId,
+      req.user,
+      isStudent
+        ? { status: req.query.status || 'active', limit: 100, offset: 0 }
+        : { status: req.query.status || 'active', limit, offset },
+    );
+    if (!isStudent) {
+      return res.json(result);
+    }
+    let scope = null;
+    try {
+      scope = await getStudentContentScope(req.schoolId, req.user.class_id);
+    } catch (_) {
+      scope = null;
+    }
+    const rows = (result.data || []).filter((row) =>
+      isAuthorVisibleToStudent(row?.creator_id ?? row?.created_by, scope),
+    );
+    try {
+      logger.info(
+        {
+          studentId: req.user?.id,
+          classId: String(req.user?.class_id || '') || '(none)',
+          teachersFound: scope ? scope.myTeacherIds.size : -1,
+          schoolTotal: (result.data || []).length,
+          delivered: rows.length,
+        },
+        'Kids championships browse: student content scope applied',
+      );
+    } catch (_) {
+      /* diagnostics must never break delivery */
+    }
+    const start = Math.max(Number(offset) || 0, 0);
+    const size = Math.max(Number(limit) || 20, 1);
+    res.json({ data: rows.slice(start, start + size), total: rows.length });
+  } catch (err) { next(err); }
+});
 
 // GET /api/v1/kids/championships — school list (admin: all, teacher: own)
 router.get('/', requireRole(CHAMPIONSHIP_ROLES), validateQuery(KidsChampionshipFilterSchema), async (req, res, next) => {

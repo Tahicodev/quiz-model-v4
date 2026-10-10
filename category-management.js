@@ -14,6 +14,175 @@ let availableQuestionsForCategory = [];
 let categoryDebounceTimer;
 
 // ============================================
+// TRAINING CATEGORIES (settings-row store)
+// ============================================
+// Which categories feed training mode. Persisted in the
+// `categoryTrainingMap` settings row ({ [categoryId]: boolean }) so it
+// survives bootstrap syncs and works across admin/teacher browsers — the
+// same pattern as the teacherClassAssignments mirror. Public visibility so
+// student devices can resolve the training pool too.
+// Resolution: explicit entry wins; otherwise Uncategorized defaults to
+// enabled (legacy behavior), every other category to disabled.
+const CATEGORY_TRAINING_KEY = 'categoryTrainingMap';
+let categoryTrainingMapCache = null;
+
+function readCategoryTrainingMapFromRepo() {
+	try {
+		const repo = window.__DI_CONTAINER__?.repo;
+		if (!repo) return null;
+		let rows = [];
+		if (typeof repo.getAll_sync === 'function') {
+			const all = repo.getAll_sync('settings') || [];
+			rows = Array.isArray(all) ? all : all.settings || [];
+		} else if (typeof repo.getValue_sync === 'function') {
+			const raw = repo.getValue_sync('settings', {});
+			rows = raw?.settings || [];
+		}
+		const row = (Array.isArray(rows) ? rows : []).find(
+			(s) => s && s.key === CATEGORY_TRAINING_KEY,
+		);
+		if (row?.value) {
+			const parsed = JSON.parse(row.value);
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+				return parsed;
+			}
+		}
+	} catch (_) {
+		/* ignore */
+	}
+	return null;
+}
+
+function getCategoryTrainingMap() {
+	if (categoryTrainingMapCache && typeof categoryTrainingMapCache === 'object') {
+		return categoryTrainingMapCache;
+	}
+	const fromRepo = readCategoryTrainingMapFromRepo();
+	categoryTrainingMapCache = fromRepo || {};
+	return categoryTrainingMapCache;
+}
+
+function hasCategoryTrainingMap() {
+	if (categoryTrainingMapCache && Object.keys(categoryTrainingMapCache).length) {
+		return true;
+	}
+	return readCategoryTrainingMapFromRepo() !== null;
+}
+
+function isTrainingCategory(categoryOrId) {
+	const id = String(
+		(categoryOrId && categoryOrId.id) || categoryOrId || 'uncategorized',
+	);
+	const map = getCategoryTrainingMap();
+	if (Object.prototype.hasOwnProperty.call(map, id)) {
+		return map[id] === true;
+	}
+	// Legacy default: only Uncategorized feeds training until configured.
+	return id === 'uncategorized';
+}
+
+function getQuestionTrainingCategoryId(question) {
+	if (!question || typeof question !== 'object') return 'uncategorized';
+	const raw =
+		question.category ?? question.categoryId ?? question.category_id ?? '';
+	const trimmed = String(raw).trim();
+	return trimmed || 'uncategorized';
+}
+
+function isTrainingQuestion(question) {
+	return isTrainingCategory(getQuestionTrainingCategoryId(question));
+}
+
+// Training pool for pushes / exports: questions whose category is enabled.
+// Legacy fallback (no map configured yet AND pool empty): first 50 questions.
+function getTrainingQuestions(allQuestions) {
+	const list = Array.isArray(allQuestions) ? allQuestions : [];
+	const pool = list.filter(isTrainingQuestion);
+	if (pool.length) return pool;
+	if (!hasCategoryTrainingMap() && list.length) {
+		console.log(
+			'No training-enabled categories found, sending first 50 questions (legacy fallback).',
+		);
+		return list.slice(0, 50);
+	}
+	return pool;
+}
+
+async function setCategoryTraining(categoryId, enabled) {
+	const id = String(categoryId || '');
+	if (!id) return false;
+	const map = { ...getCategoryTrainingMap(), [id]: enabled === true };
+	categoryTrainingMapCache = map;
+	if (window.API && typeof window.API.update === 'function') {
+		try {
+			await window.API.update('settings', CATEGORY_TRAINING_KEY, {
+				key: CATEGORY_TRAINING_KEY,
+				value: JSON.stringify(map),
+				visibility: 'public',
+			});
+		} catch (err) {
+			console.warn('[categories] training map server save failed:', err);
+			showToast(
+				'Training flag saved locally, but the server sync failed: ' +
+					(err?.message || 'network error'),
+				'warning',
+			);
+		}
+	}
+	if (typeof logActivity === 'function') {
+		logActivity('category', id, enabled ? 'training enabled' : 'training disabled', {
+			id,
+		});
+	}
+	return true;
+}
+
+async function removeCategoryTraining(categoryId) {
+	const id = String(categoryId || '');
+	if (!id) return;
+	const map = { ...getCategoryTrainingMap() };
+	if (!Object.prototype.hasOwnProperty.call(map, id)) return;
+	delete map[id];
+	categoryTrainingMapCache = map;
+	if (window.API && typeof window.API.update === 'function') {
+		try {
+			await window.API.update('settings', CATEGORY_TRAINING_KEY, {
+				key: CATEGORY_TRAINING_KEY,
+				value: JSON.stringify(map),
+				visibility: 'public',
+			});
+		} catch (err) {
+			console.warn('[categories] training map cleanup failed:', err);
+		}
+	}
+}
+
+async function toggleCategoryTraining(checkbox) {
+	const id = String(checkbox?.dataset?.id || '');
+	if (!id) return;
+	const row = checkbox.closest('tr');
+	await setCategoryTraining(id, checkbox.checked);
+	if (row) {
+		row.classList.toggle('training-enabled', checkbox.checked);
+	}
+	showToast(
+		checkbox.checked
+			? 'Category will be used in training mode'
+			: 'Category removed from training mode',
+		'success',
+	);
+}
+
+// Refresh the in-memory map after a bootstrap sync lands.
+window.addEventListener('quiz:bootstrap-ready', () => {
+	try {
+		categoryTrainingMapCache = readCategoryTrainingMapFromRepo() || {};
+	} catch (_) {
+		/* ignore */
+	}
+});
+
+// ============================================
 // QUICK CATEGORY CREATION MODAL
 // ============================================
 // Function to add new category inline from question modal
@@ -296,6 +465,8 @@ function createNewCategory() {
 		'Create New Category';
 	document.getElementById('categoryForm').reset();
 	document.getElementById('categoryColor').value = getRandomCategoryColor();
+	// New categories are excluded from training until explicitly enabled.
+	document.getElementById('categoryTraining').checked = false;
 
 	// The create/edit form no longer embeds the question picker — questions
 	// are assigned from the dedicated Assign Questions modal (table action).
@@ -316,6 +487,8 @@ function editCategory(categoryId) {
 	document.getElementById('categoryDescription').value =
 		category.description || '';
 	document.getElementById('categoryColor').value = category.color || '#3b82f6';
+	document.getElementById('categoryTraining').checked =
+		isTrainingCategory(categoryId);
 
 	// Questions are no longer part of the edit form; they are managed via the
 	// Assign Questions action in the categories table.
@@ -370,6 +543,7 @@ async function deleteCategory(categoryId) {
 
 		// Remove category
 		categories = categories.filter((c) => c.id !== categoryId);
+		await removeCategoryTraining(categoryId);
 		saveCategories();
 		updateCategoryList();
 		loadCategoriesIntoFilters();
@@ -471,6 +645,12 @@ async function saveCategoryForm() {
 		categories.push(categoryData);
 	}
 
+	// Persist the training-mode flag (settings-row store, public so
+	// student devices resolve the same training pool).
+	const trainingChecked =
+		document.getElementById('categoryTraining')?.checked === true;
+	await setCategoryTraining(categoryData.id, trainingChecked);
+
 	// NOW save categories and update UI (counts will be correct now)
 	saveCategories();
 	updateCategoryList();
@@ -564,12 +744,20 @@ function rgbToHex(rgb) {
 }
 
 function openCategoryModal() {
-	// Show modal first
+	// Show modal first (same is-open pattern as exam / class modals so the
+	// dialog gets the single-scroll overlay + content styling).
 	const modal = document.getElementById('categoryModal');
 	if (modal) {
-		modal.style.display = 'flex';
+		promoteCategoryModal(modal);
+		modal.classList.add('is-open');
+		modal.setAttribute('aria-hidden', 'false');
+		modal.setAttribute('aria-modal', 'true');
+		modal.setAttribute('role', 'dialog');
+		document.documentElement.classList.add('modal-open');
+		document.body.classList.add('modal-open');
 		setTimeout(() => {
 			modal.classList.add('active');
+			document.getElementById('categoryName')?.focus();
 		}, 10);
 	}
 
@@ -621,12 +809,42 @@ function setupCategoryModalFilters() {
 function closeCategoryModal() {
 	const modal = document.getElementById('categoryModal');
 	if (modal) {
-		modal.style.display = 'none';
-		modal.classList.remove('active');
+		modal.style.setProperty('display', 'none', 'important');
+		[
+			'position',
+			'inset',
+			'z-index',
+			'opacity',
+			'visibility',
+			'pointer-events',
+		].forEach((property) => modal.style.removeProperty(property));
+		modal.classList.remove('active', 'is-open');
+		modal.setAttribute('aria-hidden', 'true');
+		modal.removeAttribute('aria-modal');
+		modal.removeAttribute('role');
+		document.documentElement.classList.remove('modal-open');
+		document.body.classList.remove('modal-open');
 	}
 
 	// Clear form
 	document.getElementById('categoryForm').reset();
+}
+
+function promoteCategoryModal(modal) {
+	if (modal.parentElement !== document.body) {
+		document.body.appendChild(modal);
+	}
+
+	const profileMenu = document.getElementById('profileMenu');
+	if (profileMenu) profileMenu.classList.remove('active');
+
+	modal.style.setProperty('display', 'flex', 'important');
+	modal.style.setProperty('position', 'fixed', 'important');
+	modal.style.setProperty('inset', '0', 'important');
+	modal.style.setProperty('z-index', '2147483000', 'important');
+	modal.style.setProperty('opacity', '1', 'important');
+	modal.style.setProperty('visibility', 'visible', 'important');
+	modal.style.setProperty('pointer-events', 'auto', 'important');
 }
 
 // ============================================
@@ -1895,6 +2113,14 @@ function updateCategoryList(categoriesList = categories) {
             </td>
             <td>${escapeHtml(category.description || '')}</td>
             <td>${category.questionCount}</td>
+            <td class="training-cell" data-label="Training">
+                <input type="checkbox"
+                    class="training-checkbox"
+                    data-id="${category.id}"
+                    ${isTrainingCategory(category.id) ? 'checked' : ''}
+                    onchange="toggleCategoryTraining(this)"
+                    title="Use this category in training mode">
+            </td>
             <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Created by">${escapeHtml(getOwnerLabel(getOwnerId(category)))}</span></td>
             <td>${(() => {
 							const rawCreatedAt =
@@ -1941,6 +2167,9 @@ function updateCategoryList(categoriesList = categories) {
                 </div>
             </td>
         `;
+		if (isTrainingCategory(category.id)) {
+			row.classList.add('training-enabled');
+		}
 		tbody.appendChild(row);
 	});
 
@@ -1963,11 +2192,11 @@ function updateCategoryList(categoriesList = categories) {
 		styleElement.textContent = `
             .system-category {
                 opacity: 0.8;
-                background-color: #f9fafb;
+                background-color: var(--bg-surface-alt);
             }
             .system-category .category-name {
                 font-style: italic;
-                color: #6b7280;
+                color: var(--text-secondary);
             }
         `;
 		document.head.appendChild(styleElement);
@@ -3878,6 +4107,9 @@ async function deleteSelectedCategories() {
 		});
 		window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
 		categories = categories.filter((c) => !okIds.has(String(c.id)));
+		for (const id of okIds) {
+			await removeCategoryTraining(id);
+		}
 		saveCategories();
 		updateCategoryList();
 		loadCategoriesIntoFilters();

@@ -57,7 +57,20 @@ export class ExamService {
     }
     const parsed = ExamUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-    return this.#repo.update('exams', id, parsed.data);
+    // `classes` and `questions` are assignment mirrors, not exams-row
+    // columns: sync the junction tables instead of writing them onto the
+    // row (they used to be silently stripped by the schema, so "Assign to
+    // Classes" never reached student devices and "Assign Questions" was
+    // lost on the next refresh after the questions disappeared).
+    const { classes, questions, ...rowPatch } = parsed.data;
+    const updated = await this.#repo.update('exams', id, rowPatch);
+    if (classes !== undefined) {
+      await this.#syncExamClasses(id, classes, currentUser);
+    }
+    if (questions !== undefined) {
+      await this.#syncExamQuestions(id, questions, currentUser);
+    }
+    return updated;
   }
 
   async delete(id, currentUser) {
@@ -209,6 +222,110 @@ export class ExamService {
 
   async getAvailableForStudent(userId) {
     return this.#repo.query('exam.availableForStudent', { userId });
+  }
+
+  // Reconcile the exam_classes junction table with the desired class set
+  // (from the admin "Assign to Classes" picker). Teachers may only link
+  // their own assigned classes; unknown/deleted class ids are dropped so
+  // a stale picker can never hide an exam from every student.
+  async #syncExamClasses(examId, classIds, currentUser) {
+    const wanted = [...new Set((classIds || []).map(String))].filter(Boolean);
+    let allowed = null;
+    if (currentUser?.role === ROLES.TEACHER) {
+      allowed = new Set(await this.#getTeacherClassIds(currentUser));
+    }
+    const finalIds = [];
+    for (const classId of wanted) {
+      if (allowed && !allowed.has(classId)) continue;
+      try {
+        const cls = await this.#repo.getById('classes', classId);
+        if (cls) finalIds.push(classId);
+      } catch {
+        /* unknown class — skip instead of hiding the exam */
+      }
+    }
+    const { data: current } = await this.#repo.getAll('exam_classes', {
+      filters: { exam_id: examId },
+      limit: 500,
+    });
+    const have = new Map(
+      (current || []).map((row) => [String(row.class_id), row]),
+    );
+    for (const classId of finalIds) {
+      if (!have.has(classId)) {
+        await this.assignToClass(examId, classId, currentUser);
+      }
+    }
+    for (const [classId, row] of have) {
+      if (!finalIds.includes(classId)) {
+        await this.#repo.delete('exam_classes', row.id);
+      }
+    }
+  }
+
+  // Reconcile the exam_questions junction table with the desired question
+  // set (from the admin "Assign Questions" picker). Teachers may only link
+  // their own questions; unknown/deleted question ids are dropped. Order is
+  // preserved through order_index, mirroring the picker's sort.
+  async #syncExamQuestions(examId, questionIds, currentUser) {
+    const wanted = [...new Set((questionIds || []).map(String))].filter(Boolean);
+    const allowed = new Set();
+    for (const qid of wanted) {
+      try {
+        const question = await this.#repo.getById('questions', qid);
+        if (!question) continue;
+        if (currentUser?.role === ROLES.TEACHER) {
+          // Matches the addQuestion route guard: teachers may only attach
+          // questions they own (unattributed/admin rows are off-limits).
+          if (String(question.created_by || question.creator_id || '') === String(currentUser.id)) {
+            allowed.add(qid);
+          }
+        } else {
+          allowed.add(qid);
+        }
+      } catch {
+        /* unknown question — skip */
+      }
+    }
+    const finalIds = [...allowed];
+    const { data: current } = await this.#repo.getAll('exam_questions', {
+      filters: { exam_id: examId },
+      limit: 500,
+    });
+    const have = new Map(
+      (current || []).map((row) => [String(row.question_id), row]),
+    );
+    let order = 0;
+    for (const questionId of finalIds) {
+      const row = have.get(questionId);
+      if (!row) {
+        await this.addQuestion(examId, questionId, order, currentUser);
+      } else if (Number(row.order_index) !== order) {
+        await this.#repo.update('exam_questions', row.id, { order_index: order });
+      }
+      have.delete(questionId);
+      order++;
+    }
+    for (const [, row] of have) {
+      await this.removeQuestion(examId, row.question_id, currentUser);
+    }
+  }
+
+  async #getTeacherClassIds(currentUser) {
+    try {
+      const { data } = await this.#repo.getAll('settings', {
+        filters: {
+          school_id: currentUser?.school_id,
+          key: 'teacherClassAssignments',
+        },
+        limit: 1,
+      });
+      const map = JSON.parse(data?.[0]?.value || '{}');
+      const ids = map?.[currentUser?.id];
+      return Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
   }
 
   #requireAdmin(user) {

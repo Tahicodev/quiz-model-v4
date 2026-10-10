@@ -535,7 +535,7 @@ class DocumentQuestionGenerator {
     - multiple-choice (multi): set "allowMultipleAnswers": true. "answer" is a comma-separated list of exact option texts.
     - true-false: type is "multiple-choice" with options ["Vrai", "Faux"]. "answer" is "Vrai" or "Faux".
     - fill-blank: use "___" for blanks. "answer" format is "1:word|2:word". "options" contains word bank.
-    - matching-pairs: "answer" format is "Key1-->Value1|Key2-->Value2". "options" contains both keys and values.
+    - matching-pairs: "answer" format is "Key1-->Value1|Key2-->Value2" (pipe-separated, "-->" within each pair, no other separators). "options" MUST be a flat array of separate items, e.g. ["NTFS","Windows","EXT4","Linux"] — never pair-strings like "NTFS-->Windows", never joined text.
     - odd-one-out: 4 options, "answer" is the extra one.
     - draggable: "answer" is correct order of "options" joined by commas. Set "isDraggable": true.
     - code: Write professional code. The top-level "type" MUST be exactly "code". "codeAnswerMode" MUST BE ONE OF: multiple-choice, fill-blank, odd-one-out, draggable, matching-pairs (as requested in the distribution). The "answer" and "options" format must match the chosen "codeAnswerMode". For codeAnswerMode fill-blank, the question text MUST contain "___".

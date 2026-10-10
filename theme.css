@@ -757,14 +757,16 @@ html[data-theme='dark'] #settingsModal .settings-tab-btn:hover svg {
 
 html[data-theme='dark'] #settingsModal .modal-header h2,
 html[data-theme='dark'] #examModal.is-open .modal-header h2,
-html[data-theme='dark'] #classModal.is-open .modal-header h2 {
+html[data-theme='dark'] #classModal.is-open .modal-header h2,
+html[data-theme='dark'] #categoryModal.is-open .modal-header h2 {
 	color: var(--text-main) !important;
 }
 
 html[data-theme='dark'] #settingsModal .close:hover,
 html[data-theme='dark'] #userModal .close:hover,
 html[data-theme='dark'] #examModal.is-open .close:hover,
-html[data-theme='dark'] #classModal.is-open .close:hover {
+html[data-theme='dark'] #classModal.is-open .close:hover,
+html[data-theme='dark'] #categoryModal.is-open .close:hover {
 	background: rgba(248, 113, 113, 0.2) !important;
 	color: #fca5a5 !important;
 }
@@ -1354,7 +1356,8 @@ html[data-theme='dark'] #examModal #examForm > .form-actions,
 html[data-theme='dark'] #categoryModal #categoryForm > .form-actions,
 html[data-theme='dark'] #classModal #classForm > .form-actions,
 html[data-theme='dark'] #examModal.is-open .form-actions,
-html[data-theme='dark'] #classModal.is-open .form-actions {
+html[data-theme='dark'] #classModal.is-open .form-actions,
+html[data-theme='dark'] #categoryModal.is-open .form-actions {
 	background-color: var(--bg-surface) !important;
 	background-image: none !important;
 	border-top-color: var(--border-color) !important;

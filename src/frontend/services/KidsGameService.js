@@ -642,22 +642,25 @@ export class KidsGameService {
       direction: 'desc',
       search: search || null,
     });
-    return {
-      data: data.map((g) => ({
-        id: g.id,
-        name: g.name,
-        description: g.description,
-        game_type: g.game_type,
-        theme: g.theme,
-        grade: g.grade,
-        subject: g.subject,
-        pin: g.pin,
-        play_count: g.play_count,
-        question_count: parseJson(g.questions_json, []).length,
-        updated_at: g.updated_at,
-      })),
-      total,
-    };
+      return {
+        data: data.map((g) => ({
+          id: g.id,
+          name: g.name,
+          description: g.description,
+          game_type: g.game_type,
+          theme: g.theme,
+          grade: g.grade,
+          subject: g.subject,
+          pin: g.pin,
+          play_count: g.play_count,
+          question_count: parseJson(g.questions_json, []).length,
+          updated_at: g.updated_at,
+          // Author attribution for student teacher-scoping (see
+          // GET /kids/browse). No answers or management fields here.
+          teacher_id: g.teacher_id || null,
+        })),
+        total,
+      };
   }
 
   async submitAnswers(sessionId, data, totalPoints, opts = {}) {

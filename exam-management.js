@@ -1613,6 +1613,15 @@ function updateExamList(examsList = exams) {
 								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
 							</svg>
 						</button>
+						<button class="exam-action-btn exam-analysis-btn" onclick="openExamAnalysis('${
+							exam.id
+						}')" title="Analysis (per-question accuracy)">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="12" y1="20" x2="12" y2="10"></line>
+								<line x1="18" y1="20" x2="18" y2="4"></line>
+								<line x1="6" y1="20" x2="6" y2="16"></line>
+							</svg>
+						</button>
 						<button class="exam-action-btn exam-push-btn" onclick="pushExamToDevices('${
 							exam.id
 						}')" title="Push to Devices" style="background: #10b981; color: white;">
@@ -1681,6 +1690,11 @@ function updateExamList(examsList = exams) {
 						label: 'Assign to Classes',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
 						onClick: () => openAssignExamClasses(exam.id),
+					},
+					{
+						label: 'Analysis (per-question accuracy)',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>',
+						onClick: () => openExamAnalysis(exam.id),
 					},
 					{
 						label: 'Push to Devices',
@@ -2015,12 +2029,35 @@ function openAssignExamQuestions(examId) {
 	modal.style.display = 'flex';
 	setTimeout(() => modal.classList.add('active'), 10);
 
-	// Load the bank, then pre-select the exam's current questions.
+	// Load the bank, then pre-select the exam's current questions. The exam
+	// may carry either legacy numeric indices (local picker order) or the
+	// question uuids the bootstrap hydrates from the exam_questions junction
+	// after a refresh — resolve both into picker indices.
 	setTimeout(() => {
 		populateCategoryFilter();
 		loadAvailableQuestions();
 		setTimeout(() => {
-			const indices = Array.isArray(exam.questions) ? exam.questions : [];
+			const bank =
+				JSON.parse(
+					JSON.stringify(
+						window.__DI_CONTAINER__?.repo?.getAll_sync
+							? window.__DI_CONTAINER__.repo.getAll_sync('questions')
+							: [],
+					) || '[]',
+				) || [];
+			const rawQuestions = Array.isArray(exam.questions) ? exam.questions : [];
+			const indices = [];
+			rawQuestions.forEach((entry) => {
+				const asNum = Number(entry);
+				if (Number.isInteger(asNum) && asNum >= 0) {
+					indices.push(asNum);
+				} else {
+					const found = bank.findIndex(
+						(q) => String(q.id || q.question_id) === String(entry),
+					);
+					if (found !== -1) indices.push(found);
+				}
+			});
 			indices.forEach((qIndex) => {
 				const questionEl = document.querySelector(
 					`#availableQuestions .question-item[data-index="${qIndex}"]`,
@@ -2064,11 +2101,26 @@ async function saveAssignExamQuestions() {
 	// Persist to the backend first; mirror into localStorage on success.
 	if (window.API && typeof window.API.update === 'function') {
 		try {
+			// Resolve the local index-based selection to question ids so the
+			// server can persist them in the exam_questions junction (the
+			// legacy indices would fail ExamUpdateSchema's uuid validation).
+			const bank =
+				JSON.parse(
+					JSON.stringify(
+						window.__DI_CONTAINER__?.repo?.getAll_sync
+							? window.__DI_CONTAINER__.repo.getAll_sync('questions')
+							: [],
+					) || '[]',
+				) || [];
+			const selectedIds = selectedQuestions
+				.map((idx) => bank[idx] && (bank[idx].id || bank[idx].question_id))
+				.filter(Boolean);
+
 			await window.API.update('exams', examId, {
 				name: exam.name,
 				duration: exam.duration,
 				passingScore: exam.passingScore,
-				questions: exam.questions,
+				questions: selectedIds,
 				classes: Array.isArray(exam.classes) ? exam.classes : [],
 				presetId: exam.presetId || null,
 			});
@@ -3524,7 +3576,13 @@ function createTrainingPackage() {
  * @param {string} examId - The exam ID to push
  */
 function pushExamToDevices(examId) {
-	if (window.Auth?.isAdmin && !window.Auth.isAdmin()) {
+	// Staff-only: admins and teachers can push. The server relay accepts
+	// both roles (verified JWT) and students ignore pushed sessions that
+	// are not for them.
+	const canPush =
+		(window.Auth?.isAdmin && window.Auth.isAdmin()) ||
+		(window.Auth?.isTeacher && window.Auth.isTeacher());
+	if (!canPush) {
 		showToast('Access denied', 'error');
 		return;
 	}
@@ -3628,7 +3686,10 @@ function pushExamToDevices(examId) {
  * @param {string} examId - The exam ID to stop (optional context)
  */
 function stopExamOnDevices(examId) {
-	if (window.Auth?.isAdmin && !window.Auth.isAdmin()) {
+	const canStop =
+		(window.Auth?.isAdmin && window.Auth.isAdmin()) ||
+		(window.Auth?.isTeacher && window.Auth.isTeacher());
+	if (!canStop) {
 		showToast('Access denied', 'error');
 		return;
 	}

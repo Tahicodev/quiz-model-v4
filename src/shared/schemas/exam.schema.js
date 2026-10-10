@@ -14,7 +14,18 @@ export const ExamCreateSchema = z.object({
   max_attempts:  z.coerce.number().int().min(1).optional().nullable(),
 });
 
-export const ExamUpdateSchema = ExamCreateSchema.partial();
+export const ExamUpdateSchema = ExamCreateSchema.partial().extend({
+  // Class assignment mirror (the admin "Assign to Classes" picker sends the
+  // full desired set). Persisted into the exam_classes junction table by
+  // ExamService.update — never stored on the exams row itself.
+  classes: z.array(z.string().uuid()).optional(),
+  // Question assignment mirror ("Assign Questions" sends the full desired
+  // set of question ids). Persisted into the exam_questions junction table
+  // by ExamService.update — never stored on the exams row itself. Numeric
+  // legacy indices never reach this field: the frontend resolves them to
+  // question ids before the API call.
+  questions: z.array(z.string().uuid()).optional(),
+});
 
 export const ExamFilterSchema = z.object({
   status:     z.enum(statusValues).optional(),

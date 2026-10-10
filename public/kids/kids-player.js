@@ -1,9 +1,12 @@
 /**
  * kids-player.js — KidsPlayerEngine (plan §4 + §12).
  *
- * No login: PIN → welcome (name + avatar) → one renderer per question →
- * results. Answer formats follow plan §12; the server re-checks
- * authoritatively, the client check is only for instant feedback.
+ * Login required: PIN → valid session check → logged-in players skip
+ * name entry (account name is used, results link by token) → one
+ * renderer per question → results. Without a valid session the player
+ * bounces to the workspace sign-in and back. Answer formats follow
+ * plan §12; the server re-checks authoritatively, the client check is
+ * only for instant feedback.
  */
 (function () {
 	'use strict';
@@ -189,6 +192,13 @@
 				this.screen('<div class="kid-card"><h2>Oops! 😅</h2><p class="hint">No game PIN found.</p><a class="kid-btn" href="/kids/">Back</a></div>');
 				return;
 			}
+			// Direct links require a valid login so results count. Without
+			// one, bounce to the workspace sign-in and back afterwards; if
+			// the bounce guard tripped, offer a manual re-sign-in instead.
+			if (!this.requireLogin()) {
+				this.expiredScreen();
+				return;
+			}
 			this.load();
 		},
 		pinFromUrl: function () {
@@ -205,14 +215,146 @@
 			var q = new URLSearchParams(window.location.search).get('championship');
 			return q ? String(q) : null;
 		},
-		/** Logged-in students play linked (results count); else anonymous PIN. */
+		/** Logged-in students play linked (results count); else anonymous PIN.
+		 * Student portal copies are checked first so a shared browser never
+		 * mistakes another portal's tab for the student. Staff tokens also
+		 * count (teacher preview) — the server authorizes each call. */
 		storedToken: function () {
 			try {
 				if (window.__authToken) return window.__authToken;
 				var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
 				if (s && s.token) return s.token;
 			} catch (_) { /* ignore */ }
+			try {
+				var scopedStudent = localStorage.getItem('quizAuthToken:student');
+				if (scopedStudent) return scopedStudent;
+				var sessRaw =
+					localStorage.getItem('quizSession:student') ||
+					localStorage.getItem('quizSessionRemember');
+				if (sessRaw) {
+					try {
+						var parsed = JSON.parse(sessRaw);
+						if (parsed && parsed.token) return parsed.token;
+					} catch (_) { /* not JSON — ignore */ }
+				}
+				var scopedStaff =
+					localStorage.getItem('quizAuthToken:teacher') ||
+					localStorage.getItem('quizAuthToken:admin') ||
+					localStorage.getItem('quizAuthToken:super_admin');
+				if (scopedStaff) return scopedStaff;
+			} catch (_) { /* ignore */ }
 			try { return localStorage.getItem('quizAuthToken') || null; } catch (_) { return null; }
+		},
+		jwtExpiresAt: function (token) {
+			try {
+				var parts = String(token || '').split('.');
+				if (parts.length !== 3) return null;
+				var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+				return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+			} catch (_) { return null; }
+		},
+		/** Token the player may actually use: present AND not expired.
+		 * Sources are scanned in portal priority (student copies first).
+		 * Expired student copies are dropped and scanning continues, so a
+		 * stale student login falls through to any other valid session
+		 * instead of failing; only student-scoped copies are ever cleared.
+		 * Non-JWT/opaque tokens are returned optimistically (no exp claim
+		 * to check) — the server is the final judge. */
+		validStoredToken: function () {
+			var sources = [];
+			try {
+				if (window.__authToken) sources.push({ token: window.__authToken, scoped: false });
+				var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
+				if (s && s.token) sources.push({ token: s.token, scoped: false });
+			} catch (_) { /* ignore */ }
+			try {
+				var scopedStudent = localStorage.getItem('quizAuthToken:student');
+				if (scopedStudent) sources.push({ token: scopedStudent, scoped: true });
+				var sessRaw =
+					localStorage.getItem('quizSession:student') ||
+					localStorage.getItem('quizSessionRemember');
+				if (sessRaw) {
+					try {
+						var parsed = JSON.parse(sessRaw);
+						if (parsed && parsed.token) sources.push({ token: parsed.token, scoped: true });
+					} catch (_) { /* not JSON — ignore */ }
+				}
+				var scopedStaff =
+					localStorage.getItem('quizAuthToken:teacher') ||
+					localStorage.getItem('quizAuthToken:admin') ||
+					localStorage.getItem('quizAuthToken:super_admin');
+				if (scopedStaff) sources.push({ token: scopedStaff, scoped: false });
+			} catch (_) { /* ignore */ }
+			try {
+				var shared = localStorage.getItem('quizAuthToken');
+				if (shared) sources.push({ token: shared, scoped: false });
+			} catch (_) { /* ignore */ }
+			for (var i = 0; i < sources.length; i++) {
+				var exp = this.jwtExpiresAt(sources[i].token);
+				if (exp !== null && exp <= Date.now()) {
+					if (sources[i].scoped) {
+						try {
+							localStorage.removeItem('quizAuthToken:student');
+							localStorage.removeItem('quizSession:student');
+						} catch (_) { /* ignore */ }
+					}
+					continue;
+				}
+				return sources[i].token;
+			}
+			return null;
+		},
+		loginUrl: function () {
+			var next = encodeURIComponent(window.location.pathname + window.location.search);
+			return '/student-workspace.html?login=1&next=' + next;
+		},
+		/** Direct links require a valid login so results count. Without one,
+		 * bounce to the workspace sign-in and back afterwards. A bounce
+		 * guard stops redirect loops when the sign-in itself cannot
+		 * produce a usable token (then a re-sign-in screen is shown). */
+		requireLogin: function () {
+			if (this.validStoredToken()) {
+				try { sessionStorage.removeItem('kidsLoginBounceAt'); } catch (_) { /* ignore */ }
+				return true;
+			}
+			var last = 0;
+			try { last = Number(sessionStorage.getItem('kidsLoginBounceAt') || 0); } catch (_) { /* ignore */ }
+			if (Date.now() - last < 3 * 60 * 1000) return false;
+			try { sessionStorage.setItem('kidsLoginBounceAt', String(Date.now())); } catch (_) { /* ignore */ }
+			window.location.href = this.loginUrl();
+			return false;
+		},
+		expiredScreen: function () {
+			this.screen('<div class="kid-card"><h2>Session expired 😴</h2>' +
+				'<p class="hint">Please sign in again so your score counts!</p>' +
+				'<a class="kid-btn green" href="' + this.loginUrl() + '">Sign in</a></div>');
+		},
+		/** Display name for a logged-in player: account copy first, then
+		 * the JWT payload. Empty when nothing resolves (the server still
+		 * links results by token). */
+		resolveAccountName: function () {
+			var copies = [];
+			try {
+				copies.push(localStorage.getItem('quizCurrentUser:student'));
+				copies.push(localStorage.getItem('quizCurrentUser'));
+			} catch (_) { /* ignore */ }
+			for (var i = 0; i < copies.length; i++) {
+				try {
+					var u = JSON.parse(copies[i] || 'null');
+					if (u && (u.name || u.username)) return String(u.name || u.username);
+				} catch (_) { /* ignore */ }
+			}
+			try {
+				var token = this.validStoredToken();
+				var parts = String(token || '').split('.');
+				if (parts.length === 3) {
+					var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+					if (payload && (payload.name || payload.username)) {
+						return String(payload.name || payload.username);
+					}
+				}
+			} catch (_) { /* ignore */ }
+			return '';
 		},
 		screen: function (html) {
 			document.getElementById('kidScreen').innerHTML = html;
@@ -248,10 +390,21 @@
 		welcome: function () {
 			var self = this;
 			var n = (this.game.questions || []).length;
+			// Logged-in players skip name entry entirely: the account name
+			// is used and the server links results by token.
+			if (this.validStoredToken()) {
+				var accountName = this.resolveAccountName();
+				var avatar = '🦊';
+				try { avatar = localStorage.getItem('kidAvatar') || avatar; } catch (_) { /* ignore */ }
+				self.player = { name: accountName, avatar: avatar };
+				self.createSession();
+				return;
+			}
 			var badges = '';
 			if (this.tournamentFromUrl()) badges += '<p class="hint">Tournament mode 🏆 — your score feeds the leaderboard!</p>';
 			if (this.championshipFromUrl()) badges += '<p class="hint">Kids Championship 🏆 — this run counts for your best score, so every point helps!</p>';
-			if (this.storedToken()) badges += '<p class="hint">Logged in ✅ — your score will count like every other game!</p>';
+			// Note: logged-in players never see this form — welcome()
+			// auto-starts them above, so no "logged in" badge is needed.
 			var html = '<div class="kid-card"><h2>Hi! 👋</h2>' +
 				'<p class="hint">This game has <b>' + n + '</b> question' + (n === 1 ? '' : 's') + '. What is your first name?</p>' + badges +
 				'<input id="kidName" class="kid-name-input" maxlength="50" placeholder="Your name" autocomplete="off" />' +
@@ -270,6 +423,7 @@
 			var start = function () {
 				var name = String(document.getElementById('kidName').value || '').trim();
 				if (!name) { document.getElementById('kidWelcomeErr').textContent = 'Tell me your name so I can cheer for you! 📣'; return; }
+				try { localStorage.setItem('kidAvatar', chosen); } catch (_) { /* ignore */ }
 				self.player = { name: name, avatar: chosen };
 				self.createSession();
 			};
@@ -293,39 +447,44 @@
 		createSession: function () {
 			var self = this;
 			this.screen('<div class="kid-card"><h2>Get ready… 🚀</h2><p class="hint">Starting your adventure!</p></div>');
-			var token = this.storedToken();
+			// Login is required (boot gate), so play is always linked.
+			// Re-validate here: the token may have expired while welcome
+			// was on screen.
+			var token = this.validStoredToken();
 			var tournamentId = this.tournamentFromUrl();
-			// Logged-in play first (links results + EXP + tournaments); any
-			// failure falls back to anonymous PIN play.
-			var authed = token && this.game && this.game.id
-				? fetch(API + '/games/' + encodeURIComponent(this.game.id) + '/session', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-					body: JSON.stringify({
-						player_name: this.player.name,
-						avatar: this.player.avatar,
-						tournament_id: tournamentId || undefined,
-					}),
-				}).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-				: Promise.resolve({ ok: false });
-			authed.then(function (res) {
-				if (res.ok && res.j && res.j.session) {
-					self.loggedIn = true;
-					return res;
-				}
-				return fetch(API + '/play/' + encodeURIComponent(self.pin) + '/session', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ player_name: self.player.name, avatar: self.player.avatar }),
-				}).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
-			}).then(function (res) {
-					if (!res.ok) throw new Error((res.j && res.j.message) || 'Could not start');
-					self.sessionId = res.j.session.id;
-					self.index = 0;
-					self.answers = [];
-					self.score = 0;
-					document.getElementById('kidProgress').hidden = false;
-					self.next();
+			if (!token || !this.game || !this.game.id) {
+				window.location.href = this.loginUrl();
+				return;
+			}
+			var sessionBody = { avatar: this.player.avatar };
+			// player_name is optional server-side but rejects empty strings,
+			// so only send it when the welcome form (or account) provided one.
+			if (this.player.name) sessionBody.player_name = this.player.name;
+			if (tournamentId) sessionBody.tournament_id = tournamentId;
+			fetch(API + '/games/' + encodeURIComponent(this.game.id) + '/session', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+				body: JSON.stringify(sessionBody),
+			}).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, status: r.status, j: j }; }); })
+				.then(function (res) {
+					if (res.ok && res.j && res.j.session) {
+						self.loggedIn = true;
+						self.sessionId = res.j.session.id;
+						self.index = 0;
+						self.answers = [];
+						self.score = 0;
+						document.getElementById('kidProgress').hidden = false;
+						self.next();
+						return;
+					}
+					if (res.status === 401 || res.status === 403) {
+						// Session rejected after passing the boot gate (expired
+						// or revoked mid-flow): re-sign-in instead of silently
+						// falling back to anonymous play.
+						window.location.href = self.loginUrl();
+						return;
+					}
+					throw new Error((res.j && res.j.message) || 'Could not start');
 				})
 				.catch(function (e) {
 					self.screen('<div class="kid-card"><h2>Oops 😅</h2><p class="hint">' + e.message + '</p><button class="kid-btn" onclick="window.location.reload()">Retry</button></div>');

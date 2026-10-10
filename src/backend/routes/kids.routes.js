@@ -27,6 +27,8 @@ import {
   KidsAuthedSessionSchema,
 } from '../../shared/schemas/kids-game.schema.js';
 import { normalizeKidQuestion, KidsGameService } from '../../frontend/services/KidsGameService.js';
+import { getStudentContentScope, isAuthorVisibleToStudent } from './users.routes.js';
+import { logger } from '../logger.js';
 import { getContainer } from '../container.js';
 import { config } from '../config.js';
 import { ForbiddenError, NotFoundError } from '../../shared/errors.js';
@@ -134,10 +136,46 @@ router.get('/browse', requireRole(KIDS_PLAY_ROLES), validateQuery(KidsBrowseSche
   try {
     const { kidsGameSvc } = getContainer();
     const { search, limit, offset } = req.query;
-    // Teachers previewing browse only their own published games; students
-    // (and admins) see every published game in the school.
+    // Teachers previewing browse only their own published games; admins see
+    // every published game in the school. Students see ONLY games authored
+    // by their own teachers — never admins', never another teacher's.
     const teacherId = req.user.role === ROLES.TEACHER ? req.user.id : null;
-    res.json(await kidsGameSvc.listPublished(req.schoolId, { search, limit, offset, teacherId }));
+    const isStudent = req.user.role === ROLES.STUDENT;
+    const result = await kidsGameSvc.listPublished(
+      req.schoolId,
+      isStudent
+        ? { search, limit: 100, offset: 0, teacherId }
+        : { search, limit, offset, teacherId },
+    );
+    if (!isStudent) {
+      return res.json(result);
+    }
+    let scope = null;
+    try {
+      scope = await getStudentContentScope(req.schoolId, req.user.class_id);
+    } catch (_) {
+      scope = null;
+    }
+    const games = (result.data || []).filter((game) =>
+      isAuthorVisibleToStudent(game?.teacher_id ?? game?.created_by, scope),
+    );
+    try {
+      logger.info(
+        {
+          studentId: req.user?.id,
+          classId: String(req.user?.class_id || '') || '(none)',
+          teachersFound: scope ? scope.myTeacherIds.size : -1,
+          schoolTotal: (result.data || []).length,
+          delivered: games.length,
+        },
+        'Kids browse: student content scope applied',
+      );
+    } catch (_) {
+      /* diagnostics must never break delivery */
+    }
+    const start = Math.max(Number(offset) || 0, 0);
+    const size = Math.max(Number(limit) || 20, 1);
+    res.json({ data: games.slice(start, start + size), total: games.length });
   } catch (err) { next(err); }
 });
 

@@ -3063,8 +3063,12 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 /* Close button — absolute top-right corner of the header. Absolute
    positioning (not flex) so no global modal rule can ever displace it. */
 #kidsGameWizardModal .kids-wizard-header,
+#kidsChampionshipModal .kids-wizard-header,
+.kids-results-modal .kids-wizard-header,
 #kidsGameShareModal .kids-share-header { position: relative; }
 #kidsGameWizardModal .arena-modal-close,
+#kidsChampionshipModal .arena-modal-close,
+.kids-results-modal .arena-modal-close,
 #kidsGameShareModal .arena-modal-close {
 	position: absolute;
 	top: 14px;
@@ -3084,6 +3088,8 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 }
 .kids-wizard-title-row { padding-right: 48px; }
 #kidsGameWizardModal .arena-modal-close:hover,
+#kidsChampionshipModal .arena-modal-close:hover,
+.kids-results-modal .arena-modal-close:hover,
 #kidsGameShareModal .arena-modal-close:hover {
 	background: rgba(255, 255, 255, 0.25);
 	color: #fff;
@@ -3135,6 +3141,191 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 }
 .kids-wizard-progress .kw-step.completed .kw-num { background: #10b981; color: #fff; }
 .kids-wizard-progress .kw-step.locked { opacity: 0.45; cursor: not-allowed; }
+/* Championship stepper — same centered layout as the Create Kids Game modal. */
+#kidsChampionshipModal .kids-wizard-progress {
+	justify-content: center;
+	margin-left: auto;
+	margin-right: auto;
+	text-align: center;
+}
+
+/* ============================================================
+   KIDS RESULTS MODAL — same studio language as the wizards
+   ============================================================ */
+.kids-results-modal .kids-wizard-content {
+	width: min(760px, 94vw);
+}
+.kres-body {
+	padding: 20px 24px 24px;
+	overflow-y: auto;
+	max-height: 68vh;
+}
+.kres-stats {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 10px;
+	margin-bottom: 18px;
+}
+.kres-stat {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	padding: 14px 10px;
+	border-radius: 14px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	background: var(--bg-surface-alt, #f1f5f9);
+}
+.kres-stat-num {
+	font-size: 1.5rem;
+	font-weight: 800;
+	color: #1e293b;
+	line-height: 1.1;
+}
+.kres-stat-label {
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-secondary, #64748b);
+}
+.kres-section-title {
+	margin: 18px 0 10px;
+	font-size: 0.95rem;
+}
+.kres-section-title:first-of-type { margin-top: 0; }
+.kres-qlist {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+.kres-qrow {
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	background: var(--bg-surface, #ffffff);
+}
+.kres-qrow-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 8px;
+}
+.kres-qtext {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: #1e293b;
+	min-width: 0;
+}
+.kres-acc-badge {
+	flex: 0 0 auto;
+	font-size: 0.75rem;
+	font-weight: 800;
+	padding: 3px 10px;
+	border-radius: 999px;
+}
+.kres-acc-high { background: #dcfce7; color: #166534; }
+.kres-acc-mid { background: #fef3c7; color: #92400e; }
+.kres-acc-low { background: #fee2e2; color: #991b1b; }
+.kres-acc-none { background: var(--bg-surface-alt, #f1f5f9); color: var(--text-secondary, #64748b); }
+.kres-acc-bar {
+	height: 8px;
+	border-radius: 999px;
+	background: var(--bg-surface-alt, #e2e8f0);
+	overflow: hidden;
+}
+.kres-acc-bar span {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background: linear-gradient(90deg, #4f46e5, #8b5cf6);
+}
+.kres-qcount {
+	margin-top: 6px;
+	font-size: 0.72rem;
+	color: var(--text-secondary, #64748b);
+}
+.kres-slist {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.kres-srow {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 9px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	background: var(--bg-surface, #ffffff);
+	font-size: 0.83rem;
+}
+.kres-srow.kres-best {
+	border-color: #f59e0b;
+	background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+}
+.kres-rank {
+	flex: 0 0 auto;
+	min-width: 34px;
+	font-weight: 800;
+	color: var(--text-secondary, #64748b);
+}
+.kres-avatar { flex: 0 0 auto; font-size: 1.2rem; }
+.kres-pname {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-weight: 600;
+	color: #1e293b;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.kres-best-tag {
+	margin-left: 8px;
+	font-size: 0.65rem;
+	font-weight: 800;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: #92400e;
+	background: #fde68a;
+	padding: 2px 8px;
+	border-radius: 999px;
+	vertical-align: middle;
+}
+.kres-score {
+	flex: 0 0 auto;
+	font-weight: 800;
+	color: #4f46e5;
+}
+.kres-stars { flex: 0 0 auto; }
+.kres-date {
+	flex: 0 0 auto;
+	font-size: 0.72rem;
+	color: var(--text-secondary, #64748b);
+}
+.kres-empty {
+	padding: 22px 16px;
+	text-align: center;
+	border-radius: 12px;
+	border: 1px dashed var(--border-color, #e2e8f0);
+	color: var(--text-secondary, #64748b);
+	font-size: 0.85rem;
+	background: var(--bg-surface-alt, #f8fafc);
+}
+.kres-footer {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 18px;
+}
+
+@media (max-width: 640px) {
+	.kres-body { padding: 16px 14px 20px; }
+	.kres-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+	.kres-stat-num { font-size: 1.15rem; }
+	.kres-srow { flex-wrap: wrap; gap: 6px 10px; }
+	.kres-date { flex-basis: 100%; }
+}
 
 /* Scrollable body + sticky-look footer (flex column keeps footer visible) */
 .kids-wizard-form {

@@ -43,6 +43,64 @@ export async function getTeacherClassIds(schoolId, teacherId) {
 }
 
 /**
+ * Inverse index: which teachers teach a class. Students only ever see
+ * content authored by these teachers (or by admins) — never another
+ * teacher's games, questions, exams or tournaments.
+ */
+export async function getClassTeacherIds(schoolId, classId) {
+  const target = String(classId || '').trim();
+  if (!target) return [];
+  const { repo } = getContainer();
+  const { data } = await repo.getAll('settings', {
+    filters: { school_id: schoolId, key: 'teacherClassAssignments' },
+    limit: 1,
+  });
+  try {
+    const map = JSON.parse(data[0]?.value || '{}') || {};
+    return Object.keys(map).filter((teacherId) =>
+      (Array.isArray(map[teacherId]) ? map[teacherId] : [])
+        .map(String)
+        .includes(target),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Visibility scope for a student's content delivery: strictly the
+ * student's own teachers (resolved through the class assignments). A
+ * student sees ONLY their teachers' content — never admins', never other
+ * teachers'. Rows with no attributable author (legacy imports predate
+ * author stamping) stay visible: hiding them would silently empty
+ * libraries no teacher can re-attribute, and attribution gaps are
+ * surfaced by the bootstrap diagnostics log instead.
+ */
+export async function getStudentContentScope(schoolId, studentClassId) {
+  // NOTE: transport failures propagate — callers treat a thrown scope as
+  // "unknown" and fall back to the legacy unscoped delivery, so a settings
+  // outage can never hide content from students. Only a resolved scope
+  // narrows delivery.
+  const classTeachers = await getClassTeacherIds(schoolId, studentClassId);
+  return {
+    myTeacherIds: new Set((classTeachers || []).map(String)),
+  };
+}
+
+/**
+ * Strict teacher-only author check (see getStudentContentScope). Visible
+ * only when the author is one of the student's own teachers. Empty
+ * authors fail open (legacy rows); use the bootstrap diagnostics log to
+ * spot attribution gaps.
+ */
+export function isAuthorVisibleToStudent(ownerId, scope) {
+  if (!scope) return true;
+  const owner = String(ownerId ?? '').trim();
+  if (!owner) return true;
+  return scope.myTeacherIds.has(owner);
+}
+
+/**
  * The target must be a student in one of the teacher's assigned classes.
  * Anything else (other roles, other classes, other schools) is refused —
  * 404 across tenants so existence never leaks, 403 within the tenant.
