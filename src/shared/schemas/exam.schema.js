@@ -38,9 +38,10 @@ export const ExamFilterSchema = z.object({
 });
 
 export const ExamAddQuestionSchema = z.object({
-  question_id:      z.string().uuid(),
-  order_index:      z.coerce.number().int().min(0).optional(),
-  points_override:  z.coerce.number().int().min(1).optional().nullable(),
+  question_id:         z.string().uuid(),
+  order_index:         z.coerce.number().int().min(0).optional(),
+  points_override:     z.coerce.number().int().min(1).optional().nullable(),
+  time_limit_override: z.coerce.number().int().min(0).max(3600).optional().nullable(),
 });
 
 export const ExamReorderSchema = z.object({

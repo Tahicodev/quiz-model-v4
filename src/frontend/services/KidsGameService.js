@@ -643,22 +643,33 @@ export class KidsGameService {
       search: search || null,
     });
       return {
-        data: data.map((g) => ({
-          id: g.id,
-          name: g.name,
-          description: g.description,
-          game_type: g.game_type,
-          theme: g.theme,
-          grade: g.grade,
-          subject: g.subject,
-          pin: g.pin,
-          play_count: g.play_count,
-          question_count: parseJson(g.questions_json, []).length,
-          updated_at: g.updated_at,
-          // Author attribution for student teacher-scoping (see
-          // GET /kids/browse). No answers or management fields here.
-          teacher_id: g.teacher_id || null,
-        })),
+        data: data.map((g) => {
+          // Class assignment lives in config_json (same convention as the
+          // regular games' settings_json.classIds). Surfaced so staff
+          // pickers and student clients can enforce teacher-controlled
+          // visibility without extra round trips.
+          const config = parseJson(g.config_json, {});
+          const classIds = Array.isArray(config?.classIds)
+            ? config.classIds.map((id) => String(id || '').trim()).filter(Boolean)
+            : [];
+          return {
+            id: g.id,
+            name: g.name,
+            description: g.description,
+            game_type: g.game_type,
+            theme: g.theme,
+            grade: g.grade,
+            subject: g.subject,
+            pin: g.pin,
+            play_count: g.play_count,
+            question_count: parseJson(g.questions_json, []).length,
+            updated_at: g.updated_at,
+            classIds,
+            // Author attribution for student teacher-scoping (see
+            // GET /kids/browse). No answers or management fields here.
+            teacher_id: g.teacher_id || null,
+          };
+        }),
         total,
       };
   }

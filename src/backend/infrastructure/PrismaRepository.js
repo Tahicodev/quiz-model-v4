@@ -264,6 +264,7 @@ export class PrismaRepository extends IStorageRepository {
 						...eq.question,
 						order_index: eq.order_index,
 						points_override: eq.points_override,
+						time_limit_override: eq.time_limit_override,
 					})),
 				};
 			}

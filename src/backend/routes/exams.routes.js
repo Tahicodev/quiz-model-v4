@@ -124,7 +124,10 @@ router.post('/:id/questions', requireRole(EXAM_AUTHORING_ROLES), validate(ExamAd
         throw new ForbiddenError('Not your question');
       }
     }
-    const link = await examSvc.addQuestion(req.params.id, req.body.question_id, req.body.order_index, req.user);
+    const link = await examSvc.addQuestion(req.params.id, req.body.question_id, req.body.order_index, req.user, {
+      points_override: req.body.points_override,
+      time_limit_override: req.body.time_limit_override,
+    });
     res.status(201).json(link);
   } catch (err) { next(err); }
 });

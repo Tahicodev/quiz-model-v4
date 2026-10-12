@@ -610,6 +610,27 @@ html[data-theme='dark'] .theme-toggle__icon--moon {
 		align-items: stretch;
 	}
 
+	/* Overview dashboard (Score Distribution / Class Performance): keep the
+	   Mode/Class filters on a single horizontal line even on mobile. The
+	   header itself may wrap (title on its own line) so the filter row
+	   never breaks or stacks. */
+	.dashboard-panel .panel-header {
+		flex-wrap: wrap;
+		row-gap: 8px;
+	}
+
+	.dashboard-panel .panel-controls {
+		flex-direction: row;
+		align-items: center;
+		flex-wrap: nowrap;
+		gap: 8px;
+	}
+
+	.dashboard-panel .panel-controls select {
+		flex: 0 1 auto;
+		min-width: 0;
+	}
+
 	.game-filter-search,
 	.game-filter-search .form-control {
 		width: 100%;

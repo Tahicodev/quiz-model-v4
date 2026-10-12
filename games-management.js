@@ -3910,7 +3910,7 @@
 					</div>
 					<div class="game-list-meta">
 						<span>${(game.questions?.length) || 0} questions</span>
-						<span>${classCount ? `${classCount} class(es)` : 'All classes'}</span>
+						<span title="${classCount ? 'Visible to the assigned classes' : 'Hidden from students until assigned to a class'}">${classCount ? `${classCount} class(es)` : 'Unassigned'}</span>
 						<span>${expected ? `${sessionCount}/${expected} joined` : `${sessionCount} joined`}</span>
 					</div>
 					<div class="game-list-actions">
@@ -11560,13 +11560,115 @@ function buildLobbyHtml(gameId) {
 	}
 
 	// ─── Class → Games assignment ────────────────────────────────────────────────
+	// Server rows fetched on demand for the assign picker (the local library
+	// can be empty on a fresh device). Kept in a session cache — never
+	// committed into the local library, so a question-less server row can
+	// never clobber a full local game or get wiped by the game editor.
+	const classGamesServerCache = new Map();
+	const classGamesServerFetch = { state: 'idle' };
+
+	function hydrateServerGameRow(row) {
+		const source = row && typeof row === 'object' ? row : {};
+		let settings = source.settings;
+		if (
+			(!settings || typeof settings !== 'object' || Array.isArray(settings)) &&
+			typeof source.settings_json === 'string'
+		) {
+			try {
+				settings = JSON.parse(source.settings_json);
+			} catch {
+				settings = {};
+			}
+		}
+		if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+			settings = {};
+		}
+		const ids = new Set();
+		(Array.isArray(source.classIds) ? source.classIds : []).forEach((id) =>
+			ids.add(String(id || '').trim()),
+		);
+		(Array.isArray(settings.classIds) ? settings.classIds : []).forEach((id) =>
+			ids.add(String(id || '').trim()),
+		);
+		ids.delete('');
+		const classIds = [...ids];
+		return {
+			...source,
+			classIds,
+			settings: { ...settings, classIds },
+			session: source.session || settings.session || null,
+		};
+	}
+
+	// Kids games live in a separate table (`GET /kids/`, teacher-scoped) and
+	// carry their class assignment in config_json. Hydrated to the same
+	// working shape as regular games, tagged with kind:'kids' so saves route
+	// to the kids endpoint and the picker can label them.
+	function hydrateServerKidsRow(row) {
+		const source = row && typeof row === 'object' ? row : {};
+		let config = source.config;
+		if (
+			(!config || typeof config !== 'object' || Array.isArray(config)) &&
+			typeof source.config_json === 'string'
+		) {
+			try {
+				config = JSON.parse(source.config_json);
+			} catch {
+				config = {};
+			}
+		}
+		if (!config || typeof config !== 'object' || Array.isArray(config)) {
+			config = {};
+		}
+		const ids = new Set();
+		(Array.isArray(source.classIds) ? source.classIds : []).forEach((id) =>
+			ids.add(String(id || '').trim()),
+		);
+		(Array.isArray(config.classIds) ? config.classIds : []).forEach((id) =>
+			ids.add(String(id || '').trim()),
+		);
+		ids.delete('');
+		const classIds = [...ids];
+		return {
+			kind: 'kids',
+			id: source.id,
+			name: source.name || 'Untitled kids game',
+			type: source.game_type || 'kids',
+			game_type: source.game_type,
+			status: source.status || 'draft',
+			grade: source.grade || '',
+			subject: source.subject || '',
+			pin: source.pin || '',
+			play_count: source.play_count || 0,
+			classIds,
+			config: { ...config, classIds },
+			session: null,
+		};
+	}
+
+	function describeCatalogGame(game) {
+		if (game?.kind === 'kids') {
+			return `🧸 ${game.name || 'Untitled kids game'} (kids${game.status && game.status !== 'draft' ? ` • ${game.status}` : ''})`;
+		}
+		return `${game.name} (${game.type || 'game'})`;
+	}
+
+	// Full assignable catalog: local library first, server-fetched rows fill
+	// the gaps (deduplicated by id, local wins).
+	function getClassGamesCatalog() {
+		const local =
+			typeof GameCore.getQuizGames === 'function' ? GameCore.getQuizGames() : [];
+		const out = Array.isArray(local) ? [...local] : [];
+		const seen = new Set(out.map((game) => String(game?.id || '')));
+		classGamesServerCache.forEach((game, id) => {
+			if (!seen.has(String(id))) out.push(game);
+		});
+		return out;
+	}
+
 	function getGamesForClass(classId) {
 		const classKey = String(classId || '').trim();
-		const store =
-			typeof GameCore.getQuizGames === 'function'
-				? GameCore.getQuizGames()
-				: [];
-		return (Array.isArray(store) ? store : []).filter((game) => {
+		return getClassGamesCatalog().filter((game) => {
 			if (!game || !game.id) return false;
 			const topLevel = Array.isArray(game.classIds)
 				? game.classIds.map(String)
@@ -11576,6 +11678,68 @@ function buildLobbyHtml(gameId) {
 				: [];
 			return topLevel.includes(classKey) || embedded.includes(classKey);
 		});
+	}
+
+	// Pull the teacher's (or admin's full) game lists from the server so the
+	// assign picker works even when this device's local library is empty.
+	// Regular games AND kids games are fetched — a primaire teacher whose
+	// library holds only kids games must still see something to pick from.
+	function fetchServerGamesForPicker(classId) {
+		if (
+			classGamesServerFetch.state !== 'idle' ||
+			!window.API ||
+			typeof window.API.list !== 'function'
+		) {
+			return;
+		}
+		classGamesServerFetch.state = 'loading';
+		refreshClassGamesModalList(classId);
+		const regular = Promise.resolve(
+			window.API.list('games', { limit: 200 }),
+		).then((res) => {
+			const rows = Array.isArray(res) ? res : res?.data || [];
+			(rows || []).forEach((row) => {
+				if (!row?.id) return;
+				const key = String(row.id);
+				if (!classGamesServerCache.has(key)) {
+					classGamesServerCache.set(key, hydrateServerGameRow(row));
+				}
+			});
+		});
+		// Kids endpoint may 403 for non-primaire staff — non-fatal: the
+		// picker simply shows regular games only.
+		const kids =
+			window.API && typeof window.API.raw === 'function'
+				? Promise.resolve(window.API.raw('GET', '/kids/?limit=100'))
+						.then((res) => {
+							const rows = Array.isArray(res) ? res : res?.data || [];
+							(rows || []).forEach((row) => {
+								if (!row?.id) return;
+								const key = String(row.id);
+								if (!classGamesServerCache.has(key)) {
+									classGamesServerCache.set(key, hydrateServerKidsRow(row));
+								}
+							});
+						})
+						.catch((err) => {
+							console.debug(
+								'[Games] Kids game list unavailable:',
+								err?.message || err,
+							);
+						})
+				: Promise.resolve();
+		Promise.allSettled([regular, kids])
+			.catch((err) => {
+				console.warn('[Games] Server game list failed:', err?.message || err);
+			})
+			.finally(() => {
+				classGamesServerFetch.state = 'done';
+				// Repaint everything that reads the catalog: the open
+				// assign modal (if any) and every Assigned Games cell, so
+				// server-held assignments survive a refresh.
+				refreshClassGamesModalList(classId);
+				refreshAllClassGamesCells();
+			});
 	}
 
 	function gameClassStats(game) {
@@ -11603,7 +11767,24 @@ function buildLobbyHtml(gameId) {
 		};
 	}
 
+	function refreshAllClassGamesCells() {
+		document
+			.querySelectorAll('#classList tbody tr[data-id] .class-assigned-games-cell')
+			.forEach((cell) => {
+				const row = cell.closest('tr');
+				const id = row?.getAttribute('data-id');
+				if (id) cell.innerHTML = renderClassGamesCell(id);
+			});
+	}
+
 	function renderClassGamesCell(classId) {
+		// Kids games never live in the local library — without a server
+		// fetch after (re)load, their assignments would vanish from this
+		// column on every refresh even though the DB holds them. Kick the
+		// one-per-session fetch off here; the completion handler repaints.
+		if (classGamesServerFetch.state === 'idle') {
+			fetchServerGamesForPicker(classId);
+		}
 		const games = getGamesForClass(classId);
 		if (!games.length) {
 			return '<span class="text-muted">No games</span>';
@@ -11613,7 +11794,8 @@ function buildLobbyHtml(gameId) {
 				.slice(0, 4)
 				.map((game) => {
 					const status = String(game.status || 'draft');
-					return `<div class="class-game-chip" title="Status: ${escapeHtml(status)} • ${escapeHtml(game.name)}"><span class="class-game-name">${escapeHtml(game.name)}</span><span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span></div>`;
+					const kidMark = game?.kind === 'kids' ? '🧸 ' : '';
+					return `<div class="class-game-chip" title="Status: ${escapeHtml(status)} • ${escapeHtml(game.name)}"><span class="class-game-name">${kidMark}${escapeHtml(game.name)}</span><span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span></div>`;
 				})
 				.join('') +
 			(games.length > 4
@@ -11640,42 +11822,123 @@ function buildLobbyHtml(gameId) {
 		const current = normalizeIds(
 			Array.isArray(game.classIds) && game.classIds.length
 				? game.classIds
-				: game.settings?.classIds,
+				: (game.kind === 'kids' ? game.config?.classIds : game.settings?.classIds),
 		);
-		const settingsIds = normalizeIds(game.settings?.classIds);
 		const next = assign
 			? current.includes(classKey)
 				? current
 				: [...current, classKey]
 			: current.filter((id) => id !== classKey);
 		game.classIds = next;
+		if (game.kind === 'kids') {
+			// Kids games persist their assignment in config_json (see
+			// persistServerGameClassIds) — never in settings.
+			const config =
+				game.config && typeof game.config === 'object' ? game.config : {};
+			const configIds = normalizeIds(config.classIds);
+			game.config = {
+				...config,
+				classIds: assign
+					? Array.from(new Set([...configIds, ...next]))
+					: configIds.filter((id) => id !== classKey),
+			};
+			return;
+		}
+		const settingsIds = normalizeIds(game.settings?.classIds);
 		game.settings = game.settings || {};
 		game.settings.classIds = assign
 			? Array.from(new Set([...settingsIds, ...next]))
 			: settingsIds.filter((id) => id !== classKey);
 	}
 
-	function assignGameToClass(classId, gameId) {
-		const game = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
+	// Resolve a game for class assignment: local library first, then the
+	// server-fetched session cache (never auto-committed locally, so a
+	// question-less server row can't pollute the library).
+	function resolveClassGame(gameId) {
+		const key = String(gameId || '');
+		const local =
+			GameCore.getGameById && key ? GameCore.getGameById(key) : null;
+		if (local) return { game: local, serverOnly: false };
+		if (key && classGamesServerCache.has(key)) {
+			return { game: classGamesServerCache.get(key), serverOnly: true };
+		}
+		return { game: null, serverOnly: false };
+	}
+
+	// Persist a class assignment for a server-only game with a minimal PATCH.
+	// The mapped API.update would resend name/status/question_ids and could
+	// rename the game, wipe its questions, or trip the started-game guard —
+	// none of which a class assignment should do. Regular games carry the
+	// assignment in settings_json; kids games in config_json.
+	async function persistServerGameClassIds(game) {
+		if (game?.kind === 'kids') {
+			const config =
+				game?.config && typeof game.config === 'object' ? game.config : {};
+			await window.API.raw('PATCH', '/kids/' + encodeURIComponent(String(game.id)), {
+				config_json: JSON.stringify(config),
+			});
+			return;
+		}
+		const settings = game?.settings && typeof game.settings === 'object'
+			? game.settings
+			: {};
+		await window.API.raw(
+			'PATCH',
+			'/games/' + encodeURIComponent(String(game.id)),
+			{ settings_json: JSON.stringify(settings) },
+		);
+	}
+
+	async function assignGameToClass(classId, gameId) {
+		const { game, serverOnly } = resolveClassGame(gameId);
 		if (!game) {
 			showToast?.('Game not found', 'error');
 			return false;
 		}
 		syncGameClassAssignment(game, classId, { assign: true });
-		if (!commitLocalGame(game)) return false;
-		persistGameToApi(game, false);
+		if (serverOnly) {
+			if (!window.API || typeof window.API.raw !== 'function') {
+				showToast?.('Cannot reach the server to assign this game', 'error');
+				return false;
+			}
+			try {
+				await persistServerGameClassIds(game);
+			} catch (err) {
+				showToast?.(
+					'Could not assign on server: ' + (err?.message || 'network error'),
+					'error',
+				);
+				return false;
+			}
+		} else {
+			if (!commitLocalGame(game)) return false;
+			persistGameToApi(game, false);
+		}
 		refreshClassGamesCell(classId);
 		refreshClassGamesModalList(classId);
 		showToast?.('Game assigned to class', 'success');
 		return true;
 	}
 
-	function removeGameFromClass(classId, gameId) {
-		const game = GameCore.getGameById ? GameCore.getGameById(gameId) : null;
+	async function removeGameFromClass(classId, gameId) {
+		const { game, serverOnly } = resolveClassGame(gameId);
 		if (!game) return false;
 		syncGameClassAssignment(game, classId, { assign: false });
-		if (!commitLocalGame(game)) return false;
-		persistGameToApi(game, false);
+		if (serverOnly) {
+			if (!window.API || typeof window.API.raw !== 'function') return false;
+			try {
+				await persistServerGameClassIds(game);
+			} catch (err) {
+				showToast?.(
+					'Could not update on server: ' + (err?.message || 'network error'),
+					'error',
+				);
+				return false;
+			}
+		} else {
+			if (!commitLocalGame(game)) return false;
+			persistGameToApi(game, false);
+		}
 		refreshClassGamesCell(classId);
 		refreshClassGamesModalList(classId);
 		showToast?.('Game removed from class', 'success');
@@ -11692,27 +11955,51 @@ function buildLobbyHtml(gameId) {
 		);
 		if (!listEl) return;
 		const games = getGamesForClass(classId);
-		const allStore =
-			typeof GameCore.getQuizGames === 'function'
-				? GameCore.getQuizGames()
-				: [];
-		const allGames = Array.isArray(allStore) ? allStore : [];
+		const allGames = getClassGamesCatalog().filter(
+			(game) => game && game.id,
+		);
+		// Local library empty (fresh device)? Pull the staff game list from
+		// the server so the teacher always has something to pick from.
+		if (!allGames.length && classGamesServerFetch.state === 'idle') {
+			fetchServerGamesForPicker(classId);
+			listEl.innerHTML =
+				'<div class="empty-state-small">Loading games from server…</div>';
+			if (pickerSelect) {
+				pickerSelect.innerHTML = '<option value="">Loading…</option>';
+			}
+			return;
+		}
+		if (!allGames.length && classGamesServerFetch.state === 'loading') {
+			listEl.innerHTML =
+				'<div class="empty-state-small">Loading games from server…</div>';
+			if (pickerSelect) {
+				pickerSelect.innerHTML = '<option value="">Loading…</option>';
+			}
+			return;
+		}
 		const assignedIds = new Set(games.map((game) => game.id));
 		listEl.innerHTML = games.length
 			? games
 					.map((game) => {
-						const stats = gameClassStats(game);
 						const status = String(game.status || 'draft');
-						const statsText = [
-							`${stats.playerCount} player${stats.playerCount === 1 ? '' : 's'}`,
-							stats.avgScore != null ? `avg ${stats.avgScore}` : null,
-							stats.topScore != null ? `best ${stats.topScore}` : null,
-						]
-							.filter(Boolean)
-							.join(' • ');
+						const kidMark = game?.kind === 'kids' ? '🧸 ' : '';
+						let statsText = '';
+						if (game?.kind === 'kids') {
+							const plays = Number(game.play_count) || 0;
+							statsText = `${plays} play${plays === 1 ? '' : 's'}`;
+						} else {
+							const stats = gameClassStats(game);
+							statsText = [
+								`${stats.playerCount} player${stats.playerCount === 1 ? '' : 's'}`,
+								stats.avgScore != null ? `avg ${stats.avgScore}` : null,
+								stats.topScore != null ? `best ${stats.topScore}` : null,
+							]
+								.filter(Boolean)
+								.join(' • ');
+						}
 						return `<div class="class-games-row">
 							<div class="class-games-row-main">
-								<span class="class-games-name">${escapeHtml(game.name)}</span>
+								<span class="class-games-name">${kidMark}${escapeHtml(game.name)}</span>
 								<span class="game-status ${escapeHtml(status)}">${escapeHtml(status)}</span>
 								<span class="class-games-stats">${escapeHtml(statsText || 'No play yet')}</span>
 							</div>
@@ -11727,10 +12014,12 @@ function buildLobbyHtml(gameId) {
 				? candidates
 						.map(
 							(game) =>
-								`<option value="${escapeHtml(game.id)}">${escapeHtml(game.name)} (${escapeHtml(game.type || 'game')})</option>`,
+								`<option value="${escapeHtml(game.id)}">${escapeHtml(describeCatalogGame(game))}</option>`,
 						)
 						.join('')
-				: '<option value="">All games are already assigned</option>';
+				: games.length
+					? '<option value="">All games are already assigned</option>'
+					: '<option value="">No games found — create one in the Games or Kids Games tab first</option>';
 		}
 	}
 
@@ -11786,6 +12075,10 @@ function buildLobbyHtml(gameId) {
 			assignGameToClass(classId, select.value);
 		};
 		refreshClassGamesModalList(classId);
+		// Merge the server lists (regular + kids games) in the background so
+		// the picker is complete even on a fresh device. No-op when a fetch
+		// already ran or completed this session.
+		fetchServerGamesForPicker(classId);
 	}
 
 	window.getGamesForClass = getGamesForClass;

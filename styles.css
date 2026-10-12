@@ -11592,9 +11592,32 @@ textarea.code-editor::placeholder {
 	min-width: 0; /* Prevent overflow */
 }
 
+/* Preset timing row: labels vary in length ("Time per Question (seconds)"
+   wraps to two lines), so reserve equal label height in each group. Inputs
+   then start on the same baseline; the "Auto-computed" hint under Total Time
+   no longer shifts its input. */
+.preset-timing-row {
+	align-items: flex-start;
+}
+
+.preset-timing-row .form-group.half {
+	display: flex;
+	flex-direction: column;
+}
+
+.preset-timing-row .form-group.half > label {
+	display: flex;
+	align-items: flex-end;
+	min-height: 2.7em;
+}
+
 @media (max-width: 640px) {
 	.form-row {
 		flex-direction: column;
+	}
+
+	.preset-timing-row .form-group.half > label {
+		min-height: 0;
 	}
 }
 
@@ -27350,6 +27373,14 @@ tr[data-id],
 /* ============================================================
    Mobile polish for admin question list and settings
    ============================================================ */
+
+/* Per-question time badge in the question meta row. Hidden on desktop because
+   the dedicated Time column already shows it; revealed by the mobile card
+   layout further below. */
+#question-list-table .q-time-badge {
+	display: none;
+}
+
 @media (max-width: 768px) {
 	#questions .questions-type-filters {
 		gap: 6px !important;
@@ -27579,10 +27610,16 @@ tr[data-id],
 		text-transform: uppercase;
 	}
 
-	/* Hide the Points cell on the card — it duplicates the badge shown in the
-	   question meta and is not part of the mobile card layout */
-	#question-list-table tbody tr.question-table-row > .points-cell {
+	/* Hide the Points/Time cells on the card — the time duplicates the badge
+	   shown in the question meta and neither is part of the mobile card layout */
+	#question-list-table tbody tr.question-table-row > .points-cell,
+	#question-list-table tbody tr.question-table-row > .time-cell {
 		display: none !important;
+	}
+
+	/* Surface the per-question time as a badge in the question meta row */
+	#question-list-table .q-time-badge {
+		display: inline-flex !important;
 	}
 
 	#question-list-table tbody tr.question-table-row > .options-cell {
@@ -34474,6 +34511,10 @@ body.arena-modal-open {
 	letter-spacing: 0.01em;
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
+}
+
+.training-meta-badge[hidden] {
+	display: none;
 }
 
 .training-meta-time {

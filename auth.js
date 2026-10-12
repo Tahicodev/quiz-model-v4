@@ -1172,6 +1172,7 @@
 	}
 
 	function applyTeacherAccess() {
+		syncRecentActivityViewAll();
 		if (!isTeacher()) return;
 		const access = getTeacherAccessSettings();
 
@@ -1234,12 +1235,23 @@
 					section.classList.add('role-hidden');
 					return;
 				}
-				if (access.settingsTabs && access.settingsTabs[key] === false) {
-					section.classList.add('role-hidden');
-				} else {
-					section.classList.remove('role-hidden');
-				}
-			});
+			if (access.settingsTabs && access.settingsTabs[key] === false) {
+				section.classList.add('role-hidden');
+			} else {
+				section.classList.remove('role-hidden');
+			}
+		});
+	}
+
+	// The Recent Activity "View All" button opens the activity tab — hide it
+	// whenever the current user cannot access that tab (e.g. a teacher whose
+	// admin revoked activity-tab access), instead of letting the click land
+	// on an "Access denied" toast. Runs for every role so admin sessions
+	// always restore the button.
+	function syncRecentActivityViewAll() {
+		const btn = document.getElementById('recentActivityViewAll');
+		if (!btn) return;
+		btn.classList.toggle('role-hidden', !canAccessTab('activity'));
 	}
 
 	// ── School branding ───────────────────────────────────────────────────────

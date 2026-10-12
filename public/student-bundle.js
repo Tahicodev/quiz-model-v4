@@ -15456,6 +15456,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     answer: external_exports.string().min(1),
     explanation: external_exports.string().max(2e3).optional().nullable(),
     points: external_exports.coerce.number().int().min(1).max(100).default(1),
+    time_limit: external_exports.coerce.number().int().min(0).max(3600).optional().nullable(),
+    // seconds; 0/null = no per-question limit
     difficulty: external_exports.enum(difficultyValues).default("medium"),
     tags: external_exports.string().max(500).optional().nullable(),
     // comma-separated
@@ -15592,7 +15594,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     // Class assignment mirror (the admin "Assign to Classes" picker sends the
     // full desired set). Persisted into the exam_classes junction table by
     // ExamService.update — never stored on the exams row itself.
-    classes: external_exports.array(external_exports.string().uuid()).optional()
+    classes: external_exports.array(external_exports.string().uuid()).optional(),
+    // Question assignment mirror ("Assign Questions" sends the full desired
+    // set of question ids). Persisted into the exam_questions junction table
+    // by ExamService.update — never stored on the exams row itself. Numeric
+    // legacy indices never reach this field: the frontend resolves them to
+    // question ids before the API call.
+    questions: external_exports.array(external_exports.string().uuid()).optional()
   });
   var ExamFilterSchema = external_exports.object({
     status: external_exports.enum(statusValues).optional(),
@@ -15606,7 +15614,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   var ExamAddQuestionSchema = external_exports.object({
     question_id: external_exports.string().uuid(),
     order_index: external_exports.coerce.number().int().min(0).optional(),
-    points_override: external_exports.coerce.number().int().min(1).optional().nullable()
+    points_override: external_exports.coerce.number().int().min(1).optional().nullable(),
+    time_limit_override: external_exports.coerce.number().int().min(0).max(3600).optional().nullable()
   });
   var ExamReorderSchema = external_exports.object({
     question_ids: external_exports.array(external_exports.string().uuid()).min(1)
@@ -15661,10 +15670,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       const parsed = ExamUpdateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      const { classes, ...rowPatch } = parsed.data;
+      const { classes, questions: questions2, ...rowPatch } = parsed.data;
       const updated = await this.#repo.update("exams", id, rowPatch);
       if (classes !== void 0) {
         await this.#syncExamClasses(id, classes, currentUser);
+      }
+      if (questions2 !== void 0) {
+        await this.#syncExamQuestions(id, questions2, currentUser);
       }
       return updated;
     }
@@ -15683,13 +15695,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       await this.#repo.delete("exams", id);
     }
-    async addQuestion(examId, questionId, orderIndex, currentUser) {
+    async addQuestion(examId, questionId, orderIndex, currentUser, overrides = {}) {
       this.#requireAdmin(currentUser);
+      const link = {
+        question_id: questionId,
+        order_index: orderIndex ?? 0
+      };
+      if (overrides.points_override !== void 0) link.points_override = overrides.points_override;
+      if (overrides.time_limit_override !== void 0) link.time_limit_override = overrides.time_limit_override;
       if (typeof this.#repo.addExamQuestion === "function") {
-        return this.#repo.addExamQuestion(examId, {
-          question_id: questionId,
-          order_index: orderIndex ?? 0
-        });
+        return this.#repo.addExamQuestion(examId, link);
       }
       const exam = await this.#repo.getById("exams", examId);
       if (!exam) throw new NotFoundError("Exam");
@@ -15701,8 +15716,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (existing.length > 0) return existing[0];
       return this.#repo.create("exam_questions", {
         exam_id: examId,
-        question_id: questionId,
-        order_index: orderIndex ?? 0
+        ...link
       });
     }
     async removeQuestion(examId, questionId, currentUser) {
@@ -15831,6 +15845,50 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (!finalIds.includes(classId)) {
           await this.#repo.delete("exam_classes", row.id);
         }
+      }
+    }
+    // Reconcile the exam_questions junction table with the desired question
+    // set (from the admin "Assign Questions" picker). Teachers may only link
+    // their own questions; unknown/deleted question ids are dropped. Order is
+    // preserved through order_index, mirroring the picker's sort.
+    async #syncExamQuestions(examId, questionIds2, currentUser) {
+      const wanted = [...new Set((questionIds2 || []).map(String))].filter(Boolean);
+      const allowed = /* @__PURE__ */ new Set();
+      for (const qid of wanted) {
+        try {
+          const question = await this.#repo.getById("questions", qid);
+          if (!question) continue;
+          if (currentUser?.role === ROLES.TEACHER) {
+            if (String(question.created_by || question.creator_id || "") === String(currentUser.id)) {
+              allowed.add(qid);
+            }
+          } else {
+            allowed.add(qid);
+          }
+        } catch {
+        }
+      }
+      const finalIds = [...allowed];
+      const { data: current } = await this.#repo.getAll("exam_questions", {
+        filters: { exam_id: examId },
+        limit: 500
+      });
+      const have = new Map(
+        (current || []).map((row) => [String(row.question_id), row])
+      );
+      let order = 0;
+      for (const questionId of finalIds) {
+        const row = have.get(questionId);
+        if (!row) {
+          await this.addQuestion(examId, questionId, order, currentUser);
+        } else if (Number(row.order_index) !== order) {
+          await this.#repo.update("exam_questions", row.id, { order_index: order });
+        }
+        have.delete(questionId);
+        order++;
+      }
+      for (const [, row] of have) {
+        await this.removeQuestion(examId, row.question_id, currentUser);
       }
     }
     async #getTeacherClassIds(currentUser) {
@@ -18473,6 +18531,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           points: q.points != null ? Number(q.points) : 1,
           difficulty: q.difficulty || "medium"
         };
+        var rawTime = q.time_limit != null ? q.time_limit : q.timeLimit;
+        if (rawTime != null && String(rawTime).trim() !== "" && Number(rawTime) > 0) {
+          out.time_limit = Math.round(Number(rawTime));
+        }
         if (optionsJson !== void 0) out.options_json = optionsJson;
         if (q.explanation != null) out.explanation = String(q.explanation);
         if (q.instruction != null && !out.explanation) out.explanation = String(q.instruction);
@@ -18502,6 +18564,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (e.randomize != null) out.randomize = !!e.randomize;
         if (e.max_attempts != null) out.max_attempts = Number(e.max_attempts);
         if (e.maxAttempts != null) out.max_attempts = Number(e.maxAttempts);
+        var qIds = Array.isArray(e.questions) ? e.questions.map(function(q) {
+          return q && typeof q === "object" ? q.id || q.question_id : q;
+        }).filter(function(q) {
+          return typeof q === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+        }) : [];
+        if (qIds.length) out.questions = qIds;
         var legacy = {};
         if (Array.isArray(e.questions)) legacy.questions = e.questions;
         if (Array.isArray(e.classes)) legacy.classes = e.classes;
@@ -23361,8 +23429,14 @@ A new temporary password will be generated and shown to you once so you can shar
     totalQuestions: 5,
     timeLimit: 300,
     // 5 minutes
-    penalty: 5
+    penalty: 5,
     // seconds penalty per wrong answer
+    timerMode: "fixed",
+    // 'fixed' = one time for all questions, 'perQuestion' = each question has its own
+    perQuestionTime: 0,
+    // seconds per question in fixed mode (0 = no per-question countdown)
+    perQuestionActive: false
+    // true when a per-question countdown is currently running
   };
   var quizModes = {
     training: "training",
@@ -23371,6 +23445,7 @@ A new temporary password will be generated and shown to you once so you can shar
   var currentQuestion = 0;
   var score = 0;
   var timeRemaining = quizConfig.timeLimit;
+  var questionTimeRemaining = 0;
   var timerId = null;
   var currentMode = quizModes.training;
   var currentExam = null;
@@ -23852,6 +23927,8 @@ A new temporary password will be generated and shown to you once so you can shar
       Object.assign(quizConfig, {
         totalQuestions: currentExam.questions.length,
         timeLimit: examActiveSession.timeLimit || currentExam.duration * 60,
+        timerMode: examActiveSession.timerMode || "fixed",
+        perQuestionTime: Number(examActiveSession.perQuestionTime) || 0,
         penalty: examSettings.penalty ?? examActiveSession.penalty ?? 0
       });
       questions = [...currentExam.questions];
@@ -23915,6 +23992,8 @@ A new temporary password will be generated and shown to you once so you can shar
         questions.length
       ),
       timeLimit: trainingSettings.timeLimit || 300,
+      timerMode: trainingSettings.timerMode || "fixed",
+      perQuestionTime: Number(trainingSettings.perQuestionTime) || 0,
       penalty: trainingSettings.penalty || 0
     });
     console.log("Training mode ready");
@@ -24168,11 +24247,43 @@ A new temporary password will be generated and shown to you once so you can shar
     startTimer();
   }
   function startTimer() {
+    questionTimeRemaining = computeQuestionTimeRemaining(currentQuestion);
+    quizConfig.perQuestionActive = questionTimeRemaining > 0;
     timerId = setInterval(() => {
       timeRemaining--;
+      if (questionTimeRemaining > 0) {
+        questionTimeRemaining--;
+        if (questionTimeRemaining <= 0) {
+          quizConfig.perQuestionActive = false;
+          questionTimeRemaining = 0;
+          updateTimerDisplay();
+          quizAdvance();
+          return;
+        }
+      }
       updateTimerDisplay();
       if (timeRemaining <= 0) endQuiz();
     }, 1e3);
+  }
+  function computeQuestionTimeRemaining(index) {
+    const q = questions[index];
+    if (!q) return 0;
+    if (quizConfig.timerMode === "perQuestion") {
+      const perQ = Number(q.timeLimit != null ? q.timeLimit : q.time_limit || 0);
+      return perQ > 0 ? perQ : 0;
+    }
+    return quizConfig.perQuestionTime > 0 ? quizConfig.perQuestionTime : 0;
+  }
+  function quizAdvance() {
+    const total = Math.min(questions.length, quizConfig.totalQuestions);
+    if (currentQuestion >= total - 1) {
+      endQuiz();
+      return;
+    }
+    currentQuestion++;
+    showQuestion(currentQuestion);
+    questionTimeRemaining = computeQuestionTimeRemaining(currentQuestion);
+    quizConfig.perQuestionActive = questionTimeRemaining > 0;
   }
   function applyTimePenalty() {
     timeRemaining = Math.max(0, timeRemaining - quizConfig.penalty);
@@ -24180,6 +24291,8 @@ A new temporary password will be generated and shown to you once so you can shar
   }
   function showQuestion(index) {
     console.log("=== showQuestion CALLED with index:", index);
+    questionTimeRemaining = computeQuestionTimeRemaining(index);
+    quizConfig.perQuestionActive = questionTimeRemaining > 0;
     initializeDOM();
     if (!questionEl || !optionsEl || !progressEl) {
       console.error("Cannot display question - DOM elements not found", {
@@ -25347,9 +25460,15 @@ A new temporary password will be generated and shown to you once so you can shar
   function updateTimerDisplay() {
     initializeDOM();
     if (!timerEl) return;
-    const minutes = Math.floor(timeRemaining / 60);
-    const seconds = timeRemaining % 60;
+    const target = quizConfig.perQuestionActive && questionTimeRemaining > 0 ? questionTimeRemaining : timeRemaining;
+    const minutes = Math.floor(target / 60);
+    const seconds = target % 60;
     timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+    if (quizConfig.perQuestionActive && questionTimeRemaining > 0) {
+      timerEl.title = "Time left for this question";
+    } else {
+      timerEl.title = "Total time remaining";
+    }
   }
   function updateScoreDisplay() {
     initializeDOM();

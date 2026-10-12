@@ -95,13 +95,16 @@ export class ExamService {
     await this.#repo.delete('exams', id);
   }
 
-  async addQuestion(examId, questionId, orderIndex, currentUser) {
+  async addQuestion(examId, questionId, orderIndex, currentUser, overrides = {}) {
     this.#requireAdmin(currentUser);
+    const link = {
+      question_id: questionId,
+      order_index: orderIndex ?? 0,
+    };
+    if (overrides.points_override !== undefined) link.points_override = overrides.points_override;
+    if (overrides.time_limit_override !== undefined) link.time_limit_override = overrides.time_limit_override;
     if (typeof this.#repo.addExamQuestion === 'function') {
-      return this.#repo.addExamQuestion(examId, {
-        question_id: questionId,
-        order_index: orderIndex ?? 0,
-      });
+      return this.#repo.addExamQuestion(examId, link);
     }
     const exam     = await this.#repo.getById('exams', examId);
     if (!exam) throw new NotFoundError('Exam');
@@ -116,8 +119,7 @@ export class ExamService {
 
     return this.#repo.create('exam_questions', {
       exam_id:     examId,
-      question_id: questionId,
-      order_index: orderIndex ?? 0,
+      ...link,
     });
   }
 

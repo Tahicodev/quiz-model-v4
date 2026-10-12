@@ -417,6 +417,12 @@
         points: q.points != null ? Number(q.points) : 1,
         difficulty: q.difficulty || 'medium',
       };
+      // Per-question time budget in seconds. Only forward a positive integer;
+      // 0/absent means "no per-question limit" (the schema accepts null).
+      var rawTime = q.time_limit != null ? q.time_limit : q.timeLimit;
+      if (rawTime != null && String(rawTime).trim() !== '' && Number(rawTime) > 0) {
+        out.time_limit = Math.round(Number(rawTime));
+      }
       if (optionsJson !== undefined) out.options_json = optionsJson;
       if (q.explanation != null) out.explanation = String(q.explanation);
       if (q.instruction != null && !out.explanation) out.explanation = String(q.instruction);

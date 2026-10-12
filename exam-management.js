@@ -149,7 +149,20 @@ function renderExamPresetSummary() {
 	};
 
 	const chips = [
-		{ label: 'Time limit', value: formatTime(preset.timeLimit) },
+		{
+			label: 'Timer',
+			value:
+				preset.timerMode === 'perQuestion'
+					? 'Per-question time'
+					: `${preset.perQuestionTime || 0}s / question`,
+		},
+		{
+			label: 'Total time',
+			value:
+				preset.timerMode === 'perQuestion'
+					? 'Sum of question times'
+					: formatTime(preset.timeLimit),
+		},
 		{ label: 'Penalty', value: `−${preset.penalty || 0} pts` },
 		{ label: 'Pass mark', value: `${preset.passingScore || 50}%` },
 		{
@@ -187,6 +200,110 @@ function renderExamPresetSummary() {
 			)
 			.join('')}</div>
 	`;
+	recalculateExamDuration();
+}
+
+// Resolve the preset that governs an exam (local quizPresets store first,
+// then the snapshot embedded on the exam row).
+function resolvePresetForExam(exam) {
+	if (exam?.presetId && window.getPresetById) {
+		const local = window.getPresetById(exam.presetId);
+		if (local) return local;
+	}
+	return exam?.presetSnapshot || null;
+}
+
+function getQuestionTimeSeconds(question) {
+	if (window.getQuestionTime) return window.getQuestionTime(question);
+	const value = Math.round(Number(question?.time_limit ?? question?.timeLimit ?? 0));
+	return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+// Resolve an exam's assigned questions into full question objects. The legacy
+// UI stores numeric indices into the local bank; the bootstrap stores uuids.
+function resolveExamQuestionObjects(exam) {
+	const bank =
+		window.__DI_CONTAINER__?.repo?.getAll_sync?.('questions') || [];
+	const raw = Array.isArray(exam?.questions) ? exam.questions : [];
+	const out = [];
+	raw.forEach((entry) => {
+		if (entry && typeof entry === 'object') {
+			out.push(entry);
+			return;
+		}
+		const asNum = Number(entry);
+		if (Number.isInteger(asNum) && asNum >= 0 && bank[asNum]) {
+			out.push(bank[asNum]);
+			return;
+		}
+		const byId = bank.find(
+			(q) => String(q.id || q.question_id) === String(entry),
+		);
+		if (byId) out.push(byId);
+	});
+	return out;
+}
+
+/**
+ * Exam total duration (minutes) derived from its preset + assigned questions.
+ * Returns null when it cannot be derived (e.g. no questions assigned yet).
+ */
+function computeExamDurationMinutes(exam) {
+	const preset = resolvePresetForExam(exam);
+	if (!preset) return null;
+	const count = Array.isArray(exam?.questions) ? exam.questions.length : 0;
+	if (preset.timerMode === 'perQuestion') {
+		const sum = resolveExamQuestionObjects(exam).reduce(
+			(acc, q) => acc + getQuestionTimeSeconds(q),
+			0,
+		);
+		return sum > 0 ? Math.max(1, Math.ceil(sum / 60)) : null;
+	}
+	const perQ = Number(preset.perQuestionTime) || 0;
+	if (perQ > 0 && count > 0) {
+		return Math.max(1, Math.ceil((perQ * count) / 60));
+	}
+	const total = Number(preset.timeLimit) || 0;
+	return total > 0 ? Math.max(1, Math.ceil(total / 60)) : null;
+}
+
+/**
+ * Keep the exam modal's duration field in step with the selected preset:
+ * presets with a derivable total lock the field so it can never drift from
+ * the per-question values. When no total can be derived yet (e.g. a
+ * personalized-time preset with no timed questions assigned), the field
+ * stays editable — locking an empty field would make the exam unsavable.
+ */
+function recalculateExamDuration() {
+	const durationEl = document.getElementById('examDuration');
+	const presetEl = document.getElementById('examPreset');
+	if (!durationEl || !presetEl) return;
+
+	const preset = window.getPresetById
+		? window.getPresetById(presetEl.value)
+		: null;
+	const exam = currentExamId
+		? exams.find((e) => e.id === currentExamId)
+		: null;
+	const mode = preset?.timerMode || 'fixed';
+	const derived = preset ? computeExamDurationMinutes(exam) : null;
+
+	if (preset && derived) {
+		durationEl.readOnly = true;
+		durationEl.style.background = '#f1f5f9';
+		durationEl.title =
+			mode === 'perQuestion'
+				? 'Auto-computed as the sum of each question\u2019s time'
+				: 'Auto-computed from the preset\u2019s time per question';
+		durationEl.value = derived;
+	} else {
+		durationEl.readOnly = false;
+		durationEl.style.background = '';
+		durationEl.title =
+			preset && mode === 'perQuestion'
+				? 'Assign questions with their own times to auto-compute the total'
+				: '';
+	}
 }
 
 function closeExamModal() {
@@ -1796,7 +1913,7 @@ async function saveExamForm() {
 	const passingScoreEl = document.getElementById('passingScore');
 
 	const examName = examNameEl ? String(examNameEl.value).trim() : '';
-	const duration = examDurationEl ? parseInt(examDurationEl.value) : NaN;
+	let duration = examDurationEl ? parseInt(examDurationEl.value) : NaN;
 	const passingScore = passingScoreEl
 		? parseInt(passingScoreEl.value) || 60
 		: 60;
@@ -1816,11 +1933,6 @@ async function saveExamForm() {
 			? window.getPresetById(presetId) || null
 			: null;
 
-	if (!examName || isNaN(duration)) {
-		showToast('Please fill in all required fields', 'error');
-		return;
-	}
-
 	// Question selection is managed by the dedicated Assign Questions modal.
 	// When editing, keep the exam's existing question set untouched; new exams
 	// start empty and get their questions via the Assign action.
@@ -1830,6 +1942,23 @@ async function saveExamForm() {
 	const selectedQuestions = Array.isArray(existingExamForQuestions?.questions)
 		? [...existingExamForQuestions.questions]
 		: [];
+
+	// When the preset governs the total and it can be derived from the
+	// assigned questions, the derived total wins over a stale field value
+	// (e.g. the pre-assignment default still showing in the modal).
+	if (presetSnapshot) {
+		const derivedDuration = computeExamDurationMinutes({
+			questions: selectedQuestions,
+			presetId: presetId || null,
+			presetSnapshot: presetSnapshot,
+		});
+		if (derivedDuration) duration = derivedDuration;
+	}
+
+	if (!examName || isNaN(duration)) {
+		showToast('Please fill in all required fields', 'error');
+		return;
+	}
 
 	const currentUserId = window.Auth?.getCurrentUser?.()?.id || '';
 	const existingExam = existingExamForQuestions;
@@ -1845,6 +1974,8 @@ async function saveExamForm() {
 		presetSnapshot: presetSnapshot
 			? {
 					name: presetSnapshot.name || '',
+					timerMode: presetSnapshot.timerMode || 'fixed',
+					perQuestionTime: presetSnapshot.perQuestionTime || 0,
 					timeLimit: presetSnapshot.timeLimit ?? 300,
 					penalty: presetSnapshot.penalty ?? 0,
 					shuffleQuestions: presetSnapshot.shuffleQuestions ?? true,
@@ -2097,6 +2228,15 @@ async function saveAssignExamQuestions() {
 	}
 
 	exam.questions = selectedQuestions;
+
+	// When the exam uses personalized per-question time, the total duration is
+	// the sum of the assigned questions' own times — recompute it now that the
+	// question set is known.
+	const assignedPreset = resolvePresetForExam(exam);
+	if (assignedPreset && assignedPreset.timerMode === 'perQuestion') {
+		const derived = computeExamDurationMinutes(exam);
+		if (derived) exam.duration = derived;
+	}
 
 	// Persist to the backend first; mirror into localStorage on success.
 	if (window.API && typeof window.API.update === 'function') {
@@ -3137,6 +3277,8 @@ window.closeExamModal = closeExamModal;
 window.saveExam = saveExamForm;
 window.editExam = editExam;
 window.renderExamPresetSummary = renderExamPresetSummary;
+window.recalculateExamDuration = recalculateExamDuration;
+window.computeExamDurationMinutes = computeExamDurationMinutes;
 window.deleteExam = deleteExam;
 window.deleteSelectedExams = deleteSelectedExams;
 window.openAssignExamQuestions = openAssignExamQuestions;
@@ -3280,6 +3422,8 @@ function createExamPackage(examId) {
 		if (preset) {
 			presetSettings = {
 				timeLimit: preset.timeLimit,
+				timerMode: preset.timerMode || 'fixed',
+				perQuestionTime: preset.perQuestionTime || 0,
 				penalty: preset.penalty,
 				shuffleQuestions: preset.shuffleQuestions,
 				showExplanations: preset.showExplanations,
@@ -3435,6 +3579,31 @@ function createExamPackage(examId) {
 		);
 	}
 
+	// Resolve a per-question time for every question in the package. In fixed
+	// mode every question gets the preset's fixed time; in perQuestion mode
+	// each keeps its own saved time (0 = no per-question limit).
+	const timerMode = presetSettings.timerMode || 'fixed';
+	const perQuestionTime = Number(presetSettings.perQuestionTime) || 0;
+	const packagedQuestions = examQuestions.map((q) => ({
+		...q,
+		timeLimit:
+			timerMode === 'perQuestion'
+				? getQuestionTimeSeconds(q)
+				: perQuestionTime,
+	}));
+	const computedTotalSeconds = (() => {
+		if (timerMode === 'perQuestion') {
+			const sum = packagedQuestions.reduce(
+				(acc, q) => acc + (Number(q.timeLimit) || 0),
+				0,
+			);
+			if (sum > 0) return sum;
+		} else if (perQuestionTime > 0 && packagedQuestions.length) {
+			return perQuestionTime * packagedQuestions.length;
+		}
+		return 0;
+	})();
+
 	// Build the examActiveSession package
 	const sessionPackage = {
 		version: '1.0',
@@ -3443,7 +3612,10 @@ function createExamPackage(examId) {
 		examName: exam.name,
 		examPresetName: exam.presetName || presetSettings.name || '',
 		duration: exam.duration,
+		timerMode,
+		perQuestionTime,
 		timeLimit:
+			computedTotalSeconds ||
 			presetSettings.timeLimit ||
 			exam.duration * 60 ||
 			appSettings.timeLimit ||
@@ -3452,7 +3624,7 @@ function createExamPackage(examId) {
 		passingScore: presetSettings.passingScore || exam.passingScore || 60,
 		shuffleQuestions: presetSettings.shuffleQuestions ?? true,
 		showExplanations: presetSettings.showExplanations ?? false,
-		questions: examQuestions,
+		questions: packagedQuestions,
 		allowedStudents: allowedStudents, // Include allowlist
 		settings: {
 			primaryColor:
@@ -3509,6 +3681,8 @@ function createTrainingPackage() {
 		if (preset) {
 			presetSettings = {
 				timeLimit: preset.timeLimit,
+				timerMode: preset.timerMode || 'fixed',
+				perQuestionTime: preset.perQuestionTime || 0,
 				penalty: preset.penalty,
 				shuffleQuestions: preset.shuffleQuestions,
 				showExplanations: preset.showExplanations,
@@ -3524,16 +3698,44 @@ function createTrainingPackage() {
 		}
 	}
 
+	const trainingTimerMode = presetSettings.timerMode || 'fixed';
+	const trainingPerQuestionTime = Number(presetSettings.perQuestionTime) || 0;
+	const trainingQuestions = allQuestions.map((q) => ({
+		...q,
+		timeLimit:
+			trainingTimerMode === 'perQuestion'
+				? getQuestionTimeSeconds(q)
+				: trainingPerQuestionTime,
+	}));
+	const trainingTotalSeconds = (() => {
+		if (trainingTimerMode === 'perQuestion') {
+			const sum = trainingQuestions.reduce(
+				(acc, q) => acc + (Number(q.timeLimit) || 0),
+				0,
+			);
+			if (sum > 0) return sum;
+		} else if (trainingPerQuestionTime > 0 && trainingQuestions.length) {
+			return trainingPerQuestionTime * trainingQuestions.length;
+		}
+		return 0;
+	})();
+
 	return {
 		version: '1.0',
 		mode: 'training',
 		examId: 'training',
 		examName: 'Training Quiz',
-		timeLimit: presetSettings.timeLimit || appSettings.timeLimit || 300,
+		timerMode: trainingTimerMode,
+		perQuestionTime: trainingPerQuestionTime,
+		timeLimit:
+			trainingTotalSeconds ||
+			presetSettings.timeLimit ||
+			appSettings.timeLimit ||
+			300,
 		penalty: presetSettings.penalty ?? appSettings.penalty ?? 0,
 		shuffleQuestions: presetSettings.shuffleQuestions ?? true,
 		showExplanations: presetSettings.showExplanations ?? true,
-		questions: allQuestions,
+		questions: trainingQuestions,
 		settings: {
 			primaryColor:
 				presetSettings.primaryColor || appSettings.primaryColor || '#2563eb',

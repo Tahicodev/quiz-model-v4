@@ -12,6 +12,7 @@ export const QuestionCreateSchema = z.object({
   answer:       z.string().min(1),
   explanation:  z.string().max(2000).optional().nullable(),
   points:       z.coerce.number().int().min(1).max(100).default(1),
+  time_limit:   z.coerce.number().int().min(0).max(3600).optional().nullable(), // seconds; 0/null = no per-question limit
   difficulty:   z.enum(difficultyValues).default('medium'),
   tags:         z.string().max(500).optional().nullable(), // comma-separated
   media_url:    z.string().url().optional().nullable(),

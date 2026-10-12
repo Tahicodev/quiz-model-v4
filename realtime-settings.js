@@ -1174,6 +1174,8 @@
 				presetName = preset.name;
 				presetOverrides = {
 					timeLimit: preset.timeLimit,
+					timerMode: preset.timerMode || 'fixed',
+					perQuestionTime: preset.perQuestionTime || 0,
 					penalty: preset.penalty,
 					totalQuestions: preset.totalQuestions,
 					welcomeTitle: preset.welcomeTitle || '',
@@ -1201,6 +1203,16 @@
 				parseInt(document.getElementById('setting-timeLimit')?.value) ||
 				appSettings.timeLimit ||
 				300,
+			timerMode:
+				presetOverrides.timerMode ||
+				appSettings.timerMode ||
+				'fixed',
+			perQuestionTime:
+				presetOverrides.perQuestionTime !== undefined
+					? presetOverrides.perQuestionTime
+					: parseInt(document.getElementById('setting-perQuestionTime')?.value) ||
+						appSettings.perQuestionTime ||
+						0,
 			penalty:
 				presetOverrides.penalty !== undefined
 					? presetOverrides.penalty

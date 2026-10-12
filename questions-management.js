@@ -324,6 +324,12 @@ function createQuestionRow(question, index) {
 						}
         </td>
         <td class="points-cell" data-label="Points"><span class="points-badge">${escapeHtml(String(question.points || 1))} pts</span></td>
+        <td class="time-cell" data-label="Time">${(() => {
+					const t = Number(question.time_limit ?? question.timeLimit ?? 0);
+					return t > 0
+						? `<span class="points-badge">⏱ ${escapeHtml(String(t))}s</span>`
+						: '<span class="text-muted">-</span>';
+				})()}</td>
         <td class="answer-cell" data-label="Answer">${formatCorrectAnswers(
 					question
 				)}</td>
@@ -1483,6 +1489,11 @@ async function addOrUpdateQuestion() {
 		// Get difficulty from form
 		const difficulty = document.getElementById('difficulty').value;
 		const points = parseFloat(document.getElementById('points').value) || 1;
+		// Per-question time budget in seconds (0 = no limit).
+		const timeLimit = Math.max(
+			0,
+			Math.round(Number(document.getElementById('timeLimit')?.value) || 0)
+		);
 
 		// Shuffle matching columns for students (per-question toggle,
 		// default on). Legacy rows without the flag shuffle too.
@@ -1508,6 +1519,8 @@ async function addOrUpdateQuestion() {
 			category: category || '',
 			difficulty: difficulty || 'medium',
 			points: points,
+			time_limit: timeLimit,
+			timeLimit: timeLimit,
 		};
 		if (shufflePairs !== undefined) questionObj.shufflePairs = shufflePairs;
 		Object.assign(questionObj, normalizeQuestionOptionStructure(questionObj));
@@ -1834,6 +1847,20 @@ function renderQuestionContent(
         `;
 	}
 
+	// Add per-question time badge (only when a limit is set). Rendered in the
+	// meta row and revealed on mobile viewports, where the Time column is
+	// hidden — see the responsive #question-list-table rules in styles.css.
+	const questionTime = Number(
+		questionObj && (questionObj.time_limit ?? questionObj.timeLimit) || 0
+	);
+	const timeBadgeHtml = questionTime > 0
+		? `
+            <span class="type-badge q-time-badge scale-effect" style="background-color: #0ea5e9; color: white; border-color: #0284c7;">
+                ⏱ ${questionTime}s
+            </span>
+        `
+		: '';
+
 	const typeBadge = badgesHtml;
 
 	// Create question content
@@ -1848,6 +1875,7 @@ function renderQuestionContent(
             <div class="question-meta">
                 ${categoryBadge}
                 ${pointsBadgeHtml}
+                ${timeBadgeHtml}
                 ${typeBadge}
                 ${answerTypeIndicator}
             </div>
@@ -1976,7 +2004,7 @@ function updateQuestionInTable(index, questionObj) {
 		}
 
 		// Update visible content with merged question column using reusable function
-		// cells[0] = checkbox, cells[1] = #, cells[2] = Question, cells[3] = Options, cells[4] = Image, cells[5] = Points, cells[6] = Answer, cells[7] = Actions
+		// cells[0] = checkbox, cells[1] = #, cells[2] = Question, cells[3] = Options, cells[4] = Image, cells[5] = Points, cells[6] = Time, cells[7] = Answer, cells[8] = Actions
 		row.cells[2].innerHTML = `<div class="question-content-text">${renderQuestionContent(
 			question,
 			questionObj,
@@ -2006,7 +2034,13 @@ function updateQuestionInTable(index, questionObj) {
             `
 			: '<span class="text-muted">-</span>';
 		row.cells[5].innerHTML = `<span class="points-badge">${escapeHtml(String(questionObj.points || 1))} pts</span>`;
-		row.cells[6].innerHTML = formatCorrectAnswers({
+		const updatedTime = Number(
+			questionObj && (questionObj.time_limit ?? questionObj.timeLimit) || 0
+		);
+		row.cells[6].innerHTML = updatedTime > 0
+			? `<span class="points-badge">⏱ ${escapeHtml(String(updatedTime))}s</span>`
+			: '<span class="text-muted">-</span>';
+		row.cells[7].innerHTML = formatCorrectAnswers({
 			type,
 			answer,
 			allowMultipleAnswers:
@@ -2048,6 +2082,14 @@ function updateQuestionInTable(index, questionObj) {
 				useWordBank: questionObj.useWordBank || false,
 				instruction: questionObj.instruction || '',
 				points: questionObj.points || 1,
+				time_limit:
+					questionObj.time_limit != null
+						? questionObj.time_limit
+						: existing.time_limit,
+				timeLimit:
+					questionObj.timeLimit != null
+						? questionObj.timeLimit
+						: existing.timeLimit,
 				id: existing.id || questionObj.id || generateUUID(),
 				ownerId: existing.ownerId || questionObj.ownerId || window.Auth?.getCurrentUser?.()?.id || '',
 			};
@@ -2146,6 +2188,12 @@ function populateEditForm(question) {
 	const pointsElement = document.getElementById('points');
 	if (pointsElement) {
 		pointsElement.value = question.points || 1;
+	}
+
+	const timeLimitElement = document.getElementById('timeLimit');
+	if (timeLimitElement) {
+		timeLimitElement.value =
+			Number(question.time_limit ?? question.timeLimit ?? 0) || 0;
 	}
 
 	// Populate the options list with option data if available
@@ -3886,6 +3934,10 @@ function clearQuestionForm() {
 	// Clear points field
 	const pointsField = document.getElementById('points');
 	if (pointsField) pointsField.value = '1';
+
+	// Clear per-question time field
+	const timeLimitField = document.getElementById('timeLimit');
+	if (timeLimitField) timeLimitField.value = '0';
 
 	// Clear fill-blank specific fields
 	const fillBlankText = document.getElementById('fill-blank-text');

@@ -952,6 +952,8 @@
 				name: exam.presetName || 'Preset',
 				hasPreset: true,
 				timeLimit: exam.timeLimit || null,
+				timerMode: null,
+				perQuestionTime: null,
 				penalty: null,
 				passingScore: exam.passingScore || null,
 				shuffleQuestions: null,
@@ -966,6 +968,10 @@
 			hasPreset: true,
 			timeLimit: Number.isFinite(Number(source.timeLimit))
 				? Number(source.timeLimit)
+				: null,
+			timerMode: source.timerMode || (source.perQuestionTime ? 'fixed' : null),
+			perQuestionTime: Number.isFinite(Number(source.perQuestionTime))
+				? Number(source.perQuestionTime)
 				: null,
 			penalty: Number.isFinite(Number(source.penalty))
 				? Number(source.penalty)
@@ -987,6 +993,24 @@
 		const mins = Math.floor(total / 60);
 		const secs = total % 60;
 		return secs ? `${mins}m ${secs}s` : `${mins} min`;
+	}
+
+	// Total test time (seconds) derived from a question set's per-question
+	// budgets. Personalized presets sum each question's own time; fixed
+	// presets use the uniform per-question time × count. 0 = cannot derive.
+	function resolvePerQuestionTotal(questions, preset) {
+		const list = Array.isArray(questions) ? questions : [];
+		if (!list.length || !preset) return 0;
+		if (preset.timerMode === 'perQuestion') {
+			const sum = list.reduce(
+				(acc, q) => acc + (Number(q.time_limit ?? q.timeLimit) || 0),
+				0,
+			);
+			return sum > 0 ? sum : 0;
+		}
+		const perQ = Number(preset.perQuestionTime) || 0;
+		if (perQ > 0) return perQ * list.length;
+		return 0;
 	}
 
 	// Render the full preset rule set as a chip grid — every preset field gets
@@ -2758,14 +2782,10 @@
 	}
 
 	function gameMatchesStudentClass(game, context) {
-		const classKeys = getStudentClassAccessKeys(context);
-		const gameClassIds = getGameClassIds(game);
-		// Games without a class assignment are school-wide (legacy behavior).
-		if (!gameClassIds.length) return true;
-		// The student must be in one of the assigned classes. A student with no
-		// resolvable class keys can never match a class-scoped game — previously
-		// this fell through to `return true`, leaking other classes' games.
-		if (!classKeys.size) return false;
+		// A student who already joined keeps seeing the game (a live session
+		// must survive unassignment); everyone else needs an explicit class
+		// assignment made by the teacher. Games without one stay hidden —
+		// visibility is teacher-controlled, never implicit.
 		if (
 			getParticipant(game?.session || {}, context?.user?.id) ||
 			String(game?.ownerId || '').trim() ===
@@ -2773,6 +2793,13 @@
 		) {
 			return true;
 		}
+		const gameClassIds = getGameClassIds(game);
+		if (!gameClassIds.length) return false;
+		// The student must be in one of the assigned classes. A student with no
+		// resolvable class keys can never match a class-scoped game — previously
+		// this fell through to `return true`, leaking other classes' games.
+		const classKeys = getStudentClassAccessKeys(context);
+		if (!classKeys.size) return false;
 		return gameClassIds.some((value) => {
 			const trimmed = String(value || '').trim();
 			return classKeys.has(trimmed) || classKeys.has(trimmed.toLowerCase());
@@ -7753,7 +7780,21 @@
 				() => null,
 			);
 			if (myToken !== kidsSectionToken) return;
-			const games = Array.isArray(gamesRes?.data) ? gamesRes.data : [];
+			// Teacher-controlled visibility (mirrors the server browse rule
+			// and the regular-games gate): only kids games explicitly
+			// assigned to one of the student's classes are listed.
+			const classKeys = getStudentClassAccessKeys(context);
+			const games = (Array.isArray(gamesRes?.data) ? gamesRes.data : []).filter(
+				(g) => {
+					const ids = (Array.isArray(g?.classIds) ? g.classIds : [])
+						.map((id) => String(id || '').trim())
+						.filter(Boolean);
+					if (!ids.length || !classKeys.size) return false;
+					return ids.some(
+						(id) => classKeys.has(id) || classKeys.has(id.toLowerCase()),
+					);
+				},
+			);
 			const gameCards = games.length
 				? games
 						.map(
@@ -7780,7 +7821,7 @@
 				</div>`,
 						)
 						.join('')
-				: '<div class="empty-state">No kids games yet — ask your teacher to publish one. 🧸</div>';
+				: '<div class="empty-state">No kids games assigned to your class yet — ask your teacher. 🧸</div>';
 			box.innerHTML = `
 				<div class="kids-games-heading">
 					<h3>Kids Games</h3>
@@ -14798,10 +14839,19 @@
 					window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || []
 				).find((e) => e.id === examId);
 				// `timeLimit` is stored in seconds; `duration` is in minutes.
-				const minutesLimit = Number(exam?.duration) || 0;
-				const secondsLimit = Number(exam?.timeLimit) || 0;
-				if (secondsLimit > 0) trainingState.timeLimitSec = secondsLimit;
-				else if (minutesLimit > 0) trainingState.timeLimitSec = minutesLimit * 60;
+				// Personalized-time presets override both with the sum of the
+				// assigned questions' own time budgets.
+				const perQTotal = resolvePerQuestionTotal(
+					trainingState.questions,
+					getExamPresetInfo(exam),
+				);
+				if (perQTotal > 0) trainingState.timeLimitSec = perQTotal;
+				else {
+					const minutesLimit = Number(exam?.duration) || 0;
+					const secondsLimit = Number(exam?.timeLimit) || 0;
+					if (secondsLimit > 0) trainingState.timeLimitSec = secondsLimit;
+					else if (minutesLimit > 0) trainingState.timeLimitSec = minutesLimit * 60;
+				}
 			}
 		} catch (_) {}
 
@@ -14861,7 +14911,11 @@
 			questionOptions: questions.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
 			// `timeLimit` is stored in seconds; `duration` is in minutes.
+			// Personalized-time presets override both with the sum of the
+			// assigned questions' own time budgets.
 			timeLimitSec: Math.max(0, (() => {
+				const perQTotal = resolvePerQuestionTotal(questions, preset);
+				if (perQTotal > 0) return perQTotal;
 				const minutesLimit = Number(exam.duration) || 0;
 				const secondsLimit = Number(exam.timeLimit) || 0;
 				return secondsLimit > 0 ? secondsLimit : minutesLimit * 60;
@@ -15829,6 +15883,7 @@
 				${dots.join('')}
 			</div>
 			<div class="training-strip-meta">
+				<span class="training-meta-badge training-per-q-timer" id="trainingPerQuestionTimer" title="Time for this question" hidden></span>
 				<span class="training-meta-badge training-meta-time" id="trainingStripTimer" title="Elapsed / Remaining Time">
 					⏱ <span id="trainingStripTimerText">00:00</span>
 				</span>

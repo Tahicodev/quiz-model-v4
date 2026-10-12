@@ -39,9 +39,9 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-06-r14" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-10-r17" />
 		<link rel="stylesheet" href="admin.css?v=2026-09-24-r18" />
-		<link rel="stylesheet" href="theme.css?v=2026-09-24-r17" />
+		<link rel="stylesheet" href="theme.css?v=2026-09-24-r19" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r3" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
@@ -133,9 +133,9 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
 		<script src="api-client.js?v=2026-10-06-r1" defer></script>
-		<script src="auth.js?v=2026-10-06-r4" defer></script>
+		<script src="auth.js?v=2026-10-11-r5" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-10-06-r3" defer></script>
+		<script src="settings.js?v=2026-10-12-r4" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -147,8 +147,8 @@
 		<script src="bulk-selection.js?v=2026-10-08-r1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
 		<script src="category-management.js?v=2026-09-17-r1" defer></script>
-		<script src="questions-management.js?v=2026-09-27-r3" defer></script>
-		<script src="exam-management.js?v=2026-09-17-r2" defer></script>
+		<script src="questions-management.js?v=2026-10-10-r4" defer></script>
+		<script src="exam-management.js?v=2026-10-12-r3" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
@@ -157,7 +157,7 @@
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
-		<script src="games-management.js?v=2026-10-06-r3" defer></script>
+		<script src="games-management.js?v=2026-10-12-r6" defer></script>
 		<script src="kids-games-management.js?v=2026-10-06-r1" defer></script>
 <script src="kids-championships-management.js?v=2026-10-06-r4" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
@@ -1193,6 +1193,7 @@
 								<div class="panel-header">
 									<h3>Recent Activity</h3>
 									<button
+										id="recentActivityViewAll"
 										class="btn-text-only"
 										onclick="openTab(event, 'activity')"
 									>
@@ -1481,6 +1482,7 @@
 									<th>Options</th>
 									<th style="width: 120px">Image</th>
 									<th style="width: 90px">Points</th>
+									<th style="width: 90px">Time</th>
 									<th>Correct Answer</th>
 									<th style="width: 100px">Actions</th>
 								</tr>
@@ -2622,7 +2624,7 @@
 										<div class="form-group">
 											<label>Assign Classes</label>
 											<div id="gameClassList" class="checkbox-list"></div>
-											<small class="text-muted">Choose which classes can see and join this game.</small>
+											<small class="text-muted">Choose which classes can see and join this game. Games with no class stay hidden from students.</small>
 										</div>
 									</div>
 
@@ -4230,6 +4232,18 @@
 								/>
 							</div>
 							<div class="form-group half">
+								<label for="timeLimit">Time (seconds)</label>
+								<input
+									type="number"
+									id="timeLimit"
+									value="0"
+									min="0"
+									max="3600"
+									step="5"
+								/>
+								<small class="text-muted">0 = no per-question time limit</small>
+							</div>
+							<div class="form-group half">
 								<label for="difficulty">Difficulty</label>
 								<select id="difficulty" class="form-control">
 									<option value="easy">Easy</option>
@@ -4836,14 +4850,28 @@
 									<textarea id="preset-welcomeMessage" class="form-control" rows="2" placeholder="Override default welcome message" style="padding: 10px;"></textarea>
 								</div>
 								
-								<div class="form-row">
+								<div class="form-group">
+									<label for="preset-timerMode">Question Timer</label>
+									<select id="preset-timerMode" class="form-control" onchange="window.onPresetTimerModeChange && window.onPresetTimerModeChange()">
+										<option value="fixed">Fixed time for all questions</option>
+										<option value="perQuestion">Personalized time for each question</option>
+									</select>
+									<small class="text-muted">Fixed = one time for every question. Personalized = each question uses its own saved time; the exam total is their sum.</small>
+								</div>
+
+								<div class="form-row preset-timing-row">
 									<div class="form-group half">
 										<label for="preset-totalQuestions">Total Questions per Quiz</label>
-										<input type="number" id="preset-totalQuestions" class="form-control" min="1" value="5" />
+										<input type="number" id="preset-totalQuestions" class="form-control" min="1" value="5" onchange="window.recomputePresetTotalTime && window.recomputePresetTotalTime()" />
+									</div>
+									<div class="form-group half" id="preset-perQuestionTimeGroup">
+										<label for="preset-perQuestionTime">Time per Question (seconds)</label>
+										<input type="number" id="preset-perQuestionTime" class="form-control" min="5" value="60" onchange="window.recomputePresetTotalTime && window.recomputePresetTotalTime()" />
 									</div>
 									<div class="form-group half">
-										<label for="preset-timeLimit">Time Limit (seconds)</label>
-										<input type="number" id="preset-timeLimit" class="form-control" min="60" value="300" />
+										<label for="preset-timeLimit">Total Time (seconds)</label>
+										<input type="number" id="preset-timeLimit" class="form-control" min="0" value="300" readonly />
+										<small class="text-muted" id="preset-timeLimitHint">Auto-computed</small>
 									</div>
 									<div class="form-group half">
 										<label for="preset-penalty">Penalty (points)</label>

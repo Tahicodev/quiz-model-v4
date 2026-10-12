@@ -3,6 +3,9 @@ const quizConfig = {
 	totalQuestions: 5,
 	timeLimit: 300, // 5 minutes
 	penalty: 5, // seconds penalty per wrong answer
+	timerMode: 'fixed', // 'fixed' = one time for all questions, 'perQuestion' = each question has its own
+	perQuestionTime: 0, // seconds per question in fixed mode (0 = no per-question countdown)
+	perQuestionActive: false, // true when a per-question countdown is currently running
 };
 
 // Quiz modes
@@ -15,6 +18,7 @@ const quizModes = {
 let currentQuestion = 0;
 let score = 0;
 let timeRemaining = quizConfig.timeLimit;
+let questionTimeRemaining = 0; // per-question countdown (0 = no per-question limit)
 let timerId = null;
 let currentMode = quizModes.training;
 let currentExam = null;
@@ -691,6 +695,8 @@ function loadQuizMode() {
 		Object.assign(quizConfig, {
 			totalQuestions: currentExam.questions.length,
 			timeLimit: examActiveSession.timeLimit || currentExam.duration * 60,
+			timerMode: examActiveSession.timerMode || 'fixed',
+			perQuestionTime: Number(examActiveSession.perQuestionTime) || 0,
 			penalty: examSettings.penalty ?? examActiveSession.penalty ?? 0,
 		});
 
@@ -781,6 +787,8 @@ function loadQuizMode() {
 			questions.length,
 		),
 		timeLimit: trainingSettings.timeLimit || 300,
+		timerMode: trainingSettings.timerMode || 'fixed',
+		perQuestionTime: Number(trainingSettings.perQuestionTime) || 0,
 		penalty: trainingSettings.penalty || 0,
 	});
 
@@ -1157,11 +1165,49 @@ function initQuiz() {
 }
 
 function startTimer() {
+	// Start/reset the per-question countdown for the current question.
+	questionTimeRemaining = computeQuestionTimeRemaining(currentQuestion);
+	quizConfig.perQuestionActive = questionTimeRemaining > 0;
 	timerId = setInterval(() => {
 		timeRemaining--;
+		if (questionTimeRemaining > 0) {
+			questionTimeRemaining--;
+			if (questionTimeRemaining <= 0) {
+				quizConfig.perQuestionActive = false;
+				questionTimeRemaining = 0;
+				updateTimerDisplay();
+				quizAdvance();
+				return;
+			}
+		}
 		updateTimerDisplay();
 		if (timeRemaining <= 0) endQuiz();
 	}, 1000);
+}
+
+// Per-question time budget for the given index, in seconds.
+function computeQuestionTimeRemaining(index) {
+	const q = questions[index];
+	if (!q) return 0;
+	if (quizConfig.timerMode === 'perQuestion') {
+		const perQ = Number(q.timeLimit != null ? q.timeLimit : q.time_limit || 0);
+		return perQ > 0 ? perQ : 0;
+	}
+	return quizConfig.perQuestionTime > 0 ? quizConfig.perQuestionTime : 0;
+}
+
+// Advance to the next question (no scoring) — used when a question's own
+// time budget runs out without an answer.
+function quizAdvance() {
+	const total = Math.min(questions.length, quizConfig.totalQuestions);
+	if (currentQuestion >= total - 1) {
+		endQuiz();
+		return;
+	}
+	currentQuestion++;
+	showQuestion(currentQuestion);
+	questionTimeRemaining = computeQuestionTimeRemaining(currentQuestion);
+	quizConfig.perQuestionActive = questionTimeRemaining > 0;
 }
 
 function applyTimePenalty() {
@@ -1171,6 +1217,10 @@ function applyTimePenalty() {
 
 function showQuestion(index) {
 	console.log('=== showQuestion CALLED with index:', index);
+
+	// Reset the per-question countdown to this question's own time budget.
+	questionTimeRemaining = computeQuestionTimeRemaining(index);
+	quizConfig.perQuestionActive = questionTimeRemaining > 0;
 
 	// Ensure DOM elements are available
 	initializeDOM();
@@ -2939,9 +2989,16 @@ function goBack() {
 function updateTimerDisplay() {
 	initializeDOM();
 	if (!timerEl) return;
-	const minutes = Math.floor(timeRemaining / 60);
-	const seconds = timeRemaining % 60;
+	const target = quizConfig.perQuestionActive && questionTimeRemaining > 0 ?
+		questionTimeRemaining : timeRemaining;
+	const minutes = Math.floor(target / 60);
+	const seconds = target % 60;
 	timerEl.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+	if (quizConfig.perQuestionActive && questionTimeRemaining > 0) {
+		timerEl.title = 'Time left for this question';
+	} else {
+		timerEl.title = 'Total time remaining';
+	}
 }
 
 function updateScoreDisplay() {

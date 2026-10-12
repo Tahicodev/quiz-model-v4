@@ -199,6 +199,7 @@ model Question {
   answer       String // correct answer (serialized as string always)
   explanation  String? // shown to student after answering
   points       Int      @default(1)
+  time_limit   Int? // seconds allowed for this question (NULL = no per-question limit)
   difficulty   String   @default("medium")
   tags         String? // comma-separated tags for filtering
   media_url    String? // optional image/audio attachment
@@ -262,8 +263,9 @@ model ExamQuestion {
   id              String @id @default(uuid())
   exam_id         String
   question_id     String
-  order_index     Int    @default(0)
-  points_override Int? // override question's default points for this exam
+  order_index         Int    @default(0)
+  points_override     Int? // override question's default points for this exam
+  time_limit_override Int? // override question's default time (seconds) for this exam
 
   exam     Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
   question Question @relation(fields: [question_id], references: [id], onDelete: Cascade)

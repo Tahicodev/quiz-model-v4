@@ -286,6 +286,11 @@ function openSettingsModal() {
 	// Populate teacher access controls
 	populateTeacherAccessForm();
 
+	// Pre-fill the My Profile card so it starts in sync with the signed-in
+	// user. Otherwise saveAllSettings → saveOwnProfileIfDirty would see an
+	// empty (never-populated) name field and silently abort the whole save.
+	if (typeof populateOwnProfile === 'function') populateOwnProfile();
+
 	// Reset tabs
 	switchSettingsTab(null, 'general');
 	const activeBtn = document.querySelector('.settings-tab-btn.active');
@@ -1124,8 +1129,10 @@ async function saveAllSettings() {
 		}
 	}
 	// The My Profile card has no button of its own — it rides along here.
+	// notify=true so a genuine profile validation failure surfaces a toast
+	// instead of silently aborting the settings save.
 	if (typeof saveOwnProfileIfDirty === 'function') {
-		const profileOk = await saveOwnProfileIfDirty(false);
+		const profileOk = await saveOwnProfileIfDirty(true);
 		if (!profileOk) return;
 	}
 	await saveSettingsForm({ closeModal: true, notify: true });
@@ -2713,10 +2720,6 @@ async function saveOwnProfileIfDirty(notify = false) {
 		return false;
 	}
 	const name = (document.getElementById("profileName")?.value || "").trim();
-	if (!name) {
-		if (notify) showToast("Full name is required", "error");
-		return false;
-	}
 	const titleValue = (document.getElementById("profileTitle")?.value || "").trim();
 	const body = {
 		name,
@@ -2729,7 +2732,14 @@ async function saveOwnProfileIfDirty(notify = false) {
 		(user.title || null) === body.title &&
 		(user.email || null) === body.email &&
 		(user.phone || null) === body.phone;
+	// Nothing to persist (form untouched or still in sync) counts as success
+	// — it must never veto the rest of the settings save. The empty-name
+	// rejection below only applies to a real edit that clears the name.
 	if (unchanged) return true;
+	if (!name) {
+		if (notify) showToast("Full name is required", "error");
+		return false;
+	}
 	try {
 		const updated = await window.API.raw("PATCH", "/users/me", body);
 		// Refresh the signed-in identity in place (same object reference

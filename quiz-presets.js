@@ -76,6 +76,8 @@
 		document.getElementById('editingPresetId').value = '';
 		document.getElementById('preset-name').value = '';
 		document.getElementById('preset-totalQuestions').value = 5;
+		document.getElementById('preset-timerMode').value = 'fixed';
+		document.getElementById('preset-perQuestionTime').value = 60;
 		document.getElementById('preset-timeLimit').value = 300;
 		document.getElementById('preset-penalty').value = 0;
 		document.getElementById('preset-shuffleQuestions').checked = true;
@@ -91,9 +93,74 @@
 		document.getElementById('preset-inputFocusColor').value = '#3b82f6';
 		document.getElementById('preset-inputFocusColor-text').value = '#3b82f6';
 		document.getElementById('preset-fontFamily').value = "'Segoe UI', system-ui";
-		document.getElementById('preset-passingScore').value = 50;
+				document.getElementById('preset-passingScore').value = 50;
 		document.getElementById('preset-welcomeTitle').value = '';
 		document.getElementById('preset-welcomeMessage').value = '';
+		recomputePresetTotalTime();
+	}
+
+	/**
+	 * Read the per-question time budget from a question object (seconds).
+	 * Accepts both the snake_case DB field and the legacy camelCase field.
+	 */
+	function getQuestionTime(question) {
+		if (!question) return 0;
+		const raw = question.time_limit ?? question.timeLimit ?? 0;
+		const value = Math.round(Number(raw));
+		return Number.isFinite(value) && value > 0 ? value : 0;
+	}
+
+	/**
+	 * Compute the total quiz time (seconds) for a preset + question set.
+	 * - fixed mode: one time for every question = perQuestionTime × count.
+	 * - perQuestion mode: the sum of each question's own saved time.
+	 * Falls back to the preset's stored timeLimit when neither yields a value.
+	 */
+	function computePresetTotalSeconds(preset, questions) {
+		if (!preset) return 0;
+		const list = Array.isArray(questions) ? questions : [];
+		if (preset.timerMode === 'perQuestion') {
+			const sum = list.reduce((acc, q) => acc + getQuestionTime(q), 0);
+			if (sum > 0) return sum;
+			return Number(preset.timeLimit) || 0;
+		}
+		const perQ = Number(preset.perQuestionTime) || 0;
+		const count = list.length || Number(preset.totalQuestions) || 0;
+		if (perQ > 0 && count > 0) return perQ * count;
+		return Number(preset.timeLimit) || 0;
+	}
+
+	/**
+	 * Reflect the selected timer mode in the preset form: the per-question
+	 * time input only applies to "fixed" mode, and the total time is always
+	 * derived (never hand-edited) so it can't drift from the question times.
+	 */
+	function recomputePresetTotalTime() {
+		const modeEl = document.getElementById('preset-timerMode');
+		const perQGroup = document.getElementById('preset-perQuestionTimeGroup');
+		const totalEl = document.getElementById('preset-timeLimit');
+		const hintEl = document.getElementById('preset-timeLimitHint');
+		if (!modeEl || !totalEl) return;
+
+		const mode = modeEl.value || 'fixed';
+		const count = Math.max(
+			1,
+			parseInt(document.getElementById('preset-totalQuestions')?.value) || 1
+		);
+		const perQ = Math.max(
+			0,
+			parseInt(document.getElementById('preset-perQuestionTime')?.value) || 0
+		);
+
+		if (perQGroup) perQGroup.style.display = mode === 'fixed' ? '' : 'none';
+
+		if (mode === 'fixed') {
+			totalEl.value = perQ * count;
+			if (hintEl) hintEl.textContent = `${perQ}s × ${count} questions`;
+		} else {
+			totalEl.value = 0;
+			if (hintEl) hintEl.textContent = 'Sum of each question\'s saved time';
+		}
 	}
 
 	/**
@@ -109,6 +176,8 @@
 					id: 'preset-default-demo',
 					name: 'Standard Quick Quiz',
 					totalQuestions: 5,
+					timerMode: 'fixed',
+					perQuestionTime: 60,
 					timeLimit: 300,
 					penalty: 0,
 					shuffleQuestions: true,
@@ -182,7 +251,9 @@
 					<div>
 						<div class="preset-name" style="font-weight: 600; color: #1e293b;">${escapeHtml(preset.name)}</div>
 						<div class="preset-meta" style="font-size: 12px; color: #64748b;">
-							${formatTime(preset.timeLimit)} • ${preset.penalty || 0}pts penalty • ${preset.passingScore || 50}% to pass • ${preset.totalQuestions || 5} questions
+							${preset.timerMode === 'perQuestion'
+								? `Per-question time • ${preset.penalty || 0}pts penalty`
+								: `${formatTime(preset.timeLimit)} (${preset.perQuestionTime || 60}s/question)`} • ${preset.penalty || 0}pts penalty • ${preset.passingScore || 50}% to pass • ${preset.totalQuestions || 5} questions
 						</div>
 					</div>
 				</div>
@@ -223,7 +294,13 @@
 		const editingId = document.getElementById('editingPresetId')?.value;
 		const name = document.getElementById('preset-name')?.value?.trim();
 		const totalQuestions = parseInt(document.getElementById('preset-totalQuestions')?.value) || 5;
-		const timeLimit = parseInt(document.getElementById('preset-timeLimit')?.value) || 300;
+		const timerMode = document.getElementById('preset-timerMode')?.value || 'fixed';
+		const perQuestionTime = parseInt(document.getElementById('preset-perQuestionTime')?.value) || 60;
+		// Total time is authoritative only in fixed mode; in perQuestion mode it
+		// is derived from the assigned questions at exam/training build time.
+		const timeLimit = timerMode === 'fixed'
+			? perQuestionTime * totalQuestions
+			: (parseInt(document.getElementById('preset-timeLimit')?.value) || 0);
 		const penalty = parseInt(document.getElementById('preset-penalty')?.value) || 0;
 		const shuffleQuestions = document.getElementById('preset-shuffleQuestions')?.checked ?? true;
 		const showExplanations = document.getElementById('preset-showExplanations')?.checked ?? false;
@@ -248,6 +325,8 @@
 			id: editingId || generatePresetId(),
 			name,
 			totalQuestions,
+			timerMode,
+			perQuestionTime,
 			timeLimit,
 			penalty,
 			shuffleQuestions,
@@ -317,8 +396,15 @@
 		document.getElementById('presetFormTitle').textContent = 'Edit Preset';
 		document.getElementById('preset-name').value = preset.name;
 		document.getElementById('preset-totalQuestions').value = preset.totalQuestions || 5;
+		document.getElementById('preset-timerMode').value = preset.timerMode || 'fixed';
+		document.getElementById('preset-perQuestionTime').value =
+			preset.perQuestionTime ||
+			(preset.timeLimit && preset.totalQuestions
+				? Math.round(preset.timeLimit / preset.totalQuestions)
+				: 60);
 		document.getElementById('preset-timeLimit').value = preset.timeLimit || 300;
 		document.getElementById('preset-penalty').value = preset.penalty || 0;
+		recomputePresetTotalTime();
 		document.getElementById('preset-shuffleQuestions').checked = preset.shuffleQuestions ?? true;
 		document.getElementById('preset-showExplanations').checked = preset.showExplanations ?? false;
 		document.getElementById('preset-primaryColor').value = preset.primaryColor || '#2563eb';
@@ -405,4 +491,8 @@
 	window.loadPresetsList = loadPresetsList;
 	window.openPresetModal = openPresetModal;
 	window.closePresetModal = closePresetModal;
+	window.recomputePresetTotalTime = recomputePresetTotalTime;
+	window.onPresetTimerModeChange = recomputePresetTotalTime;
+	window.getQuestionTime = getQuestionTime;
+	window.computePresetTotalSeconds = computePresetTotalSeconds;
 })();

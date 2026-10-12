@@ -156,7 +156,19 @@ router.get('/browse', requireRole(KIDS_PLAY_ROLES), validateQuery(KidsBrowseSche
     } catch (_) {
       scope = null;
     }
-    const games = (result.data || []).filter((game) =>
+    // Teacher-controlled visibility (same rule as regular games): a kids
+    // game assigned to classes is delivered only to students of those
+    // classes; an unassigned game stays hidden from the browse list.
+    // PIN-direct play is a separate anonymous flow and is unaffected.
+    const studentClassId = String(req.user?.class_id || '').trim();
+    const games = (result.data || []).filter((game) => {
+      const assigned = Array.isArray(game?.classIds)
+        ? game.classIds.map((id) => String(id || '').trim()).filter(Boolean)
+        : [];
+      if (!assigned.length) return false;
+      if (studentClassId && assigned.includes(studentClassId)) return true;
+      return false;
+    }).filter((game) =>
       isAuthorVisibleToStudent(game?.teacher_id ?? game?.created_by, scope),
     );
     try {
