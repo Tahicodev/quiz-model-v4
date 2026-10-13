@@ -75,10 +75,25 @@
 					// console with "WebSocket closed before the connection is
 					// established" noise. Callers must handle a null return.
 					if (!token) return null;
+					// Present the stable device id at handshake so a blocked
+					// machine is refused before the connection is established.
+					var deviceAuth = (function () {
+						try {
+							return {
+								deviceId: localStorage.getItem('deviceId') || '',
+								hostname: localStorage.getItem('quizMachineName') || '',
+							};
+						} catch (e) {
+							return { deviceId: '', hostname: '' };
+						}
+					})();
 					var socket = window.io(
 						url || '/',
 						Object.assign(
-							{ auth: { token: token }, transports: ['polling', 'websocket'] },
+							{
+								auth: Object.assign({ token: token }, deviceAuth),
+								transports: ['polling', 'websocket'],
+							},
 							opts || {},
 						),
 					);

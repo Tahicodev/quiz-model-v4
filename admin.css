@@ -176,6 +176,151 @@
 	color: #334155;
 	font-size: 0.82rem;
 }
+/* Padded panel bodies — same section anatomy as the Classroom Devices
+   filter panel (panel-header + breathing room around the content). */
+.monitoring-panel-body {
+	padding: 16px;
+}
+/* Filter panel: toggle beside the title, grid of filter-groups — the same
+   pattern as the Classroom Devices / Results filter panels. */
+.monitoring-filter-panel {
+	margin-top: 14px;
+	margin-bottom: 16px;
+}
+.monitoring-filter-header-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+}
+.monitoring-filter-header-actions .mobile-filters-toggle {
+	flex: 0 0 auto;
+}
+/* Export CSV sits on the H1's line: kill any top margin pushing the
+   title text below the button. */
+#monitoring .monitoring-header h1 {
+	margin-top: 0;
+}
+/* Auto-refresh: single compact toggle, bottom-aligned with the Window
+   select instead of stretching across its grid cell. */
+.monitoring-filters-row .filter-group-check {
+	justify-content: flex-end;
+}
+.monitoring-filters-row .monitoring-toggle {
+	justify-self: start;
+	justify-content: center;
+	max-width: 100%;
+	min-height: 46px;
+	border: 1px solid var(--border-color);
+	font-weight: 600;
+	color: #475569;
+	cursor: pointer;
+	margin: 0;
+	gap: 6px;
+}
+.monitoring-toggle input {
+	width: 20px;
+	height: 20px;
+	flex: 0 0 auto;
+	margin: 0;
+	cursor: pointer;
+}
+/* The shared .filter-group input floor (min-width: 180px) stretches
+   checkboxes wide — checkboxes only ever need their own box width. */
+.filter-group input {
+	min-width: 12px;
+}
+/* Title row: heading left, Export CSV right on one line. */
+.monitoring-title-row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+}
+.monitoring-title-row .btn {
+	flex: 0 0 auto;
+}
+.monitoring-filters-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 16px;
+	width: 100%;
+}
+.monitoring-filters-row .monitoring-toggle {
+	min-height: 46px;
+}
+/* Monitoring tables scroll horizontally instead of clipping the last
+   column (the base .table-container uses overflow: hidden). */
+#monitoring .table-container {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+@media (max-width: 768px) {
+	#monitoring .table-container .data-table {
+		min-width: 560px;
+	}
+}
+
+/* ============================================================
+   SERVER MONITORING header — stack everything full-width with
+   touch-sized controls (ID-scoped so it wins over theme.css).
+   ============================================================ */
+@media (max-width: 768px) {
+	/* Title block over controls. */
+	#monitoring .monitoring-header {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 10px;
+	}
+
+	#monitoring .monitoring-controls {
+		width: 100%;
+		gap: 8px;
+		padding: 12px;
+	}
+
+	#monitoring .monitoring-filter-panel {
+		margin-bottom: 12px;
+	}
+
+	#monitoring .monitoring-filters-row {
+		gap: 12px;
+	}
+
+	#monitoring .monitoring-filters-row .filter-group select {
+		width: 100%;
+		min-height: 44px;
+		font-size: 16px; /* no iOS auto-zoom on focus */
+	}
+
+	/* Title stacks, Export CSV full-width right after it. */
+	#monitoring .monitoring-title-row {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	#monitoring #monitoringExport {
+		width: 100%;
+		min-height: 44px;
+		justify-content: center;
+	}
+
+	/* Refresh stays beside the Filters/Hide-filters toggle. */
+	#monitoring .monitoring-filter-header-actions {
+		flex-wrap: wrap;
+	}
+
+	#monitoring .monitoring-filter-header-actions #monitoringRefresh {
+		width: auto;
+		flex: 0 0 auto;
+		min-height: 44px;
+	}
+
+	/* Explicit open state — guarantees the toggled container shows. */
+	#monitoringFilters.collapsible-filter-controls.filters-open {
+		display: block !important;
+	}
+}
 
 @media (max-width: 960px) {
 	.monitoring-kpis {
@@ -197,6 +342,9 @@
 	.monitoring-controls .form-control,
 	.monitoring-controls button {
 		width: 100%;
+	}
+	.monitoring-panel-body {
+		padding: 14px 12px;
 	}
 }
 
@@ -3967,4 +4115,310 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	.kids-card-more-actions .kids-mini-btn { flex: 1 1 100%; }
 	.kids-wizard-footer { flex-wrap: wrap; }
 	.kids-wizard-footer .btn { flex: 1 1 auto; }
+}
+
+/* ============================================================
+   CLASSROOM DEVICES — base row styling (shared desktop/mobile)
+   ============================================================ */
+
+#devices .devices-summary {
+	margin: 0 0 12px;
+}
+
+#devices .device-empty {
+	text-align: center;
+	padding: 24px;
+}
+
+#devices .device-cell-machine {
+	vertical-align: middle;
+	white-space: normal;
+}
+
+#devices .device-cell-machine .device-id-block {
+	display: inline-block;
+	vertical-align: middle;
+	min-width: 0;
+}
+
+#devices .device-dot {
+	display: inline-block;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	flex: 0 0 auto;
+	margin-right: 8px;
+	vertical-align: middle;
+	background: #94a3b8;
+}
+
+#devices .device-dot.is-online {
+	background: #22c55e;
+}
+
+#devices .device-dot.is-offline {
+	background: #94a3b8;
+}
+
+#devices .device-name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+#devices .device-platform {
+	font-size: 12px;
+}
+
+#devices .device-assign {
+	max-width: 220px;
+}
+
+#devices .device-badge-allowed {
+	background: #22c55e;
+	color: #fff;
+}
+
+#devices .device-badge-blocked {
+	background: #ef4444;
+	color: #fff;
+}
+
+#devices .device-cell-actions {
+	white-space: nowrap;
+}
+
+/* Blocked rows get a subtle red tint so they stand out in the list. */
+#devices tr.device-card.is-blocked td:first-child {
+	box-shadow: inset 3px 0 0 #ef4444;
+}
+
+/* Search + refresh row inside the collapsible filter container. */
+#devices .devices-search-row {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	margin-bottom: 16px;
+}
+
+#devices .devices-search-row .devices-search {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+#devices .devices-search-row .btn {
+	flex: 0 0 auto;
+}
+
+#devices .devices-filters-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 16px;
+	width: 100%;
+}
+
+#devices .devices-filter-panel {
+	margin-bottom: 16px;
+}
+
+/* .panel-body has no global padding — give the filter selects breathing
+   room inside their container. */
+#devices .devices-filter-panel .panel-body {
+	padding: 16px;
+}
+
+/* Toggle + Clear sit side by side in the panel header (Results pattern). */
+#devices .devices-filter-header-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+}
+
+#devices .devices-filter-header-actions .mobile-filters-toggle {
+	flex: 0 0 auto;
+}
+
+/* ============================================================
+   CLASSROOM DEVICES — phones/tablets: table rows become cards
+   (same data-label pattern as #questionTable in styles.css)
+   ============================================================ */
+@media (max-width: 768px) {
+	/* Search + refresh stack full-width inside the toggled container. */
+	#devices .devices-search-row {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	#devices .devices-search-row .devices-search {
+		width: 100%;
+	}
+
+	#devices .devices-search input {
+		min-height: 44px;
+		font-size: 16px; /* no iOS auto-zoom on focus */
+	}
+
+	#devices .devices-search-row .btn {
+		width: 100%;
+		min-height: 44px;
+		justify-content: center;
+	}
+
+	#devices .devices-filter-panel {
+		margin-bottom: 12px;
+	}
+
+	#devices .devices-filter-panel .panel-body {
+		padding: 14px 12px;
+	}
+
+	#devices .devices-filters-row {
+		gap: 12px;
+	}
+
+	#devices .devices-filters-row .filter-group select {
+		min-height: 44px;
+		font-size: 16px;
+	}
+
+	/* Explicit open state — guarantees the toggled container shows even if
+	   another rule tries to keep it hidden. */
+	#devicesFilters.collapsible-filter-controls.filters-open {
+		display: block !important;
+	}
+
+	#devices .table-container {
+		overflow: visible;
+	}
+
+	#devices table.data-table thead {
+		display: none;
+	}
+
+	#devices table.data-table,
+	#devices table.data-table tbody {
+		display: block;
+	}
+
+	#devices table.data-table tbody tr.device-card {
+		display: block;
+		background: var(--bg-surface);
+		border: 1px solid var(--bg-surface-alt);
+		border-radius: 16px;
+		box-shadow:
+			0 4px 6px -1px rgba(0, 0, 0, 0.05),
+			0 2px 4px -1px rgba(0, 0, 0, 0.03);
+		margin: 16px 12px;
+		padding: 6px 16px 14px;
+	}
+
+	#devices table.data-table tbody tr.device-card.is-blocked {
+		border-color: rgba(239, 68, 68, 0.45);
+	}
+
+	#devices tr.device-card.is-blocked td:first-child {
+		box-shadow: none;
+	}
+
+	/* Card header: machine name row (no data-label on this cell). */
+	#devices tbody td.device-cell-machine {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 12px 0 10px;
+		border-bottom: 1px solid var(--bg-surface-alt);
+	}
+
+	#devices .device-dot {
+		width: 11px;
+		height: 11px;
+		margin-right: 0;
+	}
+
+	#devices .device-name {
+		font-size: 1rem;
+	}
+
+	/* Labelled rows. */
+	#devices tbody td[data-label] {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 12px;
+		padding: 9px 0;
+		border-bottom: 1px solid var(--bg-body);
+		text-align: right;
+	}
+
+	#devices tbody td[data-label]::before {
+		content: attr(data-label);
+		font-weight: 600;
+		color: #64748b;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		text-align: left;
+		flex: 0 0 auto;
+	}
+
+	#devices tbody td[data-label] > * {
+		min-width: 0;
+	}
+
+	#devices .device-assign {
+		max-width: none;
+		width: 100%;
+		min-height: 44px;
+		font-size: 16px; /* no iOS auto-zoom on focus */
+	}
+
+	#devices td[data-label] .device-assign {
+		flex: 1 1 auto;
+		max-width: 70%;
+	}
+
+	/* Actions row: same treatment as the Classes/Exams/Categories cards —
+	   icon buttons stay visible, and tapping the row opens the sheet. */
+	#devices tbody td.device-cell-actions {
+		display: block !important;
+		padding-top: 10px !important;
+		margin-top: 8px !important;
+		border-top: 1px dashed var(--border-color) !important;
+		border-bottom: none;
+		white-space: normal;
+	}
+
+	#devices tbody td.device-cell-actions::before {
+		content: none;
+	}
+
+	#devices tbody td.device-cell-actions .exam-actions {
+		justify-content: flex-start !important;
+		flex-wrap: wrap;
+		gap: 8px !important;
+	}
+
+	#devices tbody td.device-cell-actions .exam-action-btn {
+		width: 38px !important;
+		height: 38px !important;
+		border-radius: 11px !important;
+	}
+
+	#devices .device-empty {
+		display: block;
+		background: var(--bg-surface);
+		border: 1px dashed var(--bg-surface-alt);
+		border-radius: 12px;
+	}
+}
+
+/* Small phones: labelled rows wrap so values take the full width. */
+@media (max-width: 640px) {
+	#devices td[data-label] .device-assign {
+		max-width: 100%;
+		flex-basis: 100%;
+	}
+
+	#devices tbody td[data-label] {
+		flex-wrap: wrap;
+	}
 }

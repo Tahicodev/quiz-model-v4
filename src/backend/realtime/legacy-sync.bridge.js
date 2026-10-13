@@ -21,6 +21,7 @@
  */
 
 import { logger } from '../logger.js';
+import { getContainer } from '../container.js';
 
 const STAFF_ROLES = new Set(['admin', 'teacher', 'super_admin']);
 
@@ -46,16 +47,20 @@ export function registerLegacySyncHandlers(io) {
 
 	function clientInfo(socket) {
 		const user = socket.data?.user || {};
+		const hostname =
+			socket.data.deviceName ||
+			user.name ||
+			user.username ||
+			'Student device';
 		return {
 			socketId: socket.id,
 			userId: user.id || null,
 			schoolId: user.school_id || null,
 			deviceId: socket.data.deviceId || `socket-${socket.id}`,
-			name:
-				socket.data.deviceName ||
-				user.name ||
-				user.username ||
-				'Student device',
+			name: hostname,
+			hostname,
+			deviceType: socket.data.deviceType || 'unknown',
+			platform: socket.data.platform || null,
 			ip: socket.handshake?.address || '',
 			status: 'online',
 			connectedAt: socket.data.connectedAt || new Date().toISOString(),
@@ -133,15 +138,62 @@ export function registerLegacySyncHandlers(io) {
 		// Student pages send their stable browser device id after connecting.
 		// Keep only presence metadata here; localStorage contents never belong in
 		// the device list and continue to use the existing request-data flow.
-		socket.on('register', (payload = {}) => {
+		socket.on('register', async (payload = {}) => {
 			if (socket.role !== 'client') return;
+			const schoolId = String(socket.data?.user?.school_id || '').trim();
+			const userId = socket.data?.user?.id || null;
 			socket.data.deviceId = String(
 				payload.deviceId || `socket-${socket.id}`,
 			).slice(0, 160);
-			socket.data.deviceName = String(payload.name || 'Student device').slice(
-				0,
-				240,
-			);
+			socket.data.deviceName = String(
+				payload.hostname || payload.name || 'Student device',
+			).slice(0, 240);
+			socket.data.deviceType = payload.deviceType || null;
+			socket.data.platform = payload.platform || null;
+
+			// Persist/refresh the classroom device row and enforce hard blocks.
+			// Best effort: a DB hiccup must not break realtime for allowed devices.
+			let persisted = null;
+			if (schoolId) {
+				try {
+					const { deviceSvc } = getContainer();
+					persisted = await deviceSvc.touch({
+						schoolId,
+						deviceKey: socket.data.deviceId,
+						hostname: payload.hostname || null,
+						deviceType: payload.deviceType || null,
+						platform: payload.platform || null,
+						userAgent:
+							payload.userAgent ||
+							socket.handshake?.headers?.['user-agent'] ||
+							null,
+						ip: socket.handshake?.address || null,
+						userId,
+					});
+				} catch (err) {
+					logger.warn({ err: err?.message }, 'register: device persist failed');
+				}
+			}
+
+			if (persisted?.status === 'blocked') {
+				try {
+					socket.emit('device:blocked', {
+						deviceId: socket.data.deviceId,
+						message: 'This device has been blocked by a teacher.',
+					});
+				} catch { /* socket already gone */ }
+				connectedClients.delete(socket.id);
+				broadcastClients(schoolId);
+				socket.disconnect(true);
+				return;
+			}
+
+			if (persisted) {
+				if (!socket.data.deviceType) socket.data.deviceType = persisted.device_type;
+				if (!socket.data.platform) socket.data.platform = persisted.platform;
+				if (persisted.hostname) socket.data.deviceName = persisted.hostname;
+			}
+
 			connectedClients.set(socket.id, clientInfo(socket));
 			broadcastClients(socket.data.user?.school_id);
 		});

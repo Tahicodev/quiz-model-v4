@@ -42803,7 +42803,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 }
 
 #assignClassExamsModal.is-open .modal-content {
-	width: min(100%, 560px) !important;
+	width: min(100%, 820px) !important;
 }
 
 #assignCategoryQuestionsModal.is-open .modal-header,
@@ -43637,5 +43637,515 @@ html[data-theme='dark'] #assignClassExamsModal.is-open .modal-body .search-wrapp
 @media (max-width: 640px) {
 	.filter-undo-btn {
 		width: 100%;
+	}
+}
+
+/* ========================================================================
+   MOBILE FILTER TOGGLE — collapsible secondary filters (search stays visible)
+   ======================================================================== */
+
+.mobile-filters-toggle {
+	display: none;
+}
+
+/* Results filter header: group the toggle + clear action on the right */
+.results-filter-header {
+	align-items: center;
+}
+
+.results-filter-header-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.monitoring-filter-controls {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+/* Results search: pin the magnifier inside the field (icon precedes input) */
+#results .results-search {
+	position: relative;
+}
+
+#results .results-search .search-icon,
+#results .results-search > svg {
+	position: absolute;
+	left: 13px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 18px;
+	height: 18px;
+	color: var(--text-muted);
+	pointer-events: none;
+}
+
+#results .results-search input {
+	padding-left: 42px;
+}
+
+@media (max-width: 768px) {
+	.mobile-filters-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 7px;
+		flex: 0 0 auto;
+		min-height: 40px;
+		padding: 8px 13px;
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		background: var(--bg-surface);
+		color: var(--text-secondary);
+		font-size: 0.82rem;
+		font-weight: 700;
+		line-height: 1;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease,
+			color 0.15s ease;
+	}
+
+	.mobile-filters-toggle:active {
+		transform: scale(0.98);
+	}
+
+	.mobile-filters-toggle > svg:first-of-type {
+		width: 16px;
+		height: 16px;
+	}
+
+	.mobile-filters-toggle.is-open,
+	.mobile-filters-toggle.has-active {
+		color: var(--primary);
+		border-color: var(--primary);
+		background: var(--primary-light);
+	}
+
+	.mobile-filters-toggle .mobile-filters-chevron {
+		width: 14px;
+		height: 14px;
+		transition: transform 0.18s ease;
+	}
+
+	.mobile-filters-toggle.is-open .mobile-filters-chevron {
+		transform: rotate(180deg);
+	}
+
+	.mobile-filters-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 18px;
+		height: 18px;
+		padding: 0 5px;
+		border-radius: 999px;
+		background: var(--primary);
+		color: #fff;
+		font-size: 0.66rem;
+		font-weight: 800;
+	}
+
+	.mobile-filters-count.hidden {
+		display: none !important;
+	}
+
+	/* Collapse the filter controls until the user opens them */
+	.collapsible-filter-controls:not(.filters-open) {
+		display: none !important;
+	}
+
+	/* Results tab: icon-only filter toggle (no "Filters" text) */
+	#results .mobile-filters-toggle .mobile-filters-toggle-label {
+		display: none;
+	}
+
+	/* Results search: let the field fill the row (kills the empty gap that
+	   trailed the input) and keep the magnifier pinned inside the field */
+	#results .results-search-row {
+		width: 100%;
+	}
+
+	#results .results-search {
+		width: 100%;
+		max-width: none;
+		min-width: 0;
+		flex: 1 1 auto;
+	}
+
+	#results .results-search input {
+		width: 100%;
+		height: 44px;
+		padding: 10px 14px 10px 42px;
+	}
+
+	#results .results-search .search-icon,
+	#results .results-search > svg {
+		left: 14px;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 18px;
+		height: 18px;
+	}
+}
+
+/* ========================================================================
+   MOBILE LABELED-FIELD CARDS — one unified premium row layout.
+   Applies to categories / exams / classes / results / activity. The
+   `.tab-content` prefix guarantees these late rules win over earlier
+   per-table pill styles while keeping dark-mode variables intact.
+   ======================================================================== */
+@media (max-width: 768px) {
+	/* ── Shared card shell ── */
+	.tab-content #categoryList tbody tr,
+	.tab-content #examList tbody tr,
+	.tab-content #classList tbody tr,
+	.tab-content #results-table tbody tr:not(.results-empty-row),
+	.tab-content #activityTable tbody tr {
+		display: grid !important;
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		grid-template-areas: none !important;
+		gap: 13px 14px !important;
+		position: relative !important;
+		overflow: hidden !important;
+		padding: 18px 15px 13px !important;
+		border-radius: 16px !important;
+		border: 1px solid var(--border-color) !important;
+		background: var(--bg-surface) !important;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.06),
+			0 14px 28px -20px rgba(15, 23, 42, 0.4) !important;
+	}
+
+	/* ── Every cell is a labelled field ── */
+	.tab-content #categoryList tbody tr > td,
+	.tab-content #examList tbody tr > td,
+	.tab-content #classList tbody tr > td,
+	.tab-content #results-table tbody tr > td,
+	.tab-content #activityTable tbody tr > td {
+		display: flex !important;
+		flex-direction: column !important;
+		align-items: flex-start !important;
+		justify-content: flex-start !important;
+		gap: 3px !important;
+		grid-area: auto !important;
+		width: auto !important;
+		min-width: 0 !important;
+		max-width: 100% !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		white-space: normal !important;
+		overflow: visible !important;
+		text-overflow: clip !important;
+		color: var(--text-main) !important;
+		font-size: 0.83rem !important;
+		font-weight: 600 !important;
+		line-height: 1.35 !important;
+		text-align: left !important;
+	}
+
+	/* Label typography (content is set per column below) */
+	.tab-content #categoryList tbody tr > td::before,
+	.tab-content #examList tbody tr > td::before,
+	.tab-content #classList tbody tr > td::before,
+	.tab-content #results-table tbody tr > td::before,
+	.tab-content #activityTable tbody tr > td::before {
+		content: '' !important;
+		display: block !important;
+		order: -1 !important;
+		width: auto !important;
+		height: auto !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		background: none !important;
+		box-shadow: none !important;
+		color: var(--text-muted) !important;
+		font-size: 0.6rem !important;
+		font-weight: 800 !important;
+		letter-spacing: 0.08em !important;
+		text-transform: uppercase !important;
+		line-height: 1.2 !important;
+	}
+
+	/* Neutralise leftover suffix chips */
+	.tab-content #categoryList tbody tr > td::after,
+	.tab-content #examList tbody tr > td::after,
+	.tab-content #classList tbody tr > td::after,
+	.tab-content #results-table tbody tr > td::after,
+	.tab-content #activityTable tbody tr > td::after {
+		content: none !important;
+		display: none !important;
+	}
+
+	/* ── Pinned checkbox (bulk tables) ── */
+	.tab-content #categoryList tbody tr > td.checkbox-cell,
+	.tab-content #examList tbody tr > td.checkbox-cell,
+	.tab-content #classList tbody tr > td.checkbox-cell,
+	.tab-content #results-table tbody tr > td.checkbox-cell {
+		position: absolute !important;
+		top: 12px !important;
+		right: 13px !important;
+		left: auto !important;
+		grid-area: auto !important;
+		display: flex !important;
+		z-index: 2 !important;
+	}
+
+	.tab-content #categoryList tbody tr > td.checkbox-cell::before,
+	.tab-content #examList tbody tr > td.checkbox-cell::before,
+	.tab-content #classList tbody tr > td.checkbox-cell::before,
+	.tab-content #results-table tbody tr > td.checkbox-cell::before {
+		content: none !important;
+		display: none !important;
+	}
+
+	/* ── Actions pinned to a bottom bar ── */
+	.tab-content #categoryList tbody tr > td.actions-cell,
+	.tab-content #examList tbody tr > td.actions-cell,
+	.tab-content #classList tbody tr > td.actions-cell,
+	.tab-content #results-table tbody tr > td.actions-cell {
+		grid-column: 1 / -1 !important;
+		display: flex !important;
+		flex-direction: row !important;
+		align-items: center !important;
+		flex-wrap: wrap !important;
+		gap: 8px !important;
+		margin-top: 3px !important;
+		padding-top: 12px !important;
+		border-top: 1px dashed var(--border-color) !important;
+	}
+
+	.tab-content #categoryList tbody tr > td.actions-cell::before,
+	.tab-content #examList tbody tr > td.actions-cell::before,
+	.tab-content #classList tbody tr > td.actions-cell::before,
+	.tab-content #results-table tbody tr > td.actions-cell::before {
+		content: none !important;
+		display: none !important;
+	}
+
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions,
+	.tab-content #examList tbody tr > td.actions-cell .exam-actions,
+	.tab-content #classList tbody tr > td.actions-cell .exam-actions,
+	.tab-content #results-table tbody tr > td.actions-cell .exam-actions {
+		display: flex !important;
+		flex-wrap: wrap !important;
+		gap: 8px !important;
+	}
+
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-action-btn,
+	.tab-content #examList tbody tr > td.actions-cell .exam-action-btn,
+	.tab-content #classList tbody tr > td.actions-cell .exam-action-btn,
+	.tab-content #results-table tbody tr > td.actions-cell .exam-action-btn {
+		width: 40px !important;
+		height: 40px !important;
+		border-radius: 12px !important;
+	}
+
+	/* ── Categories: title · description · fields ── */
+	.tab-content #categoryList tbody tr > td:nth-child(2) {
+		grid-column: 1 / -1 !important;
+		padding-right: 42px !important;
+		font-size: 1.02rem !important;
+		font-weight: 800 !important;
+		letter-spacing: -0.01em !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(2)::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(3) {
+		grid-column: 1 / -1 !important;
+		display: -webkit-box !important;
+		-webkit-box-orient: vertical !important;
+		-webkit-line-clamp: 2 !important;
+		overflow: hidden !important;
+		color: var(--text-muted) !important;
+		font-size: 0.78rem !important;
+		font-weight: 500 !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(3)::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(3):empty {
+		display: none !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(4)::before {
+		content: 'Questions' !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(5)::before,
+	.tab-content #categoryList tbody tr td.training-cell::before {
+		content: 'Training' !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(6)::before {
+		content: 'Created by' !important;
+	}
+	.tab-content #categoryList tbody tr > td:nth-child(7)::before {
+		content: 'Created' !important;
+	}
+	.tab-content #categoryList tbody tr td.training-cell {
+		display: flex !important;
+		flex-direction: column !important;
+		align-items: flex-start !important;
+		gap: 4px !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		background: transparent !important;
+		color: var(--text-main) !important;
+	}
+
+	/* ── Exams: title · fields ── */
+	.tab-content #examList tbody tr > td:nth-child(2) {
+		grid-column: 1 / -1 !important;
+		padding-right: 42px !important;
+		font-size: 1.02rem !important;
+		font-weight: 800 !important;
+		letter-spacing: -0.01em !important;
+	}
+	.tab-content #examList tbody tr > td:nth-child(2)::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #examList tbody tr > td:nth-child(3)::before {
+		content: 'Created' !important;
+	}
+	.tab-content #examList tbody tr > td:nth-child(4)::before {
+		content: 'Questions' !important;
+	}
+	.tab-content #examList tbody tr > td:nth-child(5)::before {
+		content: 'Duration' !important;
+	}
+	.tab-content #examList tbody tr > td:nth-child(6)::before {
+		content: 'Created by' !important;
+	}
+
+	/* ── Classes: title · fields ── */
+	.tab-content #classList tbody tr > td:nth-child(2) {
+		grid-column: 1 / -1 !important;
+		padding-right: 42px !important;
+		font-size: 1.02rem !important;
+		font-weight: 800 !important;
+		letter-spacing: -0.01em !important;
+	}
+	.tab-content #classList tbody tr > td:nth-child(2)::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #classList tbody tr > td:nth-child(3)::before {
+		content: 'Created' !important;
+	}
+	.tab-content #classList tbody tr > td:nth-child(4)::before {
+		content: 'Students' !important;
+	}
+	.tab-content #classList tbody tr > td:nth-child(5)::before {
+		content: 'Teacher' !important;
+	}
+	.tab-content #classList tbody tr > td:nth-child(6)::before {
+		content: 'Exams' !important;
+	}
+	.tab-content #classList tbody tr > td:nth-child(7)::before {
+		content: 'Games' !important;
+	}
+	.tab-content #classList tbody tr > td:nth-child(8)::before {
+		content: 'Created by' !important;
+	}
+
+	/* ── Results: hero student · exam · score · meta fields ── */
+	.tab-content #results-table tbody tr > td.student-cell {
+		grid-column: 1 / -1 !important;
+		padding-right: 42px !important;
+	}
+	.tab-content #results-table tbody tr > td.student-cell::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #results-table tbody tr > td.exam-cell {
+		grid-column: 1 / -1 !important;
+		padding: 9px 11px !important;
+		border-radius: 11px !important;
+		background: var(--bg-surface-alt) !important;
+		border: 1px solid var(--border-color) !important;
+		font-size: 0.82rem !important;
+		font-weight: 600 !important;
+	}
+	.tab-content #results-table tbody tr > td.exam-cell::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #results-table tbody tr > td[data-label='Score'] {
+		grid-column: 1 / -1 !important;
+	}
+	.tab-content #results-table tbody tr > td[data-label='Score']::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #results-table tbody tr > td[data-label='Score'] .score-pill {
+		width: 100% !important;
+	}
+	.tab-content #results-table tbody tr > td.result-date::before {
+		content: 'Date' !important;
+	}
+	.tab-content #results-table tbody tr > td[data-label='Class']::before {
+		content: 'Class' !important;
+	}
+	.tab-content #results-table tbody tr > td[data-label='Time']::before {
+		content: 'Time' !important;
+	}
+	.tab-content #results-table tbody tr > td[data-label='Source']::before {
+		content: 'Source' !important;
+	}
+	.tab-content #results-table tbody tr > td.owner-col::before {
+		content: 'By' !important;
+	}
+	.tab-content #results-table tbody tr > td.owner-col {
+		grid-column: 1 / -1 !important;
+	}
+	.tab-content #results-table tbody tr > td[data-label='Class'] .class-pill,
+	.tab-content #results-table tbody tr > td[data-label='Source'] .device-source-badge {
+		border: 0 !important;
+		background: transparent !important;
+		padding: 0 !important;
+		box-shadow: none !important;
+		max-width: 100% !important;
+	}
+
+	/* ── Activity: description hero · type/user/date/status fields ── */
+	.tab-content #activityTable tbody tr > td:nth-child(2) {
+		grid-column: 1 / -1 !important;
+	}
+	.tab-content #activityTable tbody tr > td:nth-child(2)::before {
+		content: none !important;
+		display: none !important;
+	}
+	.tab-content #activityTable tbody tr > td:nth-child(1)::before {
+		content: 'Type' !important;
+	}
+	.tab-content #activityTable tbody tr > td:nth-child(3)::before {
+		content: 'User' !important;
+	}
+	.tab-content #activityTable tbody tr > td:nth-child(4)::before {
+		content: 'Date' !important;
+	}
+	.tab-content #activityTable tbody tr > td:nth-child(5)::before {
+		content: 'Status' !important;
+	}
+
+	/* ── Questions: match the same card shell ── */
+	.tab-content #question-list-table tbody tr.question-table-row {
+		border-radius: 16px !important;
+		box-shadow:
+			0 1px 2px rgba(15, 23, 42, 0.06),
+			0 14px 28px -20px rgba(15, 23, 42, 0.4) !important;
 	}
 }

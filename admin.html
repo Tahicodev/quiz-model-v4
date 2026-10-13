@@ -40,7 +40,7 @@
 			})();
 		</script>
 		<link rel="stylesheet" href="styles.css?v=2026-10-10-r20" />
-		<link rel="stylesheet" href="admin.css?v=2026-09-24-r18" />
+		<link rel="stylesheet" href="admin.css?v=2026-09-24-r39" />
 		<link rel="stylesheet" href="theme.css?v=2026-09-24-r20" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r5" />
 		<script>
@@ -156,6 +156,7 @@
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
+		<script src="classroom-devices.js?v=2026-10-13-r7" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-10-12-r6" defer></script>
 		<script src="kids-games-management.js?v=2026-10-06-r1" defer></script>
@@ -164,7 +165,7 @@
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
-		<script src="admin-main.js?v=2026-09-17-r5" defer></script>
+		<script src="admin-main.js?v=2026-09-17-r6" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
 			<script src="legacy-auth-bridge.js" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -546,6 +547,19 @@
 								<polyline points="3 12 7 12 10 3 14 21 17 12 21 12"></polyline>
 							</svg>
 							Monitoring
+						</button>
+						<button
+							class="nav-tab"
+							data-tab="devices"
+							data-roles="admin,teacher"
+							onclick="openTab(event, 'devices'); if(window.ClassroomDevices) window.ClassroomDevices.refresh()"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+								<rect x="2" y="4" width="20" height="12" rx="2"></rect>
+								<line x1="8" y1="20" x2="16" y2="20"></line>
+								<line x1="12" y1="16" x2="12" y2="20"></line>
+							</svg>
+							Classroom Devices
 						</button>
 					</nav>
 				</div>
@@ -1214,6 +1228,18 @@
 					<div class="content-header">
 						<h1>Activity Log</h1>
 						<div class="header-actions">
+							<button
+								type="button"
+								class="mobile-filters-toggle"
+								data-filter-target="#activityFilters"
+								onclick="toggleMobileFilters(this)"
+								aria-expanded="false"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+								<span class="mobile-filters-toggle-label">Filters</span>
+								<span class="mobile-filters-count hidden">0</span>
+								<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+							</button>
 							<div class="search-box">
 								<input
 									type="text"
@@ -1253,7 +1279,7 @@
 						</div>
 					</div>
 
-					<div class="activity-filters" id="activityFilters">
+					<div class="activity-filters collapsible-filter-controls" id="activityFilters">
 						<div class="activity-filter">
 							<label for="activityTypeFilter">Type</label>
 							<select id="activityTypeFilter" class="form-control" onchange="filterActivityTable()">
@@ -1318,22 +1344,49 @@
 				<!-- Server Monitoring Tab -->
 				<section id="monitoring" class="tab-content" data-roles="admin,teacher">
 					<div class="content-header monitoring-header">
-						<div>
-							<h1>Server Monitoring</h1>
-							<p class="text-muted">Request volume, response health, and repeated server messages.</p>
-						</div>
-						<div class="header-actions monitoring-controls">
-							<label for="monitoringWindow">Window</label>
-							<select id="monitoringWindow" class="form-control">
-								<option value="5">Last 5 minutes</option>
-								<option value="15">Last 15 minutes</option>
-								<option value="60" selected>Last hour</option>
-								<option value="360">Last 6 hours</option>
-								<option value="1440">Last 24 hours</option>
-							</select>
-							<label class="monitoring-toggle"><input type="checkbox" id="monitoringAutoRefresh"> Auto refresh</label>
-							<button type="button" class="btn btn-secondary" id="monitoringRefresh">Refresh</button>
+						<div class="monitoring-title-row">
+							<div>
+								<h1>Server Monitoring</h1>
+								<p class="text-muted">Request volume, response health, and repeated server messages.</p>
+							</div>
 							<button type="button" class="btn btn-secondary" id="monitoringExport">Export CSV</button>
+						</div>
+					</div>
+					<div class="dashboard-panel monitoring-filter-panel">
+						<div class="panel-header">
+							<h3>Filters</h3>
+							<div class="monitoring-filter-header-actions">
+								<button
+									type="button"
+									class="mobile-filters-toggle"
+									data-filter-target="#monitoringFilters"
+									onclick="toggleMobileFilters(this)"
+									aria-expanded="false"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+									<span class="mobile-filters-toggle-label">Filters</span>
+									<span class="mobile-filters-count hidden">0</span>
+									<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+								</button>
+								<button type="button" class="btn btn-secondary" id="monitoringRefresh">Refresh</button>
+							</div>
+						</div>
+						<div class="panel-body monitoring-panel-body collapsible-filter-controls" id="monitoringFilters">
+							<div class="monitoring-filters-row">
+								<div class="filter-group">
+									<label for="monitoringWindow">Window</label>
+									<select id="monitoringWindow" class="form-control" data-default="60">
+										<option value="5">Last 5 minutes</option>
+										<option value="15">Last 15 minutes</option>
+										<option value="60" selected>Last hour</option>
+										<option value="360">Last 6 hours</option>
+										<option value="1440">Last 24 hours</option>
+									</select>
+								</div>
+								<div class="filter-group filter-group-check">
+									<label class="monitoring-toggle" for="monitoringAutoRefresh"><input type="checkbox" id="monitoringAutoRefresh"> <span>Auto refresh</span></label>
+								</div>
+							</div>
 						</div>
 					</div>
 					<div class="monitoring-status" id="monitoringUpdated"></div>
@@ -1347,16 +1400,162 @@
 					<div class="monitoring-grid">
 						<div class="dashboard-panel">
 							<div class="panel-header"><h3>Most called API endpoints</h3></div>
-							<div class="table-container"><table class="data-table"><thead><tr><th>Method</th><th>Path</th><th>Calls</th><th>Errors</th><th>Avg. time</th></tr></thead><tbody id="monitoringApiBody"></tbody></table></div>
+							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Method</th><th>Path</th><th>Calls</th><th>Errors</th><th>Avg. time</th></tr></thead><tbody id="monitoringApiBody"></tbody></table></div></div>
 						</div>
 						<div class="dashboard-panel">
 							<div class="panel-header"><h3>Repeated log messages</h3></div>
-							<div class="table-container"><table class="data-table"><thead><tr><th>Level</th><th>Message</th><th>Count</th><th>Last seen</th></tr></thead><tbody id="monitoringLogBody"></tbody></table></div>
+							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Level</th><th>Message</th><th>Count</th><th>Last seen</th></tr></thead><tbody id="monitoringLogBody"></tbody></table></div></div>
 						</div>
 					</div>
 					<div class="dashboard-panel monitoring-recent-panel">
 						<div class="panel-header"><h3>Recent server logs</h3></div>
-						<div class="table-container"><table class="data-table"><thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead><tbody id="monitoringRecentBody"></tbody></table></div>
+						<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead><tbody id="monitoringRecentBody"></tbody></table></div></div>
+					</div>
+				</section>
+
+				<!-- Classroom Devices Tab -->
+				<section id="devices" class="tab-content" data-roles="admin,teacher">
+					<div class="dashboard-container">
+						<div class="dashboard-header">
+							<div class="welcome-text">
+								<h2>Classroom Devices</h2>
+								<p class="text-muted">Machines that connected to this school. Block, allow, or assign each one to a student.</p>
+							</div>
+						</div>
+
+						<div class="kpi-grid" id="devicesKpiGrid">
+							<div class="stat-card blue">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<rect x="2" y="3" width="20" height="14" rx="2"></rect>
+										<line x1="8" y1="21" x2="16" y2="21"></line>
+										<line x1="12" y1="17" x2="12" y2="21"></line>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-devices-total">0</h3>
+									<p>Total Devices</p>
+								</div>
+							</div>
+							<div class="stat-card green">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+										<path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+										<path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+										<line x1="12" y1="20" x2="12.01" y2="20"></line>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-devices-online">0</h3>
+									<p>Online Now</p>
+								</div>
+							</div>
+							<div class="stat-card amber">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<circle cx="12" cy="12" r="10"></circle>
+										<line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-devices-blocked">0</h3>
+									<p>Blocked</p>
+								</div>
+							</div>
+						</div>
+
+						<div class="dashboard-panel devices-filter-panel">
+							<div class="panel-header devices-filter-header">
+								<h3>Filters</h3>
+								<div class="devices-filter-header-actions">
+									<button
+										type="button"
+										class="mobile-filters-toggle"
+										onclick="window.ClassroomDevices && window.ClassroomDevices.toggleFilters(this)"
+										aria-expanded="false"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+										<span class="mobile-filters-toggle-label">Filters</span>
+										<span class="mobile-filters-count hidden">0</span>
+										<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+									</button>
+									<button type="button" class="btn-text-only" onclick="window.ClassroomDevices && window.ClassroomDevices.clearFilters()">Clear all</button>
+								</div>
+							</div>
+							<div class="panel-body collapsible-filter-controls" id="devicesFilters">
+								<div class="devices-search-row">
+									<div class="search-group devices-search">
+										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<circle cx="11" cy="11" r="8"></circle>
+											<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+										</svg>
+										<input
+											type="search"
+											id="devicesSearch"
+											placeholder="Search machine, IP or student…"
+											oninput="window.ClassroomDevices && window.ClassroomDevices.filter()"
+										/>
+									</div>
+									<button type="button" class="btn btn-secondary" onclick="window.ClassroomDevices && window.ClassroomDevices.refresh()">Refresh</button>
+								</div>
+								<div class="devices-filters-row">
+									<div class="filter-group">
+										<label for="deviceFilterStatus">Status</label>
+										<select id="deviceFilterStatus" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()">
+											<option value="">All statuses</option>
+											<option value="allowed">Allowed</option>
+											<option value="blocked">Blocked</option>
+										</select>
+									</div>
+									<div class="filter-group">
+										<label for="deviceFilterType">Type</label>
+										<select id="deviceFilterType" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()">
+											<option value="">All types</option>
+											<option value="desktop">PC</option>
+											<option value="mobile">Mobile</option>
+											<option value="tablet">Tablet</option>
+										</select>
+									</div>
+									<div class="filter-group">
+										<label for="deviceFilterPresence">Presence</label>
+										<select id="deviceFilterPresence" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()">
+											<option value="">All</option>
+											<option value="online">Online now</option>
+											<option value="offline">Offline</option>
+										</select>
+									</div>
+									<div class="filter-group">
+										<label for="deviceFilterStudent">Student</label>
+										<select id="deviceFilterStudent" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()">
+											<option value="">All devices</option>
+											<option value="assigned">Assigned</option>
+											<option value="unassigned">Unassigned</option>
+										</select>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="table-container">
+							<table class="data-table" id="devicesTable">
+								<thead>
+									<tr>
+										<th>Machine</th>
+										<th>Type</th>
+										<th>IP</th>
+										<th>Assigned student</th>
+										<th>Status</th>
+										<th>Last seen</th>
+										<th>Actions</th>
+									</tr>
+								</thead>
+								<tbody id="devicesTableBody"></tbody>
+							</table>
+						</div>
 					</div>
 				</section>
 
@@ -1388,7 +1587,19 @@
 									onkeyup="filterQuestions()"
 								/>
 							</div>
-							<div class="sort-wrapper" id="questionTeacherFilterWrap">
+							<button
+								type="button"
+								class="mobile-filters-toggle"
+								data-filter-target="#questionTeacherFilterWrap, #questions .questions-type-filters"
+								onclick="toggleMobileFilters(this)"
+								aria-expanded="false"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+								<span class="mobile-filters-toggle-label">Filters</span>
+								<span class="mobile-filters-count hidden">0</span>
+								<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+							</button>
+							<div class="sort-wrapper collapsible-filter-controls" id="questionTeacherFilterWrap">
 								<select
 									id="questionTeacherFilter"
 									title="Filter by teacher"
@@ -1499,7 +1710,7 @@
 					</div>
 
 					<!-- Question Type Filter Badges -->
-					<div class="questions-type-filters" style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
+					<div class="questions-type-filters collapsible-filter-controls" style="display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap;">
 						<input type="hidden" id="typeFilterMain" value="all">
 						<span class="type-filter-badge active" data-type="all" onclick="setMainTypeFilter('all', this)">All Types</span>
 						<span class="type-filter-badge" data-type="multiple-choice" onclick="setMainTypeFilter('multiple-choice', this)">MC</span>
@@ -1613,6 +1824,18 @@
 								</button>
 							</div>
 							<div class="toolbar-controls">
+								<button
+									type="button"
+									class="mobile-filters-toggle"
+									data-filter-target="#categoryTeacherFilterWrap, #categories .sort-wrapper"
+									onclick="toggleMobileFilters(this)"
+									aria-expanded="false"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+									<span class="mobile-filters-toggle-label">Filters</span>
+									<span class="mobile-filters-count hidden">0</span>
+									<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+								</button>
 								<div class="search-wrapper">
 									<input
 										type="text"
@@ -1621,7 +1844,7 @@
 										onkeyup="filterCategories()"
 									/>
 								</div>
-								<div class="sort-wrapper" id="categoryTeacherFilterWrap">
+								<div class="sort-wrapper collapsible-filter-controls" id="categoryTeacherFilterWrap">
 									<select
 										id="categoryTeacherFilter"
 										title="Filter by teacher"
@@ -1630,7 +1853,7 @@
 										<option value="">All Teachers</option>
 									</select>
 								</div>
-								<div class="sort-wrapper">
+								<div class="sort-wrapper collapsible-filter-controls">
 									<select id="categorySortBy" onchange="sortCategories()">
 										<option value="name">Name</option>
 										<option value="date">Date Created</option>
@@ -1743,6 +1966,18 @@
 								</button>
 							</div>
 							<div class="toolbar-controls">
+								<button
+									type="button"
+									class="mobile-filters-toggle"
+									data-filter-target="#examTeacherFilterWrap, #exams .sort-wrapper"
+									onclick="toggleMobileFilters(this)"
+									aria-expanded="false"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+									<span class="mobile-filters-toggle-label">Filters</span>
+									<span class="mobile-filters-count hidden">0</span>
+									<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+								</button>
 								<div class="search-wrapper">
 									<input
 										type="text"
@@ -1750,7 +1985,7 @@
 										placeholder="Search exams..."
 									/>
 								</div>
-								<div class="sort-wrapper" id="examTeacherFilterWrap">
+								<div class="sort-wrapper collapsible-filter-controls" id="examTeacherFilterWrap">
 									<select
 										id="examTeacherFilter"
 										title="Filter by teacher"
@@ -1759,7 +1994,7 @@
 										<option value="">All Teachers</option>
 									</select>
 								</div>
-								<div class="sort-wrapper">
+								<div class="sort-wrapper collapsible-filter-controls">
 									<select id="examSortBy" onchange="sortExams()">
 										<option value="date">Date Created</option>
 										<option value="name">Name</option>
@@ -1870,6 +2105,18 @@
 								</button>
 							</div>
 							<div class="toolbar-controls">
+								<button
+									type="button"
+									class="mobile-filters-toggle"
+									data-filter-target="#classTeacherFilterWrap, #classes .sort-wrapper"
+									onclick="toggleMobileFilters(this)"
+									aria-expanded="false"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+									<span class="mobile-filters-toggle-label">Filters</span>
+									<span class="mobile-filters-count hidden">0</span>
+									<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+								</button>
 								<div class="search-wrapper">
 									<input
 										type="text"
@@ -1877,7 +2124,7 @@
 										placeholder="Search classes..."
 									/>
 								</div>
-								<div class="sort-wrapper">
+								<div class="sort-wrapper collapsible-filter-controls">
 									<select id="classSortBy" onchange="sortClasses()">
 										<option value="name">Name</option>
 										<option value="date">Date Created</option>
@@ -1902,7 +2149,7 @@
 										</svg>
 									</button>
 								</div>
-								<div class="sort-wrapper" id="classTeacherFilterWrap">
+								<div class="sort-wrapper collapsible-filter-controls" id="classTeacherFilterWrap">
 									<select id="classTeacherFilter" title="Filter by teacher">
 										<option value="">All Teachers</option>
 									</select>
@@ -2040,10 +2287,24 @@
 						<div class="dashboard-panel results-filter-panel">
 							<div class="panel-header results-filter-header">
 								<h3>Filters</h3>
-								<button type="button" class="btn-text-only" onclick="clearAllResultFilters()">Clear all</button>
+								<div class="results-filter-header-actions">
+									<button
+										type="button"
+										class="mobile-filters-toggle"
+										data-filter-target="#results .results-filters-row"
+										onclick="toggleMobileFilters(this)"
+										aria-expanded="false"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+										<span class="mobile-filters-toggle-label">Filters</span>
+										<span class="mobile-filters-count hidden">0</span>
+										<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+									</button>
+									<button type="button" class="btn-text-only" onclick="clearAllResultFilters()">Clear all</button>
+								</div>
 							</div>
 							<div class="panel-body results-filter-body">
-								<div class="results-filters-row">
+								<div class="results-filters-row collapsible-filter-controls">
 									<div class="filter-group">
 										<label for="resultFilterExam">Exam</label>
 										<select id="resultFilterExam" class="form-control" onchange="filterResults()">
@@ -2106,7 +2367,7 @@
 											<div class="divider-vertical"></div>
 										</div>
 										<div class="search-group results-search">
-											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 												<circle cx="11" cy="11" r="8"></circle>
 												<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
 											</svg>
@@ -8437,6 +8698,83 @@
 		</div>
 
 		<script>
+			// ------------------------------------------------------------------
+			// Mobile collapsible filters
+			// A single toggle button per tab collapses its filter controls on
+			// small screens. Search inputs stay visible; only the secondary
+			// filters/sorts are hidden behind the "Filters" button.
+			// ------------------------------------------------------------------
+			function getMobileFilterRegions(btn) {
+				const selector = btn && btn.getAttribute('data-filter-target');
+				if (!selector) return [];
+				return Array.prototype.slice.call(
+					document.querySelectorAll(selector)
+				);
+			}
+
+			function countActiveMobileFilters(region) {
+				let count = 0;
+				region.querySelectorAll('select').forEach((select) => {
+					if (/SortBy$/.test(select.id)) return;
+					const fallback = select.getAttribute('data-default') || '';
+					const value = select.value || '';
+					if (value && value !== fallback) count++;
+				});
+				region
+					.querySelectorAll('input[type="text"], input[type="search"]')
+					.forEach((input) => {
+						if (input.value && input.value.trim() !== '') count++;
+					});
+				region
+					.querySelectorAll('.type-filter-badge.active, .quick-filter-btn.active')
+					.forEach((pill) => {
+						const type = pill.getAttribute('data-type');
+						if (!type || type !== 'all') count++;
+					});
+				return count;
+			}
+
+			function updateMobileFiltersCount(btn) {
+				if (!btn) return;
+				const regions = getMobileFilterRegions(btn);
+				const total = regions.reduce(
+					(sum, region) => sum + countActiveMobileFilters(region),
+					0
+				);
+				const badge = btn.querySelector('.mobile-filters-count');
+				if (badge) {
+					badge.textContent = String(total);
+					badge.classList.toggle('hidden', total === 0);
+				}
+				btn.classList.toggle('has-active', total > 0);
+			}
+
+			function toggleMobileFilters(btn) {
+				const regions = getMobileFilterRegions(btn);
+				if (!regions.length) return;
+				const willOpen = !regions.some((region) =>
+					region.classList.contains('filters-open')
+				);
+				regions.forEach((region) =>
+					region.classList.toggle('filters-open', willOpen)
+				);
+				btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+				btn.classList.toggle('is-open', willOpen);
+				const label = btn.querySelector('.mobile-filters-toggle-label');
+				if (label) label.textContent = willOpen ? 'Hide filters' : 'Filters';
+				updateMobileFiltersCount(btn);
+			}
+
+			function refreshAllMobileFiltersCounts() {
+				document
+					.querySelectorAll('.mobile-filters-toggle')
+					.forEach(updateMobileFiltersCount);
+			}
+
+			document.addEventListener('input', refreshAllMobileFiltersCounts);
+			document.addEventListener('change', refreshAllMobileFiltersCounts);
+			document.addEventListener('click', refreshAllMobileFiltersCounts);
+
 			// Initialize everything when DOM is loaded
 			document.addEventListener('DOMContentLoaded', () => {
 				// Check auth state

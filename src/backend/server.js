@@ -198,6 +198,7 @@ import exportsRoutes from './routes/exports.routes.js';
 import importsRoutes from './routes/imports.routes.js';
 import kidsRoutes from './routes/kids.routes.js';
 import kidsChampionshipsRoutes from './routes/kids-championships.routes.js';
+import devicesRoutes from './routes/devices.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -313,6 +314,7 @@ app.use('/api/v1/exports', exportsRoutes);
 app.use('/api/v1/imports', importsRoutes);
 app.use('/api/v1/kids/championships', kidsChampionshipsRoutes);
 app.use('/api/v1/kids', kidsRoutes);
+app.use('/api/v1/devices', devicesRoutes);
 
 // ── Static Files (built frontend bundle + dev SPA sources) ───────────────
 // Disable caching for HTML/JS entry points so dev edits reach the browser

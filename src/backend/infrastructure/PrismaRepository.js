@@ -36,6 +36,7 @@ const MODEL_MAP = {
 	refresh_tokens: 'refreshToken',
 	schools: 'school',
 	school_archives: 'schoolArchive',
+	devices: 'device',
 	profile_requests: 'profileRequest',
 	account_requests: 'accountRequest',
 	game_presets: 'gamePreset',

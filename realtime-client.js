@@ -52,13 +52,100 @@
 		if (!window.io) return null;
 		var token = readAuthToken();
 		if (!token) return null;
+		var deviceAuth = readDeviceAuth();
 		var socket = window.getSocket
 			? window.getSocket()
 			: window.io('/', {
-					auth: { token: token },
+					auth: Object.assign({ token: token }, deviceAuth),
 					transports: ['polling', 'websocket'],
 				});
 		return socket || null;
+	}
+
+	/** Stable per-machine identity shared with the handshake + register. */
+	function readDeviceAuth() {
+		try {
+			var deviceId = localStorage.getItem('deviceId');
+			if (!deviceId) {
+				deviceId = 'device-' + Math.random().toString(36).slice(2, 10);
+				localStorage.setItem('deviceId', deviceId);
+			}
+			var hostname = localStorage.getItem('quizMachineName') || '';
+			var ua = navigator.userAgent || '';
+			var deviceType = /iPad|Tablet|PlayBook|Silk/i.test(ua)
+				? 'tablet'
+				: /Mobi|Android|iPhone|iPod|Windows Phone|Opera Mini|IEMobile|BlackBerry/i.test(
+							ua,
+						)
+					? 'mobile'
+					: 'desktop';
+			return { deviceId: deviceId, hostname: hostname, deviceType: deviceType };
+		} catch (e) {
+			return { deviceId: '', hostname: '', deviceType: 'desktop' };
+		}
+	}
+
+	/** Human-friendly machine label when the student hasn't named the device. */
+	function defaultMachineName(deviceId) {
+		var ua = navigator.userAgent || '';
+		var platform = /Windows/i.test(ua)
+			? 'Windows'
+			: /Android/i.test(ua)
+				? 'Android'
+				: /iPhone|iPad|iPod/i.test(ua)
+					? 'iOS'
+					: /Mac OS X|Macintosh/i.test(ua)
+						? 'Mac'
+						: /Linux|CrOS/i.test(ua)
+							? 'Linux'
+							: 'Poste';
+		var kind = /iPad|Tablet/i.test(ua)
+			? 'Tablette'
+			: /Mobi|Android|iPhone|iPod/i.test(ua)
+				? 'Mobile'
+				: 'PC';
+		return platform + ' ' + kind + ' ' + String(deviceId || '').slice(-4);
+	}
+
+	/**
+	 * A teacher blocked this machine: stop reconnecting and tell the student.
+	 * The same overlay persists across reloads (localStorage flag) until the
+	 * device is allowed again from the Classroom Devices tab.
+	 */
+	function handleDeviceBlocked(socket, message) {
+		try {
+			localStorage.setItem('quizDeviceBlocked', '1');
+		} catch (e) {}
+		window.__DEVICE_BLOCKED__ = true;
+		try {
+			if (socket) {
+				socket.io.reconnection(false);
+				socket.disconnect();
+			}
+		} catch (e) {}
+		showDeviceBlockedOverlay(
+			message || 'Cet appareil a été bloqué par un enseignant.',
+		);
+	}
+
+	function showDeviceBlockedOverlay(message) {
+		if (document.getElementById('device-blocked-overlay')) return;
+		var el = document.createElement('div');
+		el.id = 'device-blocked-overlay';
+		el.setAttribute(
+			'style',
+			'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;' +
+				'background:rgba(15,23,42,0.92);color:#f8fafc;font-family:system-ui,Segoe UI,sans-serif;text-align:center;padding:24px;',
+		);
+		el.innerHTML =
+			'<div><div style="font-size:44px;margin-bottom:12px;">\uD83D\uDEAB</div>' +
+			'<h2 style="margin:0 0 8px;font-size:20px;">Appareil bloqué</h2>' +
+			'<p style="margin:0;opacity:0.85;max-width:420px;">' +
+			String(message) +
+			'</p></div>';
+		try {
+			document.body.appendChild(el);
+		} catch (e) {}
 	}
 	// Anonymous at load time is normal (login page first, workspace after).
 	// Poll until a token lands, then boot exactly once. The old behavior —
@@ -543,9 +630,15 @@
 				localStorage.setItem('quizServerHost', SERVER);
 			}
 
+			const deviceAuth = readDeviceAuth();
+			const hostname =
+				deviceAuth.hostname || defaultMachineName(deviceId);
 			const payload = {
 				deviceId,
-				name: navigator.userAgent || 'browser',
+				name: hostname,
+				hostname,
+				deviceType: deviceAuth.deviceType || 'desktop',
+				userAgent: navigator.userAgent || 'browser',
 				localStorage: collectLocalStorage(),
 			};
 			socket.emit('register', payload);
@@ -568,6 +661,10 @@
 		// so all handlers bound here keep working.
 		socket.on('connect_error', (error) => {
 			var message = (error && error.message) || '';
+			if (/device_blocked|device has been blocked|appareil.*bloqu/i.test(message)) {
+				handleDeviceBlocked(socket, 'Cet appareil a été bloqué par un enseignant.');
+				return;
+			}
 			var isAuthFailure =
 				/unauthorized|invalid.*token|expired|token.*required|jwt/i.test(
 					message,
@@ -601,6 +698,10 @@
 
 		socket.on('requestLocalStorage', () => {
 			sendLocalStorageUpdate(true);
+		});
+
+		socket.on('device:blocked', (info) => {
+			handleDeviceBlocked(socket, info && info.message);
 		});
 
 		function upsertPushedExam(sessionPackage) {

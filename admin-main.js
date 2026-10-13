@@ -1303,6 +1303,14 @@ function openTab(event, tabName) {
 		selectedTab.classList.add('active');
 	}
 
+	// On phones the sticky app header can cover the new tab's title when
+	// the previous tab was scrolled down — always restart at the top.
+	if (window.innerWidth <= 768) {
+		try {
+			window.scrollTo(0, 0);
+		} catch (e) {}
+	}
+
 	// Add active class to clicked tab
 	if (event && event.currentTarget) {
 		event.currentTarget.classList.add('active');
