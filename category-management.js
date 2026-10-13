@@ -889,10 +889,9 @@ function openAssignCategoryQuestions(categoryId) {
 	);
 	if (selectedContainer) selectedContainer.innerHTML = '';
 	resetAssignCategoryFilters();
+	resetAssignFiltersUI(modal);
 
-	promoteAssignModal(modal);
-	modal.style.display = 'flex';
-	setTimeout(() => modal.classList.add('active'), 10);
+	openAssignModalLike(modal, 'questionSearchCategory');
 
 	setTimeout(() => {
 		setupCategoryModalFilters();
@@ -908,8 +907,7 @@ function openAssignCategoryQuestions(categoryId) {
 function closeAssignCategoryQuestions() {
 	const modal = document.getElementById('assignCategoryQuestionsModal');
 	if (modal) {
-		modal.style.display = 'none';
-		modal.classList.remove('active');
+		closeAssignModalLike(modal);
 	}
 	assignCategoryQuestionsId = null;
 	selectedQuestionsForCategory = [];
@@ -3978,8 +3976,151 @@ function promoteAssignModal(modal) {
 	}
 	const profileMenu = document.getElementById('profileMenu');
 	if (profileMenu) profileMenu.classList.remove('active');
+
+	// Same full promotion as the entity modals (exam / class / category):
+	// the shared is-open frame CSS takes over from here.
+	modal.style.setProperty('display', 'flex', 'important');
+	modal.style.setProperty('position', 'fixed', 'important');
+	modal.style.setProperty('inset', '0', 'important');
+	modal.style.setProperty('z-index', '2147483000', 'important');
+	modal.style.setProperty('opacity', '1', 'important');
+	modal.style.setProperty('visibility', 'visible', 'important');
+	modal.style.setProperty('pointer-events', 'auto', 'important');
+}
+
+function openAssignModalLike(modal, focusId) {
+	if (!modal) return;
+	promoteAssignModal(modal);
+	modal.classList.add('is-open');
+	modal.setAttribute('aria-hidden', 'false');
+	modal.setAttribute('aria-modal', 'true');
+	modal.setAttribute('role', 'dialog');
+	document.documentElement.classList.add('modal-open');
+	document.body.classList.add('modal-open');
+	setTimeout(() => {
+		modal.classList.add('active');
+		// Autofocus only with a fine pointer: on touch devices popping the
+		// keyboard on open jumps the fixed sheet and can hide the search
+		// field behind the header/keyboard.
+		if (
+			focusId &&
+			window.matchMedia &&
+			window.matchMedia('(pointer: fine)').matches
+		) {
+			document.getElementById(focusId)?.focus();
+		}
+	}, 10);
+}
+
+function closeAssignModalLike(modal) {
+	if (!modal) return;
+	modal.style.setProperty('display', 'none', 'important');
+	[
+		'position',
+		'inset',
+		'z-index',
+		'opacity',
+		'visibility',
+		'pointer-events',
+	].forEach((property) => modal.style.removeProperty(property));
+	modal.classList.remove('active', 'is-open');
+	modal.setAttribute('aria-hidden', 'true');
+	modal.removeAttribute('aria-modal');
+	modal.removeAttribute('role');
+	document.documentElement.classList.remove('modal-open');
+	document.body.classList.remove('modal-open');
 }
 window.promoteAssignModal = promoteAssignModal;
+window.openAssignModalLike = openAssignModalLike;
+window.closeAssignModalLike = closeAssignModalLike;
+
+// ── Assign Questions filter toggle (mobile: search stays visible, the rest
+// collapses into a hidden-by-default block) ──────────────────────────────
+function toggleAssignFilters(btn) {
+	const section = btn
+		? btn.closest('.category-filter-section, .exam-filters-container')
+		: null;
+	if (!section) return;
+	const open = section.classList.toggle('filters-open');
+	btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+	const label = btn.querySelector('.filters-toggle-label');
+	if (label) label.textContent = open ? 'Hide filters' : 'Show filters';
+	updateAssignFiltersCount(section);
+}
+
+function updateAssignFiltersCount(section) {
+	if (!section) return;
+	let count = 0;
+	section.querySelectorAll('select').forEach((sel) => {
+		const value = String(sel.value ?? '');
+		if (value !== '' && value !== 'all') count++;
+	});
+	section.querySelectorAll('input[type="number"]').forEach((input) => {
+		if (String(input.value ?? '').trim() !== '') count++;
+	});
+	const search = section.querySelector('input[type="text"]');
+	if (search && search.value.trim() !== '') count++;
+	section.querySelectorAll('.quick-filter-btn.active').forEach(() => count++);
+	const badge = section.querySelector('.filters-count-badge');
+	if (badge) {
+		badge.textContent = String(count);
+		badge.classList.toggle('hidden', count === 0);
+	}
+	const toggle = section.querySelector('.filters-toggle-btn');
+	if (toggle) toggle.classList.toggle('has-active', count > 0);
+}
+
+// Collapse back to hidden-by-default + refresh the count badge.
+function resetAssignFiltersUI(modal) {
+	if (!modal) return;
+	modal
+		.querySelectorAll('.category-filter-section, .exam-filters-container')
+		.forEach((section) => {
+			section.classList.remove('filters-open');
+			const toggle = section.querySelector('.filters-toggle-btn');
+			if (toggle) {
+				toggle.setAttribute('aria-expanded', 'false');
+				const label = toggle.querySelector('.filters-toggle-label');
+				if (label) label.textContent = 'Show filters';
+			}
+			updateAssignFiltersCount(section);
+		});
+}
+
+window.toggleAssignFilters = toggleAssignFilters;
+window.updateAssignFiltersCount = updateAssignFiltersCount;
+window.resetAssignFiltersUI = resetAssignFiltersUI;
+
+// Keep the count badge live as the user types / changes filters.
+if (
+	typeof document !== 'undefined' &&
+	!window.__assignFiltersCountWired &&
+	document.addEventListener
+) {
+	window.__assignFiltersCountWired = true;
+	const recountAssignFilters = (event) => {
+		const target = event && event.target;
+		if (!target || !target.closest) return;
+		const section = target.closest(
+			'.category-filter-section, .exam-filters-container',
+		);
+		if (section) updateAssignFiltersCount(section);
+	};
+	document.addEventListener('input', recountAssignFilters);
+	document.addEventListener('change', recountAssignFilters);
+	document.addEventListener('click', (event) => {
+		const chip =
+			event.target && event.target.closest
+				? event.target.closest('.quick-filters .quick-filter-btn')
+				: null;
+		if (!chip) return;
+		const section = chip.closest(
+			'.category-filter-section, .exam-filters-container',
+		);
+		// Active-chip classes toggle after handlers run — recount next tick.
+		setTimeout(() => updateAssignFiltersCount(section), 0);
+	});
+}
 
 // ============================================
 // INLINE CATEGORY CREATION

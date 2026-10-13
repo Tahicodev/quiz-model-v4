@@ -9537,6 +9537,232 @@ textarea {
 	}
 }
 
+/* ========================================================================
+   EXAM ANALYSIS & SESSIONS — unified frame like edit exam / assign modals:
+   centered sheet, icon header, single-scroll body, footer bar with
+   safe-area room on mobile. Dark-mode safe.
+   ======================================================================== */
+
+.exam-analysis-modal {
+	padding: 24px !important;
+	background: rgba(15, 23, 42, 0.62) !important;
+	backdrop-filter: blur(8px);
+	isolation: isolate;
+}
+
+.exam-analysis-modal .modal-content {
+	display: flex !important;
+	flex-direction: column !important;
+	position: relative !important;
+	width: min(100%, 980px) !important;
+	max-height: calc(100dvh - 48px) !important;
+	margin: auto !important;
+	border: 1px solid #dbe4ef !important;
+	border-radius: 18px !important;
+	box-shadow: 0 28px 70px rgba(15, 23, 42, 0.34) !important;
+	overflow: hidden !important;
+}
+
+.exam-analysis-modal .modal-header {
+	min-height: 62px !important;
+	padding: 16px 20px !important;
+	border-radius: 18px 18px 0 0 !important;
+	background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+	flex-shrink: 0 !important;
+}
+
+.exam-analysis-modal .modal-header h2 {
+	font-size: 1.12rem !important;
+	font-weight: 600 !important;
+	letter-spacing: 0 !important;
+}
+
+.exam-analysis-modal .close-btn {
+	width: 38px !important;
+	height: 38px !important;
+	display: inline-grid !important;
+	place-items: center !important;
+	padding: 0 !important;
+	border: none !important;
+	border-radius: 10px !important;
+	background: transparent !important;
+	color: #64748b !important;
+	font-size: 0 !important;
+	font-weight: 400 !important;
+	line-height: 0 !important;
+	text-align: center !important;
+	cursor: pointer !important;
+	flex: 0 0 auto !important;
+}
+
+.exam-analysis-modal .close-btn::before {
+	content: '\00d7' !important;
+	display: block;
+	color: currentColor;
+	font-size: 1.35rem;
+	font-weight: 400;
+	line-height: 1;
+	transform: translateY(-1px);
+}
+
+.exam-analysis-modal .close-btn:hover {
+	background: #fee2e2 !important;
+	color: #b91c1c !important;
+}
+
+.exam-analysis-modal .eas-tabs {
+	flex: 0 0 auto !important;
+	padding: 12px 20px 0 !important;
+	background: var(--bg-surface) !important;
+}
+
+.exam-analysis-modal .eas-body {
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	max-height: none !important;
+	padding: 20px !important;
+	background: #ffffff !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	overscroll-behavior: contain;
+}
+
+.exam-analysis-modal .modal-footer {
+	display: flex !important;
+	justify-content: flex-end !important;
+	gap: 10px !important;
+	padding: 14px 20px !important;
+	background: #ffffff !important;
+	flex-shrink: 0 !important;
+}
+
+.exam-analysis-modal .modal-footer .btn {
+	min-width: 116px !important;
+	min-height: 40px !important;
+}
+
+html[data-theme='dark'] .exam-analysis-modal .modal-content {
+	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .exam-analysis-modal .modal-header {
+	background: var(--bg-surface) !important;
+	background-image: none !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme='dark'] .exam-analysis-modal .modal-header h2 {
+	color: var(--text-main) !important;
+}
+
+html[data-theme='dark'] .exam-analysis-modal .close-btn:hover {
+	background: rgba(248, 113, 113, 0.2) !important;
+	color: #fca5a5 !important;
+}
+
+html[data-theme='dark'] .exam-analysis-modal .eas-tabs,
+html[data-theme='dark'] .exam-analysis-modal .eas-body,
+html[data-theme='dark'] .exam-analysis-modal .modal-footer {
+	background-color: var(--bg-body) !important;
+}
+
+html[data-theme='dark'] .exam-analysis-modal .modal-footer {
+	border-top-color: var(--border-color) !important;
+}
+
+@media (max-width: 860px) {
+	.exam-analysis-modal {
+		padding: 10px !important;
+		align-items: stretch !important;
+	}
+
+	.exam-analysis-modal .modal-content {
+		width: 100% !important;
+		max-height: calc(100dvh - 20px) !important;
+		border-radius: 14px !important;
+	}
+
+	.exam-analysis-modal .modal-header {
+		min-height: 56px !important;
+		padding: 12px 14px !important;
+		border-radius: 14px 14px 0 0 !important;
+	}
+
+	.exam-analysis-modal .modal-header h2 {
+		font-size: 1rem !important;
+	}
+
+	.exam-analysis-modal .eas-tabs {
+		padding: 10px 14px 0 !important;
+	}
+
+	.exam-analysis-modal .eas-tab-btn {
+		flex: 1 1 auto !important;
+		text-align: center !important;
+		padding: 9px 10px !important;
+		font-size: 0.82rem !important;
+	}
+
+	.exam-analysis-modal .eas-body {
+		padding: 14px !important;
+		padding-bottom: 84px !important;
+	}
+
+	.exam-analysis-modal .eas-kpis {
+		gap: 8px !important;
+	}
+
+	.exam-analysis-modal .eas-kpi {
+		flex: 1 1 calc(50% - 8px) !important;
+		padding: 12px 8px !important;
+	}
+
+	.exam-analysis-modal .modal-footer {
+		position: absolute !important;
+		left: 0 !important;
+		right: 0 !important;
+		bottom: 0 !important;
+		margin: 0 !important;
+		padding: 10px 12px max(10px, env(safe-area-inset-bottom)) !important;
+		border-radius: 0 0 14px 14px !important;
+		background: rgba(255, 255, 255, 0.98) !important;
+		box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.1) !important;
+		backdrop-filter: blur(10px);
+		z-index: 20 !important;
+	}
+
+	.exam-analysis-modal .modal-footer .btn {
+		width: 100% !important;
+		min-width: 0 !important;
+		min-height: 44px !important;
+	}
+
+	html[data-theme='dark'] .exam-analysis-modal .modal-footer {
+		background-color: var(--bg-body) !important;
+	}
+}
+
+@media (max-width: 480px) {
+	.exam-analysis-modal {
+		padding: 6px !important;
+	}
+
+	.exam-analysis-modal .modal-content {
+		max-height: calc(100dvh - 12px) !important;
+		border-radius: 12px !important;
+	}
+
+	.exam-analysis-modal .eas-body {
+		padding: 12px !important;
+		padding-bottom: 80px !important;
+	}
+
+	.exam-analysis-modal .eas-kpi {
+		flex: 1 1 100% !important;
+	}
+}
+
 .lightbox-content {
 	position: relative;
 	z-index: 201;
@@ -36717,6 +36943,65 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		box-shadow 0.2s ease;
 }
 
+/* Search unit: ONE fused control in every viewport. The wrapper carries the
+   field chrome (bg / border / radius / focus ring); icon + input are
+   transparent and can never mismatch or split apart. */
+.filter-search-wrap {
+	display: flex;
+	align-items: stretch;
+	flex: 2 1 220px;
+	min-width: 0;
+	gap: 0 !important;
+	column-gap: 0 !important;
+	background: #ffffff;
+	border: 1px solid #dbe4f0;
+	border-radius: 10px;
+	transition:
+		border-color 0.2s ease,
+		box-shadow 0.2s ease;
+}
+
+.filter-search-wrap:focus-within {
+	border-color: #6366f1;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.filter-search-wrap:focus-within .filter-field-icon {
+	color: #6366f1;
+}
+
+.filter-search-wrap .filter-field-icon {
+	flex: 0 0 auto;
+	width: 38px;
+	height: auto !important;
+	align-self: stretch !important;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: #64748b;
+	background: transparent !important;
+	border: none !important;
+	border-radius: 0 !important;
+	box-shadow: none !important;
+}
+
+.filter-search-wrap .filter-search-input {
+	flex: 1 1 auto !important;
+	min-width: 0 !important;
+	height: auto !important;
+	min-height: 38px !important;
+	padding: 0 12px 0 0 !important;
+	border: none !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+.filter-search-wrap .filter-search-input:focus {
+	border: none !important;
+	box-shadow: none !important;
+}
+
 .filter-field-icon:focus-within {
 	border-color: #6366f1;
 	color: #6366f1;
@@ -36729,7 +37014,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 
 .filter-select {
 	flex: 1 1 120px;
-	height: 34px;
+	height: 38px;
 	padding: 0 26px 0 10px !important;
 	border: 1px solid #dbe4f0 !important;
 	border-radius: 10px !important;
@@ -36755,13 +37040,15 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 /* Points interval inside the toolbar */
 .filter-toolbar .points-interval-filter {
 	display: flex;
-	align-items: center;
+	align-items: stretch;
 	gap: 0;
 	flex: 1 1 150px;
+	min-height: 38px;
 }
 
 .filter-toolbar .points-interval-filter input {
-	height: 34px;
+	height: auto;
+	min-height: 38px;
 	width: 100%;
 	min-width: 0;
 	padding: 0 8px !important;
@@ -36789,7 +37076,9 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	height: 34px;
+	align-self: stretch;
+	height: auto;
+	min-height: 38px;
 	width: 22px;
 	flex-shrink: 0;
 	color: #94a3b8;
@@ -36861,10 +37150,11 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	background: #fffbeb;
 }
 
-/* Tablet / small desktop: wrap selects onto two rows */
+/* Tablet / small desktop: search unit takes its own row, selects wrap below */
 @media (max-width: 1180px) {
-	.filter-search-input {
-		flex: 1 1 100%;
+	.filter-search-wrap {
+		flex: 1 1 100% !important;
+		min-width: 0 !important;
 	}
 
 	.filter-select {
@@ -42334,5 +42624,909 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	html[data-theme='dark'] #classModal .form-actions,
 	html[data-theme='dark'] #quickCategoryModal .form-actions {
 		background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%) !important;
+	}
+}
+
+/* ========================================================================
+   ASSIGNMENT MODALS — shared is-open frame, exactly like edit exam/class.
+   Assign Questions (category + exam), Assign to Classes, Assign Students and
+   Assign Exams share one overlay / sheet / header / body / footer, so the
+   Cancel + Save bar is always visible — desktop and mobile (safe-area).
+   ======================================================================== */
+
+#assignCategoryQuestionsModal.is-open,
+#assignExamQuestionsModal.is-open,
+#assignExamClassesModal.is-open,
+#assignClassStudentsModal.is-open,
+#assignClassExamsModal.is-open {
+	display: flex !important;
+	position: fixed !important;
+	inset: 0 !important;
+	z-index: 2147483000 !important;
+	isolation: isolate;
+	align-items: center !important;
+	justify-content: center !important;
+	padding: 24px !important;
+	background: rgba(15, 23, 42, 0.62) !important;
+	backdrop-filter: blur(8px);
+	overflow: auto !important;
+	box-sizing: border-box;
+	opacity: 1 !important;
+	visibility: visible !important;
+	pointer-events: auto !important;
+	transform: translateZ(0);
+}
+
+#assignCategoryQuestionsModal.is-open .modal-content,
+#assignExamQuestionsModal.is-open .modal-content,
+#assignExamClassesModal.is-open .modal-content,
+#assignClassStudentsModal.is-open .modal-content,
+#assignClassExamsModal.is-open .modal-content {
+	display: flex !important;
+	flex-direction: column !important;
+	position: relative !important;
+	width: min(100%, 1000px) !important;
+	height: auto !important;
+	max-height: calc(100dvh - 48px) !important;
+	margin: auto !important;
+	border: 1px solid #dbe4ef !important;
+	border-radius: 18px !important;
+	background: #ffffff !important;
+	box-shadow: 0 28px 70px rgba(15, 23, 42, 0.34) !important;
+	opacity: 1 !important;
+	visibility: visible !important;
+	transform: none !important;
+	overflow: hidden !important;
+}
+
+/* Per-modal widths (same desktop footprint as before, unified frame) */
+#assignCategoryQuestionsModal.is-open .modal-content,
+#assignExamQuestionsModal.is-open .modal-content {
+	width: min(100%, 1200px) !important;
+}
+
+#assignExamClassesModal.is-open .modal-content {
+	width: min(100%, 760px) !important;
+}
+
+#assignClassStudentsModal.is-open .modal-content {
+	width: min(100%, 780px) !important;
+}
+
+#assignClassExamsModal.is-open .modal-content {
+	width: min(100%, 560px) !important;
+}
+
+#assignCategoryQuestionsModal.is-open .modal-header,
+#assignExamQuestionsModal.is-open .modal-header,
+#assignExamClassesModal.is-open .modal-header,
+#assignClassStudentsModal.is-open .modal-header,
+#assignClassExamsModal.is-open .modal-header {
+	min-height: 62px !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+	gap: 14px !important;
+	padding: 16px 20px !important;
+	border-bottom: 1px solid #e2e8f0 !important;
+	border-radius: 18px 18px 0 0 !important;
+	background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+	flex-shrink: 0;
+}
+
+#assignCategoryQuestionsModal.is-open .modal-header h2,
+#assignExamQuestionsModal.is-open .modal-header h2,
+#assignExamClassesModal.is-open .modal-header h2,
+#assignClassStudentsModal.is-open .modal-header h2,
+#assignClassExamsModal.is-open .modal-header h2 {
+	margin: 0 !important;
+	color: #0f172a !important;
+	font-size: 1.12rem !important;
+	font-weight: 600 !important;
+	letter-spacing: 0 !important;
+	line-height: 1.2 !important;
+}
+
+#assignCategoryQuestionsModal.is-open .close,
+#assignExamQuestionsModal.is-open .close,
+#assignExamClassesModal.is-open .close,
+#assignClassStudentsModal.is-open .close,
+#assignClassExamsModal.is-open .close {
+	width: 38px !important;
+	height: 38px !important;
+	display: inline-grid !important;
+	place-items: center !important;
+	padding: 0 !important;
+	border-radius: 10px !important;
+	color: #64748b !important;
+	font-size: 0 !important;
+	font-weight: 400 !important;
+	line-height: 0 !important;
+	text-align: center !important;
+	flex: 0 0 auto !important;
+}
+
+#assignCategoryQuestionsModal.is-open .close::before,
+#assignExamQuestionsModal.is-open .close::before,
+#assignExamClassesModal.is-open .close::before,
+#assignClassStudentsModal.is-open .close::before,
+#assignClassExamsModal.is-open .close::before {
+	content: '\00d7' !important;
+	display: block;
+	color: currentColor;
+	font-size: 1.35rem;
+	font-weight: 400;
+	line-height: 1;
+	transform: translateY(-1px);
+}
+
+#assignCategoryQuestionsModal.is-open .close:hover,
+#assignExamQuestionsModal.is-open .close:hover,
+#assignExamClassesModal.is-open .close:hover,
+#assignClassStudentsModal.is-open .close:hover,
+#assignClassExamsModal.is-open .close:hover {
+	background: #fee2e2 !important;
+	color: #b91c1c !important;
+}
+
+#assignCategoryQuestionsModal.is-open .modal-body,
+#assignExamQuestionsModal.is-open .modal-body,
+#assignExamClassesModal.is-open .modal-body,
+#assignClassStudentsModal.is-open .modal-body,
+#assignClassExamsModal.is-open .modal-body {
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	max-height: none !important;
+	padding: 20px !important;
+	background: #ffffff !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	overscroll-behavior: contain;
+}
+
+#assignCategoryQuestionsModal.is-open .form-actions,
+#assignExamQuestionsModal.is-open .form-actions,
+#assignExamClassesModal.is-open .form-actions,
+#assignClassStudentsModal.is-open .form-actions,
+#assignClassExamsModal.is-open .form-actions {
+	display: flex !important;
+	justify-content: flex-end !important;
+	gap: 10px !important;
+	margin: 4px 0 0 !important;
+	padding: 16px 0 0 !important;
+	border-top: 1px solid #e2e8f0 !important;
+	background: transparent !important;
+}
+
+#assignCategoryQuestionsModal.is-open .form-actions .btn,
+#assignExamQuestionsModal.is-open .form-actions .btn,
+#assignExamClassesModal.is-open .form-actions .btn,
+#assignClassStudentsModal.is-open .form-actions .btn,
+#assignClassExamsModal.is-open .form-actions .btn {
+	min-width: 116px !important;
+}
+
+@media (max-width: 860px) {
+	#assignCategoryQuestionsModal.is-open,
+	#assignExamQuestionsModal.is-open,
+	#assignExamClassesModal.is-open,
+	#assignClassStudentsModal.is-open,
+	#assignClassExamsModal.is-open {
+		align-items: stretch !important;
+		padding: 10px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .modal-content,
+	#assignExamQuestionsModal.is-open .modal-content,
+	#assignExamClassesModal.is-open .modal-content,
+	#assignClassStudentsModal.is-open .modal-content,
+	#assignClassExamsModal.is-open .modal-content {
+		width: 100% !important;
+		max-height: calc(100dvh - 20px) !important;
+		border-radius: 14px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .modal-header,
+	#assignExamQuestionsModal.is-open .modal-header,
+	#assignExamClassesModal.is-open .modal-header,
+	#assignClassStudentsModal.is-open .modal-header,
+	#assignClassExamsModal.is-open .modal-header {
+		min-height: 56px !important;
+		padding: 12px 14px !important;
+		border-radius: 14px 14px 0 0 !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .modal-header h2,
+	#assignExamQuestionsModal.is-open .modal-header h2,
+	#assignExamClassesModal.is-open .modal-header h2,
+	#assignClassStudentsModal.is-open .modal-header h2,
+	#assignClassExamsModal.is-open .modal-header h2 {
+		font-size: 1rem !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .modal-body,
+	#assignExamQuestionsModal.is-open .modal-body,
+	#assignExamClassesModal.is-open .modal-body,
+	#assignClassStudentsModal.is-open .modal-body,
+	#assignClassExamsModal.is-open .modal-body {
+		padding: 14px !important;
+		padding-bottom: 84px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .question-selection-container,
+	#assignExamQuestionsModal.is-open .question-selection-container {
+		grid-template-columns: 1fr !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .form-actions,
+	#assignExamQuestionsModal.is-open .form-actions,
+	#assignExamClassesModal.is-open .form-actions,
+	#assignClassStudentsModal.is-open .form-actions,
+	#assignClassExamsModal.is-open .form-actions {
+		position: absolute !important;
+		left: 0 !important;
+		right: 0 !important;
+		bottom: 0 !important;
+		display: grid !important;
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		gap: 8px !important;
+		margin: 0 !important;
+		padding: 10px 12px max(10px, env(safe-area-inset-bottom)) !important;
+		border-top: 1px solid #e2e8f0 !important;
+		border-radius: 0 0 14px 14px !important;
+		background: rgba(255, 255, 255, 0.98) !important;
+		box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.1) !important;
+		backdrop-filter: blur(10px);
+		z-index: 20 !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .form-actions .btn,
+	#assignExamQuestionsModal.is-open .form-actions .btn,
+	#assignExamClassesModal.is-open .form-actions .btn,
+	#assignClassStudentsModal.is-open .form-actions .btn,
+	#assignClassExamsModal.is-open .form-actions .btn {
+		width: 100% !important;
+		min-width: 0 !important;
+		min-height: 40px !important;
+	}
+}
+
+@media (max-width: 480px) {
+	#assignCategoryQuestionsModal.is-open,
+	#assignExamQuestionsModal.is-open,
+	#assignExamClassesModal.is-open,
+	#assignClassStudentsModal.is-open,
+	#assignClassExamsModal.is-open {
+		padding: 6px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .modal-content,
+	#assignExamQuestionsModal.is-open .modal-content,
+	#assignExamClassesModal.is-open .modal-content,
+	#assignClassStudentsModal.is-open .modal-content,
+	#assignClassExamsModal.is-open .modal-content {
+		max-height: calc(100dvh - 12px) !important;
+		border-radius: 12px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .modal-body,
+	#assignExamQuestionsModal.is-open .modal-body,
+	#assignExamClassesModal.is-open .modal-body,
+	#assignClassStudentsModal.is-open .modal-body,
+	#assignClassExamsModal.is-open .modal-body {
+		padding: 12px !important;
+		padding-bottom: 80px !important;
+	}
+}
+
+/* ========================================================================
+   QUESTION PICKERS — tall workspace with internal column scrolling.
+   Assign Questions (category + exam) need room to SEE questions: fixed tall
+   sheet, filters pinned, both columns scroll independently, footer static.
+   (Overrides the shrink-wrap exam frame above for these two modals only.)
+   ======================================================================== */
+
+#assignCategoryQuestionsModal.is-open .modal-content,
+#assignExamQuestionsModal.is-open .modal-content {
+	height: min(88dvh, 900px) !important;
+}
+
+#assignCategoryQuestionsModal.is-open .modal-body,
+#assignExamQuestionsModal.is-open .modal-body {
+	display: flex !important;
+	flex-direction: column !important;
+	overflow: hidden !important;
+	padding: 20px !important;
+}
+
+#assignCategoryQuestionsModal.is-open #assignCategoryQuestionsForm,
+#assignExamQuestionsModal.is-open #assignExamQuestionsForm {
+	display: flex !important;
+	flex-direction: column !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	height: 100% !important;
+	overflow: hidden !important;
+}
+
+#assignCategoryQuestionsModal.is-open .question-selection-container,
+#assignExamQuestionsModal.is-open .question-selection-container {
+	display: grid !important;
+	grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	gap: 14px !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	height: auto !important;
+	max-height: none !important;
+}
+
+#assignCategoryQuestionsModal.is-open .available-questions,
+#assignCategoryQuestionsModal.is-open .selected-questions,
+#assignExamQuestionsModal.is-open .question-column {
+	display: flex !important;
+	flex-direction: column !important;
+	min-width: 0 !important;
+	min-height: 0 !important;
+	height: auto !important;
+	max-height: none !important;
+	overflow: hidden !important;
+	border: 1px solid var(--border-color) !important;
+	border-radius: 14px !important;
+	background: var(--bg-surface) !important;
+}
+
+#assignCategoryQuestionsModal.is-open .available-questions h4,
+#assignCategoryQuestionsModal.is-open .selected-questions h4,
+#assignExamQuestionsModal.is-open .question-column h4 {
+	flex: 0 0 auto !important;
+	margin: 0 !important;
+	padding: 12px 14px !important;
+}
+
+#assignCategoryQuestionsModal.is-open .question-list-scroll,
+#assignExamQuestionsModal.is-open .question-list-scroll {
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	max-height: none !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	padding: 12px !important;
+	overscroll-behavior: contain;
+}
+
+#assignCategoryQuestionsModal.is-open .form-actions,
+#assignExamQuestionsModal.is-open .form-actions {
+	position: static !important;
+	flex: 0 0 auto !important;
+	display: flex !important;
+	grid-template-columns: none !important;
+	justify-content: flex-end !important;
+	gap: 10px !important;
+	margin: 14px 0 0 !important;
+	padding: 14px 0 0 !important;
+	border-top: 1px solid #e2e8f0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	backdrop-filter: none !important;
+	z-index: auto !important;
+}
+
+#assignCategoryQuestionsModal.is-open .form-actions .btn,
+#assignExamQuestionsModal.is-open .form-actions .btn {
+	width: auto !important;
+	min-width: 116px !important;
+	min-height: 40px !important;
+}
+
+@media (max-width: 860px) {
+	#assignCategoryQuestionsModal.is-open .modal-content,
+	#assignExamQuestionsModal.is-open .modal-content {
+		width: 100% !important;
+		height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+		max-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) !important;
+		border-radius: 14px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .modal-body,
+	#assignExamQuestionsModal.is-open .modal-body {
+		padding: 14px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .category-filter-section,
+	#assignExamQuestionsModal.is-open .exam-filters-container {
+		flex: 0 0 auto !important;
+		max-height: 26dvh !important;
+		overflow-y: auto !important;
+		margin-bottom: 10px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .question-selection-container,
+	#assignExamQuestionsModal.is-open .question-selection-container {
+		grid-template-columns: minmax(0, 1fr) !important;
+		grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) !important;
+		gap: 10px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .available-questions h4,
+	#assignCategoryQuestionsModal.is-open .selected-questions h4,
+	#assignExamQuestionsModal.is-open .question-column h4 {
+		padding: 10px 12px !important;
+		font-size: 0.82rem !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .form-actions,
+	#assignExamQuestionsModal.is-open .form-actions {
+		display: grid !important;
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		gap: 8px !important;
+		margin: 12px 0 0 !important;
+		padding: 12px 0 max(12px, env(safe-area-inset-bottom)) !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .form-actions .btn,
+	#assignExamQuestionsModal.is-open .form-actions .btn {
+		width: 100% !important;
+		min-width: 0 !important;
+		min-height: 44px !important;
+	}
+}
+
+@media (max-width: 480px) {
+	#assignCategoryQuestionsModal.is-open .modal-body,
+	#assignExamQuestionsModal.is-open .modal-body {
+		padding: 12px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .question-list-scroll,
+	#assignExamQuestionsModal.is-open .question-list-scroll {
+		padding: 10px !important;
+	}
+}
+
+/* ========================================================================
+   ASSIGN MODALS — mobile comfort: roomy lists, readable rows, big targets.
+   ======================================================================== */
+@media (max-width: 860px) {
+	/* Checklist + exam pickers breathe */
+	#assignExamClassesModal.is-open .assign-checklist,
+	#assignClassExamsModal.is-open .exam-selection-list {
+		gap: 10px !important;
+		padding: 6px !important;
+	}
+
+	#assignExamClassesModal.is-open .assign-checklist__item {
+		min-height: 50px !important;
+		padding: 12px 14px !important;
+		gap: 12px !important;
+		border-radius: 12px !important;
+	}
+
+	#assignExamClassesModal.is-open .assign-checklist__checkbox {
+		width: 20px !important;
+		height: 20px !important;
+		flex: 0 0 auto !important;
+	}
+
+	#assignExamClassesModal.is-open .assign-checklist__label {
+		font-size: 0.86rem !important;
+		line-height: 1.4 !important;
+	}
+
+	#assignClassExamsModal.is-open .exam-item {
+		padding: 12px 14px !important;
+		border-radius: 12px !important;
+		font-size: 0.86rem !important;
+		line-height: 1.4 !important;
+	}
+
+	/* Roster steps stack with air */
+	#assignClassStudentsModal.is-open .assign-step {
+		margin-bottom: 14px !important;
+	}
+
+	#assignClassStudentsModal.is-open .assign-step-title {
+		margin-bottom: 10px !important;
+		font-size: 0.9rem !important;
+	}
+
+	#assignClassStudentsModal.is-open .class-user-picker-row {
+		gap: 10px !important;
+	}
+
+	#assignClassStudentsModal.is-open #studentUserPicker {
+		min-height: 132px !important;
+		font-size: 0.86rem !important;
+	}
+
+	#assignClassStudentsModal.is-open .bulk-student-actions .btn {
+		min-height: 42px !important;
+	}
+
+	#assignClassStudentsModal.is-open table.roster-table th,
+	#assignClassStudentsModal.is-open table.roster-table td {
+		padding: 10px !important;
+		font-size: 0.8rem !important;
+	}
+
+	#assignClassStudentsModal.is-open .roster-toolbar {
+		gap: 8px !important;
+	}
+
+	/* Picker question cards get air */
+	#assignCategoryQuestionsModal.is-open .question-item,
+	#assignCategoryQuestionsModal.is-open .premium-question-item,
+	#assignExamQuestionsModal.is-open .question-item,
+	#assignExamQuestionsModal.is-open .premium-question-item {
+		margin-bottom: 10px !important;
+		padding: 12px !important;
+		border-radius: 12px !important;
+	}
+
+	/* Search + filter controls: comfortable height, full width */
+	#assignCategoryQuestionsModal.is-open .filter-search-input,
+	#assignExamQuestionsModal.is-open .filter-search-input,
+	#assignExamClassesModal.is-open #assignExamClassesSearch,
+	#assignClassStudentsModal.is-open .filter-search-input,
+	#assignClassExamsModal.is-open #examSearchInClass {
+		min-height: 42px !important;
+		font-size: 0.86rem !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .filter-select,
+	#assignExamQuestionsModal.is-open .filter-select {
+		min-height: 42px !important;
+		font-size: 0.82rem !important;
+	}
+}
+
+/* ========================================================================
+   QUESTION PICKERS — one scroll surface, everything expanded.
+   Filters + Available + Selected all grow to full content height (no inner
+   scrollbars). The FORM is the single scroller; the footer is a static bar
+   pinned under it, always visible. Applies to both pickers, all viewports.
+   ======================================================================== */
+
+#assignCategoryQuestionsModal.is-open .modal-body,
+#assignExamQuestionsModal.is-open .modal-body {
+	display: flex !important;
+	flex-direction: column !important;
+	overflow: hidden !important;
+	padding: 20px !important;
+}
+
+#assignCategoryQuestionsModal.is-open #assignCategoryQuestionsForm,
+#assignExamQuestionsModal.is-open #assignExamQuestionsForm {
+	display: block !important;
+	flex: 1 1 auto !important;
+	min-height: 0 !important;
+	height: auto !important;
+	overflow-y: auto !important;
+	overflow-x: hidden !important;
+	overscroll-behavior: contain;
+}
+
+/* All three sections breathe to full content height — no inner scroll */
+#assignCategoryQuestionsModal.is-open .category-filter-section,
+#assignExamQuestionsModal.is-open .exam-filters-container {
+	flex: none !important;
+	max-height: none !important;
+	overflow: visible !important;
+	margin-bottom: 14px !important;
+}
+
+#assignCategoryQuestionsModal.is-open .question-selection-container,
+#assignExamQuestionsModal.is-open .question-selection-container {
+	display: grid !important;
+	grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+	grid-template-rows: auto !important;
+	gap: 14px !important;
+	flex: none !important;
+	height: auto !important;
+	max-height: none !important;
+	min-height: 0 !important;
+}
+
+#assignCategoryQuestionsModal.is-open .available-questions,
+#assignCategoryQuestionsModal.is-open .selected-questions,
+#assignExamQuestionsModal.is-open .question-column {
+	height: auto !important;
+	max-height: none !important;
+	min-height: 0 !important;
+	overflow: visible !important;
+}
+
+#assignCategoryQuestionsModal.is-open .question-list-scroll,
+#assignExamQuestionsModal.is-open .question-list-scroll {
+	flex: none !important;
+	height: auto !important;
+	max-height: none !important;
+	min-height: 0 !important;
+	overflow: visible !important;
+}
+
+/* Static footer bar pinned under the scrolling form — always visible */
+#assignCategoryQuestionsModal.is-open .form-actions,
+#assignExamQuestionsModal.is-open .form-actions {
+	position: static !important;
+	flex: 0 0 auto !important;
+	display: flex !important;
+	grid-template-columns: none !important;
+	justify-content: flex-end !important;
+	gap: 10px !important;
+	margin: 14px -20px -20px !important;
+	padding: 14px 20px max(14px, env(safe-area-inset-bottom)) !important;
+	border-top: 1px solid #e2e8f0 !important;
+	border-radius: 0 !important;
+	background: var(--bg-surface, #fff) !important;
+	box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06) !important;
+	backdrop-filter: none !important;
+	z-index: auto !important;
+}
+
+#assignCategoryQuestionsModal.is-open .form-actions .btn,
+#assignExamQuestionsModal.is-open .form-actions .btn {
+	width: auto !important;
+	min-width: 116px !important;
+	min-height: 40px !important;
+}
+
+@media (max-width: 860px) {
+	#assignCategoryQuestionsModal.is-open .modal-body,
+	#assignExamQuestionsModal.is-open .modal-body {
+		padding: 14px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .question-selection-container,
+	#assignExamQuestionsModal.is-open .question-selection-container {
+		grid-template-columns: minmax(0, 1fr) !important;
+		gap: 12px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .form-actions,
+	#assignExamQuestionsModal.is-open .form-actions {
+		display: grid !important;
+		grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		gap: 8px !important;
+		margin: 12px -14px -14px !important;
+		padding: 12px 14px max(12px, env(safe-area-inset-bottom)) !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .form-actions .btn,
+	#assignExamQuestionsModal.is-open .form-actions .btn {
+		width: 100% !important;
+		min-width: 0 !important;
+		min-height: 44px !important;
+	}
+}
+
+@media (max-width: 480px) {
+	#assignCategoryQuestionsModal.is-open .modal-body,
+	#assignExamQuestionsModal.is-open .modal-body {
+		padding: 12px !important;
+	}
+
+	#assignCategoryQuestionsModal.is-open .form-actions,
+	#assignExamQuestionsModal.is-open .form-actions {
+		margin: 10px -12px -12px !important;
+		padding: 10px 12px max(10px, env(safe-area-inset-bottom)) !important;
+	}
+}
+
+/* ========================================================================
+   PICKER FILTER TOOLBAR — search stays joined with its icon, undo matches
+   the quick chips. Fixes: lonely wrapped icon + stretched borderless input
+   on narrow screens (the old flex:1 1 100% rule lost to !important base).
+   ======================================================================== */
+
+/* Narrow: icon + search share the first row, selects wrap below */
+@media (max-width: 1180px) {
+	.filter-search-input {
+		flex: 2 1 0 !important;
+		min-width: 0 !important;
+	}
+}
+
+/* ========================================================================
+   ASSIGN MODALS — frozen search pane. The class search row sticks under the
+   modal header so it can never be scrolled/covered out of view.
+   ======================================================================== */
+
+#assignExamClassesModal.is-open .modal-body .search-wrapper,
+#assignClassExamsModal.is-open .modal-body .search-wrapper {
+	position: sticky !important;
+	top: -20px !important;
+	z-index: 5 !important;
+	margin: 0 -20px 12px !important;
+	padding: 12px 20px 10px !important;
+	background: #ffffff !important;
+	border-bottom: 1px solid var(--border-color) !important;
+}
+
+#assignExamClassesModal.is-open .modal-body .search-wrapper input,
+#assignClassExamsModal.is-open .modal-body .search-wrapper input {
+	width: 100% !important;
+	min-height: 42px !important;
+	font-size: 0.86rem !important;
+}
+
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-body .search-wrapper,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-body .search-wrapper {
+	background: var(--bg-body) !important;
+	border-bottom-color: var(--border-color) !important;
+}
+
+@media (max-width: 860px) {
+	#assignExamClassesModal.is-open .modal-body .search-wrapper,
+	#assignClassExamsModal.is-open .modal-body .search-wrapper {
+		top: -14px !important;
+		margin: 0 -14px 10px !important;
+		padding: 10px 14px 8px !important;
+	}
+}
+
+@media (max-width: 480px) {
+	#assignExamClassesModal.is-open .modal-body .search-wrapper,
+	#assignClassExamsModal.is-open .modal-body .search-wrapper {
+		top: -12px !important;
+		margin: 0 -12px 8px !important;
+		padding: 8px 12px !important;
+	}
+}
+
+/* Mobile: the fused unit simply stretches full-width with a taller touch row */
+@media (max-width: 640px) {
+	.filter-search-wrap {
+		flex: 1 1 100% !important;
+		min-width: 0 !important;
+		min-height: 42px !important;
+		border-radius: 12px !important;
+	}
+
+	.filter-search-wrap .filter-field-icon {
+		width: 42px !important;
+	}
+
+	.filter-search-wrap .filter-search-input {
+		min-height: 42px !important;
+		font-size: 0.86rem !important;
+	}
+}
+
+/* Quick chips + undo: identical geometry in every flex context */
+.filter-toolbar-quick .quick-filter-btn,
+.filter-undo-btn {
+	box-sizing: border-box !important;
+	min-height: 30px !important;
+	height: auto !important;
+	align-self: center !important;
+	white-space: nowrap !important;
+}
+
+@media (max-width: 640px) {
+	.filter-toolbar-quick .quick-filter-btn,
+	.filter-undo-btn {
+		min-height: 38px !important;
+	}
+}
+
+/* ========================================================================
+   ASSIGN QUESTIONS — mobile collapsible filters. Search stays on its own
+   always-visible row; selects / points / quick chips / undo collapse into a
+   hidden-by-default block opened by the Filters toggle.
+   ======================================================================== */
+@media (max-width: 640px) {
+	#assignCategoryQuestionsModal .filters-toggle-btn,
+	#assignExamQuestionsModal .filters-toggle-btn {
+		display: inline-flex !important;
+		align-items: center !important;
+		justify-content: center !important;
+		gap: 8px !important;
+		width: 100% !important;
+		min-height: 42px !important;
+		margin-top: 8px !important;
+		padding: 0 14px !important;
+		border-radius: 10px !important;
+		border: 1px solid var(--border-color, #dbe4f0) !important;
+		background: var(--bg-surface-alt, #f8fafc) !important;
+		color: var(--text-secondary, #475569) !important;
+		font-size: 0.82rem !important;
+		font-weight: 700 !important;
+		cursor: pointer !important;
+		order: 2 !important;
+	}
+
+	/* Toggle stays pinned under search; expanded controls flow below it */
+	#assignCategoryQuestionsModal .filters-open .filter-select,
+	#assignExamQuestionsModal .filters-open .filter-select,
+	#assignCategoryQuestionsModal .filters-open .points-interval-filter,
+	#assignExamQuestionsModal .filters-open .points-interval-filter {
+		order: 3 !important;
+	}
+
+	#assignCategoryQuestionsModal .filters-toggle-btn.has-active,
+	#assignExamQuestionsModal .filters-toggle-btn.has-active {
+		border-color: var(--primary, #6366f1) !important;
+		color: var(--primary, #6366f1) !important;
+	}
+
+	#assignCategoryQuestionsModal .filters-toggle-btn .filters-chevron,
+	#assignExamQuestionsModal .filters-toggle-btn .filters-chevron {
+		transition: transform 0.18s ease !important;
+	}
+
+	#assignCategoryQuestionsModal .filters-open .filters-toggle-btn .filters-chevron,
+	#assignExamQuestionsModal .filters-open .filters-toggle-btn .filters-chevron {
+		transform: rotate(180deg) !important;
+	}
+
+	#assignCategoryQuestionsModal .filters-toggle-btn .filters-count-badge,
+	#assignExamQuestionsModal .filters-toggle-btn .filters-count-badge {
+		display: inline-flex !important;
+		align-items: center !important;
+		justify-content: center !important;
+		min-width: 20px !important;
+		height: 20px !important;
+		padding: 0 6px !important;
+		border-radius: 999px !important;
+		background: var(--primary, #6366f1) !important;
+		color: #ffffff !important;
+		font-size: 0.68rem !important;
+		font-weight: 800 !important;
+		line-height: 1 !important;
+	}
+
+	/* Collapsed by default: selects, points interval, quick chips + undo */
+	#assignCategoryQuestionsModal .category-filter-section:not(.filters-open) .filter-select,
+	#assignCategoryQuestionsModal .category-filter-section:not(.filters-open) .points-interval-filter,
+	#assignCategoryQuestionsModal .category-filter-section:not(.filters-open) .filter-toolbar-quick,
+	#assignExamQuestionsModal .exam-filters-container:not(.filters-open) .filter-select,
+	#assignExamQuestionsModal .exam-filters-container:not(.filters-open) .points-interval-filter,
+	#assignExamQuestionsModal .exam-filters-container:not(.filters-open) .filter-toolbar-quick {
+		display: none !important;
+	}
+
+	/* Opened: full-width stacked controls with air */
+	#assignCategoryQuestionsModal .filters-open .filter-select,
+	#assignExamQuestionsModal .filters-open .filter-select,
+	#assignCategoryQuestionsModal .filters-open .points-interval-filter,
+	#assignExamQuestionsModal .filters-open .points-interval-filter {
+		width: 100% !important;
+		min-height: 42px !important;
+		margin-top: 8px !important;
+	}
+}
+
+/* Filters toggle (Assign Questions pickers) — hidden on desktop, the
+   mobile block below turns it into the collapsible-filters trigger. */
+.filters-toggle-btn {
+	display: none;
+}
+
+.filters-toggle-btn .filters-count-badge.hidden {
+	display: none !important;
+}
+
+/* Undo button — same pill look as the quick filter chips */
+.filter-undo-btn {
+	border: 1px solid #dbe4f0 !important;
+	background: #ffffff !important;
+	color: #475569 !important;
+}
+
+.filter-undo-btn:hover {
+	border-color: #6366f1 !important;
+	color: #6366f1 !important;
+	background: #eef2ff !important;
+	transform: translateY(-1px);
+}
+
+.filter-undo-btn:active {
+	transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+	.filter-undo-btn {
+		width: 100%;
 	}
 }

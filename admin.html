@@ -39,10 +39,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-10-r17" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-10-r20" />
 		<link rel="stylesheet" href="admin.css?v=2026-09-24-r18" />
-		<link rel="stylesheet" href="theme.css?v=2026-09-24-r19" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r3" />
+		<link rel="stylesheet" href="theme.css?v=2026-09-24-r20" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r5" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -6800,6 +6800,7 @@
 						<div class="category-filter-section">
 							<div class="filter-toolbar">
 								<div class="filter-toolbar-group filter-toolbar-main">
+									<div class="filter-search-wrap">
 									<span class="filter-field-icon">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 									</span>
@@ -6810,6 +6811,18 @@
 										placeholder="Search questions..."
 										onkeyup="loadAvailableQuestionsForCategory()"
 									/>
+									</div>
+									<button
+										type="button"
+										class="filters-toggle-btn"
+										onclick="toggleAssignFilters(this)"
+										aria-expanded="false"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+										<span class="filters-toggle-label">Show filters</span>
+										<span class="filters-count-badge hidden">0</span>
+										<svg class="filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+									</button>
 									<select
 										id="categoryFilterCategory"
 										class="filter-select"
@@ -7025,6 +7038,7 @@
 						<div class="exam-filters-container">
 							<div class="filter-toolbar">
 								<div class="filter-toolbar-group filter-toolbar-main">
+									<div class="filter-search-wrap">
 									<span class="filter-field-icon">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 									</span>
@@ -7035,6 +7049,18 @@
 										placeholder="Search questions..."
 										onkeyup="debounceFilterExamQuestions()"
 									/>
+									</div>
+									<button
+										type="button"
+										class="filters-toggle-btn"
+										onclick="toggleAssignFilters(this)"
+										aria-expanded="false"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+										<span class="filters-toggle-label">Show filters</span>
+										<span class="filters-count-badge hidden">0</span>
+										<svg class="filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+									</button>
 									<select
 										id="categoryFilterExam"
 										class="filter-select"
@@ -7417,6 +7443,7 @@
 
 							<!-- Roster toolbar: search + status -->
 							<div class="roster-toolbar">
+								<div class="filter-search-wrap">
 								<span class="filter-field-icon">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
 								</span>
@@ -7427,6 +7454,7 @@
 									placeholder="Search roster by name or number..."
 									onkeyup="filterStudentRosterTable()"
 								/>
+								</div>
 								<select
 									id="studentRosterStatusFilter"
 									class="filter-select"

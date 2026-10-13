@@ -2154,11 +2154,18 @@ function openAssignExamQuestions(examId) {
 	const countEl = document.getElementById('selectedQuestionCount');
 	if (countEl) countEl.textContent = '0';
 
-	if (typeof window.promoteAssignModal === 'function') {
-		window.promoteAssignModal(modal);
+	if (typeof window.resetAssignFiltersUI === 'function') {
+		window.resetAssignFiltersUI(modal);
 	}
-	modal.style.display = 'flex';
-	setTimeout(() => modal.classList.add('active'), 10);
+	if (typeof window.openAssignModalLike === 'function') {
+		window.openAssignModalLike(modal, 'examQuestionSearch');
+	} else {
+		if (typeof window.promoteAssignModal === 'function') {
+			window.promoteAssignModal(modal);
+		}
+		modal.style.display = 'flex';
+		setTimeout(() => modal.classList.add('active'), 10);
+	}
 
 	// Load the bank, then pre-select the exam's current questions. The exam
 	// may carry either legacy numeric indices (local picker order) or the
@@ -2203,8 +2210,12 @@ function openAssignExamQuestions(examId) {
 function closeAssignExamQuestions() {
 	const modal = document.getElementById('assignExamQuestionsModal');
 	if (modal) {
-		modal.style.display = 'none';
-		modal.classList.remove('active');
+		if (typeof window.closeAssignModalLike === 'function') {
+			window.closeAssignModalLike(modal);
+		} else {
+			modal.style.display = 'none';
+			modal.classList.remove('active');
+		}
 	}
 	assignExamQuestionsId = null;
 }
@@ -2353,18 +2364,26 @@ function openAssignExamClasses(examId) {
 		}
 	}
 
-	if (typeof window.promoteAssignModal === 'function') {
-		window.promoteAssignModal(modal);
+	if (typeof window.openAssignModalLike === 'function') {
+		window.openAssignModalLike(modal, 'assignExamClassesSearch');
+	} else {
+		if (typeof window.promoteAssignModal === 'function') {
+			window.promoteAssignModal(modal);
+		}
+		modal.style.display = 'flex';
+		setTimeout(() => modal.classList.add('active'), 10);
 	}
-	modal.style.display = 'flex';
-	setTimeout(() => modal.classList.add('active'), 10);
 }
 
 function closeAssignExamClasses() {
 	const modal = document.getElementById('assignExamClassesModal');
 	if (modal) {
-		modal.style.display = 'none';
-		modal.classList.remove('active');
+		if (typeof window.closeAssignModalLike === 'function') {
+			window.closeAssignModalLike(modal);
+		} else {
+			modal.style.display = 'none';
+			modal.classList.remove('active');
+		}
 	}
 	assignExamClassesId = null;
 }

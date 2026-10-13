@@ -779,7 +779,12 @@ html[data-theme='dark'] #settingsModal .settings-tab-btn:hover svg {
 html[data-theme='dark'] #settingsModal .modal-header h2,
 html[data-theme='dark'] #examModal.is-open .modal-header h2,
 html[data-theme='dark'] #classModal.is-open .modal-header h2,
-html[data-theme='dark'] #categoryModal.is-open .modal-header h2 {
+html[data-theme='dark'] #categoryModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-header h2 {
 	color: var(--text-main) !important;
 }
 
@@ -787,7 +792,12 @@ html[data-theme='dark'] #settingsModal .close:hover,
 html[data-theme='dark'] #userModal .close:hover,
 html[data-theme='dark'] #examModal.is-open .close:hover,
 html[data-theme='dark'] #classModal.is-open .close:hover,
-html[data-theme='dark'] #categoryModal.is-open .close:hover {
+html[data-theme='dark'] #categoryModal.is-open .close:hover,
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .close:hover,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .close:hover,
+html[data-theme='dark'] #assignExamClassesModal.is-open .close:hover,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .close:hover,
+html[data-theme='dark'] #assignClassExamsModal.is-open .close:hover {
 	background: rgba(248, 113, 113, 0.2) !important;
 	color: #fca5a5 !important;
 }
@@ -1299,6 +1309,16 @@ html[data-theme='dark'] #examModal .modal-content,
 html[data-theme='dark'] #examModal.is-open .modal-content,
 html[data-theme='dark'] #classModal .modal-content,
 html[data-theme='dark'] #classModal.is-open .modal-content,
+html[data-theme='dark'] #assignCategoryQuestionsModal .modal-content,
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .modal-content,
+html[data-theme='dark'] #assignExamQuestionsModal .modal-content,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .modal-content,
+html[data-theme='dark'] #assignExamClassesModal .modal-content,
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-content,
+html[data-theme='dark'] #assignClassStudentsModal .modal-content,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-content,
+html[data-theme='dark'] #assignClassExamsModal .modal-content,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-content,
 html[data-theme='dark'] #questionModal .modal-content {
 	background-color: var(--bg-surface) !important;
 	color: var(--text-main) !important;
@@ -1312,6 +1332,16 @@ html[data-theme='dark'] #examModal .modal-header,
 html[data-theme='dark'] #examModal.is-open .modal-header,
 html[data-theme='dark'] #classModal .modal-header,
 html[data-theme='dark'] #classModal.is-open .modal-header,
+html[data-theme='dark'] #assignCategoryQuestionsModal .modal-header,
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .modal-header,
+html[data-theme='dark'] #assignExamQuestionsModal .modal-header,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .modal-header,
+html[data-theme='dark'] #assignExamClassesModal .modal-header,
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-header,
+html[data-theme='dark'] #assignClassStudentsModal .modal-header,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-header,
+html[data-theme='dark'] #assignClassExamsModal .modal-header,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-header,
 html[data-theme='dark'] #questionModal .modal-header {
 	background-color: var(--bg-surface) !important;
 	background-image: none !important;
@@ -1327,6 +1357,16 @@ html[data-theme='dark'] #examModal .modal-header h2,
 html[data-theme='dark'] #examModal.is-open .modal-header h2,
 html[data-theme='dark'] #classModal .modal-header h2,
 html[data-theme='dark'] #classModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignCategoryQuestionsModal .modal-header h2,
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignExamQuestionsModal .modal-header h2,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignExamClassesModal .modal-header h2,
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignClassStudentsModal .modal-header h2,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-header h2,
+html[data-theme='dark'] #assignClassExamsModal .modal-header h2,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-header h2,
 html[data-theme='dark'] #questionModal .modal-header h2 {
 	color: var(--text-main) !important;
 }
@@ -1339,6 +1379,16 @@ html[data-theme='dark'] #examModal .modal-body,
 html[data-theme='dark'] #examModal.is-open .modal-body,
 html[data-theme='dark'] #classModal .modal-body,
 html[data-theme='dark'] #classModal.is-open .modal-body,
+html[data-theme='dark'] #assignCategoryQuestionsModal .modal-body,
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .modal-body,
+html[data-theme='dark'] #assignExamQuestionsModal .modal-body,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .modal-body,
+html[data-theme='dark'] #assignExamClassesModal .modal-body,
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-body,
+html[data-theme='dark'] #assignClassStudentsModal .modal-body,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-body,
+html[data-theme='dark'] #assignClassExamsModal .modal-body,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-body,
 html[data-theme='dark'] #questionModal .modal-body {
 	background-color: var(--bg-body) !important;
 	color: var(--text-main) !important;
@@ -1378,7 +1428,12 @@ html[data-theme='dark'] #categoryModal #categoryForm > .form-actions,
 html[data-theme='dark'] #classModal #classForm > .form-actions,
 html[data-theme='dark'] #examModal.is-open .form-actions,
 html[data-theme='dark'] #classModal.is-open .form-actions,
-html[data-theme='dark'] #categoryModal.is-open .form-actions {
+html[data-theme='dark'] #categoryModal.is-open .form-actions,
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .form-actions,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .form-actions,
+html[data-theme='dark'] #assignExamClassesModal.is-open .form-actions,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .form-actions,
+html[data-theme='dark'] #assignClassExamsModal.is-open .form-actions {
 	background-color: var(--bg-surface) !important;
 	background-image: none !important;
 	border-top-color: var(--border-color) !important;

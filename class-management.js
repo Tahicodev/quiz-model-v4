@@ -149,7 +149,13 @@ function openModalLike(modal, focusId) {
 	document.body.classList.add('modal-open');
 	setTimeout(() => {
 		modal.classList.add('active');
-		if (focusId) {
+		// Autofocus only with a fine pointer (see openAssignModalLike):
+		// avoids the mobile keyboard jump hiding modal content.
+		if (
+			focusId &&
+			window.matchMedia &&
+			window.matchMedia('(pointer: fine)').matches
+		) {
 			document.getElementById(focusId)?.focus();
 		}
 	}, 10);

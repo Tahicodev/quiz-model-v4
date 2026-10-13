@@ -3376,6 +3376,13 @@ html[data-theme='dark'] #classModal.is-open .modal-content {
 html[data-theme='dark'] #categoryModal.is-open .modal-content {
 	border: 1px solid rgb(66, 103, 148) !important;
 }
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .modal-content,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .modal-content,
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-content,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-content,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-content {
+	border: 1px solid rgb(66, 103, 148) !important;
+}
 html[data-theme='dark'] #examModal.is-open .modal-header {
 	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
 }
@@ -3383,6 +3390,13 @@ html[data-theme='dark'] #classModal.is-open .modal-header {
 	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
 }
 html[data-theme='dark'] #categoryModal.is-open .modal-header {
+	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
+}
+html[data-theme='dark'] #assignCategoryQuestionsModal.is-open .modal-header,
+html[data-theme='dark'] #assignExamQuestionsModal.is-open .modal-header,
+html[data-theme='dark'] #assignExamClassesModal.is-open .modal-header,
+html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-header,
+html[data-theme='dark'] #assignClassExamsModal.is-open .modal-header {
 	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
 }
 html[data-theme='dark'] #examModal.is-open .exam-filters-container {
@@ -4174,6 +4188,25 @@ html[data-theme='dark'] .filter-field-icon {
 	background: var(--bg-surface);
 	border: 1px solid rgb(63, 101, 151);
 }
+html[data-theme='dark'] .filter-search-wrap {
+	background: var(--bg-surface);
+	border-color: rgb(63, 101, 151);
+}
+html[data-theme='dark'] .filter-search-wrap:focus-within {
+	border-color: rgb(32, 35, 182);
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+html[data-theme='dark'] .filter-search-wrap:focus-within .filter-field-icon {
+	color: #a5b4fc;
+}
+html[data-theme='dark'] .filter-search-wrap .filter-field-icon {
+	background: transparent;
+	border: none;
+}
+html[data-theme='dark'] .filter-search-wrap .filter-search-input {
+	background: transparent;
+	border: none;
+}
 html[data-theme='dark'] .filter-search-input {
 	border: 1px solid rgb(63, 101, 151);
 	color: rgb(181, 194, 217);
@@ -4206,12 +4239,19 @@ html[data-theme='dark'] .filter-toolbar-quick .quick-filter-btn:hover {
 	background: rgb(31, 45, 91);
 }
 html[data-theme='dark'] .filter-undo-btn {
-	border: 1px dashed var(--border-color);
+	border: 1px solid rgb(63, 101, 151);
+	background: var(--bg-surface);
 	color: var(--text-secondary);
 }
 html[data-theme='dark'] .filter-undo-btn:hover {
-	color: rgb(241, 193, 157);
-	background: rgb(91, 79, 31);
+	border-color: rgb(32, 35, 182);
+	color: var(--text-secondary);
+	background: rgb(31, 45, 91);
+}
+@media (max-width: 640px) {
+	html[data-theme='dark'] .filter-toolbar-main .filter-search-input {
+		border: 1px solid rgb(63, 101, 151) !important;
+	}
 }
 html[data-theme='dark'] #assignCategoryQuestionsModal .question-item {
 	border: 1px solid var(--border-color);

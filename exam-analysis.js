@@ -526,14 +526,36 @@ function openExamAnalysis(examId) {
 
 	const modal = document.createElement('div');
 	modal.className = 'exam-analysis-modal';
+	modal.setAttribute('role', 'dialog');
+	modal.setAttribute('aria-modal', 'true');
+	modal.setAttribute('aria-hidden', 'false');
+	document.documentElement.classList.add('modal-open');
+	document.body.classList.add('modal-open');
 	modal.innerHTML = `
 		<div class="modal-content">
 			<div class="modal-header">
-				<div>
-					<h2>Exam Analysis &amp; Sessions</h2>
-					<p class="eas-subtitle">${examAnalysisEscapeHtml(exam.name || exam.title || 'Exam')}</p>
+				<div class="modal-header-with-icon">
+					<div class="modal-header-icon icon-violet">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="22"
+							height="22"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<line x1="12" y1="20" x2="12" y2="10"></line>
+							<line x1="18" y1="20" x2="18" y2="4"></line>
+							<line x1="6" y1="20" x2="6" y2="16"></line>
+						</svg>
+					</div>
+					<div class="modal-header-text">
+						<h2>Exam Analysis &amp; Sessions</h2>
+						<p class="modal-header-subtitle eas-subtitle">${examAnalysisEscapeHtml(exam.name || exam.title || 'Exam')}</p>
+					</div>
 				</div>
-				<button class="close-btn" aria-label="Close">✕</button>
+				<button class="close-btn" aria-label="Close">&times;</button>
 			</div>
 			<div class="eas-tabs">
 				<button type="button" class="eas-tab-btn active" data-eas-tab="accuracy">Per-question accuracy</button>
@@ -550,7 +572,16 @@ function openExamAnalysis(examId) {
 
 	document.body.appendChild(modal);
 
-	const close = () => modal.remove();
+	const close = () => {
+		modal.remove();
+		document.documentElement.classList.remove('modal-open');
+		document.body.classList.remove('modal-open');
+		document.removeEventListener('keydown', onKeyDown);
+	};
+	const onKeyDown = (e) => {
+		if (e.key === 'Escape') close();
+	};
+	document.addEventListener('keydown', onKeyDown);
 
 	modal.querySelector('.close-btn').addEventListener('click', close);
 	modal.querySelector('.eas-close-btn').addEventListener('click', close);
