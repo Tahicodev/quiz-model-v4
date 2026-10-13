@@ -166,6 +166,35 @@ if (!document.getElementById('toast-animations')) {
  * @param {object} metadata - Optional additional data
  */
 function logActivity(type, name, action = 'created', metadata = {}) {
+    // ── Session actor: capture WHO triggered this activity ──────────────
+    // Stored on the entry (and the notification payload) so the Activity Log
+    // tab can show the student/teacher/admin session behind every message.
+    let actor = null;
+    try {
+        const sessionUser =
+            (window.Auth && typeof window.Auth.getCurrentUser === 'function'
+                ? window.Auth.getCurrentUser()
+                : null) || window.currentUser || null;
+        if (sessionUser) {
+            let studentIdentity = null;
+            try {
+                studentIdentity =
+                    window.Auth && typeof window.Auth.getStudentIdentity === 'function'
+                        ? window.Auth.getStudentIdentity(sessionUser)
+                        : null;
+            } catch (_) { studentIdentity = null; }
+            actor = {
+                id: sessionUser.id || '',
+                name: sessionUser.name || sessionUser.username || '',
+                username: sessionUser.username || '',
+                role: sessionUser.role || '',
+                studentNumber: sessionUser.studentNumber || '',
+                className: (studentIdentity && studentIdentity.class) || sessionUser.className || '',
+                classId: sessionUser.classId || '',
+            };
+        }
+    } catch (_) { actor = null; }
+
     // ── Backend-first: persist to Notification table so the bell shows it ──
     // The /notifications endpoint creates a real DB row (unlike audit_logs
     // which requires an entity_id we often don't have for pure UI events).
@@ -173,7 +202,7 @@ function logActivity(type, name, action = 'created', metadata = {}) {
         window.API.create('notifications', {
             type: type,
             message: `${name} ${action}`,
-            data: { name: name, action: action, metadata: metadata },
+            data: { name: name, action: action, metadata: metadata, actor: actor },
         }).catch(function (err) {
             console.warn('[utils] notification persist failed:', err && err.message);
         });
@@ -189,6 +218,11 @@ function logActivity(type, name, action = 'created', metadata = {}) {
         date: new Date().toISOString(),
         metadata: metadata,
         meta: metadata,
+        // Session info of the user (student/teacher/admin) who triggered it.
+        user: actor,
+        userName: actor ? actor.name : '',
+        userRole: actor ? actor.role : '',
+        userId: actor ? actor.id : '',
         id: generateUUID() // Use the existing generateUUID function
     };
 

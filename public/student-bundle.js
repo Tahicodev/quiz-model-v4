@@ -19675,6 +19675,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return false;
     }
     function applyTeacherAccess() {
+      syncRecentActivityViewAll();
       if (!isTeacher()) return;
       const access = getTeacherAccessSettings();
       document.querySelectorAll(".nav-tab[data-tab]").forEach((btn) => {
@@ -19729,6 +19730,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           section.classList.remove("role-hidden");
         }
       });
+    }
+    function syncRecentActivityViewAll() {
+      const btn = document.getElementById("recentActivityViewAll");
+      if (!btn) return;
+      btn.classList.toggle("role-hidden", !canAccessTab("activity"));
     }
     var schoolBrandingCache = { loaded: false, profile: null };
     function applySchoolBranding() {

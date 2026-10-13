@@ -916,6 +916,33 @@ function getAllActivities() {
 		return Math.max(participantNames.length, maxArrayCount, 0);
 	};
 
+	// Builds the session-info object shown in the Activity Log "User" column.
+	const buildUserInfo = (user) => {
+		if (!user || typeof user !== 'object') return null;
+		let className = user.className || '';
+		if (!className && user.classId) {
+			const cls = classes.find((c) => String(c.id) === String(user.classId));
+			if (cls) className = cls.name || cls.className || '';
+		}
+		const name = user.name || user.username || '';
+		if (!name && !user.role && !user.studentNumber) return null;
+		return {
+			id: user.id || '',
+			name,
+			username: user.username || '',
+			role: user.role || '',
+			studentNumber: user.studentNumber || '',
+			className,
+			classId: user.classId || '',
+		};
+	};
+
+	const resolveActorById = (id) => {
+		if (!id) return null;
+		const match = users.find((u) => u && String(u.id) === String(id));
+		return buildUserInfo(match);
+	};
+
 	const gameParticipantIndex = new Map();
 	results.forEach((entry) => {
 		if (!entry || typeof entry !== 'object') return;
@@ -974,6 +1001,8 @@ function getAllActivities() {
 					isValid: true,
 					date: q.dateCreated,
 					action: 'created',
+					ownerId: q.ownerId || '',
+					user: resolveActorById(q.ownerId),
 					meta: {
 						id: q.id,
 						type: questionType,
@@ -995,6 +1024,8 @@ function getAllActivities() {
 				name: e.name || e.title || 'New Exam',
 				isValid: true,
 				date: e.dateCreated,
+				ownerId: e.ownerId || '',
+				user: resolveActorById(e.ownerId),
 				meta: { questionCount: e.questions?.length || 0 },
 				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
 				color: TYPE_STYLES.exam.color,
@@ -1014,6 +1045,24 @@ function getAllActivities() {
 			const participantNames = resolveParticipantNamesForDisplay(r);
 			const participantCount = resolveParticipantCount(r, participantNames);
 			const nameSuffix = r.deviceName ? ` (from ${r.deviceName})` : '';
+			const matchedStudent = users.find(
+				(u) =>
+					u &&
+					((studentNumber &&
+						String(u.studentNumber || '').trim() === String(studentNumber).trim()) ||
+						(r.userId && String(u.id) === String(r.userId))),
+			);
+			const resultActor =
+				buildUserInfo(matchedStudent) ||
+				(studentName && String(studentName).toLowerCase() !== 'student'
+					? {
+							id: r.userId || '',
+							name: studentName,
+							role: 'student',
+							studentNumber,
+							className,
+						}
+					: null);
 			return {
 				id: r.id || `${studentNumber || studentName}-${dateIso}`,
 				type: 'result',
@@ -1032,6 +1081,7 @@ function getAllActivities() {
 				mode: r.mode || r.gameMode || 'training',
 				score: scoreText,
 				action: 'completed',
+				user: resultActor,
 				meta: {
 					studentName,
 					studentNumber,
@@ -1379,7 +1429,8 @@ function renderActivityTable(activities) {
 
 	if (activities.length === 0) {
 		tbody.innerHTML =
-			'<tr><td colspan="4" class="empty-cell">No activity found</td></tr>';
+			'<tr><td colspan="5" class="empty-cell">No activity found</td></tr>';
+		populateActivityUserFilter(new Set());
 		return;
 	}
 
@@ -1402,7 +1453,52 @@ function renderActivityTable(activities) {
 			'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"></circle><path d="M4 20c0-4 4-7 8-7s8 3 8 7"></path></svg>',
 	};
 
+	// Session info (student/teacher/admin) shown in the "User" column.
+	const activityUsers = window.__DI_CONTAINER__.repo.getAll_sync('users') || [];
+	const activityClasses = window.__DI_CONTAINER__.repo.getAll_sync('classes') || [];
+	const activityUsersById = new Map(
+		activityUsers.filter(Boolean).map((u) => [String(u.id), u]),
+	);
+
+	const resolveActivityActor = (item) => {
+		if (!item) return null;
+		if (item.user && (item.user.name || item.user.role || item.user.studentNumber)) {
+			return item.user;
+		}
+		if (item.userName) {
+			return { name: item.userName, role: item.userRole || '' };
+		}
+		if (item.type === 'result') {
+			if (item.studentName && String(item.studentName).toLowerCase() !== 'student') {
+				return {
+					name: item.studentName,
+					role: 'student',
+					studentNumber: item.studentNumber || '',
+					className: item.className || '',
+				};
+			}
+			return null;
+		}
+		const ownerId = item.ownerId || item.meta?.ownerId || item.userId;
+		const owner = ownerId ? activityUsersById.get(String(ownerId)) : null;
+		if (owner) {
+			let className = owner.className || '';
+			if (!className && owner.classId) {
+				const cls = activityClasses.find((c) => String(c.id) === String(owner.classId));
+				if (cls) className = cls.name || cls.className || '';
+			}
+			return {
+				name: owner.name || owner.username || '',
+				role: owner.role || '',
+				studentNumber: owner.studentNumber || '',
+				className,
+			};
+		}
+		return null;
+	};
+
 	let html = '';
+	const activityActorNames = new Set();
 	activities.forEach((item) => {
 		let dateStr = 'N/A';
 		if (item.date) {
@@ -1575,8 +1671,41 @@ function renderActivityTable(activities) {
 			}
 		}
 
+		const actor = resolveActivityActor(item);
+		const actorName = actor && actor.name ? actor.name : '';
+		if (actorName) activityActorNames.add(actorName);
+		const actorRoleLabel = actor && actor.role ? capitalize(actor.role) : '';
+		const actorSub = actor
+			? [
+					actor.studentNumber ? `#${actor.studentNumber}` : '',
+					actor.className || '',
+				]
+					.filter(Boolean)
+					.join(' • ')
+			: '';
+		const actorCell = `
+                    <div class="activity-user-cell">
+                        <span class="activity-user-name">${actorName ? escapeActivityText(actorName) : '—'}</span>
+                        ${
+													actorRoleLabel
+														? `<span class="activity-user-role">${escapeActivityText(actorRoleLabel)}</span>`
+														: ''
+												}
+                        ${
+													actorSub
+														? `<span class="activity-user-sub">${escapeActivityText(actorSub)}</span>`
+														: ''
+												}
+                    </div>`;
+
 		html += `
-            <tr ${actionLink} data-id="${item.id || ''}">
+            <tr ${actionLink} data-id="${escapeActivityText(item.id || '')}" data-type="${escapeActivityText(
+			item.type || '',
+		)}" data-role="${escapeActivityText(
+			(actor && actor.role) || '',
+		)}" data-user="${escapeActivityText(actorName)}" data-date="${escapeActivityText(
+			item.date || item.dateCreated || '',
+		)}">
                 <td><span class="badge ${typeClass}">${capitalize(
 			item.type
 		)}</span></td>
@@ -1593,6 +1722,7 @@ function renderActivityTable(activities) {
                         </div>
                     </div>
                 </td>
+                <td>${actorCell}</td>
                 <td>${displayDate}</td>
                 <td>${status}</td>
             </tr>
@@ -1600,6 +1730,10 @@ function renderActivityTable(activities) {
 	});
 
 	window.safeSetHTML ? window.safeSetHTML(tbody, html, true) : (tbody.innerHTML = html);
+
+	// Rebuild the user dropdown from the actors present, then re-apply filters.
+	populateActivityUserFilter(activityActorNames);
+	filterActivityTable();
 }
 
 function loadActivityLog() {
@@ -1608,29 +1742,137 @@ function loadActivityLog() {
 }
 
 function filterActivityTable() {
-	const input = document.getElementById('activitySearch');
-	const filter = input.value.toLowerCase();
 	const tbody = document.getElementById('activityTableBody');
+	if (!tbody) return;
+
+	const search = (document.getElementById('activitySearch')?.value || '')
+		.trim()
+		.toLowerCase();
+	const type = document.getElementById('activityTypeFilter')?.value || '';
+	const role = document.getElementById('activityRoleFilter')?.value || '';
+	const user = document.getElementById('activityUserFilter')?.value || '';
+	const period = document.getElementById('activityDateFilter')?.value || '';
+
+	const now = new Date();
+	const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+	const daysAgo = (n) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+
 	const rows = tbody.getElementsByTagName('tr');
+	let dataRows = 0;
+	let visible = 0;
 
 	for (let i = 0; i < rows.length; i++) {
-		const cells = rows[i].getElementsByTagName('td');
-		let found = false;
+		const row = rows[i];
+		if (row.classList.contains('activity-no-match')) continue;
+		if (row.querySelector('.empty-cell')) continue;
+		dataRows++;
 
-		// Loop through all cells in row
-		for (let j = 0; j < cells.length; j++) {
-			const cell = cells[j];
-			if (cell) {
-				const textValue = cell.textContent || cell.innerText;
-				if (textValue.toLowerCase().indexOf(filter) > -1) {
-					found = true;
-					break;
-				}
+		let matches = true;
+
+		if (
+			search &&
+			(row.textContent || row.innerText || '').toLowerCase().indexOf(search) === -1
+		) {
+			matches = false;
+		}
+
+		if (matches && type) {
+			matches = (row.getAttribute('data-type') || '') === type;
+		}
+
+		if (matches && role) {
+			matches = (row.getAttribute('data-role') || '') === role;
+		}
+
+		if (matches && user) {
+			matches = (row.getAttribute('data-user') || '') === user;
+		}
+
+		if (matches && period) {
+			const raw = row.getAttribute('data-date') || '';
+			const dateObj = raw ? new Date(raw) : null;
+			if (!dateObj || isNaN(dateObj.getTime())) {
+				matches = false;
+			} else if (period === 'today') {
+				matches = dateObj >= startOfToday;
+			} else if (period === 'month') {
+				matches =
+					dateObj.getFullYear() === now.getFullYear() &&
+					dateObj.getMonth() === now.getMonth();
+			} else {
+				const n = parseInt(period, 10);
+				if (Number.isFinite(n)) matches = dateObj >= daysAgo(n);
 			}
 		}
 
-		rows[i].style.display = found ? '' : 'none';
+		row.style.display = matches ? '' : 'none';
+		if (matches) visible++;
 	}
+
+	// Toggle the "no matching activity" row.
+	let noMatch = tbody.querySelector('tr.activity-no-match');
+	const shouldShowNoMatch = dataRows > 0 && visible === 0;
+	if (shouldShowNoMatch) {
+		if (!noMatch) {
+			noMatch = document.createElement('tr');
+			noMatch.className = 'activity-no-match';
+			noMatch.innerHTML =
+				'<td colspan="5" class="empty-cell">No activity matches the selected filters</td>';
+			tbody.appendChild(noMatch);
+		}
+		noMatch.style.display = '';
+	} else if (noMatch) {
+		noMatch.style.display = 'none';
+	}
+}
+
+function populateActivityUserFilter(names) {
+	const select = document.getElementById('activityUserFilter');
+	if (!select) return;
+
+	const current = select.value;
+	const unique = [
+		...new Set(
+			[...(names || [])]
+				.map((name) => String(name || '').trim())
+				.filter(Boolean),
+		),
+	].sort((a, b) => a.localeCompare(b));
+
+	let html = '<option value="">All users</option>';
+	unique.forEach((name) => {
+		const safe = escapeActivityText(name);
+		html += `<option value="${safe}">${safe}</option>`;
+	});
+	select.innerHTML = html;
+
+	if (current && unique.includes(current)) {
+		select.value = current;
+	}
+}
+
+function clearActivityFilters() {
+	[
+		'activityTypeFilter',
+		'activityRoleFilter',
+		'activityUserFilter',
+		'activityDateFilter',
+	].forEach((id) => {
+		const el = document.getElementById(id);
+		if (el) el.value = '';
+	});
+	const search = document.getElementById('activitySearch');
+	if (search) search.value = '';
+	filterActivityTable();
+}
+
+function escapeActivityText(value) {
+	return String(value == null ? '' : value)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
 }
 
 function exportActivityLog() {
@@ -1640,7 +1882,7 @@ function exportActivityLog() {
 		return;
 	}
 
-	const headers = ['Type', 'Name', 'Date', 'Status'];
+	const headers = ['Type', 'User', 'Role', 'Description', 'Date', 'Status'];
 	const csvContent =
 		'data:text/csv;charset=utf-8,' +
 		headers.join(',') +
@@ -1651,9 +1893,16 @@ function exportActivityLog() {
 					? new Date(row.date).toLocaleString()
 					: 'N/A';
 				const status = 'Created'; // Default for now
+				const actor = row.user || {};
+				const userName = String(
+					(actor && actor.name) || row.userName || '',
+				).replace(/"/g, '""');
+				const userRole = String(
+					(actor && actor.role) || row.userRole || '',
+				);
 				// Escape quotes in name
 				const safeName = `"${row.name.replace(/"/g, '""')}"`;
-				return `${row.type},${safeName},${dateStr},${status}`;
+				return `${row.type},"${userName}",${userRole},${safeName},${dateStr},${status}`;
 			})
 			.join('\n');
 

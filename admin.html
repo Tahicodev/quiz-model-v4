@@ -1253,12 +1253,57 @@
 						</div>
 					</div>
 
+					<div class="activity-filters" id="activityFilters">
+						<div class="activity-filter">
+							<label for="activityTypeFilter">Type</label>
+							<select id="activityTypeFilter" class="form-control" onchange="filterActivityTable()">
+								<option value="">All types</option>
+								<option value="question">Question</option>
+								<option value="exam">Exam</option>
+								<option value="class">Class</option>
+								<option value="category">Category</option>
+								<option value="result">Result</option>
+								<option value="import">Import</option>
+								<option value="export">Export</option>
+								<option value="device">Device</option>
+								<option value="profile_request">Profile request</option>
+							</select>
+						</div>
+						<div class="activity-filter">
+							<label for="activityRoleFilter">Role</label>
+							<select id="activityRoleFilter" class="form-control" onchange="filterActivityTable()">
+								<option value="">All roles</option>
+								<option value="admin">Admin</option>
+								<option value="teacher">Teacher</option>
+								<option value="student">Student</option>
+							</select>
+						</div>
+						<div class="activity-filter">
+							<label for="activityUserFilter">User</label>
+							<select id="activityUserFilter" class="form-control" onchange="filterActivityTable()">
+								<option value="">All users</option>
+							</select>
+						</div>
+						<div class="activity-filter">
+							<label for="activityDateFilter">Period</label>
+							<select id="activityDateFilter" class="form-control" onchange="filterActivityTable()">
+								<option value="">All time</option>
+								<option value="today">Today</option>
+								<option value="7">Last 7 days</option>
+								<option value="30">Last 30 days</option>
+								<option value="month">This month</option>
+							</select>
+						</div>
+						<button type="button" class="btn btn-secondary activity-filter-clear" onclick="clearActivityFilters()">Clear filters</button>
+					</div>
+
 					<div class="table-container">
 						<table class="data-table" id="activityTable">
 							<thead>
 								<tr>
 									<th>Type</th>
 									<th>Description</th>
+									<th>User</th>
 									<th>Date</th>
 									<th>Status</th>
 								</tr>
@@ -7707,7 +7752,7 @@
 								<div class="form-group half">
 									<label for="ai-category" style="font-weight: 600;">Category</label>
 									<select id="ai-category" class="form-control" style="padding: 10px;">
-										<option value="">-- No Category (General) --</option>
+										<option value="uncategorized">Uncategorized</option>
 									</select>
 								</div>
 							</div>
@@ -7991,7 +8036,7 @@
 										<div class="form-group half">
 											<label for="docCategory" style="font-weight: 600;">Category</label>
 											<select id="docCategory" class="form-control" style="padding: 10px;">
-												<option value="">-- No Category --</option>
+												<option value="uncategorized">Uncategorized</option>
 											</select>
 										</div>
 										<div class="form-group half">

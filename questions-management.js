@@ -6574,20 +6574,27 @@ function populateAICategorySelect() {
 		const select = document.getElementById(id);
 		if (!select) return;
 		
-		const firstOptionText = id === 'ai-category' ? '-- No Category (General) --' : '-- No Category --';
-		select.innerHTML = `<option value="">${firstOptionText}</option>`;
+		select.innerHTML = '<option value="uncategorized">Uncategorized</option>';
 		
 		try {
 			const categories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
 			categories.forEach(cat => {
+				const value = cat.id || cat.name;
+				const isUncategorized =
+					value === 'uncategorized' ||
+					String(cat.name || '').trim().toLowerCase() === 'uncategorized';
+				if (isUncategorized) return;
 				const option = document.createElement('option');
-				option.value = cat.id || cat.name;
+				option.value = value;
 				option.textContent = cat.name;
 				select.appendChild(option);
 			});
 		} catch (e) {
 			console.error('Error loading categories:', e);
 		}
+		
+		// Default to Uncategorized so generated questions land there.
+		select.value = 'uncategorized';
 	});
 }
 

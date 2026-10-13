@@ -19129,6 +19129,88 @@ body.mobile-action-sheet-open {
 	color: #e11d48;
 }
 
+/* User (session actor) cell in the Activity Log table */
+.activity-user-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.activity-user-name {
+	font-weight: 600;
+	color: var(--text-main);
+	overflow-wrap: anywhere;
+}
+
+.activity-user-role {
+	display: inline-flex;
+	align-self: flex-start;
+	padding: 1px 8px;
+	border-radius: 10px;
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+}
+
+.activity-user-sub {
+	color: var(--text-secondary);
+	font-size: 0.72rem;
+	overflow-wrap: anywhere;
+}
+
+/* Activity Log filters */
+.activity-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 12px;
+	margin-bottom: 16px;
+	padding: 12px;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: var(--bg-surface);
+}
+
+.activity-filter {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 140px;
+}
+
+.activity-filter label {
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+}
+
+.activity-filter select {
+	min-height: 38px;
+	padding: 8px 10px;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: var(--bg-surface-alt);
+	color: var(--text-main);
+	font-size: 0.85rem;
+}
+
+.activity-filter select:focus {
+	border-color: var(--primary);
+	box-shadow: 0 0 0 3px var(--primary-light);
+	outline: none;
+}
+
+.activity-filter-clear {
+	min-height: 38px;
+	align-self: flex-end;
+}
+
 /* Status Badges */
 .status-badge {
 	display: inline-flex;
@@ -28299,6 +28381,23 @@ tr[data-id],
 		min-width: 0;
 	}
 
+	.activity-filters {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+		padding: 10px;
+	}
+
+	.activity-filter {
+		min-width: 0;
+	}
+
+	.activity-filter-clear {
+		grid-column: 1 / -1;
+		justify-content: center;
+		width: 100%;
+	}
+
 	#activity .search-box input {
 		min-height: 38px;
 		padding: 8px 10px 8px 34px;
@@ -28343,7 +28442,8 @@ tr[data-id],
 		grid-template-columns: minmax(0, 1fr) auto;
 		grid-template-areas:
 			'desc status'
-			'type date';
+			'type date'
+			'user user';
 		gap: 8px 10px;
 		margin-bottom: 10px;
 		padding: 12px;
@@ -28396,20 +28496,28 @@ tr[data-id],
 	}
 
 	#activityTable tbody td:nth-child(3) {
-		grid-area: date;
+		grid-area: user;
 	}
 
 	#activityTable tbody td:nth-child(3)::before {
-		content: 'Date';
+		content: 'User';
 	}
 
 	#activityTable tbody td:nth-child(4) {
+		grid-area: date;
+	}
+
+	#activityTable tbody td:nth-child(4)::before {
+		content: 'Date';
+	}
+
+	#activityTable tbody td:nth-child(5) {
 		grid-area: status;
 		justify-self: end;
 		text-align: right;
 	}
 
-	#activityTable tbody td:nth-child(4)::before {
+	#activityTable tbody td:nth-child(5)::before {
 		display: none;
 	}
 
@@ -29457,11 +29565,12 @@ tr[data-id],
 			'desc'
 			'status'
 			'type'
-			'date';
+			'date'
+			'user';
 		padding: 10px;
 	}
 
-	#activityTable tbody td:nth-child(4) {
+	#activityTable tbody td:nth-child(5) {
 		justify-self: start;
 		text-align: left;
 	}
@@ -42358,8 +42467,8 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		display: block !important;
 	}
 	#activityTable tbody tr td:nth-child(1),
-	#activityTable tbody tr td:nth-child(3),
-	#activityTable tbody tr td:nth-child(4) {
+	#activityTable tbody tr td:nth-child(4),
+	#activityTable tbody tr td:nth-child(5) {
 		display: inline-flex !important;
 		align-items: center !important;
 		width: auto !important;
@@ -42373,7 +42482,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		white-space: nowrap !important;
 	}
 	#activityTable tbody tr td:nth-child(1)::before,
-	#activityTable tbody tr td:nth-child(3)::before {
+	#activityTable tbody tr td:nth-child(4)::before {
 		display: none !important;
 		content: none !important;
 	}
@@ -42468,7 +42577,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	#results-table tbody tr td[data-label='Source']::before,
 	#results-table tbody tr td.owner-col::before,
 	#activityTable tbody tr td:nth-child(1)::before,
-	#activityTable tbody tr td:nth-child(3)::before {
+	#activityTable tbody tr td:nth-child(4)::before {
 		display: inline-block !important;
 		width: auto !important;
 		height: auto !important;
@@ -42516,7 +42625,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 
 	/* Activity */
 	#activityTable tbody tr td:nth-child(1)::before { content: 'Type' !important; }
-	#activityTable tbody tr td:nth-child(3)::before { content: 'On' !important; }
+	#activityTable tbody tr td:nth-child(4)::before { content: 'On' !important; }
 }
 
 /* ========================================================================
