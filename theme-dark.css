@@ -72,6 +72,15 @@ html[data-theme='dark'] .workspace-tab-btn:hover {
 	color: rgb(142, 167, 235);
 	background: rgb(31, 59, 91);
 }
+/* Dark mode: focused (active) tab keeps white text on hover/focus. */
+html[data-theme='dark'] .workspace-tab-btn.active:hover,
+html[data-theme='dark'] .workspace-tab-btn.active:focus,
+html[data-theme='dark'] .workspace-tab-btn.active:focus-visible,
+html[data-theme='dark'] body.student-workspace .workspace-tab-btn.active:hover,
+html[data-theme='dark'] body.student-workspace .workspace-tab-btn.active:focus,
+html[data-theme='dark'] body.student-workspace .workspace-tab-btn.active:focus-visible {
+	color: #ffffff;
+}
 html[data-theme='dark'] .hero-card {
 	background: linear-gradient(
 		165deg,
@@ -3692,6 +3701,23 @@ html[data-theme='dark'] .explanation-box {
 	background: var(--bg-surface-alt);
 	color: rgb(185, 196, 213);
 }
+html[data-theme='dark'] .student-workspace .corrections-modal-content {
+	background: var(--bg-surface);
+	color: rgb(181, 194, 217);
+}
+html[data-theme='dark'] .student-workspace .corrections-modal-header,
+html[data-theme='dark'] .student-workspace .corrections-modal-footer {
+	background: var(--bg-surface);
+}
+html[data-theme='dark'] .student-workspace .corrections-modal-title-wrap h3 {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-workspace .corrections-modal-subtitle {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-workspace .corrections-modal-body .corrections-container {
+	background: transparent;
+}
 html[data-theme='dark'] .training-timer {
 	background: rgb(91, 79, 31);
 	color: rgb(241, 189, 157);
@@ -3930,6 +3956,99 @@ html[data-theme='dark'] .student-workspace .results-list .result-score.passed {
 }
 html[data-theme='dark'] .student-workspace .results-list .result-score.failed {
 	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .results-filter-label {
+	color: var(--text-muted);
+}
+html[data-theme='dark'] .student-workspace .results-subtabs {
+	background: rgba(148, 163, 184, 0.1);
+	border-color: rgba(148, 163, 184, 0.22);
+}
+html[data-theme='dark'] .student-workspace .results-subtab {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-workspace .results-subtab:hover:not(.active) {
+	background: rgba(99, 102, 241, 0.2);
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-workspace .results-summary-chip {
+	background: linear-gradient(160deg, var(--bg-surface) 0%, var(--bg-surface) 100%);
+	border-color: rgba(148, 163, 184, 0.22);
+}
+html[data-theme='dark'] .student-workspace .results-summary-value {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-workspace .results-summary-label {
+	color: var(--text-muted);
+}
+html[data-theme='dark'] .student-workspace .question-accuracy-badge {
+	background: rgba(99, 102, 241, 0.22);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-card {
+	background: linear-gradient(160deg, rgba(99, 102, 241, 0.18), rgba(99, 102, 241, 0.08));
+	border-color: rgba(99, 102, 241, 0.32);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-card--hard {
+	background: linear-gradient(160deg, rgba(239, 68, 68, 0.18), rgba(239, 68, 68, 0.08));
+	border-color: rgba(239, 68, 68, 0.34);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-card--good {
+	background: linear-gradient(160deg, rgba(16, 185, 129, 0.18), rgba(16, 185, 129, 0.08));
+	border-color: rgba(16, 185, 129, 0.34);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-card--good .accuracy-summary-value {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-card--good .accuracy-summary-label {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .accuracy-sources {
+	color: var(--text-muted);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-value {
+	color: rgb(180, 178, 235);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-card--hard .accuracy-summary-value {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-label {
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .student-workspace .accuracy-summary-card--hard .accuracy-summary-label {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .accuracy-row {
+	background: linear-gradient(160deg, var(--bg-surface) 0%, var(--bg-surface) 100%);
+	border-color: rgba(148, 163, 184, 0.22);
+}
+html[data-theme='dark'] .student-workspace .accuracy-rank {
+	color: var(--text-muted);
+}
+html[data-theme='dark'] .student-workspace .accuracy-question {
+	color: rgb(172, 188, 225);
+}
+html[data-theme='dark'] .student-workspace .accuracy-pill--hard {
+	color: rgb(240, 158, 158);
+}
+html[data-theme='dark'] .student-workspace .accuracy-pill--mid {
+	color: rgb(245, 210, 140);
+}
+html[data-theme='dark'] .student-workspace .accuracy-pill--strong {
+	color: rgb(157, 241, 217);
+}
+html[data-theme='dark'] .student-workspace .accuracy-bar {
+	background: rgba(148, 163, 184, 0.24);
+}
+html[data-theme='dark'] .student-workspace .accuracy-meta {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .student-workspace .accuracy-type {
+	background: rgba(99, 102, 241, 0.22);
+	color: rgb(156, 150, 227);
+}
+html[data-theme='dark'] .student-workspace .accuracy-more {
+	color: var(--text-muted);
 }
 html[data-theme='dark'] #studentProfileModal .modal-header .close {
 	background: rgba(16, 26, 44, 0.12);
@@ -5402,5 +5521,6 @@ html[data-theme='dark'] #studentProfileModal .sa-secure-intro h3 { color: #f1f5f
 html[data-theme='dark'] #studentProfileModal .sa-secure-intro p { color: #94a3b8 !important; }
 html[data-theme='dark'] #studentProfileModal .sa-tips { background: #0f172a; border-color: rgba(148,163,184,0.3); color: #94a3b8; }
 html[data-theme='dark'] #studentProfileModal .sa-btn-ghost { background: #0f172a !important; color: #cbd5e1 !important; border-color: rgba(148,163,184,0.35) !important; }
+html[data-theme='dark'] #studentProfileModal .sa-back-btn { background: rgba(99,102,241,0.2) !important; color: #c7d2fe !important; border-color: rgba(99,102,241,0.45) !important; }
 html[data-theme='dark'] #studentProfileModal .sa-pw-toggle { background: rgba(99,102,241,0.2); color: #c7d2fe; }
 html[data-theme='dark'] #studentProfileModal .profile-request-status:not(:empty) { background: #0f172a !important; border-color: rgba(148,163,184,0.28) !important; color: #cbd5e1 !important; }

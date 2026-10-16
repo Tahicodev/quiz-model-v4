@@ -136,14 +136,14 @@
 		</script>
 		<script src="utils.js" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
-		<script src="api-client.js?v=2026-10-06-r1" defer></script>
+		<script src="api-client.js?v=2026-10-14-r2" defer></script>
 		<script src="auth.js?v=2026-10-06-r2" defer></script>
 		<script src="vendor/socket.io.min.js" defer></script>
 		<script src="realtime-client.js?v=2026-09-15-r2" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="legacy-auth-bridge.js" defer></script>
+		<script src="legacy-auth-bridge.js?v=2026-10-14-r1" defer></script>
 		<script
-			src="student-workspace.js?v=2026-10-12-r4"
+			src="student-workspace.js?v=2026-10-14-r5"
 			defer
 		></script>
 	</head>
@@ -634,13 +634,147 @@
 					<div class="workspace-column">
 						<aside class="workspace-sidebar">
 							<div class="workspace-panel" data-workspace-section="results">
-								<div class="panel-header">
-									<div>
-										<h2>Recent Results</h2>
-										<p>Your latest scores and attempts</p>
-									</div>
+								<div
+									class="results-subtabs"
+									id="studentResultsSubtabs"
+									role="tablist"
+									aria-label="Results views"
+								>
+									<button
+										type="button"
+										class="results-subtab active"
+										role="tab"
+										id="results-subtab-results"
+										aria-selected="true"
+										aria-controls="results-panel-results"
+										tabindex="0"
+										data-results-view="results"
+									>
+										My Results
+									</button>
+									<button
+										type="button"
+										class="results-subtab"
+										role="tab"
+										id="results-subtab-accuracy"
+										aria-selected="false"
+										aria-controls="results-panel-accuracy"
+										tabindex="-1"
+										data-results-view="accuracy"
+									>
+										Question Accuracy
+									</button>
 								</div>
-								<div id="studentResults" class="results-list"></div>
+
+								<div
+									class="results-view"
+									data-results-panel="results"
+									role="tabpanel"
+									id="results-panel-results"
+									aria-labelledby="results-subtab-results"
+									tabindex="0"
+								>
+									<div class="panel-header">
+										<div>
+											<h2>My Results</h2>
+											<p>Filter your scores and see what to review next</p>
+										</div>
+									</div>
+									<div class="results-filters" id="studentResultsFilters">
+										<div
+											class="results-filter-group"
+											role="group"
+											aria-label="Filter results by type"
+										>
+											<span class="results-filter-label">Type</span>
+											<button type="button" class="filter-chip active" data-result-type="all">
+												All
+											</button>
+											<button type="button" class="filter-chip" data-result-type="exam">
+												Exams
+											</button>
+											<button type="button" class="filter-chip" data-result-type="training">
+												Training
+											</button>
+											<button type="button" class="filter-chip" data-result-type="game">
+												Games
+											</button>
+										</div>
+									</div>
+									<div
+										id="studentResultsSummary"
+										class="results-summary"
+										aria-live="polite"
+									></div>
+									<div id="studentResults" class="results-list"></div>
+								</div>
+
+								<div
+									class="results-view"
+									data-results-panel="accuracy"
+									role="tabpanel"
+									id="results-panel-accuracy"
+									aria-labelledby="results-subtab-accuracy"
+									tabindex="0"
+									hidden
+								>
+									<div class="panel-header">
+										<div>
+											<h2>Question Accuracy</h2>
+											<p>Questions you find hardest, ranked by accuracy</p>
+										</div>
+										<span
+											class="question-accuracy-badge"
+											id="studentAccuracyBadge"
+										></span>
+									</div>
+									<div
+										class="results-filters accuracy-filters"
+										id="studentAccuracyFilters"
+										hidden
+									>
+										<div
+											class="results-filter-group"
+											role="group"
+											aria-label="Filter accuracy by source"
+										>
+											<span class="results-filter-label">Source</span>
+											<button type="button" class="filter-chip active" data-accuracy-source="all">
+												All
+											</button>
+											<button type="button" class="filter-chip" data-accuracy-source="exam">
+												Exams
+											</button>
+											<button type="button" class="filter-chip" data-accuracy-source="training">
+												Training
+											</button>
+											<button type="button" class="filter-chip" data-accuracy-source="game">
+												Games
+											</button>
+										</div>
+										<div
+											class="results-filter-group"
+											role="group"
+											aria-label="Filter accuracy by mastery"
+										>
+											<span class="results-filter-label">Mastery</span>
+											<button type="button" class="filter-chip active" data-accuracy-mastery="all">
+												All
+											</button>
+											<button type="button" class="filter-chip" data-accuracy-mastery="practice">
+												Need practice
+											</button>
+											<button type="button" class="filter-chip" data-accuracy-mastery="good">
+												Good
+											</button>
+										</div>
+									</div>
+									<div
+										id="studentQuestionAccuracy"
+										class="question-accuracy"
+										aria-live="polite"
+									></div>
+								</div>
 							</div>
 						</aside>
 					</div>
@@ -1170,6 +1304,12 @@
 						</div>
 					</div>
 					<div id="update-tab" class="profile-section hidden" role="tabpanel">
+						<div class="sa-back-row">
+							<button type="button" class="sa-back-btn" data-profile-tab="profile" aria-label="Back to profile">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+								<span>Back to Profile</span>
+							</button>
+						</div>
 						<div class="profile-form-card sa-card">
 							<div class="profile-form-card-header sa-card-head">
 								<span class="sa-step">Step 01 — Identity</span>
@@ -1269,6 +1409,12 @@
 						</div>
 					</div>
 					<div id="security-tab" class="profile-section hidden" role="tabpanel">
+						<div class="sa-back-row">
+							<button type="button" class="sa-back-btn" data-profile-tab="profile" aria-label="Back to profile">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+								<span>Back to Profile</span>
+							</button>
+						</div>
 						<div class="profile-security-intro sa-secure-intro">
 							<div class="profile-security-medal sa-shield" aria-hidden="true">
 								<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
@@ -1376,6 +1522,43 @@
 			</div>
 		</div>
 		<div
+			id="trainingCorrectionsModal"
+			class="modal corrections-modal"
+			aria-hidden="true"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="trainingCorrectionsTitle"
+		>
+			<div class="modal-content corrections-modal-content">
+				<div class="modal-header corrections-modal-header">
+					<div class="corrections-modal-title-wrap">
+						<h3 id="trainingCorrectionsTitle">Answer Breakdown & Corrections</h3>
+						<p class="corrections-modal-subtitle" id="trainingCorrectionsSubtitle"></p>
+					</div>
+					<button
+						type="button"
+						class="close-modal-btn"
+						onclick="closeTrainingCorrectionsModal()"
+						aria-label="Close corrections"
+					>
+						&times;
+					</button>
+				</div>
+				<div class="modal-body corrections-modal-body" id="trainingCorrectionsBody">
+					<!-- Corrections list renders here -->
+				</div>
+				<div class="corrections-modal-footer">
+					<button
+						type="button"
+						class="workspace-btn ghost"
+						onclick="closeTrainingCorrectionsModal()"
+					>
+						Close
+					</button>
+				</div>
+			</div>
+		</div>
+		<div
 			id="trainingImageLightbox"
 			class="training-lightbox"
 			hidden
@@ -1386,11 +1569,54 @@
 		<script>
 			// Student Account modal micro-interactions (safe: no global MutationObserver).
 			(function () {
+				var MOBILE_QUERY = '(max-width: 760px)';
+				function isMobileViewport() {
+					try {
+						return window.matchMedia
+							? window.matchMedia(MOBILE_QUERY).matches
+							: window.innerWidth <= 760;
+					} catch (e) {
+						return false;
+					}
+				}
 				function activateTab(key) {
 					var btn = document.querySelector(
 						'#studentProfileModal .profile-tab-btn[data-profile-tab="' + key + '"]'
 					);
 					if (btn) btn.click();
+				}
+				// Mobile only: the tab bar (.profile-tabs/.profile-tabs-v2/.sa-tabs)
+				// is hidden via CSS, so the student name becomes the way back
+				// to the Profile overview tab.
+				function syncMobileNameLink() {
+					var name = document.getElementById('studentProfileName');
+					if (!name) return;
+					var mobile = isMobileViewport();
+					name.classList.toggle('sa-name-link', mobile);
+					if (mobile) {
+						name.setAttribute('role', 'button');
+						name.setAttribute('tabindex', '0');
+						name.setAttribute('title', 'Back to profile');
+						name.setAttribute('aria-label', 'Back to profile');
+					} else {
+						name.removeAttribute('role');
+						name.removeAttribute('tabindex');
+						name.removeAttribute('title');
+						name.removeAttribute('aria-label');
+					}
+				}
+				function goToProfileFromName() {
+					if (!isMobileViewport()) return;
+					activateTab('profile');
+					var body = document.querySelector('#studentProfileModal .sa-body');
+					if (body) {
+						try {
+							body.scrollTo({ top: 0, behavior: 'smooth' });
+						} catch (e) {
+							body.scrollTop = 0;
+						}
+					}
+					setTimeout(paintStrength, 50);
 				}
 				function paintStrength() {
 					var input = document.getElementById('studentPasswordNew');
@@ -1421,7 +1647,12 @@
 					}
 				}
 				document.addEventListener('click', function (e) {
-					var quick = e.target && e.target.closest ? e.target.closest('.sa-quick-btn[data-profile-tab]') : null;
+					var nameLink = e.target && e.target.closest ? e.target.closest('#studentProfileName.sa-name-link') : null;
+					if (nameLink) {
+						goToProfileFromName();
+						return;
+					}
+					var quick = e.target && e.target.closest ? e.target.closest('.sa-quick-btn[data-profile-tab], .sa-back-btn[data-profile-tab]') : null;
 					if (quick) {
 						activateTab(quick.getAttribute('data-profile-tab'));
 						setTimeout(paintStrength, 50);
@@ -1441,11 +1672,29 @@
 				document.addEventListener('input', function (e) {
 					if (e.target && e.target.id === 'studentPasswordNew') paintStrength();
 				});
+				document.addEventListener('keydown', function (e) {
+					if (e.key !== 'Enter' && e.key !== ' ') return;
+					var nameLink = e.target && e.target.closest ? e.target.closest('#studentProfileName.sa-name-link') : null;
+					if (nameLink) {
+						e.preventDefault();
+						goToProfileFromName();
+					}
+				});
+				try {
+					if (window.matchMedia) {
+						var mq = window.matchMedia(MOBILE_QUERY);
+						if (mq.addEventListener) mq.addEventListener('change', syncMobileNameLink);
+						else if (mq.addListener) mq.addListener(syncMobileNameLink);
+					}
+				} catch (e) {}
+				window.addEventListener('resize', syncMobileNameLink);
 				if (document.readyState === 'loading') {
-					document.addEventListener('DOMContentLoaded', paintStrength);
+					document.addEventListener('DOMContentLoaded', function () { paintStrength(); syncMobileNameLink(); });
 				} else {
 					paintStrength();
+					syncMobileNameLink();
 				}
+				syncMobileNameLink();
 			})();
 		</script>
 	</body>

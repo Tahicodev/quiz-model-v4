@@ -264,6 +264,24 @@
         if (!res.ok) {
           var err = new Error(parseError(res, text));
           err.status = res.status;
+          // Single-session enforcement: this tab's session was ended by a
+          // newer sign-in elsewhere. Hand off to the session watchdog (it is
+          // idempotent) so the user is signed out with an explanation instead
+          // of seeing scattered API errors.
+          try {
+            var errJson = JSON.parse(text);
+            var errCode = errJson && errJson.error && errJson.error.code;
+            if (
+              res.status === 409 &&
+              (errCode === 'SESSION_ACTIVE' || errCode === 'SESSION_SUPERSEDED') &&
+              typeof window.__sessionSuperseded === 'function'
+            ) {
+              err.code = errCode;
+              window.__sessionSuperseded();
+            }
+          } catch (_) {
+            /* non-JSON error body — nothing to classify */
+          }
           throw err;
         }
         if (!text) return null;
@@ -316,6 +334,15 @@
       if (c.color != null) out.color = String(c.color);
       var parent = c.parent_id || c.parentId;
       if (parent) out.parent_id = String(parent);
+      // Moving a category back to top-level sends parent_id: null
+      // explicitly — a present-but-null key means "clear", while an absent
+      // key means "leave unchanged".
+      else if (
+        Object.prototype.hasOwnProperty.call(c, 'parent_id') ||
+        Object.prototype.hasOwnProperty.call(c, 'parentId')
+      ) {
+        out.parent_id = null;
+      }
       return out;
     },
 

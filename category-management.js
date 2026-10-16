@@ -70,15 +70,23 @@ function hasCategoryTrainingMap() {
 }
 
 function isTrainingCategory(categoryOrId) {
-	const id = String(
+	const originalId = String(
 		(categoryOrId && categoryOrId.id) || categoryOrId || 'uncategorized',
 	);
 	const map = getCategoryTrainingMap();
-	if (Object.prototype.hasOwnProperty.call(map, id)) {
-		return map[id] === true;
+	// Nearest explicit entry wins — walk up through parents so enabling
+	// "Math" covers "Addition"/"Subtraction" without extra toggles.
+	let id = originalId;
+	const seen = new Set();
+	while (id && !seen.has(id)) {
+		seen.add(id);
+		if (Object.prototype.hasOwnProperty.call(map, id)) {
+			return map[id] === true;
+		}
+		id = getCategoryParentId(getCategoryById(id));
 	}
 	// Legacy default: only Uncategorized feeds training until configured.
-	return id === 'uncategorized';
+	return originalId === 'uncategorized';
 }
 
 function getQuestionTrainingCategoryId(question) {
@@ -220,7 +228,763 @@ function setQuickCategoryColor(color) {
 	}
 }
 
-function saveQuickCategoryForm() {
+// Author attribution for categories. Server-stamped keys (`created_by` /
+// `creator_id`) are authoritative and win over the legacy `ownerId`: the
+// edit dialog used to fall back to "current user" when only `ownerId` was
+// present, so a stale local `ownerId` must never shadow the real author
+// (e.g. a teacher's category showing the admin as its creator).
+function getCategoryAuthorId(category) {
+	if (!category || typeof category !== 'object') return '';
+	const author =
+		category.created_by ||
+		category.creator_id ||
+		category.ownerId ||
+		category.createdBy ||
+		category.creatorId ||
+		'';
+	return String(author || '');
+}
+
+// ============================================
+// CATEGORY TREE (nested categories / subcategories)
+// ============================================
+// The server stores the hierarchy in `parent_id` (self-FK, any depth).
+// These helpers are the single place that interprets it on the admin side;
+// they are also exposed as `window.CategoryTree` for the question-bank,
+// exam-builder and bulk-assign selects in the other admin scripts.
+function getCategoryParentId(category) {
+	if (!category || typeof category !== 'object') return '';
+	const p = category.parent_id ?? category.parentId ?? '';
+	return String(p || '');
+}
+
+function getCategoryById(id, list) {
+	const rows = Array.isArray(list) ? list : categories;
+	const key = String(id ?? '');
+	return rows.find((c) => c && String(c.id) === key) || null;
+}
+
+function getCategoryChildrenIds(parentId, list) {
+	const rows = Array.isArray(list) ? list : categories;
+	const key = String(parentId ?? '');
+	return rows
+		.filter(
+			(c) =>
+				c &&
+				c.id &&
+				!c.isSystem &&
+				String(c.id) !== key &&
+				getCategoryParentId(c) === key,
+		)
+		.map((c) => c.id);
+}
+
+// Questions live in the deepest level only: a category with subcategories
+// cannot hold questions directly (the question form + API enforce this).
+function isLeafCategory(id, list) {
+	return getCategoryChildrenIds(id, list).length === 0;
+}
+
+// All descendant ids (iterative + cycle-safe: a corrupted loop can never
+// hang the UI, and getOrderedCategoryTree still renders every row).
+function getCategoryDescendantIds(id, list) {
+	const out = [];
+	const seen = new Set([String(id ?? '')]);
+	const queue = [String(id ?? '')];
+	while (queue.length) {
+		const current = queue.shift();
+		for (const childId of getCategoryChildrenIds(current, list)) {
+			const key = String(childId);
+			if (seen.has(key)) continue;
+			seen.add(key);
+			out.push(childId);
+			queue.push(key);
+		}
+	}
+	return out;
+}
+
+function getCategoryAncestorIds(id, list) {
+	const rows = Array.isArray(list) ? list : categories;
+	const out = [];
+	const seen = new Set([String(id ?? '')]);
+	let current = String(id ?? '');
+	for (;;) {
+		const cat = rows.find((c) => c && String(c.id) === current) || null;
+		const parent = cat ? getCategoryParentId(cat) : '';
+		if (!parent || seen.has(parent)) break;
+		seen.add(parent);
+		const parentRow =
+			rows.find((c) => c && String(c.id) === parent) || null;
+		out.push(parentRow ? parentRow.id : parent);
+		current = parent;
+	}
+	return out;
+}
+
+function getCategoryDepth(id, list) {
+	return getCategoryAncestorIds(id, list).length;
+}
+
+// Breadcrumb path, e.g. "Math › Addition".
+function getCategoryPath(id, list, separator = ' › ') {
+	const parentPath = getCategoryParentPath(id, list, separator);
+	const self = getCategoryById(id, list);
+	const selfName = self ? String(self.name || 'Unnamed') : '';
+	if (!parentPath) return selfName;
+	if (!selfName) return parentPath;
+	return `${parentPath}${separator}${selfName}`;
+}
+
+// Breadcrumb of ancestors only, e.g. "Math › Addition" for Equations.
+function getCategoryParentPath(id, list, separator = ' › ') {
+	const rows = Array.isArray(list) ? list : categories;
+	const names = [...getCategoryAncestorIds(id, list)].reverse().map((cid) => {
+		const cat = rows.find((c) => c && String(c.id) === String(cid));
+		return cat ? String(cat.name || 'Unnamed') : '';
+	});
+	return names.filter(Boolean).join(separator);
+}
+
+// Flat pre-order walk: roots first, children (name-sorted) nested right
+// under their parent. Nodes whose parent is absent from `list` are treated
+// as roots, so filtered subsets still render correctly. Cycle leftovers
+// (unreachable from any root) are appended instead of dropped.
+function getOrderedCategoryTree(list, rootComparator) {
+	const rows = (Array.isArray(list) ? list : categories).filter(
+		(c) => c && c.id,
+	);
+	const byId = new Map(rows.map((c) => [String(c.id), c]));
+	const childrenOf = new Map();
+	const roots = [];
+	for (const row of rows) {
+		const parent = getCategoryParentId(row);
+		if (
+			parent &&
+			parent !== String(row.id) &&
+			byId.has(parent)
+		) {
+			if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+			childrenOf.get(parent).push(row);
+		} else {
+			roots.push(row);
+		}
+	}
+	const byName = (a, b) =>
+		String(a.name || '').localeCompare(String(b.name || ''));
+	roots.sort(typeof rootComparator === 'function' ? rootComparator : byName);
+	for (const siblings of childrenOf.values()) siblings.sort(byName);
+	const out = [];
+	const seen = new Set();
+	const visit = (row, depth) => {
+		const key = String(row.id);
+		if (seen.has(key)) return;
+		seen.add(key);
+		out.push({ category: row, depth });
+		for (const child of childrenOf.get(key) || []) visit(child, depth + 1);
+	};
+	for (const root of roots) visit(root, 0);
+	for (const row of rows) {
+		if (!seen.has(String(row.id))) visit(row, 0);
+	}
+	return out;
+}
+
+function getIndentedCategoryLabel(category, depth) {
+	return `${'\u2014 '.repeat(depth)}${category?.name || 'Unnamed'}`;
+}
+
+// ============================================
+// TREE COLLAPSE STATE (persisted per browser)
+// ============================================
+let collapsedCategories = new Set();
+try {
+	const rawCollapsed = localStorage.getItem('quizCollapsedCategories');
+	const parsedCollapsed = rawCollapsed ? JSON.parse(rawCollapsed) : [];
+	if (Array.isArray(parsedCollapsed)) {
+		collapsedCategories = new Set(
+			parsedCollapsed.map((id) => String(id)),
+		);
+	}
+} catch (_) {
+	collapsedCategories = new Set();
+}
+
+function persistCollapsedCategories() {
+	try {
+		localStorage.setItem(
+			'quizCollapsedCategories',
+			JSON.stringify([...collapsedCategories]),
+		);
+	} catch (_) {
+		/* private mode etc. — collapse just won't survive reloads */
+	}
+}
+
+function toggleCategoryCollapse(event, categoryId) {
+	if (event) {
+		event.stopPropagation();
+		if (typeof event.preventDefault === 'function') event.preventDefault();
+	}
+	const key = String(categoryId);
+	if (collapsedCategories.has(key)) {
+		collapsedCategories.delete(key);
+	} else {
+		collapsedCategories.add(key);
+	}
+	persistCollapsedCategories();
+	updateCategoryList();
+}
+
+// ============================================
+// POINTER DRAG NESTING (mouse + touch, one code path)
+// ============================================
+// Dragging starts on the ⋮⋮ grip, which has `touch-action: none` so the page
+// still scrolls everywhere else. A press without movement is a tap and
+// toggles tap-to-move mode instead — touch screens get the full experience:
+// drag to nest, or tap grip → tap destination.
+let catDrag = null; // { id, pointerId, startX, startY, started, targetId, ghost, hint }
+let catPointerBound = false;
+let catDragLastScroll = 0;
+const CAT_DRAG_THRESHOLD_PX = 8;
+
+function bindCatPointerOnce() {
+	if (catPointerBound) return;
+	catPointerBound = true;
+	try {
+		window.addEventListener('pointermove', onCatPointerMove, {
+			passive: false,
+		});
+		window.addEventListener('pointerup', onCatPointerUp);
+		window.addEventListener('pointercancel', cancelCatPointerDrag);
+	} catch (_) {
+		/* ignore */
+	}
+}
+
+function clearCatDropTarget() {
+	try {
+		document
+			.querySelectorAll('#categoryList tr.drop-target')
+			.forEach((r) => r.classList.remove('drop-target'));
+	} catch (_) {
+		/* ignore */
+	}
+}
+
+// Dropping onto Uncategorized moves the row to top-level; anything else must
+// be a real, non-system category that is neither the dragged row nor one of
+// its own subcategories.
+function canDropCategoryOn(draggedId, targetId) {
+	const from = String(draggedId ?? '');
+	const to = String(targetId ?? '');
+	if (!from || !to || from === to) return false;
+	if (to === 'uncategorized') return true;
+	const target = getCategoryById(to);
+	if (!target || target.isSystem) return false;
+	const forbidden = new Set([from]);
+	for (const id of getCategoryDescendantIds(from)) {
+		forbidden.add(String(id));
+	}
+	return !forbidden.has(to);
+}
+
+function onGripPointerDown(event, categoryId) {
+	if (event?.pointerType === 'mouse' && (event.button ?? 0) !== 0) return;
+	bindCatPointerOnce();
+	catDrag = {
+		id: String(categoryId),
+		pointerId: event?.pointerId ?? null,
+		startX: event?.clientX ?? 0,
+		startY: event?.clientY ?? 0,
+		started: false,
+		targetId: null,
+		ghost: null,
+		hint: null,
+	};
+	// Suppress native image-drag / text selection. (The grip's
+	// `touch-action: none` already keeps touch from scrolling here, and
+	// cancelling pointerdown also suppresses the synthetic click that would
+	// otherwise immediately toggle tap-to-move after a drag.)
+	try {
+		if (typeof event?.preventDefault === 'function') event.preventDefault();
+	} catch (_) {
+		/* ignore */
+	}
+}
+
+function onCatPointerMove(event) {
+	if (!catDrag) return;
+	if (
+		catDrag.pointerId !== null &&
+		event.pointerId !== catDrag.pointerId
+	)
+		return;
+	const dx = (event.clientX ?? 0) - catDrag.startX;
+	const dy = (event.clientY ?? 0) - catDrag.startY;
+	if (!catDrag.started) {
+		if (Math.hypot(dx, dy) < CAT_DRAG_THRESHOLD_PX) return;
+		startCatPointerDrag(event);
+	}
+	positionCatGhost(event);
+	updateCatDropTarget(event);
+	autoScrollCatDrag(event);
+}
+
+function startCatPointerDrag(event) {
+	const cat = getCategoryById(catDrag.id);
+	catDrag.started = true;
+	try {
+		document.body.classList.add('cat-dragging');
+	} catch (_) {
+		/* ignore */
+	}
+	try {
+		const row = document.querySelector(
+			`#categoryList tr[data-id="${catDrag.id}"]`,
+		);
+		if (row) row.classList.add('drag-source');
+	} catch (_) {
+		/* ignore */
+	}
+	try {
+		const ghost = document.createElement('div');
+		ghost.className = 'cat-drag-ghost';
+		ghost.innerHTML =
+			`<span class="ghost-name"><span class="ghost-dot" style="background-color:${cat?.color || '#9ca3af'}"></span>${escapeHtml(cat?.name || 'Category')}</span>` +
+			`<span class="ghost-hint">Release to cancel</span>`;
+		document.body.appendChild(ghost);
+		catDrag.ghost = ghost;
+		catDrag.hint = ghost.querySelector('.ghost-hint');
+	} catch (_) {
+		catDrag.ghost = null;
+		catDrag.hint = null;
+	}
+	positionCatGhost(event);
+}
+
+function positionCatGhost(event) {
+	if (!catDrag?.ghost) return;
+	try {
+		catDrag.ghost.style.left = `${(event.clientX ?? 0) + 14}px`;
+		catDrag.ghost.style.top = `${(event.clientY ?? 0) + 14}px`;
+	} catch (_) {
+		/* ignore */
+	}
+}
+
+function catRowFromPoint(x, y) {
+	try {
+		if (typeof document.elementFromPoint !== 'function') return null;
+		const el = document.elementFromPoint(x, y);
+		const row = el?.closest?.('#categoryList tr[data-id]');
+		return row?.dataset?.id ? row : null;
+	} catch (_) {
+		return null;
+	}
+}
+
+function updateCatDropTarget(event) {
+	if (!catDrag) return;
+	const row = catRowFromPoint(event.clientX, event.clientY);
+	const targetId = row ? String(row.dataset.id) : null;
+	if (targetId === catDrag.targetId) return;
+	catDrag.targetId = targetId;
+	clearCatDropTarget();
+	const valid = !!targetId && canDropCategoryOn(catDrag.id, targetId);
+	if (targetId && valid) {
+		try {
+			const targetRow = document.querySelector(
+				`#categoryList tr[data-id="${targetId}"]`,
+			);
+			if (targetRow) targetRow.classList.add('drop-target');
+		} catch (_) {
+			/* ignore */
+		}
+	}
+	updateCatGhostHint(valid, targetId);
+}
+
+function updateCatGhostHint(valid, targetId) {
+	const hint = catDrag?.hint;
+	if (!hint) return;
+	try {
+		if (!targetId) {
+			hint.textContent = 'Release to cancel';
+			hint.className = 'ghost-hint';
+		} else if (String(targetId) === 'uncategorized') {
+			hint.textContent = 'Release: move to top level';
+			hint.className = 'ghost-hint top';
+		} else if (valid) {
+			const target = getCategoryById(targetId);
+			hint.textContent = `Release: nest in "${target?.name || 'category'}"`;
+			hint.className = 'ghost-hint';
+		} else {
+			hint.textContent = "Can't nest here";
+			hint.className = 'ghost-hint bad';
+		}
+	} catch (_) {
+		/* ignore */
+	}
+}
+
+function autoScrollCatDrag(event) {
+	const now = Date.now();
+	if (now - catDragLastScroll < 60) return;
+	catDragLastScroll = now;
+	const y = event.clientY ?? -1;
+	if (y < 0) return;
+	let dy = 0;
+	try {
+		const height = window.innerHeight || 0;
+		if (y < 90) dy = -18;
+		else if (height && y > height - 90) dy = 18;
+	} catch (_) {
+		/* ignore */
+	}
+	if (!dy) return;
+	try {
+		let scroller = null;
+		const el =
+			typeof document.elementFromPoint === 'function'
+				? document.elementFromPoint(event.clientX, event.clientY)
+				: null;
+		let node = el?.parentElement;
+		while (
+			node &&
+			node !== document.body &&
+			node !== document.documentElement
+		) {
+			if (node.scrollHeight > node.clientHeight + 4) {
+				scroller = node;
+				break;
+			}
+			node = node.parentElement;
+		}
+		if (scroller) scroller.scrollTop += dy;
+		else if (typeof window.scrollBy === 'function') window.scrollBy(0, dy);
+	} catch (_) {
+		/* ignore */
+	}
+}
+
+function cleanupCatPointerDrag() {
+	try {
+		document.body.classList.remove('cat-dragging');
+	} catch (_) {
+		/* ignore */
+	}
+	try {
+		if (catDrag?.ghost && typeof catDrag.ghost.remove === 'function') {
+			catDrag.ghost.remove();
+		}
+	} catch (_) {
+		/* ignore */
+	}
+	clearCatDropTarget();
+	try {
+		document
+			.querySelectorAll('#categoryList tr.drag-source')
+			.forEach((r) => r.classList.remove('drag-source'));
+	} catch (_) {
+		/* ignore */
+	}
+	catDrag = null;
+}
+
+async function onCatPointerUp(event) {
+	if (!catDrag) return;
+	if (
+		catDrag.pointerId !== null &&
+		event.pointerId !== catDrag.pointerId
+	)
+		return;
+	const drag = catDrag;
+	const wasDragging = drag.started;
+	const targetId = drag.targetId;
+	cleanupCatPointerDrag();
+	if (wasDragging) {
+		// A click typically follows pointer-up on the grip — it must not
+		// toggle tap-to-move right after a drag.
+		suppressMoveTapUntil = Date.now() + 600;
+		// A pointer drop wins over any active tap-to-move session.
+		if (moveModeCategoryId) exitCategoryMoveMode();
+		if (targetId) await dropCategoryOnto(drag.id, targetId);
+		return;
+	}
+	// Plain tap on the grip → toggle tap-to-move mode.
+	startCategoryMove(null, drag.id);
+}
+
+function cancelCatPointerDrag() {
+	if (!catDrag) return;
+	cleanupCatPointerDrag();
+}
+
+// Shared drop path for pointer drags and tap-to-move: validate, then move.
+async function dropCategoryOnto(draggedId, targetId) {
+	if (!canDropCategoryOn(draggedId, targetId)) {
+		showToast(
+			'A category cannot live inside itself or its own subcategories',
+			'error',
+		);
+		return false;
+	}
+	return moveCategoryToParent(
+		draggedId,
+		String(targetId) === 'uncategorized' ? '' : String(targetId),
+	);
+}
+
+// ============================================
+// TAP-TO-MOVE MODE (mouse AND touch friendly)
+// ============================================
+// Pointer drags nest directly; a plain tap on the grip (or the Move action)
+// picks the category up instead: tap its new parent, and the shared
+// dropCategoryOnto() path below performs the move. The source stays
+// highlighted, valid targets glow green, and a banner explains + offers
+// Cancel.
+let moveModeCategoryId = null;
+let categoryMoveEscBound = false;
+let suppressMoveTapUntil = 0;
+
+function bindCategoryMoveEsc() {
+	if (categoryMoveEscBound) return;
+	categoryMoveEscBound = true;
+	try {
+		document.addEventListener('keydown', (e) => {
+			if (
+				(e.key === 'Escape' || e.key === 'Esc') &&
+				moveModeCategoryId
+			) {
+				cancelCategoryMove();
+			}
+		});
+	} catch (_) {
+		/* ignore */
+	}
+}
+
+function renderMoveModeBanner() {
+	let banner = null;
+	try {
+		banner = document.getElementById('categoryMoveBanner');
+	} catch (_) {
+		banner = null;
+	}
+	if (!moveModeCategoryId) {
+		if (banner && typeof banner.remove === 'function') banner.remove();
+		return;
+	}
+	const cat = getCategoryById(moveModeCategoryId);
+	if (!banner) {
+		try {
+			banner = document.createElement('div');
+			banner.id = 'categoryMoveBanner';
+			document.body.appendChild(banner);
+		} catch (_) {
+			return;
+		}
+	}
+	banner.innerHTML =
+		`<span>Moving "<b>${escapeHtml(cat?.name || 'category')}</b>" \u2014 tap a highlighted category to nest it inside it (Uncategorized = top level).</span>` +
+		`<button type="button" onclick="cancelCategoryMove()">Cancel</button>`;
+}
+
+function startCategoryMove(event, categoryId) {
+	if (event) {
+		event.stopPropagation();
+		if (typeof event.preventDefault === 'function') event.preventDefault();
+	}
+	const key = String(categoryId ?? '');
+	if (!key) return;
+	// Tapping the source again cancels.
+	if (moveModeCategoryId === key) {
+		cancelCategoryMove();
+		return;
+	}
+	moveModeCategoryId = key;
+	bindCategoryMoveEsc();
+	renderMoveModeBanner();
+	updateCategoryList();
+	const cat = getCategoryById(key);
+	showToast(
+		`Moving "${cat?.name || 'category'}" \u2014 tap a category to nest it inside (Uncategorized = top level).`,
+		'info',
+	);
+}
+
+function cancelCategoryMove() {
+	if (!moveModeCategoryId) return;
+	moveModeCategoryId = null;
+	renderMoveModeBanner();
+	updateCategoryList();
+}
+
+function exitCategoryMoveMode() {
+	moveModeCategoryId = null;
+	renderMoveModeBanner();
+}
+
+async function finishCategoryMoveOnTap(targetId) {
+	if (!moveModeCategoryId) return;
+	const sourceId = moveModeCategoryId;
+	if (String(targetId) === String(sourceId)) {
+		cancelCategoryMove();
+		return;
+	}
+	const moved = await dropCategoryOnto(sourceId, targetId);
+	if (moved) {
+		moveModeCategoryId = null;
+		renderMoveModeBanner();
+		updateCategoryList();
+	}
+	// On failure the mode stays active so the teacher can retry elsewhere.
+}
+
+// Reparent a category (server-first, then the local mirror). Passing '' as
+// the new parent moves it back to top-level.
+// Returns true when the mirror now reflects the requested parent.
+async function moveCategoryToParent(categoryId, newParentId) {
+	const category = categories.find(
+		(c) => c && String(c.id) === String(categoryId),
+	);
+	if (!category) {
+		showToast('Category not found', 'error');
+		return false;
+	}
+	const prevParent = getCategoryParentId(category);
+	if ((prevParent || '') === (newParentId || '')) return true; // no-op
+	if (newParentId) {
+		const target = categories.find(
+			(c) => c && String(c.id) === String(newParentId),
+		);
+		if (!target || target.isSystem || target.id === 'uncategorized') {
+			showToast('Cannot nest inside that category', 'error');
+			return false;
+		}
+		const forbidden = new Set([String(categoryId)]);
+		for (const id of getCategoryDescendantIds(categoryId)) {
+			forbidden.add(String(id));
+		}
+		if (forbidden.has(String(newParentId))) {
+			showToast(
+				'A category cannot live inside itself or its own subcategories',
+				'error',
+			);
+			return false;
+		}
+	}
+
+	if (window.API && typeof window.API.update === 'function') {
+		try {
+			const payload = { name: category.name };
+			if (category.color) payload.color = category.color;
+			// The API mapper forwards an explicit null (clear) and uuids;
+			// an absent key would leave the server value untouched.
+			if (newParentId) payload.parent_id = newParentId;
+			else if (prevParent) payload.parent_id = null;
+			const saved = await window.API.update(
+				'categories',
+				categoryId,
+				payload,
+			);
+			if (
+				saved &&
+				(saved.parent_id !== undefined || saved.parentId !== undefined)
+			) {
+				const serverParent = saved.parent_id ?? saved.parentId ?? null;
+				category.parent_id = serverParent;
+				category.parentId = serverParent;
+			} else {
+				category.parent_id = newParentId || null;
+				category.parentId = newParentId || null;
+			}
+		} catch (apiErr) {
+			console.warn('[categories] move failed:', apiErr);
+			showToast(
+				'Could not move category: ' + (apiErr?.message || 'network error'),
+				'error',
+			);
+			return false;
+		}
+	} else {
+		category.parent_id = newParentId || null;
+		category.parentId = newParentId || null;
+	}
+
+	saveCategories();
+	updateCategoryList();
+	loadCategoriesIntoSelect();
+	loadCategoriesIntoFilters();
+	const targetName = newParentId
+		? getCategoryById(newParentId)?.name || 'another category'
+		: 'top level';
+	showToast(
+		`"${category.name}" moved ${newParentId ? `into "${targetName}"` : 'to top level'}`,
+		'success',
+	);
+	if (typeof logActivity === 'function') {
+		logActivity('category', category.name, 'moved', {
+			id: categoryId,
+			parent_id: newParentId || null,
+		});
+	}
+	return true;
+}
+
+// Parent dropdown of the create/edit modal: every visible category, indented
+// by depth. The edited category itself plus its whole subtree are excluded
+// (a category cannot live inside itself or its own subcategories).
+function populateCategoryParentPicker(excludeId) {
+	const select = document.getElementById('categoryParent');
+	if (!select) return;
+	const excluded = new Set();
+	if (excludeId) {
+		excluded.add(String(excludeId));
+		for (const id of getCategoryDescendantIds(excludeId)) {
+			excluded.add(String(id));
+		}
+	}
+	const visible = categories.filter(
+		(category) =>
+			category &&
+			category.id &&
+			!category.isSystem &&
+			category.id !== 'uncategorized' &&
+			!excluded.has(String(category.id)) &&
+			(!window.Auth?.canAccessItem ||
+				window.Auth.canAccessItem('category', category)),
+	);
+	select.innerHTML = '';
+	const topOption = document.createElement('option');
+	topOption.value = '';
+	topOption.textContent = 'Top-level category';
+	select.appendChild(topOption);
+	for (const { category, depth } of getOrderedCategoryTree(visible)) {
+		const option = document.createElement('option');
+		option.value = category.id;
+		option.textContent = getIndentedCategoryLabel(category, depth);
+		select.appendChild(option);
+	}
+}
+
+if (typeof window !== 'undefined') {
+	window.CategoryTree = {
+		getParentId: getCategoryParentId,
+		getById: getCategoryById,
+		getChildrenIds: getCategoryChildrenIds,
+		isLeaf: isLeafCategory,
+		getDescendantIds: getCategoryDescendantIds,
+		getAncestorIds: getCategoryAncestorIds,
+		getDepth: getCategoryDepth,
+		getPath: getCategoryPath,
+		getOrderedTree: getOrderedCategoryTree,
+		getIndentedLabel: getIndentedCategoryLabel,
+	};
+}
+
+async function saveQuickCategoryForm() {
 	const categoryName = document
 		.getElementById('quickCategoryName')
 		.value.trim();
@@ -241,14 +1005,46 @@ function saveQuickCategoryForm() {
 		return;
 	}
 
+	// Authorship is stamped in both vocabularies so the owner badge and the
+	// teacher filter agree no matter which key a reader checks.
+	const authorId = window.Auth?.getCurrentUser?.()?.id || '';
 	const newCategory = {
 		id: generateUUID(),
 		name: categoryName,
 		color: categoryColor,
 		questionCount: 0,
 		dateCreated: new Date().toISOString(),
-		ownerId: window.Auth?.getCurrentUser?.()?.id || '',
+		ownerId: authorId,
+		created_by: authorId,
 	};
+
+	// Persist to the backend so the server stamps the same author
+	// (`created_by` from the JWT). The server id/author are authoritative —
+	// adopt them so the local mirror never disagrees with the DB.
+	if (window.API && typeof window.API.create === 'function') {
+		try {
+			const payload = { name: newCategory.name };
+			if (newCategory.color) payload.color = newCategory.color;
+			const saved = await window.API.create('categories', payload);
+			if (saved && saved.id) {
+				newCategory.id = saved.id;
+			}
+			const serverAuthor =
+				(saved && (saved.created_by || saved.creator_id || saved.ownerId)) ||
+				'';
+			if (serverAuthor) {
+				newCategory.created_by = String(serverAuthor);
+				newCategory.ownerId = String(serverAuthor);
+			}
+		} catch (apiErr) {
+			console.warn('[categories] API create failed:', apiErr);
+			showToast(
+				'Category saved locally, but the server sync failed: ' +
+					(apiErr?.message || 'network error'),
+				'warning',
+			);
+		}
+	}
 
 	categories.push(newCategory);
 	saveCategories();
@@ -309,6 +1105,10 @@ function loadCategories() {
 		window.__DI_CONTAINER__.repo.getAll_sync('categories'),
 	);
 	categories = savedCategories ? JSON.parse(savedCategories) : [];
+	// Reconcile the two author vocabularies on every load (see
+	// normalizeCategoryAuthors): heals rows whose local `ownerId` disagrees
+	// with the authoritative server attribution.
+	normalizeCategoryAuthors();
 
 	// If no categories exist, create a default uncategorized category
 	if (categories.length === 0) {
@@ -359,6 +1159,20 @@ function loadCategories() {
 	}
 }
 
+function normalizeCategoryAuthors() {
+	if (!Array.isArray(categories)) return;
+	categories.forEach((cat) => {
+		if (!cat || typeof cat !== 'object') return;
+		const serverAuthor = cat.created_by || cat.creator_id || '';
+		if (serverAuthor) {
+			cat.created_by = cat.created_by || String(serverAuthor);
+			cat.ownerId = String(serverAuthor);
+		} else if (cat.ownerId && !cat.created_by) {
+			cat.created_by = String(cat.ownerId);
+		}
+	});
+}
+
 function createDefaultCategories() {
 	categories = [
 		{
@@ -393,14 +1207,33 @@ function updateQuestionCategoryCounts() {
 		category.questionCount = 0;
 	});
 
-	// Count questions per category
+	// Count direct questions per category (id first, name as legacy fallback)
+	const byId = new Map(categories.map((c) => [String(c.id), c]));
+	const byName = new Map();
+	for (const c of categories) {
+		if (c?.name && !byName.has(String(c.name))) byName.set(String(c.name), c);
+	}
 	questions.forEach((question) => {
-		const questionCategoryId = question.category || 'uncategorized';
-		const categoryObj = categories.find((c) => c.id === questionCategoryId);
+		const ref = question.category ?? question.categoryId ?? question.category_id ?? 'uncategorized';
+		const categoryObj = byId.get(String(ref)) || byName.get(String(ref));
 		if (categoryObj) {
 			categoryObj.questionCount++;
 		}
 	});
+
+	// Roll subtree counts up into parents (children first, so each level
+	// accumulates exactly once): "Math" shows Addition + Subtraction too.
+	const ordered = getOrderedCategoryTree(
+		categories.filter((c) => c && !c.isSystem && c.id !== 'uncategorized'),
+	);
+	for (let i = ordered.length - 1; i >= 0; i--) {
+		const child = ordered[i].category;
+		const parent = byId.get(getCategoryParentId(child));
+		if (parent) {
+			parent.questionCount =
+				(parent.questionCount || 0) + (child.questionCount || 0);
+		}
+	}
 
 	// Save updated categories
 	window.__DI_CONTAINER__.repo.setAll_sync('categories', categories);
@@ -437,16 +1270,18 @@ function populateCategoryFilter() {
         <option value="uncategorized">Uncategorized</option>
     `;
 
-	// Add categories
+	// Add categories (hierarchical labels; the filter itself still matches
+	// the exact category — training/count roll-up is what spans subtrees).
 	if (Array.isArray(savedCategories)) {
-		savedCategories.forEach((category) => {
-			if (category && category.id && category.name && !category.isSystem) {
-				const option = document.createElement('option');
-				option.value = category.id;
-				option.textContent = category.name;
-				categoryFilterCategory.appendChild(option);
-			}
-		});
+		const rows = savedCategories.filter(
+			(category) => category && category.id && category.name && !category.isSystem,
+		);
+		for (const { category, depth } of getOrderedCategoryTree(rows)) {
+			const option = document.createElement('option');
+			option.value = category.id;
+			option.textContent = getIndentedCategoryLabel(category, depth);
+			categoryFilterCategory.appendChild(option);
+		}
 	}
 
 	// Debug: check resulting options
@@ -467,6 +1302,7 @@ function createNewCategory() {
 	document.getElementById('categoryColor').value = getRandomCategoryColor();
 	// New categories are excluded from training until explicitly enabled.
 	document.getElementById('categoryTraining').checked = false;
+	populateCategoryParentPicker(null);
 
 	// The create/edit form no longer embeds the question picker — questions
 	// are assigned from the dedicated Assign Questions modal (table action).
@@ -489,14 +1325,66 @@ function editCategory(categoryId) {
 	document.getElementById('categoryColor').value = category.color || '#3b82f6';
 	document.getElementById('categoryTraining').checked =
 		isTrainingCategory(categoryId);
+	populateCategoryParentPicker(categoryId);
+	const parentSelect = document.getElementById('categoryParent');
+	if (parentSelect) {
+		parentSelect.value = getCategoryParentId(category);
+	}
 
 	// Questions are no longer part of the edit form; they are managed via the
 	// Assign Questions action in the categories table.
 	openCategoryModal();
 }
 
+// Detach every question filed under this category on the server
+// (category_id NULL) so the subsequent DELETE /categories/:id is accepted:
+// the server refuses to delete a category that still contains questions.
+// Local-only questions (no server id) are skipped — they detach with the
+// local pass. A per-question 404 is tolerated (already gone server-side).
+async function detachCategoryQuestionsOnServer(category) {
+	const categoryId = category?.id ?? category;
+	const categoryName = category?.name ?? '';
+	const savedQuestions =
+		window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
+	const attached = savedQuestions.filter(
+		(q) =>
+			q &&
+			q.id &&
+			(String(q.category || '') === String(categoryId) ||
+				String(q.category || '') === String(categoryName) ||
+				String(q.categoryId || '') === String(categoryId) ||
+				String(q.category_id || '') === String(categoryId)),
+	);
+	if (!attached.length) return;
+	if (!window.API || typeof window.API.raw !== 'function') {
+		throw new Error('Question API is unavailable. Refresh the page and try again.');
+	}
+	for (const question of attached) {
+		try {
+			await window.API.raw(
+				'PATCH',
+				`/questions/${encodeURIComponent(question.id)}`,
+				{ category_id: null },
+			);
+		} catch (err) {
+			// Already detached/gone server-side — nothing to do.
+			if (err?.status === 404) continue;
+			throw err;
+		}
+		question.category = '';
+		question.categoryId = '';
+		question.category_id = null;
+	}
+	window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
+}
+
 async function deleteCategory(categoryId) {
 	const category = categories.find((c) => c.id === categoryId);
+
+	if (!category) {
+		showToast('Category not found', 'error');
+		return;
+	}
 
 	if (category.isDefault) {
 		showToast('Cannot delete default categories', 'error');
@@ -508,24 +1396,38 @@ async function deleteCategory(categoryId) {
 			`Are you sure you want to delete "${category.name}"? All questions in this category will become uncategorized.`,
 		)
 	) {
-		// Persist to server first. The legacy "uncategorized" reassignment
-		// happens locally AND is replayed against the DB via the questions
-		// bulk sync — but the category row itself must come from the API.
+		// Server-first: detach every server-side question (category_id NULL)
+		// BEFORE deleting the row — the server refuses to delete a category
+		// that still contains questions. A 404 means the row is already gone
+		// server-side, so we still finish the local removal.
 		if (window.API && typeof window.API.remove === 'function') {
 			try {
-				await window.API.remove('categories', categoryId);
+				await detachCategoryQuestionsOnServer(category);
 			} catch (apiErr) {
-				console.warn('[categories] API delete failed:', apiErr);
+				console.warn('[categories] question detach failed:', apiErr);
 				showToast(
-					'Failed to delete category on server: ' +
+					'Cannot delete category: ' +
 						(apiErr?.message || 'network error'),
 					'error',
 				);
 				return;
 			}
+			try {
+				await window.API.remove('categories', categoryId);
+			} catch (apiErr) {
+				if (apiErr?.status !== 404) {
+					console.warn('[categories] API delete failed:', apiErr);
+					showToast(
+						'Failed to delete category on server: ' +
+							(apiErr?.message || 'network error'),
+						'error',
+					);
+					return;
+				}
+			}
 		}
 
-		// Remove category from questions
+		// Remove category from questions (all key spellings)
 		const savedQuestions =
 			window.__DI_CONTAINER__.repo.getAll_sync('questions');
 		const questions = savedQuestions || [];
@@ -533,9 +1435,13 @@ async function deleteCategory(categoryId) {
 		questions.forEach((question) => {
 			if (
 				question.category === category.name ||
-				question.category === category.id
+				question.category === category.id ||
+				question.categoryId === category.id ||
+				question.category_id === category.id
 			) {
 				question.category = '';
+				question.categoryId = '';
+				question.category_id = null;
 			}
 		});
 
@@ -584,6 +1490,38 @@ async function saveCategoryForm() {
 		? existing.questions
 		: [];
 
+	// Parent nesting (Math → Addition). The picker already excludes the
+	// edited category and its subtree; this is the backstop (plus the
+	// server's own cycle guard).
+	const parentSelect = document.getElementById('categoryParent');
+	const parentVal = parentSelect ? String(parentSelect.value || '') : '';
+	const prevParent = existing ? getCategoryParentId(existing) : '';
+	if (parentVal && currentCategoryId) {
+		const forbidden = new Set([String(currentCategoryId)]);
+		for (const id of getCategoryDescendantIds(currentCategoryId)) {
+			forbidden.add(String(id));
+		}
+		if (forbidden.has(parentVal)) {
+			showToast(
+				'A category cannot live inside itself or its own subcategories',
+				'error',
+			);
+			return;
+		}
+	}
+
+	// Authorship is immutable: editing a category (even as an admin) must
+	// never reattribute someone else's category to the editor. Preserve the
+	// previously recorded author across both vocabularies (`created_by` is
+	// what the server stamps; `ownerId` is what legacy rows carry).
+	const prevAuthor = currentCategoryId
+		? getCategoryAuthorId(
+				categories.find((c) => c.id === currentCategoryId),
+			)
+		: '';
+	const authorId =
+		prevAuthor || window.Auth?.getCurrentUser?.()?.id || '';
+
 	const categoryData = {
 		id: currentCategoryId || generateUUID(),
 		name: name,
@@ -596,11 +1534,10 @@ async function saveCategoryForm() {
 				new Date().toISOString()
 			: new Date().toISOString(),
 		isSystem: false,
-		ownerId: currentCategoryId
-			? categories.find((c) => c.id === currentCategoryId)?.ownerId ||
-				window.Auth?.getCurrentUser?.()?.id ||
-				''
-			: window.Auth?.getCurrentUser?.()?.id || '',
+		ownerId: authorId,
+		created_by: authorId,
+		parent_id: parentVal || null,
+		parentId: parentVal || null,
 	};
 
 	// ── Persist to the backend FIRST ─────────────────────────────────────────
@@ -612,6 +1549,11 @@ async function saveCategoryForm() {
 			const payload = { name: categoryData.name };
 			if (categoryData.color) payload.color = categoryData.color;
 			if (categoryData.icon) payload.icon = categoryData.icon;
+			// Nesting: set the parent, or explicitly clear it when an edited
+			// category moves back to top-level (the API mapper forwards an
+			// explicit null; an absent key leaves the server value untouched).
+			if (parentVal) payload.parent_id = parentVal;
+			else if (currentCategoryId && prevParent) payload.parent_id = null;
 			let saved = null;
 			if (currentCategoryId) {
 				saved = await window.API.update(
@@ -624,6 +1566,25 @@ async function saveCategoryForm() {
 			}
 			if (saved && saved.id) {
 				categoryData.id = saved.id;
+			}
+			// Adopt the server's canonical parent alongside its id/author so
+			// the local mirror never disagrees with the DB.
+			if (saved && (saved.parent_id !== undefined || saved.parentId !== undefined)) {
+				const serverParent = saved.parent_id ?? saved.parentId ?? null;
+				categoryData.parent_id = serverParent;
+				categoryData.parentId = serverParent;
+			}
+			// The server is authoritative for authorship: adopt whatever it
+			// stamped so the local mirror never disagrees with the DB (and a
+			// teacher's category can never display the editing admin as its
+			// creator).
+			const serverAuthor =
+				(saved &&
+					(saved.created_by || saved.creator_id || saved.ownerId)) ||
+				'';
+			if (serverAuthor) {
+				categoryData.created_by = String(serverAuthor);
+				categoryData.ownerId = String(serverAuthor);
 			}
 		} catch (apiErr) {
 			console.warn('[categories] API save failed:', apiErr);
@@ -875,10 +1836,20 @@ function openAssignCategoryQuestions(categoryId) {
 		return;
 	}
 
+	// Leaf-only filing: a category with subcategories cannot take questions
+	// directly — assign them to one of its subcategories instead.
+	if (!isUncategorized && !isLeafCategory(categoryId)) {
+		showToast(
+			`"${category.name}" has subcategories \u2014 assign questions to a subcategory instead`,
+			'error',
+		);
+		return;
+	}
+
 	assignCategoryQuestionsId = categoryId;
 
 	const titleEl = document.getElementById('assignCategoryQuestionsTitle');
-	if (titleEl) titleEl.textContent = `Assign Questions — ${category.name}`;
+	if (titleEl) titleEl.textContent = `Assign Questions \u2014 ${category.name}`;
 
 	// Reset any previous state, then show the modal. Selected questions are
 	// populated inside loadAvailableQuestionsForCategory from the questions'
@@ -1094,7 +2065,7 @@ async function saveAssignCategoryQuestions() {
 	showToast(
 		assignedQuestionIds.length
 			? `${assignedQuestionIds.length} question(s) assigned successfully!`
-			: 'Assignment cleared — no questions in this category.',
+			: 'Assignment cleared \u2014 no questions in this category.',
 		'success',
 	);
 
@@ -1907,18 +2878,29 @@ function loadCategoriesIntoSelect(selectElementId = 'category') {
 			: true,
 	);
 
-	// Add categories to select
-	visibleCategories.forEach((category) => {
-		if (!category.isSystem) {
-			// Don't add system categories like "Uncategorized"
-			const option = document.createElement('option');
-			option.value = category.id;
-			option.textContent = category.name;
-			selectElement.appendChild(option);
+	// Hierarchical options, deepest level selectable: questions can only be
+	// filed in categories without subcategories — parents are shown (indented)
+	// but disabled so the structure stays visible.
+	for (const { category, depth } of getOrderedCategoryTree(
+		visibleCategories.filter((c) => !c.isSystem),
+	)) {
+		const option = document.createElement('option');
+		option.value = category.id;
+		const leaf = isLeafCategory(category.id);
+		option.textContent =
+			getIndentedCategoryLabel(category, depth) +
+			(leaf ? '' : ' (has subcategories)');
+		if (!leaf) {
+			option.disabled = true;
+			option.title =
+				'Questions can only be filed in subcategories without children';
 		}
-	});
+		selectElement.appendChild(option);
+	}
 
-	// Restore previous selection if it still exists
+	// Restore previous selection if it still exists (a disabled option still
+	// restores: the teacher sees where the question is filed and must pick a
+	// subcategory to move it).
 	if (
 		currentValue &&
 		selectElement.querySelector(`option[value="${currentValue}"]`)
@@ -1962,15 +2944,15 @@ function loadCategoriesIntoFilters() {
 				: true,
 		);
 
-		// Add categories to select
-		visibleCategories.forEach((category) => {
-			if (!category.isSystem) {
-				const option = document.createElement('option');
-				option.value = category.id;
-				option.textContent = category.name;
-				categoryFilter.appendChild(option);
-			}
-		});
+		// Add categories to select (hierarchical labels)
+		for (const { category, depth } of getOrderedCategoryTree(
+			visibleCategories.filter((c) => !c.isSystem),
+		)) {
+			const option = document.createElement('option');
+			option.value = category.id;
+			option.textContent = getIndentedCategoryLabel(category, depth);
+			categoryFilter.appendChild(option);
+		}
 
 		// Restore value if it still exists
 		if (
@@ -1980,6 +2962,137 @@ function loadCategoriesIntoFilters() {
 			categoryFilter.value = currentValue;
 		}
 	});
+}
+
+// ============================================
+// CATEGORY ROW CELLS (single source of row markup)
+// ============================================
+function categoryToggleHtml(category, hasChildren, isCollapsed) {
+	if (!hasChildren) return `<span class="cat-collapse-spacer"></span>`;
+	return `<button type="button" class="cat-collapse-btn" onclick="toggleCategoryCollapse(event,'${category.id}')" title="${isCollapsed ? 'Expand subcategories' : 'Collapse subcategories'}" aria-expanded="${isCollapsed ? 'false' : 'true'}">${isCollapsed ? '+' : '−'}</button>`;
+}
+
+function categoryGripHtml(category) {
+	if (category.isSystem || category.id === 'uncategorized') return '';
+	return `<span class="drag-grip" data-id="${category.id}" title="Drag to nest \u2022 tap to pick up" onpointerdown="onGripPointerDown(event,'${category.id}')">\u22ee\u22ee</span>`;
+}
+
+// Identity cell: tree guides + toggle + grip + color + stacked name
+// (title row with sub-count pill, ancestor breadcrumb underneath).
+function categoryNameCellHtml(category, rowCtx, list) {
+	const depth = rowCtx?.depth || 0;
+	const guides =
+		depth > 0
+			? `<span class="cat-guides" aria-hidden="true">${'<i></i>'.repeat(depth)}</span>`
+			: '';
+	const childCount = getCategoryChildrenIds(category.id).length;
+	const countPill = childCount
+		? `<span class="cat-child-count" title="${childCount} subcategor${childCount === 1 ? 'y' : 'ies'}">${childCount} sub</span>`
+		: '';
+	const breadcrumb = getCategoryParentPath(category.id, list);
+	const path =
+		rowCtx?.path ??
+		(breadcrumb
+			? `${breadcrumb} › ${category.name || ''}`
+			: String(category.name || ''));
+	return `
+            <td>
+                <div class="category-info" title="${escapeHtml(path)}">
+                    ${guides}${categoryToggleHtml(category, !!rowCtx?.hasChildren, !!rowCtx?.isCollapsed)}${categoryGripHtml(category)}
+                    <div class="category-color" style="background-color: ${category.color}"></div>
+                    <span class="cat-text">
+                        <span class="cat-title-row">
+                            <span class="category-name">${escapeHtml(category.name)}</span>${countPill}
+                        </span>
+                        ${breadcrumb ? `<span class="cat-path">${escapeHtml(breadcrumb)}</span>` : ''}
+                    </span>
+                </div>
+            </td>`;
+}
+
+function categoryTrainingCellHtml(category) {
+	const trainingMap = getCategoryTrainingMap();
+	const explicitTraining = Object.prototype.hasOwnProperty.call(
+		trainingMap,
+		String(category.id),
+	);
+	const effectiveTraining = isTrainingCategory(category.id);
+	return `
+            <td class="training-cell" data-label="Training">
+                <input type="checkbox"
+                    class="training-checkbox"
+                    data-id="${category.id}"
+                    ${effectiveTraining ? 'checked' : ''}
+                    onchange="toggleCategoryTraining(this)"
+                    title="${explicitTraining ? 'Use this category in training mode' : effectiveTraining ? 'Enabled via a parent category \u2014 uncheck to exclude this subcategory' : 'Use this category in training mode'}">
+            </td>`;
+}
+
+function categoryActionsCellHtml(category, assignable) {
+	if (moveModeCategoryId) {
+		const moveActionHtml =
+			String(category.id) === String(moveModeCategoryId)
+				? `<button type="button" class="move-cancel-btn" onclick="cancelCategoryMove()" title="Cancel move">\u2715 Cancel</button>`
+				: canDropCategoryOn(moveModeCategoryId, category.id)
+					? `<button type="button" class="move-here-btn" onclick="finishCategoryMoveOnTap('${category.id}')" title="Move the category here">\u21e5 Move here</button>`
+					: `<span class="no-actions" title="Cannot move here">\u2014</span>`;
+		return `
+            <td class="actions-cell">
+                <div class="exam-actions">
+                    ${moveActionHtml}
+                </div>
+            </td>`;
+	}
+	const moveButtonHtml =
+		!category.isSystem && category.id !== 'uncategorized'
+			? `<button class="exam-action-btn exam-move-btn" onclick="startCategoryMove(event,'${category.id}')" title="Move into another category">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 9l-3 3 3 3"></path>
+                            <path d="M9 5l3-3 3 3"></path>
+                            <path d="M15 19l-3 3-3-3"></path>
+                            <path d="M19 9l3 3-3 3"></path>
+                            <path d="M2 12h20"></path>
+                            <path d="M12 2v20"></path>
+                        </svg>
+                    </button>`
+			: '';
+	return `
+            <td class="actions-cell">
+                <div class="exam-actions">
+                    ${assignable ? `
+                    <button class="exam-action-btn exam-assign-btn" onclick="openAssignCategoryQuestions('${category.id}')" title="Assign Questions">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h11"></path>
+                        </svg>
+                    </button>
+                    ` : `
+                    <span class="no-actions" title="This category has subcategories \u2014 assign questions to a subcategory instead">\u2014</span>
+                    `}
+                    ${moveButtonHtml}
+                    ${
+											category.isSystem
+												? `
+                        <span class="no-actions" title="System category">\u2014</span>
+                    `
+												: `
+                        <button class="exam-action-btn exam-edit-btn" onclick="editCategory('${category.id}')" title="Edit">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </button>
+                        <button class="exam-action-btn exam-delete-btn" onclick="deleteCategory('${category.id}')" title="Delete">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 6h18"></path>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
+                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    `
+										}
+                </div>
+            </td>`;
 }
 
 function updateCategoryList(categoriesList = categories) {
@@ -2022,25 +3135,6 @@ function updateCategoryList(categoriesList = categories) {
 		return true;
 	});
 
-	// Count questions for each category - handle both category ID and name for backward compatibility
-	visibleCategories.forEach((category) => {
-		if (category.isSystem || category.id === 'uncategorized') {
-			// Count questions without category
-			category.questionCount = savedQuestions.filter(
-				(q) =>
-					!q.category ||
-					q.category === '' ||
-					q.category === 'uncategorized' ||
-					q.category === 'Uncategorized',
-			).length;
-		} else {
-			// Count by ID first, then by name as fallback
-			category.questionCount = savedQuestions.filter(
-				(q) => q.category === category.id || q.category === category.name,
-			).length;
-		}
-	});
-
 	// Add "Uncategorized" category if it doesn't exist
 	let uncategorizedExists = visibleCategories.some(
 		(cat) => String(cat.name || '').toLowerCase() === 'uncategorized',
@@ -2056,17 +3150,125 @@ function updateCategoryList(categoriesList = categories) {
 		});
 	}
 
+	// Direct counts (id first, name as legacy fallback), then roll subtree
+	// counts up into parents: "Math" shows Addition + Subtraction too.
+	const visibleById = new Map(
+		visibleCategories.map((c) => [String(c.id), c]),
+	);
+	visibleCategories.forEach((category) => {
+		category.questionCount = 0;
+	});
+	savedQuestions.forEach((question) => {
+		const ref =
+			question.category ??
+			question.categoryId ??
+			question.category_id ??
+			'';
+		if (!ref || ref === 'uncategorized' || ref === 'Uncategorized') {
+			const unc = visibleById.get('uncategorized');
+			if (unc) unc.questionCount++;
+			return;
+		}
+		const target = visibleById.get(String(ref));
+		if (target) {
+			target.questionCount++;
+			return;
+		}
+		// Legacy name reference.
+		const byName = visibleCategories.find(
+			(c) => String(c.name || '') === String(ref),
+		);
+		if (byName) byName.questionCount++;
+	});
+	const hierarchyScope = visibleCategories.filter(
+		(c) => c && !c.isSystem && c.id !== 'uncategorized',
+	);
+	const hierarchyOrder = getOrderedCategoryTree(hierarchyScope);
+	for (let i = hierarchyOrder.length - 1; i >= 0; i--) {
+		const child = hierarchyOrder[i].category;
+		const parent = visibleById.get(getCategoryParentId(child));
+		if (parent) {
+			parent.questionCount =
+				(parent.questionCount || 0) + (child.questionCount || 0);
+		}
+	}
+	// Render order: system rows first (as before), then the tree pre-order
+	// (roots sorted by the current sort control, children by name).
+	const sortBy =
+		document.getElementById('categorySortBy')?.value || 'name';
+	const direction = categorySortDirection === 'asc' ? 1 : -1;
+	const rootComparator = (a, b) => {
+		switch (sortBy) {
+			case 'date':
+				return (
+					direction * (new Date(b.dateCreated) - new Date(a.dateCreated))
+				);
+			case 'questions':
+				return (
+					direction * ((a.questionCount || 0) - (b.questionCount || 0))
+				);
+			case 'name':
+			default:
+				return (
+					direction *
+					String(a.name || '').localeCompare(String(b.name || ''))
+				);
+		}
+	};
+	const systemRows = visibleCategories.filter(
+		(c) => c.isSystem || c.id === 'uncategorized',
+	);
+	// Flat render entries with depth: system rows first (as before), then the
+	// tree pre-order (roots per the sort control, children by name).
+	const renderEntries = [
+		...systemRows.map((category) => ({ category, depth: 0 })),
+		...getOrderedCategoryTree(hierarchyScope, rootComparator),
+	];
+
 	tbody.innerHTML = ''; // Clear existing rows
 
-	visibleCategories.forEach((category) => {
+	// Collapse: rows below a collapsed ancestor are hidden (but still
+	// rendered, so counts/filters stay consistent).
+	let hiddenBelowDepth = -1;
+	renderEntries.forEach((entry, index) => {
+		const category = entry.category;
+		const depth = entry.depth || 0;
+		const hidden = hiddenBelowDepth >= 0 && depth > hiddenBelowDepth;
+		if (!hidden) hiddenBelowDepth = -1;
+		const next = renderEntries[index + 1];
+		const hasChildren = !!next && (next.depth || 0) > depth;
+		const isCollapsed =
+			hasChildren && collapsedCategories.has(String(category.id));
+
 		const row = document.createElement('tr');
 		row.setAttribute('data-id', category.id);
+		if (hidden) row.style.display = 'none';
 		if (category.isSystem) {
 			row.classList.add('system-category');
 		}
-
+		if (moveModeCategoryId) {
+			if (String(category.id) === String(moveModeCategoryId)) {
+				row.classList.add('moving-source');
+			} else if (canDropCategoryOn(moveModeCategoryId, category.id)) {
+				row.classList.add('move-target');
+			}
+		}
 		// Mobile Action Handler via event listener
 		row.addEventListener('click', (e) => {
+			// Tap-to-move mode: any row tap picks the destination (controls
+			// keep their own behavior; post-drag clicks are suppressed).
+			if (Date.now() < suppressMoveTapUntil) return;
+			if (moveModeCategoryId) {
+				if (
+					e.target.closest(
+						'button, input, a, select, textarea, .drag-grip',
+					)
+				)
+					return;
+				e.stopPropagation();
+				finishCategoryMoveOnTap(category.id);
+				return;
+			}
 			if (window.innerWidth <= 768) {
 				if (e.target.closest('button')) return;
 				if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
@@ -2079,6 +3281,11 @@ function updateCategoryList(categoriesList = categories) {
 					},
 					...(!category.isSystem
 						? [
+								{
+									label: 'Move',
+									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"></path><path d="M9 5l3-3 3 3"></path><path d="M15 19l-3 3-3-3"></path><path d="M19 9l3 3-3 3"></path><path d="M2 12h20"></path><path d="M12 2v20"></path></svg>',
+									onClick: () => startCategoryMove(null, category.id),
+								},
 								{
 									label: 'Edit Category',
 									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
@@ -2096,6 +3303,17 @@ function updateCategoryList(categoriesList = categories) {
 			}
 		});
 
+		const path = depth
+			? getCategoryPath(category.id, visibleCategories)
+			: String(category.name || '');
+		// Questions live in the deepest level only: rows with subcategories
+		// cannot take questions directly (the Assign modal enforces this too).
+		const assignable =
+			category.isSystem ||
+			category.id === 'uncategorized' ||
+			isLeafCategory(category.id);
+		const rowCtx = { depth, path, hasChildren, isCollapsed };
+
 		row.innerHTML = `
             <td class="checkbox-cell" data-label="Select">
                 <input type="checkbox"
@@ -2103,23 +3321,11 @@ function updateCategoryList(categoriesList = categories) {
                     data-id="${category.id}"
                     ${category.isSystem || category.id === 'uncategorized' ? 'disabled title="System category cannot be deleted"' : `onchange="toggleBulkRowSelection(this,'categories')"`}>
             </td>
-            <td>
-                <div class="category-info">
-                    <div class="category-color" style="background-color: ${category.color}"></div>
-                    <span class="category-name">${escapeHtml(category.name)}</span>
-                </div>
-            </td>
+            ${categoryNameCellHtml(category, rowCtx, visibleCategories)}
             <td>${escapeHtml(category.description || '')}</td>
             <td>${category.questionCount}</td>
-            <td class="training-cell" data-label="Training">
-                <input type="checkbox"
-                    class="training-checkbox"
-                    data-id="${category.id}"
-                    ${isTrainingCategory(category.id) ? 'checked' : ''}
-                    onchange="toggleCategoryTraining(this)"
-                    title="Use this category in training mode">
-            </td>
-            <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Created by">${escapeHtml(getOwnerLabel(getOwnerId(category)))}</span></td>
+            ${categoryTrainingCellHtml(category)}
+            <td class="owner-col" data-label="By">${(() => { const label = getOwnerLabel(getCategoryAuthorId(category)); return label ? `<span class="q-owner-badge" title="Created by">${escapeHtml(label)}</span>` : ''; })()}</td>
             <td>${(() => {
 							const rawCreatedAt =
 								category.dateCreated ||
@@ -2133,42 +3339,15 @@ function updateCategoryList(categoriesList = categories) {
 								? parsedCreatedAt.toLocaleDateString()
 								: '-';
 						})()}</td>
-            <td class="actions-cell">
-                <div class="exam-actions">
-                    <button class="exam-action-btn exam-assign-btn" onclick="openAssignCategoryQuestions('${category.id}')" title="Assign Questions">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 11l3 3L22 4"></path>
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                        </svg>
-                    </button>
-                    ${
-											category.isSystem
-												? `
-                        <span class="no-actions" title="System category">—</span>
-                    `
-												: `
-                        <button class="exam-action-btn exam-edit-btn" onclick="editCategory('${category.id}')" title="Edit">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                        </button>
-                        <button class="exam-action-btn exam-delete-btn" onclick="deleteCategory('${category.id}')" title="Delete">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 6h18"></path>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                        </button>
-                    `
-										}
-                </div>
-            </td>
+            ${categoryActionsCellHtml(category, assignable)}
         `;
 		if (isTrainingCategory(category.id)) {
 			row.classList.add('training-enabled');
 		}
+		// The grip drives the pointer system inline (onpointerdown) — no
+		// per-row wiring needed, so re-renders stay cheap.
 		tbody.appendChild(row);
+		if (!hidden && isCollapsed) hiddenBelowDepth = depth;
 	});
 
 	// Owner badges are admin-only (see teacher-filter.js + hide-owner-col CSS).
@@ -2178,7 +3357,15 @@ function updateCategoryList(categoriesList = categories) {
 			? window.TeacherFilter.isAdminSession()
 			: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
 		categoryTable.classList.toggle('hide-owner-col', !admin);
+		categoryTable.classList.toggle('move-mode', !!moveModeCategoryId);
 	}
+
+	// If the row being moved vanished (bootstrap reload, delete elsewhere),
+	// leave move mode instead of pointing at nothing.
+	if (moveModeCategoryId && !getCategoryById(moveModeCategoryId)) {
+		moveModeCategoryId = null;
+	}
+	renderMoveModeBanner();
 
 	// Restore bulk selection (filter/sort safe) + refresh bulk bar
 	if (window.BulkSelect) window.BulkSelect.restore('categories');
@@ -2224,7 +3411,18 @@ function filterCategories() {
 				.toLowerCase()
 				.includes(searchTerm),
 	);
-	updateCategoryList(filteredCategories);
+	// Keep hierarchy context: a match brings its ancestors (so the tree
+	// renders in place) and its whole subtree (so "math" shows Addition…).
+	const keep = new Set(filteredCategories.map((c) => String(c.id)));
+	for (const category of filteredCategories) {
+		for (const id of getCategoryAncestorIds(category.id, categories)) {
+			keep.add(String(id));
+		}
+		for (const id of getCategoryDescendantIds(category.id, categories)) {
+			keep.add(String(id));
+		}
+	}
+	updateCategoryList(categories.filter((c) => c && keep.has(String(c.id))));
 }
 
 function sortCategories() {
@@ -4224,16 +5422,30 @@ async function deleteSelectedCategories() {
 		return;
 	}
 
-	// Server-first per row (same contract as deleteCategory), then a single
-	// local pass so counts/questions stay consistent.
+	// Server-first per row (same contract as deleteCategory): detach the
+	// row's questions so the server accepts the delete, then delete the row.
+	// A 404 on delete means the row is already gone server-side and counts
+	// as deleted. Then a single local pass so counts/questions stay
+	// consistent.
 	const failed = [];
+	const failureReasons = [];
 	for (const categoryId of deletable) {
+		const category = categories.find(
+			(c) => String(c.id) === String(categoryId),
+		);
 		if (window.API && typeof window.API.remove === 'function') {
 			try {
+				if (category) {
+					await detachCategoryQuestionsOnServer(category);
+				}
 				await window.API.remove('categories', categoryId);
 			} catch (apiErr) {
+				if (apiErr?.status === 404) {
+					continue;
+				}
 				console.warn('[categories] bulk API delete failed:', apiErr);
 				failed.push(categoryId);
+				if (apiErr?.message) failureReasons.push(apiErr.message);
 				continue;
 			}
 		}
@@ -4245,6 +5457,9 @@ async function deleteSelectedCategories() {
 			window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
 		savedQuestions.forEach((question) => {
 			if (okIds.has(String(question.category))) question.category = '';
+			if (okIds.has(String(question.categoryId))) question.categoryId = '';
+			if (okIds.has(String(question.category_id)))
+				question.category_id = null;
 		});
 		window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
 		categories = categories.filter((c) => !okIds.has(String(c.id)));
@@ -4262,8 +5477,10 @@ async function deleteSelectedCategories() {
 		}
 	}
 	if (failed.length) {
+		const cause = failureReasons.find(Boolean);
 		showToast(
-			`Deleted ${okIds.size}; ${failed.length} failed on server — kept locally so you can retry`,
+			`Deleted ${okIds.size}; ${failed.length} failed on server \u2014 kept locally so you can retry` +
+				(cause ? `: ${cause}` : ''),
 			'error',
 		);
 	} else {

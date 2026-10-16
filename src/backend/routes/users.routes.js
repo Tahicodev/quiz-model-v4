@@ -221,4 +221,28 @@ router.post('/:id/reset-password', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN])
   } catch (err) { next(err); }
 });
 
+// GET /api/v1/users/:id/sessions — active sign-ins (admin support view for
+// stuck "already signed in" accounts). Token hashes are never exposed.
+router.get('/:id/sessions', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
+  try {
+    const { userSvc, authSvc } = getContainer();
+    const target = await userSvc.getById(req.params.id);
+    if (!target || target.school_id !== req.schoolId) return next(new NotFoundError('User'));
+    res.json(await authSvc.listSessions(target.id));
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/v1/users/:id/sessions — end every session of the user, so the
+// next login succeeds immediately without waiting out the activity window.
+router.delete('/:id/sessions', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
+  try {
+    const { userSvc, authSvc, auditSvc } = getContainer();
+    const target = await userSvc.getById(req.params.id);
+    if (!target || target.school_id !== req.schoolId) return next(new NotFoundError('User'));
+    const { revoked } = await authSvc.revokeUserSessions(target.id);
+    await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'user', entityId: target.id, action: 'revoke-sessions', ip: req.ip });
+    res.json({ revoked });
+  } catch (err) { next(err); }
+});
+
 export default router;

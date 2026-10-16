@@ -53,11 +53,15 @@
 
 	function getOwnerId(item) {
 		if (!item || typeof item !== 'object') return '';
+		// Server-stamped attribution (`created_by` / `creator_id`) is
+		// authoritative and wins over the legacy `ownerId`: the edit dialogs
+		// used to fall back to "current user" when only `ownerId` was
+		// present, so a stale local `ownerId` must never shadow it.
 		return String(
-			item.ownerId ||
-				item.created_by ||
-				item.createdBy ||
+			item.created_by ||
 				item.creator_id ||
+				item.ownerId ||
+				item.createdBy ||
 				item.creatorId ||
 				'',
 		);
@@ -136,7 +140,9 @@
 			/* fall through */
 		}
 		const owner = getOwnerId(item);
-		if (!owner) return 'Shared';
+		// No "Shared" concept anymore: every teacher sees only their own
+		// rows, so unattributed legacy rows render without an author name.
+		if (!owner) return '';
 		try {
 			const users = window.Auth?.getUsers ? window.Auth.getUsers() : [];
 			const found = (Array.isArray(users) ? users : []).find(
@@ -196,9 +202,12 @@
 
 	// Owner badge HTML (question-tab style). Always rendered; visibility for
 	// non-admin sessions is handled via the hide-owner / hide-owner-col
-	// classes toggled by each list renderer.
+	// classes toggled by each list renderer. Empty when there is no recorded
+	// author (no "Shared" badge anymore).
 	function ownerBadge(item) {
-		return `<span class="q-owner-badge" title="Created by">${escapeHtmlLocal(resolveOwnerName(item))}</span>`;
+		const name = resolveOwnerName(item);
+		if (!name) return '';
+		return `<span class="q-owner-badge" title="Created by">${escapeHtmlLocal(name)}</span>`;
 	}
 
 	function escapeHtmlLocal(value) {

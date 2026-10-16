@@ -49,6 +49,45 @@ describe('QuestionService', () => {
     });
   });
 
+  describe('create()/update() — leaf-only filing', () => {
+    const MATH = '11111111-1111-4111-8111-111111111111';
+    const ADDITION = '22222222-2222-4222-8222-222222222222';
+
+    it('rejects filing a question directly under a parent category', async () => {
+      repo.getAll.mockResolvedValue({ data: [{ id: 'sub-1' }], total: 1 });
+      repo.getById.mockResolvedValue({ id: MATH, name: 'Math' });
+      await expect(
+        service.create({ type: 'mcq', text: 'Q?', answer: 'A', category_id: MATH }, ADMIN),
+      ).rejects.toBeInstanceOf(ValidationError);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('allows filing under a leaf category', async () => {
+      repo.getAll.mockResolvedValue({ data: [], total: 0 });
+      repo.create.mockResolvedValue({ id: 'q-9', text: 'Q?' });
+      const result = await service.create(
+        { type: 'mcq', text: 'Q?', answer: 'A', category_id: ADDITION },
+        ADMIN,
+      );
+      expect(result.id).toBe('q-9');
+    });
+
+    it('rejects moving a question to a parent category on update', async () => {
+      repo.getById.mockResolvedValue({ id: 'q-1', text: 'Q' });
+      repo.getAll.mockResolvedValue({ data: [{ id: 'sub-1' }], total: 1 });
+      await expect(service.update('q-1', { category_id: MATH }, ADMIN))
+        .rejects.toBeInstanceOf(ValidationError);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('allows unsetting the category on update', async () => {
+      repo.getById.mockResolvedValue({ id: 'q-1', text: 'Q' });
+      repo.update.mockResolvedValue({ id: 'q-1', category_id: null });
+      await service.update('q-1', { category_id: null }, ADMIN);
+      expect(repo.update).toHaveBeenCalled();
+    });
+  });
+
   describe('delete()', () => {
     it('throws if question does not exist', async () => {
       repo.getById.mockResolvedValue(null);

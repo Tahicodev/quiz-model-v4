@@ -65,10 +65,61 @@ describe('CategoryService', () => {
       const tree = await service.getTree();
       expect(tree).toHaveLength(0);
     });
+
+    it('surfaces cycle-trapped rows instead of dropping them', async () => {
+      repo.getAll.mockResolvedValue({
+        data: [
+          { id: 'r', name: 'Root', parent_id: null },
+          { id: 'a', name: 'A', parent_id: 'b' },
+          { id: 'b', name: 'B', parent_id: 'a' },
+        ],
+        total: 3,
+      });
+      const tree = await service.getTree();
+      const ids = tree.map((c) => c.id).sort();
+      expect(ids).toEqual(['a', 'b', 'r']);
+    });
   });
 
-  describe('delete()', () => {
-    it('throws if category has children', async () => {
+  describe('update() — hierarchy guards', () => {
+    const MATH = '11111111-1111-4111-8111-111111111111';
+    const ADDITION = '22222222-2222-4222-8222-222222222222';
+    const SCIENCE = '33333333-3333-4333-8333-333333333333';
+
+    it('rejects moving a category inside one of its own subcategories', async () => {
+      // Math -> Addition; moving Math under Addition would cycle.
+      repo.getById.mockImplementation(async (table, id) => {
+        if (table !== 'categories') return null;
+        if (id === MATH) return { id: MATH, name: 'Math', parent_id: null };
+        if (id === ADDITION) return { id: ADDITION, name: 'Addition', parent_id: MATH };
+        return null;
+      });
+      await expect(service.update(MATH, { parent_id: ADDITION }, ADMIN))
+        .rejects.toBeInstanceOf(ValidationError);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('allows moving a category under an unrelated parent', async () => {
+      repo.getById.mockImplementation(async (table, id) => {
+        if (table !== 'categories') return null;
+        if (id === MATH) return { id: MATH, name: 'Math', parent_id: null };
+        if (id === SCIENCE) return { id: SCIENCE, name: 'Science', parent_id: null };
+        return null;
+      });
+      repo.update.mockResolvedValue({ id: MATH, parent_id: SCIENCE });
+      await service.update(MATH, { parent_id: SCIENCE }, ADMIN);
+      expect(repo.update).toHaveBeenCalledWith('categories', MATH, { parent_id: SCIENCE });
+    });
+
+    it('allows clearing the parent (top-level)', async () => {
+      repo.getById.mockResolvedValue({ id: ADDITION, name: 'Addition', parent_id: MATH });
+      repo.update.mockResolvedValue({ id: ADDITION, parent_id: null });
+      await service.update(ADDITION, { parent_id: null }, ADMIN);
+      expect(repo.update).toHaveBeenCalledWith('categories', ADDITION, { parent_id: null });
+    });
+  });
+
+  describe('delete()', () => {    it('throws if category has children', async () => {
       repo.getById.mockResolvedValue({ id: 'c-1', name: 'Parent' });
       repo.getAll.mockResolvedValue({ data: [{ id: 'c-2', parent_id: 'c-1' }], total: 1 });
       await expect(service.delete('c-1', ADMIN)).rejects.toBeInstanceOf(ValidationError);

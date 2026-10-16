@@ -47,6 +47,7 @@ export function registerLegacySyncHandlers(io) {
 
 	function clientInfo(socket) {
 		const user = socket.data?.user || {};
+		const role = String(user.role || '').toLowerCase() || null;
 		const hostname =
 			socket.data.deviceName ||
 			user.name ||
@@ -56,6 +57,11 @@ export function registerLegacySyncHandlers(io) {
 			socketId: socket.id,
 			userId: user.id || null,
 			schoolId: user.school_id || null,
+			role,
+			// Staff browsers (teachers/admins) appear in presence too, so a
+			// teacher's machine is visible in Classroom Devices when they log
+			// in — students stay the only exam-device flow.
+			kind: role && STAFF_ROLES.has(role) ? 'staff' : 'student',
 			deviceId: socket.data.deviceId || `socket-${socket.id}`,
 			name: hostname,
 			hostname,
@@ -102,11 +108,12 @@ export function registerLegacySyncHandlers(io) {
 			// Role comes from the handshake JWT only — the shared Admin Secret is
 			// gone. Staff sockets get the admin relay surface regardless of the
 			// legacy `role` the panel asked for; everyone else is a plain client.
-			socket.role = isStaff ? 'admin' : 'client';
-			socket.adminAuthenticated = isStaff;
-			if (!isStaff) {
-				connectedClients.set(socket.id, clientInfo(socket));
-			}
+		socket.role = isStaff ? 'admin' : 'client';
+		socket.adminAuthenticated = isStaff;
+		// Staff presence: teachers'/admins' browsers join the live roster so
+		// Classroom Devices shows their machines (students still get the
+		// game-snapshot replays below, staff never do).
+		connectedClients.set(socket.id, clientInfo(socket));
 			if (requestedRole === 'admin' && !isStaff) {
 				socket.emit('admin:auth:error', {
 					message: 'Admin access requires an admin or teacher account.',
@@ -135,18 +142,21 @@ export function registerLegacySyncHandlers(io) {
 			}
 		});
 
-		// Student pages send their stable browser device id after connecting.
+		// Devices register here: student exam machines AND staff browsers
+		// (teachers/admins appear in Classroom Devices with a staff badge).
 		// Keep only presence metadata here; localStorage contents never belong in
 		// the device list and continue to use the existing request-data flow.
 		socket.on('register', async (payload = {}) => {
-			if (socket.role !== 'client') return;
+			const jwtRole = String(socket.data?.user?.role || '').toLowerCase();
+			const isStaffSocket = socket.role === 'admin' && STAFF_ROLES.has(jwtRole);
+			if (socket.role !== 'client' && !isStaffSocket) return;
 			const schoolId = String(socket.data?.user?.school_id || '').trim();
 			const userId = socket.data?.user?.id || null;
 			socket.data.deviceId = String(
 				payload.deviceId || `socket-${socket.id}`,
 			).slice(0, 160);
 			socket.data.deviceName = String(
-				payload.hostname || payload.name || 'Student device',
+				payload.hostname || payload.name || socket.data.deviceName || (isStaffSocket ? 'Staff browser' : 'Student device'),
 			).slice(0, 240);
 			socket.data.deviceType = payload.deviceType || null;
 			socket.data.platform = payload.platform || null;
@@ -175,7 +185,10 @@ export function registerLegacySyncHandlers(io) {
 				}
 			}
 
-			if (persisted?.status === 'blocked') {
+			// Exam-device blocks never apply to staff browsers: blocking is a
+			// student-exam control, while a stuck staff sign-in is ended via
+			// the sessions kill-switch, not by killing their browser.
+			if (!isStaffSocket && persisted?.status === 'blocked') {
 				try {
 					socket.emit('device:blocked', {
 						deviceId: socket.data.deviceId,

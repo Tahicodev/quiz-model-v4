@@ -91,6 +91,10 @@ app.use((req, res, next) => {
 				path: req.path,
 				status: res.statusCode,
 				ms,
+				user: req.user,
+				userId: req.user?.id,
+				role: req.user?.role,
+				ip: req.ip,
 			});
 		}
 		const level =
@@ -105,6 +109,9 @@ app.use((req, res, next) => {
 			status: res.statusCode,
 			ms,
 			userId: req.user?.id,
+			username: req.user?.username,
+			role: req.user?.role,
+			ip: req.ip,
 		});
 	});
 	next();
@@ -236,18 +243,31 @@ window.APP_CONFIG = ${JSON.stringify({
 	);
 }
 
+// These entry pages are served by dedicated handlers (not express.static), so
+// they do NOT inherit noCacheOpts. Explicitly forbid caching, otherwise the
+// browser keeps serving a stale document after local edits (the injected
+// APP_CONFIG also makes every response unique, defeating ETag reuse anyway).
+function sendEntryHtml(res, filePath) {
+	res.setHeader(
+		'Cache-Control',
+		'no-store, no-cache, must-revalidate, proxy-revalidate',
+	);
+	res.setHeader('Pragma', 'no-cache');
+	res.setHeader('Expires', '0');
+	res.setHeader('Surrogate-Control', 'no-store');
+	res.type('html').send(injectAppConfig(readEntryHtml(filePath)));
+}
+
 app.get('/', (req, res) => {
-	res.type('html').send(injectAppConfig(readEntryHtml(indexHtmlPath)));
+	sendEntryHtml(res, indexHtmlPath);
 });
 
 app.get('/admin.html', (req, res) => {
-	res.type('html').send(injectAppConfig(readEntryHtml(adminHtmlPath)));
+	sendEntryHtml(res, adminHtmlPath);
 });
 
 app.get('/student-workspace.html', (req, res) => {
-	res
-		.type('html')
-		.send(injectAppConfig(readEntryHtml(studentWorkspaceHtmlPath)));
+	sendEntryHtml(res, studentWorkspaceHtmlPath);
 });
 
 // ── Kids player pages (no login, plan §5.4) ─────────────────────────────

@@ -525,6 +525,62 @@ router.get('/', async (req, res, next) => {
         if (req.user?.role === ROLES.TEACHER && (table === 'questions' || table === 'categories')) {
           query.or = [{ created_by: req.user.id }];
         }
+        // Teachers operate strictly inside their own library: only rows
+        // they authored, only students/results in their assigned classes.
+        // Anything else (other teachers' exams/games/tournaments, unattributed
+        // legacy rows) is admin-only and never reaches a teacher browser.
+        if (req.user?.role === ROLES.TEACHER) {
+          const teacherId = req.user.id;
+          if (table === 'exams' || table === 'games' || table === 'tournaments') {
+            query.or = [{ creator_id: teacherId }];
+          }
+          if (table === 'classes') {
+            const classIds = await getTeacherClassIds(req.schoolId, teacherId);
+            query.or = [{ id: { in: [...classIds] } }];
+          }
+          if (table === 'exam_questions' || table === 'exam_classes') {
+            const { data: ownExams } = await repo.getAll('exams', {
+              filters: { school_id: req.schoolId, creator_id: teacherId },
+              limit: 100000,
+            });
+            query.or = [{ exam_id: { in: (ownExams || []).map((e) => e.id) } }];
+          }
+          if (
+            table === 'results' ||
+            table === 'exam_sessions' ||
+            table === 'game_sessions' ||
+            table === 'tournament_entries'
+          ) {
+            const classIds = new Set(
+              await getTeacherClassIds(req.schoolId, teacherId),
+            );
+            let studentIds = [];
+            if (classIds.size) {
+              const { data: students } = await repo.getAll('users', {
+                filters: { school_id: req.schoolId, role: 'student' },
+                limit: 100000,
+              });
+              studentIds = (students || [])
+                .filter(
+                  (s) => s?.id && s.class_id && classIds.has(String(s.class_id)),
+                )
+                .map((s) => String(s.id));
+            }
+            // Anonymous plays (user_id NULL) cannot be proven to belong to
+            // this teacher's students, so they stay admin-only.
+            query.or = [{ user_id: { in: studentIds } }];
+          }
+          if (
+            table === 'teacher_messages' ||
+            table === 'teacher_assignments'
+          ) {
+            const classIds = await getTeacherClassIds(req.schoolId, teacherId);
+            query.or = [
+              { teacher_id: teacherId },
+              { class_id: { in: [...classIds] } },
+            ];
+          }
+        }
         // Teachers receive only students in their assigned classes — never
         // staff rows, never other classes, and never password hashes (a
         // teacher browser has no legitimate use for them). The teacher's
@@ -550,7 +606,26 @@ router.get('/', async (req, res, next) => {
         // Teachers receive only requests in their scope: profile requests of
         // students they can manage, account requests targeting their classes.
         // Account rows carry password hashes — strip them for teachers.
-        if (req.user?.role === ROLES.TEACHER && (table === 'profile_requests' || table === 'account_requests')) {
+        // Teachers see only their own activity notifications: a row whose
+        // embedded actor is someone else describes another teacher's
+        // actions. Actorless rows are system notices and stay visible.
+        if (req.user?.role === ROLES.TEACHER && table === 'notifications') {
+          data[table] = rows.filter((n) => {
+            try {
+              const payload =
+                n && typeof n === 'object' && n.data != null
+                  ? n.data
+                  : typeof n?.data_json === 'string'
+                    ? JSON.parse(n.data_json)
+                    : n?.data_json || {};
+              const actor = payload?.actor || null;
+              if (!actor || !actor.id) return true;
+              return String(actor.id) === String(req.user.id);
+            } catch {
+              return true;
+            }
+          });
+        } else if (req.user?.role === ROLES.TEACHER && (table === 'profile_requests' || table === 'account_requests')) {
           if (table === 'profile_requests') {
             const allowedUsers = new Set(((data.users || []).map((u) => String(u.id))));
             data[table] = rows.filter((r) => allowedUsers.has(String(r.user_id)));

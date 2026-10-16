@@ -17,7 +17,9 @@ import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/role.js';
 import { ROLES } from '../../shared/constants.js';
+import { ForbiddenError, NotFoundError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
+import { getTeacherClassIds } from './users.routes.js';
 import { getIO } from '../realtime/socket.server.js';
 import { logger } from '../logger.js';
 
@@ -54,17 +56,79 @@ function kickDeviceSockets(schoolId, deviceKey) {
 	return kicked;
 }
 
-router.get('/', async (req, res, next) => {
-	try {
-		const { deviceSvc } = getContainer();
-		res.json(await deviceSvc.list(req.schoolId));
-	} catch (err) { next(err); }
+router.get('/', requireRole(DEVICE_ROLES), async (req, res, next) => {
+  try {
+    const { deviceSvc, repo } = getContainer();
+    const rows = await deviceSvc.list(req.schoolId);
+    // Teacher isolation: own machine + machines of own students +
+    // unassigned hardware. Other teachers' machines stay invisible.
+    if (req.user.role === ROLES.TEACHER) {
+      const classIds = await getTeacherClassIds(req.schoolId, req.user.id);
+      const { data: students } = await repo.getAll('users', {
+        filters: { school_id: req.schoolId, role: 'student' },
+        limit: 100000,
+      });
+      const ownStudentIds = new Set(
+        (students || [])
+          .filter((s) => s?.id && s.class_id && classIds.includes(String(s.class_id)))
+          .map((s) => String(s.id)),
+      );
+      return res.json(
+        rows.filter(
+          (d) =>
+            !d.assigned_user_id ||
+            String(d.assigned_user_id) === String(req.user.id) ||
+            ownStudentIds.has(String(d.assigned_user_id)),
+        ),
+      );
+    }
+    res.json(rows);
+  } catch (err) { next(err); }
 });
 
+// Teacher isolation on writes: a teacher may only touch unassigned
+// hardware, their own machine, or machines of their own students. Relinking
+// checks both ends, so nobody can steal or unlink another scope's machine.
+async function assertTeacherDevice(req, deviceId, nextAssignedUserId = undefined) {
+  if (req.user.role !== ROLES.TEACHER) return;
+  const { deviceSvc, repo } = getContainer();
+  const row = await deviceSvc.getById(req.schoolId, deviceId);
+  if (!row) throw new NotFoundError('Device');
+  const checkIds =
+    nextAssignedUserId !== undefined
+      ? [row.assigned_user_id, nextAssignedUserId]
+      : [row.assigned_user_id];
+  let students = null;
+  const loadStudents = async () => {
+    if (students) return students;
+    const { data } = await repo.getAll('users', {
+      filters: { school_id: req.schoolId, role: 'student' },
+      limit: 100000,
+    });
+    students = data || [];
+    return students;
+  };
+  const classIds = await getTeacherClassIds(req.schoolId, req.user.id);
+  for (const linkedId of checkIds) {
+    if (!linkedId) continue;
+    if (String(linkedId) === String(req.user.id)) continue;
+    const roster = await loadStudents();
+    const ok = roster.some(
+      (s) =>
+        String(s.id) === String(linkedId) &&
+        s.class_id &&
+        classIds.includes(String(s.class_id)),
+    );
+    if (!ok) throw new ForbiddenError('Not your device');
+  }
+}
+
 router.patch('/:id', requireRole(DEVICE_ROLES), async (req, res, next) => {
-	try {
-		const { deviceSvc, auditSvc } = getContainer();
-		const { status, assigned_user_id, hostname, note } = req.body || {};
+  try {
+    const { deviceSvc, auditSvc } = getContainer();
+    const { status, assigned_user_id, hostname, note } = req.body || {};
+
+    await assertTeacherDevice(req, req.params.id, assigned_user_id);
 
 		let device = null;
 		if (status !== undefined) {
@@ -96,9 +160,10 @@ router.patch('/:id', requireRole(DEVICE_ROLES), async (req, res, next) => {
 });
 
 router.delete('/:id', requireRole(DEVICE_ROLES), async (req, res, next) => {
-	try {
-		const { deviceSvc, auditSvc } = getContainer();
-		await deviceSvc.remove(req.schoolId, req.params.id);
+  try {
+    const { deviceSvc, auditSvc } = getContainer();
+    await assertTeacherDevice(req, req.params.id);
+    await deviceSvc.remove(req.schoolId, req.params.id);
 		await auditSvc.log({
 			schoolId: req.schoolId,
 			actorId: req.user.id,

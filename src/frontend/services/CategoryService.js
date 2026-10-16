@@ -46,6 +46,21 @@ export class CategoryService {
         roots.push(cat);
       }
     }
+    // Cycle safety: rows trapped in a parent loop are reachable from no root
+    // (the update route rejects new cycles, but legacy/mirrored data may
+    // still contain one). Surface them as roots instead of dropping them.
+    {
+      const reachable = new Set();
+      const visit = (node) => {
+        if (!node || reachable.has(node.id)) return;
+        reachable.add(node.id);
+        for (const child of node.children) visit(child);
+      };
+      for (const root of roots) visit(root);
+      for (const cat of lookup.values()) {
+        if (!reachable.has(cat.id)) roots.push(cat);
+      }
+    }
     return roots;
   }
 
@@ -85,6 +100,19 @@ export class CategoryService {
       if (parsed.data.parent_id === id) throw new ValidationError({ parent_id: ['Cannot set category as its own parent'] });
       const parent = await this.#repo.getById('categories', parsed.data.parent_id);
       if (!parent) throw new ValidationError({ parent_id: ['Parent category not found'] });
+      // Cycle guard: walk the new parent's ancestor chain — if it leads back
+      // to this category the tree would loop (and getTree would drop the
+      // whole cycle from the roots).
+      let ancestorId = parent.parent_id || null;
+      const seen = new Set([id]);
+      while (ancestorId) {
+        if (ancestorId === id || seen.has(ancestorId)) {
+          throw new ValidationError({ parent_id: ['Cannot move a category inside one of its own subcategories'] });
+        }
+        seen.add(ancestorId);
+        const ancestor = await this.#repo.getById('categories', ancestorId);
+        ancestorId = ancestor?.parent_id || null;
+      }
     }
 
     return this.#repo.update('categories', id, parsed.data);

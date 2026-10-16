@@ -98,4 +98,8 @@ export const LoginSchema = z.object({
 	// refresh cookie is scoped per portal so one tab's refresh never rotates
 	// (or mints a wrong-identity token for) the other tab's session.
 	portal: z.enum(['admin', 'student']).optional(),
+	// Take over an existing live session. Without it, logging in while the
+	// account already holds a live session elsewhere is rejected with
+	// SESSION_ACTIVE (409) so two tabs/devices are never signed in at once.
+	force: z.boolean().optional(),
 });

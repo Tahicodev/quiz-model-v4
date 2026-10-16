@@ -6,6 +6,11 @@
 		filter: 'all',
 		trainingFilter: 'all',
 		gameFilter: 'all',
+		resultsFilter: 'all',
+		resultsStatusFilter: 'all',
+		resultsView: 'results',
+		accuracySource: 'all',
+		accuracyMastery: 'all',
 		workspaceTab: 'overview',
 		activeGameId: null,
 		gameActionsBound: false,
@@ -2655,14 +2660,7 @@
 		);
 	}
 
-	function renderResultsList(context) {
-		const container = byId('studentResults');
-		if (!container) return;
-		if (!context) {
-			container.innerHTML = '<div class="empty-state">No results yet.</div>';
-			return;
-		}
-
+	function buildStudentResults(context) {
 		const trainingResults = getTrainingResults(context.identity);
 		const examResults = collectExamResults(context.identity);
 		const gameResults = getGameResults(context);
@@ -2687,42 +2685,117 @@
 
 		allResults.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
-		if (allResults.length === 0) {
+		allResults.forEach((result) => {
+			const scoreText = String(result.score || '');
+			let scoreTone = 'neutral';
+			if (result.kind === 'training') {
+				// /20 grades: green above 10, red below
+				const grade = parseFloat(scoreText.replace(',', '.'));
+				scoreTone = Number.isFinite(grade) && grade > 10 ? 'passed' : 'failed';
+			} else if (result.kind === 'exam') {
+				scoreTone = result.passed ? 'passed' : 'failed';
+			} else {
+				// Game summaries carry "pts"; exam scores are "score/total".
+				const isRatio = /\d+\s*\/\s*\d+/.test(scoreText);
+				if (isRatio) {
+					const [score, total] = scoreText
+						.split('/')
+						.map((part) => Number(part.trim()));
+					if (Number.isFinite(score) && Number.isFinite(total) && total > 0) {
+						const percent = Math.round((score / total) * 100);
+						scoreTone = percent >= 50 ? 'passed' : 'failed';
+					}
+				}
+			}
+			result.scoreTone = scoreTone;
+		});
+
+		return allResults;
+	}
+
+	function resultMatchesFilters(result, typeFilter, statusFilter) {
+		if (typeFilter && typeFilter !== 'all' && result.kind !== typeFilter) {
+			return false;
+		}
+		if (statusFilter === 'passed' || statusFilter === 'failed') {
+			// Outcome only applies to graded work (exams / training); games are
+			// shown under any outcome unless they resolve a pass/fail tone.
+			if (result.scoreTone === 'neutral') return false;
+			return result.scoreTone === statusFilter;
+		}
+		return true;
+	}
+
+	function renderResultsSummary(results, filtered) {
+		const container = byId('studentResultsSummary');
+		if (!container) return;
+		if (!results.length) {
+			container.innerHTML = '';
+			return;
+		}
+		const graded = results.filter((r) => r.scoreTone !== 'neutral');
+		const passed = results.filter((r) => r.scoreTone === 'passed').length;
+		const passRate = graded.length
+			? Math.round((passed / graded.length) * 100)
+			: 0;
+		container.innerHTML = `
+			<div class="results-summary-chip">
+				<span class="results-summary-value">${filtered.length}</span>
+				<span class="results-summary-label">Shown</span>
+			</div>
+			<div class="results-summary-chip">
+				<span class="results-summary-value">${results.length}</span>
+				<span class="results-summary-label">Total</span>
+			</div>
+			<div class="results-summary-chip">
+				<span class="results-summary-value">${passRate}%</span>
+				<span class="results-summary-label">Pass rate</span>
+			</div>
+		`;
+	}
+
+	function renderResultsList(context) {
+		const container = byId('studentResults');
+		if (!container) return;
+		if (!context) {
 			container.innerHTML = '<div class="empty-state">No results yet.</div>';
+			const summary = byId('studentResultsSummary');
+			if (summary) summary.innerHTML = '';
+			renderQuestionAccuracy(null);
 			return;
 		}
 
-		container.innerHTML = allResults
-			.slice(0, 6)
+		const allResults = buildStudentResults(context);
+		const typeFilter = state.resultsFilter || 'all';
+		const statusFilter = state.resultsStatusFilter || 'all';
+		const filtered = allResults.filter((result) =>
+			resultMatchesFilters(result, typeFilter, statusFilter),
+		);
+
+		renderResultsSummary(allResults, filtered);
+
+		if (!allResults.length) {
+			container.innerHTML = '<div class="empty-state">No results yet.</div>';
+			renderQuestionAccuracy(context);
+			return;
+		}
+
+		if (!filtered.length) {
+			container.innerHTML =
+				'<div class="empty-state">No results match this filter. Try another filter.</div>';
+			renderQuestionAccuracy(context);
+			return;
+		}
+
+		const kindLabels = {
+			training: 'Training',
+			exam: 'Exam',
+			game: 'Game',
+		};
+
+		container.innerHTML = filtered
 			.map((result) => {
 				const kind = result.kind || 'training';
-				const kindLabels = {
-					training: 'Training',
-					exam: 'Exam',
-					game: 'Game',
-				};
-				const scoreText = String(result.score || '');
-				let scoreTone = 'neutral';
-				if (result.kind === 'training') {
-					// /20 grades: green above 10, red below
-					const grade = parseFloat(scoreText.replace(',', '.'));
-					scoreTone =
-						Number.isFinite(grade) && grade > 10 ? 'passed' : 'failed';
-				} else if (result.kind === 'exam') {
-					scoreTone = result.passed ? 'passed' : 'failed';
-				} else {
-					// Game summaries carry "pts"; exam scores are "score/total".
-					const isRatio = /\d+\s*\/\s*\d+/.test(scoreText);
-					if (isRatio) {
-						const [score, total] = scoreText
-							.split('/')
-							.map((part) => Number(part.trim()));
-						if (Number.isFinite(score) && Number.isFinite(total) && total > 0) {
-							const percent = Math.round((score / total) * 100);
-							scoreTone = percent >= 50 ? 'passed' : 'failed';
-						}
-					}
-				}
 				return `
 					<div class="result-row">
 						<div class="result-main">
@@ -2734,11 +2807,302 @@
 								result.date ? new Date(result.date).toLocaleString() : ''
 							}</div>
 						</div>
-						<div class="result-score ${scoreTone}">${escapeHtml(result.score)}</div>
+						<div class="result-score ${result.scoreTone}">${escapeHtml(result.score)}</div>
 					</div>
 				`;
 			})
 			.join('');
+
+		renderQuestionAccuracy(context);
+	}
+
+	// ── Per-question accuracy ───────────────────────────────────────────────
+	// Aggregates the student's recorded answers (exams + training + games,
+	// which store `answers_json` as { questionId: userAnswer }) against the
+	// question bank's expected answer to surface the questions they struggle
+	// with most. Game rows currently persist only aggregate score/rank, so
+	// they contribute no per-question rows until game answers are stored.
+	function getStudentRawResultRows(context) {
+		let rows = [];
+		try {
+			rows = window.__DI_CONTAINER__?.repo?.getAll_sync('results') || [];
+		} catch (_) {
+			rows = [];
+		}
+		if (!Array.isArray(rows)) return [];
+		const userId = String(context?.user?.id || '').trim();
+		const numero = String(context?.identity?.numero || '').trim();
+		const classId = String(context?.identity?.classId || '').trim();
+		const className = String(context?.identity?.class || '').trim().toLowerCase();
+		return rows.filter((row) => {
+			if (!row || typeof row !== 'object') return false;
+			// Game rows carry only aggregate score/rank (no per-question
+			// `answers_json` yet), so they naturally contribute nothing to
+			// per-question accuracy — but keep them in the pipeline so the
+			// Games source filter works as soon as game answers exist.
+			const rowUserId = String(row.userId || row.user_id || '').trim();
+			if (userId && rowUserId && rowUserId === userId) return true;
+			const rowNumero = String(row.numero || row.studentNumber || '').trim();
+			if (!rowNumero || rowNumero !== numero) return false;
+			const rowClassId = String(row.classId || '').trim();
+			const rowClass = String(row.class || row.className || '')
+				.trim()
+				.toLowerCase();
+			return (
+				(Boolean(classId) && rowClassId === classId) ||
+				(Boolean(className) && rowClass === className)
+			);
+		});
+	}
+
+	function resultRowSource(row) {
+		if (row?.gameId) return 'game';
+		const mode = String(row?.mode || '')
+			.trim()
+			.toLowerCase();
+		if (mode === 'training') return 'training';
+		if (mode === 'game') return 'game';
+		const examId = String(row?.examId || row?.exam_id || '')
+			.trim()
+			.toLowerCase();
+		if (examId === 'training-practice') return 'training';
+		return 'exam';
+	}
+
+	function collectQuestionAccuracy(context) {
+		if (!context) return [];
+		const rows = getStudentRawResultRows(context);
+		if (!rows.length) return [];
+		const questionBank =
+			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		const byId = new Map(
+			questionBank.map((question) => [String(question?.id ?? '').trim(), question]),
+		);
+		const stats = new Map();
+		rows.forEach((row) => {
+			let answers = row.answersJson ?? row.answers_json ?? null;
+			if (typeof answers === 'string') {
+				try {
+					answers = JSON.parse(answers);
+				} catch (_) {
+					answers = null;
+				}
+			}
+			if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+				return;
+			}
+			const source = resultRowSource(row);
+			Object.keys(answers).forEach((questionId) => {
+				const key = String(questionId || '').trim();
+				if (!key) return;
+				const question = byId.get(key);
+				if (!question) return;
+				const qType = normalizeTrainingQuestionType(question);
+				const correctAnswer = getQuestionExpectedAnswerValue(question);
+				const isCorrect = trainingAnswersEqual(
+					answers[questionId],
+					correctAnswer,
+					qType,
+				);
+				const entry = stats.get(key) || {
+					question,
+					qType,
+					bySource: {
+						exam: { attempts: 0, correct: 0 },
+						training: { attempts: 0, correct: 0 },
+						game: { attempts: 0, correct: 0 },
+					},
+					attempts: 0,
+					correct: 0,
+				};
+				if (!entry.bySource[source]) {
+					entry.bySource[source] = { attempts: 0, correct: 0 };
+				}
+				entry.bySource[source].attempts += 1;
+				if (isCorrect) entry.bySource[source].correct += 1;
+				entry.attempts += 1;
+				if (isCorrect) entry.correct += 1;
+				stats.set(key, entry);
+			});
+		});
+		return Array.from(stats.values()).sort(
+			(a, b) => b.attempts - a.attempts || a.correct - b.correct,
+		);
+	}
+
+	function accuracyStatsForSource(entry, source) {
+		if (source === 'exam') return entry?.bySource?.exam || { attempts: 0, correct: 0 };
+		if (source === 'training') {
+			return entry?.bySource?.training || { attempts: 0, correct: 0 };
+		}
+		if (source === 'game') {
+			return entry?.bySource?.game || { attempts: 0, correct: 0 };
+		}
+		return { attempts: entry?.attempts || 0, correct: entry?.correct || 0 };
+	}
+
+	function accuracyPercent(stats) {
+		if (!stats || !stats.attempts) return 0;
+		return Math.round((stats.correct / stats.attempts) * 100);
+	}
+
+	const ACCURACY_PRACTICE_THRESHOLD = 60;
+
+	function accuracyMastery(accuracy) {
+		return accuracy >= ACCURACY_PRACTICE_THRESHOLD ? 'good' : 'practice';
+	}
+
+	function accuracySourceBreakdown(entry) {
+		const parts = [];
+		const exam = entry?.bySource?.exam || { attempts: 0, correct: 0 };
+		const training = entry?.bySource?.training || { attempts: 0, correct: 0 };
+		const game = entry?.bySource?.game || { attempts: 0, correct: 0 };
+		if (exam.attempts) parts.push(`Exam ${exam.correct}/${exam.attempts}`);
+		if (training.attempts) {
+			parts.push(`Training ${training.correct}/${training.attempts}`);
+		}
+		if (game.attempts) parts.push(`Game ${game.correct}/${game.attempts}`);
+		return parts.join(' · ');
+	}
+
+	function accuracyTone(accuracy) {
+		if (accuracy >= 80) return 'strong';
+		if (accuracy >= 50) return 'mid';
+		return 'hard';
+	}
+
+	function syncAccuracyChips() {
+		const bar = byId('studentAccuracyFilters');
+		if (!bar) return;
+		const source = state.accuracySource || 'all';
+		const mastery = state.accuracyMastery || 'all';
+		bar.querySelectorAll('[data-accuracy-source]').forEach((chip) => {
+			chip.classList.toggle(
+				'active',
+				String(chip.dataset.accuracySource || 'all') === source,
+			);
+		});
+		bar.querySelectorAll('[data-accuracy-mastery]').forEach((chip) => {
+			chip.classList.toggle(
+				'active',
+				String(chip.dataset.accuracyMastery || 'all') === mastery,
+			);
+		});
+	}
+
+	function renderQuestionAccuracy(context) {
+		const container = byId('studentQuestionAccuracy');
+		const badge = byId('studentAccuracyBadge');
+		const filterBar = byId('studentAccuracyFilters');
+		if (!container) return;
+		const entries = collectQuestionAccuracy(context);
+		if (!entries.length) {
+			if (badge) badge.textContent = '';
+			if (filterBar) filterBar.hidden = true;
+			container.innerHTML =
+				'<div class="empty-state">Complete an exam, training session, or game to see which questions need more practice.</div>';
+			return;
+		}
+		if (filterBar) filterBar.hidden = false;
+		syncAccuracyChips();
+
+		const source = state.accuracySource || 'all';
+		const mastery = state.accuracyMastery || 'all';
+
+		const view = entries
+			.map((entry) => {
+				const stats = accuracyStatsForSource(entry, source);
+				const accuracy = accuracyPercent(stats);
+				return {
+					entry,
+					attempts: stats.attempts,
+					correct: stats.correct,
+					accuracy,
+					mastery: accuracyMastery(accuracy),
+				};
+			})
+			.filter((row) => row.attempts > 0)
+			.sort((a, b) => a.accuracy - b.accuracy || b.attempts - a.attempts);
+
+		const tracked = view.length;
+		const practiceCount = view.filter((row) => row.mastery === 'practice').length;
+		const goodCount = tracked - practiceCount;
+		const avg = tracked
+			? Math.round(view.reduce((sum, row) => sum + row.accuracy, 0) / tracked)
+			: 0;
+		if (badge) badge.textContent = tracked ? `${avg}% avg` : '';
+
+		const summary = `
+			<div class="accuracy-summary">
+				<div class="accuracy-summary-card">
+					<span class="accuracy-summary-value">${tracked}</span>
+					<span class="accuracy-summary-label">Questions tracked</span>
+				</div>
+				<div class="accuracy-summary-card accuracy-summary-card--hard">
+					<span class="accuracy-summary-value">${practiceCount}</span>
+					<span class="accuracy-summary-label">Need practice</span>
+				</div>
+				<div class="accuracy-summary-card accuracy-summary-card--good">
+					<span class="accuracy-summary-value">${goodCount}</span>
+					<span class="accuracy-summary-label">Good</span>
+				</div>
+			</div>
+		`;
+
+		const filtered =
+			mastery === 'all'
+				? view
+				: view.filter((row) => row.mastery === mastery);
+
+		if (!filtered.length) {
+			container.innerHTML =
+				summary +
+				'<div class="empty-state">No questions match this filter yet.</div>';
+			return;
+		}
+
+		const rows = filtered
+			.slice(0, 8)
+			.map((row, index) => {
+				const tone = accuracyTone(row.accuracy);
+				const questionText =
+					row.entry.question?.text ||
+					row.entry.question?.question ||
+					row.entry.question?.title ||
+					'Question';
+				const breakdown =
+					source === 'all' ? accuracySourceBreakdown(row.entry) : '';
+				return `
+					<div class="accuracy-row accuracy-row--${tone}">
+						<div class="accuracy-row-head">
+							<span class="accuracy-rank">#${index + 1}</span>
+							<span class="accuracy-question">${escapeHtml(questionText)}</span>
+							<span class="accuracy-pill accuracy-pill--${tone}">${row.accuracy}%</span>
+						</div>
+						<div class="accuracy-bar">
+							<span style="width:${row.accuracy}%"></span>
+						</div>
+						<div class="accuracy-meta">
+							<span>${row.attempts} attempt${row.attempts === 1 ? '' : 's'}</span>
+							<span>${row.correct} correct</span>
+							${
+								breakdown
+									? `<span class="accuracy-sources">${escapeHtml(breakdown)}</span>`
+									: ''
+							}
+							<span class="accuracy-type">${escapeHtml(row.entry.qType)}</span>
+						</div>
+					</div>
+				`;
+			})
+			.join('');
+
+		const more =
+			filtered.length > 8
+				? `<div class="accuracy-more">Showing the 8 lowest-accuracy questions of ${filtered.length}.</div>`
+				: '';
+
+		container.innerHTML = summary + rows + more;
 	}
 
 	function getStudentClassId(context) {
@@ -13221,9 +13585,155 @@
 			});
 	}
 
+	// ── Results subtabs (My Results / Question Accuracy) ────────────────────
+	// Single source of truth for the two views. Follows the WAI-ARIA
+	// tablist pattern: roving tabindex + ArrowLeft/Right/Home/End support.
+	// Buttons carry `data-results-view`, panels `data-results-panel`.
+	const RESULTS_VIEWS = ['results', 'accuracy'];
+
+	function normalizeResultsView(view) {
+		return view === 'accuracy' ? 'accuracy' : 'results';
+	}
+
+	function getResultsTabButtons() {
+		const nav = byId('studentResultsSubtabs');
+		if (!nav) return [];
+		return Array.from(nav.querySelectorAll('[data-results-view]'));
+	}
+
+	function setResultsView(view, options) {
+		const normalized = normalizeResultsView(view);
+		state.resultsView = normalized;
+		const buttons = getResultsTabButtons();
+		buttons.forEach((btn) => {
+			const isActive =
+				String(btn.dataset.resultsView || '') === normalized;
+			btn.classList.toggle('active', isActive);
+			btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+			btn.tabIndex = isActive ? 0 : -1;
+		});
+		document.querySelectorAll('[data-results-panel]').forEach((panel) => {
+			panel.hidden = String(panel.dataset.resultsPanel || '') !== normalized;
+		});
+		if (options && options.focus) {
+			const active = buttons.find(
+				(btn) => String(btn.dataset.resultsView || '') === normalized,
+			);
+			if (active && typeof active.focus === 'function') active.focus();
+		}
+	}
+
+	function focusResultsTab(offset) {
+		const buttons = getResultsTabButtons();
+		if (!buttons.length) return;
+		const currentIndex = buttons.findIndex(
+			(btn) => String(btn.dataset.resultsView || '') === state.resultsView,
+		);
+		const next =
+			buttons[
+				(currentIndex + offset + buttons.length) % buttons.length
+			];
+		if (next) setResultsView(next.dataset.resultsView, { focus: true });
+	}
+
+	function attachResultsSubtabs() {
+		const nav = byId('studentResultsSubtabs');
+		if (!nav || nav.dataset.bound === 'true') return;
+		nav.dataset.bound = 'true';
+		nav.addEventListener('click', (event) => {
+			const target = event.target;
+			if (!target || !target.closest) return;
+			const btn = target.closest('[data-results-view]');
+			if (!btn || !nav.contains(btn)) return;
+			setResultsView(btn.dataset.resultsView);
+		});
+		nav.addEventListener('keydown', (event) => {
+			const target = event.target;
+			if (!target || !target.closest) return;
+			if (!target.closest('[data-results-view]')) return;
+			switch (event.key) {
+				case 'ArrowLeft':
+				case 'ArrowUp':
+					event.preventDefault();
+					focusResultsTab(-1);
+					break;
+				case 'ArrowRight':
+				case 'ArrowDown':
+					event.preventDefault();
+					focusResultsTab(1);
+					break;
+				case 'Home':
+					event.preventDefault();
+					setResultsView(RESULTS_VIEWS[0], { focus: true });
+					break;
+				case 'End':
+					event.preventDefault();
+					setResultsView(RESULTS_VIEWS[RESULTS_VIEWS.length - 1], {
+						focus: true,
+					});
+					break;
+			}
+		});
+		// Exposed for tests / deep-linking: window.setStudentResultsView('accuracy')
+		window.setStudentResultsView = (view) => setResultsView(view);
+	}
+
+	function attachAccuracyFilters() {
+		const bar = byId('studentAccuracyFilters');
+		if (!bar || bar.dataset.bound === 'true') return;
+		bar.dataset.bound = 'true';
+		bar.addEventListener('click', (event) => {
+			const target = event.target;
+			if (!target || !target.closest) return;
+			const sourceChip = target.closest('[data-accuracy-source]');
+			if (sourceChip) {
+				state.accuracySource = sourceChip.dataset.accuracySource || 'all';
+				const context = getStudentContext();
+				if (context) renderQuestionAccuracy(context);
+				return;
+			}
+			const masteryChip = target.closest('[data-accuracy-mastery]');
+			if (masteryChip) {
+				state.accuracyMastery = masteryChip.dataset.accuracyMastery || 'all';
+				const context = getStudentContext();
+				if (context) renderQuestionAccuracy(context);
+			}
+		});
+	}
+
+	function attachResultsFilters() {
+		const group = byId('studentResultsFilters');
+		if (!group || group.dataset.bound === 'true') return;
+		group.dataset.bound = 'true';
+		group.addEventListener('click', (event) => {
+			const target = event.target;
+			if (!target || !target.closest) return;
+			const typeChip = target.closest('[data-result-type]');
+			if (typeChip) {
+				group
+					.querySelectorAll('[data-result-type]')
+					.forEach((el) => el.classList.remove('active'));
+				typeChip.classList.add('active');
+				state.resultsFilter = typeChip.dataset.resultType || 'all';
+				const context = getStudentContext();
+				if (context) renderResultsList(context);
+				return;
+			}
+			const statusChip = target.closest('[data-result-status]');
+			if (statusChip) {
+				group
+					.querySelectorAll('[data-result-status]')
+					.forEach((el) => el.classList.remove('active'));
+				statusChip.classList.add('active');
+				state.resultsStatusFilter = statusChip.dataset.resultStatus || 'all';
+				const context = getStudentContext();
+				if (context) renderResultsList(context);
+			}
+		});
+	}
+
 	function bindProfileActions() {
-		const headerProfileBtn = byId('workspaceProfileButton');
-		if (headerProfileBtn) {
+		const headerProfileBtn = byId('workspaceProfileButton');		if (headerProfileBtn) {
 			headerProfileBtn.addEventListener('click', (event) => {
 				event.stopPropagation();
 				toggleStudentDropdown();
@@ -14760,13 +15270,32 @@
 	}
 
 	function isStudentTrainingCategory(categoryId) {
-		const id = String(categoryId || 'uncategorized');
+		const originalId = String(categoryId || 'uncategorized');
 		const map = getStudentTrainingMap();
 		if (!map) return true; // legacy: no map configured → everything eligible
-		if (Object.prototype.hasOwnProperty.call(map, id)) {
-			return map[id] === true;
+		// Nearest explicit entry wins — walk up through parents so a teacher
+		// enabling "Math" covers "Addition"/"Subtraction" (mirrors the admin
+		// resolution in category-management.js).
+		let current = originalId;
+		const seen = new Set();
+		while (current && !seen.has(current)) {
+			seen.add(current);
+			if (Object.prototype.hasOwnProperty.call(map, current)) {
+				return map[current] === true;
+			}
+			let parent = '';
+			try {
+				const cats = window.__DI_CONTAINER__?.repo?.getAll_sync('categories') || [];
+				const row = (Array.isArray(cats) ? cats : []).find(
+					(c) => c && String(c.id) === String(current),
+				);
+				parent = String((row && (row.parent_id ?? row.parentId)) || '');
+			} catch (_) {
+				parent = '';
+			}
+			current = parent;
 		}
-		return id === 'uncategorized';
+		return originalId === 'uncategorized';
 	}
 
 	function filterStudentTrainingQuestions(questionList) {
@@ -14948,6 +15477,9 @@
 		// Also hide the image lightbox so it doesn't linger on the workspace.
 		if (typeof window.closeTrainingLightbox === 'function') {
 			window.closeTrainingLightbox();
+		}
+		if (typeof window.closeTrainingCorrectionsModal === 'function') {
+			window.closeTrainingCorrectionsModal();
 		}
 	};
 
@@ -16250,6 +16782,18 @@
 				: Math.min(elapsedSeconds, 86400);
 		const totalQuestions = trainingState.questions.length;
 
+		// Freeze the per-question answers as { questionId: userAnswer } so the
+		// Results tab can compute per-question accuracy later. Only answered
+		// questions are recorded — skipped ones should not read as misses.
+		const answersJsonMap = {};
+		trainingState.questions.forEach((q, idx) => {
+			const questionId = String(q?.id ?? '').trim();
+			if (!questionId) return;
+			const answer = trainingState.userAnswers[idx];
+			if (answer === undefined || answer === null || answer === '') return;
+			answersJsonMap[questionId] = answer;
+		});
+
 		// /20 grading scale: normalized regardless of question count.
 		// Grade > 10 passes; grade < 10 fails. Stored as a decimal number
 		// (e.g. 12.5) in the DB; displayed as "12,50 / 20".
@@ -16291,6 +16835,7 @@
 			passed: passed,
 			timeSpent: timeSpent,
 			time_spent: timeSpent,
+			answers_json: JSON.stringify(answersJsonMap),
 			completedAt: new Date().toISOString(),
 			date: new Date().toISOString(),
 		};
@@ -16366,6 +16911,51 @@
 		renderTrainingQuestion();
 	}
 
+	function buildTrainingCorrectionsHtml() {
+		return `
+			<div class="corrections-container corrections-container--in-modal">
+				${trainingState.questions
+					.map((q, i) => {
+						const userAns = trainingState.userAnswers[i] || '';
+						const correctAns = q.answer || '';
+						const qType = normalizeTrainingQuestionType(q);
+						const isCorrect = trainingAnswersEqual(
+							userAns,
+							correctAns,
+							qType,
+						);
+						return `
+						<div class="correction-item ${isCorrect ? 'correct' : 'incorrect'}">
+							<div class="correction-header">
+								<span class="question-number">Question ${i + 1}</span>
+								<span class="question-type-tag">${escapeHtml(qType)}</span>
+								<span class="status-badge ${isCorrect ? 'pass' : 'fail'}">
+									${isCorrect ? '✓ Correct' : '✕ Incorrect'}
+								</span>
+							</div>
+							<p class="question-title">${escapeHtml(q.text || q.question || 'Question')}</p>
+							<div class="answer-row">
+								<div class="answer-group">
+									<strong>Your Answer:</strong>
+									<span class="answer-badge ${isCorrect ? 'badge-success' : 'badge-danger'}">
+										${escapeHtml(prettyPrintTrainingAnswer(userAns, qType))}
+									</span>
+								</div>
+								<div class="answer-group">
+									<strong>Correct Answer:</strong>
+									<span class="answer-badge badge-success">
+										${escapeHtml(prettyPrintTrainingAnswer(correctAns, qType))}
+									</span>
+								</div>
+							</div>
+							${q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</div>` : ''}
+						</div>`;
+					})
+					.join('')}
+			</div>
+		`;
+	}
+
 	function renderTrainingResultsView(container) {
 		const total = trainingState.questions.length;
 		const score = trainingState.score;
@@ -16386,58 +16976,11 @@
 				: elapsedSec;
 		const timeDisplay = formatTrainingDuration(timeSec);
 
-		let correctionsHtml = '';
-		if (trainingState.allowCorrections && trainingState.showCorrections) {
-			correctionsHtml = `
-				<div class="corrections-container">
-					<h4>Answer Breakdown & Corrections</h4>
-					${trainingState.questions
-						.map((q, i) => {
-							const userAns = trainingState.userAnswers[i] || '';
-							const correctAns = q.answer || '';
-							const qType = normalizeTrainingQuestionType(q);
-							const isCorrect = trainingAnswersEqual(
-								userAns,
-								correctAns,
-								qType,
-							);
-							return `
-							<div class="correction-item ${isCorrect ? 'correct' : 'incorrect'}">
-								<div class="correction-header">
-									<span class="question-number">Question ${i + 1}</span>
-									<span class="question-type-tag">${escapeHtml(qType)}</span>
-									<span class="status-badge ${isCorrect ? 'pass' : 'fail'}">
-										${isCorrect ? '✓ Correct' : '✕ Incorrect'}
-									</span>
-								</div>
-								<p class="question-title">${escapeHtml(q.text || q.question || 'Question')}</p>
-								<div class="answer-row">
-									<div class="answer-group">
-										<strong>Your Answer:</strong>
-										<span class="answer-badge ${isCorrect ? 'badge-success' : 'badge-danger'}">
-											${escapeHtml(prettyPrintTrainingAnswer(userAns, qType))}
-										</span>
-									</div>
-									<div class="answer-group">
-										<strong>Correct Answer:</strong>
-										<span class="answer-badge badge-success">
-											${escapeHtml(prettyPrintTrainingAnswer(correctAns, qType))}
-										</span>
-									</div>
-								</div>
-								${q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${escapeHtml(q.explanation)}</div>` : ''}
-							</div>`;
-						})
-						.join('')}
-				</div>
-			`;
-		}
-
 		container.innerHTML = `
 			<div class="training-results-view">
 				<div class="results-header">
 					<h2>${trainingState.mode === 'exam' ? 'Exam Finished' : 'Training Test Completed!'}</h2>
-					<p>${trainingState.mode === 'exam' ? 'Your exam has been submitted.' : 'Great effort! Review your metrics and corrections below.'}</p>
+					<p>${trainingState.mode === 'exam' ? 'Your exam has been submitted.' : 'Great effort! Review your metrics, then open the corrections breakdown.'}</p>
 				</div>
 
 				<div class="results-stats-grid">
@@ -16460,21 +17003,82 @@
 				</div>
 
 				<div class="results-actions">
-					${trainingState.allowCorrections ? `<button type="button" class="workspace-btn" onclick="toggleTrainingCorrections()">${trainingState.showCorrections ? 'Hide Corrections' : 'Show Corrections'}</button>` : ''}
+					${trainingState.allowCorrections ? `<button type="button" class="workspace-btn" onclick="openTrainingCorrectionsModal()">Show Corrections</button>` : ''}
 					${trainingState.mode === 'training' ? `<button type="button" class="workspace-btn secondary" onclick="retakeTrainingModal()">Retake Training</button>` : ''}
 					<button type="button" class="workspace-btn ghost" onclick="closeTrainingModal()">
 						Close & Return to Workspace
 					</button>
 				</div>
-
-				${correctionsHtml}
 			</div>
 		`;
 	}
 
+	window.openTrainingCorrectionsModal = function () {
+		if (!trainingState.allowCorrections) return;
+		const modal = byId('trainingCorrectionsModal');
+		const body = byId('trainingCorrectionsBody');
+		const subtitle = byId('trainingCorrectionsSubtitle');
+		if (!modal || !body) {
+			// Fallback: legacy inline toggle if modal markup is missing.
+			trainingState.showCorrections = !trainingState.showCorrections;
+			renderTrainingQuestion();
+			return;
+		}
+		const total = trainingState.questions.length;
+		const correctCount = trainingState.questions.filter((q, i) =>
+			trainingAnswersEqual(
+				trainingState.userAnswers[i] || '',
+				q.answer || '',
+				normalizeTrainingQuestionType(q),
+			),
+		).length;
+		if (subtitle) {
+			subtitle.textContent = `${correctCount} / ${total} correct · ${trainingState.examName || ''}`.trim();
+		}
+		body.innerHTML = buildTrainingCorrectionsHtml();
+		modal.classList.add('active');
+		modal.setAttribute('aria-hidden', 'false');
+		body.scrollTop = 0;
+		const closeBtn = modal.querySelector('.close-modal-btn');
+		if (closeBtn && typeof closeBtn.focus === 'function') {
+			try {
+				closeBtn.focus({ preventScroll: true });
+			} catch (_) {
+				closeBtn.focus();
+			}
+		}
+		if (!modal.dataset.bound) {
+			modal.dataset.bound = '1';
+			modal.addEventListener('click', (e) => {
+				if (e.target === modal) window.closeTrainingCorrectionsModal();
+			});
+			document.addEventListener('keydown', (e) => {
+				if (e.key !== 'Escape') return;
+				const open = byId('trainingCorrectionsModal');
+				if (open && open.classList.contains('active')) {
+					window.closeTrainingCorrectionsModal();
+				}
+			});
+		}
+	};
+
+	window.closeTrainingCorrectionsModal = function () {
+		const modal = byId('trainingCorrectionsModal');
+		if (modal) {
+			modal.classList.remove('active');
+			modal.setAttribute('aria-hidden', 'true');
+		}
+	};
+
 	window.toggleTrainingCorrections = function () {
-		trainingState.showCorrections = !trainingState.showCorrections;
-		renderTrainingQuestion();
+		// Kept for backward-compat with any cached markup / tests:
+		// "Show" opens the new modal, "Hide" closes it.
+		const modal = byId('trainingCorrectionsModal');
+		if (modal && modal.classList.contains('active')) {
+			window.closeTrainingCorrectionsModal();
+		} else {
+			window.openTrainingCorrectionsModal();
+		}
 	};
 
 	window.retakeTrainingModal = function () {
@@ -16715,6 +17319,9 @@
 		attachGameFilters();
 		attachGameRefreshControl();
 		attachTrainingFilters();
+		attachResultsFilters();
+		attachResultsSubtabs();
+		attachAccuracyFilters();
 		bindProfileActions();
 		bindGameActions();
 		bindGameSocket();

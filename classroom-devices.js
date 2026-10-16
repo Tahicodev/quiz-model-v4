@@ -112,6 +112,55 @@
 		return found ? found.name || found.username || '' : '';
 	}
 
+	var STAFF_DEVICE_ROLES = ['admin', 'teacher', 'super_admin'];
+
+	function isAdminSession() {
+		try {
+			if (window.TeacherFilter && typeof window.TeacherFilter.isAdminSession === 'function') {
+				return window.TeacherFilter.isAdminSession();
+			}
+			return !!(window.Auth && window.Auth.isAdmin && window.Auth.isAdmin());
+		} catch (e) {
+			return false;
+		}
+	}
+
+	// Assigned user, preferring the embedded server row (which now carries
+	// the role) over the students-only local list — staff machines resolve
+	// to their teacher/admin here.
+	function deviceUser(d) {
+		if (d && d.assignedUser && (d.assignedUser.name || d.assignedUser.username)) {
+			return {
+				id: d.assigned_user_id || d.assignedUser.id,
+				name: d.assignedUser.name || d.assignedUser.username || '',
+				role: String(d.assignedUser.role || '').toLowerCase(),
+			};
+		}
+		if (d && d.assigned_user_id) {
+			var found = students.find(function (s) {
+				return String(s.id) === String(d.assigned_user_id);
+			});
+			if (found) {
+				return {
+					id: found.id,
+					name: found.name || found.username || '',
+					role: 'student',
+				};
+			}
+			return { id: d.assigned_user_id, name: '', role: '' };
+		}
+		return null;
+	}
+
+	function isStaffRow(d) {
+		var u = deviceUser(d);
+		return !!u && STAFF_DEVICE_ROLES.indexOf(u.role) !== -1;
+	}
+
+	function staffRoleLabel(role) {
+		return role === 'admin' || role === 'super_admin' ? 'Admin' : 'Teacher';
+	}
+
 	async function loadStudents() {
 		// /users caps `limit` at 200 and paginates with `offset` — page through
 		// the whole roster (teachers are server-scoped to their own students).
@@ -210,17 +259,20 @@
 				if (presence === 'online' && !online) return false;
 				if (presence === 'offline' && online) return false;
 			}
-			if (student === 'assigned' && !d.assigned_user_id) return false;
-			if (student === 'unassigned' && d.assigned_user_id) return false;
-			if (!q) return true;
-			return (
-				String(d.hostname || '').toLowerCase().indexOf(q) !== -1 ||
-				String(d.last_ip || '').toLowerCase().indexOf(q) !== -1 ||
-				String(d.platform || '').toLowerCase().indexOf(q) !== -1 ||
-				studentName(d.assigned_user_id).toLowerCase().indexOf(q) !== -1
-			);
-		});
-	}
+		if (student === 'assigned' && !d.assigned_user_id) return false;
+		if (student === 'unassigned' && d.assigned_user_id) return false;
+		if (student === 'staff' && !isStaffRow(d)) return false;
+		if (!q) return true;
+		var linkedName = (deviceUser(d) || {}).name || '';
+		return (
+			String(d.hostname || '').toLowerCase().indexOf(q) !== -1 ||
+			String(d.last_ip || '').toLowerCase().indexOf(q) !== -1 ||
+			String(d.platform || '').toLowerCase().indexOf(q) !== -1 ||
+			String(d.note || '').toLowerCase().indexOf(q) !== -1 ||
+			linkedName.toLowerCase().indexOf(q) !== -1
+		);
+	});
+}
 
 	function clearFilters() {
 		['deviceFilterStatus', 'deviceFilterType', 'deviceFilterPresence', 'deviceFilterStudent'].forEach(function (id) {
@@ -280,6 +332,7 @@
 		allow: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
 		rename: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
 		forget: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+		sessions: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>',
 	};
 
 	function sheetIcon(svg16) {
@@ -309,6 +362,7 @@
 		if (!window.MobileActionSheet || !d) return;
 		var blocked = d.status === 'blocked';
 		var hostname = d.hostname || d.note || '(sans nom)';
+		var linked = deviceUser(d);
 		var statusAction = blocked
 			? {
 					label: 'Autoriser',
@@ -323,7 +377,19 @@
 					onClick: function () { setStatus(d.id, 'blocked'); },
 				};
 		window.MobileActionSheet.open('Appareil : ' + hostname, [
-			statusAction,
+			// Blocking is a student-exam control — never offered on staff rows.
+			...(isStaffRow(d) ? [] : [statusAction]),
+			...(isAdminSession() && linked && linked.id
+				? [
+						{
+							label: 'End sessions (' + (linked.name || 'user') + ')',
+							icon: sheetIcon(ICONS.sessions),
+							onClick: function () {
+								endSessions(d.id);
+							},
+						},
+					]
+				: []),
 			{
 				label: 'Renommer',
 				icon: sheetIcon(ICONS.rename),
@@ -383,25 +449,53 @@
 				var online = onlineIds.has(String(d.device_key));
 				var blocked = d.status === 'blocked';
 				var hostname = d.hostname || d.note || '(sans nom)';
+				var linkedUser = deviceUser(d);
+				var staffRow = isStaffRow(d);
 
-				var options =
-					'<option value="">— Non assigné —</option>' +
-					students
-						.map(function (s) {
-							return (
-								'<option value="' +
-								esc(s.id) +
-								'"' +
-								(String(s.id) === String(d.assigned_user_id) ? ' selected' : '') +
-								'>' +
-								esc(s.name || s.username) +
-								'</option>'
-							);
-						})
-						.join('');
+				var userCellHtml;
+				if (staffRow) {
+					userCellHtml =
+						'<span class="device-staff-badge" title="Staff machine">' +
+						esc(staffRoleLabel(linkedUser.role)) +
+						'</span> ' +
+						'<span class="device-user-name">' +
+						esc(linkedUser.name || linkedUser.id) +
+						'</span>';
+				} else {
+					var options =
+						'<option value="">— Non assigné —</option>' +
+						students
+							.map(function (s) {
+								return (
+									'<option value="' +
+									esc(s.id) +
+									'"' +
+									(String(s.id) === String(d.assigned_user_id) ? ' selected' : '') +
+									'>' +
+									esc(s.name || s.username) +
+									'</option>'
+								);
+							})
+							.join('');
+					userCellHtml =
+						'<select class="form-control device-assign" onchange="window.ClassroomDevices.assign(\'' +
+						id +
+						'\', this.value)">' +
+						options +
+						'</select>';
+				}
+
+				var endSessionsBtnHtml =
+					isAdminSession() && linkedUser && linkedUser.id
+						? '<button type="button" class="exam-action-btn exam-copy-btn" title="End all sign-in sessions for ' +
+							esc(linkedUser.name || linkedUser.id) +
+							'" onclick="window.ClassroomDevices.endSessions(\'' +
+							id +
+							'\')">' + ICONS.sessions + '</button>'
+						: '';
 
 				return (
-					'<tr class="device-card' + (blocked ? ' is-blocked' : '') + '" data-device-id="' + id + '">' +
+					'<tr class="device-card' + (blocked ? ' is-blocked' : '') + (staffRow ? ' is-staff' : '') + '" data-device-id="' + id + '">' +
 					'<td class="device-cell-machine">' +
 					'<span class="device-dot ' + (online ? 'is-online' : 'is-offline') + '" title="' + (online ? 'En ligne' : 'Hors ligne') + '"></span>' +
 					'<div class="device-id-block"><div class="device-name">' + esc(hostname) + '</div>' +
@@ -409,11 +503,7 @@
 					'</div></td>' +
 					'<td data-label="Type">' + typeLabel(d.device_type) + '</td>' +
 					'<td data-label="IP">' + esc(d.last_ip || '—') + '</td>' +
-					'<td data-label="Élève"><select class="form-control device-assign" onchange="window.ClassroomDevices.assign(\'' +
-					id +
-					'\', this.value)">' +
-					options +
-					'</select></td>' +
+					'<td data-label="Élève">' + userCellHtml + '</td>' +
 					'<td data-label="Statut"><span class="badge ' +
 					(blocked ? 'device-badge-blocked' : 'device-badge-allowed') +
 					'">' +
@@ -421,9 +511,12 @@
 					'</span></td>' +
 					'<td data-label="Vu">' + relativeTime(d.last_seen) + '</td>' +
 					'<td class="actions-cell device-cell-actions" data-label="Actions"><div class="exam-actions">' +
-					(blocked
-						? '<button type="button" class="exam-action-btn exam-copy-btn" title="Autoriser" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'allowed\')">' + ICONS.allow + '</button>'
-						: '<button type="button" class="exam-action-btn exam-delete-btn" title="Bloquer" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'blocked\')">' + ICONS.block + '</button>') +
+					(staffRow
+						? ''
+						: (blocked
+							? '<button type="button" class="exam-action-btn exam-copy-btn" title="Autoriser" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'allowed\')">' + ICONS.allow + '</button>'
+							: '<button type="button" class="exam-action-btn exam-delete-btn" title="Bloquer" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'blocked\')">' + ICONS.block + '</button>')) +
+					endSessionsBtnHtml +
 					'<button type="button" class="exam-action-btn exam-edit-btn" title="Renommer" onclick="window.ClassroomDevices.rename(\'' +
 					id +
 					'\')">' + ICONS.rename + '</button>' +
@@ -510,6 +603,46 @@
 		}
 	}
 
+	// End every sign-in session of the user linked to this machine (stuck
+	// "already signed in" accounts). Admin-only; the server enforces it too.
+	async function endSessions(id) {
+		if (!isAdminSession()) {
+			toast('Only admins can end sessions', 'error');
+			return;
+		}
+		var device = devices.find(function (d) {
+			return String(d.id) === String(id);
+		});
+		if (!device) {
+			toast('Appareil introuvable', 'error');
+			return;
+		}
+		var linked = deviceUser(device);
+		if (!linked || !linked.id) {
+			toast('No user linked to this machine', 'error');
+			return;
+		}
+		var label = linked.name || linked.id;
+		if (
+			!window.confirm(
+				'End all sign-in sessions for "' +
+					label +
+					'"?\n\nThey will be signed out immediately and can sign in again.',
+			)
+		) {
+			return;
+		}
+		try {
+			var res = await api('/users/' + encodeURIComponent(linked.id) + '/sessions', {
+				method: 'DELETE',
+			});
+			var count = res && res.revoked != null ? res.revoked : '?';
+			toast('Ended ' + count + ' session(s) for "' + label + '"', 'success');
+		} catch (err) {
+			toast('Échec: ' + err.message, 'error');
+		}
+	}
+
 	window.ClassroomDevices = {
 		refresh: refresh,
 		filter: render,
@@ -519,5 +652,6 @@
 		assign: assign,
 		rename: rename,
 		forget: forget,
+		endSessions: endSessions,
 	};
 })();

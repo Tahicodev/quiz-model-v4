@@ -361,11 +361,18 @@ function populateCategoryFilter() {
 	// Clear existing options except the first "All Categories" option
 	categoryFilter.innerHTML = '<option value="">All Categories</option>';
 
-	// Add categories
-	visibleCategories.forEach((category) => {
+	// Add categories (hierarchical labels)
+	const ordered = window.CategoryTree
+		? window.CategoryTree.getOrderedTree(
+				visibleCategories.filter((c) => c && c.id),
+			)
+		: visibleCategories.map((category) => ({ category, depth: 0 }));
+	ordered.forEach(({ category, depth }) => {
 		const option = document.createElement('option');
 		option.value = category.id;
-		option.textContent = category.name;
+		option.textContent = window.CategoryTree
+			? window.CategoryTree.getIndentedLabel(category, depth)
+			: category.name;
 		categoryFilter.appendChild(option);
 	});
 }

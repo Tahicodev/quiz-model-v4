@@ -31,6 +31,9 @@ export class QuestionService {
     this.#requireAdmin(currentUser);
     const parsed = QuestionCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    // Leaf-only filing: questions live in the deepest level — a category
+    // that has subcategories cannot hold questions directly.
+    await this.#assertLeafCategory(parsed.data.category_id);
     return this.#repo.create('questions', {
       ...parsed.data,
       school_id: currentUser?.school_id,
@@ -47,6 +50,9 @@ export class QuestionService {
 
     const parsed = QuestionUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    if (parsed.data.category_id !== undefined) {
+      await this.#assertLeafCategory(parsed.data.category_id);
+    }
     return this.#repo.update('questions', id, parsed.data);
   }
 
@@ -78,6 +84,12 @@ export class QuestionService {
       const parsed = QuestionCreateSchema.safeParse(questionsArray[i]);
       if (!parsed.success) {
         errors.push({ index: i, errors: parsed.error.flatten().fieldErrors });
+        continue;
+      }
+      try {
+        await this.#assertLeafCategory(parsed.data.category_id);
+      } catch (leafErr) {
+        errors.push({ index: i, errors: leafErr?.fields || { category_id: [leafErr?.message || 'Invalid category'] } });
         continue;
       }
       const created = await this.#repo.create('questions', {
@@ -113,6 +125,25 @@ export class QuestionService {
   #requireAdmin(user) {
     if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
       throw new ForbiddenError();
+    }
+  }
+
+  /**
+   * Leaf-only filing: questions live in the deepest level of the category
+   * tree. A category that has subcategories cannot hold questions directly
+   * (its rolled-up count/training already covers the subtree).
+   */
+  async #assertLeafCategory(categoryId) {
+    if (!categoryId) return;
+    const { data: children } = await this.#repo.getAll('categories', {
+      filters: { parent_id: categoryId },
+      limit: 1,
+    });
+    if ((children || []).length > 0) {
+      const cat = await this.#repo.getById('categories', categoryId);
+      throw new ValidationError({
+        category_id: [`Questions can only be filed under a subcategory ("${cat?.name || categoryId}" has subcategories)`],
+      });
     }
   }
 }

@@ -291,13 +291,14 @@ router.post('/setup/network-profile', adminOnly, async (req, res, next) => {
 });
 
 /**
- * GET /api/v1/admin/metrics?minutes=60
+ * GET /api/v1/admin/metrics?minutes=60&user=amina
  * Returns process-local request and log aggregates for the admin monitor.
+ * Optional `user` substring filter matches username / user id / role / IP.
  * The collector is intentionally in-memory: it is diagnostic, bounded, and
  * reset when the server restarts rather than becoming an audit datastore.
  */
 router.get('/metrics', monitoringAccess, (req, res) => {
-	res.json({ data: getServerMetrics(req.query.minutes) });
+	res.json({ data: getServerMetrics(req.query.minutes, { user: req.query.user }) });
 });
 
 // Same defaults prisma/seed.js installs on a fresh database.

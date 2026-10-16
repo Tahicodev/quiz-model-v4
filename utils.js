@@ -21,23 +21,35 @@ function escapeHtml(unsafe) {
 
 /**
  * Author attribution helpers (teacher-owned content).
- * Server rows carry `created_by` (nullable user id); legacy cached rows may
- * carry `ownerId` instead. NULL/absent = historically shared content.
- * @returns {string|null} owner user id or null when shared
+ * Server rows carry `created_by` / `creator_id` (nullable user id); legacy
+ * cached rows may carry `ownerId` instead. NULL/absent = historically shared
+ * content.
+ * Server-stamped keys win over the legacy `ownerId`: the edit dialogs used
+ * to fall back to "current user" when only `ownerId` was present, so a stale
+ * local `ownerId` must never shadow the authoritative server attribution.
+ * @returns {string|null} owner user id or null when unattributed
  */
 function getOwnerId(item) {
     if (!item) return null;
-    const id = item.ownerId || item.created_by || item.createdBy || null;
+    const id =
+        item.created_by ||
+        item.creator_id ||
+        item.ownerId ||
+        item.createdBy ||
+        item.creatorId ||
+        null;
     return id != null && String(id) !== '' ? String(id) : null;
 }
 
 /**
  * Human label for an owner id: "You" for the current user, the user's name
- * for anyone else (resolved from the cached users table), "Shared" for
- * unattributed legacy rows.
+ * for anyone else (resolved from the cached users table), or '' when there
+ * is no recorded author. There is no shared library anymore — every teacher
+ * sees only their own rows, so unattributed legacy rows render without an
+ * author badge instead of a "Shared" one.
  */
 function getOwnerLabel(ownerId) {
-    if (!ownerId) return 'Shared';
+    if (!ownerId) return '';
     try {
         const me = window.Auth && window.Auth.getCurrentUser ? window.Auth.getCurrentUser() : null;
         const myId = me && (me.id || me.userId);

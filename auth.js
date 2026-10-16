@@ -3056,11 +3056,16 @@
 											? `<button class="btn btn-sm ${statusClass}" onclick="toggleUserStatus('${escapeHtml(u.id)}')">${statusAction}</button>`
 											: ''
 									}
-									${
-										canManage && isAdmin()
-											? `<button class="btn btn-sm btn-secondary-soft" title="Generate a new temporary password for this user" onclick="resetUserPassword('${escapeHtml(u.id)}')">Reset password</button>`
-											: ''
-									}
+								${
+									canManage && isAdmin()
+										? `<button class="btn btn-sm btn-secondary-soft" title="End all active sign-in sessions for this user" onclick="endUserSessions('${escapeHtml(u.id)}')">End sessions</button>`
+										: ''
+								}
+								${
+									canManage && isAdmin()
+										? `<button class="btn btn-sm btn-secondary-soft" title="Generate a new temporary password for this user" onclick="resetUserPassword('${escapeHtml(u.id)}')">Reset password</button>`
+										: ''
+								}
 									${
 										canManage
 											? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${escapeHtml(u.id)}')">Delete</button>`
@@ -4107,6 +4112,84 @@
 		const valueEl = document.getElementById('resetPasswordValue');
 		if (labelEl) labelEl.textContent = '';
 		if (valueEl) valueEl.textContent = '';
+	}
+
+	// ── Admin session kill-switch ────────────────────────────────────────
+	// Shows a stuck account's live sign-ins (device/IP/age, never token
+	// material) and ends them all so the next login succeeds immediately.
+	function sessionAgeText(iso) {
+		const ms = Date.now() - new Date(iso).getTime();
+		if (!Number.isFinite(ms) || ms < 0) return 'unknown age';
+		const mins = Math.floor(ms / 60000);
+		if (mins < 1) return 'just now';
+		if (mins < 60) return mins + ' min ago';
+		const hours = Math.floor(mins / 60);
+		if (hours < 24) return hours + ' h ago';
+		return Math.floor(hours / 24) + ' d ago';
+	}
+
+	async function endUserSessions(userId) {
+		if (!userId) return;
+		if (!isAdmin()) {
+			showToast('Only admins can manage sessions', 'error');
+			return;
+		}
+		const user = getUsers().find((u) => u && String(u.id) === String(userId));
+		const label = user
+			? user.name || user.username || 'this user'
+			: 'this user';
+		if (!window.API || typeof window.API.raw !== 'function') {
+			showToast('Server connection unavailable', 'error');
+			return;
+		}
+		let sessions = [];
+		try {
+			const res = await window.API.raw(
+				'GET',
+				'/users/' + encodeURIComponent(userId) + '/sessions',
+			);
+			sessions = Array.isArray(res) ? res : res?.data || res?.sessions || [];
+		} catch (apiErr) {
+			console.warn('[auth] load sessions failed:', apiErr);
+			showToast(
+				'Could not load sessions: ' + (apiErr?.message || 'network error'),
+				'error',
+			);
+			return;
+		}
+		const live = sessions.filter((s) => s && !s.revoked);
+		if (!live.length) {
+			showToast(`"${label}" has no active sessions.`, 'info');
+			return;
+		}
+		const lines = live.map((s) => {
+			const where = [s.user_agent, s.ip_address].filter(Boolean).join(' · ');
+			return `- ${(where || 'unknown device').slice(0, 80)} (${sessionAgeText(s.created_at)})`;
+		});
+		if (
+			!confirm(
+				`End ${live.length} active session(s) for "${label}"?\n\n${lines.join('\n')}\n\nThey will be signed out immediately.`,
+			)
+		) {
+			return;
+		}
+		try {
+			const res = await window.API.raw(
+				'DELETE',
+				'/users/' + encodeURIComponent(userId) + '/sessions',
+			);
+			const count = res?.revoked ?? live.length;
+			showToast(
+				`Ended ${count} session(s) for "${label}". They can sign in again now.`,
+				'success',
+			);
+		} catch (apiErr) {
+			console.warn('[auth] revoke sessions failed:', apiErr);
+			showToast(
+				'Failed to end sessions: ' + (apiErr?.message || 'network error'),
+				'error',
+			);
+		}
 	}
 
 	// ── Pending student imports (teacher-staged, admin-confirmed) ───────────
@@ -5731,6 +5814,7 @@
 	window.deleteUser = deleteUser;
 	window.toggleUserStatus = toggleUserStatus;
 	window.resetUserPassword = resetUserPassword;
+	window.endUserSessions = endUserSessions;
 	window.copyTempPassword = copyTempPassword;
 	window.closeResetPasswordModal = closeResetPasswordModal;
 	window.renderUsersTable = renderUsersTable;

@@ -130,24 +130,57 @@ const resolveCreatorId = (row, actorId, legacyCtx = {}) => {
 };
 
 /**
+ * Strict author resolution for the Category model (whose author column is
+ * `created_by`). Unlike resolveCreatorId it NEVER falls back to the syncing
+ * actor: a full-table mirror sync must not reattribute existing rows to
+ * whoever synced last (e.g. an admin's browser must not steal a teacher's
+ * category). Returns the author id only when a row candidate maps to a real
+ * user, otherwise undefined so the caller omits the column.
+ * Server-stamped keys are checked first — they are authoritative over the
+ * legacy `ownerId`, which a stale client cache may have corrupted.
+ */
+const resolveCategoryAuthorId = (row, legacyCtx = {}) => {
+  const candidates = [row.created_by, row.creator_id, row.creatorId, row.ownerId, row.createdBy];
+  for (const c of candidates) {
+    const s = pickStr(c);
+    if (!s || !s.trim()) continue;
+    const t = s.trim();
+    if (legacyCtx.validUserIds instanceof Set && legacyCtx.validUserIds.has(t)) return t;
+    if (legacyCtx.userIdByKey instanceof Map) {
+      const found = legacyCtx.userIdByKey.get(t.toLowerCase());
+      if (found) return found;
+    }
+  }
+  return undefined;
+};
+
+/**
  * Per-table sanitizers. Each receives the legacy row + the tenant school_id
  * and returns a row whose keys are exactly the columns the Prisma model
  * expects. Unknown fields are returned on `dropped` so we can warn.
  */
 const SANITIZERS = {
   // model Category { id, school_id, name, parent_id?, icon?, color?,
-  //                  created_at, updated_at }
-  categories: (row, schoolId) => ({
-    ...(row.id && { id: String(row.id) }),
-    school_id: schoolId,
-    name: String(row.name ?? '').trim() || 'Untitled',
-    ...(row.parent_id && { parent_id: String(row.parent_id) }),
-    ...(row.parentId && { parent_id: String(row.parentId) }),
-    ...(row.icon != null && { icon: pickStr(row.icon) }),
-    ...(row.color != null && { color: pickStr(row.color) }),
-    // legacy fields `description`, `questionCount`, `dateCreated`,
-    // `isSystem`, `ownerId` are not in the schema — dropped.
-  }),
+  //                  created_by?, created_at, updated_at }
+  categories: (row, schoolId, _actorId, legacyCtx = {}) => {
+    // Authorship travels strictly: only a candidate that maps to a real user
+    // is kept (no actor fallback — see resolveCategoryAuthorId), and the
+    // upsert loop applies it on CREATE only so a mirror sync can never
+    // reattribute an existing row.
+    const authorId = resolveCategoryAuthorId(row, legacyCtx);
+    return {
+      ...(row.id && { id: String(row.id) }),
+      school_id: schoolId,
+      name: String(row.name ?? '').trim() || 'Untitled',
+      ...(row.parent_id && { parent_id: String(row.parent_id) }),
+      ...(row.parentId && { parent_id: String(row.parentId) }),
+      ...(row.icon != null && { icon: pickStr(row.icon) }),
+      ...(row.color != null && { color: pickStr(row.color) }),
+      ...(authorId && { created_by: authorId }),
+      // legacy fields `description`, `questionCount`, `dateCreated`,
+      // `isSystem` are not in the schema — dropped.
+    };
+  },
 
   // model Class { id, school_id, name, description?, created_at, updated_at }
   classes: (row, schoolId) => ({
@@ -354,6 +387,9 @@ const SANITIZERS = {
       ...(row.explanation != null && { explanation: pickStr(row.explanation) }),
       ...(row.instruction != null && { explanation: pickStr(row.instruction) }),
       ...(row.points != null && { points: pickInt(row.points) ?? 1 }),
+      ...((row.time_limit ?? row.timeLimit ?? row.time_seconds ?? null) != null && {
+        time_limit: pickInt(row.time_limit ?? row.timeLimit ?? row.time_seconds),
+      }),
       ...(row.difficulty != null && {
         difficulty: pickStr(row.difficulty) || 'medium',
       }),
@@ -1161,6 +1197,7 @@ router.post('/:table', async (req, res, next) => {
       table === 'games' ||
       table === 'exams' ||
       table === 'tournaments' ||
+      table === 'categories' ||
       table === 'profile_requests';
     const needsExams = table === 'results' || table === 'exam_sessions';
     let legacyCtx = {};
@@ -1407,6 +1444,13 @@ router.post('/:table', async (req, res, next) => {
         // Strip the id from the update payload so Prisma doesn't try to set
         // the primary key on update (some drivers reject that).
         const { id, ...rest } = row;
+        if (table === 'categories') {
+          // Category authorship is set once at creation (POST /categories
+          // stamps the JWT author; bulk create carries the strictly-resolved
+          // legacy author). Never let a full-table mirror sync reattribute an
+          // existing row to whoever synced last.
+          delete rest.created_by;
+        }
         if (id) {
           // Users: never accept a client-supplied password_hash on UPDATE. The
           // UI's `passwordHash` is a sha256/simpleHash digest of whatever the

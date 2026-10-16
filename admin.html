@@ -4,6 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Admin Dashboard</title>
+		<script>window.__ADMIN_BUILD__='2026-10-16-r2';try{console.log('[admin.html] build',window.__ADMIN_BUILD__);}catch(e){}</script>
 		<link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" />
 			<script>
 			// Gate the dashboard behind login: unless a remembered quiz session
@@ -39,9 +40,9 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-10-r20" />
-		<link rel="stylesheet" href="admin.css?v=2026-09-24-r39" />
-		<link rel="stylesheet" href="theme.css?v=2026-09-24-r20" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-14-r24" />
+		<link rel="stylesheet" href="admin.css?v=2026-10-14-r40" />
+		<link rel="stylesheet" href="theme.css?v=2026-10-16-r2" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r5" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
@@ -132,31 +133,31 @@
 
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
-		<script src="api-client.js?v=2026-10-06-r1" defer></script>
-		<script src="auth.js?v=2026-10-11-r5" defer></script>
+		<script src="api-client.js?v=2026-10-14-r2" defer></script>
+		<script src="auth.js?v=2026-10-14-r7" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-10-12-r4" defer></script>
+		<script src="settings.js?v=2026-10-14-r1" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
 
 		<!-- Register admin panel with realtime server -->
-		<script src="realtime-admin.js?v=2026-09-15-r1" defer></script>
+		<script src="realtime-admin.js?v=2026-10-14-r2" defer></script>
 
 		<!-- Admin page scripts -->
 		<script src="bulk-selection.js?v=2026-10-08-r1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-09-17-r1" defer></script>
-		<script src="questions-management.js?v=2026-10-10-r4" defer></script>
-		<script src="exam-management.js?v=2026-10-12-r3" defer></script>
+		<script src="category-management.js?v=2026-10-14-r1" defer></script>
+		<script src="questions-management.js?v=2026-10-16-r3" defer></script>
+		<script src="exam-management.js?v=2026-10-14-r1" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
-		<script src="overview-dashboard.js?v=2026-10-06-r1" defer></script>
+		<script src="overview-dashboard.js?v=2026-10-14-r2" defer></script>
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
-		<script src="classroom-devices.js?v=2026-10-13-r7" defer></script>
+		<script src="classroom-devices.js?v=2026-10-14-r8" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-10-12-r6" defer></script>
 		<script src="kids-games-management.js?v=2026-10-06-r1" defer></script>
@@ -167,7 +168,7 @@
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
 		<script src="admin-main.js?v=2026-09-17-r6" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
-			<script src="legacy-auth-bridge.js" defer></script>
+			<script src="legacy-auth-bridge.js?v=2026-10-14-r1" defer></script>
 			<!-- PDF.js pour extraction PDF -->
 <script src="vendor/pdf.min.js"></script>
 
@@ -180,6 +181,7 @@
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="vendor/jszip.min.js"></script> -->
 		<script src="ai-question-generator.js?v=2026-09-09-realtime-r6" defer></script>
+		<script src="prompt-builder.js?v=2026-10-16-r3" defer></script>
 		<script src="rag.js?v=2026-09-22-r1" defer></script>
 
 		<!-- Syntax Highlighting -->
@@ -599,6 +601,18 @@
 			</div>
 		</div>
 
+							<button
+								type="button"
+								class="mobile-filters-toggle"
+								data-filter-target="#overviewFilterBar"
+								onclick="toggleMobileFilters(this)"
+								aria-expanded="false"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+								<span class="mobile-filters-toggle-label">Filters</span>
+								<span class="mobile-filters-count hidden">0</span>
+								<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+							</button>
 							<div class="date-badge">
 		<script>
 									document.write(
@@ -610,6 +624,39 @@
 										})
 									);
 								</script>
+							</div>
+						</div>
+
+						<div
+							class="sort-wrapper collapsible-filter-controls overview-filters"
+							id="overviewFilterBar"
+						>
+							<div id="overviewTeacherFilterWrap">
+								<select id="overviewTeacherFilter" title="Filter overview by teacher">
+									<option value="">All Teachers</option>
+								</select>
+							</div>
+							<div id="overviewClassFilterWrap">
+								<select id="overviewClassFilter" title="Filter overview by class">
+									<option value="">All Classes</option>
+								</select>
+							</div>
+							<div id="overviewCategoryFilterWrap">
+								<select id="overviewCategoryFilter" title="Filter overview by category">
+									<option value="">All Categories</option>
+								</select>
+							</div>
+							<div id="overviewStudentFilterWrap">
+								<select id="overviewStudentFilter" title="Filter overview by student">
+									<option value="">All Students</option>
+								</select>
+							</div>
+							<div id="overviewModeFilterWrap">
+								<select id="overviewModeFilter" title="Exam or training results">
+									<option value="">All Modes</option>
+									<option value="exam">Exam</option>
+									<option value="training">Training</option>
+								</select>
 							</div>
 						</div>
 
@@ -997,27 +1044,166 @@
 							</div>
 						</div>
 
+						<!-- Category Insights Panel -->
+						<div class="dashboard-panel" id="categoryInsightsPanel">
+							<div class="panel-header">
+								<h3>Category Insights</h3>
+								<div class="panel-controls">
+									<span
+										class="text-muted text-xs"
+										id="categoryInsightsScopeLabel"
+									></span>
+								</div>
+							</div>
+							<div
+								class="panel-body"
+								style="
+									padding: 20px;
+									display: flex;
+									flex-direction: column;
+									gap: 20px;
+								"
+							>
+								<div class="kpi-grid">
+									<div
+										class="stat-card indigo"
+										data-tooltip="Share of training answers that were correct in the current scope"
+									>
+										<div class="stat-bar"></div>
+										<div class="stat-icon">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="24"
+												height="24"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<circle cx="12" cy="12" r="10"></circle>
+												<circle cx="12" cy="12" r="6"></circle>
+												<circle cx="12" cy="12" r="2"></circle>
+											</svg>
+										</div>
+										<div class="stat-info">
+											<h3 id="kpi-cat-training">-</h3>
+											<p>Training accuracy</p>
+										</div>
+									</div>
+									<div
+										class="stat-card purple"
+										data-tooltip="Share of exam answers that were correct in the current scope"
+									>
+										<div class="stat-bar"></div>
+										<div class="stat-icon">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="24"
+												height="24"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+												<polyline points="14 2 14 8 20 8"></polyline>
+												<line x1="16" y1="13" x2="8" y2="13"></line>
+												<line x1="16" y1="17" x2="8" y2="17"></line>
+											</svg>
+										</div>
+										<div class="stat-info">
+											<h3 id="kpi-cat-exam">-</h3>
+											<p>Exam accuracy</p>
+										</div>
+									</div>
+									<div
+										class="stat-card green"
+										data-tooltip="Questions answered by students in the current scope"
+									>
+										<div class="stat-bar"></div>
+										<div class="stat-icon">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="24"
+												height="24"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<polyline points="9 11 12 14 22 4"></polyline>
+												<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+											</svg>
+										</div>
+										<div class="stat-info">
+											<h3 id="kpi-cat-attempts">0</h3>
+											<p>Questions answered</p>
+										</div>
+									</div>
+									<div
+										class="stat-card rose"
+										data-tooltip="Questions with under 50% accuracy and at least 2 attempts"
+									>
+										<div class="stat-bar"></div>
+										<div class="stat-icon">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="24"
+												height="24"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path
+													d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+												></path>
+												<line x1="12" y1="9" x2="12" y2="13"></line>
+												<line x1="12" y1="17" x2="12.01" y2="17"></line>
+											</svg>
+										</div>
+										<div class="stat-info">
+											<h3 id="kpi-cat-struggling">0</h3>
+											<p>Struggling questions</p>
+										</div>
+									</div>
+								</div>
+								<div class="insights-columns">
+									<div class="insights-block">
+										<h4>Class performance <small>in this scope</small></h4>
+										<div class="table-scroll">
+											<table class="insights-table">
+												<thead>
+													<tr>
+														<th>Class</th>
+														<th>Training</th>
+														<th>Exam</th>
+														<th>Attempts</th>
+													</tr>
+												</thead>
+												<tbody id="categoryClassTableBody"></tbody>
+											</table>
+										</div>
+									</div>
+									<div class="insights-block">
+										<h4>Needs attention <small>lowest accuracy</small></h4>
+										<div id="categoryHardList"></div>
+										<div
+											class="text-muted text-xs"
+											id="categoryUnattemptedLine"
+											style="margin-top: 8px"
+										></div>
+									</div>
+								</div>
+							</div>
+						</div>
+
 						<!-- Reports Grid -->
 						<div class="dashboard-charts-grid">
 							<!-- Score Distribution Panel -->
 							<div class="dashboard-panel">
 								<div class="panel-header">
 									<h3>Score Distribution</h3>
-									<div class="panel-controls">
-										<label
-											class="text-muted text-xs"
-											for="scoreDistributionMode"
-											>Mode:</label
-										>
-										<select
-											id="scoreDistributionMode"
-											onchange="generateAndSaveReports()"
-										>
-											<option value="">All</option>
-											<option value="exam">Exam</option>
-											<option value="training">Training</option>
-										</select>
-									</div>
 								</div>
 								<div
 									class="panel-body"
@@ -1038,24 +1224,6 @@
 							<div class="dashboard-panel">
 								<div class="panel-header">
 									<h3>Class Performance</h3>
-									<div class="panel-controls">
-										<label class="text-muted text-xs" for="classPerformanceMode"
-											>Mode:</label
-										>
-										<select
-											id="classPerformanceMode"
-											onchange="generateAndSaveReports()"
-										>
-											<option value="">All</option>
-											<option value="exam">Exam</option>
-											<option value="training">Training</option>
-										</select>
-
-										<label class="text-muted text-xs" for="classPerformanceClassFilter" style="margin-left: 12px;">Class:</label>
-										<select id="classPerformanceClassFilter">
-											<option value="">All</option>
-										</select>
-									</div>
 								</div>
 								<div class="panel-body" style="padding: 20px; position: relative;">
 									<div class="kpi-scroll-wrapper">
@@ -1383,8 +1551,18 @@
 										<option value="1440">Last 24 hours</option>
 									</select>
 								</div>
+								<div class="filter-group">
+									<label for="monitoringUser">User</label>
+									<select id="monitoringUser" class="form-control" data-default="">
+										<option value="">All users</option>
+									</select>
+								</div>
 								<div class="filter-group filter-group-check">
 									<label class="monitoring-toggle" for="monitoringAutoRefresh"><input type="checkbox" id="monitoringAutoRefresh"> <span>Auto refresh</span></label>
+								</div>
+								<div class="filter-group">
+									<label aria-hidden="true">&nbsp;</label>
+									<button type="button" class="btn btn-secondary" id="monitoringClearUser" title="Clear user filter">Clear</button>
 								</div>
 							</div>
 						</div>
@@ -1400,16 +1578,16 @@
 					<div class="monitoring-grid">
 						<div class="dashboard-panel">
 							<div class="panel-header"><h3>Most called API endpoints</h3></div>
-							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Method</th><th>Path</th><th>Calls</th><th>Errors</th><th>Avg. time</th></tr></thead><tbody id="monitoringApiBody"></tbody></table></div></div>
+							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Method</th><th>Path</th><th>Calls</th><th>Errors</th><th>Avg. time</th><th>Users</th><th>Last caller</th></tr></thead><tbody id="monitoringApiBody"></tbody></table></div></div>
 						</div>
 						<div class="dashboard-panel">
 							<div class="panel-header"><h3>Repeated log messages</h3></div>
-							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Level</th><th>Message</th><th>Count</th><th>Last seen</th></tr></thead><tbody id="monitoringLogBody"></tbody></table></div></div>
+							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Level</th><th>Message</th><th>Source</th><th>User</th><th>Count</th><th>Last seen</th></tr></thead><tbody id="monitoringLogBody"></tbody></table></div></div>
 						</div>
 					</div>
 					<div class="dashboard-panel monitoring-recent-panel">
 						<div class="panel-header"><h3>Recent server logs</h3></div>
-						<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead><tbody id="monitoringRecentBody"></tbody></table></div></div>
+						<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Time</th><th>Level</th><th>Message</th><th>Source</th><th>User</th></tr></thead><tbody id="monitoringRecentBody"></tbody></table></div></div>
 					</div>
 				</section>
 
@@ -1530,11 +1708,12 @@
 									</div>
 									<div class="filter-group">
 										<label for="deviceFilterStudent">Student</label>
-										<select id="deviceFilterStudent" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()">
-											<option value="">All devices</option>
-											<option value="assigned">Assigned</option>
-											<option value="unassigned">Unassigned</option>
-										</select>
+									<select id="deviceFilterStudent" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()">
+										<option value="">All devices</option>
+										<option value="assigned">Assigned</option>
+										<option value="unassigned">Unassigned</option>
+										<option value="staff">Staff</option>
+									</select>
 									</div>
 								</div>
 							</div>
@@ -4667,6 +4846,11 @@
 							<textarea id="categoryDescription" rows="2"></textarea>
 						</div>
 						<div class="form-group">
+							<label for="categoryParent">Parent category</label>
+							<select id="categoryParent" class="form-control"></select>
+							<small class="text-muted" style="display: block; margin-top: 4px;">Optional — nest this inside another category (e.g. Addition inside Math). Questions can only be filed in categories without subcategories.</small>
+						</div>
+						<div class="form-group">
 							<label>Color</label>
 							<div class="color-picker-container">
 								<input
@@ -5708,7 +5892,7 @@
 								</button>
 								<input type="file" id="importDataInput" accept=".json,.zip,application/json,application/zip" style="display: none" onchange="window.importAllData(this)" />
 
-								<div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 20px;">
+									<div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 20px;">
 										<p class="text-muted" style="margin-bottom: 15px;">
 											Import data downloaded from a student device (Realtime &rarr; Devices &rarr; Download data, or a USB/local copy). Adds exam results, completed sessions, activity and any cached exams/questions/classes to your existing data without overwriting it. Duplicates are skipped automatically.
 										</p>
@@ -5718,17 +5902,26 @@
 										</button>
 										<input type="file" id="importDeviceDataInput" accept=".json" style="display: none" onchange="window.importDeviceData(this)" />
 									</div>
+								</div>
 
-									<div style="margin-top: 20px; border-top: 1px dashed #e5e7eb; padding-top: 20px;">
-										<p class="text-muted" style="margin-bottom: 15px;">
-											Have questions generated outside the app (ChatGPT, Claude…)? Import the JSON the model produced here — the app repairs and normalizes it into proper questions. See <strong>Settings &rarr; AI Generation &rarr; Copy structure prompt</strong> for the exact format to give the model.
-										</p>
-										<button type="button" class="btn btn-primary" onclick="document.getElementById('importAIQuestionsInput').click()" style="background: #f5f3ff; color: #7c3aed; border: 1px solid #c4b5fd;">
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-											Import AI-Generated Questions (JSON)
-										</button>
-										<input type="file" id="importAIQuestionsInput" accept=".json,.txt" style="display: none" onchange="window.importAIQuestions(this)" />
+								<div class="settings-group" data-roles="admin,teacher" style="border-color: #c4b5fd; background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);">
+									<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+										<span style="background: #7c3aed; color: white; padding: 6px; border-radius: 8px;">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+										</span>
+										<div>
+											<h3 style="margin: 0; font-size: 1.1rem;">Import AI-Generated Questions</h3>
+											<small class="text-muted">ChatGPT / Claude JSON → questions + categories</small>
+										</div>
 									</div>
+									<p class="text-muted" style="margin-bottom: 15px;">
+										Have questions generated outside the app (ChatGPT, Claude…)? Import the JSON the model produced here — the app repairs and normalizes it into proper questions and creates any missing categories / subcategories automatically. Build a guided prompt in the <strong>AI Question Generator &rarr; 🧱 Prompt Builder tab</strong>, or paste the model's answer directly in that tab's import zone.
+									</p>
+									<button type="button" class="btn btn-primary" onclick="document.getElementById('importAIQuestionsInput').click()" style="background: #f5f3ff; color: #7c3aed; border: 1px solid #c4b5fd;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+										Import AI-Generated Questions (JSON)
+									</button>
+									<input type="file" id="importAIQuestionsInput" accept=".json,.txt" style="display: none" onchange="window.importAIQuestions(this)" />
 								</div>
 
 								<div class="settings-group" data-roles="admin" style="border-color: #fecaca; background: linear-gradient(135deg, #fef2f2 0%, #fff1f2 100%);">
@@ -6106,33 +6299,6 @@
 								</div>
 							</div>
 
-							<!-- Keyless path: copy prompt for ChatGPT/Claude + import -->
-							<div class="settings-group" style="background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%); border-color: #6ee7b7;">
-								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-									<span style="background: #10b981; color: white; padding: 8px; border-radius: 10px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-									</span>
-									<div>
-										<h3 style="margin: 0; font-size: 1.1rem;">No API key? Use ChatGPT / Claude directly</h3>
-										<small class="text-muted">Copy the exact question structure, generate in any chat AI, import back</small>
-									</div>
-								</div>
-								<p class="text-muted" style="font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
-									① Copy the structure prompt (it matches the app's exact JSON format) &rarr; ② paste it into <strong>ChatGPT, Claude, Gemini…</strong> with your topic &rarr; ③ copy the model's JSON answer &rarr; ④ import it in <strong>Settings &rarr; Data &rarr; Import AI-Generated Questions</strong>. The app repairs and normalizes the JSON automatically.
-								</p>
-								<div style="display: flex; gap: 10px; flex-wrap: wrap;">
-									<button type="button" class="btn btn-primary" style="background: #059669; border: none;" onclick="window.copyAIStructurePrompt()">
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-										Copy structure prompt
-									</button>
-									<button type="button" class="btn btn-secondary" onclick="document.getElementById('importAIQuestionsInput').click()">
-										Import generated JSON
-									</button>
-									<input type="file" id="aiPromptImportInline" accept=".json,.txt" style="display: none" onchange="window.importAIQuestions(this)" />
-								</div>
-								<div id="ai-copy-prompt-status" class="text-muted" style="font-size: 0.85em; margin-top: 8px;"></div>
-							</div>
-
 							<!-- Structure compatibility guide -->
 							<div class="settings-group">
 								<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
@@ -6142,18 +6308,24 @@
 									<h3 style="margin: 0; font-size: 1.1rem;">Question structure guide</h3>
 								</div>
 								<details style="background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 8px; padding: 10px 12px;">
-									<summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem; color: #57534e;">📐 Required question structure (what the model must output)</summary>
+									<summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem; color: #57534e;">📐 Required data structure (what ChatGPT / Claude must output)</summary>
 									<small class="text-muted" style="display: block; margin-top: 8px; line-height: 1.6;">
-										Every generated question is a JSON object with <code>question</code>, <code>type</code>, <code>options</code>, <code>answer</code>, <code>explanation</code>, <code>difficulty</code> — the copy-prompt and server prompt both enforce this automatically.
+										The easiest path is the <strong>AI Question Generator &rarr; 🧱 Prompt Builder tab</strong>: it builds this exact format for you from your Category &rarr; Subcategory &rarr; Axe plan. Generated JSON is imported from <strong>Settings &rarr; Data &rarr; Import AI-Generated Questions</strong> (or the paste zone in the builder tab) — categories and subcategories are created automatically.
+										<br /><br />
+										<strong>Top-level format</strong> — one JSON object:
+										<code>{"categories": [{"name": "Module 1", "parent": null}, {"name": "Vocabulaire", "parent": "Module 1"}], "questions": […]}</code>
 										<ul style="margin: 6px 0 6px 18px; padding: 0;">
-											<li><strong>multiple-choice</strong> — answer = exact option text</li>
-											<li><strong>multiple-choice-multi</strong> — answer = options joined with " | "</li>
-											<li><strong>true-false</strong> — answer = "true" / "false"</li>
-											<li><strong>odd-one-out</strong> — answer = the odd option</li>
-											<li><strong>draggable</strong> — answer = correct order, comma-joined</li>
-											<li><strong>matching-pairs</strong> — answer = "Key--&gt;Value|…" pairs</li>
-											<li><strong>fill-blank</strong> — question uses ___ (three underscores) per blank; answer = "1:word|2:word" matching blanks left to right</li>
-											<li><strong>code</strong> — adds codeSnippet, language, answerMode</li>
+											<li><strong>categories</strong> — every category, subcategory and sub-subcategory with its parent name (top-level <code>parent</code> = <code>null</code>). Exact names are matched, missing levels are created.</li>
+											<li><strong>questions[].categoryPath</strong> — filing path, e.g. <code>"Module 1 &gt; Vocabulaire &gt; Informatique"</code>. Must use the exact names above. Questions always land on the <strong>deepest (leaf) level</strong> — a parent with children is rejected.</li>
+											<li><strong>questions[].type</strong> — only <code>multiple-choice</code>, <code>multiple-choice-multi</code>, <code>true-false</code>, <code>fill-blank</code>, <code>draggable</code>, <code>odd-one-out</code>, <code>matching-pairs</code>, <code>code</code>.</li>
+											<li><strong>multiple-choice</strong> — answer = exact option text. <strong>multiple-choice-multi</strong> — answers joined with "," + <code>allowMultipleAnswers: true</code>.</li>
+											<li><strong>true-false</strong> — options <code>["Vrai","Faux"]</code>, answer is one of them.</li>
+											<li><strong>fill-blank</strong> — question uses <code>___</code> per blank; answer = <code>"1:word|2:word"</code> left to right; options = word bank.</li>
+											<li><strong>draggable</strong> — options in display order; answer = correct order, comma-joined (+ <code>isDraggable: true</code>).</li>
+											<li><strong>matching-pairs</strong> — answer = <code>"Key--&gt;Value|…"</code> pairs.</li>
+											<li><strong>odd-one-out</strong> — answer = the odd option text.</li>
+											<li><strong>code</strong> — adds <code>codeSnippet</code>, <code>codeLanguage</code>, <code>codeAnswerMode</code>.</li>
+											<li><strong>difficulty</strong> — <code>easy</code> / <code>medium</code> / <code>hard</code>. <strong>points</strong> — 1–100 per question. <strong>time_limit</strong> — seconds per question (<code>0</code> or omitted = no limit). Also shown as ⏱ badges in the generator preview and editable in the Add/Edit question form.</li>
 										</ul>
 										Weaker models may output broken JSON — the app auto-repairs common issues on import, but recommended models give the best results.
 									</small>
@@ -7955,6 +8127,9 @@
 						<button class="ai-modal-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('document')" id="tab-ai-document">
 							<span class="ai-tab-icon" aria-hidden="true">▤</span><span><strong>From materials</strong><small>Use your uploaded documents</small></span>
 						</button>
+						<button class="ai-modal-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('builder')" id="tab-ai-builder">
+							<span class="ai-tab-icon" aria-hidden="true">🧱</span><span><strong>Prompt Builder</strong><small>ChatGPT / Claude course plan</small></span>
+						</button>
 					</div>
 
 					<!-- Tab Contents -->
@@ -8012,9 +8187,25 @@
 								</div>
 								<div class="form-group half">
 									<label for="ai-category" style="font-weight: 600;">Category</label>
-									<select id="ai-category" class="form-control" style="padding: 10px;">
+									<select id="ai-category" class="form-control" style="padding: 10px;" onchange="onAICategoryChange('ai-category', 'ai-subcategory')">
 										<option value="uncategorized">Uncategorized</option>
 									</select>
+								</div>
+							</div>
+
+							<!-- Config Row: Subcategory + Time per question -->
+							<div class="form-row" style="margin-top: 20px;">
+								<div class="form-group half">
+									<label for="ai-subcategory" style="font-weight: 600;">Subcategory</label>
+									<select id="ai-subcategory" class="form-control" style="padding: 10px;">
+										<option value="">—</option>
+									</select>
+									<small class="text-muted">Questions are filed in the deepest level</small>
+								</div>
+								<div class="form-group half">
+									<label for="ai-time-limit" style="font-weight: 600;">⏱ Time per question (sec)</label>
+									<input type="number" id="ai-time-limit" class="form-control" style="padding: 10px;" min="0" max="3600" step="5" value="30" />
+									<small class="text-muted">0 = no time limit</small>
 								</div>
 							</div>
 
@@ -8296,7 +8487,7 @@
 									<div class="form-row" style="margin-top: 20px;">
 										<div class="form-group half">
 											<label for="docCategory" style="font-weight: 600;">Category</label>
-											<select id="docCategory" class="form-control" style="padding: 10px;">
+											<select id="docCategory" class="form-control" style="padding: 10px;" onchange="onAICategoryChange('docCategory', 'docSubcategory')">
 												<option value="uncategorized">Uncategorized</option>
 											</select>
 										</div>
@@ -8308,6 +8499,22 @@
 												<option value="5">5 points</option>
 												<option value="10">10 points</option>
 											</select>
+										</div>
+									</div>
+
+									<!-- Settings Row 3: Subcategory + Time -->
+									<div class="form-row" style="margin-top: 20px;">
+										<div class="form-group half">
+											<label for="docSubcategory" style="font-weight: 600;">Subcategory</label>
+											<select id="docSubcategory" class="form-control" style="padding: 10px;">
+												<option value="">—</option>
+											</select>
+											<small class="text-muted">Questions are filed in the deepest level</small>
+										</div>
+										<div class="form-group half">
+											<label for="docTimeLimit" style="font-weight: 600;">⏱ Time per question (sec)</label>
+											<input type="number" id="docTimeLimit" class="form-control" style="padding: 10px;" min="0" max="3600" step="5" value="30" />
+											<small class="text-muted">0 = no time limit</small>
 										</div>
 									</div>
 
@@ -8511,6 +8718,75 @@
 								</div>
 							</div>
 						</div>
+					</div>
+
+						<!-- Tab 3: Prompt Builder (no API key — guided prompt for ChatGPT / Claude) -->
+						<div id="ai-builder-form" class="ai-tab-pane" style="display: none; padding: 24px;">
+							<div style="text-align: right; font-size: 0.7rem; color: #0d9488; font-weight: 700; margin-bottom: -4px;">build <span id="pbBuildTag">2026-10-16-r3</span></div>
+							<p class="text-muted" style="font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
+								No API key? Build your course plan here &rarr; generate the prompt &rarr; paste it into <strong>ChatGPT, Claude, Gemini…</strong> &rarr; paste the model's JSON answer below to import. Categories, difficulties, types, points and time limits are created automatically.
+							</p>
+							<!-- Toolbar -->
+							<div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 12px; background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);">
+								<button type="button" class="btn btn-primary" onclick="addCategoryNode()" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(13,148,136,0.4)';" onmouseout="this.style.transform='none';this.style.boxShadow='0 2px 8px rgba(13,148,136,0.3)';" style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); border: none; color: #fff; font-weight: 700; padding: 10px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(13,148,136,0.3); transition: transform 0.15s ease, box-shadow 0.15s ease;">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; vertical-align: -2px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+									＋ Add Category
+								</button>
+								<button type="button" class="btn btn-secondary" onclick="loadPromptBuilderTemplate()">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+									Load Template
+								</button>
+								<button type="button" class="btn btn-secondary" onclick="clearPromptBuilder()">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+									Clear All
+								</button>
+							</div>
+
+							<div id="promptBuilderStats" class="text-muted" style="font-size: 0.85rem; margin-bottom: 10px;">Aucune structure — ajoutez une catégorie.</div>
+							<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+								<label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">Langue
+									<select id="pbLanguage" style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px;">
+										<option value="fr">Français</option>
+										<option value="en">English</option>
+										<option value="ar">Arabe</option>
+									</select>
+								</label>
+								<label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; flex: 1; min-width: 220px;">Instruction / contexte
+									<input id="pbExtra" type="text" placeholder="ex : niveau collège, français académique…" style="flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+								</label>
+							</div>
+							<div id="promptBuilderTree" class="prompt-builder-tree">
+								<div style="text-align: center; padding: 40px 20px; color: #94a3b8;">Chargement du Prompt Builder…<br /><small>Si ce message persiste, rechargez la page (Ctrl+F5).</small></div>
+							</div>
+							<div style="margin-top: 14px;">
+								<button type="button" class="btn btn-primary" onclick="generateAndCopyPrompt()" style="width: 100%; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: none; font-weight: 700; padding: 12px; border-radius: 10px;">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: -2px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+									Generate & Copy Prompt
+								</button>
+							</div>
+							<div id="promptBuilderOutputWrap" style="display: none; margin-top: 16px;">
+								<label style="font-weight: 700; font-size: 0.9rem;">📋 Prompt généré — copiez-collez dans ChatGPT / Claude</label>
+								<textarea id="promptBuilderOutput" rows="14" readonly style="width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #6ee7b7; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #f0fdf4;"></textarea>
+								<div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
+									<button type="button" class="btn btn-secondary" onclick="generateAndCopyPrompt()">↻ Régénérer & copier</button>
+									<button type="button" class="btn btn-secondary" onclick="downloadPromptBuilderPrompt()">⬇ Télécharger (.txt)</button>
+									<span id="promptBuilderStatus" class="text-muted" style="font-size: 0.85em;"></span>
+								</div>
+							</div>
+							<div id="promptBuilderImportWrap" style="margin-top: 16px; border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px; background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);">
+								<label style="font-weight: 700; font-size: 0.9rem;">📥 Réponse du modèle — collez le JSON ici puis importez</label>
+								<p class="text-muted" style="font-size: 0.8rem; margin: 4px 0 8px;">Collez la réponse JSON de ChatGPT/Claude (format <code>{"categories": […], "questions": […]}</code>). Les catégories / sous-catégories seront créées automatiquement.</p>
+								<textarea id="promptBuilderImportInput" rows="8" placeholder='Collez ici le JSON du modèle, ex : {"categories": […], "questions": […]}' style="width: 100%; padding: 10px; border: 1px solid #c4b5fd; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #fff;"></textarea>
+								<div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
+									<button type="button" class="btn btn-primary" onclick="importPromptBuilderJSON()" style="background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%); border: none; font-weight: 700; padding: 10px 20px; border-radius: 10px;">
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: -2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+										📥 Import JSON
+									</button>
+									<button type="button" class="btn btn-secondary" onclick="clearPromptBuilderImport()">Effacer</button>
+									<span id="promptBuilderImportStatus" class="text-muted" style="font-size: 0.85em;"></span>
+								</div>
+							</div>
+						</div>
 
 						<!-- Cooldown Progress -->
 						<div id="ai-cooldown-container" class="hidden" style="margin: 0 24px 20px;">
@@ -8569,6 +8845,7 @@
 							</button>
 						</div>
 					</div>
+				</div>
 			</div>
 		</div>
 

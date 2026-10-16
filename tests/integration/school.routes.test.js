@@ -34,9 +34,11 @@ afterAll(async () => {
 const BASE = '/api/v1/school';
 
 async function login() {
+  // Single active session per user: take over any prior login from an
+  // earlier block in this file so each suite starts from a live session.
   const res = await request(app)
     .post('/api/v1/auth/login')
-    .send({ username: 'admin', password: 'admin123' });
+    .send({ username: 'admin', password: 'admin123', force: true });
   expect(res.status).toBe(200);
   return res.body.accessToken;
 }
@@ -149,7 +151,7 @@ describe('School routes', () => {
     });
     const loginRes = await request(app)
       .post('/api/v1/auth/login')
-      .send({ username: 'teacher1', password: 'teacher123' });
+      .send({ username: 'teacher1', password: 'teacher123', force: true });
     expect(loginRes.status).toBe(200);
 
     const res = await request(app)
@@ -243,7 +245,7 @@ describe('Server-side recovery (auth routes)', () => {
     // Teacher cannot set the code.
     const teacherLogin = await request(app)
       .post('/api/v1/auth/login')
-      .send({ username: 'teacher1', password: 'teacher123' });
+      .send({ username: 'teacher1', password: 'teacher123', force: true });
     const denied = await request(app)
       .post('/api/v1/auth/recover/set')
       .set('Authorization', `Bearer ${teacherLogin.body.accessToken}`)
@@ -312,7 +314,7 @@ describe('Server-side recovery (auth routes)', () => {
     // New password works
     const newLogin = await request(app)
       .post('/api/v1/auth/login')
-      .send({ username: 'admin', password: 'Recovered123' });
+      .send({ username: 'admin', password: 'Recovered123', force: true });
     expect(newLogin.status).toBe(200);
   });
 

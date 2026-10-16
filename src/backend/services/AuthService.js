@@ -12,7 +12,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import { logger, securityLog } from '../logger.js';
-import { UnauthorizedError, NotFoundError, ValidationError, ForbiddenError } from '../../shared/errors.js';
+import { UnauthorizedError, NotFoundError, ValidationError, ForbiddenError, SessionConflictError } from '../../shared/errors.js';
 import { LoginSchema, ChangePasswordSchema } from '../../shared/schemas/user.schema.js';
 import { ROLES } from '../../shared/constants.js';
 
@@ -35,6 +35,34 @@ function durationToSeconds(d) {
   return value * unit;
 }
 
+/** A refresh token counts as a *live* session while it is younger than this.
+ * Rotation keeps a genuinely-open tab's token fresh (access TTL is 15m, so
+ * live tabs rotate well inside the window); a closed tab's last token ages
+ * out and stops blocking new logins. */
+function sessionActiveWindowMs() {
+  const minutes = Number(process.env.SESSION_ACTIVE_WINDOW_MINUTES || 30);
+  return (Number.isFinite(minutes) && minutes > 0 ? minutes : 30) * 60_000;
+}
+
+/** Non-revoked refresh-token rows for a user (any portal — one user, one session). */
+async function liveRefreshTokens(repo, userId) {
+  const { data: tokens } = await repo.getAll('refresh_tokens', {
+    filters: { user_id: userId, revoked: false },
+    limit: 1000,
+  });
+  return tokens || [];
+}
+
+function isTokenLive(token, nowMs) {
+  if (!token) return false;
+  if (new Date(token.expires_at).getTime() <= nowMs) return false;
+  const createdAt = new Date(token.created_at).getTime();
+  // Rows without a timestamp never count as live (never block a login on
+  // bad data); only their expiry/revocation still applies elsewhere.
+  if (!Number.isFinite(createdAt)) return false;
+  return nowMs - createdAt < sessionActiveWindowMs();
+}
+
 export class AuthService {
   #repo;
   #lastIp = null;
@@ -50,7 +78,7 @@ export class AuthService {
    * @param {string} password
    * @returns {Promise<{ user: object, accessToken: string, refreshToken: string }>}
    */
-  async login(username, password, { ip = null, userAgent = null, schoolSlug = null, schoolId = null } = {}) {
+  async login(username, password, { ip = null, userAgent = null, schoolSlug = null, schoolId = null, force = false } = {}) {
     const parsed = LoginSchema.safeParse({ username, password });
     if (!parsed.success) {
       throw new ValidationError(parsed.error.flatten().fieldErrors);
@@ -153,12 +181,46 @@ export class AuthService {
     // Update last login
     await this.#repo.update('users', user.id, { last_login: new Date().toISOString() });
 
+    // ── Single active session ──────────────────────────────────────────
+    // One user, one live session across every portal/tab/device. Mint first,
+    // then arbitrate: concurrent logins (double-clicks, racing tabs) converge
+    // instead of both slipping past a check-then-mint race with two live
+    // sessions. A blocked attempt rolls back its own mint so failed logins
+    // never pile up live rows that would block every future login.
+    // Without `force`, a live session elsewhere rejects this login (409);
+    // with it, every other token is revoked and the previous tab is ended
+    // server-side (it learns via /auth/session or its next failed refresh).
+    const issued = await this.#issueRefresh(user.id, { ip, userAgent });
+    const others = (await liveRefreshTokens(this.#repo, user.id)).filter(
+      (t) => t && t.id !== issued.id,
+    );
+    const nowMs = Date.now();
+    const liveOthers = others.filter((t) => isTokenLive(t, nowMs));
+    if (liveOthers.length && force !== true) {
+      try {
+        if (issued.id) {
+          await this.#repo.update('refresh_tokens', issued.id, { revoked: true });
+        }
+      } catch (rollbackErr) {
+        logger.warn({ err: rollbackErr, userId: user.id }, 'Blocked login: own token rollback failed');
+      }
+      securityLog('login_blocked_active_session', { userId: user.id, ip });
+      throw new SessionConflictError();
+    }
+    for (const t of others) {
+      if (!t?.id) continue;
+      try {
+        await this.#repo.update('refresh_tokens', t.id, { revoked: true });
+      } catch (revokeErr) {
+        logger.warn({ err: revokeErr, userId: user.id }, 'Single-session takeover: revoke failed');
+      }
+    }
+
     const safeUser = this.#stripSensitive(user);
-    const accessToken = this.#signAccess(safeUser);
-    const refreshToken = await this.#issueRefresh(user.id, { ip, userAgent });
+    const accessToken = this.#signAccess(safeUser, { sid: issued.id });
 
     securityLog('login_success', { userId: user.id, ip });
-    return { user: safeUser, accessToken, refreshToken };
+    return { user: safeUser, accessToken, refreshToken: issued.raw };
   }
 
   /**
@@ -188,10 +250,100 @@ export class AuthService {
 
     // Rotate: revoke the consumed token and issue a fresh one.
     await this.#repo.update('refresh_tokens', stored.id, { revoked: true });
-    const newRefresh = await this.#issueRefresh(user.id, {});
+    const issued = await this.#issueRefresh(user.id, {});
 
-    const accessToken = this.#signAccess(this.#stripSensitive(user));
-    return { accessToken, refreshToken: newRefresh };
+    // Single-session convergence: if two sessions somehow coexist (e.g. one
+    // predates this feature), the one that refreshes first ends the other.
+    try {
+      const { data: siblings } = await this.#repo.getAll('refresh_tokens', {
+        filters: { user_id: user.id, revoked: false },
+        limit: 1000,
+      });
+      for (const t of siblings || []) {
+        if (t?.id && t.id !== issued.id) {
+          await this.#repo.update('refresh_tokens', t.id, { revoked: true });
+        }
+      }
+    } catch (convergeErr) {
+      logger.warn({ err: convergeErr, userId: user.id }, 'Refresh single-session convergence failed');
+    }
+
+    const accessToken = this.#signAccess(this.#stripSensitive(user), { sid: issued.id });
+    return { accessToken, refreshToken: issued.raw };
+  }
+
+  /**
+   * Is this tab's session still the live one? The access token carries the
+   * id (`sid`) of the refresh token minted at login/last rotation. If a
+   * NEWER live token exists for the user, another tab/device took over and
+   * this session has ended. Tokens without a sid (predating this feature)
+   * fail open — rotation mints them a sid within one access-TTL window.
+   * @returns {Promise<{ active: boolean, reason?: string }>}
+   */
+  async sessionStatus(userId, sid) {
+    if (!userId) throw new UnauthorizedError();
+    if (!sid) return { active: true, current: false };
+    const { data: tokens } = await this.#repo.getAll('refresh_tokens', {
+      filters: { user_id: userId, revoked: false },
+      orderBy: 'created_at',
+      direction: 'desc',
+      limit: 100,
+    });
+    const nowMs = Date.now();
+    const live = (tokens || []).filter((t) => t && new Date(t.expires_at).getTime() > nowMs);
+    const mine = live.find((t) => String(t.id) === String(sid));
+    if (!mine) return { active: false, reason: 'revoked' };
+    const newest = live[0];
+    if (newest && String(newest.id) !== String(sid)) {
+      return { active: false, reason: 'superseded' };
+    }
+    return { active: true };
+  }
+
+  /**
+   * List a user's refresh-token sessions for admin inspection. Token hashes
+   * are never exposed — only metadata plus whether each row counts as live.
+   */
+  async listSessions(userId) {
+    const { data: tokens } = await this.#repo.getAll('refresh_tokens', {
+      filters: { user_id: userId },
+      orderBy: 'created_at',
+      direction: 'desc',
+      limit: 100,
+    });
+    const nowMs = Date.now();
+    return (tokens || []).map((t) => ({
+      id: t.id,
+      created_at: t.created_at,
+      expires_at: t.expires_at,
+      revoked: !!t.revoked,
+      live: !t.revoked && isTokenLive(t, nowMs),
+      user_agent: t.user_agent || null,
+      ip_address: t.ip_address || null,
+    }));
+  }
+
+  /**
+   * Revoke every live session of a user (admin unstick: ends all their
+   * tabs/devices so the next login succeeds). Returns the revoked count.
+   */
+  async revokeUserSessions(userId) {
+    const { data: tokens } = await this.#repo.getAll('refresh_tokens', {
+      filters: { user_id: userId, revoked: false },
+      limit: 1000,
+    });
+    let revoked = 0;
+    for (const t of tokens || []) {
+      if (!t?.id) continue;
+      try {
+        await this.#repo.update('refresh_tokens', t.id, { revoked: true });
+        revoked += 1;
+      } catch (revokeErr) {
+        logger.warn({ err: revokeErr, userId }, 'Admin session revoke failed');
+      }
+    }
+    securityLog('admin_revoked_sessions', { userId, revoked });
+    return { revoked };
   }
 
   /**
@@ -368,7 +520,7 @@ export class AuthService {
 
   // ── Private helpers ────────────────────────────────────────────────────────
 
-  #signAccess(user) {
+  #signAccess(user, extra = {}) {
     return jwt.sign(
       {
         id: user.id,
@@ -378,6 +530,9 @@ export class AuthService {
         class_id: user.class_id ?? null,
         name: user.name ?? null,
         numero: user.numero ?? null,
+        // Session id: the refresh-token row minted with this access token.
+        // Lets /auth/session tell whether a newer login superseded us.
+        ...(extra.sid ? { sid: extra.sid } : {}),
       },
       config.jwtSecret,
       { expiresIn: config.jwtAccessExpires }
@@ -388,7 +543,7 @@ export class AuthService {
     const raw = generateRefreshToken();
     const expiresAt = new Date(Date.now() + durationToSeconds(config.jwtRefreshExpires) * 1000);
 
-    await this.#repo.create('refresh_tokens', {
+    const created = await this.#repo.create('refresh_tokens', {
       user_id: userId,
       token_hash: hashToken(raw),
       expires_at: expiresAt.toISOString(),
@@ -396,7 +551,7 @@ export class AuthService {
       user_agent: userAgent || null,
       ip_address: ip || null,
     });
-    return raw;
+    return { raw, id: created?.id ?? null };
   }
 
   #stripSensitive(user) {

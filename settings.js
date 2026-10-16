@@ -2585,6 +2585,178 @@ window.resetAllData = resetAllData;
 // ─── Import AI-generated questions (Settings → Data tab) ─────────────────────
 // Accepts the raw JSON output of an external model (ChatGPT/Claude), repairs
 // it and turns the rows into real questions through the normal import path.
+// Supports the Prompt Builder hierarchical format:
+//   { "categories": [{name, parent}], "questions": [{..., categoryPath, time_limit, points, difficulty}] }
+// as well as legacy flat arrays. Missing categories/subcategories are
+// auto-created so Categories + Questions tabs stay in sync.
+
+function parseAIImportPayload(rawText) {
+	let categories = [];
+	let questions = null;
+	try {
+		const parsed = JSON.parse(rawText);
+		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+			if (Array.isArray(parsed.categories)) categories = parsed.categories;
+			if (Array.isArray(parsed.questions)) questions = parsed.questions;
+			else if (parsed.question || parsed.text) questions = [parsed];
+			else if (!questions) {
+				// Maybe the object itself is {categories, questions} with other keys
+				const maybeArr = Object.values(parsed).find((v) => Array.isArray(v));
+				if (maybeArr) questions = maybeArr;
+			}
+		} else if (Array.isArray(parsed)) {
+			questions = parsed;
+		} else if (parsed && typeof parsed === 'object') {
+			questions = [parsed];
+		}
+	} catch (_) {
+		// Tolerant parse: pull out top-level {...} objects.
+		const matches = rawText.match(/\{[\s\S]*?\}/g) || [];
+		const candidates = matches
+			.map((m) => {
+				try {
+					return JSON.parse(m);
+				} catch (_) {
+					return null;
+				}
+			})
+			.filter((o) => o && (o.question || o.text));
+		if (candidates.length) questions = candidates;
+	}
+	return { categories, questions };
+}
+window.parseAIImportPayload = parseAIImportPayload;
+
+function getLocalCategories() {
+	try {
+		const repo = window.__DI_CONTAINER__?.repo;
+		if (repo && typeof repo.getAll_sync === 'function') {
+			const rows = repo.getAll_sync('categories');
+			return Array.isArray(rows) ? rows : [];
+		}
+	} catch (_) {}
+	try {
+		return JSON.parse(localStorage.getItem('quizCategories') || '[]');
+	} catch (_) {
+		return [];
+	}
+}
+
+function findCategoryByNameParent(list, name, parentId) {
+	const n = String(name || '').trim().toLowerCase();
+	return (list || []).find((c) => {
+		if (String(c.name || '').trim().toLowerCase() !== n) return false;
+		const pid = c.parent_id ?? c.parentId ?? null;
+		if (!parentId && !pid) return true;
+		return String(pid || '') === String(parentId || '');
+	});
+}
+
+async function ensureCategoryPath(pathString, cache) {
+	const parts = String(pathString || '')
+		.split('>')
+		.map((s) => s.trim())
+		.filter(Boolean);
+	if (!parts.length) return '';
+	let parentId = null;
+	let list = getLocalCategories();
+	for (const part of parts) {
+		let found = findCategoryByNameParent(list, part, parentId);
+		// Also consult just-created cache (name+parent -> id)
+		if (!found && cache) {
+			const key = `${String(parentId || 'ROOT')}::${part.toLowerCase()}`;
+			const cachedId = cache.get(key);
+			if (cachedId) {
+				parentId = cachedId;
+				continue;
+			}
+		}
+		if (!found) {
+			try {
+				const payload = { name: part };
+				if (parentId) payload.parent_id = parentId;
+				const saved = await window.API.create('categories', payload);
+				const newRow = {
+					id: saved?.id || `tmp-${Date.now()}-${Math.random()}`,
+					name: part,
+					parent_id: parentId,
+					parentId,
+				};
+				list = [...list, newRow];
+				try {
+					window.__DI_CONTAINER__?.repo?.setAll_sync?.('categories', list);
+				} catch (_) {}
+				found = newRow;
+				if (typeof logActivity === 'function') {
+					try { logActivity('category', part, 'created', { via: 'ai-import' }); } catch (_) {}
+				}
+			} catch (err) {
+				console.warn('[ai-import] category create failed:', part, err);
+				return parentId || '';
+			}
+		}
+		parentId = found.id;
+		if (cache) cache.set(`${String(found.parent_id ?? found.parentId ?? 'ROOT')}::${String(found.name).toLowerCase()}`, found.id);
+		// refresh list reference for next level
+		list = getLocalCategories();
+		if (!list.find((c) => String(c.id) === String(parentId))) {
+			// repo mirror may lag (server is truth) — keep our in-memory row
+			list = [...list, found];
+		}
+	}
+	return parentId || '';
+}
+
+async function ensureFlatCategories(categoryDefs, cache) {
+	// categoryDefs: [{name, parent}] where parent is a NAME or null.
+	// Create parents first (multi-pass).
+	const pending = (categoryDefs || [])
+		.map((c) => ({
+			name: String(c?.name ?? '').trim(),
+			parent: c?.parent != null ? String(c.parent).trim() : null,
+		}))
+		.filter((c) => c.name);
+	let guard = pending.length * 3 + 5;
+	while (pending.length && guard-- > 0) {
+		const def = pending.shift();
+		const list = getLocalCategories();
+		let parentId = null;
+		if (def.parent) {
+			const p = list.find(
+				(c) => String(c.name || '').trim().toLowerCase() === def.parent.toLowerCase(),
+			);
+			if (!p) {
+				// parent not yet created — defer
+				pending.push(def);
+				continue;
+			}
+			parentId = p.id;
+		}
+		if (findCategoryByNameParent(list, def.name, parentId)) continue;
+		try {
+			const payload = { name: def.name };
+			if (parentId) payload.parent_id = parentId;
+			const saved = await window.API.create('categories', payload);
+			const newRow = { id: saved?.id, name: def.name, parent_id: parentId, parentId };
+			const updated = [...getLocalCategories(), ...(newRow.id ? [newRow] : [])];
+			try { window.__DI_CONTAINER__?.repo?.setAll_sync?.('categories', updated); } catch (_) {}
+			if (cache && newRow.id) cache.set(`${String(parentId || 'ROOT')}::${def.name.toLowerCase()}`, newRow.id);
+		} catch (err) {
+			console.warn('[ai-import] flat category failed:', def, err);
+		}
+	}
+}
+
+function resolveQuestionCategoryPath(q) {
+	return (
+		q.categoryPath ||
+		q.category_path ||
+		q.categoryPathName ||
+		q.path ||
+		(q.category && typeof q.category === 'string' && q.category.includes('>') ? q.category : '') ||
+		''
+	);
+}
 
 function importAIQuestions(inputElement) {
 	const file = inputElement?.files?.[0];
@@ -2594,27 +2766,7 @@ function importAIQuestions(inputElement) {
 	reader.onload = (e) => {
 		try {
 			const rawText = String(e.target.result || '');
-			let questions = null;
-
-			try {
-				const parsed = JSON.parse(rawText);
-				if (Array.isArray(parsed)) questions = parsed;
-				else if (Array.isArray(parsed?.questions)) questions = parsed.questions;
-				else if (parsed && typeof parsed === 'object') questions = [parsed];
-			} catch (_) {
-				// Tolerant parse: pull out top-level {...} objects.
-				const matches = rawText.match(/\{[\s\S]*?\}/g) || [];
-				const candidates = matches
-					.map((m) => {
-						try {
-							return JSON.parse(m);
-						} catch (_) {
-							return null;
-						}
-					})
-					.filter((o) => o && (o.question || o.text));
-				if (candidates.length) questions = candidates;
-			}
+			const { categories, questions } = parseAIImportPayload(rawText);
 
 			if (!questions || !questions.length) {
 				showToast(
@@ -2624,49 +2776,12 @@ function importAIQuestions(inputElement) {
 				return;
 			}
 
-			const normalized = questions
-				.map((q) => {
-					try {
-						return window.normalizeImportedAIQuestion
-							? window.normalizeImportedAIQuestion(q)
-							: q;
-					} catch (_) {
-						return null;
-					}
-				})
-				.filter(Boolean);
-
-			if (!normalized.length) {
-				showToast(
-					'The file contained rows, but none matched the question structure.',
-					'error',
-				);
-				return;
-			}
-
 			const apply = confirm(
-				`Import ${normalized.length} AI-generated question${normalized.length === 1 ? '' : 's'} into your Questions bank?`,
+				`Import ${questions.length} AI-generated question${questions.length === 1 ? '' : 's'}${categories?.length ? ` + ${categories.length} categorie(s)` : ''} into your bank? Categories will be created automatically.`,
 			);
 			if (!apply) return;
 
-			(async () => {
-				let imported = 0;
-				for (const question of normalized) {
-					try {
-						await window.API.create('questions', question);
-						imported += 1;
-					} catch (err) {
-						console.warn('AI question import row failed:', err);
-					}
-				}
-				showToast(
-					`Imported ${imported}/${normalized.length} questions.`,
-					imported ? 'success' : 'error',
-				);
-				if (window.refreshQuestionsList) window.refreshQuestionsList();
-				if (imported && window.updateQuickStartCounts)
-					window.updateQuickStartCounts();
-			})();
+			importParsedAIQuestions(categories, questions);
 		} catch (err) {
 			console.error('AI questions import failed:', err);
 			showToast(`Import failed: ${err?.message || 'invalid file'}`, 'error');
@@ -2679,6 +2794,69 @@ function importAIQuestions(inputElement) {
 }
 
 window.importAIQuestions = importAIQuestions;
+
+// Shared import engine (file import + Prompt Builder paste zone).
+// Creates missing categories/subcategories, files each question in its leaf
+// category with difficulty/points/time_limit preserved.
+async function importParsedAIQuestions(categories, questions) {
+	const cache = new Map();
+	// 1. Explicit categories block first (Prompt Builder format)
+	if (categories?.length) await ensureFlatCategories(categories, cache);
+	// 2. Per-question paths (covers axes even without a categories block)
+	const withCategory = [];
+	for (const q of questions) {
+		const path = resolveQuestionCategoryPath(q);
+		let leafId = '';
+		if (path) {
+			leafId = await ensureCategoryPath(path, cache);
+		} else {
+			const single = q.categoryId || q.category_id || q.category || q.categoryName || '';
+			if (single && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(single))) {
+				leafId = String(single);
+			} else if (single) {
+				leafId = await ensureCategoryPath(String(single), cache);
+			}
+		}
+		withCategory.push({ raw: q, leafId });
+	}
+
+	let imported = 0;
+	for (const { raw, leafId } of withCategory) {
+		try {
+			const normalized = window.normalizeImportedAIQuestion
+				? window.normalizeImportedAIQuestion(raw, leafId)
+				: raw;
+			if (!normalized) continue;
+			// normalizeImportedAIQuestion keeps category as name/id string;
+			// resolve to the leaf UUID for the API (which requires a UUID FK).
+			if (leafId) {
+				normalized.category = leafId;
+				normalized.categoryId = leafId;
+				normalized.category_id = leafId;
+			}
+			await window.API.create('questions', normalized);
+			imported += 1;
+		} catch (err) {
+			console.warn('AI question import row failed:', err);
+		}
+	}
+	showToast(
+		`Imported ${imported}/${questions.length} questions${categories?.length ? ' + categories' : ''}.`,
+		imported ? 'success' : 'error',
+	);
+	if (window.refreshQuestionsList) window.refreshQuestionsList();
+	if (typeof updateCategoryList === 'function') {
+		try { updateCategoryList(); } catch (_) {}
+	}
+	if (typeof loadCategoriesIntoSelect === 'function') {
+		try { loadCategoriesIntoSelect(); } catch (_) {}
+	}
+	if (imported && window.updateQuickStartCounts)
+		window.updateQuickStartCounts();
+	return imported;
+}
+
+window.importParsedAIQuestions = importParsedAIQuestions;
 
 // ?? My Profile (self-service account) ?????????????????????????????????????
 // Visible to admins and teachers (students use the workspace profile).
@@ -2983,11 +3161,28 @@ async function importOwnDataSnapshot(data) {
 		}
 	};
 	// 1. Categories (school-unique per name): reuse the teacher's own
-	// matching category, else create, else suffixed copy.
+	// matching category, else create, else suffixed copy. Hierarchy is
+	// preserved: parents are created first and children reference the
+	// remapped parent ids (a missing parent falls back to top-level).
 	const categoryMap = new Map();
-	for (const cat of data.categories || []) {
+	const importCats = (data.categories || []).filter(
+		(cat) => cat && String(cat?.name || "").trim(),
+	);
+	const importDepth = (cat, seen = new Set()) => {
+		const key = String(cat?.id ?? "");
+		if (!key || seen.has(key)) return 0;
+		seen.add(key);
+		const parentOld = cat?.parent_id ?? cat?.parentId ?? "";
+		if (!parentOld) return 0;
+		const parent = importCats.find((c) => String(c?.id) === String(parentOld));
+		return parent ? 1 + importDepth(parent, seen) : 0;
+	};
+	importCats.sort((a, b) => importDepth(a) - importDepth(b));
+	for (const cat of importCats) {
 		const name = String(cat?.name || "").trim();
 		if (!name) { fail("category"); continue; }
+		const parentOld = cat?.parent_id ?? cat?.parentId ?? "";
+		const parentNew = parentOld ? categoryMap.get(String(parentOld)) || "" : "";
 	 try {
 			const existing = myCategoryName(name);
 			if (existing) {
@@ -2998,6 +3193,7 @@ async function importOwnDataSnapshot(data) {
 				name,
 				icon: cat.icon || undefined,
 				color: cat.color || undefined,
+				...(parentNew ? { parent_id: parentNew } : {}),
 			});
 			if (created?.id) {
 				categoryMap.set(String(cat.id), String(created.id));
@@ -3008,7 +3204,10 @@ async function importOwnDataSnapshot(data) {
 		} catch (_) {
 			// Name clash with another teacher's category - suffixed copy.
 			try {
-				const created = await apiCreate("/categories", { name: `${name} (imported)` });
+				const created = await apiCreate("/categories", {
+					name: `${name} (imported)`,
+					...(parentNew ? { parent_id: parentNew } : {}),
+				});
 				if (created?.id) {
 					categoryMap.set(String(cat.id), String(created.id));
 					summary.categories += 1;

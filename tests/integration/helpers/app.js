@@ -30,6 +30,9 @@ import settingsRoutes from '../../../src/backend/routes/settings.routes.js';
 import schoolRoutes from '../../../src/backend/routes/school.routes.js';
 import bootstrapRoutes from '../../../src/backend/routes/bootstrap.routes.js';
 import bulkRoutes from '../../../src/backend/routes/bulk.routes.js';
+import notificationRoutes from '../../../src/backend/routes/notifications.routes.js';
+import teacherMessageRoutes from '../../../src/backend/routes/teacher-messages.routes.js';
+import devicesRoutes from '../../../src/backend/routes/devices.routes.js';
 
 // Container (needed for route handlers)
 import { createContainer } from '../../../src/backend/container.js';
@@ -63,6 +66,9 @@ app.use('/api/v1/settings',    settingsRoutes);
 app.use('/api/v1/school',     schoolRoutes);
 app.use('/api/v1/bootstrap',   bootstrapRoutes);
 app.use('/api/v1/bulk',        bulkRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/teacher-messages', teacherMessageRoutes);
+app.use('/api/v1/devices', devicesRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

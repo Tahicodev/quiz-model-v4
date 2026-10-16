@@ -6566,36 +6566,143 @@ function promoteAIGeneratorModal(modal) {
 	modal.style.setProperty('pointer-events', 'auto', 'important');
 }
 
-// Populate AI category select
+// Populate AI category select (top-level categories only — children go to the
+// paired subcategory select so generated questions land on a leaf level).
+function getAICategoryRows() {
+	try {
+		const rows = window.__DI_CONTAINER__.repo.getAll_sync('categories');
+		return Array.isArray(rows) ? rows : [];
+	} catch (e) {
+		return [];
+	}
+}
+
+function aiCategoryParentId(cat) {
+	return cat.parent_id ?? cat.parentId ?? null;
+}
+
+function aiCategoryKey(cat) {
+	return String(cat.id || cat.name || '');
+}
+
 function populateAICategorySelect() {
-	const selects = ['ai-category', 'docCategory'];
-	
-	selects.forEach(id => {
-		const select = document.getElementById(id);
+	const pairs = [['ai-category', 'ai-subcategory'], ['docCategory', 'docSubcategory']];
+
+	pairs.forEach(([catId, subId]) => {
+		const select = document.getElementById(catId);
 		if (!select) return;
-		
+
+		const previous = select.value;
 		select.innerHTML = '<option value="uncategorized">Uncategorized</option>';
-		
-		try {
-			const categories = window.__DI_CONTAINER__.repo.getAll_sync('categories');
-			categories.forEach(cat => {
-				const value = cat.id || cat.name;
-				const isUncategorized =
-					value === 'uncategorized' ||
-					String(cat.name || '').trim().toLowerCase() === 'uncategorized';
-				if (isUncategorized) return;
+
+		const rows = getAICategoryRows();
+		rows
+			.filter((cat) => {
+				const value = aiCategoryKey(cat);
+				if (value === 'uncategorized') return false;
+				if (String(cat.name || '').trim().toLowerCase() === 'uncategorized') return false;
+				return !aiCategoryParentId(cat);
+			})
+			.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+			.forEach((cat) => {
 				const option = document.createElement('option');
-				option.value = value;
+				option.value = aiCategoryKey(cat);
 				option.textContent = cat.name;
 				select.appendChild(option);
 			});
-		} catch (e) {
-			console.error('Error loading categories:', e);
-		}
-		
-		// Default to Uncategorized so generated questions land there.
-		select.value = 'uncategorized';
+
+		// Restore the previous choice when it still exists, else Uncategorized.
+		const stillThere = Array.from(select.options).some((o) => o.value === previous);
+		select.value = stillThere ? previous : 'uncategorized';
+
+		populateAISubcategorySelect(catId, subId);
 	});
+}
+
+// Fill the subcategory select with ALL descendants of the chosen category,
+// labelled with their breadcrumb path. Questions must live on leaf levels
+// (the server rejects parent categories), so filing uses this select first.
+function populateAISubcategorySelect(catId, subId) {
+	const catSelect = document.getElementById(catId);
+	const subSelect = document.getElementById(subId);
+	if (!subSelect) return;
+
+	const catVal = catSelect?.value || 'uncategorized';
+	const rows = getAICategoryRows();
+	const byId = new Map(rows.map((r) => [aiCategoryKey(r), r]));
+	const childrenOf = (pid) =>
+		rows.filter((r) => String(aiCategoryParentId(r) || '') === String(pid));
+
+	subSelect.innerHTML = '';
+	const addOption = (value, label) => {
+		const option = document.createElement('option');
+		option.value = value;
+		option.textContent = label;
+		subSelect.appendChild(option);
+	};
+
+	if (!catVal || catVal === 'uncategorized' || !byId.has(catVal)) {
+		addOption('', '—');
+		subSelect.disabled = true;
+		return;
+	}
+	subSelect.disabled = false;
+
+	// Depth-first walk collecting leaf descendants with breadcrumb labels.
+	const leaves = [];
+	const walk = (pid, trail) => {
+		const kids = childrenOf(pid);
+		if (!kids.length) {
+			if (trail.length) leaves.push({ id: String(pid), label: trail.join(' › ') });
+			return;
+		}
+		kids.forEach((k) => walk(aiCategoryKey(k), [...trail, String(k.name || '')]));
+	};
+	walk(catVal, []);
+
+	if (!leaves.length) {
+		addOption('', 'Same as category (leaf)');
+		return;
+	}
+	addOption('', 'Select subcategory…');
+	leaves.forEach((leaf) => addOption(leaf.id, leaf.label));
+}
+
+window.onAICategoryChange = function (catId, subId) {
+	populateAISubcategorySelect(catId, subId);
+};
+
+// Resolve the leaf category id for an AI tab: subcategory wins when chosen,
+// otherwise the category itself. Returns { id } or { id, error } when the
+// resolved node still has children (server would reject it).
+function resolveAILeafCategory(tab) {
+	const isDoc = tab === 'document';
+	const catEl = document.getElementById(isDoc ? 'docCategory' : 'ai-category');
+	const subEl = document.getElementById(isDoc ? 'docSubcategory' : 'ai-subcategory');
+	const cat = catEl?.value || '';
+	const sub = subEl && !subEl.disabled ? subEl.value || '' : '';
+	const leaf = sub || cat;
+	if (!leaf || leaf === 'uncategorized') return { id: '' };
+	const rows = getAICategoryRows();
+	const hasKids = rows.some(
+		(c) => String(aiCategoryParentId(c) || '') === String(leaf),
+	);
+	if (hasKids) {
+		const name =
+			rows.find((c) => aiCategoryKey(c) === String(leaf))?.name || leaf;
+		return {
+			id: leaf,
+			error: `"${name}" has subcategories — pick a subcategory (leaf level) instead.`,
+		};
+	}
+	return { id: leaf };
+}
+
+function readAITimeLimit(tab) {
+	const el = document.getElementById(tab === 'document' ? 'docTimeLimit' : 'ai-time-limit');
+	const raw = Number(el?.value);
+	if (!Number.isFinite(raw) || raw <= 0) return 0;
+	return Math.max(1, Math.min(3600, Math.round(raw)));
 }
 
 // Current active AI tab
@@ -6623,18 +6730,80 @@ window.switchAIGeneratorTab = function(tab) {
 	// Update Content visibility
 	const standardForm = document.getElementById('ai-generator-form');
 	const documentForm = document.getElementById('ai-document-form');
+	const builderForm = document.getElementById('ai-builder-form');
+	const previewSection = document.getElementById('ai-preview-section');
+	const formFooter = document.getElementById('ai-form-footer-actions');
+	const previewFooter = document.getElementById('ai-preview-footer-actions');
 	
 	if (tab === 'standard') {
-		standardForm.style.display = 'block';
-		documentForm.style.display = 'none';
+		if (standardForm) {
+			standardForm.style.display = 'block';
+			standardForm.classList.add('active');
+		}
+		if (documentForm) {
+			documentForm.style.display = 'none';
+			documentForm.classList.remove('active');
+		}
+		if (builderForm) {
+			builderForm.style.display = 'none';
+			builderForm.classList.remove('active');
+		}
+	} else if (tab === 'builder') {
+		if (standardForm) {
+			standardForm.style.display = 'none';
+			standardForm.classList.remove('active');
+		}
+		if (documentForm) {
+			documentForm.style.display = 'none';
+			documentForm.classList.remove('active');
+		}
+		if (builderForm) {
+			builderForm.style.display = 'block';
+			builderForm.classList.add('active');
+		}
+		// The builder has its own in-pane Generate + Import controls — the
+		// topic/document footers do not apply here.
+		if (previewSection) previewSection.classList.add('hidden');
+		if (formFooter) formFooter.classList.add('hidden');
+		if (previewFooter) previewFooter.classList.add('hidden');
+		if (typeof window.syncPromptBuilderInputs === 'function') {
+			try { window.syncPromptBuilderInputs(); } catch (_) {}
+		}
+		if (typeof window.renderPromptBuilderTree === 'function') {
+			try { window.renderPromptBuilderTree(); } catch (_) {}
+		} else {
+			// prompt-builder.js did not load (stale cache) — say so instead
+			// of leaving a blank pane.
+			const tree = document.getElementById('promptBuilderTree');
+			if (tree && !tree.innerHTML.trim()) {
+				tree.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">⚠ Prompt Builder script not loaded — hard-refresh the page (Ctrl+F5), then reopen this tab.</div>';
+			}
+		}
 	} else {
-		standardForm.style.display = 'none';
-		documentForm.style.display = 'block';
+		if (standardForm) {
+			standardForm.style.display = 'none';
+			standardForm.classList.remove('active');
+		}
+		if (documentForm) {
+			documentForm.style.display = 'block';
+			documentForm.classList.add('active');
+		}
+		if (builderForm) {
+			builderForm.style.display = 'none';
+			builderForm.classList.remove('active');
+		}
 		
 		// Initialize Document Generator if needed
 		if (typeof initDocumentGenerator === 'function') {
 			initDocumentGenerator();
 		}
+	}
+
+	// Leaving the builder tab restores the Generate footer, unless a preview
+	// batch is currently shown (its own footer then stays).
+	if (tab !== 'builder' && previewSection && previewSection.classList.contains('hidden')) {
+		if (formFooter) formFooter.classList.remove('hidden');
+		if (previewFooter) previewFooter.classList.add('hidden');
 	}
 	
 	// Clear any previous error
@@ -6902,6 +7071,8 @@ window.generateQuestionsWithAI = async function() {
 			});
 			if (questions && questions.length > 0) {
 				questions.forEach((q) => { q.points = points; });
+				const imgTime = readAITimeLimit('standard');
+				if (imgTime > 0) questions.forEach((q) => { q.time_limit = imgTime; q.timeLimit = imgTime; });
 				aiGeneratedQuestions = questions;
 				displayAIPreview(questions);
 				showToast(`✨ Generated ${questions.length} question(s) with image options!`, 'success');
@@ -6960,6 +7131,8 @@ window.generateQuestionsWithAI = async function() {
 
 			// Apply points
 			if (questions) questions.forEach(q => { q.points = points; });
+			const stdTime = readAITimeLimit('standard');
+			if (stdTime > 0 && questions) questions.forEach(q => { q.time_limit = stdTime; q.timeLimit = stdTime; });
 		} else {
 			// Document-based generation (RAG)
 			if (typeof documentQuestionGenerator === 'undefined') {
@@ -7001,7 +7174,7 @@ const docText = (typeof documentQuestionGenerator.getDocumentText === 'function'
 				questions = await documentQuestionGenerator.generateFromDocument({
 					count: docCount,
 					difficulty: docDifficulty,
-					category: docCategory,
+					category: resolveAILeafCategory('document').id || docCategory,
 					types: docTypes,
 					typeCounts: docTypeCounts,
 					strategy: strategy,
@@ -7009,6 +7182,8 @@ const docText = (typeof documentQuestionGenerator.getDocumentText === 'function'
 					codeTypeCounts
 				});
 			}
+			const docTime = readAITimeLimit('document');
+			if (docTime > 0 && questions) questions.forEach(q => { q.time_limit = docTime; q.timeLimit = docTime; });
 		}
 		
 		if (questions && questions.length > 0) {
@@ -7143,6 +7318,8 @@ function displayAIPreview(questions) {
 	
 	// Hide form, show preview
 	if (formSection) formSection.style.display = 'none';
+	const builderPane = document.getElementById('ai-builder-form');
+	if (builderPane) builderPane.style.display = 'none';
 	previewSection.classList.remove('hidden');
 	
 	// Show preview footer actions
@@ -7246,6 +7423,7 @@ function createPreviewCard(question, index) {
 	const isMulti =
 		normalizedType === 'multiple-choice' &&
 		Boolean(question.allowMultipleAnswers || answerTokens.length > 1);
+	const previewTime = Number(question.time_limit ?? question.timeLimit ?? 0) || 0;
 
 	card.innerHTML = `
 		<div class="ai-preview-header">
@@ -7254,6 +7432,7 @@ function createPreviewCard(question, index) {
 				<span class="ai-preview-type">${typeLabel}</span>
 				${isMulti ? '<span class="ai-preview-type" style="background:#ede9fe; color:#6d28d9;">Multiple answers</span>' : ''}
 				${isCode ? '<span class="ai-preview-type code-badge">💻 Code</span>' : ''}
+				${previewTime > 0 ? `<span class="ai-preview-type" style="background:#fef3c7; color:#92400e;">⏱ ${previewTime}s</span>` : ''}
 			</div>
 			<span style="margin-left: auto; font-size: 0.85rem; color: var(--text-muted);">Q${index + 1}</span>
 		</div>
@@ -7342,6 +7521,15 @@ window.resetAIGenerator = function() {
 	if (previewList) previewList.innerHTML = '';
 	if (errorDiv) errorDiv.classList.add('hidden');
 	if (cooldownContainer) cooldownContainer.classList.add('hidden');
+	// Tab-aware restore: the builder pane is not part of the preview flow.
+	const builderPane = document.getElementById('ai-builder-form');
+	if (typeof currentAITab !== 'undefined' && currentAITab === 'builder') {
+		if (formSection) formSection.style.display = 'none';
+		if (builderPane) builderPane.style.display = 'block';
+		document.getElementById('ai-form-footer-actions')?.classList.add('hidden');
+	} else {
+		if (builderPane) builderPane.style.display = 'none';
+	}
 	
 	// Reset the manual image builder (Images option style) to a blank state.
 	resetAIImageBuilder();
@@ -7579,8 +7767,34 @@ function normalizeImportedAIQuestion(question, fallbackCategoryId = '') {
 		? normalizedDifficulty
 		: 'medium';
 	q.points = Math.min(100, Math.max(1, Math.round(Number.parseFloat(q.points) || 1)));
-	q.category = String(q.category || fallbackCategoryId || '').trim();
-	q.categoryId = String(q.categoryId || q.category || fallbackCategoryId || '').trim();
+	// Per-question time budget (Prompt Builder axes). Accept every alias the
+	// model might emit; 0/empty = no limit (api-client forwards only > 0).
+	const rawTime =
+		q.time_limit ?? q.timeLimit ?? q.time_seconds ?? q.timeSeconds ?? q.duration ?? q.durationSeconds ?? null;
+	if (rawTime != null && String(rawTime).trim() !== '' && Number(rawTime) > 0) {
+		q.time_limit = Math.max(1, Math.min(3600, Math.round(Number(rawTime))));
+		q.timeLimit = q.time_limit;
+	}
+	// Hierarchical filing: categoryPath ("A > B > C") wins, then plain names/ids.
+	const rawPath =
+		q.categoryPath || q.category_path || q.categoryPathName || q.path || '';
+	if (rawPath && typeof rawPath === 'string' && rawPath.includes('>')) {
+		q.categoryPath = rawPath.trim();
+		// Leaf name as display fallback until the importer resolves the UUID.
+		const leafName = rawPath.split('>').map((s) => s.trim()).filter(Boolean).pop() || '';
+		q.category = String(q.category || leafName || fallbackCategoryId || '').trim() || leafName;
+	} else {
+		q.category = String(q.category || q.categoryName || fallbackCategoryId || '').trim();
+	}
+	q.categoryId = String(q.categoryId || q.category_id || q.category || fallbackCategoryId || '').trim();
+	if (fallbackCategoryId) {
+		// Server requires a UUID FK — prefer the resolved leaf id when given.
+		if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(fallbackCategoryId))) {
+			q.category = String(fallbackCategoryId);
+			q.categoryId = String(fallbackCategoryId);
+		}
+		q.category_id = q.categoryId;
+	}
 	q.dateCreated = q.dateCreated || new Date().toISOString();
 	q.id = q.id || generateUUID();
 	q.ownerId = q.ownerId || window.Auth?.getCurrentUser?.()?.id || '';
@@ -7602,13 +7816,24 @@ window.importSelectedAIQuestions = async function() {
 	const importBtn = document.getElementById('ai-import-btn');
 	if (importBtn) importBtn.disabled = true;
 
+	// File under the leaf level: subcategory wins when chosen, else the
+	// category itself (per active tab). A parent with children is rejected
+	// with a clear message — the server enforces leaf-only filing.
+	const tabForImport = currentAITab === 'document' ? 'document' : 'standard';
+	const resolvedLeaf = resolveAILeafCategory(tabForImport);
+	if (resolvedLeaf.error) {
+		showToast(resolvedLeaf.error, 'error');
+		if (importBtn) importBtn.disabled = false;
+		return;
+	}
+
 	try {
 		// Get existing questions
 		let existingQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
 		
 		// Get selected questions to import
 		const questionsToImport = [];
-		const selectedCategory = document.getElementById('ai-category')?.value || '';
+		const selectedCategory = resolvedLeaf.id;
 		aiSelectedQuestions.forEach(idx => {
 			if (aiGeneratedQuestions[idx]) {
 				const normalizedQuestion = normalizeImportedAIQuestion(

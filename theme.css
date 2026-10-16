@@ -1544,7 +1544,8 @@ html[data-theme='dark'] #aiGeneratorModal #tab-ai-standard {
 	border-bottom-color: #6366f1 !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal #tab-ai-document {
+html[data-theme='dark'] #aiGeneratorModal #tab-ai-document,
+html[data-theme='dark'] #aiGeneratorModal #tab-ai-builder {
 	color: var(--text-muted) !important;
 }
 

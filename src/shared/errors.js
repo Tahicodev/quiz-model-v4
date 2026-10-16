@@ -47,6 +47,17 @@ export class ConflictError extends AppError {
   }
 }
 
+/**
+ * A second login was attempted while this account already holds a live
+ * session elsewhere. The client may retry with `force: true` to end the
+ * other session and take over — otherwise exactly one session stays live.
+ */
+export class SessionConflictError extends AppError {
+  constructor(msg = 'This account is already signed in on another device or tab.') {
+    super('SESSION_ACTIVE', msg, 409);
+  }
+}
+
 export class RateLimitError extends AppError {
   constructor() {
     super('RATE_LIMITED', 'Too many requests', 429);

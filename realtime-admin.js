@@ -49,6 +49,53 @@
 	window.adminSocket = socket;
 	window.clientSocket = socket; // Alias for shared code compatibility
 
+	// Staff presence: register this browser as a classroom device so
+	// teachers'/admins' machines appear in Classroom Devices when they log
+	// in (students register from realtime-client.js). Same localStorage
+	// device id students use, so one machine is one row whichever portal it
+	// uses. Hostname stays null so a teacher-renamed label is never
+	// clobbered; the server resolves type/platform from the handshake.
+	function staffDeviceId() {
+		try {
+			var id = localStorage.getItem('deviceId');
+			if (!id) {
+				id = 'device-' + Math.random().toString(36).slice(2, 10);
+				localStorage.setItem('deviceId', id);
+			}
+			return id;
+		} catch (e) {
+			return '';
+		}
+	}
+
+	function currentStaffRole() {
+		try {
+			if (window.Auth && typeof window.Auth.getCurrentUser === 'function') {
+				var me = window.Auth.getCurrentUser();
+				var role = String((me && me.role) || '').toLowerCase();
+				if (role === 'admin' || role === 'teacher' || role === 'super_admin') return role;
+			}
+		} catch (e) {}
+		try {
+			var raw = sessionStorage.getItem('quizSession');
+			var s = raw ? JSON.parse(raw) : null;
+			var fallbackRole = String((s && s.role) || '').toLowerCase();
+			if (fallbackRole === 'admin' || fallbackRole === 'teacher' || fallbackRole === 'super_admin') {
+				return fallbackRole;
+			}
+		} catch (e) {}
+		return '';
+	}
+
+	function registerStaffDevice() {
+		try {
+			if (!currentStaffRole()) return;
+			var id = staffDeviceId();
+			if (!id || typeof socket.emit !== 'function') return;
+			socket.emit('register', { deviceId: id, hostname: null });
+		} catch (e) {}
+	}
+
 	const panelId = 'devices-panel';
 
 	function createPanel() {
@@ -234,6 +281,8 @@
 
 	socket.on('connect', () => {
 		socket.emit('identify', { role: 'admin' });
+		// Keep staff presence fresh on every (re)connect.
+		registerStaffDevice();
 		socket.emit('game:list', (response) => {
 			if (!response?.ok || !Array.isArray(response.games)) return;
 

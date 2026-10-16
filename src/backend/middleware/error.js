@@ -14,10 +14,18 @@ export const errorHandler = (err, req, res, next) => {
     fields = err.fields;
     
     // Log warnings for client errors, errors for server errors
+    const actor = {
+      path: req.path,
+      method: req.method,
+      userId: req.user?.id,
+      username: req.user?.username,
+      role: req.user?.role,
+      ip: req.ip,
+    };
     if (statusCode >= 500) {
-      logger.error(`[${code}] ${message}`, { stack: err.stack, path: req.path });
+      logger.error(`[${code}] ${message}`, { stack: err.stack, ...actor });
     } else {
-      logger.warn(`[${code}] ${message}`, { path: req.path });
+      logger.warn(`[${code}] ${message}`, actor);
     }
   } else {
     // Unhandled system errors. body-parser/express errors carry their own

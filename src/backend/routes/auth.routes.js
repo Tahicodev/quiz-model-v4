@@ -68,11 +68,12 @@ function refreshCookieName(portal) {
 router.post('/login', authLimiter, validate(LoginSchema), async (req, res, next) => {
 	try {
 		const { authSvc } = getContainer();
-		const { username, password, portal, schoolSlug } = req.body;
+		const { username, password, portal, schoolSlug, force } = req.body;
 		const { user, accessToken, refreshToken } = await authSvc.login(username, password, {
 			ip: req.ip,
 			userAgent: req.headers['user-agent'],
 			schoolSlug,
+			force: force === true,
 		});
 
 		// Set refresh token as httpOnly cookie (SaaS mode; in local mode it's optional)
@@ -172,8 +173,36 @@ router.post('/refresh', async (req, res, next) => {
 
 // ── Authenticated routes ──────────────────────────────────────────────────────
 
+// GET /api/v1/auth/session — is THIS tab's session still the live one?
+// 200 { active: true } while it is; 409 { code: SESSION_SUPERSEDED } once
+// another tab/device took over (the client then ends this session).
+router.get('/session', requireAuth, async (req, res, next) => {
+	try {
+		const { authSvc } = getContainer();
+		const status = await authSvc.sessionStatus(req.user.id, req.user.sid || null);
+		if (!status.active) {
+			return res.status(409).json({
+				success: false,
+				error: {
+					code: 'SESSION_SUPERSEDED',
+					message: 'Signed in on another device or tab. This session has ended.',
+				},
+			});
+		}
+		res.json({ active: true });
+	} catch (err) {
+		next(err);
+	}
+});
+
 // POST /api/v1/auth/logout
-router.post('/logout', requireAuth, async (req, res, next) => {
+// Deliberately NOT behind requireAuth: presenting a refresh cookie IS the
+// credential, and logout must succeed even when the short-lived access token
+// already expired — otherwise the server session silently survives and the
+// next login is wrongly rejected as "already signed in" (single-session
+// enforcement). CSRF-safe: the cookies are SameSite=strict, so a cross-site
+// POST arrives without them and revokes nothing.
+router.post('/logout', async (req, res, next) => {
 	try {
 		const { authSvc } = getContainer();
 		// Revoke whichever refresh cookies this browser holds. When the client

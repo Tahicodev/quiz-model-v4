@@ -51,19 +51,21 @@ export class DeviceService {
 		this.#repo = repo;
 	}
 
-	/** @returns {import('@prisma/client').Prisma.DeviceGetPayload<{ include: ... }>[]} */
-	async list(schoolId) {
-		if (!schoolId) return [];
-		return this.#repo.modelFor('devices').findMany({
-			where: { school_id: schoolId },
-			orderBy: [{ hostname: 'asc' }, { first_seen: 'desc' }],
-			include: {
-				assignedUser: {
-					select: { id: true, name: true, username: true, class_id: true },
-				},
-			},
-		});
-	}
+  /** @returns {import('@prisma/client').Prisma.DeviceGetPayload<{ include: ... }>[]} */
+  async list(schoolId) {
+    if (!schoolId) return [];
+    return this.#repo.modelFor('devices').findMany({
+      where: { school_id: schoolId },
+      orderBy: [{ hostname: 'asc' }, { first_seen: 'desc' }],
+      include: {
+        assignedUser: {
+          // role included so the UI can badge staff machines (teachers'
+          // browsers register like student devices) vs student ones.
+          select: { id: true, name: true, username: true, role: true, class_id: true },
+        },
+      },
+    });
+  }
 
 	async getByKey(schoolId, deviceKey) {
 		if (!schoolId || !deviceKey) return null;
@@ -77,17 +79,17 @@ export class DeviceService {
 		});
 	}
 
-	async getById(schoolId, id) {
-		if (!schoolId || !id) return null;
-		return this.#repo.modelFor('devices').findFirst({
-			where: { id, school_id: schoolId },
-			include: {
-				assignedUser: {
-					select: { id: true, name: true, username: true, class_id: true },
-				},
-			},
-		});
-	}
+  async getById(schoolId, id) {
+    if (!schoolId || !id) return null;
+    return this.#repo.modelFor('devices').findFirst({
+      where: { id, school_id: schoolId },
+      include: {
+        assignedUser: {
+          select: { id: true, name: true, username: true, role: true, class_id: true },
+        },
+      },
+    });
+  }
 
 	/**
 	 * Cheap block check used on the socket register path. Never throws — a DB

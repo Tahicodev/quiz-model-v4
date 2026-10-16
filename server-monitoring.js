@@ -27,6 +27,45 @@
 		if (element) element.textContent = value;
 	}
 
+	function formatUsers(users, userCount) {
+		const list = Array.isArray(users) ? users : [];
+		if (!list.length) return '-';
+		const shown = list
+			.slice(0, 3)
+			.map((u) =>
+				u && u.count > 1
+					? `${u.user} (×${u.count})`
+					: `${u?.user ?? ''}`,
+			)
+			.join(', ');
+		const extra =
+			typeof userCount === 'number' && userCount > list.length
+				? ` +${userCount - list.length} more`
+				: '';
+		return `${shown}${extra}`;
+	}
+
+	function formatCaller(item) {
+		const user = item.lastUser || item.user || '-';
+		const bits = [user];
+		if (item.lastRole || item.role) bits.push(`(${(item.lastRole || item.role)})`);
+		if (item.lastIp || item.ip) bits.push(`· ${(item.lastIp || item.ip)}`);
+		return bits.join(' ');
+	}
+
+	function formatDetails(details) {
+		if (!details || typeof details !== 'object') return '';
+		try {
+			const entries = Object.entries(details)
+				.filter(([, v]) => v !== undefined && v !== '')
+				.slice(0, 6)
+				.map(([k, v]) => `${k}=${v}`);
+			return entries.join(' ');
+		} catch (_) {
+			return '';
+		}
+	}
+
 	function renderApiCalls(items) {
 		const body = document.getElementById('monitoringApiBody');
 		if (!body) return;
@@ -34,10 +73,10 @@
 			? items
 					.map(
 						(item) =>
-							`<tr><td><code>${escapeHtml(item.method)}</code></td><td>${escapeHtml(item.path)}</td><td>${formatNumber(item.calls)}</td><td>${formatNumber(item.errors)}</td><td>${escapeHtml(item.averageMs)} ms</td></tr>`,
+							`<tr><td><code>${escapeHtml(item.method)}</code></td><td>${escapeHtml(item.path)}</td><td>${formatNumber(item.calls)}</td><td>${formatNumber(item.errors)}</td><td>${escapeHtml(item.averageMs)} ms</td><td title="${escapeHtml(formatUsers(item.users, item.userCount))}">${escapeHtml(formatUsers(item.users, item.userCount))}</td><td title="${escapeHtml(item.lastIp || '')}">${escapeHtml(formatCaller(item))}</td></tr>`,
 					)
 					.join('')
-			: '<tr><td colspan="5" class="empty-state-small">No API calls in this window</td></tr>';
+			: '<tr><td colspan="7" class="empty-state-small">No API calls in this window</td></tr>';
 	}
 
 	function renderRepeatedLogs(items) {
@@ -47,10 +86,10 @@
 			? items
 					.map(
 						(item) =>
-							`<tr><td><span class="monitoring-level monitoring-level-${escapeHtml(item.level)}">${escapeHtml(item.level)}</span></td><td>${escapeHtml(item.message)}</td><td>${formatNumber(item.count)}</td><td>${escapeHtml(formatTime(item.lastAt))}</td></tr>`,
+							`<tr><td><span class="monitoring-level monitoring-level-${escapeHtml(item.level)}">${escapeHtml(item.level)}</span></td><td>${escapeHtml(item.message)}</td><td><code>${escapeHtml(item.source || '-')}</code></td><td title="${escapeHtml(formatUsers(item.users, item.userCount))}">${escapeHtml(item.lastUser || formatUsers(item.users, item.userCount))}</td><td>${formatNumber(item.count)}</td><td>${escapeHtml(formatTime(item.lastAt))}</td></tr>`,
 					)
 					.join('')
-			: '<tr><td colspan="4" class="empty-state-small">No server logs in this window</td></tr>';
+			: '<tr><td colspan="6" class="empty-state-small">No server logs in this window</td></tr>';
 	}
 
 	function renderRecentLogs(items) {
@@ -58,12 +97,13 @@
 		if (!body) return;
 		body.innerHTML = items.length
 			? items
-					.map(
-						(item) =>
-							`<tr><td>${escapeHtml(formatTime(item.at))}</td><td><span class="monitoring-level monitoring-level-${escapeHtml(item.level)}">${escapeHtml(item.level)}</span></td><td>${escapeHtml(item.message)}</td></tr>`,
-					)
+					.map((item) => {
+						const details = formatDetails(item.details);
+						const tip = details ? ` • ${details}` : '';
+						return `<tr title="${escapeHtml((item.source || '') + (item.user ? ` • ${item.user}` : '') + tip)}"><td>${escapeHtml(formatTime(item.at))}</td><td><span class="monitoring-level monitoring-level-${escapeHtml(item.level)}">${escapeHtml(item.level)}</span></td><td>${escapeHtml(item.message)}${details ? `<div class="text-muted small">${escapeHtml(details)}</div>` : ''}</td><td><code>${escapeHtml(item.source || '-')}</code></td><td>${escapeHtml(formatCaller(item))}</td></tr>`;
+					})
 					.join('')
-			: '<tr><td colspan="3" class="empty-state-small">No recent server logs</td></tr>';
+			: '<tr><td colspan="5" class="empty-state-small">No recent server logs</td></tr>';
 	}
 
 	function csvCell(value) {
@@ -90,6 +130,11 @@
 				'Count',
 				'Last seen',
 				'Time',
+				'Source',
+				'User',
+				'Role',
+				'IP',
+				'Users',
 			],
 		];
 		(latestMetrics.apiCalls || []).forEach((item) => {
@@ -105,6 +150,11 @@
 				'',
 				'',
 				'',
+				'',
+				item.lastUser || '',
+				item.lastRole || '',
+				item.lastIp || '',
+				formatUsers(item.users, item.userCount),
 			]);
 		});
 		(latestMetrics.repeatedLogs || []).forEach((item) => {
@@ -120,6 +170,11 @@
 				item.count,
 				formatTime(item.lastAt),
 				'',
+				item.source || '',
+				item.lastUser || '',
+				'',
+				'',
+				formatUsers(item.users, item.userCount),
 			]);
 		});
 		(latestMetrics.recentLogs || []).forEach((item) => {
@@ -135,6 +190,11 @@
 				'',
 				'',
 				formatTime(item.at),
+				item.source || '',
+				item.user || '',
+				item.role || '',
+				item.ip || '',
+				formatDetails(item.details),
 			]);
 		});
 
@@ -151,16 +211,73 @@
 		setTimeout(() => URL.revokeObjectURL(url), 1000);
 	}
 
+	function getUserFilter() {
+		const input = document.getElementById('monitoringUser');
+		return (input?.value || '').trim();
+	}
+
+	function collectFallbackUsers(metrics) {
+		const counts = new Map();
+		const add = (name) => {
+			const key = String(name || '').trim();
+			if (!key) return;
+			counts.set(key, (counts.get(key) || 0) + 1);
+		};
+		(metrics.apiCalls || []).forEach((item) =>
+			(item.users || []).forEach((u) => add(u?.user)),
+		);
+		(metrics.repeatedLogs || []).forEach((item) =>
+			(item.users || []).forEach((u) => add(u?.user)),
+		);
+		(metrics.recentLogs || []).forEach((item) => add(item.user));
+		return [...counts.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 100)
+			.map(([user, count]) => ({ user, count }));
+	}
+
+	function populateUserList(metrics) {
+		const select = document.getElementById('monitoringUser');
+		if (!select) return;
+		// Union server-provided users with anything visible in the tables, so
+		// the dropdown is never emptier than the data on screen (e.g. when
+		// the running server predates the `users` field).
+		const merged = new Map();
+		(metrics.users || []).forEach((u) => {
+			const key = String(u?.user || '').trim();
+			if (key) merged.set(key, (merged.get(key) || 0) + (Number(u.count) || 1));
+		});
+		collectFallbackUsers(metrics).forEach((u) => {
+			if (!merged.has(u.user)) merged.set(u.user, u.count);
+		});
+		const users = [...merged.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.map(([user, count]) => ({ user, count }));
+		// Keep the active filter even if it is absent from this window's list
+		// (e.g. typed/IP filter echoed back by the server).
+		const active = (metrics.filter?.user || getUserFilter()).trim();
+		if (active && !merged.has(active)) users.unshift({ user: active, count: 0 });
+		select.innerHTML =
+			'<option value="">All users</option>' +
+			users
+				.map(
+					(u) =>
+						`<option value="${escapeHtml(u.user)}"${u.user === active ? ' selected' : ''}>${escapeHtml(u.count > 0 ? `${u.user} (×${u.count})` : u.user)}</option>`,
+				)
+				.join('');
+		select.value = active || '';
+	}
+
 	async function loadMonitoring() {
 		const select = document.getElementById('monitoringWindow');
 		if (!select || !window.API?.raw) return;
 		const refreshButton = document.getElementById('monitoringRefresh');
 		if (refreshButton) refreshButton.disabled = true;
 		try {
-			const response = await window.API.raw(
-				'GET',
-				`/admin/metrics?minutes=${encodeURIComponent(select.value)}`,
-			);
+			const user = getUserFilter();
+			let url = `/admin/metrics?minutes=${encodeURIComponent(select.value)}`;
+			if (user) url += `&user=${encodeURIComponent(user)}`;
+			const response = await window.API.raw('GET', url);
 			const metrics = response?.data || {};
 			latestMetrics = metrics;
 			const summary = metrics.summary || {};
@@ -172,10 +289,12 @@
 				'monitoringLatency',
 				`${formatNumber(summary.averageResponseMs)} ms`,
 			);
+			const activeFilter = metrics.filter?.user || user;
 			setText(
 				'monitoringUpdated',
-				metrics.generatedAt ? `Updated ${formatTime(metrics.generatedAt)}` : '',
+				`${metrics.generatedAt ? `Updated ${formatTime(metrics.generatedAt)}` : ''}${activeFilter ? ` • Filtered by user: ${activeFilter}` : ''}`,
 			);
+			populateUserList(metrics);
 			renderApiCalls(metrics.apiCalls || []);
 			renderRepeatedLogs(metrics.repeatedLogs || []);
 			renderRecentLogs(metrics.recentLogs || []);
@@ -202,8 +321,34 @@
 		});
 	}
 
+	let userDebounce = null;
+
+	function configureUserFilter() {
+		const input = document.getElementById('monitoringUser');
+		if (!input || input.dataset.bound) return;
+		input.dataset.bound = 'true';
+		if (input.tagName === 'SELECT') {
+			input.addEventListener('change', loadMonitoring);
+		} else {
+			input.addEventListener('input', () => {
+				clearTimeout(userDebounce);
+				userDebounce = setTimeout(loadMonitoring, 400);
+			});
+			input.addEventListener('change', loadMonitoring);
+		}
+		const clearButton = document.getElementById('monitoringClearUser');
+		if (clearButton && !clearButton.dataset.bound) {
+			clearButton.dataset.bound = 'true';
+			clearButton.addEventListener('click', () => {
+				input.value = '';
+				loadMonitoring();
+			});
+		}
+	}
+
 	window.loadServerMonitoring = function () {
 		configureAutoRefresh();
+		configureUserFilter();
 		loadMonitoring();
 	};
 
@@ -215,5 +360,6 @@
 		if (select) select.addEventListener('change', loadMonitoring);
 		if (exportButton)
 			exportButton.addEventListener('click', exportMonitoringCsv);
+		configureUserFilter();
 	});
 })();

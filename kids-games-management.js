@@ -236,7 +236,9 @@
 				var ownerName = window.TeacherFilter
 					? window.TeacherFilter.resolveOwnerName({ ownerId: ownerTid })
 					: ownerTid;
-				ownerBadge = '<span class="q-owner-badge" title="Created by">' + esc(ownerName) + '</span>';
+				if (ownerName) {
+					ownerBadge = '<span class="q-owner-badge" title="Created by">' + esc(ownerName) + '</span>';
+				}
 			}
 		} catch (_) { ownerBadge = ''; }
 		return '' +
