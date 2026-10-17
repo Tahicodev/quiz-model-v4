@@ -3,8 +3,9 @@
  *
  * End-to-end hierarchy contract: a teacher creates Math → Addition /
  * Subtraction → Equations (sub-sub), files questions at the deepest level
- * only, and the server guards the tree (leaf-only filing, no cycles,
- * no deleting parents/children with content).
+ * only, and the server guards the tree (leaf-only filing, no cycles).
+ * Deleting a category cascades: the subtree is deleted and every question
+ * under it goes to Uncategorized (category_id NULL).
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -147,20 +148,6 @@ describe('nested categories', () => {
     expect(res.status).toBe(422);
   });
 
-  it('rejects deleting Math while it has subcategories', async () => {
-    const res = await request(app)
-      .delete(`/api/v1/categories/${mathId}`)
-      .set('Authorization', `Bearer ${teacherToken}`);
-    expect(res.status).toBe(422);
-  });
-
-  it('rejects deleting Equations while it contains questions', async () => {
-    const res = await request(app)
-      .delete(`/api/v1/categories/${equationsId}`)
-      .set('Authorization', `Bearer ${teacherToken}`);
-    expect(res.status).toBe(422);
-  });
-
   it('serves the nested tree', async () => {
     const res = await request(app)
       .get('/api/v1/categories/tree')
@@ -199,5 +186,57 @@ describe('nested categories', () => {
       where: { id: subtractionId },
     });
     expect(row.parent_id).toBeNull();
+  });
+
+  it('deleting a parent cascades: subtree deleted, questions uncategorized', async () => {
+    // Fresh branch so the main Math tree above stays intact for the other
+    // assertions: Physics → Mechanics → Kinematics, with a question filed
+    // at the deepest level.
+    const physics = await createCategory(adminToken, { name: 'Physics' });
+    const physicsId = physics.body.id;
+    const mechanics = await createCategory(adminToken, {
+      name: 'Mechanics',
+      parent_id: physicsId,
+    });
+    const mechanicsId = mechanics.body.id;
+    const kinematics = await createCategory(adminToken, {
+      name: 'Kinematics',
+      parent_id: mechanicsId,
+    });
+    const kinematicsId = kinematics.body.id;
+    const qRes = await request(app)
+      .post('/api/v1/questions')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        type: 'mcq',
+        text: 'What is velocity?',
+        answer: 'Speed with direction',
+        category_id: kinematicsId,
+      });
+    expect(qRes.status).toBe(201);
+    const questionIds = [qRes.body.id];
+
+    const res = await request(app)
+      .delete(`/api/v1/categories/${physicsId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(204);
+
+    // The whole subtree is gone.
+    for (const id of [physicsId, mechanicsId, kinematicsId]) {
+      expect(await prisma.category.findUnique({ where: { id } })).toBeNull();
+    }
+    // The question filed under Kinematics is now uncategorized.
+    const questions = await prisma.question.findMany();
+    expect(questions.length).toBeGreaterThan(0);
+    for (const q of questions) {
+      expect([physicsId, mechanicsId, kinematicsId]).not.toContain(
+        q.category_id,
+      );
+    }
+    const detached = await prisma.question.findUnique({
+      where: { id: questionIds[0] },
+    });
+    expect(detached).toBeTruthy();
+    expect(detached.category_id).toBeNull();
   });
 });

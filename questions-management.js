@@ -193,7 +193,15 @@ function createQuestionRow(question, index) {
 	row.setAttribute('data-instruction', question.instruction || ''); // Add instruction attribute
 	row.setAttribute(
 		'data-owner',
-		question.ownerId || question.created_by || question.createdBy || '',
+		// Ownership vocabulary mirror of teacher-filter.js getOwnerId, but
+		// carrying BOTH ids (server stamp first, then any legacy ownerId)
+		// space-separated: filterQuestions() matches on any of them, so the
+		// admin teacher dropdown keeps working even for legacy rows where
+		// only side stamped an id.
+		[String(question.created_by || question.creator_id || question.createdBy || question.creatorId || '').trim(),
+			String(question.ownerId || '').trim()]
+			.filter(Boolean)
+			.join(' ')
 	);
 
 	// Store optionData as JSON string if it exists

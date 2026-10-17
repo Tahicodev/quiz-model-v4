@@ -424,6 +424,32 @@ const httpServer = tlsOpts ? https.createServer(tlsOpts, app) : http.createServe
 // than starting a half-initialized server.
 (async () => {
 	try {
+		// ── Boot: reinitialise all sessions ──────────────────────────────────
+		// Refresh-token rows persisted from a previous run would otherwise
+		// keep blocking fresh logins after every restart with "This account
+		// is already signed in on another device or tab" (SESSION_ACTIVE) —
+		// sessions that died with the old process. Revoke every token on
+		// boot: nobody carries a session across a restart, and no stale row
+		// can ever gate the next login. The hourly cleanup below purges the
+		// now-revoked rows from the table.
+		try {
+			const wiped = await prisma.refreshToken.updateMany({
+				where: { revoked: false },
+				data: { revoked: true },
+			});
+			if (wiped.count > 0) {
+				logger.info(
+					{ count: wiped.count },
+					'Boot: previous sessions revoked — all users must sign in again',
+				);
+			}
+		} catch (err) {
+			// Never block startup over the wipe — worst case is the old
+			// behaviour (stale rows can block a login inside the 30-minute
+			// active window, but they age out).
+			logger.error({ err }, 'Boot session wipe failed');
+		}
+
 		await initSocketServer(httpServer, {
 			gameService: gameSvc,
 			tournamentService: tournamentSvc,

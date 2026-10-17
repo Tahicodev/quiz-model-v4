@@ -4233,8 +4233,10 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 /* ============================================================
    CLASSROOM DEVICES — machine → sessions panel (parent/child).
-   Clicking a machine row opens a dedicated sessions table beneath it
-   (admin only); the machine row itself stays clean.
+   Clicking a machine row opens a dedicated sessions panel beneath it
+   (admin only); the machine row itself stays clean. The panel is a
+   div/grid block that lays out like a table on desktop and becomes a
+   stack of compact cards on phones.
    ============================================================ */
 #devices tr.device-card {
 	cursor: pointer;
@@ -4254,45 +4256,57 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	padding: 0 12px 12px 10px;
 }
 
-#devices .device-sessions-table {
-	width: 100%;
-	border-collapse: separate;
-	border-spacing: 0;
+#devices .device-sessions-panel {
 	background: var(--bg-surface);
 	border: 1px solid var(--bg-surface-alt);
 	border-radius: 10px;
 	overflow: hidden;
 }
 
-#devices .device-sessions-table thead th {
+/* Table-like header row (desktop only). */
+#devices .device-sessions-head,
+#devices .device-session-item {
+	display: grid;
+	grid-template-columns:
+		minmax(150px, 1.4fr)
+		minmax(90px, 0.7fr)
+		minmax(80px, 0.5fr)
+		minmax(110px, 0.8fr)
+		minmax(190px, 1.2fr)
+		48px;
+	align-items: center;
+	gap: 10px;
+}
+
+#devices .device-sessions-head {
+	padding: 8px 14px;
 	font-size: 11px;
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
 	color: #64748b;
-	text-align: left;
-	padding: 8px 14px;
-	border-bottom: 1px solid var(--bg-surface-alt);
 	background: var(--bg-surface-alt);
+	text-align: left;
 }
 
-#devices .device-sessions-table tbody td {
-	padding: 8px 14px;
-	font-size: 13px;
-	vertical-align: middle;
+#devices .device-session-item {
+	padding: 10px 14px;
 }
 
-#devices .device-sessions-table tbody tr + tr td {
+#devices .device-session-item + .device-session-item {
 	border-top: 1px solid var(--bg-body);
 }
 
-#devices .device-sessions-table .exam-action-btn {
-	width: 32px;
-	height: 32px;
+#devices .device-session-empty {
+	padding: 18px 14px;
+	font-size: 13px;
+	color: #64748b;
+	text-align: center;
 }
 
-#devices .device-sessions-table .device-empty {
-	padding: 16px;
+#devices .device-sessions-panel .exam-action-btn {
+	width: 32px;
+	height: 32px;
 }
 
 /* Search + refresh row inside the collapsible filter container. */
@@ -4418,21 +4432,107 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		border-color: rgba(239, 68, 68, 0.45);
 	}
 
-	/* Sessions panel: hugs its machine card (collapsed by default via the
-	   desktop rule above; opened by tapping the card's actions/sheet — on
-	   desktop by clicking the row). */
+	/* Sessions panel: detached card stack beneath the machine card
+	   (collapsed by default; opened from the action sheet via
+	   "View sessions" on phones, by clicking the row on desktop). */
 	#devices tr.device-sessions-subrow.is-expanded {
 		display: block;
-		margin: -8px 16px 0 28px;
-		padding: 8px 14px 6px;
-		background: var(--bg-surface);
-		border: 1px solid var(--bg-surface-alt);
-		border-radius: 0 0 14px 14px;
+		margin: -8px 12px 0 28px;
+		padding: 0 10px 12px;
 	}
 
 	#devices tr.device-sessions-subrow.is-expanded > td {
 		display: block;
 		padding: 0;
+	}
+
+	#devices .device-sessions-panel {
+		background: transparent;
+		border: none;
+		border-radius: 0;
+		overflow: visible;
+	}
+
+	/* Different structure on phones: one compact card per session group —
+	   header row (role badge · user · End action) over a labeled fact
+	   stack. No table/header at all. */
+	#devices .device-sessions-head {
+		display: none;
+	}
+
+	#devices .device-session-item {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		grid-template-areas: 'user role actions';
+		gap: 6px 10px;
+		margin: 10px 0;
+		padding: 12px 14px;
+		background: var(--bg-surface);
+		border: 1px solid var(--bg-surface-alt);
+		border-radius: 14px;
+	}
+
+	#devices .device-session-item + .device-session-item {
+		border-top: 1px solid var(--bg-surface-alt);
+	}
+
+	#devices .device-session-item .device-name {
+		font-size: 1rem;
+		overflow-wrap: anywhere;
+	}
+
+	#devices .sh-user {
+		grid-area: user;
+		min-width: 0;
+	}
+
+	#devices .sh-role {
+		grid-area: role;
+		display: flex;
+		align-items: center;
+	}
+
+	#devices .sh-actions {
+		grid-area: actions;
+		display: flex;
+		align-items: center;
+	}
+
+	/* Fact rows: full-width, labeled small caps lines. */
+	#devices .sh-cell.sh-count,
+	#devices .sh-cell.sh-seen,
+	#devices .sh-cell.sh-ip {
+		grid-column: 1 / -1;
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		font-size: 12px;
+		color: #64748b;
+		overflow-wrap: anywhere;
+	}
+
+	#devices .sh-count::before,
+	#devices .sh-seen::before,
+	#devices .sh-ip::before {
+		content: attr(data-label);
+		flex: 0 0 auto;
+		font-size: 10px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #94a3b8;
+	}
+
+	#devices .sh-ip {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+	}
+
+	#devices .device-sessions-panel .exam-action-btn {
+		width: 38px !important;
+		height: 38px !important;
+		border-radius: 11px !important;
 	}
 
 	#devices tr.device-card.is-blocked td:first-child {

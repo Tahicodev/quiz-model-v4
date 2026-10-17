@@ -726,9 +726,15 @@ function filterQuestions(resetPage = true) {
 
 		const matchesType = selectedType === 'all' || questionType === selectedType;
 
+		// data-owner may carry several ids (server created_by + legacy
+		// ownerId, see createQuestionRow) — a teacher scope matches any of
+		// them so rows authored under either vocabulary stay filterable.
 		const matchesTeacher =
 			!teacherScope ||
-			String(row.getAttribute('data-owner') || '') === String(teacherScope);
+			String(row.getAttribute('data-owner') || '')
+				.split(/\s+/)
+				.filter(Boolean)
+				.includes(String(teacherScope));
 
 		if (matchesSearch && matchesType && matchesTeacher) {
 			row.classList.remove('filtered-out');

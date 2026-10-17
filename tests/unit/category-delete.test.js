@@ -2,11 +2,11 @@
  * tests/unit/category-delete.test.js
  *
  * Regression test for "Deleted 0; 1 failed on server — kept locally so you
- * can retry": deleting a category that still contains questions always failed
- * because the UI sent DELETE /categories/:id while the server still had
- * questions filed under it (the server refuses that), instead of detaching
- * the questions first as the confirm dialog promises ("all questions will
- * become uncategorized").
+ * can retry": deleting a category that has subcategories/questions used to
+ * fail server-side. The contract is now a cascade — DELETE /categories/:id
+ * removes the whole subtree server-side and sends every question under it
+ * to Uncategorized — and the UI mirrors that locally without any
+ * per-question PATCH.
  *
  * category-management.js is a classic browser script (no modules), so it is
  * loaded with node:vm into a sandbox with stubbed browser globals.
@@ -129,19 +129,42 @@ function resetScenario() {
   );
 }
 
+function resetParentScenario() {
+  state.rawCalls = [];
+  state.removeCalls = [];
+  // Question filed under the CHILD (leaf level) proves the local pass
+  // covers the whole subtree, not just the deleted parent.
+  state.questions = [
+    {
+      id: 'q-1',
+      question: 'What is 2+2?',
+      category: 'cat-child',
+      categoryId: 'cat-child',
+      category_id: 'cat-child',
+    },
+  ];
+  state.selected = ['cat-parent'];
+  vm.runInContext(
+    `categories = [
+       { id: 'cat-parent', name: 'Parent', color: '#3b82f6',
+         questionCount: 0, dateCreated: new Date().toISOString(),
+         isSystem: false, created_by: 'teacher-1', ownerId: 'teacher-1' },
+       { id: 'cat-child', name: 'Child', color: '#ef4444',
+         questionCount: 1, dateCreated: new Date().toISOString(),
+         isSystem: false, created_by: 'teacher-1', ownerId: 'teacher-1',
+         parent_id: 'cat-parent' }];
+     currentCategoryId = null;`,
+    ctx,
+  );
+}
+
 describe('category delete with attached questions', () => {
-  it('bulk delete detaches server questions BEFORE deleting the row', async () => {
+  it('bulk delete cascades: one DELETE per selected row, local subtree detach', async () => {
     resetScenario();
     await vm.runInContext('deleteSelectedCategories()', ctx);
 
-    // Questions are detached first (category_id NULL), then the row delete.
-    expect(state.rawCalls).toEqual([
-      {
-        method: 'PATCH',
-        path: '/questions/q-1',
-        body: { category_id: null },
-      },
-    ]);
+    // No per-question PATCH anymore — the server detaches on delete.
+    expect(state.rawCalls).toEqual([]);
     expect(state.removeCalls).toEqual([['categories', 'cat-teacher-1']]);
 
     // Local mirror converges: row gone, question uncategorized.
@@ -151,20 +174,29 @@ describe('category delete with attached questions', () => {
     expect(state.questions[0].category_id).toBeNull();
   });
 
-  it('single delete detaches server questions BEFORE deleting the row', async () => {
+  it('single delete cascades without question PATCHes', async () => {
     resetScenario();
     await vm.runInContext(`deleteCategory('cat-teacher-1')`, ctx);
 
-    expect(state.rawCalls).toEqual([
-      {
-        method: 'PATCH',
-        path: '/questions/q-1',
-        body: { category_id: null },
-      },
-    ]);
+    expect(state.rawCalls).toEqual([]);
     expect(state.removeCalls).toEqual([['categories', 'cat-teacher-1']]);
     const remaining = vm.runInContext('categories', ctx);
     expect(remaining.find((c) => c.id === 'cat-teacher-1')).toBeUndefined();
+    expect(state.questions[0].category_id).toBeNull();
+  });
+
+  it('deleting a parent removes the whole subtree locally and detaches its questions', async () => {
+    resetParentScenario();
+    await vm.runInContext(`deleteCategory('cat-parent')`, ctx);
+
+    // Only ONE DELETE call — the subcategory is removed by the server's
+    // cascade (mirrored locally via the subtree walk).
+    expect(state.removeCalls).toEqual([['categories', 'cat-parent']]);
+    const remaining = vm.runInContext('categories', ctx);
+    expect(remaining.find((c) => c.id === 'cat-parent')).toBeUndefined();
+    expect(remaining.find((c) => c.id === 'cat-child')).toBeUndefined();
+    expect(state.questions[0].category).toBe('');
+    expect(state.questions[0].category_id).toBeNull();
   });
 
   it('delete of an empty category sends no question PATCH', async () => {

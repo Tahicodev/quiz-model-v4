@@ -119,17 +119,49 @@ describe('CategoryService', () => {
     });
   });
 
-  describe('delete()', () => {    it('throws if category has children', async () => {
+  describe('delete()', () => {
+    it('cascades: deletes the subtree children-first and uncategorizes questions', async () => {
+      const PARENT = 'c-parent';
+      const CHILD = 'c-child';
+      const GRAND = 'c-grand';
+      repo.getById.mockResolvedValue({ id: PARENT, name: 'Parent' });
+      repo.getAll.mockImplementation(async (table, opts) => {
+        if (table === 'categories') {
+          const parentId = String(opts?.filters?.parent_id || '');
+          if (parentId === PARENT) return { data: [{ id: CHILD, parent_id: PARENT }], total: 1 };
+          if (parentId === CHILD) return { data: [{ id: GRAND, parent_id: CHILD }], total: 1 };
+          return { data: [], total: 0 };
+        }
+        return {
+          data: [
+            { id: 'q-parent', category_id: PARENT },
+            { id: 'q-grand', category_id: GRAND },
+            { id: 'q-other', category_id: 'c-other' },
+          ],
+          total: 3,
+        };
+      });
+
+      await service.delete(PARENT, ADMIN);
+
+      // Every question under the subtree went to uncategorized.
+      expect(repo.update).toHaveBeenCalledWith('questions', 'q-parent', { category_id: null });
+      expect(repo.update).toHaveBeenCalledWith('questions', 'q-grand', { category_id: null });
+      expect(repo.update).not.toHaveBeenCalledWith('questions', 'q-other', { category_id: null });
+      // Children first, then the root.
+      expect(repo.delete.mock.calls.map((c) => c[1])).toEqual([GRAND, CHILD, PARENT]);
+    });
+
+    it('deletes a category with children', async () => {
       repo.getById.mockResolvedValue({ id: 'c-1', name: 'Parent' });
       repo.getAll.mockResolvedValue({ data: [{ id: 'c-2', parent_id: 'c-1' }], total: 1 });
-      await expect(service.delete('c-1', ADMIN)).rejects.toBeInstanceOf(ValidationError);
+      await service.delete('c-1', ADMIN);
+      expect(repo.delete).toHaveBeenCalledWith('categories', 'c-1');
     });
 
     it('deletes empty leaf category', async () => {
       repo.getById.mockResolvedValue({ id: 'c-1', name: 'Leaf' });
-      repo.getAll
-        .mockResolvedValueOnce({ data: [], total: 0 })  // children count
-        .mockResolvedValueOnce({ data: [], total: 0 });  // questions count
+      repo.getAll.mockResolvedValue({ data: [], total: 0 });
       await service.delete('c-1', ADMIN);
       expect(repo.delete).toHaveBeenCalledWith('categories', 'c-1');
     });

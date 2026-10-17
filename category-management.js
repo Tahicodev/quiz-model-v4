@@ -1336,48 +1336,51 @@ function editCategory(categoryId) {
 	openCategoryModal();
 }
 
-// Detach every question filed under this category on the server
-// (category_id NULL) so the subsequent DELETE /categories/:id is accepted:
-// the server refuses to delete a category that still contains questions.
-// Local-only questions (no server id) are skipped — they detach with the
-// local pass. A per-question 404 is tolerated (already gone server-side).
-async function detachCategoryQuestionsOnServer(category) {
-	const categoryId = category?.id ?? category;
-	const categoryName = category?.name ?? '';
-	const savedQuestions =
-		window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
-	const attached = savedQuestions.filter(
-		(q) =>
-			q &&
-			q.id &&
-			(String(q.category || '') === String(categoryId) ||
-				String(q.category || '') === String(categoryName) ||
-				String(q.categoryId || '') === String(categoryId) ||
-				String(q.category_id || '') === String(categoryId)),
-	);
-	if (!attached.length) return;
-	if (!window.API || typeof window.API.raw !== 'function') {
-		throw new Error('Question API is unavailable. Refresh the page and try again.');
+// Subtree (the category itself + every descendant) member ids AND legacy
+// display names, so the local question pass can detach questions that
+// carry either spelling. Server mirror of this cascade lives in
+// CategoryService.delete — deleting a category takes the whole branch.
+function getCategorySubtree(categoryId) {
+	const root = getCategoryById(categoryId);
+	const names = root && root.name ? [root.name] : [];
+	const descendantIds = getCategoryDescendantIds(categoryId);
+	for (const id of descendantIds) {
+		const child = getCategoryById(id);
+		if (child?.name) names.push(child.name);
 	}
-	for (const question of attached) {
-		try {
-			await window.API.raw(
-				'PATCH',
-				`/questions/${encodeURIComponent(question.id)}`,
-				{ category_id: null },
-			);
-		} catch (err) {
-			// Already detached/gone server-side — nothing to do.
-			if (err?.status === 404) continue;
-			throw err;
-		}
-		question.category = '';
-		question.categoryId = '';
-		question.category_id = null;
-	}
-	window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
+	return {
+		ids: [String(categoryId), ...descendantIds.map(String)],
+		names,
+	};
 }
 
+// Local pass: every question filed under ANY member of the subtree
+// (this category or one of its subcategories, by id or legacy name) is
+// sent to Uncategorized (category_id NULL).
+function detachCategorySubtreeQuestions(subtreeIds, subtreeNames, questions) {
+	const ids = new Set(subtreeIds || []);
+	const names = subtreeNames || [];
+	(questions || []).forEach((question) => {
+		if (!question) return;
+		const catRef = String(question.category ?? '');
+		const catId = String(question.categoryId ?? '');
+		const catIdSnake = String(question.category_id ?? '');
+		if (
+			ids.has(catRef) ||
+			names.includes(catRef) ||
+			ids.has(catId) ||
+			ids.has(catIdSnake)
+		) {
+			question.category = '';
+			question.categoryId = '';
+			question.category_id = null;
+		}
+	});
+}
+
+// The server no longer requires pre-detached questions: DELETE
+// /categories/:id cascades (subtree deleted, their questions go to
+// Uncategorized), so a single DELETE per category is enough.
 async function deleteCategory(categoryId) {
 	const category = categories.find((c) => c.id === categoryId);
 
@@ -1393,25 +1396,12 @@ async function deleteCategory(categoryId) {
 
 	if (
 		confirm(
-			`Are you sure you want to delete "${category.name}"? All questions in this category will become uncategorized.`,
+			`Are you sure you want to delete "${category.name}"? Its subcategories (if any) are deleted too, and all their questions become uncategorized.`,
 		)
 	) {
-		// Server-first: detach every server-side question (category_id NULL)
-		// BEFORE deleting the row — the server refuses to delete a category
-		// that still contains questions. A 404 means the row is already gone
-		// server-side, so we still finish the local removal.
+		// Server-first. A 404 means the row is already gone server-side, so
+		// we still finish the local pass.
 		if (window.API && typeof window.API.remove === 'function') {
-			try {
-				await detachCategoryQuestionsOnServer(category);
-			} catch (apiErr) {
-				console.warn('[categories] question detach failed:', apiErr);
-				showToast(
-					'Cannot delete category: ' +
-						(apiErr?.message || 'network error'),
-					'error',
-				);
-				return;
-			}
 			try {
 				await window.API.remove('categories', categoryId);
 			} catch (apiErr) {
@@ -1427,29 +1417,25 @@ async function deleteCategory(categoryId) {
 			}
 		}
 
-		// Remove category from questions (all key spellings)
+		// Local: detach the whole subtree (ids or legacy names), then remove
+		// every subtree row.
+		const subtree = getCategorySubtree(categoryId);
 		const savedQuestions =
 			window.__DI_CONTAINER__.repo.getAll_sync('questions');
-		const questions = savedQuestions || [];
-
-		questions.forEach((question) => {
-			if (
-				question.category === category.name ||
-				question.category === category.id ||
-				question.categoryId === category.id ||
-				question.category_id === category.id
-			) {
-				question.category = '';
-				question.categoryId = '';
-				question.category_id = null;
-			}
-		});
-
+		detachCategorySubtreeQuestions(
+			subtree.ids,
+			subtree.names,
+			savedQuestions,
+		);
 		window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
 
-		// Remove category
-		categories = categories.filter((c) => c.id !== categoryId);
-		await removeCategoryTraining(categoryId);
+		const subtreeIds = new Set(subtree.ids);
+		categories = categories.filter(
+			(c) => !subtreeIds.has(String(c.id)),
+		);
+		for (const id of subtree.ids) {
+			await removeCategoryTraining(id);
+		}
 		saveCategories();
 		updateCategoryList();
 		loadCategoriesIntoFilters();
@@ -5422,25 +5408,22 @@ async function deleteSelectedCategories() {
 		return;
 	}
 
-	// Server-first per row (same contract as deleteCategory): detach the
-	// row's questions so the server accepts the delete, then delete the row.
-	// A 404 on delete means the row is already gone server-side and counts
-	// as deleted. Then a single local pass so counts/questions stay
-	// consistent.
+	// Server-first per row (same contract as deleteCategory): the server
+	// cascades each delete (whole subtree removed, their questions sent to
+	// Uncategorized), so a 404 simply means the row is already gone and
+	// still counts as deleted. Then a single local pass so
+	// counts/questions stay consistent.
 	const failed = [];
 	const failureReasons = [];
-	for (const categoryId of deletable) {
-		const category = categories.find(
-			(c) => String(c.id) === String(categoryId),
-		);
-		if (window.API && typeof window.API.remove === 'function') {
+	const deleted = [];
+	if (window.API && typeof window.API.remove === 'function') {
+		for (const categoryId of deletable) {
 			try {
-				if (category) {
-					await detachCategoryQuestionsOnServer(category);
-				}
 				await window.API.remove('categories', categoryId);
+				deleted.push(String(categoryId));
 			} catch (apiErr) {
 				if (apiErr?.status === 404) {
+					deleted.push(String(categoryId));
 					continue;
 				}
 				console.warn('[categories] bulk API delete failed:', apiErr);
@@ -5451,40 +5434,54 @@ async function deleteSelectedCategories() {
 		}
 	}
 
-	const okIds = new Set(deletable.filter((id) => !failed.includes(id)));
-	if (okIds.size) {
+	// Local pass over every deleted category's subtree: descendants the
+	// server removed via cascade 404 locally here (they never get their own
+	// DELETE call), so questions filed under them detach by id/name.
+	const subtreeIds = new Set(deleted);
+	const subtreeNames = [];
+	if (deleted.length) {
+		for (const id of deleted) {
+			const subtree = getCategorySubtree(id);
+			for (const cid of subtree.ids) subtreeIds.add(String(cid));
+			subtreeNames.push(...subtree.names);
+		}
+	}
+
+	if (deleted.length) {
 		const savedQuestions =
 			window.__DI_CONTAINER__.repo.getAll_sync('questions') || [];
-		savedQuestions.forEach((question) => {
-			if (okIds.has(String(question.category))) question.category = '';
-			if (okIds.has(String(question.categoryId))) question.categoryId = '';
-			if (okIds.has(String(question.category_id)))
-				question.category_id = null;
-		});
+		detachCategorySubtreeQuestions(
+			subtreeIds,
+			subtreeNames,
+			savedQuestions,
+		);
 		window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
-		categories = categories.filter((c) => !okIds.has(String(c.id)));
-		for (const id of okIds) {
-			await removeCategoryTraining(id);
+		categories = categories.filter(
+			(c) => !subtreeIds.has(String(c.id)),
+		);
+		for (const id of subtreeIds) {
+			await removeCategoryTraining(String(id));
 		}
 		saveCategories();
 		updateCategoryList();
 		loadCategoriesIntoFilters();
 		if (window.BulkSelect) window.BulkSelect.clear('categories');
 		if (typeof logActivity === 'function') {
-			logActivity('category', `${okIds.size} Categories`, 'deleted', {
-				count: okIds.size,
+			logActivity('category', `${deleted.length} Categories`, 'deleted', {
+				count: deleted.length,
 			});
 		}
 	}
+	const okCount = deleted.length;
 	if (failed.length) {
 		const cause = failureReasons.find(Boolean);
 		showToast(
-			`Deleted ${okIds.size}; ${failed.length} failed on server \u2014 kept locally so you can retry` +
+			`Deleted ${okCount}; ${failed.length} failed on server \u2014 kept locally so you can retry` +
 				(cause ? `: ${cause}` : ''),
 			'error',
 		);
 	} else {
-		showToast(`Deleted ${okIds.size} categor${okIds.size === 1 ? 'y' : 'ies'}!`);
+		showToast(`Deleted ${okCount} categor${okCount === 1 ? 'y' : 'ies'}!`);
 	}
 }
 

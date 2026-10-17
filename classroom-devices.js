@@ -425,9 +425,19 @@
 					onClick: function () { setStatus(d.id, 'blocked'); },
 				};
 		// ONE End-sessions action PER user holding a session on this machine
-		// (admin only) — mirrors the per-user buttons in the sub-row.
+		// (admin only) — mirrors the per-user buttons in the sessions panel.
+		// The first item opens the sessions panel itself (the mobile way to
+		// "click the machine": the row tap opens this sheet on phones).
 		var sessionActions = [];
 		if (isAdminSession()) {
+			var sessionCount = deviceSessions(d).reduce(function (n, e) {
+				return n + ((e.sessions || []).length || 0);
+			}, 0);
+			sessionActions.push({
+				label: 'View sessions (' + sessionCount + ')',
+				icon: sheetIcon(ICONS.sessions),
+				onClick: function () { toggleSessions(d.id); },
+			});
 			deviceSessionUsers(d).forEach(function (t) {
 				sessionActions.push({
 					label: 'End sessions (' + t.name + ')',
@@ -728,14 +738,27 @@
 	}
 
 	// Embedded sessions panel rendered right beneath its machine row
-	// (colspan across the whole table). Clicking the machine row opens
-	///closes it. Session data lives in its OWN table here — User · Role ·
-	// Sessions · Last seen · IP · Device · Actions — separate from the
-	// machine columns even though they share the machine.
+	// (colspan across the whole table). Clicking the machine row opens/closes
+	// it. Session data lives in its OWN block here — User · Role · Sessions ·
+	// Last seen · IP · Device · Actions — separate from the machine columns
+	// even though they share the machine.
+	// The panel is a div/grid panel (NOT a nested <table>): on desktop it lays
+	// out like a table, on phones each session group becomes a compact card
+	// with a labeled fact stack. Per-user End button only — never the whole
+	// machine.
 	function sessionSubRowHtml(d) {
 		if (!isAdminSession()) return '';
 		var entries = deviceSessions(d);
 		var isOpen = devicesExpanded.has(String(d.id));
+		var head =
+			'<div class="device-sessions-head">' +
+			'<div class="sh-head">User</div>' +
+			'<div class="sh-head">Role</div>' +
+			'<div class="sh-head">Sessions</div>' +
+			'<div class="sh-head">Last seen</div>' +
+			'<div class="sh-head">IP · Device</div>' +
+			'<div class="sh-head">Actions</div>' +
+			'</div>';
 		var rows;
 		if (entries.length) {
 			rows = entries
@@ -766,38 +789,36 @@
 								'</button>'
 							: '';
 					return (
-						'<tr>' +
-						'<td data-label="User"><div class="device-name">' + name + '</div>' +
+						'<div class="device-session-item">' +
+						'<div class="sh-cell sh-user"><div class="device-name">' + name + '</div>' +
 						(u.username && u.name && u.username !== u.name
 							? '<div class="device-platform text-muted">' + esc(u.username) + '</div>'
 							: '') +
-						'</td>' +
-						'<td data-label="Role">' + badge + '</td>' +
-						'<td data-label="Sessions"><strong>' + sessions.length + '</strong></td>' +
-						'<td data-label="Last seen">' + relativeTime(last.created_at) + '</td>' +
-						'<td data-label="IP · Device"><div>' + esc(last.ip_address || '—') + '</div>' +
+						'</div>' +
+						'<div class="sh-cell sh-role">' + badge + '</div>' +
+						'<div class="sh-cell sh-count" data-label="Sessions"><strong>' + sessions.length + '</strong></div>' +
+						'<div class="sh-cell sh-seen" data-label="Last seen">' + relativeTime(last.created_at) + '</div>' +
+						'<div class="sh-cell sh-ip" data-label="IP · Device"><div>' + esc(last.ip_address || '—') + '</div>' +
 						(last.user_agent
 							? '<div class="device-platform text-muted">' + esc(shortAgent(last.user_agent)) + '</div>'
 							: '') +
-						'</td>' +
-						'<td data-label="Actions">' + endBtn + '</td>' +
-						'</tr>'
+						'</div>' +
+						'<div class="sh-cell sh-actions">' + endBtn + '</div>' +
+						'</div>'
 					);
 				})
 				.join('');
 		} else {
 			rows =
-				'<tr><td colspan="6" class="text-muted device-empty">No live sign-in session comes from this machine.</td></tr>';
+				'<div class="device-session-empty">No live sign-in session comes from this machine.</div>';
 		}
 		return (
 			'<tr class="device-sessions-subrow' + (isOpen ? ' is-expanded' : '') + '">' +
 			'<td colspan="' + DEVICES_COLS + '">' +
-			'<table class="device-sessions-table">' +
-			'<thead><tr>' +
-			'<th>User</th><th>Role</th><th>Sessions</th><th>Last seen</th><th>IP · Device</th><th>Actions</th>' +
-			'</tr></thead>' +
-			'<tbody>' + rows + '</tbody>' +
-			'</table></td></tr>'
+			'<div class="device-sessions-panel">' +
+			head +
+			rows +
+			'</div></td></tr>'
 		);
 	}
 
