@@ -6,8 +6,9 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { ROLES } from '../../shared/constants.js';
-import { ForbiddenError } from '../../shared/errors.js';
+import { ForbiddenError, NotFoundError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
+import { gradeAttempt, grade20, isPassingGrade20 } from '../services/GradingService.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -60,6 +61,140 @@ router.get('/:id', async (req, res, next) => {
     res.json(result);
   } catch (err) { next(err); }
 });
+
+// GET /api/v1/results/:id/corrections — server-graded answer breakdown for a
+// completed attempt (the "Answer Breakdown & Corrections" view in the student
+// workspace).
+//
+// Student browsers never receive question `answer`/`explanation` fields (the
+// bootstrap payload strips them as an anti-cheat measure), so the workspace
+// cannot grade locally. This endpoint grades the persisted attempt
+// server-side and reveals the correct answers + explanations ONLY for:
+//   - training/practice attempts (always reviewable), and
+//   - exam attempts whose preset explicitly enables explanations
+//     (`showExplanations === true`, mirroring the workspace gate).
+// Instructors may review any result in their tenant (they already have full
+// question-bank access). Every reveal is bound to a persisted attempt row,
+// so answer harvesting is audit-visible to teachers via the results list.
+router.get('/:id/corrections', async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const result = await repo.modelFor('results').findFirst({
+      where: { id: req.params.id, school_id: req.schoolId },
+    });
+    if (!result) throw new NotFoundError('Result');
+    assertSelfOrInstructor(req, result.user_id);
+
+    const answersMap = extractAttemptAnswers(result.answers_json);
+    const questionIds = Object.keys(answersMap).slice(0, 200);
+    if (!questionIds.length) {
+      throw new NotFoundError('Attempt answers');
+    }
+
+    const mode = String(result.mode || 'training').toLowerCase();
+    const isExamAttempt = mode === 'exam' || Boolean(result.exam_id);
+    if (isExamAttempt && !isInstructor(req)) {
+      const allowed = await examAllowsCorrections(repo, result.exam_id, req.schoolId);
+      if (!allowed) {
+        throw new ForbiddenError('Corrections are not enabled for this exam');
+      }
+    }
+
+    const rows = await repo.modelFor('questions').findMany({
+      where: { id: { in: questionIds }, school_id: req.schoolId },
+    });
+    const byId = new Map((rows || []).map((q) => [String(q.id), q]));
+    // Preserve the attempt's question order; drop questions that no longer
+    // exist (deleted bank rows must not break the breakdown).
+    const ordered = questionIds.map((qid) => byId.get(String(qid))).filter(Boolean);
+
+    const { score, total, items } = gradeAttempt(ordered, answersMap);
+    const grade = grade20(score, total);
+    res.json({
+      resultId: result.id,
+      mode: result.mode || 'training',
+      score,
+      total,
+      grade20: grade,
+      passed: isPassingGrade20(grade),
+      items: items.map((item) => ({
+        questionId: item.questionId,
+        type: item.type,
+        question: item.question,
+        options: item.options,
+        userAnswer: item.userAnswer,
+        correctAnswer: item.correctAnswer,
+        correct: item.correct,
+        explanation: item.explanation,
+        points: item.points,
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
+function parseJsonObject(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// The persisted answers take several shapes depending on the write path:
+//  - POST /results stores the workspace `{ questionId: userAnswer }` map
+//    verbatim in `answers_json`;
+//  - POST /bulk/results wraps it as `answersPayload.userAnswers` alongside
+//    numeric/curated metadata (totalQuestions, grade20, …) which must NOT be
+//    mistaken for answers;
+//  - legacy writers nest it under `userAnswers`/`answers`.
+// Accept all three; ignore non-string values (metadata, not answers).
+function extractAttemptAnswers(answersJson) {
+  const root = parseJsonObject(answersJson);
+  if (!root) return {};
+  const pickEntries = (obj) => {
+    const out = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if ((typeof value === 'string' || typeof value === 'number') && String(key).trim()) {
+        out[String(key).trim()] = String(value);
+      }
+    }
+    return out;
+  };
+  for (const key of ['userAnswers', 'answers']) {
+    const nested = parseJsonObject(root[key]);
+    if (nested) {
+      const out = pickEntries(nested);
+      if (Object.keys(out).length) return out;
+    }
+  }
+  // Verbatim map shape has no wrapper keys at all. When a wrapper key is
+  // present (even null — bulk metadata shape), the root itself is metadata.
+  if ('userAnswers' in root || 'answers' in root) return {};
+  return pickEntries(root);
+}
+
+// Exam corrections follow the workspace gate: only when the exam's preset
+// explicitly enables explanations. The preset snapshot travels on the exam
+// row (`options_json.presetSnapshot`) so student devices can enforce the
+// same rule offline.
+async function examAllowsCorrections(repo, examId, schoolId) {
+  if (!examId) return false;
+  try {
+    const exam = await repo.modelFor('exams').findFirst({
+      where: { id: String(examId), school_id: schoolId },
+    });
+    if (!exam) return false;
+    const legacy = parseJsonObject(exam.options_json) || {};
+    const snapshot = legacy.presetSnapshot;
+    if (!snapshot || typeof snapshot !== 'object') return false;
+    return snapshot.showExplanations === true;
+  } catch (_) {
+    return false;
+  }
+}
 
 router.get('/exam/:examId/stats', async (req, res, next) => {
   try {

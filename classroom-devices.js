@@ -11,17 +11,31 @@
  *
  * Presence (green "online" dot) comes from the shared `clients:update` socket
  * broadcast; the authoritative list/status always comes from /api/v1/devices.
+ *
+ * Machines + sessions, linked by their common machine: each device renders
+ * as a clean 7-column row, and CLICKING the machine opens a dedicated
+ * sessions table right beneath it (User · Role · Sessions · Last seen ·
+ * IP · Device · End action) — session data lives in its own table, the
+ * machine row stays clean. Each user line/button ends only that user's
+ * sessions. Admin only: teachers get plain rows with no session panel (the
+ * endpoint 403s for them, so it is never fetched).
  */
+
 (function () {
 	'use strict';
 
 	var API_BASE = (window.APP_CONFIG && window.APP_CONFIG.apiUrl) || '/api/v1';
 	var devices = [];
 	var students = [];
+	var liveSessions = [];
+	// Machine ids whose sessions panel is currently open (row click).
+	var devicesExpanded = new Set();
 	var onlineIds = new Set();
 	var socketAttached = false;
 	var loading = false;
-
+	// Columns in the machine rows (Machine, Type, IP, User, Status,
+	// Last seen, Actions) — session panels span all of them.
+	var DEVICES_COLS = 7;
 	function token() {
 		if (window.__authToken) return window.__authToken;
 		try {
@@ -102,6 +116,26 @@
 			default:
 				return '❔ Inconnu';
 		}
+	}
+
+	// Short UA family for a session — "Windows · Chrome" style.
+	function shortAgent(ua) {
+		var s = String(ua || '');
+		if (!s) return '—';
+		var os = '—';
+		var osMatch = s.match(/\(([^)]+)\)/);
+		if (osMatch) {
+			var plat = osMatch[1];
+			if (/windows/i.test(plat)) os = 'Windows';
+			else if (/android/i.test(plat)) os = 'Android';
+			else if (/iphone|ipad/i.test(plat)) os = 'iOS';
+			else if (/mac os/i.test(plat)) os = 'macOS';
+			else if (/linux/i.test(plat)) os = 'Linux';
+		}
+		var browser = '';
+		var bMatch = s.match(/(Chrome|Firefox|Safari|Edg|OPR)\/[\d.]+/);
+		if (bMatch) browser = bMatch[1].replace('OPR', 'Opera').replace('Edg', 'Edge');
+		return (os + (browser ? ' · ' + browser : '')).trim();
 	}
 
 	function studentName(userId) {
@@ -219,18 +253,33 @@
 		var body = document.getElementById('devicesTableBody');
 		if (body) {
 			body.innerHTML =
-				'<tr><td colspan="7" class="text-muted device-empty">Chargement…</td></tr>';
+				'<tr><td colspan="' + DEVICES_COLS + '" class="text-muted device-empty">Chargement…</td></tr>';
 		}
 		try {
 			attachSocket();
 			attachSheetListener();
+			attachRowToggle();
 			await loadStudents();
 			devices = (await api('/devices')) || [];
+			// Live sign-in sessions power the per-machine "Sessions" column and
+			// the admin End-sessions actions. Admin-only: /auth/sessions/live
+			// 403s for teachers — skip it entirely so the tab loads fine for them.
+			if (isAdminSession()) {
+				try {
+					var live = await api('/auth/sessions/live');
+					liveSessions = Array.isArray(live) ? live : [];
+				} catch (e) {
+					console.error('[ClassroomDevices] live sessions load failed:', e);
+					liveSessions = [];
+				}
+			} else {
+				liveSessions = [];
+			}
 			render();
 		} catch (err) {
 			if (body) {
 				body.innerHTML =
-					'<tr><td colspan="7" class="text-muted device-empty">Échec du chargement: ' +
+					'<tr><td colspan="' + DEVICES_COLS + '" class="text-muted device-empty">Échec du chargement: ' +
 					esc(err.message) +
 					'</td></tr>';
 			}
@@ -362,7 +411,6 @@
 		if (!window.MobileActionSheet || !d) return;
 		var blocked = d.status === 'blocked';
 		var hostname = d.hostname || d.note || '(sans nom)';
-		var linked = deviceUser(d);
 		var statusAction = blocked
 			? {
 					label: 'Autoriser',
@@ -376,20 +424,22 @@
 					variant: 'danger',
 					onClick: function () { setStatus(d.id, 'blocked'); },
 				};
+		// ONE End-sessions action PER user holding a session on this machine
+		// (admin only) — mirrors the per-user buttons in the sub-row.
+		var sessionActions = [];
+		if (isAdminSession()) {
+			deviceSessionUsers(d).forEach(function (t) {
+				sessionActions.push({
+					label: 'End sessions (' + t.name + ')',
+					icon: sheetIcon(ICONS.sessions),
+					onClick: function () { endUserSessions(t.id, t.name); },
+				});
+			});
+		}
 		window.MobileActionSheet.open('Appareil : ' + hostname, [
 			// Blocking is a student-exam control — never offered on staff rows.
 			...(isStaffRow(d) ? [] : [statusAction]),
-			...(isAdminSession() && linked && linked.id
-				? [
-						{
-							label: 'End sessions (' + (linked.name || 'user') + ')',
-							icon: sheetIcon(ICONS.sessions),
-							onClick: function () {
-								endSessions(d.id);
-							},
-						},
-					]
-				: []),
+			...sessionActions,
 			{
 				label: 'Renommer',
 				icon: sheetIcon(ICONS.rename),
@@ -425,6 +475,27 @@
 		});
 	}
 
+	var rowToggleAttached = false;
+
+	// Desktop: clicking anywhere on a machine row opens/closes its sessions
+	// panel (controls ignored). Mobile keeps the tap-opens-action-sheet
+	// behavior above.
+	function attachRowToggle() {
+		if (rowToggleAttached) return;
+		var tbody = document.getElementById('devicesTableBody');
+		if (!tbody) return;
+		rowToggleAttached = true;
+		tbody.addEventListener('click', function (e) {
+			if (window.innerWidth <= 768) return;
+			if (e.target.closest('button, select, input, a, textarea, label')) return;
+			var row = e.target.closest('tr.device-card');
+			if (!row) return;
+			var id = row.getAttribute('data-device-id');
+			if (!id) return;
+			toggleSessions(id);
+		});
+	}
+
 	function render() {
 		var body = document.getElementById('devicesTableBody');
 		if (!body) return;
@@ -435,7 +506,7 @@
 
 		if (!rows.length) {
 			body.innerHTML =
-				'<tr><td colspan="7" class="text-muted device-empty">' +
+				'<tr><td colspan="' + DEVICES_COLS + '" class="text-muted device-empty">' +
 				(devices.length
 					? 'Aucun appareil ne correspond à la recherche.'
 					: "Aucun appareil pour l'instant — ils apparaissent dès qu'un élève se connecte.") +
@@ -451,6 +522,11 @@
 				var hostname = d.hostname || d.note || '(sans nom)';
 				var linkedUser = deviceUser(d);
 				var staffRow = isStaffRow(d);
+				// Total live sign-in sessions reaching this machine — shown as
+				// a count badge in the "Machine" column (0 → no badge).
+				var sessionCount = deviceSessions(d).reduce(function (n, e) {
+					return n + ((e.sessions || []).length || 0);
+				}, 0);
 
 				var userCellHtml;
 				if (staffRow) {
@@ -485,25 +561,21 @@
 						'</select>';
 				}
 
-				var endSessionsBtnHtml =
-					isAdminSession() && linkedUser && linkedUser.id
-						? '<button type="button" class="exam-action-btn exam-copy-btn" title="End all sign-in sessions for ' +
-							esc(linkedUser.name || linkedUser.id) +
-							'" onclick="window.ClassroomDevices.endSessions(\'' +
-							id +
-							'\')">' + ICONS.sessions + '</button>'
-						: '';
-
 				return (
 					'<tr class="device-card' + (blocked ? ' is-blocked' : '') + (staffRow ? ' is-staff' : '') + '" data-device-id="' + id + '">' +
 					'<td class="device-cell-machine">' +
 					'<span class="device-dot ' + (online ? 'is-online' : 'is-offline') + '" title="' + (online ? 'En ligne' : 'Hors ligne') + '"></span>' +
-					'<div class="device-id-block"><div class="device-name">' + esc(hostname) + '</div>' +
+					'<div class="device-id-block"><div class="device-name">' + esc(hostname) +
+					(sessionCount
+						? ' <span class="device-sessions-count-badge" title="' + sessionCount + ' live sign-in session' + (sessionCount > 1 ? 's' : '') + '">' + sessionCount + '</span>'
+						: '') +
+					'</div>' +
 					(d.platform ? '<div class="device-platform text-muted">' + esc(d.platform) + '</div>' : '') +
-					'</div></td>' +
+					'</div>' +
+					'</td>' +
 					'<td data-label="Type">' + typeLabel(d.device_type) + '</td>' +
 					'<td data-label="IP">' + esc(d.last_ip || '—') + '</td>' +
-					'<td data-label="Élève">' + userCellHtml + '</td>' +
+					'<td data-label="Student">' + userCellHtml + '</td>' +
 					'<td data-label="Statut"><span class="badge ' +
 					(blocked ? 'device-badge-blocked' : 'device-badge-allowed') +
 					'">' +
@@ -516,7 +588,6 @@
 						: (blocked
 							? '<button type="button" class="exam-action-btn exam-copy-btn" title="Autoriser" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'allowed\')">' + ICONS.allow + '</button>'
 							: '<button type="button" class="exam-action-btn exam-delete-btn" title="Bloquer" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'blocked\')">' + ICONS.block + '</button>')) +
-					endSessionsBtnHtml +
 					'<button type="button" class="exam-action-btn exam-edit-btn" title="Renommer" onclick="window.ClassroomDevices.rename(\'' +
 					id +
 					'\')">' + ICONS.rename + '</button>' +
@@ -524,10 +595,12 @@
 					id +
 					'\')">' + ICONS.forget + '</button>' +
 					'</div></td>' +
-					'</tr>'
+					'</tr>' +
+					sessionSubRowHtml(d)
 				);
 			})
 			.join('');
+
 		body.innerHTML = html;
 	}
 
@@ -603,43 +676,174 @@
 		}
 	}
 
-	// End every sign-in session of the user linked to this machine (stuck
-	// "already signed in" accounts). Admin-only; the server enforces it too.
-	async function endSessions(id) {
+	// End the sign-in sessions of ONE user (a line of the machine's session
+	// sub-row) — never the whole machine. Admin-only; the server enforces
+	// it too.
+	async function endUserSessions(userId, label) {
 		if (!isAdminSession()) {
 			toast('Only admins can end sessions', 'error');
 			return;
 		}
-		var device = devices.find(function (d) {
-			return String(d.id) === String(id);
-		});
-		if (!device) {
-			toast('Appareil introuvable', 'error');
+		if (!userId) {
+			toast('No user selected', 'error');
 			return;
 		}
-		var linked = deviceUser(device);
-		if (!linked || !linked.id) {
-			toast('No user linked to this machine', 'error');
-			return;
-		}
-		var label = linked.name || linked.id;
+		var name = label || String(userId);
 		if (
 			!window.confirm(
 				'End all sign-in sessions for "' +
-					label +
+					name +
 					'"?\n\nThey will be signed out immediately and can sign in again.',
 			)
 		) {
 			return;
 		}
 		try {
-			var res = await api('/users/' + encodeURIComponent(linked.id) + '/sessions', {
+			var res = await api('/users/' + encodeURIComponent(userId) + '/sessions', {
 				method: 'DELETE',
 			});
 			var count = res && res.revoked != null ? res.revoked : '?';
-			toast('Ended ' + count + ' session(s) for "' + label + '"', 'success');
+			toast('Ended ' + count + ' session(s) for "' + name + '"', 'success');
+			await refreshSessions();
 		} catch (err) {
 			toast('Échec: ' + err.message, 'error');
+		}
+	}
+
+	// Live sign-in sessions that belong to a machine: an entry matches when
+	// its user is the machine's assigned user OR one of its sessions was
+	// seen from the machine's last known IP. Session rows are NOT device
+	// rows — this is what makes stuck "already signed in" accounts
+	// discoverable on the very machine they signed in from.
+	function deviceSessions(d) {
+		if (!d || !liveSessions.length) return [];
+		var ip = String(d.last_ip || '');
+		var uid = d.assigned_user_id ? String(d.assigned_user_id) : '';
+		return liveSessions.filter(function (entry) {
+			if (uid && String((entry.user || {}).id || '') === uid) return true;
+			return (entry.sessions || []).some(function (s) {
+				return s.ip_address && String(s.ip_address) === ip;
+			});
+		});
+	}
+
+	// Embedded sessions panel rendered right beneath its machine row
+	// (colspan across the whole table). Clicking the machine row opens
+	///closes it. Session data lives in its OWN table here — User · Role ·
+	// Sessions · Last seen · IP · Device · Actions — separate from the
+	// machine columns even though they share the machine.
+	function sessionSubRowHtml(d) {
+		if (!isAdminSession()) return '';
+		var entries = deviceSessions(d);
+		var isOpen = devicesExpanded.has(String(d.id));
+		var rows;
+		if (entries.length) {
+			rows = entries
+				.map(function (entry) {
+					var u = entry.user || {};
+					var role = String(u.role || '').toLowerCase();
+					var badge =
+						role === 'admin' || role === 'super_admin'
+							? '<span class="device-staff-badge">Admin</span>'
+							: role === 'teacher'
+								? '<span class="device-staff-badge">Teacher</span>'
+								: '<span class="badge device-badge-allowed">Student</span>';
+					var sessions = Array.isArray(entry.sessions) ? entry.sessions : [];
+					var last = sessions[0] || {};
+					var name = esc(u.name || u.username || u.id || '');
+					// ONE End-sessions button PER USER — ends only that user's
+					// sessions, never the whole machine's.
+					var endBtn =
+						u.id
+							? '<button type="button" class="exam-action-btn exam-copy-btn" title="End all sign-in sessions for ' +
+								name +
+								'" onclick="window.ClassroomDevices.endUserSessions(\'' +
+								esc(u.id) +
+								'\', \'' +
+								name.replace(/'/g, "\\'") +
+								'\')">' +
+								ICONS.sessions +
+								'</button>'
+							: '';
+					return (
+						'<tr>' +
+						'<td data-label="User"><div class="device-name">' + name + '</div>' +
+						(u.username && u.name && u.username !== u.name
+							? '<div class="device-platform text-muted">' + esc(u.username) + '</div>'
+							: '') +
+						'</td>' +
+						'<td data-label="Role">' + badge + '</td>' +
+						'<td data-label="Sessions"><strong>' + sessions.length + '</strong></td>' +
+						'<td data-label="Last seen">' + relativeTime(last.created_at) + '</td>' +
+						'<td data-label="IP · Device"><div>' + esc(last.ip_address || '—') + '</div>' +
+						(last.user_agent
+							? '<div class="device-platform text-muted">' + esc(shortAgent(last.user_agent)) + '</div>'
+							: '') +
+						'</td>' +
+						'<td data-label="Actions">' + endBtn + '</td>' +
+						'</tr>'
+					);
+				})
+				.join('');
+		} else {
+			rows =
+				'<tr><td colspan="6" class="text-muted device-empty">No live sign-in session comes from this machine.</td></tr>';
+		}
+		return (
+			'<tr class="device-sessions-subrow' + (isOpen ? ' is-expanded' : '') + '">' +
+			'<td colspan="' + DEVICES_COLS + '">' +
+			'<table class="device-sessions-table">' +
+			'<thead><tr>' +
+			'<th>User</th><th>Role</th><th>Sessions</th><th>Last seen</th><th>IP · Device</th><th>Actions</th>' +
+			'</tr></thead>' +
+			'<tbody>' + rows + '</tbody>' +
+			'</table></td></tr>'
+		);
+	}
+
+	// Users holding a live sign-in on this machine (linked user first),
+	// de-duplicated — the one "End sessions" action ends all of them.
+	function deviceSessionUsers(d) {
+		var linked = deviceUser(d);
+		var seen = {};
+		var targets = [];
+		if (linked && linked.id) {
+			seen[String(linked.id)] = true;
+			targets.push({ id: linked.id, name: linked.name || String(linked.id) });
+		}
+		deviceSessions(d).forEach(function (entry) {
+			var u = entry.user || {};
+			var uid = String(u.id || '');
+			if (!uid || seen[uid]) return;
+			seen[uid] = true;
+			targets.push({ id: uid, name: u.name || u.username || uid });
+		});
+		return targets;
+	}
+
+	// Expand/collapse the session sub-row of one machine.
+	function toggleSessions(id) {
+		var key = String(id);
+		if (devicesExpanded.has(key)) {
+			devicesExpanded.delete(key);
+		} else {
+			devicesExpanded.add(key);
+		}
+		render();
+	}
+
+	// Manual refresh of the live sessions (Rescue panel button + after
+	// revoking sessions) — re-renders the merged machine table.
+	async function refreshSessions() {
+		if (!isAdminSession()) return;
+		try {
+			var list = await api('/auth/sessions/live');
+			liveSessions = Array.isArray(list) ? list : [];
+			render();
+		} catch (err) {
+			liveSessions = [];
+			render();
+			toast('Échec du chargement: ' + err.message, 'error');
 		}
 	}
 
@@ -648,10 +852,12 @@
 		filter: render,
 		clearFilters: clearFilters,
 		toggleFilters: toggleFilters,
+		toggleSessions: toggleSessions,
 		setStatus: setStatus,
 		assign: assign,
 		rename: rename,
 		forget: forget,
-		endSessions: endSessions,
+		endUserSessions: endUserSessions,
+		refreshSessions: refreshSessions,
 	};
 })();

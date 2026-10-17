@@ -14962,6 +14962,15 @@
 		endTime: null,
 		completed: false,
 		showCorrections: false,
+		// Persisted attempt id (client-generated) + server grading fetched
+		// after finish. Student browsers never receive correct answers (the
+		// bootstrap strips them), so the authoritative score + breakdown
+		// come from GET /results/:id/corrections; local grading is only a
+		// fallback for guests / offline use.
+		resultId: null,
+		resultPayload: null,
+		serverGrading: null,
+		serverGradingFailed: false,
 		// per-question answer records so the corrections view can pretty-print
 		// non-string types (matching pairs, fill-blank, draggable, etc.)
 		perQuestion: [],
@@ -15353,6 +15362,10 @@
 			endTime: null,
 			completed: false,
 			showCorrections: false,
+			resultId: null,
+			resultPayload: null,
+			serverGrading: null,
+			serverGradingFailed: false,
 			perQuestion: [],
 			questionOptions: shuffled.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
@@ -15436,6 +15449,10 @@
 			completed: false,
 			showCorrections: false,
 			allowCorrections: preset?.showExplanations === true,
+			resultId: null,
+			resultPayload: null,
+			serverGrading: null,
+			serverGradingFailed: false,
 			perQuestion: [],
 			questionOptions: questions.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
@@ -16909,9 +16926,157 @@
 		clearTrainingStorage();
 		if (context) renderWorkspace();
 		renderTrainingQuestion();
+
+		// Server grading (async upgrade): persist the attempt authoritatively,
+		// then fetch the graded breakdown. Student browsers never hold the
+		// correct answers, so the local score above is only a fallback — the
+		// server response replaces it (and the corrections view) on arrival.
+		trainingState.resultId = newResult.id;
+		trainingState.resultPayload = newResult;
+		ensureServerGrading().then(refreshGradingViews);
+	}
+
+	// Fetch the server-graded breakdown for the finished attempt. The write
+	// is awaited first (upsert by attempt id — idempotent with the
+	// fire-and-forget bridge sync) so the corrections read never races it.
+	// Resolves to the grading object, or null when unavailable (guest /
+	// offline / server error) — callers keep the local fallback then.
+	async function ensureServerGrading() {
+		if (trainingState.serverGrading) return trainingState.serverGrading;
+		if (trainingState.serverGradingFailed) return null;
+		const payload = trainingState.resultPayload;
+		const resultId = trainingState.resultId;
+		if (!payload || !resultId || !window.API || typeof window.API.raw !== 'function') {
+			trainingState.serverGradingFailed = true;
+			return null;
+		}
+		try {
+			await window.API.raw('POST', '/results', payload);
+			const data = await window.API.raw(
+				'GET',
+				'/results/' + encodeURIComponent(resultId) + '/corrections',
+			);
+			if (data && Array.isArray(data.items) && data.items.length) {
+				trainingState.serverGrading = data;
+				trainingState.score = Number(data.score) || 0;
+				// Write the authoritative score back onto the same attempt row
+				// so teacher dashboards stop showing 0 for student training.
+				persistCorrectedScore(payload, data);
+				return data;
+			}
+		} catch (_) {
+			/* keep the local fallback */
+		}
+		trainingState.serverGradingFailed = true;
+		return null;
+	}
+
+	// Best-effort: re-persist the attempt with the server-computed score.
+	// Same row id (upsert), same per-question answers map — only the totals
+	// change. Failures are silent; the local row already exists.
+	function persistCorrectedScore(payload, grading) {
+		try {
+			if (!window.API || typeof window.API.raw !== 'function') return;
+			const total = Number(grading.total) || 0;
+			const score = Number(grading.score) || 0;
+			const grade = total > 0 ? Math.round(((score / total) * 20) * 100) / 100 : 0;
+			Promise.resolve(
+				window.API.raw('POST', '/results', {
+					...payload,
+					score: grade,
+					earned_points: score,
+					earnedPoints: score,
+					total_points: total,
+					totalPoints: total,
+					grade20: grade,
+					passed: grade > 10,
+				}),
+			).catch(() => {});
+		} catch (_) {}
+	}
+
+	// Re-render grading-dependent views after the server response lands.
+	// No-op while an attempt is still in progress.
+	function refreshGradingViews() {
+		if (!trainingState.completed) return;
+		try {
+			renderTrainingQuestion();
+		} catch (_) {}
+		try {
+			const modal = byId('trainingCorrectionsModal');
+			if (modal && modal.classList.contains('active')) {
+				const body = byId('trainingCorrectionsBody');
+				if (body) body.innerHTML = buildTrainingCorrectionsHtml();
+				updateCorrectionsSubtitle();
+			}
+		} catch (_) {}
+	}
+
+	function updateCorrectionsSubtitle() {
+		const subtitle = byId('trainingCorrectionsSubtitle');
+		if (!subtitle) return;
+		const grading = trainingState.serverGrading;
+		if (grading && Array.isArray(grading.items)) {
+			subtitle.textContent = `${grading.score} / ${grading.total} correct · ${trainingState.examName || ''}`.trim();
+			return;
+		}
+		const total = trainingState.questions.length;
+		const correctCount = trainingState.questions.filter((q, i) =>
+			trainingAnswersEqual(
+				trainingState.userAnswers[i] || '',
+				q.answer || '',
+				normalizeTrainingQuestionType(q),
+			),
+		).length;
+		subtitle.textContent = `${correctCount} / ${total} correct · ${trainingState.examName || ''}`.trim();
 	}
 
 	function buildTrainingCorrectionsHtml() {
+		// Server-graded breakdown (authoritative: correct answers + score come
+		// from the server because student browsers never receive them).
+		const serverItems = trainingState.serverGrading && Array.isArray(trainingState.serverGrading.items)
+			? trainingState.serverGrading.items
+			: null;
+		if (serverItems) {
+			return `
+			<div class="corrections-container corrections-container--in-modal">
+				${serverItems
+					.map((entry, i) => {
+						const qType = entry.type || 'multiple-choice';
+						const isCorrect = entry.correct === true;
+						return `
+						<div class="correction-item ${isCorrect ? 'correct' : 'incorrect'}">
+							<div class="correction-header">
+								<span class="question-number">Question ${i + 1}</span>
+								<span class="question-type-tag">${escapeHtml(qType)}</span>
+								<span class="status-badge ${isCorrect ? 'pass' : 'fail'}">
+									${isCorrect ? '✓ Correct' : '✕ Incorrect'}
+								</span>
+							</div>
+							<p class="question-title">${escapeHtml(entry.question || 'Question')}</p>
+							<div class="answer-row">
+								<div class="answer-group">
+									<strong>Your Answer:</strong>
+									<span class="answer-badge ${isCorrect ? 'badge-success' : 'badge-danger'}">
+										${escapeHtml(prettyPrintTrainingAnswer(entry.userAnswer || '', qType))}
+									</span>
+								</div>
+								<div class="answer-group">
+									<strong>Correct Answer:</strong>
+									<span class="answer-badge badge-success">
+										${escapeHtml(prettyPrintTrainingAnswer(entry.correctAnswer || '', qType))}
+									</span>
+								</div>
+							</div>
+							${entry.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${escapeHtml(entry.explanation)}</div>` : ''}
+						</div>`;
+					})
+					.join('')}
+			</div>
+		`;
+		}
+		// Local fallback (guests / offline / ungraded attempts): graded
+		// against whatever answer data this browser holds.
 		return `
 			<div class="corrections-container corrections-container--in-modal">
 				${trainingState.questions
@@ -17024,42 +17189,61 @@
 			renderTrainingQuestion();
 			return;
 		}
-		const total = trainingState.questions.length;
-		const correctCount = trainingState.questions.filter((q, i) =>
-			trainingAnswersEqual(
-				trainingState.userAnswers[i] || '',
-				q.answer || '',
-				normalizeTrainingQuestionType(q),
-			),
-		).length;
-		if (subtitle) {
-			subtitle.textContent = `${correctCount} / ${total} correct · ${trainingState.examName || ''}`.trim();
-		}
-		body.innerHTML = buildTrainingCorrectionsHtml();
-		modal.classList.add('active');
-		modal.setAttribute('aria-hidden', 'false');
-		body.scrollTop = 0;
-		const closeBtn = modal.querySelector('.close-modal-btn');
-		if (closeBtn && typeof closeBtn.focus === 'function') {
-			try {
-				closeBtn.focus({ preventScroll: true });
-			} catch (_) {
-				closeBtn.focus();
-			}
-		}
-		if (!modal.dataset.bound) {
-			modal.dataset.bound = '1';
-			modal.addEventListener('click', (e) => {
-				if (e.target === modal) window.closeTrainingCorrectionsModal();
-			});
-			document.addEventListener('keydown', (e) => {
-				if (e.key !== 'Escape') return;
-				const open = byId('trainingCorrectionsModal');
-				if (open && open.classList.contains('active')) {
-					window.closeTrainingCorrectionsModal();
+		const showModalChrome = () => {
+			modal.classList.add('active');
+			modal.setAttribute('aria-hidden', 'false');
+			body.scrollTop = 0;
+			const closeBtn = modal.querySelector('.close-modal-btn');
+			if (closeBtn && typeof closeBtn.focus === 'function') {
+				try {
+					closeBtn.focus({ preventScroll: true });
+				} catch (_) {
+					closeBtn.focus();
 				}
-			});
+			}
+			if (!modal.dataset.bound) {
+				modal.dataset.bound = '1';
+				modal.addEventListener('click', (e) => {
+					if (e.target === modal) window.closeTrainingCorrectionsModal();
+				});
+				document.addEventListener('keydown', (e) => {
+					if (e.key !== 'Escape') return;
+					const open = byId('trainingCorrectionsModal');
+					if (open && open.classList.contains('active')) {
+						window.closeTrainingCorrectionsModal();
+					}
+				});
+			}
+		};
+		// Authoritative server breakdown when available.
+		if (trainingState.serverGrading && Array.isArray(trainingState.serverGrading.items)) {
+			updateCorrectionsSubtitle();
+			body.innerHTML = buildTrainingCorrectionsHtml();
+			showModalChrome();
+			return;
 		}
+		// Attempt still grading on the server: show a loading state, then
+		// fill the breakdown on arrival (stays on fallback if it fails).
+		if (
+			trainingState.resultId &&
+			!trainingState.serverGradingFailed &&
+			window.API &&
+			typeof window.API.raw === 'function'
+		) {
+			if (subtitle) subtitle.textContent = 'Grading your answers…';
+			body.innerHTML = '<div class="empty-state">Grading your answers…</div>';
+			showModalChrome();
+			ensureServerGrading().then(() => {
+				if (!modal.classList.contains('active')) return;
+				updateCorrectionsSubtitle();
+				body.innerHTML = buildTrainingCorrectionsHtml();
+			});
+			return;
+		}
+		// Local fallback (guests / offline / ungraded attempts).
+		updateCorrectionsSubtitle();
+		body.innerHTML = buildTrainingCorrectionsHtml();
+		showModalChrome();
 	};
 
 	window.closeTrainingCorrectionsModal = function () {

@@ -168,7 +168,7 @@
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
 		<script src="admin-main.js?v=2026-09-17-r6" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
-			<script src="legacy-auth-bridge.js?v=2026-10-14-r1" defer></script>
+			<script src="legacy-auth-bridge.js?v=2026-10-16-r2" defer></script>
 			<!-- PDF.js pour extraction PDF -->
 <script src="vendor/pdf.min.js"></script>
 
@@ -1722,7 +1722,7 @@
 						<div class="table-container">
 							<table class="data-table" id="devicesTable">
 								<thead>
-									<tr>
+								<tr>
 										<th>Machine</th>
 										<th>Type</th>
 										<th>IP</th>
@@ -8130,6 +8130,9 @@
 						<button class="ai-modal-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('builder')" id="tab-ai-builder">
 							<span class="ai-tab-icon" aria-hidden="true">🧱</span><span><strong>Prompt Builder</strong><small>ChatGPT / Claude course plan</small></span>
 						</button>
+						<button class="ai-modal-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('import')" id="tab-ai-import">
+							<span class="ai-tab-icon" aria-hidden="true">📥</span><span><strong>Import JSON</strong><small>Réponse du modèle</small></span>
+						</button>
 					</div>
 
 					<!-- Tab Contents -->
@@ -8722,15 +8725,15 @@
 
 						<!-- Tab 3: Prompt Builder (no API key — guided prompt for ChatGPT / Claude) -->
 						<div id="ai-builder-form" class="ai-tab-pane" style="display: none; padding: 24px;">
-							<div style="text-align: right; font-size: 0.7rem; color: #0d9488; font-weight: 700; margin-bottom: -4px;">build <span id="pbBuildTag">2026-10-16-r3</span></div>
+							<div style="text-align: right; font-size: 0.7rem; color: #0d9488; font-weight: 700; margin-bottom: -4px;">build <span id="pbBuildTag">2026-10-16-r4</span></div>
 							<p class="text-muted" style="font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
-								No API key? Build your course plan here &rarr; generate the prompt &rarr; paste it into <strong>ChatGPT, Claude, Gemini…</strong> &rarr; paste the model's JSON answer below to import. Categories, difficulties, types, points and time limits are created automatically.
+								No API key? Build your course plan here &rarr; hit <strong>Generate & Copy Prompt</strong> below &rarr; paste it into <strong>ChatGPT, Claude, Gemini…</strong> &rarr; open the <strong>Import JSON</strong> tab to paste the model's answer. Categories, difficulties, types, points and time limits are created automatically.
 							</p>
 							<!-- Toolbar -->
 							<div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 12px; background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);">
 								<button type="button" class="btn btn-primary" onclick="addCategoryNode()" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(13,148,136,0.4)';" onmouseout="this.style.transform='none';this.style.boxShadow='0 2px 8px rgba(13,148,136,0.3)';" style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); border: none; color: #fff; font-weight: 700; padding: 10px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(13,148,136,0.3); transition: transform 0.15s ease, box-shadow 0.15s ease;">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; vertical-align: -2px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-									＋ Add Category
+									Add Category
 								</button>
 								<button type="button" class="btn btn-secondary" onclick="loadPromptBuilderTemplate()">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
@@ -8758,12 +8761,6 @@
 							<div id="promptBuilderTree" class="prompt-builder-tree">
 								<div style="text-align: center; padding: 40px 20px; color: #94a3b8;">Chargement du Prompt Builder…<br /><small>Si ce message persiste, rechargez la page (Ctrl+F5).</small></div>
 							</div>
-							<div style="margin-top: 14px;">
-								<button type="button" class="btn btn-primary" onclick="generateAndCopyPrompt()" style="width: 100%; background: linear-gradient(135deg, #059669 0%, #10b981 100%); border: none; font-weight: 700; padding: 12px; border-radius: 10px;">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: -2px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-									Generate & Copy Prompt
-								</button>
-							</div>
 							<div id="promptBuilderOutputWrap" style="display: none; margin-top: 16px;">
 								<label style="font-weight: 700; font-size: 0.9rem;">📋 Prompt généré — copiez-collez dans ChatGPT / Claude</label>
 								<textarea id="promptBuilderOutput" rows="14" readonly style="width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #6ee7b7; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #f0fdf4;"></textarea>
@@ -8773,15 +8770,16 @@
 									<span id="promptBuilderStatus" class="text-muted" style="font-size: 0.85em;"></span>
 								</div>
 							</div>
-							<div id="promptBuilderImportWrap" style="margin-top: 16px; border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px; background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);">
-								<label style="font-weight: 700; font-size: 0.9rem;">📥 Réponse du modèle — collez le JSON ici puis importez</label>
+							<p class="text-muted" style="font-size: 0.82rem; margin-top: 12px;">Après génération, ouvrez l'onglet <button type="button" class="btn btn-sm btn-secondary" onclick="switchAIGeneratorTab('import')">📥 Import JSON</button> pour coller la réponse du modèle.</p>
+						</div>
+
+						<!-- Tab 4: Model answer import (paste ChatGPT/Claude JSON here) -->
+						<div id="ai-import-form" class="ai-tab-pane" style="display: none; padding: 24px;">
+							<div id="promptBuilderImportWrap" style="border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px; background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);">
+								<label for="promptBuilderImportInput" style="font-weight: 700; font-size: 0.9rem;">📥 Réponse du modèle — collez le JSON ici puis importez</label>
 								<p class="text-muted" style="font-size: 0.8rem; margin: 4px 0 8px;">Collez la réponse JSON de ChatGPT/Claude (format <code>{"categories": […], "questions": […]}</code>). Les catégories / sous-catégories seront créées automatiquement.</p>
-								<textarea id="promptBuilderImportInput" rows="8" placeholder='Collez ici le JSON du modèle, ex : {"categories": […], "questions": […]}' style="width: 100%; padding: 10px; border: 1px solid #c4b5fd; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #fff;"></textarea>
+								<textarea id="promptBuilderImportInput" rows="12" placeholder='Collez ici le JSON du modèle, ex : {"categories": […], "questions": […]}' style="width: 100%; padding: 10px; border: 1px solid #c4b5fd; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #fff;"></textarea>
 								<div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
-									<button type="button" class="btn btn-primary" onclick="importPromptBuilderJSON()" style="background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%); border: none; font-weight: 700; padding: 10px 20px; border-radius: 10px;">
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px; vertical-align: -2px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-										📥 Import JSON
-									</button>
 									<button type="button" class="btn btn-secondary" onclick="clearPromptBuilderImport()">Effacer</button>
 									<span id="promptBuilderImportStatus" class="text-muted" style="font-size: 0.85em;"></span>
 								</div>
@@ -8828,6 +8826,21 @@
 						<button type="button" id="ai-generate-action-btn" class="btn btn-ai-generate btn-lg" onclick="generateQuestionsWithAI()" style="width: 100%;">
 							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
 							<span>Generate Questions</span>
+						</button>
+					</div>
+					<!-- Builder Footer: Generate & Copy Prompt (same placement/size as Generate Questions) -->
+					<div id="ai-builder-footer-actions" class="hidden" style="width: 100%;">
+						<button type="button" id="ai-builder-generate-btn" class="btn btn-ai-generate btn-lg" onclick="generateAndCopyPrompt()" style="width: 100%;">
+							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+							<span>Generate & Copy Prompt</span>
+						</button>
+					</div>
+
+					<!-- Import Footer: paste model JSON then import (same placement/size as Generate Questions) -->
+					<div id="ai-import-footer-actions" class="hidden" style="width: 100%;">
+						<button type="button" id="ai-import-json-btn" class="btn btn-ai-generate btn-lg" onclick="importPromptBuilderJSON()" style="width: 100%;">
+							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+							<span>Import JSON</span>
 						</button>
 					</div>
 					

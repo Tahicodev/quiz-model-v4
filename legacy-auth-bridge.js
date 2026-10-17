@@ -101,23 +101,51 @@
       if (old) old.remove();
       var bar = document.createElement('div');
       bar.setAttribute('data-session-conflict', 'true');
+      bar.setAttribute('role', 'alert');
       bar.style.cssText =
-        'margin:10px 0;padding:10px 12px;border:1px solid #f59e0b;' +
-        'border-radius:8px;background:#fffbeb;color:#92400e;font-size:0.9rem;';
+        'margin:12px 0;padding:0;border:1px solid #fcd34d;' +
+        'border-left:5px solid #f59e0b;border-radius:12px;background:' +
+        'linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);' +
+        'box-shadow:0 8px 24px rgba(245,158,11,0.18);overflow:hidden;' +
+        'animation:sessionConflictIn 0.25s ease-out;';
+      var head = document.createElement('div');
+      head.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 14px 0;';
+      var icon = document.createElement('span');
+      icon.setAttribute('aria-hidden', 'true');
+      icon.textContent = '⚠️';
+      icon.style.cssText =
+        'display:inline-grid;place-items:center;width:34px;height:34px;flex:0 0 auto;' +
+        'border-radius:50%;background:#f59e0b;color:#fff;font-size:18px;' +
+        'box-shadow:0 2px 8px rgba(245,158,11,0.45);';
+      var title = document.createElement('strong');
+      title.textContent = 'Already signed in';
+      title.style.cssText = 'color:#78350f;font-size:0.98rem;letter-spacing:-0.01em;';
+      head.appendChild(icon);
+      head.appendChild(title);
       var msg = document.createElement('div');
       msg.textContent =
         'This account is already signed in on another device or tab. ' +
         'Only one session is allowed at a time.';
-      msg.style.marginBottom = '8px';
+      msg.style.cssText = 'padding:8px 14px 0;color:#92400e;font-size:0.88rem;line-height:1.5;';
+      var hint = document.createElement('div');
+      hint.textContent =
+        'Ask your teacher or admin to end your other session, or take over below.';
+      hint.style.cssText = 'padding:4px 14px 0;color:#b45309;font-size:0.8rem;line-height:1.5;';
       var row = document.createElement('div');
       row.style.display = 'flex';
       row.style.gap = '8px';
+      row.style.padding = '12px 14px 14px';
+      row.style.flexWrap = 'wrap';
       var takeOver = document.createElement('button');
       takeOver.type = 'button';
       takeOver.textContent = 'Sign out the other session and continue';
       takeOver.style.cssText =
-        'flex:1;padding:8px;border:none;border-radius:6px;background:#d97706;' +
-        'color:#fff;font-weight:700;cursor:pointer;';
+        'flex:1;min-width:200px;padding:10px 14px;border:none;border-radius:9px;' +
+        'background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);color:#fff;' +
+        'font-weight:700;font-size:0.88rem;cursor:pointer;' +
+        'box-shadow:0 4px 14px rgba(99,102,241,0.35);transition:transform 0.15s ease;';
+      takeOver.onmouseover = function () { takeOver.style.transform = 'translateY(-1px)'; };
+      takeOver.onmouseout = function () { takeOver.style.transform = 'none'; };
       takeOver.onclick = function () {
         try { bar.remove(); } catch (_) {}
         onTakeOver();
@@ -126,21 +154,42 @@
       cancel.type = 'button';
       cancel.textContent = 'Cancel';
       cancel.style.cssText =
-        'padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;' +
-        'background:#fff;cursor:pointer;';
+        'padding:10px 16px;border:1px solid #d1d5db;border-radius:9px;' +
+        'background:#fff;color:#374151;font-weight:600;font-size:0.88rem;cursor:pointer;';
       cancel.onclick = function () {
         try { bar.remove(); } catch (_) {}
       };
       row.appendChild(takeOver);
       row.appendChild(cancel);
+      bar.appendChild(head);
       bar.appendChild(msg);
+      bar.appendChild(hint);
       bar.appendChild(row);
+      ensureConflictAnimation();
       form.appendChild(bar);
       try { takeOver.focus(); } catch (_) {}
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  // One-shot keyframes for the conflict notice entrance (inline <style> so
+  // the login page needs no stylesheet changes).
+  var conflictAnimationAdded = false;
+  function ensureConflictAnimation() {
+    if (conflictAnimationAdded) return;
+    conflictAnimationAdded = true;
+    try {
+      var style = document.createElement('style');
+      style.setAttribute('data-session-conflict-style', 'true');
+      style.textContent =
+        '@keyframes sessionConflictIn{' +
+        'from{opacity:0;transform:translateY(-6px);}' +
+        'to{opacity:1;transform:none;}' +
+        '}';
+      document.head.appendChild(style);
+    } catch (_) {}
   }
 
   // â”€â”€ Single-session watchdog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -456,7 +505,10 @@
           showMsg('Login successful', 'success');
           window.location.reload();
         }).catch(function (err) {
-          if (err && err.code === 'SESSION_ACTIVE' && !force) {
+          // Admin portal: newest session always wins — no conflict dead-end.
+          // (The safety-net notice below only fires if a forced takeover
+          // itself ever races a 409.)
+          if (err && err.code === 'SESSION_ACTIVE') {
             form.dataset.loggingIn = '';
             var shown = showSessionConflictConfirm(form, function () {
               form.dataset.loggingIn = 'true';
@@ -471,7 +523,9 @@
           form.dataset.loggingIn = '';
         });
       };
-      attempt(false).catch(function (err) {
+      // Admins take over immediately: the newest admin session ends any
+      // older one server-side (students keep the confirm-takeover prompt).
+      attempt(true).catch(function (err) {
         form.dataset.loggingIn = '';
         showMsg('Connection error: ' + (err.message || 'network error'), 'error');
       });

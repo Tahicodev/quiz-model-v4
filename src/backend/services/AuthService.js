@@ -63,6 +63,14 @@ function isTokenLive(token, nowMs) {
   return nowMs - createdAt < sessionActiveWindowMs();
 }
 
+/**
+ * Shared liveness check (exported for the school-wide live-sessions
+ * listing, which applies the same "would this token block a login" rule).
+ */
+export function isRefreshTokenLive(token, nowMs = Date.now()) {
+  return isTokenLive(token, nowMs);
+}
+
 export class AuthService {
   #repo;
   #lastIp = null;
@@ -321,6 +329,51 @@ export class AuthService {
       user_agent: t.user_agent || null,
       ip_address: t.ip_address || null,
     }));
+  }
+
+  /**
+   * School-wide blocking sessions: every user of the school holding at
+   * least one LIVE refresh token (i.e. a login elsewhere would be rejected
+   * as "already signed in"). Powers the admin rescue view for stuck
+   * accounts — without it, an admin cannot discover WHO is blocked.
+   * Token hashes are never exposed.
+   * @returns {Promise<Array<{ user, sessions, blocking }>>}
+   */
+  async listLiveSessions(schoolId) {
+    const { data: users } = await this.#repo.getAll('users', {
+      filters: { school_id: schoolId },
+      limit: 100000,
+    });
+    const byId = new Map((users || []).map((u) => [String(u.id), u]));
+    const { data: tokens } = await this.#repo.getAll('refresh_tokens', {
+      filters: { revoked: false },
+      limit: 5000,
+    });
+    const nowMs = Date.now();
+    const grouped = new Map();
+    for (const t of tokens || []) {
+      if (!t?.user_id || !isTokenLive(t, nowMs)) continue;
+      const user = byId.get(String(t.user_id));
+      // Tenant-scoped: tokens whose user is outside this school (moved or
+      // stale rows) never surface in another school's admin view.
+      if (!user || String(user.school_id) !== String(schoolId)) continue;
+      if (!grouped.has(user.id)) grouped.set(user.id, { user, sessions: [] });
+      grouped.get(user.id).sessions.push({
+        id: t.id,
+        created_at: t.created_at,
+        expires_at: t.expires_at,
+        live: true,
+        user_agent: t.user_agent || null,
+        ip_address: t.ip_address || null,
+      });
+    }
+    return [...grouped.values()]
+      .map(({ user, sessions }) => {
+        const { password_hash, ...safe } = user;
+        sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        return { user: safe, sessions, blocking: true };
+      })
+      .sort((a, b) => new Date(b.sessions[0].created_at) - new Date(a.sessions[0].created_at));
   }
 
   /**

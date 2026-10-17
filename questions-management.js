@@ -6710,12 +6710,14 @@ let currentAITab = 'standard';
 
 // Switch AI Generator Tab
 window.switchAIGeneratorTab = function(tab) {
+	if (tab !== 'standard' && tab !== 'document' && tab !== 'builder' && tab !== 'import') tab = 'standard';
 	currentAITab = tab;
 	
 	// Update Tab UI
 	const tabs = document.querySelectorAll('.ai-modal-tab');
 	tabs.forEach(t => {
 		t.classList.remove('active');
+		t.setAttribute('aria-selected', 'false');
 		t.style.color = '#64748b';
 		t.style.borderBottomColor = 'transparent';
 	});
@@ -6723,6 +6725,7 @@ window.switchAIGeneratorTab = function(tab) {
 	const activeTab = document.getElementById(`tab-ai-${tab}`);
 	if (activeTab) {
 		activeTab.classList.add('active');
+		activeTab.setAttribute('aria-selected', 'true');
 		activeTab.style.color = '#6366f1';
 		activeTab.style.borderBottomColor = '#6366f1';
 	}
@@ -6731,41 +6734,45 @@ window.switchAIGeneratorTab = function(tab) {
 	const standardForm = document.getElementById('ai-generator-form');
 	const documentForm = document.getElementById('ai-document-form');
 	const builderForm = document.getElementById('ai-builder-form');
+	const importForm = document.getElementById('ai-import-form');
 	const previewSection = document.getElementById('ai-preview-section');
 	const formFooter = document.getElementById('ai-form-footer-actions');
+	const builderFooter = document.getElementById('ai-builder-footer-actions');
+	const importFooter = document.getElementById('ai-import-footer-actions');
 	const previewFooter = document.getElementById('ai-preview-footer-actions');
+	const hidePane = (el) => { if (el) { el.style.display = 'none'; el.classList.remove('active'); } };
+	const showPane = (el) => { if (el) { el.style.display = 'block'; el.classList.add('active'); } };
+	const hideFooters = () => {
+		if (formFooter) formFooter.classList.add('hidden');
+		if (builderFooter) builderFooter.classList.add('hidden');
+		if (importFooter) importFooter.classList.add('hidden');
+		if (previewFooter) previewFooter.classList.add('hidden');
+	};
+	const previewVisible = previewSection && !previewSection.classList.contains('hidden');
 	
 	if (tab === 'standard') {
-		if (standardForm) {
-			standardForm.style.display = 'block';
-			standardForm.classList.add('active');
+		showPane(standardForm);
+		hidePane(documentForm);
+		hidePane(builderForm);
+		hidePane(importForm);
+		// Preview flow owns the footer while a batch is shown.
+		hideFooters();
+		if (previewVisible) {
+			if (previewFooter) previewFooter.classList.remove('hidden');
+		} else {
+			if (formFooter) formFooter.classList.remove('hidden');
 		}
-		if (documentForm) {
-			documentForm.style.display = 'none';
-			documentForm.classList.remove('active');
-		}
-		if (builderForm) {
-			builderForm.style.display = 'none';
-			builderForm.classList.remove('active');
-		}
+		if (previewSection && previewVisible) { /* keep preview */ }
 	} else if (tab === 'builder') {
-		if (standardForm) {
-			standardForm.style.display = 'none';
-			standardForm.classList.remove('active');
-		}
-		if (documentForm) {
-			documentForm.style.display = 'none';
-			documentForm.classList.remove('active');
-		}
-		if (builderForm) {
-			builderForm.style.display = 'block';
-			builderForm.classList.add('active');
-		}
-		// The builder has its own in-pane Generate + Import controls — the
-		// topic/document footers do not apply here.
+		hidePane(standardForm);
+		hidePane(documentForm);
+		showPane(builderForm);
+		hidePane(importForm);
+		// The builder uses the modal footer Generate & Copy Prompt button —
+		// same placement/size as Generate Questions.
 		if (previewSection) previewSection.classList.add('hidden');
-		if (formFooter) formFooter.classList.add('hidden');
-		if (previewFooter) previewFooter.classList.add('hidden');
+		hideFooters();
+		if (builderFooter) builderFooter.classList.remove('hidden');
 		if (typeof window.syncPromptBuilderInputs === 'function') {
 			try { window.syncPromptBuilderInputs(); } catch (_) {}
 		}
@@ -6779,31 +6786,32 @@ window.switchAIGeneratorTab = function(tab) {
 				tree.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">⚠ Prompt Builder script not loaded — hard-refresh the page (Ctrl+F5), then reopen this tab.</div>';
 			}
 		}
+	} else if (tab === 'import') {
+		hidePane(standardForm);
+		hidePane(documentForm);
+		hidePane(builderForm);
+		showPane(importForm);
+		// The import tab uses the modal footer Import JSON button — same
+		// placement/size as Generate Questions (desktop + mobile).
+		if (previewSection) previewSection.classList.add('hidden');
+		hideFooters();
+		if (importFooter) importFooter.classList.remove('hidden');
 	} else {
-		if (standardForm) {
-			standardForm.style.display = 'none';
-			standardForm.classList.remove('active');
-		}
-		if (documentForm) {
-			documentForm.style.display = 'block';
-			documentForm.classList.add('active');
-		}
-		if (builderForm) {
-			builderForm.style.display = 'none';
-			builderForm.classList.remove('active');
+		hidePane(standardForm);
+		showPane(documentForm);
+		hidePane(builderForm);
+		hidePane(importForm);
+		hideFooters();
+		if (previewVisible) {
+			if (previewFooter) previewFooter.classList.remove('hidden');
+		} else {
+			if (formFooter) formFooter.classList.remove('hidden');
 		}
 		
 		// Initialize Document Generator if needed
 		if (typeof initDocumentGenerator === 'function') {
 			initDocumentGenerator();
 		}
-	}
-
-	// Leaving the builder tab restores the Generate footer, unless a preview
-	// batch is currently shown (its own footer then stays).
-	if (tab !== 'builder' && previewSection && previewSection.classList.contains('hidden')) {
-		if (formFooter) formFooter.classList.remove('hidden');
-		if (previewFooter) previewFooter.classList.add('hidden');
 	}
 	
 	// Clear any previous error
@@ -7320,10 +7328,14 @@ function displayAIPreview(questions) {
 	if (formSection) formSection.style.display = 'none';
 	const builderPane = document.getElementById('ai-builder-form');
 	if (builderPane) builderPane.style.display = 'none';
+	const importPane = document.getElementById('ai-import-form');
+	if (importPane) importPane.style.display = 'none';
 	previewSection.classList.remove('hidden');
 	
 	// Show preview footer actions
 	document.getElementById('ai-form-footer-actions')?.classList.add('hidden');
+	document.getElementById('ai-builder-footer-actions')?.classList.add('hidden');
+	document.getElementById('ai-import-footer-actions')?.classList.add('hidden');
 	document.getElementById('ai-preview-footer-actions')?.classList.remove('hidden');
 	
 	// Update count
@@ -7521,14 +7533,32 @@ window.resetAIGenerator = function() {
 	if (previewList) previewList.innerHTML = '';
 	if (errorDiv) errorDiv.classList.add('hidden');
 	if (cooldownContainer) cooldownContainer.classList.add('hidden');
-	// Tab-aware restore: the builder pane is not part of the preview flow.
+	// Tab-aware restore: the builder / import panes are not part of the preview flow.
 	const builderPane = document.getElementById('ai-builder-form');
+	const importPane = document.getElementById('ai-import-form');
+	const builderFooter = document.getElementById('ai-builder-footer-actions');
+	const importFooter = document.getElementById('ai-import-footer-actions');
+	const formFooterRestore = document.getElementById('ai-form-footer-actions');
+	const previewFooterRestore = document.getElementById('ai-preview-footer-actions');
 	if (typeof currentAITab !== 'undefined' && currentAITab === 'builder') {
 		if (formSection) formSection.style.display = 'none';
 		if (builderPane) builderPane.style.display = 'block';
-		document.getElementById('ai-form-footer-actions')?.classList.add('hidden');
+		if (importPane) importPane.style.display = 'none';
+		if (formFooterRestore) formFooterRestore.classList.add('hidden');
+		if (previewFooterRestore) previewFooterRestore.classList.add('hidden');
+		if (importFooter) importFooter.classList.add('hidden');
+		if (builderFooter) builderFooter.classList.remove('hidden');
+	} else if (typeof currentAITab !== 'undefined' && currentAITab === 'import') {
+		if (formSection) formSection.style.display = 'none';
+		if (builderPane) builderPane.style.display = 'none';
+		if (importPane) importPane.style.display = 'block';
+		if (formFooterRestore) formFooterRestore.classList.add('hidden');
+		if (previewFooterRestore) previewFooterRestore.classList.add('hidden');
+		if (builderFooter) builderFooter.classList.add('hidden');
+		if (importFooter) importFooter.classList.remove('hidden');
 	} else {
 		if (builderPane) builderPane.style.display = 'none';
+		if (importPane) importPane.style.display = 'none';
 	}
 	
 	// Reset the manual image builder (Images option style) to a blank state.
@@ -7540,9 +7570,14 @@ window.resetAIGenerator = function() {
 	if (standardCodeOptions) standardCodeOptions.style.display = 'none';
 	if (documentCodeOptions) documentCodeOptions.style.display = 'none';
 	
-	// Reset footer actions
-	document.getElementById('ai-form-footer-actions')?.classList.remove('hidden');
-	document.getElementById('ai-preview-footer-actions')?.classList.add('hidden');
+	// Reset footer actions (standard/document flow only — builder/import
+	// footers are handled above).
+	if (typeof currentAITab === 'undefined' || currentAITab === 'standard' || currentAITab === 'document') {
+		document.getElementById('ai-form-footer-actions')?.classList.remove('hidden');
+		document.getElementById('ai-builder-footer-actions')?.classList.add('hidden');
+		document.getElementById('ai-import-footer-actions')?.classList.add('hidden');
+		document.getElementById('ai-preview-footer-actions')?.classList.add('hidden');
+	}
 	
 	aiSelectedQuestions.clear();
 	updateSelectedCount();

@@ -4165,6 +4165,19 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	overflow-wrap: anywhere;
 }
 
+/* Live sign-in session count for the machine ("Machine" column badge). */
+#devices .device-sessions-count-badge {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 0 7px;
+	font-size: 11px;
+	font-weight: 800;
+	color: #fff;
+	background: #3b82f6;
+	border-radius: 999px;
+	vertical-align: middle;
+}
+
 #devices .device-platform {
 	font-size: 12px;
 }
@@ -4216,6 +4229,70 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 #devices .device-user-name {
 	font-weight: 600;
 	vertical-align: middle;
+}
+
+/* ============================================================
+   CLASSROOM DEVICES — machine → sessions panel (parent/child).
+   Clicking a machine row opens a dedicated sessions table beneath it
+   (admin only); the machine row itself stays clean.
+   ============================================================ */
+#devices tr.device-card {
+	cursor: pointer;
+}
+
+#devices tr.device-card td button,
+#devices tr.device-card td select {
+	cursor: pointer;
+}
+
+/* Collapsed by default; opening the panel just adds .is-expanded. */
+#devices tr.device-sessions-subrow:not(.is-expanded) {
+	display: none;
+}
+
+#devices tr.device-sessions-subrow > td {
+	padding: 0 12px 12px 10px;
+}
+
+#devices .device-sessions-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	background: var(--bg-surface);
+	border: 1px solid var(--bg-surface-alt);
+	border-radius: 10px;
+	overflow: hidden;
+}
+
+#devices .device-sessions-table thead th {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #64748b;
+	text-align: left;
+	padding: 8px 14px;
+	border-bottom: 1px solid var(--bg-surface-alt);
+	background: var(--bg-surface-alt);
+}
+
+#devices .device-sessions-table tbody td {
+	padding: 8px 14px;
+	font-size: 13px;
+	vertical-align: middle;
+}
+
+#devices .device-sessions-table tbody tr + tr td {
+	border-top: 1px solid var(--bg-body);
+}
+
+#devices .device-sessions-table .exam-action-btn {
+	width: 32px;
+	height: 32px;
+}
+
+#devices .device-sessions-table .device-empty {
+	padding: 16px;
 }
 
 /* Search + refresh row inside the collapsible filter container. */
@@ -4339,6 +4416,23 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 	#devices table.data-table tbody tr.device-card.is-blocked {
 		border-color: rgba(239, 68, 68, 0.45);
+	}
+
+	/* Sessions panel: hugs its machine card (collapsed by default via the
+	   desktop rule above; opened by tapping the card's actions/sheet — on
+	   desktop by clicking the row). */
+	#devices tr.device-sessions-subrow.is-expanded {
+		display: block;
+		margin: -8px 16px 0 28px;
+		padding: 8px 14px 6px;
+		background: var(--bg-surface);
+		border: 1px solid var(--bg-surface-alt);
+		border-radius: 0 0 14px 14px;
+	}
+
+	#devices tr.device-sessions-subrow.is-expanded > td {
+		display: block;
+		padding: 0;
 	}
 
 	#devices tr.device-card.is-blocked td:first-child {

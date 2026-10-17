@@ -15126,7 +15126,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     // the student workspace can be open in two tabs of the SAME browser — the
     // refresh cookie is scoped per portal so one tab's refresh never rotates
     // (or mints a wrong-identity token for) the other tab's session.
-    portal: external_exports.enum(["admin", "student"]).optional()
+    portal: external_exports.enum(["admin", "student"]).optional(),
+    // Take over an existing live session. Without it, logging in while the
+    // account already holds a live session elsewhere is rejected with
+    // SESSION_ACTIVE (409) so two tabs/devices are never signed in at once.
+    force: external_exports.boolean().optional()
   });
 
   // src/frontend/infrastructure/socket.client.js
@@ -15503,6 +15507,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const parsed = QuestionCreateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      await this.#assertLeafCategory(parsed.data.category_id);
       return this.#repo.create("questions", {
         ...parsed.data,
         school_id: currentUser?.school_id,
@@ -15517,6 +15522,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!existing) throw new NotFoundError("Question");
       const parsed = QuestionUpdateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      if (parsed.data.category_id !== void 0) {
+        await this.#assertLeafCategory(parsed.data.category_id);
+      }
       return this.#repo.update("questions", id, parsed.data);
     }
     async delete(id, currentUser) {
@@ -15542,6 +15550,12 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         const parsed = QuestionCreateSchema.safeParse(questionsArray[i]);
         if (!parsed.success) {
           errors.push({ index: i, errors: parsed.error.flatten().fieldErrors });
+          continue;
+        }
+        try {
+          await this.#assertLeafCategory(parsed.data.category_id);
+        } catch (leafErr) {
+          errors.push({ index: i, errors: leafErr?.fields || { category_id: [leafErr?.message || "Invalid category"] } });
           continue;
         }
         const created = await this.#repo.create("questions", {
@@ -15573,6 +15587,24 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     #requireAdmin(user) {
       if (!user || ![ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN].includes(user.role)) {
         throw new ForbiddenError();
+      }
+    }
+    /**
+     * Leaf-only filing: questions live in the deepest level of the category
+     * tree. A category that has subcategories cannot hold questions directly
+     * (its rolled-up count/training already covers the subtree).
+     */
+    async #assertLeafCategory(categoryId) {
+      if (!categoryId) return;
+      const { data: children } = await this.#repo.getAll("categories", {
+        filters: { parent_id: categoryId },
+        limit: 1
+      });
+      if ((children || []).length > 0) {
+        const cat = await this.#repo.getById("categories", categoryId);
+        throw new ValidationError({
+          category_id: [`Questions can only be filed under a subcategory ("${cat?.name || categoryId}" has subcategories)`]
+        });
       }
     }
   };
@@ -16279,6 +16311,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           roots.push(cat);
         }
       }
+      {
+        const reachable = /* @__PURE__ */ new Set();
+        const visit = (node) => {
+          if (!node || reachable.has(node.id)) return;
+          reachable.add(node.id);
+          for (const child of node.children) visit(child);
+        };
+        for (const root of roots) visit(root);
+        for (const cat of lookup.values()) {
+          if (!reachable.has(cat.id)) roots.push(cat);
+        }
+      }
       return roots;
     }
     async getById(id) {
@@ -16311,6 +16355,16 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (parsed.data.parent_id === id) throw new ValidationError({ parent_id: ["Cannot set category as its own parent"] });
         const parent = await this.#repo.getById("categories", parsed.data.parent_id);
         if (!parent) throw new ValidationError({ parent_id: ["Parent category not found"] });
+        let ancestorId = parent.parent_id || null;
+        const seen = /* @__PURE__ */ new Set([id]);
+        while (ancestorId) {
+          if (ancestorId === id || seen.has(ancestorId)) {
+            throw new ValidationError({ parent_id: ["Cannot move a category inside one of its own subcategories"] });
+          }
+          seen.add(ancestorId);
+          const ancestor = await this.#repo.getById("categories", ancestorId);
+          ancestorId = ancestor?.parent_id || null;
+        }
       }
       return this.#repo.update("categories", id, parsed.data);
     }
@@ -18400,6 +18454,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           if (!res.ok) {
             var err = new Error(parseError(res, text));
             err.status = res.status;
+            try {
+              var errJson = JSON.parse(text);
+              var errCode = errJson && errJson.error && errJson.error.code;
+              if (res.status === 409 && (errCode === "SESSION_ACTIVE" || errCode === "SESSION_SUPERSEDED") && typeof window.__sessionSuperseded === "function") {
+                err.code = errCode;
+                window.__sessionSuperseded();
+              }
+            } catch (_) {
+            }
             throw err;
           }
           if (!text) return null;
@@ -18444,6 +18507,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (c.color != null) out.color = String(c.color);
         var parent = c.parent_id || c.parentId;
         if (parent) out.parent_id = String(parent);
+        else if (Object.prototype.hasOwnProperty.call(c, "parent_id") || Object.prototype.hasOwnProperty.call(c, "parentId")) {
+          out.parent_id = null;
+        }
         return out;
       },
       questions: function(q) {
@@ -21160,7 +21226,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 								<div class="user-actions">
 									${canManage ? `<button class="btn btn-sm btn-secondary" onclick="openUserModal('${escapeHtml(u.id)}')">Edit</button>` : ""}
 									${canManage ? `<button class="btn btn-sm ${statusClass}" onclick="toggleUserStatus('${escapeHtml(u.id)}')">${statusAction}</button>` : ""}
-									${canManage && isAdmin() ? `<button class="btn btn-sm btn-secondary-soft" title="Generate a new temporary password for this user" onclick="resetUserPassword('${escapeHtml(u.id)}')">Reset password</button>` : ""}
+								${canManage && isAdmin() ? `<button class="btn btn-sm btn-secondary-soft" title="End all active sign-in sessions for this user" onclick="endUserSessions('${escapeHtml(u.id)}')">End sessions</button>` : ""}
+								${canManage && isAdmin() ? `<button class="btn btn-sm btn-secondary-soft" title="Generate a new temporary password for this user" onclick="resetUserPassword('${escapeHtml(u.id)}')">Reset password</button>` : ""}
 									${canManage ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${escapeHtml(u.id)}')">Delete</button>` : ""}
 				</div>
             </td>
@@ -21995,6 +22062,79 @@ A new temporary password will be generated and shown to you once so you can shar
       const valueEl = document.getElementById("resetPasswordValue");
       if (labelEl) labelEl.textContent = "";
       if (valueEl) valueEl.textContent = "";
+    }
+    function sessionAgeText(iso) {
+      const ms = Date.now() - new Date(iso).getTime();
+      if (!Number.isFinite(ms) || ms < 0) return "unknown age";
+      const mins = Math.floor(ms / 6e4);
+      if (mins < 1) return "just now";
+      if (mins < 60) return mins + " min ago";
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return hours + " h ago";
+      return Math.floor(hours / 24) + " d ago";
+    }
+    async function endUserSessions(userId) {
+      if (!userId) return;
+      if (!isAdmin()) {
+        showToast2("Only admins can manage sessions", "error");
+        return;
+      }
+      const user = getUsers().find((u) => u && String(u.id) === String(userId));
+      const label = user ? user.name || user.username || "this user" : "this user";
+      if (!window.API || typeof window.API.raw !== "function") {
+        showToast2("Server connection unavailable", "error");
+        return;
+      }
+      let sessions = [];
+      try {
+        const res = await window.API.raw(
+          "GET",
+          "/users/" + encodeURIComponent(userId) + "/sessions"
+        );
+        sessions = Array.isArray(res) ? res : res?.data || res?.sessions || [];
+      } catch (apiErr) {
+        console.warn("[auth] load sessions failed:", apiErr);
+        showToast2(
+          "Could not load sessions: " + (apiErr?.message || "network error"),
+          "error"
+        );
+        return;
+      }
+      const live = sessions.filter((s) => s && !s.revoked);
+      if (!live.length) {
+        showToast2(`"${label}" has no active sessions.`, "info");
+        return;
+      }
+      const lines = live.map((s) => {
+        const where = [s.user_agent, s.ip_address].filter(Boolean).join(" \xB7 ");
+        return `- ${(where || "unknown device").slice(0, 80)} (${sessionAgeText(s.created_at)})`;
+      });
+      if (!confirm(
+        `End ${live.length} active session(s) for "${label}"?
+
+${lines.join("\n")}
+
+They will be signed out immediately.`
+      )) {
+        return;
+      }
+      try {
+        const res = await window.API.raw(
+          "DELETE",
+          "/users/" + encodeURIComponent(userId) + "/sessions"
+        );
+        const count = res?.revoked ?? live.length;
+        showToast2(
+          `Ended ${count} session(s) for "${label}". They can sign in again now.`,
+          "success"
+        );
+      } catch (apiErr) {
+        console.warn("[auth] revoke sessions failed:", apiErr);
+        showToast2(
+          "Failed to end sessions: " + (apiErr?.message || "network error"),
+          "error"
+        );
+      }
     }
     function getPendingImports() {
       var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
@@ -23327,6 +23467,7 @@ A new temporary password will be generated and shown to you once so you can shar
     window.deleteUser = deleteUser;
     window.toggleUserStatus = toggleUserStatus;
     window.resetUserPassword = resetUserPassword;
+    window.endUserSessions = endUserSessions;
     window.copyTempPassword = copyTempPassword;
     window.closeResetPasswordModal = closeResetPasswordModal;
     window.renderUsersTable = renderUsersTable;
@@ -28285,11 +28426,66 @@ A new temporary password will be generated and shown to you once so you can shar
       if (!window.io) return null;
       var token = readAuthToken();
       if (!token) return null;
+      var deviceAuth = readDeviceAuth();
       var socket2 = window.getSocket ? window.getSocket() : window.io("/", {
-        auth: { token },
+        auth: Object.assign({ token }, deviceAuth),
         transports: ["polling", "websocket"]
       });
       return socket2 || null;
+    }
+    function readDeviceAuth() {
+      try {
+        var deviceId = localStorage.getItem("deviceId");
+        if (!deviceId) {
+          deviceId = "device-" + Math.random().toString(36).slice(2, 10);
+          localStorage.setItem("deviceId", deviceId);
+        }
+        var hostname3 = localStorage.getItem("quizMachineName") || "";
+        var ua = navigator.userAgent || "";
+        var deviceType = /iPad|Tablet|PlayBook|Silk/i.test(ua) ? "tablet" : /Mobi|Android|iPhone|iPod|Windows Phone|Opera Mini|IEMobile|BlackBerry/i.test(
+          ua
+        ) ? "mobile" : "desktop";
+        return { deviceId, hostname: hostname3, deviceType };
+      } catch (e) {
+        return { deviceId: "", hostname: "", deviceType: "desktop" };
+      }
+    }
+    function defaultMachineName(deviceId) {
+      var ua = navigator.userAgent || "";
+      var platform = /Windows/i.test(ua) ? "Windows" : /Android/i.test(ua) ? "Android" : /iPhone|iPad|iPod/i.test(ua) ? "iOS" : /Mac OS X|Macintosh/i.test(ua) ? "Mac" : /Linux|CrOS/i.test(ua) ? "Linux" : "Poste";
+      var kind = /iPad|Tablet/i.test(ua) ? "Tablette" : /Mobi|Android|iPhone|iPod/i.test(ua) ? "Mobile" : "PC";
+      return platform + " " + kind + " " + String(deviceId || "").slice(-4);
+    }
+    function handleDeviceBlocked(socket2, message) {
+      try {
+        localStorage.setItem("quizDeviceBlocked", "1");
+      } catch (e) {
+      }
+      window.__DEVICE_BLOCKED__ = true;
+      try {
+        if (socket2) {
+          socket2.io.reconnection(false);
+          socket2.disconnect();
+        }
+      } catch (e) {
+      }
+      showDeviceBlockedOverlay(
+        message || "Cet appareil a \xE9t\xE9 bloqu\xE9 par un enseignant."
+      );
+    }
+    function showDeviceBlockedOverlay(message) {
+      if (document.getElementById("device-blocked-overlay")) return;
+      var el = document.createElement("div");
+      el.id = "device-blocked-overlay";
+      el.setAttribute(
+        "style",
+        "position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,0.92);color:#f8fafc;font-family:system-ui,Segoe UI,sans-serif;text-align:center;padding:24px;"
+      );
+      el.innerHTML = '<div><div style="font-size:44px;margin-bottom:12px;">\u{1F6AB}</div><h2 style="margin:0 0 8px;font-size:20px;">Appareil bloqu\xE9</h2><p style="margin:0;opacity:0.85;max-width:420px;">' + String(message) + "</p></div>";
+      try {
+        document.body.appendChild(el);
+      } catch (e) {
+      }
     }
     var socket = existingRuntime?.socket || createSocket();
     var bootRetries = 0;
@@ -28677,9 +28873,14 @@ A new temporary password will be generated and shown to you once so you can shar
         if (!localStorage.getItem("quizServerHost")) {
           localStorage.setItem("quizServerHost", SERVER);
         }
+        const deviceAuth = readDeviceAuth();
+        const hostname3 = deviceAuth.hostname || defaultMachineName(deviceId);
         const payload = {
           deviceId,
-          name: navigator.userAgent || "browser",
+          name: hostname3,
+          hostname: hostname3,
+          deviceType: deviceAuth.deviceType || "desktop",
+          userAgent: navigator.userAgent || "browser",
           localStorage: collectLocalStorage()
         };
         socket.emit("register", payload);
@@ -28693,6 +28894,10 @@ A new temporary password will be generated and shown to you once so you can shar
       });
       socket.on("connect_error", (error51) => {
         var message = error51 && error51.message || "";
+        if (/device_blocked|device has been blocked|appareil.*bloqu/i.test(message)) {
+          handleDeviceBlocked(socket, "Cet appareil a \xE9t\xE9 bloqu\xE9 par un enseignant.");
+          return;
+        }
         var isAuthFailure = /unauthorized|invalid.*token|expired|token.*required|jwt/i.test(
           message
         );
@@ -28724,6 +28929,9 @@ A new temporary password will be generated and shown to you once so you can shar
       });
       socket.on("requestLocalStorage", () => {
         sendLocalStorageUpdate(true);
+      });
+      socket.on("device:blocked", (info) => {
+        handleDeviceBlocked(socket, info && info.message);
       });
       function upsertPushedExam(sessionPackage) {
         if (sessionPackage?.mode !== "exam" || !sessionPackage.examId) return;
@@ -29717,6 +29925,198 @@ A new temporary password will be generated and shown to you once so you can shar
         console.log("[" + type + "] " + msg);
       }
     }
+    function postLoginRequest(portal, username, password, force) {
+      return fetch(baseUrl + "/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          password,
+          // Scope the refresh cookie to this portal so a student login in
+          // another tab of the same browser never rotates it.
+          portal,
+          force: force === true
+        }),
+        credentials: "include"
+      }).then(function(res) {
+        return res.json().then(
+          function(body) {
+            return { res, body: body || {} };
+          },
+          function() {
+            return { res, body: {} };
+          }
+        );
+      }).then(function(out) {
+        if (out.res.status === 409 && out.body && out.body.error && out.body.error.code === "SESSION_ACTIVE") {
+          var conflict = new Error(
+            out.body.error.message || "Already signed in on another device or tab."
+          );
+          conflict.code = "SESSION_ACTIVE";
+          conflict.status = 409;
+          throw conflict;
+        }
+        if (!out.res.ok) {
+          var msg = out.body && out.body.error && out.body.error.message || "Invalid username or password";
+          var err = new Error(msg);
+          err.status = out.res.status;
+          throw err;
+        }
+        return out.body;
+      });
+    }
+    function showSessionConflictConfirm(form, onTakeOver) {
+      try {
+        if (!form || !form.appendChild) return false;
+        var old = form.querySelector("[data-session-conflict]");
+        if (old) old.remove();
+        var bar = document.createElement("div");
+        bar.setAttribute("data-session-conflict", "true");
+        bar.setAttribute("role", "alert");
+        bar.style.cssText = "margin:12px 0;padding:0;border:1px solid #fcd34d;border-left:5px solid #f59e0b;border-radius:12px;background:linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%);box-shadow:0 8px 24px rgba(245,158,11,0.18);overflow:hidden;animation:sessionConflictIn 0.25s ease-out;";
+        var head = document.createElement("div");
+        head.style.cssText = "display:flex;align-items:center;gap:10px;padding:12px 14px 0;";
+        var icon = document.createElement("span");
+        icon.setAttribute("aria-hidden", "true");
+        icon.textContent = "\u26A0\uFE0F";
+        icon.style.cssText = "display:inline-grid;place-items:center;width:34px;height:34px;flex:0 0 auto;border-radius:50%;background:#f59e0b;color:#fff;font-size:18px;box-shadow:0 2px 8px rgba(245,158,11,0.45);";
+        var title = document.createElement("strong");
+        title.textContent = "Already signed in";
+        title.style.cssText = "color:#78350f;font-size:0.98rem;letter-spacing:-0.01em;";
+        head.appendChild(icon);
+        head.appendChild(title);
+        var msg = document.createElement("div");
+        msg.textContent = "This account is already signed in on another device or tab. Only one session is allowed at a time.";
+        msg.style.cssText = "padding:8px 14px 0;color:#92400e;font-size:0.88rem;line-height:1.5;";
+        var hint = document.createElement("div");
+        hint.textContent = "Ask your teacher or admin to end your other session, or take over below.";
+        hint.style.cssText = "padding:4px 14px 0;color:#b45309;font-size:0.8rem;line-height:1.5;";
+        var row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.gap = "8px";
+        row.style.padding = "12px 14px 14px";
+        row.style.flexWrap = "wrap";
+        var takeOver = document.createElement("button");
+        takeOver.type = "button";
+        takeOver.textContent = "Sign out the other session and continue";
+        takeOver.style.cssText = "flex:1;min-width:200px;padding:10px 14px;border:none;border-radius:9px;background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);color:#fff;font-weight:700;font-size:0.88rem;cursor:pointer;box-shadow:0 4px 14px rgba(99,102,241,0.35);transition:transform 0.15s ease;";
+        takeOver.onmouseover = function() {
+          takeOver.style.transform = "translateY(-1px)";
+        };
+        takeOver.onmouseout = function() {
+          takeOver.style.transform = "none";
+        };
+        takeOver.onclick = function() {
+          try {
+            bar.remove();
+          } catch (_) {
+          }
+          onTakeOver();
+        };
+        var cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.textContent = "Cancel";
+        cancel.style.cssText = "padding:10px 16px;border:1px solid #d1d5db;border-radius:9px;background:#fff;color:#374151;font-weight:600;font-size:0.88rem;cursor:pointer;";
+        cancel.onclick = function() {
+          try {
+            bar.remove();
+          } catch (_) {
+          }
+        };
+        row.appendChild(takeOver);
+        row.appendChild(cancel);
+        bar.appendChild(head);
+        bar.appendChild(msg);
+        bar.appendChild(hint);
+        bar.appendChild(row);
+        ensureConflictAnimation();
+        form.appendChild(bar);
+        try {
+          takeOver.focus();
+        } catch (_) {
+        }
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+    var conflictAnimationAdded = false;
+    function ensureConflictAnimation() {
+      if (conflictAnimationAdded) return;
+      conflictAnimationAdded = true;
+      try {
+        var style = document.createElement("style");
+        style.setAttribute("data-session-conflict-style", "true");
+        style.textContent = "@keyframes sessionConflictIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}";
+        document.head.appendChild(style);
+      } catch (_) {
+      }
+    }
+    var sessionWatchTimer = null;
+    var lastSessionCheck = 0;
+    var sessionEnded = false;
+    function checkSessionAlive(manual) {
+      if (sessionEnded) return Promise.resolve(false);
+      var token = window.__authToken || "";
+      if (!token) return Promise.resolve(false);
+      var now = Date.now();
+      if (!manual && now - lastSessionCheck < 45e3) return Promise.resolve(true);
+      lastSessionCheck = now;
+      return fetch(baseUrl + "/auth/session", {
+        method: "GET",
+        credentials: "include",
+        headers: { Authorization: "Bearer " + token }
+      }).then(function(res) {
+        if (res.status === 409) {
+          handleSessionSuperseded();
+          return false;
+        }
+        return res.ok;
+      }).catch(function() {
+        return true;
+      });
+    }
+    function handleSessionSuperseded() {
+      if (sessionEnded) return;
+      sessionEnded = true;
+      try {
+        if (sessionWatchTimer) {
+          clearInterval(sessionWatchTimer);
+          sessionWatchTimer = null;
+        }
+      } catch (_) {
+      }
+      try {
+        sessionStorage.removeItem("quizSession");
+        localStorage.removeItem("quizSession");
+        localStorage.removeItem("quizSessionRemember");
+        window.__authToken = null;
+      } catch (_) {
+      }
+      showMsg(
+        "Signed in on another device or tab. This session has ended.",
+        "error"
+      );
+      setTimeout(function() {
+        window.location.href = "/";
+      }, 2500);
+    }
+    window.__sessionSuperseded = handleSessionSuperseded;
+    function startSessionWatchdog() {
+      if (sessionWatchTimer) return;
+      try {
+        sessionWatchTimer = setInterval(function() {
+          checkSessionAlive(false);
+        }, 6e4);
+        document.addEventListener("visibilitychange", function() {
+          if (!document.hidden) checkSessionAlive(true);
+        });
+        window.addEventListener("focus", function() {
+          checkSessionAlive(true);
+        });
+      } catch (_) {
+      }
+    }
     function replaceForm(id) {
       var form = document.getElementById(id);
       if (!form) return null;
@@ -29884,7 +30284,7 @@ A new temporary password will be generated and shown to you once so you can shar
       if (!form) return;
       form.setAttribute("data-bridge-owned", "true");
       window.__AUTH_BRIDGE_OWNS_LOGIN__ = true;
-      form.addEventListener("submit", async function(e) {
+      form.addEventListener("submit", function(e) {
         e.preventDefault();
         e.stopImmediatePropagation();
         var username = (this.querySelector('[data-auth="username"]') || {}).value;
@@ -29894,51 +30294,50 @@ A new temporary password will be generated and shown to you once so you can shar
           showMsg("Please enter your username and password", "error");
           return;
         }
-        try {
-          var res = await fetch(baseUrl + "/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: username.trim(),
-              password,
-              // Scope the refresh cookie to this portal so a student login in
-              // another tab of the same browser never rotates it.
-              portal: "admin"
-            }),
-            credentials: "include"
-          });
-          if (!res.ok) {
-            var errBody;
+        if (form.dataset.loggingIn === "true") return;
+        form.dataset.loggingIn = "true";
+        var attempt = function(force) {
+          return postLoginRequest("admin", username.trim(), password, force).then(function(data) {
+            var user = data.user || data;
+            var token = data.accessToken || data.token || "";
+            var session = buildSession(user, token, remember);
+            persistSession(session, remember);
+            sessionStorage.setItem("adminLoggedIn", "true");
             try {
-              errBody = await res.json();
+              document.documentElement.classList.remove("auth-pending", "auth-ready");
             } catch (_) {
-              errBody = {};
             }
-            showMsg(errBody?.error?.message || "Invalid username or password", "error");
-            return;
-          }
-          var data = await res.json();
-          var user = data.user || data;
-          var token = data.accessToken || data.token || "";
-          var session = buildSession(user, token, remember);
-          persistSession(session, remember);
-          sessionStorage.setItem("adminLoggedIn", "true");
-          try {
-            document.documentElement.classList.remove("auth-pending", "auth-ready");
-          } catch (_) {
-          }
-          showMsg("Login successful", "success");
-          window.location.reload();
-        } catch (err) {
-          showMsg("Connection error: " + err.message, "error");
-        }
+            sessionEnded = false;
+            startSessionWatchdog();
+            showMsg("Login successful", "success");
+            window.location.reload();
+          }).catch(function(err) {
+            if (err && err.code === "SESSION_ACTIVE") {
+              form.dataset.loggingIn = "";
+              var shown = showSessionConflictConfirm(form, function() {
+                form.dataset.loggingIn = "true";
+                attempt(true);
+              });
+              if (!shown) {
+                showMsg(err.message || "Already signed in on another device or tab.", "error");
+              }
+              return;
+            }
+            showMsg(err && err.message || "Invalid username or password", "error");
+            form.dataset.loggingIn = "";
+          });
+        };
+        attempt(true).catch(function(err) {
+          form.dataset.loggingIn = "";
+          showMsg("Connection error: " + (err.message || "network error"), "error");
+        });
       }, true);
     }
     function bindStudentLogin() {
       var form = replaceForm("studentLoginForm");
       if (!form) return;
       form.setAttribute("data-bridge-owned", "true");
-      form.addEventListener("submit", async function(e) {
+      form.addEventListener("submit", function(e) {
         e.preventDefault();
         e.stopImmediatePropagation();
         var username = (this.querySelector('[data-auth="username"]') || {}).value;
@@ -29948,83 +30347,84 @@ A new temporary password will be generated and shown to you once so you can shar
           showMsg("Please enter your username and password", "error");
           return;
         }
-        try {
-          var res = await fetch(baseUrl + "/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              username: username.trim(),
-              password,
-              // Scope the refresh cookie to this portal so an admin login in
-              // another tab of the same browser never rotates it.
-              portal: "student"
-            }),
-            credentials: "include"
+        if (form.dataset.loggingIn === "true") return;
+        form.dataset.loggingIn = "true";
+        var attempt = function(force) {
+          var loginToken = "";
+          return postLoginRequest("student", username.trim(), password, force).then(function(data) {
+            var user = data.user || data;
+            loginToken = data.accessToken || data.token || "";
+            return hydrateFullUser(user, loginToken);
+          }).then(function(user) {
+            var authNS0 = window.Auth || {};
+            var roleCheck = window.isStudentLikeUser || authNS0.isStudentLikeUser;
+            var effectiveRole = typeof roleCheck === "function" ? roleCheck(user) ? "student" : String(user.role || "") : String(user.role || "");
+            if (effectiveRole !== "student") {
+              showMsg("Only student accounts can sign in here. Admins and teachers must use the admin portal.", "error");
+              return;
+            }
+            var session = buildSession(user, loginToken, remember);
+            persistSession(session, remember);
+            sessionEnded = false;
+            startSessionWatchdog();
+            var authNSApply = window.Auth || {};
+            if (typeof authNSApply.setCurrentUser === "function") {
+              try {
+                authNSApply.setCurrentUser(user, session);
+              } catch (e2) {
+                console.warn("[legacy-auth] setCurrentUser failed:", e2);
+              }
+            }
+            if (typeof window.__legacyBridgeBootstrap === "function") {
+              window.__legacyBridgeBootstrap().catch(function() {
+              });
+            }
+            var authNS = window.Auth || {};
+            var notifyAuth = window.notifyAuthChange || authNS.notifyAuthChange;
+            var applyAuthUI = window.applyStudentAuthUI || authNS.applyStudentAuthUI;
+            var hideModal = window.hideStudentAuthModal || authNS.hideStudentAuthModal;
+            if (typeof notifyAuth === "function") {
+              try {
+                notifyAuth();
+              } catch (e2) {
+                console.warn("[legacy-auth] notifyAuthChange failed:", e2);
+              }
+            }
+            if (typeof applyAuthUI === "function") {
+              try {
+                applyAuthUI(user);
+              } catch (e2) {
+                console.warn("[legacy-auth] applyStudentAuthUI failed:", e2);
+              }
+            }
+            if (typeof hideModal === "function") {
+              try {
+                hideModal();
+              } catch (e2) {
+                console.warn("[legacy-auth] hideStudentAuthModal failed:", e2);
+              }
+            }
+            showMsg("Login successful", "success");
+          }).catch(function(err) {
+            if (err && err.code === "SESSION_ACTIVE") {
+              form.dataset.loggingIn = "";
+              var shown = showSessionConflictConfirm(form, function() {
+                form.dataset.loggingIn = "true";
+                attempt(true);
+              });
+              if (!shown) {
+                showMsg(err.message || "Already signed in on another device or tab.", "error");
+              }
+              return;
+            }
+            showMsg(err && err.message || "Invalid username or password", "error");
+            form.dataset.loggingIn = "";
           });
-          if (!res.ok) {
-            var errBody;
-            try {
-              errBody = await res.json();
-            } catch (_) {
-              errBody = {};
-            }
-            showMsg(errBody?.error?.message || "Invalid username or password", "error");
-            return;
-          }
-          var data = await res.json();
-          var user = data.user || data;
-          var token = data.accessToken || data.token || "";
-          user = await hydrateFullUser(user, token);
-          var authNS0 = window.Auth || {};
-          var roleCheck = window.isStudentLikeUser || authNS0.isStudentLikeUser;
-          var effectiveRole = typeof roleCheck === "function" ? roleCheck(user) ? "student" : String(user.role || "") : String(user.role || "");
-          if (effectiveRole !== "student") {
-            showMsg("Only student accounts can sign in here. Admins and teachers must use the admin portal.", "error");
-            return;
-          }
-          var session = buildSession(user, token, remember);
-          persistSession(session, remember);
-          var authNSApply = window.Auth || {};
-          if (typeof authNSApply.setCurrentUser === "function") {
-            try {
-              authNSApply.setCurrentUser(user, session);
-            } catch (e2) {
-              console.warn("[legacy-auth] setCurrentUser failed:", e2);
-            }
-          }
-          if (typeof window.__legacyBridgeBootstrap === "function") {
-            window.__legacyBridgeBootstrap().catch(function() {
-            });
-          }
-          var authNS = window.Auth || {};
-          var notifyAuth = window.notifyAuthChange || authNS.notifyAuthChange;
-          var applyAuthUI = window.applyStudentAuthUI || authNS.applyStudentAuthUI;
-          var hideModal = window.hideStudentAuthModal || authNS.hideStudentAuthModal;
-          if (typeof notifyAuth === "function") {
-            try {
-              notifyAuth();
-            } catch (e2) {
-              console.warn("[legacy-auth] notifyAuthChange failed:", e2);
-            }
-          }
-          if (typeof applyAuthUI === "function") {
-            try {
-              applyAuthUI(user);
-            } catch (e2) {
-              console.warn("[legacy-auth] applyStudentAuthUI failed:", e2);
-            }
-          }
-          if (typeof hideModal === "function") {
-            try {
-              hideModal();
-            } catch (e2) {
-              console.warn("[legacy-auth] hideStudentAuthModal failed:", e2);
-            }
-          }
-          showMsg("Login successful", "success");
-        } catch (err) {
-          showMsg("Connection error: " + err.message, "error");
-        }
+        };
+        attempt(false).catch(function(err) {
+          form.dataset.loggingIn = "";
+          showMsg("Connection error: " + (err.message || "network error"), "error");
+        });
       }, true);
     }
     function overrideLogout() {
@@ -30080,6 +30480,12 @@ A new temporary password will be generated and shown to you once so you can shar
       bindAdminLogin();
       bindStudentLogin();
       overrideLogout();
+      try {
+        if (window.__authToken || sessionStorage.getItem("quizSession")) {
+          startSessionWatchdog();
+        }
+      } catch (_) {
+      }
     }
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", init);

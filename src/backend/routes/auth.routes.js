@@ -195,6 +195,21 @@ router.get('/session', requireAuth, async (req, res, next) => {
 	}
 });
 
+// GET /api/v1/auth/sessions/live — school-wide blocking sign-ins (admin
+// rescue view for stuck "already signed in" accounts). Lists every user of
+// the caller's school holding at least one live refresh token, newest
+// first. Token hashes are never exposed. Without this, an admin cannot
+// discover WHO is blocked — login sessions are not device rows, so the
+// Classroom Devices table never shows them.
+router.get('/sessions/live', requireAuth, enforceTenant, requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
+	try {
+		const { authSvc } = getContainer();
+		res.json(await authSvc.listLiveSessions(req.schoolId));
+	} catch (err) {
+		next(err);
+	}
+});
+
 // POST /api/v1/auth/logout
 // Deliberately NOT behind requireAuth: presenting a refresh cookie IS the
 // credential, and logout must succeed even when the short-lived access token

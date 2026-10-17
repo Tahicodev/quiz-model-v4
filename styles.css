@@ -32272,7 +32272,9 @@ body.modal-open {
 }
 
 #aiGeneratorModal.is-open #ai-preview-footer-actions.hidden,
-#aiGeneratorModal.is-open #ai-form-footer-actions.hidden {
+#aiGeneratorModal.is-open #ai-form-footer-actions.hidden,
+#aiGeneratorModal.is-open #ai-builder-footer-actions.hidden,
+#aiGeneratorModal.is-open #ai-import-footer-actions.hidden {
 	display: none !important;
 }
 
@@ -32317,6 +32319,9 @@ body.modal-open {
 		width: 36px;
 		height: 36px;
 		border-radius: 12px;
+		background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+		color: #ffffff !important;
+		border: 1px solid transparent !important;
 	}
 
 	#aiGeneratorModal.is-open .ai-header-icon-wrapper svg {
@@ -32379,6 +32384,13 @@ body.modal-open {
 		display: grid !important;
 		grid-template-columns: 1fr;
 		width: 100%;
+	}
+
+	#aiGeneratorModal.is-open #ai-builder-footer-actions,
+	#aiGeneratorModal.is-open #ai-import-footer-actions,
+	#aiGeneratorModal.is-open #ai-builder-footer-actions .btn,
+	#aiGeneratorModal.is-open #ai-import-footer-actions .btn {
+		width: 100% !important;
 	}
 
 	#aiGeneratorModal.is-open #ai-questions-preview {

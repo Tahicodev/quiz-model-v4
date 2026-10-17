@@ -1545,7 +1545,8 @@ html[data-theme='dark'] #aiGeneratorModal #tab-ai-standard {
 }
 
 html[data-theme='dark'] #aiGeneratorModal #tab-ai-document,
-html[data-theme='dark'] #aiGeneratorModal #tab-ai-builder {
+html[data-theme='dark'] #aiGeneratorModal #tab-ai-builder,
+html[data-theme='dark'] #aiGeneratorModal #tab-ai-import {
 	color: var(--text-muted) !important;
 }
 
@@ -1597,6 +1598,114 @@ html[data-theme='dark'] #aiGeneratorModal [style*='background: #f8fafc'],
 html[data-theme='dark'] #aiGeneratorModal [style*='background: #f1f5f9'],
 html[data-theme='dark'] #aiGeneratorModal [style*='background: rgba(255, 255, 255, 0.7)'] {
 	background-color: var(--bg-surface-alt) !important;
+}
+
+/* ── Prompt Builder + Import JSON tabs (dark) ── */
+/* Toolbar (teal gradient in light mode) */
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f0fdfa'] {
+	background: rgba(13, 148, 136, 0.14) !important;
+	border-color: rgba(45, 212, 191, 0.35) !important;
+}
+
+/* Hierarchy cards: keep the accent coding, darkened */
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#ecfdf5'] {
+	background: rgba(16, 185, 129, 0.10) !important;
+	border-color: rgba(52, 211, 153, 0.45) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f0f9ff'] {
+	background: rgba(56, 189, 248, 0.10) !important;
+	border-color: rgba(56, 189, 248, 0.40) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#faf5ff'] {
+	background: rgba(167, 139, 250, 0.12) !important;
+	border-color: rgba(167, 139, 250, 0.45) !important;
+}
+/* Axe card (white + violet left accent in light mode) */
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='border-left:4px solid #8b5cf6'] {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+	border-left-color: #8b5cf6 !important;
+}
+/* Type-mix chips + language bar + empty state */
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f8fafc'],
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f1f5f9'] {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+
+/* All builder/import fields readable on dark */
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form input,
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form select,
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form textarea,
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form textarea {
+	background-color: var(--bg-body) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-main) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form input::placeholder,
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form textarea::placeholder,
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form textarea::placeholder {
+	color: var(--text-muted) !important;
+	opacity: 1;
+}
+html[data-theme='dark'] #aiGeneratorModal #promptBuilderOutput {
+	background: rgba(16, 185, 129, 0.08) !important;
+	border-color: rgba(52, 211, 153, 0.4) !important;
+	color: var(--text-main) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #promptBuilderImportInput {
+	background: var(--bg-body) !important;
+	border-color: rgba(167, 139, 250, 0.5) !important;
+	color: var(--text-main) !important;
+}
+/* Import wrap (violet gradient in light mode) */
+html[data-theme='dark'] #aiGeneratorModal #promptBuilderImportWrap {
+	background: rgba(124, 58, 237, 0.12) !important;
+	border-color: rgba(167, 139, 250, 0.45) !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form code {
+	background-color: var(--bg-surface-alt) !important;
+	color: #c4b5fd !important;
+	border-radius: 4px;
+	padding: 0 4px;
+}
+
+/* Inline accent text colors → readable light variants */
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#065f46'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#065f46'] {
+	color: #6ee7b7 !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#047857'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#047857'],
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#059669'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#059669'] {
+	color: #34d399 !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#0369a1'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#0369a1'] {
+	color: #7dd3fc !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#6d28d9'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#6d28d9'],
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#7c3aed'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#7c3aed'] {
+	color: #c4b5fd !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#334155'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#334155'] {
+	color: #e2e8f0 !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#64748b'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#64748b'] {
+	color: #94a3b8 !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#b45309'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#b45309'] {
+	color: #fbbf24 !important;
+}
+html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#0d9488'],
+html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#0d9488'] {
+	color: #5eead4 !important;
 }
 
 /* ── Lobby Dock window + taskbar (dark) ── */

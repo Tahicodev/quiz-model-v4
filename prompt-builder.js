@@ -556,7 +556,7 @@ Generate now.`;
     } catch (_) { copied = false; }
     if (status) {
       status.textContent = copied
-        ? `✓ Prompt copié (${total} questions) — collez-le dans ChatGPT/Claude, puis importez sa réponse JSON via « Import generated JSON ».`
+        ? `✓ Prompt copié (${total} questions) — collez-le dans ChatGPT/Claude, puis ouvrez l’onglet « Import JSON » pour coller sa réponse.`
         : 'Prompt généré ci-dessous — copiez-le manuellement (presse-papiers bloqué).';
     }
     if (typeof showToast === 'function') {
@@ -680,6 +680,23 @@ Generate now.`;
     window.renderPromptBuilderTree();
   };
 
+  window.openPromptBuilderImport = function () {
+    if (!ensureGeneratorOpen()) {
+      if (typeof showToast === 'function') showToast('AI Generator introuvable — rechargez la page (Ctrl+F5).', 'error');
+      return;
+    }
+    if (typeof window.switchAIGeneratorTab === 'function') {
+      window.switchAIGeneratorTab('import');
+    } else {
+      const pane = document.getElementById('ai-import-form');
+      if (pane) pane.style.display = 'block';
+    }
+    const ta = document.getElementById('promptBuilderImportInput');
+    if (ta) {
+      try { ta.focus({ preventScroll: false }); } catch (_) { try { ta.focus(); } catch (_) {} }
+    }
+  };
+
   window.closePromptBuilderModal = function () {
     if (typeof window.closeAIGeneratorModal === 'function') {
       window.closeAIGeneratorModal();
@@ -692,18 +709,24 @@ Generate now.`;
   // One-command diagnostic for the browser console:
   //   __aiBuilderDiag()
   window.__aiBuilderDiag = function () {
-    const out = { pbVersion: '2026-10-16-r1' };
+    const out = { pbVersion: '2026-10-16-r4' };
     try {
       out.switchFn = typeof window.switchAIGeneratorTab;
       out.renderFn = typeof window.renderPromptBuilderTree;
       const pane = document.getElementById('ai-builder-form');
       out.paneFound = !!pane;
       out.paneDisplay = pane ? pane.style.display : null;
+      const importPane = document.getElementById('ai-import-form');
+      out.importPaneFound = !!importPane;
+      out.importPaneDisplay = importPane ? importPane.style.display : null;
       const tree = document.getElementById('promptBuilderTree');
       out.treeFound = !!tree;
       out.treeChildren = tree ? tree.children.length : null;
       out.treeTextHead = tree ? String(tree.textContent || '').slice(0, 80) : null;
       out.tabBtn = !!document.getElementById('tab-ai-builder');
+      out.importTabBtn = !!document.getElementById('tab-ai-import');
+      out.builderFooter = !!document.getElementById('ai-builder-footer-actions');
+      out.importFooter = !!document.getElementById('ai-import-footer-actions');
       out.cats = (state.categories || []).length;
       out.axes = collectAxes().length;
     } catch (e) {

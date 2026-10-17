@@ -133,6 +133,25 @@ beforeAll(() => {
       if (u.includes('/devices')) {
         return { ok: true, status: 200, json: async () => state.rows };
       }
+      if (u.includes('/sessions/live')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              user: { id: 'teacher-1', name: 'Hicham', username: 'hicham', role: 'teacher' },
+              sessions: [
+                {
+                  id: 'tok-1',
+                  created_at: new Date().toISOString(),
+                  ip_address: '192.168.1.10',
+                  user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0',
+                },
+              ],
+            },
+          ],
+        };
+      }
       return { ok: false, status: 404, json: async () => ({}) };
     },
   };
@@ -150,7 +169,7 @@ async function refresh() {
 }
 
 describe('staff device rows', () => {
-  it('renders a staff badge, no block button, and an end-sessions action', async () => {
+  it('renders a staff badge, no block button, and per-user end-sessions actions', async () => {
     resetEls();
     await refresh();
     const html = els.devicesTableBody.innerHTML;
@@ -160,16 +179,16 @@ describe('staff device rows', () => {
     // Block action only on the student row.
     const blockCount = html.split("title=\"Bloquer\"").length - 1;
     expect(blockCount).toBe(1);
-    // End-sessions on both linked rows (admin session).
-    const endCount = html.split('endSessions(').length - 1;
-    expect(endCount).toBe(2);
+    // Per-user End-sessions: one for the teacher (session sub-row line).
+    const endCount = html.split('endUserSessions(').length - 1;
+    expect(endCount).toBe(1);
   });
 
   it('hides the end-sessions action for non-admins', async () => {
     resetEls();
     state.isAdmin = false;
     await refresh();
-    expect(els.devicesTableBody.innerHTML).not.toContain('endSessions(');
+    expect(els.devicesTableBody.innerHTML).not.toContain('endUserSessions(');
     state.isAdmin = true;
   });
 

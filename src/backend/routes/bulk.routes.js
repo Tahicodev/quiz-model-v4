@@ -99,6 +99,32 @@ const pickBool = (v) => (v === undefined ? undefined : Boolean(v));
 
 const pickStr = (v) => (v == null ? undefined : String(v));
 
+/**
+ * Extract the training workspace `{ questionId: userAnswer }` map from a
+ * raw `answers_json` string. Only string/number values are kept (curated
+ * metadata objects are answers, not answers). Returns null when there is no
+ * usable map so the caller can omit the key.
+ */
+const extractUserAnswersMap = (raw) => {
+  if (raw == null || raw === '') return null;
+  let parsed = raw;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (_) {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const out = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if ((typeof value === 'string' || typeof value === 'number') && String(key).trim()) {
+      out[String(key).trim()] = String(value);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+};
+
 /** Real v4-UUID test — legacy Date.now() / simpleHash ids must be dropped so Prisma's @default(uuid()) fires. */
 const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const pickUuid = (v) => {
@@ -524,6 +550,11 @@ const SANITIZERS = {
       totalQuestions: row.totalQuestions ?? null,
       // /20 grading scale sent by the student training workspace.
       grade20: Number.isFinite(Number(row.grade20)) ? Number(row.grade20) : null,
+      // Per-question user answers ({ questionId: answer }) sent by the
+      // training workspace. Required by GET /results/:id/corrections to
+      // grade the attempt server-side (student browsers never receive the
+      // correct answers, so the breakdown cannot be built locally).
+      userAnswers: extractUserAnswersMap(row.answers_json ?? row.answersJson),
       gameId: row.gameId ?? null,
       gameName: row.gameName ?? null,
       lobbyId: row.lobbyId ?? null,
