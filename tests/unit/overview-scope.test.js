@@ -127,7 +127,9 @@ function resetEls() {
   els.overviewStudentFilter = makeEl({ value: '' });
   els.overviewStudentFilterWrap = makeEl();
   els.overviewModeFilter = makeEl({ value: '' });
+  els.overviewPeriodFilter = makeEl({ value: '' });
   els.overviewFilterBar = makeEl();
+  els.overviewScopeLabel = makeEl();
   els.recentActivityList = makeEl();
   els.dashboardGreeting = makeEl();
   els.categoryInsightsScopeLabel = makeEl();
@@ -135,7 +137,8 @@ function resetEls() {
   els['kpi-cat-exam'] = makeEl();
   els['kpi-cat-attempts'] = makeEl();
   els['kpi-cat-struggling'] = makeEl();
-  els.categoryClassTableBody = makeEl();
+  els['kpi-avg-score'] = makeEl();
+  els['kpi-activity-rate'] = makeEl();
   els.categoryHardList = makeEl();
   els.categoryUnattemptedLine = makeEl();
   els.scoreDistributionChart = makeEl();
@@ -350,7 +353,7 @@ describe('category insights', () => {
     expect([c1.attempts, c1.training.a, c1.training.c, c1.exam.a]).toEqual([3, 2, 1, 1]);
   });
 
-  it('renders KPI cards, class table, hard list and unattempted line', () => {
+  it('renders the needs-attention list ranked lowest first', () => {
     seedInsights();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
     vm.runInContext('initDashboard();', ctx);
@@ -359,14 +362,13 @@ describe('category insights', () => {
     expect(els['kpi-cat-attempts'].textContent).toBe('4');
     expect(els['kpi-cat-struggling'].textContent).toBe('1');
     expect(els.categoryInsightsScopeLabel.textContent).toBe('All data');
-    const tableHtml = els.categoryClassTableBody.innerHTML;
-    expect(tableHtml).toContain('Class One');
-    expect(tableHtml).toContain('Class Two');
     const hardHtml = els.categoryHardList.innerHTML;
+    expect(hardHtml).toContain('hard-item');
     expect(hardHtml).toContain('Capital of France?');
     expect(hardHtml.indexOf('Capital of France?')).toBeLessThan(
       hardHtml.indexOf('What is 2 + 2?'),
     );
+    expect(hardHtml).toContain('acc-low');
     expect(els.categoryUnattemptedLine.textContent).toBe(
       '3 questions not attempted yet',
     );
@@ -400,8 +402,9 @@ describe('category insights', () => {
     vm.runInContext('initDashboard();', ctx);
     // r12 belongs to the other class: excluded from teacher 1.
     expect(els['kpi-cat-attempts'].textContent).toBe('3');
-    expect(els.categoryClassTableBody.innerHTML).toContain('Class One');
-    expect(els.categoryClassTableBody.innerHTML).not.toContain('Class Two');
+    expect(
+      vm.runInContext('overviewScopeClasses().map((c) => c.id)', ctx),
+    ).toEqual([C1]);
   });
 });
 
@@ -514,8 +517,72 @@ describe('student filter', () => {
   });
 });
 
+describe('period filter', () => {
+  function seedPeriodResults() {
+    seedTables();
+    // Replace the fixed-date seed results with clock-relative ones so the
+    // window math never depends on how close the suite runs to Oct 5 2026.
+    const nowMs = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    state.tables.results = [
+      {
+        id: 'rU-now',
+        user_id: 's1',
+        classId: C1,
+        studentName: 'Student One',
+        studentNumber: '101',
+        score: 10,
+        totalPoints: 10,
+        mode: 'training',
+        date: new Date(nowMs - day).toISOString(),
+      },
+      {
+        id: 'rU-old',
+        user_id: 's1',
+        classId: C1,
+        studentName: 'Student One',
+        studentNumber: '101',
+        score: 0,
+        totalPoints: 10,
+        mode: 'training',
+        date: new Date(nowMs - 41 * day).toISOString(),
+      },
+    ];
+    setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
+  }
+
+  it('All time shows both windows; Last 7 days drops the old attempt', () => {
+    seedPeriodResults();
+    vm.runInContext('initDashboard();', ctx);
+    // Both attempts land in distinct buckets (0-5 and 15-20): two bars at
+    // one-count, plus the four always-rendered groups.
+    const count1Bars = () =>
+      els.scoreDistributionChart.innerHTML.split('data-value="1 student').length - 1;
+    expect(count1Bars()).toBe(2);
+    expect(els['kpi-activity-rate'].textContent).toBe('2');
+    expect(els.overviewScopeLabel.textContent).toContain('All data');
+
+    els.overviewPeriodFilter.value = '7d';
+    vm.runInContext('initDashboard();', ctx);
+    // Only the recent attempt counts: exclusively the green bucket.
+    expect(count1Bars()).toBe(1);
+    expect(els['kpi-activity-rate'].textContent).toBe('1');
+    // The scope bar recaps the period.
+    expect(els.overviewScopeLabel.textContent).toContain('last 7 days');
+  });
+
+  it('mode + period combine: exams only leaves both training attempts out', () => {
+    seedPeriodResults();
+    els.overviewModeFilter.value = 'exam';
+    els.overviewPeriodFilter.value = 'today';
+    vm.runInContext('initDashboard();', ctx);
+    expect(els.scoreDistributionChart.innerHTML).toContain('chart-empty');
+    expect(els['kpi-avg-score'].textContent).toBe('-');
+  });
+});
+
 describe('overview markup', () => {
-  it('exposes all four filters plus the mobile toggle in admin.html', () => {
+  it('exposes all six filters plus the mobile toggle in admin.html', () => {
     const html = readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
     for (const id of [
       'overviewTeacherFilter',
@@ -523,7 +590,10 @@ describe('overview markup', () => {
       'overviewCategoryFilter',
       'overviewStudentFilter',
       'overviewModeFilter',
+      'overviewPeriodFilter',
       'overviewFilterBar',
+      'overviewScopeBar',
+      'overviewScopeLabel',
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
@@ -540,5 +610,20 @@ describe('overview markup', () => {
     expect(advancedAt).toBeGreaterThanOrEqual(0);
     expect(categoryAt).toBeGreaterThan(advancedAt);
     expect(reportsAt).toBeGreaterThan(categoryAt);
+    // KPI domains are strictly separated: games/tournaments live in their
+    // own "Live Play" section, results metrics in "Advanced Insights".
+    const livePlayAt = html.indexOf('Live Play');
+    expect(livePlayAt).toBeGreaterThan(0);
+    expect(livePlayAt).toBeLessThan(advancedAt);
+    expect(html).toContain('kpi-avg-score');
+    expect(html).toContain('kpi-activity-window');
+    // The per-class table is gone: the Class Performance chart is the one
+    // class view (no duplicated class breakdown).
+    expect(html).not.toContain('categoryClassTableBody');
+    expect(html).not.toContain('insights-table');
+    // Every filter dropdown carries a visible caption.
+    expect(html).toContain('<label for="overviewClassFilter">');
+    expect(html).toContain('<label for="overviewPeriodFilter">');
+    expect(html).toContain('needs-attention-block');
   });
 });

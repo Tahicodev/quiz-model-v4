@@ -16368,17 +16368,46 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return this.#repo.update("categories", id, parsed.data);
     }
+    /**
+     * Deleting a category deletes the WHOLE subtree (subcategories,
+     * sub-subcategories…) and every question filed under it — this category
+     * or any of its subcategories — becomes uncategorized (category_id NULL,
+     * the UI's "Uncategorized" pseudo-category). Deep joins stay reachable:
+     * no more "cannot delete: has subcategories / contains questions".
+     */
     async delete(id, currentUser) {
       this.#requireAdmin(currentUser);
-      const existing = await this.#repo.getById("categories", id);
-      if (!existing) throw new NotFoundError("Category");
-      const { total: childCount } = await this.#repo.getAll("categories", { filters: { parent_id: id } });
-      if (childCount > 0) {
-        throw new ValidationError({ id: ["Cannot delete a category that has subcategories"] });
+      const root = await this.#repo.getById("categories", id);
+      if (!root) throw new NotFoundError("Category");
+      const subtreeIds = [String(id)];
+      let frontier = [id];
+      let guard = 0;
+      while (frontier.length && guard++ < 100) {
+        const found = [];
+        for (const parentId of frontier) {
+          const { data: children } = await this.#repo.getAll("categories", {
+            filters: { parent_id: parentId },
+            limit: 1e5
+          });
+          for (const child of children || []) {
+            if (child?.id && !subtreeIds.includes(String(child.id))) {
+              subtreeIds.push(String(child.id));
+              found.push(child.id);
+            }
+          }
+        }
+        frontier = found;
       }
-      const { total: questionCount } = await this.#repo.getAll("questions", { filters: { category_id: id } });
-      if (questionCount > 0) {
-        throw new ValidationError({ id: ["Cannot delete a category that contains questions"] });
+      const subtree = new Set(subtreeIds);
+      const { data: questions2 } = await this.#repo.getAll("questions", { limit: 1e5 });
+      for (const q of questions2 || []) {
+        if (q?.id && q.category_id && subtree.has(String(q.category_id))) {
+          await this.#repo.update("questions", q.id, { category_id: null });
+        }
+      }
+      for (const cid of subtreeIds.slice().reverse()) {
+        if (String(cid) === String(id)) continue;
+        await this.#repo.delete("categories", cid);
       }
       await this.#repo.delete("categories", id);
     }

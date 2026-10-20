@@ -631,36 +631,58 @@
 							class="sort-wrapper collapsible-filter-controls overview-filters"
 							id="overviewFilterBar"
 						>
-							<div id="overviewTeacherFilterWrap">
+							<div id="overviewTeacherFilterWrap" class="overview-filter">
+								<label for="overviewTeacherFilter">Teacher</label>
 								<select id="overviewTeacherFilter" title="Filter overview by teacher">
-									<option value="">All Teachers</option>
+									<option value="">All</option>
 								</select>
 							</div>
-							<div id="overviewClassFilterWrap">
+							<div class="overview-filter">
+								<label for="overviewClassFilter">Class</label>
 								<select id="overviewClassFilter" title="Filter overview by class">
-									<option value="">All Classes</option>
+									<option value="">All</option>
 								</select>
 							</div>
-							<div id="overviewCategoryFilterWrap">
+							<div class="overview-filter">
+								<label for="overviewCategoryFilter">Category</label>
 								<select id="overviewCategoryFilter" title="Filter overview by category">
-									<option value="">All Categories</option>
+									<option value="">All</option>
 								</select>
 							</div>
-							<div id="overviewStudentFilterWrap">
+							<div class="overview-filter">
+								<label for="overviewStudentFilter">Student</label>
 								<select id="overviewStudentFilter" title="Filter overview by student">
-									<option value="">All Students</option>
+									<option value="">All</option>
 								</select>
 							</div>
-							<div id="overviewModeFilterWrap">
+							<div class="overview-filter">
+								<label for="overviewModeFilter">Mode</label>
 								<select id="overviewModeFilter" title="Exam or training results">
-									<option value="">All Modes</option>
-									<option value="exam">Exam</option>
+									<option value="">All</option>
+									<option value="exam">Exams</option>
 									<option value="training">Training</option>
+								</select>
+							</div>
+							<div class="overview-filter">
+								<label for="overviewPeriodFilter">Period</label>
+								<select id="overviewPeriodFilter" title="Time window for results-based metrics">
+									<option value="">All time</option>
+									<option value="today">Today</option>
+									<option value="7d">Last 7 days</option>
+									<option value="30d">Last 30 days</option>
 								</select>
 							</div>
 						</div>
 
-						<div class="kpi-section-title">Core Statistics</div>
+						<!-- Active-scope recap: mirrors the filter bar so the view is
+						     always explicit (premium dashboards never leave scope
+						     ambiguous). Teachers see their own pinned scope here. -->
+						<div class="overview-scope-bar" id="overviewScopeBar">
+							<span class="overview-scope-label" id="overviewScopeLabel"></span>
+							<button type="button" class="overview-scope-clear" id="overviewClearFilters" onclick="window.clearOverviewFilters()">Clear filters</button>
+						</div>
+
+						<div class="kpi-section-title">People &amp; Students</div>
 						<div class="kpi-grid">
 							<div
 								class="stat-card blue"
@@ -738,6 +760,36 @@
 								</div>
 							</div>
 							<div
+								class="stat-card purple"
+								data-tooltip="Total number of classes organized for quiz administration"
+							>
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="24"
+										height="24"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+										<circle cx="9" cy="7" r="4"></circle>
+										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-classes">0</h3>
+									<p>Classes</p>
+								</div>
+							</div>
+						</div>
+
+						<div class="kpi-section-title">Content &amp; Structure</div>
+						<div class="kpi-grid">
+							<div
 								class="stat-card blue"
 								data-tooltip="Total number of quiz questions available across all categories"
 							>
@@ -792,32 +844,6 @@
 								</div>
 							</div>
 							<div
-								class="stat-card purple"
-								data-tooltip="Total number of classes organized for quiz administration"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-										<circle cx="9" cy="7" r="4"></circle>
-										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-classes">0</h3>
-									<p>Classes</p>
-								</div>
-							</div>
-							<div
 								class="stat-card amber"
 								data-tooltip="Total number of quiz categories available"
 							>
@@ -843,6 +869,13 @@
 									<p>Categories</p>
 								</div>
 							</div>
+						</div>
+
+						<!-- Live Play kept fully separate from exams/training on
+						     purpose: games and tournaments are their own activity
+						     domain and must never blend into quiz KPIs. -->
+						<div class="kpi-section-title">Live Play</div>
+						<div class="kpi-grid">
 							<div
 								class="stat-card indigo"
 								data-tooltip="Total number of game lobbies configured in Game Studio"
@@ -973,7 +1006,7 @@
 							</div>
 							<div
 								class="stat-card rose"
-								data-tooltip="Percentage of quizzes started that were completed"
+								data-tooltip="Average score of results in the current scope, filter mode and time window — shown /20"
 							>
 								<div class="stat-bar"></div>
 								<div class="stat-icon">
@@ -986,18 +1019,18 @@
 										stroke="currentColor"
 										stroke-width="2"
 									>
-										<circle cx="12" cy="12" r="10"></circle>
-										<polyline points="12 6 12 12 16 14"></polyline>
+										<polyline points="4 17 10 11 4 5"></polyline>
+										<line x1="12" y1="19" x2="20" y2="19"></line>
 									</svg>
 								</div>
 								<div class="stat-info">
-									<h3 id="kpi-completion-rate">0%</h3>
-									<p>Completion Rate</p>
+									<h3 id="kpi-avg-score">-</h3>
+									<p>Avg Score (/20)</p>
 								</div>
 							</div>
 							<div
 								class="stat-card cyan"
-								data-tooltip="Number of quiz attempts in the last 7 days"
+								data-tooltip="Number of quiz attempts in the selected time window"
 							>
 								<div class="stat-bar"></div>
 								<div class="stat-icon">
@@ -1015,7 +1048,7 @@
 								</div>
 								<div class="stat-info">
 									<h3 id="kpi-activity-rate">0</h3>
-									<p>Activity Rate (7d)</p>
+									<p>Attempts (<span id="kpi-activity-window">last 30 days</span>)</p>
 								</div>
 							</div>
 							<div
@@ -1168,33 +1201,25 @@
 										</div>
 									</div>
 								</div>
-								<div class="insights-columns">
-									<div class="insights-block">
-										<h4>Class performance <small>in this scope</small></h4>
-										<div class="table-scroll">
-											<table class="insights-table">
-												<thead>
-													<tr>
-														<th>Class</th>
-														<th>Training</th>
-														<th>Exam</th>
-														<th>Attempts</th>
-													</tr>
-												</thead>
-												<tbody id="categoryClassTableBody"></tbody>
-											</table>
-										</div>
-									</div>
-									<div class="insights-block">
-										<h4>Needs attention <small>lowest accuracy</small></h4>
-										<div id="categoryHardList"></div>
-										<div
-											class="text-muted text-xs"
-											id="categoryUnattemptedLine"
-											style="margin-top: 8px"
-										></div>
-									</div>
+								<!-- Needs attention: ranked with the class table gone
+							     (Class Performance chart is the class view) and the
+							     findings allowed to breathe full width — mobile too. -->
+							<div class="insights-block needs-attention-block">
+								<div class="nit-head">
+									<h4>Needs attention <small>lowest accuracy first</small></h4>
+									<span class="nit-legend" aria-hidden="true">
+										<span class="nit-dot acc-high"></span>solid
+										<span class="nit-dot acc-mid"></span>mixed
+										<span class="nit-dot acc-low"></span>struggling
+									</span>
 								</div>
+								<div id="categoryHardList"></div>
+								<div
+									class="text-muted text-xs"
+									id="categoryUnattemptedLine"
+									style="margin-top: 10px"
+								></div>
+							</div>
 							</div>
 						</div>
 

@@ -543,6 +543,11 @@ const SANITIZERS = {
     const answersPayload = {
       examId: rawExamId ?? null,
       examTitle: row.examTitle ?? row.examName ?? null,
+      // Training-enabled category labels active for this attempt; needed so
+      // the Training Progress list can reveal category changes between runs.
+      categories: (Array.isArray(row.categories) ? row.categories : pickStr(row.categories) ? String(row.categories).split(',') : null)
+        ?.map((label) => pickStr(label)?.trim())
+        .filter(Boolean) ?? null,
       numero: row.numero ?? null,
       studentName: row.studentName ?? row.name ?? null,
       class: row.class ?? row.className ?? null,

@@ -25,10 +25,44 @@ document.addEventListener('DOMContentLoaded', () => {
 function initDashboard() {
 	overviewStatsCache = null;
 	populateOverviewFilters();
+	updateOverviewScopeBar();
 	updateDashboardStats();
 	renderRecentActivity();
 	updateGreeting();
 }
+
+// ── Scope bar ────────────────────────────────────────────────────────────────
+// Recaps the active scope (teacher | class | category | student · period ·
+// mode) directly under the filter bar so the view is never ambiguous, and
+// offers a one-click reset for everything.
+function updateOverviewScopeBar() {
+	const label = document.getElementById('overviewScopeLabel');
+	if (!label) return;
+	let text = overviewScopeDescription();
+	const win = overviewPeriodWindow();
+	if (win.key) text += ` · ${overviewPeriodLabelText(win.key)}`;
+	const mode = overviewModeFilterValue();
+	if (mode) text += ` · ${mode === 'exam' ? 'Exams' : 'Training'} only`;
+	label.textContent = text;
+}
+
+window.clearOverviewFilters = function () {
+	const ids = [
+		'overviewClassFilter',
+		'overviewCategoryFilter',
+		'overviewStudentFilter',
+		'overviewModeFilter',
+		'overviewPeriodFilter',
+	];
+	// The teacher pick is an admin-only filter; teachers are pinned to
+	// themselves and resetting it would fake an admin view.
+	if (overviewIsAdmin()) ids.unshift('overviewTeacherFilter');
+	ids.forEach((id) => {
+		const el = document.getElementById(id);
+		if (el) el.value = '';
+	});
+	initDashboard();
+};
 
 // ============================================
 // OVERVIEW SCOPE — teacher isolation + admin filters
@@ -145,6 +179,91 @@ function overviewStudentMatchesRow(key, row) {
 		if (num && num === key.numero) return true;
 	}
 	return false;
+}
+
+// ── Period + mode windows (results-derived metrics) ───────────────────────
+// The filter bar's Period select narrows every RESULT-based metric (trend,
+// average score, activity, top class, charts). Structural KPIs (students,
+// questions, classes, games…) always reflect the whole scope.
+function overviewPeriodFilterValue() {
+	return String(
+		document.getElementById('overviewPeriodFilter')?.value || '',
+	);
+}
+
+function overviewModeFilterValue() {
+	return String(document.getElementById('overviewModeFilter')?.value || '');
+}
+
+function overviewPeriodWindow() {
+	const key = overviewPeriodFilterValue();
+	const nowMs = Date.now();
+	const ms = (d) => d * 24 * 60 * 60 * 1000;
+	if (key === 'today') {
+		const start = new Date();
+		start.setHours(0, 0, 0, 0);
+		return { key, start: start.getTime(), lengthMs: ms(1), end: nowMs };
+	}
+	const days = key === '7d' ? 7 : key === '30d' ? 30 : null;
+	if (days == null) {
+		// All time — the trend/activity comparison still uses a 30-day
+		// rolling basis so the metrics never regress to "everything ever".
+		return { key: '', start: null, lengthMs: ms(30), end: nowMs };
+	}
+	return { key, start: nowMs - ms(days), lengthMs: ms(days), end: nowMs };
+}
+
+function overviewPeriodLabelText(key) {
+	return { '': 'last 30 days', today: 'today', '7d': 'last 7 days', '30d': 'last 30 days' }[
+		key || ''
+	] || 'last 30 days';
+}
+
+function overviewResultInWindow(r, win) {
+	if (!win || win.start == null) return true;
+	const t = new Date(r?.date || r?.dateTaken || 0).getTime();
+	if (!Number.isFinite(t)) return false;
+	return t >= win.start && t <= win.end;
+}
+
+// Results narrowed by the Mode + Period filters — the single input for every
+// results-derived metric (trend, average, activity, top class) and charts.
+function overviewKpiResults() {
+	const mode = overviewModeFilterValue();
+	const win = overviewPeriodWindow();
+	return scopeResultRows(
+		window.__DI_CONTAINER__.repo.getAll_sync('results'),
+	).filter(
+		(r) => (!mode || (r.mode || 'exam') === mode) && overviewResultInWindow(r, win),
+	);
+}
+
+// Stable class name for a result (id fields first, then name fallbacks).
+// Shared by the charts, the top-class KPI and the category insights so the
+// three can never disagree about which class a result belongs to.
+function overviewResolveResultClassName(r, classesList) {
+	let cName = 'Unknown';
+	if (r.classId) {
+		const cls = classesList.find((c) => String(c.id) === String(r.classId));
+		if (cls) cName = cls.name || cls.className || String(r.classId);
+		else cName = r.class || r.studentClass || String(r.classId);
+	} else if (r.class) {
+		const cls = classesList.find(
+			(c) =>
+				String(c.id) === String(r.class) ||
+				c.name === r.class ||
+				c.className === r.class,
+		);
+		if (cls) cName = cls.name || cls.className || String(r.class);
+		else cName = r.class;
+	} else if (r.studentClass) {
+		const cls = classesList.find(
+			(c) => c.name === r.studentClass || c.className === r.studentClass,
+		);
+		if (cls) cName = cls.name || cls.className;
+		else cName = r.studentClass;
+	}
+	return cName;
 }
 
 // Classes visible in scope (used for KPIs, charts and result attribution).
@@ -518,7 +637,13 @@ function getOverviewCategoryStats() {
 	try {
 		const repo = window.__DI_CONTAINER__.repo;
 		questions = scopeAuthoredRows(repo.getAll_sync('questions'));
-		results = scopeResultRows(repo.getAll_sync('results'));
+		// Category Insights is a results panel: the Period filter narrows
+		// the attempts it aggregates (mode stays split by design — the
+		// panel itself contrasts training vs exam accuracy).
+		const win = overviewPeriodWindow();
+		results = scopeResultRows(repo.getAll_sync('results')).filter(
+			(r) => overviewResultInWindow(r, win),
+		);
 		classes = overviewScopeClasses();
 		categories = repo.getAll_sync('categories') || [];
 	} catch (_) {
@@ -891,6 +1016,28 @@ function updateDashboardStats() {
 	const uniqueStudents = new Set(results.map(r => r.numero || r.studentName || 'Unknown'));
 	animateValue('kpi-students-total', 0, uniqueStudents.size, 1000);
 
+	// 7b. Certified vs Pending — cumulative People metrics (certification
+	// status is a state, unaffected by the period filter).
+	const studentSuccess = {};
+	results.forEach((r) => {
+		const sId = r.numero || r.studentName || 'Unknown';
+		if (!studentSuccess[sId]) studentSuccess[sId] = false;
+		const total = r.totalPoints || r.totalQuestions || r.total || 1;
+		const scorePerc = parseScore(r.score, total);
+		if (scorePerc >= 50) {
+			// 10/20 = 50%
+			studentSuccess[sId] = true;
+		}
+	});
+	const certifiedCount = Object.values(studentSuccess).filter(
+		(passed) => passed
+	).length;
+	const pendingCount = Object.keys(studentSuccess).length - certifiedCount;
+	const passedEl = document.getElementById('kpi-students-passed');
+	if (passedEl) animateValue('kpi-students-passed', 0, certifiedCount, 1000);
+	const pendingEl = document.getElementById('kpi-students-pending');
+	if (pendingEl) animateValue('kpi-students-pending', 0, pendingCount, 1000);
+
 	// 8. Generate and Save Reports
 	generateAndSaveReports();
 
@@ -1021,30 +1168,23 @@ function generateAndSaveReports() {
 	);
 	const classes = overviewScopeClasses();
 
-	// Mode comes from the Overview filter bar (one mode for both charts).
-	// Class narrowing comes from the overview scope (no per-chart filter).
-	const overviewMode = String(
-		document.getElementById('overviewModeFilter')?.value || '',
-	);
-	const scoreMode = overviewMode;
-	const classMode = overviewMode;
-
-	// Create filtered views for each chart so they can be toggled independently.
-	// The category filter narrows both charts to results that touch the
-	// selected category (or its subcategories).
+	// Mode + Period come from the Overview filter bar (both charts follow
+	// them). Class narrowing comes from the overview scope (no per-chart
+	// filter). The category filter narrows both charts to results that
+	// touch the selected category (or its subcategories).
+	const overviewMode = overviewModeFilterValue();
+	const overviewWin = overviewPeriodWindow();
 	const stats = getOverviewCategoryStats();
 	const inCategoryScope = (r) => overviewResultTouchesCategories(r, stats);
-	const resultsForDistribution = (
-		scoreMode
-			? allResults.filter((r) => (r.mode || 'exam') === scoreMode)
+	const resultsForCharts = (
+		overviewMode
+			? allResults.filter((r) => (r.mode || 'exam') === overviewMode)
 			: allResults.slice()
-	).filter(inCategoryScope);
-
-	let resultsForClass = (
-		classMode
-			? allResults.filter((r) => (r.mode || 'exam') === classMode)
-			: allResults.slice()
-	).filter(inCategoryScope);
+	)
+		.filter((r) => overviewResultInWindow(r, overviewWin))
+		.filter(inCategoryScope);
+	const resultsForDistribution = resultsForCharts;
+	const resultsForClass = resultsForCharts;
 
 	// 2. Score Distribution (Histogram)
 	// Buckets: 0-5/20, 5-10/20, 10-15/20, 15-20/20
@@ -1075,31 +1215,7 @@ function generateAndSaveReports() {
 	const classesList = classes; // already parsed above
 	const resultsByClass = {};
 	resultsForClass.forEach((r) => {
-		// Determine a stable class name for the result, trying multiple fields
-		let cName = 'Unknown';
-
-		if (r.classId) {
-			const cls = classesList.find((c) => String(c.id) === String(r.classId));
-			if (cls) cName = cls.name || cls.className || String(r.classId);
-			else cName = r.class || r.studentClass || String(r.classId);
-		} else if (r.class) {
-			// r.class may be an id or a name; try to resolve
-			const cls = classesList.find(
-				(c) =>
-					String(c.id) === String(r.class) ||
-					c.name === r.class ||
-					c.className === r.class
-			);
-			if (cls) cName = cls.name || cls.className || String(r.class);
-			else cName = r.class;
-		} else if (r.studentClass) {
-			const cls = classesList.find(
-				(c) => c.name === r.studentClass || c.className === r.studentClass
-			);
-			if (cls) cName = cls.name || cls.className;
-			else cName = r.studentClass;
-		}
-
+		const cName = overviewResolveResultClassName(r, classesList);
 		if (!resultsByClass[cName]) resultsByClass[cName] = [];
 
 		const total = r.totalPoints || r.totalQuestions || r.total || 1;
@@ -1133,7 +1249,7 @@ function generateAndSaveReports() {
 
 	// 5. Render both charts
 	renderScoreDistribution(distribution, resultsForDistribution.length);
-	renderClassPerformance(classStats);
+	renderClassPerformance(classStats, resultsForClass);
 }
 
 function overviewScopeDescription() {
@@ -1197,7 +1313,6 @@ function overviewScopeDescription() {
 function renderCategoryInsights() {
 	const hasPanel =
 		document.getElementById('kpi-cat-training') ||
-		document.getElementById('categoryClassTableBody') ||
 		document.getElementById('categoryHardList');
 	if (!hasPanel) return;
 	const esc =
@@ -1230,23 +1345,10 @@ function renderCategoryInsights() {
 	);
 	setText('kpi-cat-struggling', String(struggling.length));
 	setText('categoryInsightsScopeLabel', overviewScopeDescription());
-	// Per-class training/exam split.
-	const body = document.getElementById('categoryClassTableBody');
-	if (body) {
-		const rows = stats.classes.map((cls) => {
-			const e = stats.perClass.get(String(cls.id));
-			return (
-				`<tr><td>${esc(cls.name || 'Untitled Class')}</td>` +
-				`<td>${e ? pct(e.training.c, e.training.a) : '-'}</td>` +
-				`<td>${e ? pct(e.exam.c, e.exam.a) : '-'}</td>` +
-				`<td>${e ? e.attempts : 0}</td></tr>`
-			);
-		});
-		body.innerHTML = rows.length
-			? rows.join('')
-			: '<tr><td colspan="4" class="chart-empty">No attempts in this scope yet</td></tr>';
-	}
-	// Needs attention: the 5 lowest-accuracy questions.
+	// Needs attention: the 5 lowest-accuracy questions, ranked. The class
+	// table is gone (the Class Performance chart already covers the class
+	// dimension), so these findings render full width — one rank, one
+	// breadcrumb, one try count and one accuracy chip each.
 	const hardEl = document.getElementById('categoryHardList');
 	if (hardEl) {
 		const bottom = ranked.slice(0, 5);
@@ -1255,7 +1357,7 @@ function renderCategoryInsights() {
 				'<div class="chart-empty">No answered questions in this scope yet</div>';
 		} else {
 			hardEl.innerHTML = bottom
-				.map((e) => {
+				.map((e, i) => {
 					const q = stats.questionsById.get(e.qid) || {};
 					const text = String(q.question || q.text || 'Question');
 					const short =
@@ -1265,13 +1367,16 @@ function renderCategoryInsights() {
 						stats.categories,
 					);
 					const acc = Math.round(e.accuracy);
-					const tone = acc < 50 ? 'low' : acc < 80 ? 'mid' : 'high';
+					const tone = acc < 50 ? 'acc-low' : acc < 80 ? 'acc-mid' : 'acc-high';
 					return (
-						'<div class="hard-item">' +
+						`<div class="hard-item ${tone}">` +
+						`<span class="hard-rank" aria-hidden="true">${i + 1}</span>` +
+						'<div class="hard-main">' +
 						`<div class="hard-title" title="${esc(text)}">${esc(short)}</div>` +
-						`<div class="hard-meta"><span>${esc(crumb || 'Uncategorized')}</span><span>${e.attempts} tries</span></div>` +
-						`<div class="acc-bar"><span class="acc-fill acc-${tone}" style="width:${acc}%"></span></div>` +
-						`<div class="hard-acc">${acc}% correct</div>` +
+						`<div class="hard-meta"><span class="hard-cat">${esc(crumb || 'Uncategorized')}</span><span class="hard-tries">${e.attempts}${e.attempts === 1 ? ' try' : ' tries'}</span></div>` +
+						'</div>' +
+						`<span class="hard-acc ${tone}">${acc}%<small> acc</small></span>` +
+						`<div class="acc-bar"><span class="acc-fill ${tone}" style="width:${acc}%"></span></div>` +
 						'</div>'
 					);
 				})
@@ -1352,7 +1457,7 @@ function renderScoreDistribution(data, total) {
 	window.safeSetHTML ? window.safeSetHTML(container, html, true) : (container.innerHTML = html);
 }
 
-function renderClassPerformance(data) {
+function renderClassPerformance(data, scopedResultsForCharts) {
 	const container = document.getElementById('classPerformanceChart');
 	if (!container) return;
 
@@ -1363,8 +1468,12 @@ function renderClassPerformance(data) {
 		return;
 	}
 
-	// Get the raw results to calculate score distribution per class
-	const allResults = window.__DI_CONTAINER__.repo.getAll_sync('results');
+	// Source results: the already-scoped chart set from
+	// generateAndSaveReports (mode + period + teacher/class scope).
+	// The repo fallback keeps legacy entry points working.
+	const allResults = Array.isArray(scopedResultsForCharts)
+		? scopedResultsForCharts
+		: window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const classesList = window.__DI_CONTAINER__.repo.getAll_sync('classes');
 
 	// Sort by average score descending, then limit to top 8
@@ -1384,29 +1493,7 @@ function renderClassPerformance(data) {
 		const classResults = [];
 
 		allResults.forEach((r) => {
-			let cName = 'Unknown';
-
-			if (r.classId) {
-				const cls = classesList.find((c) => String(c.id) === String(r.classId));
-				if (cls) cName = cls.name || cls.className || String(r.classId);
-				else cName = r.class || r.studentClass || String(r.classId);
-			} else if (r.class) {
-				const cls = classesList.find(
-					(c) =>
-						String(c.id) === String(r.class) ||
-						c.name === r.class ||
-						c.className === r.class
-				);
-				if (cls) cName = cls.name || cls.className || String(r.class);
-				else cName = r.class;
-			} else if (r.studentClass) {
-				const cls = classesList.find(
-					(c) => c.name === r.studentClass || c.className === r.studentClass
-				);
-				if (cls) cName = cls.name || cls.className;
-				else cName = r.studentClass;
-			}
-
+			const cName = overviewResolveResultClassName(r, classesList);
 			if (cName === className) {
 				classResults.push(r);
 			}
@@ -1480,32 +1567,31 @@ function renderClassPerformance(data) {
 }
 
 function renderAdvancedKPIs() {
-	const results = scopeResultRows(
-		window.__DI_CONTAINER__.repo.getAll_sync('results'),
-	);
 	const classes = overviewScopeClasses();
+	const classesList = classes;
 
-	// 1. Average Score Trend
-	// Compare current average with previous period (e.g., last 7 days vs previous 7 days)
-	const now = new Date();
-	const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-	const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+	// Mode-filtered base (Mode applies to these Advanced metrics; Period
+	// only controls the "current" window used for the KPI values).
+	const mode = overviewModeFilterValue();
+	const base = scopeResultRows(
+		window.__DI_CONTAINER__.repo.getAll_sync('results'),
+	).filter((r) => !mode || (r.mode || 'exam') === mode);
+	const win = overviewPeriodWindow();
 
-	const currentPeriodScores = results
-		.filter((r) => new Date(r.date || r.dateTaken) >= sevenDaysAgo)
-		.map((r) => {
-			const total = r.totalPoints || r.totalQuestions || r.total || 1;
-			return parseScore(r.score, total);
-		});
-	const previousPeriodScores = results
+	// ── 1. Average Score Trend ──────────────────────────────────────────────
+	// The selected period is the "current" window; the previous window has
+	// the same length and sits directly before it. All time → last 30 days
+	// vs the previous 30.
+	const currentResults = base.filter((r) => overviewResultInWindow(r, win));
+	const currentPeriodScores = currentResults.map(percentOfResult);
+	const startMs = win.start == null ? win.end - win.lengthMs : win.start;
+	const previousPeriodScores = base
 		.filter((r) => {
-			const d = new Date(r.date || r.dateTaken);
-			return d >= fourteenDaysAgo && d < sevenDaysAgo;
+			const t = new Date(r?.date || r?.dateTaken || 0).getTime();
+			if (!Number.isFinite(t)) return false;
+			return t >= startMs - win.lengthMs && t < startMs;
 		})
-		.map((r) => {
-			const total = r.totalPoints || r.totalQuestions || r.total || 1;
-			return parseScore(r.score, total);
-		});
+		.map(percentOfResult);
 
 	const currentAvg = currentPeriodScores.length
 		? currentPeriodScores.reduce((a, b) => a + b, 0) /
@@ -1531,59 +1617,41 @@ function renderAdvancedKPIs() {
 			card.className = `stat-card ${trend >= 0 ? 'indigo' : 'rose'}`;
 			const curr20 = ((currentAvg / 100) * 20).toFixed(1);
 			const prev20 = ((previousAvg / 100) * 20).toFixed(1);
-			card.setAttribute('data-tooltip', `Trend based on last 7 days vs previous 7 days\nCurrent Avg: ${curr20}/20 | Previous Avg: ${prev20}/20`);
+			card.setAttribute(
+				'data-tooltip',
+				`Trend: ${overviewPeriodLabelText(win.key)} vs the previous equal-length window` +
+					`\nCurrent Avg: ${curr20}/20 | Previous Avg: ${prev20}/20` +
+					(mode ? `\nMode: ${mode}` : ''),
+			);
 		}
 	}
 
-	// 2. Completion Rate
-	// Assuming all results in quizResults are "completed".
-	// If we had a "started" log, we'd compare.
-	// For now, let's use a heuristic or mock it if data missing.
-	// Let's assume 95% if we have results, 0% if not.
-	const completionRate = results.length > 0 ? 95 : 0;
-	const completionEl = document.getElementById('kpi-completion-rate');
-	if (completionEl) {
-		animateValue('kpi-completion-rate', 0, completionRate, 1000, '%');
+	// ── 2. Average Score (/20) — replaces the old fake "Completion Rate" ────
+	const avgEl = document.getElementById('kpi-avg-score');
+	if (avgEl) {
+		if (currentPeriodScores.length) {
+			avgEl.textContent = `${((currentAvg / 100) * 20).toFixed(1)}/20`;
+		} else {
+			avgEl.textContent = '-';
+		}
 	}
 
-	// 3. Activity Rate (7d)
-	const activityRate = currentPeriodScores.length;
+	// ── 3. Activity (attempts in the selected window) ───────────────────────
 	const activityEl = document.getElementById('kpi-activity-rate');
 	if (activityEl) {
-		animateValue('kpi-activity-rate', 0, activityRate, 1000);
+		animateValue('kpi-activity-rate', 0, currentPeriodScores.length, 1000);
+	}
+	const activityWindowEl = document.getElementById('kpi-activity-window');
+	if (activityWindowEl) {
+		activityWindowEl.textContent = overviewPeriodLabelText(win.key);
 	}
 
-	// 4. Top Performing Class (resolve class names properly)
-	const classesList = overviewScopeClasses();
+	// ── 4. Top Performing Class (within the current window) ────────────────
 	const resultsByClass = {};
-	results.forEach((r) => {
-		// Determine a stable class name for the result
-		let cName = 'Unknown';
-
-		if (r.classId) {
-			const cls = classesList.find((c) => String(c.id) === String(r.classId));
-			if (cls) cName = cls.name || cls.className || String(r.classId);
-			else cName = r.class || r.studentClass || String(r.classId);
-		} else if (r.class) {
-			const cls = classesList.find(
-				(c) =>
-					String(c.id) === String(r.class) ||
-					c.name === r.class ||
-					c.className === r.class
-			);
-			if (cls) cName = cls.name || cls.className || String(r.class);
-			else cName = r.class;
-		} else if (r.studentClass) {
-			const cls = classesList.find(
-				(c) => c.name === r.studentClass || c.className === r.studentClass
-			);
-			if (cls) cName = cls.name || cls.className;
-			else cName = r.studentClass;
-		}
-
+	currentResults.forEach((r) => {
+		const cName = overviewResolveResultClassName(r, classesList);
 		if (!resultsByClass[cName]) resultsByClass[cName] = [];
-		const total = r.totalPoints || r.totalQuestions || r.total || 1;
-		resultsByClass[cName].push(parseScore(r.score, total));
+		resultsByClass[cName].push(percentOfResult(r));
 	});
 
 	let topClass = '-';
@@ -1609,31 +1677,12 @@ function renderAdvancedKPIs() {
 			}
 		}
 	}
+}
 
-	// 5. Student Success Metrics (Certified vs Pending)
-	const studentSuccess = {};
-	results.forEach((r) => {
-		const sId = r.numero || r.studentName || 'Unknown';
-		if (!studentSuccess[sId]) studentSuccess[sId] = false;
-
-		const total = r.totalPoints || r.totalQuestions || r.total || 1;
-		const scorePerc = parseScore(r.score, total);
-		if (scorePerc >= 50) {
-			// 10/20 = 50%
-			studentSuccess[sId] = true;
-		}
-	});
-
-	const certifiedCount = Object.values(studentSuccess).filter(
-		(passed) => passed
-	).length;
-	const pendingCount = Object.keys(studentSuccess).length - certifiedCount;
-
-	const passedEl = document.getElementById('kpi-students-passed');
-	if (passedEl) animateValue('kpi-students-passed', 0, certifiedCount, 1000);
-
-	const pendingEl = document.getElementById('kpi-students-pending');
-	if (pendingEl) animateValue('kpi-students-pending', 0, pendingCount, 1000);
+/** Score as a percentage (0-100), independent of the result's point scale. */
+function percentOfResult(r) {
+	const total = r.totalPoints || r.totalQuestions || r.total || 1;
+	return parseScore(r.score, total);
 }
 
 // Helper to parse scores consistently

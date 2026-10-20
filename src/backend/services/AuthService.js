@@ -39,6 +39,15 @@ function durationToSeconds(d) {
  * Rotation keeps a genuinely-open tab's token fresh (access TTL is 15m, so
  * live tabs rotate well inside the window); a closed tab's last token ages
  * out and stops blocking new logins. */
+
+// Boot epoch: anything minted BEFORE this process start belongs to a
+// previous run. Those tokens remain VALID for refresh() so open tabs keep
+// their session across a server restart (no surprise mid-session logouts),
+// but they never count as LIVE — otherwise a killed server would leave
+// "This account is already signed in on another device" walls for logins
+// whose sessions died with the old process.
+const BOOT_EPOCH_MS = Date.now();
+
 function sessionActiveWindowMs() {
   const minutes = Number(process.env.SESSION_ACTIVE_WINDOW_MINUTES || 30);
   return (Number.isFinite(minutes) && minutes > 0 ? minutes : 30) * 60_000;
@@ -60,6 +69,9 @@ function isTokenLive(token, nowMs) {
   // Rows without a timestamp never count as live (never block a login on
   // bad data); only their expiry/revocation still applies elsewhere.
   if (!Number.isFinite(createdAt)) return false;
+  // Pre-boot rows belong to a previous run: valid for refresh, but not a
+  // live gate for new logins (sessions died with the old process).
+  if (createdAt < BOOT_EPOCH_MS) return false;
   return nowMs - createdAt < sessionActiveWindowMs();
 }
 

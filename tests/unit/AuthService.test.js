@@ -152,7 +152,10 @@ describe('AuthService', () => {
       user_id: 'u-1',
       revoked: false,
       expires_at: new Date(Date.now() + 3600_000).toISOString(),
-      created_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+      // Minted inside the current process run — tokens from before the
+      // process booted (BOOT_EPOCH in AuthService) are never live, so a
+      // backdated row here would (correctly) not block the login.
+      created_at: new Date().toISOString(),
       ...overrides,
     });
 
@@ -350,7 +353,7 @@ describe('AuthService', () => {
             token_hash: 'secret-hash',
             revoked: false,
             expires_at: new Date(Date.now() + 3600_000).toISOString(),
-            created_at: new Date(Date.now() - 60_000).toISOString(),
+            created_at: new Date().toISOString(),
             user_agent: 'Chrome',
             ip_address: '1.2.3.4',
           },

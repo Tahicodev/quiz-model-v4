@@ -1298,9 +1298,55 @@
 					passed: grade > 10,
 					totalQuestions: Number.isFinite(totalQuestions) ? totalQuestions : 0,
 					date: result.date || result.dateTaken || '',
+					timeSpent: Math.max(
+						0,
+						Number(result.timeSpent ?? result.time_spent) || 0,
+					),
+					categories: resolveResultCategoryLabels(result),
 				};
 			})
 			.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+	}
+
+	// Category labels attached to a training result (Training Progress rows):
+	// new writes carry explicit `categories`; older rows are derived from the
+	// persisted answers map (each key is a question id → bank category).
+	function resolveResultCategoryLabels(result) {
+		if (!result || typeof result !== 'object') return [];
+		let labels = Array.isArray(result.categories)
+			? result.categories.slice()
+			: typeof result.categories === 'string' && result.categories.trim()
+				? result.categories.split(',')
+				: [];
+		labels = labels.map((label) => String(label || '').trim()).filter(Boolean);
+		if (labels.length) return Array.from(new Set(labels));
+		try {
+			const rawAnswers =
+				typeof result.answers_json === 'string' && result.answers_json.trim()
+					? JSON.parse(result.answers_json)
+					: result.answers_json;
+			if (!rawAnswers || typeof rawAnswers !== 'object') return [];
+			const answers =
+				rawAnswers.userAnswers &&
+				typeof rawAnswers.userAnswers === 'object' &&
+				!Array.isArray(rawAnswers.userAnswers)
+					? rawAnswers.userAnswers
+					: rawAnswers;
+			const questionIds = Object.keys(answers).filter((id) => String(id).trim());
+			if (!questionIds.length) return [];
+			const questions =
+				window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+			const byId = new Map(questions.map((q) => [String(q.id), q]));
+			const categoryMap = buildCategoryMap();
+			const derived = new Set();
+			questionIds.forEach((id) => {
+				const question = byId.get(String(id).trim());
+				if (question) derived.add(getQuestionCategoryLabel(question, categoryMap));
+			});
+			return Array.from(derived);
+		} catch (_) {
+			return [];
+		}
 	}
 
 	function dedupeTrainingResultsByExam(trainingResults = []) {
@@ -2381,6 +2427,21 @@
 						: grade >= 8
 							? 'performance-attempt--ok'
 							: 'performance-attempt--weak';
+				// Category this attempt was drawn from + time spent on it.
+				const attemptCategories = Array.isArray(result.categories)
+					? result.categories.filter(Boolean)
+					: [];
+				const categoryChips = attemptCategories.length
+					? `<div class="performance-attempt-cats">${attemptCategories
+							.map(
+								(label) =>
+									`<span class="performance-attempt-cat">${escapeHtml(label)}</span>`,
+							)
+							.join('')}</div>`
+					: '';
+				const timeSpent = Math.max(0, Number(result.timeSpent) || 0);
+				const timeLabel = timeSpent > 0 ? formatDuration(timeSpent * 1000) : '—';
+				const timeInfo = `<div class="performance-attempt-time">${escapeHtml(timeLabel)}</div>`;
 				return `
 					<div class="performance-row performance-attempt ${attemptClass}">
 						<div class="performance-attempt-label">
@@ -2390,11 +2451,13 @@
 								<div class="performance-subtitle">${
 									result.date ? new Date(result.date).toLocaleString() : ''
 								}</div>
+								${categoryChips}
 							</div>
 						</div>
 						<div class="performance-metric">
 							<span>${formatGrade20(grade)}</span>
 							<div class="performance-bar"><span style="width: ${percent}%"></span></div>
+							${timeInfo}
 						</div>
 					</div>
 				`;
@@ -16799,6 +16862,21 @@
 				: Math.min(elapsedSeconds, 86400);
 		const totalQuestions = trainingState.questions.length;
 
+		// Record the distinct category labels this attempt was drawn from so
+		// the Training Progress list can reveal the category the teacher had
+		// enabled for training at the time (categories change between runs).
+		const attemptCategoryMap = buildCategoryMap();
+		const attemptCategoryLabels = [];
+		const seenAttemptCategories = new Set();
+		trainingState.questions.forEach((question) => {
+			if (!question) return;
+			const label = getQuestionCategoryLabel(question, attemptCategoryMap);
+			if (!seenAttemptCategories.has(label)) {
+				seenAttemptCategories.add(label);
+				attemptCategoryLabels.push(label);
+			}
+		});
+
 		// Freeze the per-question answers as { questionId: userAnswer } so the
 		// Results tab can compute per-question accuracy later. Only answered
 		// questions are recorded — skipped ones should not read as misses.
@@ -16843,6 +16921,9 @@
 			exam_id: trainingState.mode === 'exam' ? trainingState.examId : undefined,
 			examTitle: trainingState.examName,
 			mode: trainingState.mode,
+			// Training-enabled categories (labels) active for this attempt.
+			categories: attemptCategoryLabels,
+			category: attemptCategoryLabels.join(', '),
 			// /20 scale everywhere (score = grade out of 20, e.g. 12.5)
 			score: grade,
 			totalQuestions: totalQuestions,

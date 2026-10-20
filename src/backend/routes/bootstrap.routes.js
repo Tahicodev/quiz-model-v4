@@ -233,6 +233,13 @@ function hydrateLegacyPayload(data) {
       examId: result.exam_id || payload.examId || '',
       userId: result.user_id,
       examName: payload.examTitle || payload.examName || '',
+      // Training attempt category labels (persisted inside answers_json by
+      // the student workspace / bulk writer) promoted back to the top level.
+      categories: Array.isArray(payload.categories)
+        ? payload.categories
+        : typeof payload.categories === 'string' && payload.categories.trim()
+          ? payload.categories.split(',').map((label) => label.trim()).filter(Boolean)
+          : [],
       numero: payload.numero || '',
       // Anonymous kids-game plays carry their display name here (no user FK).
       studentName: payload.studentName || payload.name || payload.playerName || payload.player_name || '',
