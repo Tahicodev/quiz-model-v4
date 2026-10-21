@@ -299,7 +299,7 @@ export function grade20(score, totalQuestions) {
 }
 
 export function isPassingGrade20(grade) {
-  return Number(grade) > 10;
+  return Number(grade) >= 10;
 }
 
 function parseOptions(optionsJson, fallback) {

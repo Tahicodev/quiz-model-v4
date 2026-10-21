@@ -163,7 +163,7 @@ function renderExamPresetSummary() {
 					? 'Sum of question times'
 					: formatTime(preset.timeLimit),
 		},
-		{ label: 'Penalty', value: `−${preset.penalty || 0} pts` },
+		{ label: 'Penalty', value: preset.penalty > 0 ? `−${preset.penalty} pts / wrong` : 'None' },
 		{ label: 'Pass mark', value: `${preset.passingScore || 50}%` },
 		{
 			label: 'Questions',
@@ -3712,6 +3712,7 @@ function createTrainingPackage() {
 				penalty: preset.penalty,
 				shuffleQuestions: preset.shuffleQuestions,
 				showExplanations: preset.showExplanations,
+				passingScore: preset.passingScore,
 				primaryColor: preset.primaryColor,
 				secondaryColor: preset.secondaryColor,
 				backgroundColor: preset.backgroundColor,
@@ -3759,6 +3760,7 @@ function createTrainingPackage() {
 			appSettings.timeLimit ||
 			300,
 		penalty: presetSettings.penalty ?? appSettings.penalty ?? 0,
+		passingScore: presetSettings.passingScore ?? appSettings.passingScore ?? 50,
 		shuffleQuestions: presetSettings.shuffleQuestions ?? true,
 		showExplanations: presetSettings.showExplanations ?? true,
 		questions: trainingQuestions,

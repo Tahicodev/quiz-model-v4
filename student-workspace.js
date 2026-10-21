@@ -991,6 +991,100 @@
 		};
 	}
 
+	// Resolve the globally selected Training preset (Settings tab → training
+	// preset) into the same normalized shape `getExamPresetInfo` returns, so
+	// every training launch honors the exact preset the teacher configured.
+	function getTrainingPresetRules() {
+		let preset = null;
+		try {
+			const appSettings =
+				(window.__DI_CONTAINER__?.repo?.getAll_sync('settings') || [])[0] || {};
+			const trainingPresetId = String(appSettings.trainingPresetId || '').trim();
+			if (trainingPresetId) {
+				const presets = JSON.parse(localStorage.getItem('quizPresets') || '[]');
+				preset = Array.isArray(presets)
+					? presets.find((p) => String(p.id) === trainingPresetId) || null
+					: null;
+			}
+		} catch (_) {
+			preset = null;
+		}
+		if (!preset) return null;
+		return {
+			name: String(preset.name || 'Training Preset'),
+			hasPreset: true,
+			timeLimit: Number.isFinite(Number(preset.timeLimit))
+				? Number(preset.timeLimit)
+				: null,
+			timerMode: preset.timerMode || (preset.perQuestionTime ? 'fixed' : null),
+			perQuestionTime: Number.isFinite(Number(preset.perQuestionTime))
+				? Number(preset.perQuestionTime)
+				: null,
+			penalty: Number.isFinite(Number(preset.penalty)) ? Number(preset.penalty) : null,
+			passingScore: Number.isFinite(Number(preset.passingScore))
+				? Number(preset.passingScore)
+				: null,
+			shuffleQuestions: Boolean(preset.shuffleQuestions),
+			showExplanations: Boolean(preset.showExplanations),
+			welcomeTitle: String(preset.welcomeTitle || ''),
+			welcomeMessage: String(preset.welcomeMessage || ''),
+		};
+	}
+
+	// Attempt-level rules shared by every launch path. With a preset attached
+	// every toggle is honored exactly; without one the previous behavior
+	// stays (shuffle + explanations shown, 50% pass mark, no penalty).
+	// Options:
+	//   strictToggles      — preset toggles must be explicitly true (used by
+	//                        exams to mirror the server corrections gate)
+	//   defaultShuffle     — ordering when no preset exists (training: true,
+	//                        exams: false to preserve the exam record order)
+	//   defaultExplanations— corrections gate when no preset exists
+	//   fallbackPassingScore — exam-level passingScore when the preset omits it
+	function buildAttemptRules(preset, opts) {
+		const options = opts || {};
+		const strict = options.strictToggles === true;
+		const hasPreset = Boolean(preset && preset.hasPreset);
+		const presetPassing = Number(preset?.passingScore);
+		const fallbackPassing = Number(options.fallbackPassingScore);
+		const resolvedPassing = Number.isFinite(presetPassing) && presetPassing > 0
+			? presetPassing
+			: Number.isFinite(fallbackPassing) && fallbackPassing > 0
+				? fallbackPassing
+				: 50;
+		return {
+			shuffleQuestions: hasPreset
+				? (strict ? preset.shuffleQuestions === true : preset.shuffleQuestions !== false)
+				: options.defaultShuffle !== false,
+			showExplanations: hasPreset
+				? (strict ? preset.showExplanations === true : preset.showExplanations !== false)
+				: options.defaultExplanations !== false,
+			penalty: Math.max(0, Number(preset?.penalty) || 0),
+			passingScore: resolvedPassing > 0 ? resolvedPassing : 50,
+		};
+	}
+
+	// Penalty model: the preset "penalty" is the number of points docked from
+	// the earned points per graded question that was not answered correctly
+	// (wrong or skipped). It is applied only on the authoritative server
+	// grading — student browsers never hold the correct answers, so a local
+	// penalty pass could over-dock before the real score arrives.
+	function applyAttemptPenalty(score, total) {
+		const earned = Math.max(0, Number(score) || 0);
+		const penalty = Number(trainingState?.penalty) || 0;
+		if (!(penalty > 0) || !(Number(total) > 0)) return earned;
+		const wrong = Math.max(0, Number(total) - earned);
+		return Math.max(0, Math.round((earned - wrong * penalty) * 100) / 100);
+	}
+
+	// Pass mark from the attempt's configured passing score, as a percentage
+	// of the /20 grade (50% → grade 10). The epsilon keeps exact boundaries
+	// (e.g. a passingScore of 55 → grade 11) passing.
+	function isAttemptPassed(grade) {
+		const threshold = (Number(trainingState?.passingScore) || 50) / 5;
+		return Number(grade) + 1e-9 >= threshold;
+	}
+
 	function formatPresetTimeLimit(seconds) {
 		const total = Math.max(0, Math.floor(Number(seconds) || 0));
 		if (!total) return '';
@@ -1031,7 +1125,7 @@
 			{ label: 'Time limit', value: timeLimitLabel || '—' },
 			{
 				label: 'Penalty',
-				value: preset.penalty != null ? `−${preset.penalty} pts` : '—',
+				value: preset.penalty != null && preset.penalty > 0 ? `−${preset.penalty} pts / wrong` : 'None',
 			},
 			{
 				label: 'Pass mark',
@@ -1200,7 +1294,7 @@
 
 		const chips = [
 			{ label: 'Time limit', value: formatPresetTimeLimit(timeLimit) || '—' },
-			{ label: 'Penalty', value: penalty ? `−${penalty} pts` : 'None' },
+			{ label: 'Penalty', value: penalty ? `−${penalty} pts / wrong` : 'None' },
 			{ label: 'Pass mark', value: `${passingScore}%` },
 			{ label: 'Questions', value: shuffle ? 'Shuffled' : 'Fixed order' },
 			{ label: 'Explanations', value: explanations ? 'Shown' : 'Hidden' },
@@ -1295,7 +1389,7 @@
 					title: result.examTitle || 'Training Quiz',
 					score: score, // raw correct-answer count (for x/y display)
 					grade,
-					passed: grade > 10,
+					passed: grade >= 10,
 					totalQuestions: Number.isFinite(totalQuestions) ? totalQuestions : 0,
 					date: result.date || result.dateTaken || '',
 					timeSpent: Math.max(
@@ -1445,7 +1539,7 @@
 					? Number(result.grade)
 					: grade20(score, total);
 				const percent = getScorePercent(score, total);
-				const passed = grade > 10;
+				const passed = grade >= 10;
 				const title = result.title || 'Training Quiz';
 				const attemptSummary = getTrainingAttemptSummary(result);
 				const repeatClass =
@@ -2422,7 +2516,7 @@
 				const percent = Math.round((grade / 20) * 100);
 				const attemptNumber = trainingResults.length - index;
 				const attemptClass =
-					grade > 10
+					grade >= 10
 						? 'performance-attempt--strong'
 						: grade >= 8
 							? 'performance-attempt--ok'
@@ -2732,14 +2826,14 @@
 				type: r.title || 'Training',
 				score: formatGrade20(r.grade),
 				// /20 grade with comma decimals — pass strictly above 10
-				passed: Number(r.grade) > 10,
+				passed: Number(r.grade) >= 10,
 				date: r.date,
 				kind: 'training',
 			})),
 			...examResults.map((r) => ({
 				type: r.examName || 'Exam',
 				score: formatGrade20(r.grade20),
-				passed: Number(r.grade20) > 10,
+				passed: Number(r.grade20) >= 10,
 				date: r.date,
 				kind: 'exam',
 			})),
@@ -2754,7 +2848,7 @@
 			if (result.kind === 'training') {
 				// /20 grades: green above 10, red below
 				const grade = parseFloat(scoreText.replace(',', '.'));
-				scoreTone = Number.isFinite(grade) && grade > 10 ? 'passed' : 'failed';
+				scoreTone = Number.isFinite(grade) && grade >= 10 ? 'passed' : 'failed';
 			} else if (result.kind === 'exam') {
 				scoreTone = result.passed ? 'passed' : 'failed';
 			} else {
@@ -15025,6 +15119,12 @@
 		endTime: null,
 		completed: false,
 		showCorrections: false,
+		// Preset-driven rules for THIS attempt (refreshed on every launch):
+		// penalty docked per wrong graded answer, pass mark as a percentage
+		// of the /20 grade, and the penalty total once server grading lands.
+		penalty: 0,
+		passingScore: 50,
+		penaltyDocked: 0,
 		// Persisted attempt id (client-generated) + server grading fetched
 		// after finish. Student browsers never receive correct answers (the
 		// bootstrap strips them), so the authoritative score + breakdown
@@ -15046,7 +15146,8 @@
 	// ── 20-point grading scale ─────────────────────────────────────────────
 	// All training (and exam-facing) scores are normalized to a /20 scale
 	// regardless of question count: 12.5/20, 8.75/20 … Passing threshold is
-	// strictly above 10 (x,xx > 10 passed; x,xx < 10 failed).
+	// 10 or more (x,xx >= 10 passed; x,xx < 10 failed) — the same rule every
+	// surface uses (results tab, exam analysis, server grading).
 	function grade20(score, totalQuestions) {
 		const total = Math.max(0, Number(totalQuestions) || 0);
 		const correct = Math.max(0, Number(score) || 0);
@@ -15056,7 +15157,7 @@
 	}
 
 	function isPassingGrade20(grade) {
-		return Number(grade) > 10;
+		return Number(grade) >= 10;
 	}
 
 	// French-style decimal comma for display: 12,50 / 20
@@ -15410,14 +15511,27 @@
 			return;
 		}
 
-		const shuffled = [...questions].sort(() => 0.5 - Math.random());
+		// Preset-driven rules: exam-based training follows the exam's own
+		// preset, free training follows the globally selected training
+		// preset. Ordering, corrections gate, penalty and pass mark all
+		// come from the resolved rules (fixed order + no corrections when
+		// the preset says so).
+		const examPreset = examId ? getExamPresetInfo(exam) : null;
+		const presetSource = examPreset || getTrainingPresetRules();
+		const rules = buildAttemptRules(presetSource);
+		const ordered = rules.shuffleQuestions
+			? [...questions].sort(() => 0.5 - Math.random())
+			: [...questions];
 		trainingState = {
 			active: true,
 			mode: 'training',
 			examId: examId || null,
 			examName: trainingExamName,
-			allowCorrections: true,
-			questions: shuffled,
+			allowCorrections: rules.showExplanations,
+			penalty: rules.penalty,
+			passingScore: rules.passingScore,
+			penaltyDocked: 0,
+			questions: ordered,
 			currentIndex: 0,
 			userAnswers: {},
 			score: 0,
@@ -15430,33 +15544,34 @@
 			serverGrading: null,
 			serverGradingFailed: false,
 			perQuestion: [],
-			questionOptions: shuffled.map(getTrainingOptionsForQuestion),
+			questionOptions: ordered.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
 			timeLimitSec: 0,
 		};
 
-		// Per-exam time limit: read from the exam record (if any) or fall
-		// back to no timer. The default is "no timer" to preserve the
-		// previous behaviour for students who set a long test.
+		// Time limit precedence: per-question budgets → preset time limit →
+		// exam duration/timeLimit (exam-based training only). Free training
+		// without any preset stays untimed (previous behavior).
 		try {
-			if (examId) {
+			// `timeLimit` is stored in seconds; `duration` is in minutes.
+			// Personalized-time presets override both with the sum of the
+			// assigned questions' own time budgets.
+			const perQTotal = resolvePerQuestionTotal(
+				trainingState.questions,
+				presetSource,
+			);
+			if (perQTotal > 0) {
+				trainingState.timeLimitSec = perQTotal;
+			} else if (presetSource && Number(presetSource.timeLimit) > 0) {
+				trainingState.timeLimitSec = Number(presetSource.timeLimit);
+			} else if (examId) {
 				const exam = (
 					window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || []
 				).find((e) => e.id === examId);
-				// `timeLimit` is stored in seconds; `duration` is in minutes.
-				// Personalized-time presets override both with the sum of the
-				// assigned questions' own time budgets.
-				const perQTotal = resolvePerQuestionTotal(
-					trainingState.questions,
-					getExamPresetInfo(exam),
-				);
-				if (perQTotal > 0) trainingState.timeLimitSec = perQTotal;
-				else {
-					const minutesLimit = Number(exam?.duration) || 0;
-					const secondsLimit = Number(exam?.timeLimit) || 0;
-					if (secondsLimit > 0) trainingState.timeLimitSec = secondsLimit;
-					else if (minutesLimit > 0) trainingState.timeLimitSec = minutesLimit * 60;
-				}
+				const minutesLimit = Number(exam?.duration) || 0;
+				const secondsLimit = Number(exam?.timeLimit) || 0;
+				if (secondsLimit > 0) trainingState.timeLimitSec = secondsLimit;
+				else if (minutesLimit > 0) trainingState.timeLimitSec = minutesLimit * 60;
 			}
 		} catch (_) {}
 
@@ -15498,12 +15613,28 @@
 		}
 
 		const preset = getExamPresetInfo(exam);
+		// Exam attempts keep their stricter previous defaults when no preset
+		// snapshot exists: fixed question order, corrections hidden. With an
+		// attached preset every rule is honored exactly, including question
+		// shuffling, the penalty and the configured pass mark.
+		const rules = buildAttemptRules(preset, {
+			strictToggles: true,
+			defaultShuffle: false,
+			defaultExplanations: false,
+			fallbackPassingScore: exam.passingScore,
+		});
+		const ordered = rules.shuffleQuestions
+			? [...questions].sort(() => 0.5 - Math.random())
+			: questions;
 		trainingState = {
 			active: true,
 			mode: 'exam',
 			examId: exam.id,
 			examName: exam.name || 'Exam',
-			questions,
+			penalty: rules.penalty,
+			passingScore: rules.passingScore,
+			penaltyDocked: 0,
+			questions: ordered,
 			currentIndex: 0,
 			userAnswers: {},
 			score: 0,
@@ -15511,20 +15642,22 @@
 			endTime: null,
 			completed: false,
 			showCorrections: false,
-			allowCorrections: preset?.showExplanations === true,
+			allowCorrections: rules.showExplanations,
 			resultId: null,
 			resultPayload: null,
 			serverGrading: null,
 			serverGradingFailed: false,
 			perQuestion: [],
-			questionOptions: questions.map(getTrainingOptionsForQuestion),
+			questionOptions: ordered.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
 			// `timeLimit` is stored in seconds; `duration` is in minutes.
 			// Personalized-time presets override both with the sum of the
-			// assigned questions' own time budgets.
+			// assigned questions' own time budgets; a fixed preset time limit
+			// applies before the exam-level fields.
 			timeLimitSec: Math.max(0, (() => {
-				const perQTotal = resolvePerQuestionTotal(questions, preset);
+				const perQTotal = resolvePerQuestionTotal(ordered, preset);
 				if (perQTotal > 0) return perQTotal;
+				if (preset && Number(preset.timeLimit) > 0) return Number(preset.timeLimit);
 				const minutesLimit = Number(exam.duration) || 0;
 				const secondsLimit = Number(exam.timeLimit) || 0;
 				return secondsLimit > 0 ? secondsLimit : minutesLimit * 60;
@@ -16890,10 +17023,11 @@
 		});
 
 		// /20 grading scale: normalized regardless of question count.
-		// Grade > 10 passes; grade < 10 fails. Stored as a decimal number
-		// (e.g. 12.5) in the DB; displayed as "12,50 / 20".
+		// The pass mark comes from the attempt's preset (50% → grade 10;
+		// e.g. 60% → grade 12). Grade >= mark passes, below fails. Stored as
+		// a decimal number (e.g. 12.5) in the DB; displayed as "12,50 / 20".
 		const grade = grade20(score, totalQuestions);
-		const passed = isPassingGrade20(grade);
+		const passed = isAttemptPassed(grade);
 
 		const newResult = {
 			id:
@@ -17033,13 +17167,27 @@
 		}
 		try {
 			await window.API.raw('POST', '/results', payload);
+			const passingScore = Math.round(Number(trainingState.passingScore) || 50);
 			const data = await window.API.raw(
 				'GET',
-				'/results/' + encodeURIComponent(resultId) + '/corrections',
+				'/results/' +
+					encodeURIComponent(resultId) +
+					'/corrections?passing_score=' +
+					encodeURIComponent(passingScore),
 			);
 			if (data && Array.isArray(data.items) && data.items.length) {
+				const serverScore = Number(data.score) || 0;
+				const serverTotal = Number(data.total) || 0;
 				trainingState.serverGrading = data;
-				trainingState.score = Number(data.score) || 0;
+				trainingState.score = serverScore;
+				// Penalty docking is computed against the authoritative server
+				// grading: what the earned score loses per wrong graded answer.
+				trainingState.penaltyDocked = Math.max(
+					0,
+					Math.round(
+						(serverScore - applyAttemptPenalty(serverScore, serverTotal)) * 100,
+					) / 100,
+				);
 				// Write the authoritative score back onto the same attempt row
 				// so teacher dashboards stop showing 0 for student training.
 				persistCorrectedScore(payload, data);
@@ -17059,20 +17207,23 @@
 		try {
 			if (!window.API || typeof window.API.raw !== 'function') return;
 			const total = Number(grading.total) || 0;
-			const score = Number(grading.score) || 0;
-			const grade = total > 0 ? Math.round(((score / total) * 20) * 100) / 100 : 0;
-			Promise.resolve(
-				window.API.raw('POST', '/results', {
-					...payload,
-					score: grade,
-					earned_points: score,
-					earnedPoints: score,
-					total_points: total,
-					totalPoints: total,
-					grade20: grade,
-					passed: grade > 10,
-				}),
-			).catch(() => {});
+			const rawScore = Number(grading.score) || 0;
+			// The persisted grade is penalty-adjusted: earned points minus the
+			// preset penalty per wrong graded answer, floored at zero.
+			const finalEarned = applyAttemptPenalty(rawScore, total);
+			const grade = total > 0 ? Math.round(((finalEarned / total) * 20) * 100) / 100 : 0;
+			const graded = {
+				...payload,
+				score: grade,
+				earned_points: finalEarned,
+				earnedPoints: finalEarned,
+				total_points: total,
+				totalPoints: total,
+				grade20: grade,
+				passed: isAttemptPassed(grade),
+				passing_score: Math.round(Number(trainingState.passingScore) || 50),
+			};
+			Promise.resolve(window.API.raw('POST', '/results', graded)).catch(() => {});
 		} catch (_) {}
 	}
 
@@ -17205,9 +17356,14 @@
 	function renderTrainingResultsView(container) {
 		const total = trainingState.questions.length;
 		const score = trainingState.score;
-		const grade = grade20(score, total);
-		const passed = isPassingGrade20(grade);
-		const percent = total > 0 ? Math.round((score / total) * 100) : 0;
+		// The grade is penalty-adjusted when the attempt's preset docks
+		// points per wrong graded answer; the raw correct count stays on the
+		// "Correct Answers" card for transparency.
+		const penaltyDocked = Math.max(0, Number(trainingState.penaltyDocked) || 0);
+		const effectiveScore = Math.max(0, score - penaltyDocked);
+		const grade = grade20(effectiveScore, total);
+		const passed = isAttemptPassed(grade);
+		const percent = total > 0 ? Math.round((effectiveScore / total) * 100) : 0;
 		const elapsedSec = Math.max(
 			0,
 			Math.round(
@@ -17232,7 +17388,7 @@
 				<div class="results-stats-grid">
 					<div class="stat-card accent ${passed ? 'stat-passed' : 'stat-failed'}">
 						<div class="stat-value">${formatGrade20(grade)}</div>
-						<div class="stat-label">${passed ? 'Passed' : 'Failed'} · Grade</div>
+						<div class="stat-label">${passed ? 'Passed' : 'Failed'} · Grade${penaltyDocked ? ` · −${penaltyDocked} pts penalty` : ''}</div>
 					</div>
 					<div class="stat-card">
 						<div class="stat-value">${score} / ${total}</div>

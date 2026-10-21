@@ -28879,7 +28879,6 @@ tr[data-id],
 	#games .switch-text div,
 	#settingsModal .switch-text div {
 		white-space: normal;
-		overflow: visible;
 		text-overflow: clip;
 	}
 
@@ -46364,5 +46363,261 @@ body.cat-dragging * {
 	.overview-scope-clear {
 		padding: 4px 10px;
 		font-size: 0.72rem;
+	}
+}
+
+/* ???????????????????????????????????????????????????????????????????????????
+   STUDENT WORKSPACE � TRAINING TAB, MOBILE VIEWPORT (final override layer)
+   Measured on a real 320�768px run of student-workspace.html:
+   � the stacked .panel-header kept the desktop `flex: 1 1 160px` basis � in a
+     column flex container that basis is a HEIGHT, so the title block was
+     forced to 160px and the header measured 236px tall on a 360px screen,
+     leaving a huge empty gap above the Training panels and pushing the
+     filter chips ~150px below the title.
+   � the full-bleed header kept margin-inline:-16px while the shell only has
+     10px inline padding at ?640px, so it was clipped 6px on both sides.
+   � Training cards and summary tiles stayed single-column all the way up to
+     768px, wasting tablet width.
+   Every rule is scoped (body.student-workspace / [data-workspace-section=
+   "training"]) so the admin panel � which shares the class names � is
+   untouched.
+   ??????????????????????????????????????????????????????????????????????????? */
+
+/* ---- Phones (?640px): stacked panel headers, no dead space ---- */
+@media (max-width: 640px) {
+	body.student-workspace .panel-header {
+		padding: 0 0 12px;
+		gap: 10px;
+		margin-bottom: 14px;
+	}
+
+	/* Reset the desktop width basis � as a column-basis it became a
+	   160px-tall title block on phones. */
+	body.student-workspace .panel-header > div:first-child {
+		flex: 0 0 auto;
+		width: 100%;
+	}
+
+	/* Chips sit directly under the title, full width, left aligned. */
+	body.student-workspace .panel-filters {
+		justify-content: flex-start;
+		width: 100%;
+		gap: 6px;
+	}
+
+	/* Bigger tap targets for the filter chips. */
+	body.student-workspace .filter-chip {
+		min-height: 36px;
+		padding-block: 6px;
+	}
+
+	/* Full-bleed header must match the shell's 10px inline padding,
+	   otherwise it overflows and is clipped 6px on each side. */
+	body.student-workspace .workspace-header {
+		margin-inline: -10px;
+	}
+
+	body.student-workspace .panel-header h2 {
+		font-size: 1rem;
+	}
+}
+
+/* ---- Training tab: tablets (481�768px) use the available width ---- */
+@media (min-width: 481px) and (max-width: 768px) {
+	body.student-workspace
+		.workspace-panel[data-workspace-section="training"]
+		.exam-card-grid {
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+		gap: 12px;
+	}
+
+	body.student-workspace .training-summary-grid {
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+	}
+
+	/* Attempt rows keep the side-by-side label/metric layout there is
+	   room for, instead of stacking at 768px. */
+	body.student-workspace .performance-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	body.student-workspace .performance-row > .performance-metric {
+		width: auto;
+		max-width: 42%;
+		flex: 0 0 auto;
+	}
+}
+
+/* ---- Training tab: phones (?480px) ---- */
+@media (max-width: 480px) {
+	/* One tile/card per row � no half-width pairs on small screens. */
+	body.student-workspace .training-summary-grid,
+	body.student-workspace
+		.workspace-panel[data-workspace-section="training"]
+		.exam-card-grid {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 10px;
+	}
+
+	body.student-workspace .training-summary-tile {
+		padding: 14px;
+	}
+
+	/* Compact cards: smaller title, tighter padding. */
+	body.student-workspace
+		.workspace-panel[data-workspace-section="training"]
+		.exam-card {
+		padding: 16px;
+	}
+
+	body.student-workspace
+		.workspace-panel[data-workspace-section="training"]
+		.exam-card h3 {
+		font-size: 1rem;
+		line-height: 1.35;
+	}
+
+	body.student-workspace .training-attempt-meta {
+		gap: 6px;
+	}
+
+	/* Preset banner chips stay readable without three rows of pills. */
+	body.student-workspace .training-preset-banner .exam-preset-chip {
+		font-size: 0.68rem;
+		padding: 3px 8px;
+	}
+
+	body.student-workspace .performance-attempt {
+		padding: 12px;
+	}
+
+	body.student-workspace .performance-attempt-label {
+		gap: 10px;
+	}
+}
+
+/* ???????????????????????????????????????????????????????????????????????????
+   STUDENT WORKSPACE � CONTAINER RESPONSIVENESS (final override layer, part 2)
+   Narrowing the window clipped the right side of every panel: flex and grid
+   children default to min-width:auto, so ONE wide child (a nowrap result
+   title, the 360px game-card track, the join-code form�) stretched the whole
+   .workspace-column past the viewport, and .workspace-shell's overflow-x:clip
+   silently cut the overflow off. Every container can now shrink, and the
+   individual offenders are capped inside their panels.
+   Measured offenders before this pass: Results panel forced 533px min-content
+   (clipped at ?700px), Games panel 380px (clipped at ?390px).
+   ??????????????????????????????????????????????????????????????????????????? */
+
+/* ---- 1. Nothing in the workspace column can stretch it past its track ---- */
+body.student-workspace .workspace-grid,
+body.student-workspace .workspace-column,
+body.student-workspace .workspace-sidebar,
+body.student-workspace .workspace-panel,
+body.student-workspace .workspace-panel > * {
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+
+/* ---- 3. Results tab (?768px): the nowrap title drove a 533px panel ---- */
+@media (max-width: 768px) {
+	body.student-workspace .results-subtabs {
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	body.student-workspace .results-list .result-row,
+	body.student-workspace .results-list .result-main,
+	body.student-workspace .results-list .result-title-row {
+		min-width: 0;
+		max-width: 100%;
+	}
+
+	/* Titles wrap (2-line clamp) instead of forcing the whole panel wide. */
+	body.student-workspace .results-list .result-title {
+		white-space: normal;
+		overflow: visible;
+		text-overflow: clip;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	body.student-workspace .results-summary {
+		gap: 6px;
+	}
+
+	body.student-workspace .results-summary-chip {
+		min-width: 0;
+		padding: 8px 6px;
+	}
+
+	body.student-workspace .results-summary-value {
+		font-size: 0.95rem;
+	}
+
+	body.student-workspace .results-summary-label {
+		font-size: 0.58rem;
+		letter-spacing: 0.03em;
+	}
+
+	body.student-workspace .results-filters {
+		min-width: 0;
+	}
+
+	body.student-workspace .results-filter-group {
+		min-width: 0;
+		max-width: 100%;
+	}
+}
+
+/* ---- 4. Games tab: hard 320/360px card tracks and the join form ---- */
+@media (max-width: 980px) {
+	/* Replace the unshrinkable minmax(320px/360px, 1fr) tracks with a
+	   fluid minimum so the grid can always fit the panel. */
+	body.student-workspace .games-panel .game-card-list,
+	body.student-workspace
+		.workspace-grid--full-width
+		.games-panel
+		.game-card-list {
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+		min-width: 0;
+	}
+}
+
+@media (max-width: 640px) {
+	body.student-workspace .game-arena-stats {
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+		gap: 10px;
+		min-width: 0;
+	}
+
+	body.student-workspace .games-panel .game-card-list {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	/* Join-code row: full width, stacked, never forcing 290px. */
+	body.student-workspace .game-quick-join {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	body.student-workspace .game-quick-join-form {
+		min-width: 0;
+		width: 100%;
+	}
+
+	body.student-workspace .game-quick-join-form .workspace-input {
+		min-width: 0;
+		flex: 1 1 auto;
+		width: auto;
+	}
+
+	body.student-workspace .game-stat-card {
+		min-width: 0;
 	}
 }

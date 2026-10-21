@@ -127,6 +127,97 @@
 		return map;
 	}
 
+	// Saved classes (repo cache). Virtual classes created on the fly during
+	// quizzes are not stored here; results without a saved class fall through
+	// to the exam-owner fallback.
+	function getClasses() {
+		try {
+			return window.__DI_CONTAINER__.repo.getAll_sync('classes') || [];
+		} catch (_) {
+			return [];
+		}
+	}
+
+	// The { id, name } class "behind" a result, using the same precedence as
+	// resolveResultClass (results-management.js) so the By badge, the Class
+	// cell, and the teacher filter can never disagree on attribution:
+	//   1. result.classId / class_id (direct id match);
+	//   2. result.class / className / class_name (saved-class name match);
+	//   3. the attempt's student (userId) -> their registered class.
+	// Server-persisted training rows may carry NO class fields at all (some
+	// write paths only store them inside answers_json metadata); step 3 is
+	// what keeps those rows attributed to the right teachers.
+	function resolveResultClassRef(result) {
+		if (!result || typeof result !== 'object') return null;
+		const classes = getClasses();
+		const resultClassId = String(result.classId || result.class_id || '');
+		if (resultClassId) {
+			const match = classes.find(
+				(c) => String(c.id) === resultClassId,
+			);
+			if (match) return { id: String(match.id), name: match.name || '' };
+		}
+		const resultClassName = String(
+			result.class || result.className || result.class_name || '',
+		);
+		if (resultClassName) {
+			const match = classes.find(
+				(c) => String(c.name || '') === resultClassName,
+			);
+			if (match) return { id: String(match.id), name: match.name || '' };
+		}
+		const userId = String(result.userId || result.user_id || '');
+		if (!userId) return null;
+		try {
+			const users = window.Auth?.getUsers ? window.Auth.getUsers() : [];
+			const user = (Array.isArray(users) ? users : []).find(
+				(u) => String(u.id) === userId,
+			);
+			const userClassId = String(user?.classId || user?.class_id || '');
+			const userClassName = String(
+				user?.className || user?.class_name || user?.class || '',
+			);
+			const match = userClassId
+				? classes.find((c) => String(c.id) === userClassId)
+				: userClassName
+					? classes.find((c) => String(c.name || '') === userClassName)
+					: null;
+			if (match) return { id: String(match.id), name: match.name || '' };
+			if (userClassName) return { id: '', name: userClassName };
+		} catch (_) {
+			/* users store is best-effort */
+		}
+		return null;
+	}
+
+	// Normalize a caller-supplied class row / { className } face / ref into a
+	// class ref. Returns null when nothing usable is on it.
+	function classRefFromHint(hint) {
+		if (!hint || typeof hint !== 'object') return null;
+		const id = String(hint.id ?? '');
+		const name = String(hint.name ?? hint.className ?? hint.class ?? '');
+		return id || name ? { id, name } : null;
+	}
+
+	// Teacher display names assigned to a { id, name } class ref.
+	function teacherNamesForClassRef(classRef, classTeacherMap) {
+		if (!classRef) return [];
+		const map =
+			classTeacherMap instanceof Map
+				? classTeacherMap
+				: buildClassTeacherMap();
+		if (classRef.id && map.has(classRef.id)) return [...map.get(classRef.id)];
+		if (classRef.name) {
+			const match = getClasses().find(
+				(c) => String(c.name || '') === classRef.name,
+			);
+			if (match && map.has(String(match.id))) {
+				return [...map.get(String(match.id))];
+			}
+		}
+		return [];
+	}
+
 	function resolveOwnerName(item) {
 		try {
 			if (typeof window.getOwnerLabel === 'function') {
@@ -156,33 +247,14 @@
 	}
 
 	// Display name(s) of the teacher(s) behind a result: the teacher(s) of
-	// the result's class, falling back to the exam's creator.
-	function resolveResultTeacherNames(result, classTeacherMap) {
-		const names = [];
-		try {
-			const map =
-				classTeacherMap instanceof Map ? classTeacherMap : buildClassTeacherMap();
-			const classId = String(result?.classId || result?.class_id || '');
-			if (classId && map.has(classId)) {
-				names.push(...map.get(classId));
-			} else {
-				const className = String(
-					result?.class || result?.className || result?.class_name || '',
-				);
-				if (className) {
-					const classes =
-						window.__DI_CONTAINER__.repo.getAll_sync('classes') || [];
-					const match = (Array.isArray(classes) ? classes : []).find(
-						(c) => String(c.name || '') === className,
-					);
-					if (match && map.has(String(match.id))) {
-						names.push(...map.get(String(match.id)));
-					}
-				}
-			}
-		} catch (_) {
-			/* ignore */
-		}
+	// the result's class (direct id → class name → the student's registered
+	// class), falling back to the exam's creator. `resolvedClassHint` lets a
+	// caller that already computed the row's class (results tab) reuse it so
+	// the Class cell and the By badge agree by construction.
+	function resolveResultTeacherNames(result, classTeacherMap, resolvedClassHint) {
+		const classRef =
+			classRefFromHint(resolvedClassHint) || resolveResultClassRef(result);
+		let names = teacherNamesForClassRef(classRef, classTeacherMap);
 		if (!names.length) {
 			try {
 				const exams = window.__DI_CONTAINER__.repo.getAll_sync('exams') || [];
@@ -240,26 +312,21 @@
 		return getOwnerId(item) === String(teacherId);
 	}
 
-	function matchesResult(result, teacherId) {
+	// Filter matches use the same resolution as the By badge, with the same
+	// optional class hint, so filtering by a teacher never hides a row whose
+	// badge shows that teacher's name.
+	function matchesResult(result, teacherId, resolvedClassHint) {
 		if (!teacherId) return true;
 		const classIds = new Set(getTeacherClassIds(teacherId));
-		const classId = String(result?.classId || result?.class_id || '');
-		if (classId && classIds.has(classId)) return true;
-		// Fall back to class-name matching (virtual classes / legacy rows).
-		const className = String(
-			result?.class || result?.className || result?.class_name || '',
-		);
-		if (className) {
-			try {
-				const classes =
-					window.__DI_CONTAINER__.repo.getAll_sync('classes') || [];
-				const match = (Array.isArray(classes) ? classes : []).find(
-					(c) => String(c.name || '') === className,
-				);
-				if (match && classIds.has(String(match.id))) return true;
-			} catch (_) {
-				/* ignore */
-			}
+		const classRef =
+			classRefFromHint(resolvedClassHint) || resolveResultClassRef(result);
+		if (classRef?.id && classIds.has(classRef.id)) return true;
+		if (classRef?.name) {
+			// Virtual/legacy rows may only be recognizable by class name.
+			const match = getClasses().find(
+				(c) => String(c.name || '') === classRef.name,
+			);
+			if (match && classIds.has(String(match.id))) return true;
 		}
 		// Results of the teacher's own exams still count as their activity.
 		try {
@@ -347,6 +414,7 @@
 		matchesOwner,
 		matchesClass,
 		matchesResult,
+		resolveResultClassRef,
 		populate,
 		refreshAll,
 		buildClassTeacherMap,

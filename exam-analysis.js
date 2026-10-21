@@ -397,7 +397,7 @@ function renderExamAnalysisStudentsTab(payload) {
 		return `<div class="eas-empty">No attempts recorded for this exam yet.</div>`;
 	}
 	const attempts = rows.map((r) => {
-		const passed = Number(r.grade) > 10;
+		const passed = Number(r.grade) >= 10;
 		const name = r.student.numero
 			? `${examAnalysisEscapeHtml(r.student.numero)} — ${examAnalysisEscapeHtml(r.student.name)}`
 			: examAnalysisEscapeHtml(r.student.name);

@@ -606,11 +606,11 @@ const SANITIZERS = {
     }
     score = Math.max(0, Math.min(100, Math.round(score * 100) / 100));
 
-    // Pass threshold follows the /20 rule: grade strictly above 10/20.
+    // Pass threshold follows the /20 rule: grade of 10/20 or more passes.
     const derivedPassed =
       totalPoints > 0
-        ? earnedPoints * 2 > totalPoints
-        : score > 50;
+        ? earnedPoints * 2 >= totalPoints
+        : score >= 50;
     const passed =
       pickBool(row.passed) ??
       pickBool(row.isPassed) ??

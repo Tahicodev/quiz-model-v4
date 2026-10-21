@@ -212,7 +212,25 @@ function resolveStudentDisplay(result, users) {
 	return { name, numero, class: klass, user };
 }
 
+/**
+ * Resolve the class (row or { className } face) behind a result row. The
+ * shared TeacherFilter resolver is authoritative — it applies the exact same
+ * precedence (classId → class name → the student's registered class) to the
+ * By badge and the teacher filter, so all three agree by construction. The
+ * local logic only runs when teacher-filter.js has not loaded.
+ */
 function resolveResultClass(result, classes, student) {
+	if (window.TeacherFilter?.resolveResultClassRef) {
+		const ref = window.TeacherFilter.resolveResultClassRef(result);
+		if (ref && (ref.id || ref.name)) {
+			return {
+				id: ref.id || '',
+				className: ref.name || '',
+				name: ref.name || '',
+			};
+		}
+		return null;
+	}
 	let classData = null;
 	if (result.classId) {
 		classData = classes.find((c) => String(c.id) === String(result.classId));
@@ -235,6 +253,15 @@ function resolveResultClass(result, classes, student) {
 		}
 	}
 	return classData;
+}
+
+/**
+ * Canonical pass rule: 10/20 or more — the French convention, and the same
+ * rule every surface uses (student workspace `isPassingGrade20`, the
+ * server's GradingService, exam analysis). 10,00/20 grades render green.
+ */
+function isResultPassed(grade) {
+	return Number(grade) >= 10;
 }
 
 function isGameResult(result) {
@@ -389,9 +416,7 @@ function resolveWinnerName(result) {
 
 function loadResults() {
 	// Load training results from quizResults
-	let results = window.__DI_CONTAINER__.repo.getAll_sync('results').map(
-		normalizeResultEntry,
-	);
+	let results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 
 	// Also load exam results from examResults
 	try {
@@ -438,8 +463,16 @@ function loadResults() {
 			'resultTeacherFilter',
 		);
 		if (teacherScope) {
+			// Resolve each row's class the same way the table will, so the
+			// filter and the By badge stay in sync for raw server rows.
+			const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
+			const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			results = results.filter((r) =>
-				window.TeacherFilter.matchesResult(r, teacherScope),
+				window.TeacherFilter.matchesResult(
+					r,
+					teacherScope,
+					resolveResultClass(r, classes, resolveStudentDisplay(r, users)),
+				),
 			);
 		}
 	}
@@ -479,8 +512,16 @@ function filterResults() {
 			'resultTeacherFilter',
 		);
 		if (teacherScope) {
+			// Same class resolution the table uses, so filtering by teacher
+			// matches the By badge row for row (incl. the student fallback).
+			const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes');
+			const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
 			results = results.filter((r) =>
-				window.TeacherFilter.matchesResult(r, teacherScope),
+				window.TeacherFilter.matchesResult(
+					r,
+					teacherScope,
+					resolveResultClass(r, classes, resolveStudentDisplay(r, users)),
+				),
 			);
 		}
 	}
@@ -676,7 +717,7 @@ function displayResults(results) {
 		const classLabel = classData
 				? classData.className || classData.name
 				: student.class || '';
-		const passed = parseFloat(scoreOn20) >= 10;
+		const passed = isResultPassed(grade);
 		const dateTitle = resultDate
 				? new Date(resultDate).toLocaleString()
 				: '';
@@ -727,7 +768,7 @@ function displayResults(results) {
                 </td>
                 <td data-label="Time"><span class="time-pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${escapeHtml(timeFormatted)}</span></td>
                 <td data-label="Source">${sourceCell}</td>
-                <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Teacher">${escapeHtml(window.TeacherFilter ? window.TeacherFilter.resolveResultTeacherNames(result, resultTeacherMap) : '—')}</span></td>
+                <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Teacher">${escapeHtml(window.TeacherFilter ? window.TeacherFilter.resolveResultTeacherNames(result, resultTeacherMap, classData) : '—')}</span></td>
                 <td class="actions-cell">
                     <div class="exam-actions">
                         <button class="exam-action-btn exam-view-btn" onclick="viewResultDetails('${escapeHtml(
@@ -819,7 +860,7 @@ function renderResultsKpis(results) {
 		const { grade } = resolveResultScore(r);
 		if (Number.isFinite(grade)) {
 			gradeSum += grade;
-			if (grade >= 10) passed++;
+			if (isResultPassed(grade)) passed++;
 		}
 		const student = resolveStudentDisplay(r, users);
 		const klass = student.class || 'Unassigned';
@@ -1038,6 +1079,8 @@ function viewResultDetails(resultId) {
 	const results = window.__DI_CONTAINER__.repo.getAll_sync('results');
 	const participantIndex = buildGameParticipantIndex(results);
 
+	// Normalize first: the row ids the table renders are built from the
+	// normalized shape (numero, resolved date).
 	const result = normalizeResultEntry(
 		results.find(
 			(r) =>
@@ -1056,19 +1099,9 @@ function viewResultDetails(resultId) {
 	const users = window.__DI_CONTAINER__.repo.getAll_sync('users');
 	const student = resolveStudentDisplay(result, users);
 
-	// Find exam
-	let exam = null;
-	if (result.examId) {
-		exam = exams.find((e) => String(e.id) === String(result.examId));
-	} else if ((result.examTitle || result.examName) && result.examTitle !== 'Training Quiz') {
-		exam = exams.find(
-			(e) =>
-				e.title === result.examTitle ||
-				e.name === result.examTitle ||
-				e.title === result.examName ||
-				e.name === result.examName
-		);
-	}
+	// Same row label the table renders (Training Quiz / game / exam title),
+	// so the modal never spins its own vocabulary.
+	const examDisplayName = resolveExamDisplayName(result, exams);
 
 	// Find class - fall back to the student's registered class
 	const classData = resolveResultClass(result, classes, student);
@@ -1086,23 +1119,11 @@ function viewResultDetails(resultId) {
 		? resolveParticipantCount(result, participantNames)
 		: 0;
 	const winnerName = gameResult ? resolveWinnerName(result) : '';
-	let assessmentLabel = 'Exam';
-	let assessmentValue = '';
-	if (gameResult) {
-		assessmentLabel = 'Game';
-		assessmentValue = resolveGameDisplayName(result);
-	} else {
-		assessmentValue = exam
-			? exam.title || exam.name
-			: result.examTitle
-			? result.examTitle
-			: result.mode === 'training'
-			? 'Training Quiz'
-			: 'Unknown Exam';
-	}
+	const assessmentLabel = isGameResult(result) ? 'Game' : 'Exam';
+	const assessmentValue = examDisplayName;
 
 	// Create detail modal (modern dashboard-style hero + grid)
-	const passed = parseFloat(scoreOn20) >= 10;
+	const passed = isResultPassed(grade);
 	const modalInitials = String(student.name || '?')
 		.trim()
 		.split(/\s+/)
@@ -1209,10 +1230,10 @@ async function deleteResult(resultId) {
 	const target = results.find((r) => r.id === resultId);
 	const initialLength = results.length;
 
-	// Delete by id or by numero+date combination
+	// Delete by id or by numero+date combination (same key the table uses)
 	results = results.filter(
 		(r) =>
-			!(r.id === resultId || (r.numero && `${r.numero}-${r.date}` === resultId))
+			!(r.id === resultId || (r.numero && `${r.numero}-${getResultDate(r)}` === resultId))
 	);
 
 	if (results.length === initialLength) {

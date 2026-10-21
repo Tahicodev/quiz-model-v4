@@ -8,7 +8,7 @@ import { enforceTenant } from '../middleware/tenant.js';
 import { ROLES } from '../../shared/constants.js';
 import { ForbiddenError, NotFoundError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
-import { gradeAttempt, grade20, isPassingGrade20 } from '../services/GradingService.js';
+import { gradeAttempt, grade20 } from '../services/GradingService.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -110,13 +110,19 @@ router.get('/:id/corrections', async (req, res, next) => {
 
     const { score, total, items } = gradeAttempt(ordered, answersMap);
     const grade = grade20(score, total);
+    // Preset pass mark (optional): the workspace sends the attempt's
+    // configured passing score; without it the default 50% applies
+    // (50% of the /20 grade → grade 10).
+    const passingScore = Number(req.query.passing_score ?? req.query.passingScore) || 50;
+    const passingGrade = (passingScore / 100) * 20;
     res.json({
       resultId: result.id,
       mode: result.mode || 'training',
       score,
       total,
       grade20: grade,
-      passed: isPassingGrade20(grade),
+      passingScore,
+      passed: grade + 1e-9 >= passingGrade,
       items: items.map((item) => ({
         questionId: item.questionId,
         type: item.type,
@@ -326,7 +332,7 @@ router.post('/', async (req, res, next) => {
       mode,
       passed: body.passed != null
         ? Boolean(body.passed)
-        : (totalPoints > 0 ? earnedPoints * 2 > totalPoints : score > 50),
+        : (totalPoints > 0 ? earnedPoints * 2 >= totalPoints : score >= 50),
       attempt_number: body.attempt_number != null
         ? Number(body.attempt_number)
         : (body.attemptNumber != null ? Number(body.attemptNumber) : 1),

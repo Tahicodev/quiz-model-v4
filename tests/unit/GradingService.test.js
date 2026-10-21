@@ -174,12 +174,13 @@ describe('gradeAttempt', () => {
 });
 
 describe('grade20', () => {
-  it('normalizes to a /20 scale and thresholds passing above 10', () => {
+  it('normalizes to a /20 scale and thresholds passing at 10 or more', () => {
     expect(grade20(3, 5)).toBe(12);
     expect(grade20(0, 5)).toBe(0);
     expect(grade20(5, 5)).toBe(20);
     expect(grade20(0, 0)).toBe(0);
     expect(isPassingGrade20(12)).toBe(true);
-    expect(isPassingGrade20(10)).toBe(false);
+    expect(isPassingGrade20(10)).toBe(true);
+    expect(isPassingGrade20(9.99)).toBe(false);
   });
 });
