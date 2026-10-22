@@ -23,9 +23,12 @@
 		{ id: 'build-a-tower', icon: '🏗️', label: 'Build-a-Tower', desc: 'Stack blocks in the correct order', kidType: 'draggable' },
 		{ id: 'magic-words', icon: '🪄', label: 'Magic Words', desc: 'Drag words into the blanks', kidType: 'fill-blank' },
 		{ id: 'code-explorer', icon: '🔭', label: 'Code Explorer', desc: 'Code puzzles, space style (CM1/CM2)', kidType: 'code' },
+		{ id: 'math-quest', icon: '🦖', label: 'Math Quest', desc: 'Jungle adventure with a map between levels', kidType: 'multiple-choice' },
 	];
 	var KIDS_THEMES = ['jungle', 'space', 'ocean', 'farm', 'castle', 'dinosaur', 'forest', 'city', 'circus', 'magic', 'school', 'superhero'];
 	var KIDS_GRADES = ['maternelle', 'cp', 'ce1', 'ce2', 'cm1', 'cm2'];
+	/* Math Quest level editor (config_json.levels) */
+	var MQ_ART_VALUES = ['home', 'treasure', 'temple', 'sunset'];
 	var THEME_BG = {
 		jungle: 'linear-gradient(135deg,#166534,#4ade80)', space: 'linear-gradient(135deg,#0f172a,#7c3aed)',
 		ocean: 'linear-gradient(135deg,#0c4a6e,#38bdf8)', farm: 'linear-gradient(135deg,#65a30d,#fef08a)',
@@ -40,7 +43,7 @@
 		filters: { game_type: '', grade: '', subject: '', status: '', teacher_id: '', search: '' },
 		wizardStep: 1,
 		editingId: null,
-		wizard: { game_type: null, theme: 'jungle', questions: [] },
+		wizard: { game_type: null, theme: 'jungle', questions: [], mqLevels: [] },
 		bank: [],
 		bankTypeFilter: 'all',
 		aiResults: [],
@@ -296,7 +299,7 @@
 			state.editingId = editId || null;
 			state.wizardStep = 1;
 			state.maxWizardStep = 1;
-			state.wizard = { game_type: null, theme: 'jungle', questions: [] };
+			state.wizard = { game_type: null, theme: 'jungle', questions: [], mqLevels: [] };
 			state.aiResults = [];
 			state.manualList = [];
 			setFormValue('kidsGameWizardId', editId || '');
@@ -312,6 +315,7 @@
 					state.wizard.theme = game.theme || 'jungle';
 					state.wizard.questions = parseJsonSafe(game.questions_json, []).map(normalizeKidQuestion);
 					var cfg = parseJsonSafe(game.config_json, {});
+					hydrateMqLevels(cfg);
 					setFormValue('kidsGameName', game.name || '');
 					setFormValue('kidsGameSubject', game.subject || '');
 					setFormValue('kidsAIGrade', game.grade || 'cp');
@@ -323,6 +327,7 @@
 					setChecked('kidsGameShowExplanations', cfg.show_explanations !== false);
 					syncWizardSelectionUI();
 					renderKidsWizardSelectedQuestions();
+					syncMqLevelsVisibility();
 					safeLoadKidsBank();
 				}).catch(function (err) { toast('Could not load game: ' + (err && err.message), 'error'); });
 			} else {
@@ -369,11 +374,21 @@
 			return false;
 		}
 		if (n === 4 && !String(($('kidsGameName') || {}).value || '').trim()) { toast('Give your game a name', 'warning'); return false; }
+		if (n === 4 && state.wizard.game_type === 'math-quest') {
+			ensureMqLevels(); // auto-align the plan with the current questions
+			var covered = 0;
+			state.wizard.mqLevels.forEach(function (lv) { covered += Math.max(0, Math.floor(Number(lv.count) || 0)); });
+			if (covered !== state.wizard.questions.length) { toast('Level plan does not cover every question', 'warning'); return false; }
+		}
 		return true;
 	}
 	function goToWizardStep(n) {
 		state.wizardStep = Math.min(5, Math.max(1, n));
 		if (state.maxWizardStep == null || state.wizardStep > state.maxWizardStep) state.maxWizardStep = state.wizardStep;
+		// Math Quest: re-sync the level plan with the current questions every
+		// time step 4 is entered (questions are picked in step 3, AFTER the
+		// plan was first initialized at game-type selection).
+		if (state.wizardStep === 4) { ensureMqLevels(); }
 		var stepInput = $('kidsGameWizardStep');
 		if (stepInput) stepInput.value = String(state.wizardStep);
 		document.querySelectorAll('#kidsGameWizardModal .kw-step-panel').forEach(function (p) {
@@ -436,6 +451,202 @@
 		buildGameTypeGrid();
 		loadKidsBank();
 		renderKidsWizardSelectedQuestions();
+		syncMqLevelsVisibility();
+	}
+
+	/* ── Math Quest multi-level editor (step 4, math-quest only) ─────────
+	   Every question is assigned to exactly one level via contiguous ranges
+	   over state.wizard.questions (same order the kid plays them in). A
+	   level entry stores its question COUNT; the level ids are stable
+	   random strings, kept across splits/merges so saved progress in the
+	   KidQuestProgress table survives edits of level names/titles. */
+	function mqNewLevelId() { return 'lv-' + Math.random().toString(36).slice(2, 10); }
+	function mqSinglePlan() {
+		state.wizard.mqLevels = [{
+			id: mqNewLevelId(), name: 'Level 1', pass_stars: 1, art: 'home',
+			count: state.wizard.questions.length || 0,
+		}];
+	}
+	/** Edit modal: turn a persisted config_json.levels plan into editor rows. */
+	function hydrateMqLevels(cfg) {
+		var type = state.wizard.game_type;
+		if (type !== 'math-quest' || !cfg || !Array.isArray(cfg.levels) || !cfg.levels.length) {
+			state.wizard.mqLevels = [];
+			if (type === 'math-quest') mqSinglePlan();
+			return;
+		}
+		state.wizard.mqLevels = cfg.levels.map(function (lv, i) {
+			return {
+				id: String(lv.id || mqNewLevelId()).slice(0, 80),
+				name: String(lv.name || '').trim().slice(0, 60) || ('Level ' + (i + 1)),
+				pass_stars: Math.min(3, Math.max(1, Math.floor(Number(lv.pass_stars) || 1))),
+				art: MQ_ART_VALUES.indexOf(lv.art) >= 0 ? lv.art : 'home',
+				count: Math.max(0, Math.min(30, (Array.isArray(lv.questions) ? lv.questions : []).length)),
+			};
+		});
+	}
+	/** Keep the plan valid when the question list changes (add/remove/swap).
+	   Added questions go to the last level; after removals, trailing levels
+	   are clamped or dropped (always keeping at least one level). */
+	function ensureMqLevels() {
+		if (state.wizard.game_type !== 'math-quest') return;
+		if (!Array.isArray(state.wizard.mqLevels) || !state.wizard.mqLevels.length) mqSinglePlan();
+		var total = 0;
+		state.wizard.mqLevels.forEach(function (lv) { total += Math.max(0, Math.floor(Number(lv.count) || 0)); });
+		var len = state.wizard.questions.length;
+		if (total === len) { syncMqLevelsVisibility(); return; }
+		if (!len) { mqSinglePlan(); syncMqLevelsVisibility(); return; }
+		if (total < len) {
+			var last = state.wizard.mqLevels[state.wizard.mqLevels.length - 1];
+			last.count = Math.max(0, Math.floor(Number(last.count) || 0)) + (len - total);
+			syncMqLevelsVisibility();
+			return;
+		}
+		var remaining = len, kept = [];
+		state.wizard.mqLevels.forEach(function (lv) {
+			if (remaining <= 0) return;
+			var c = Math.min(Math.max(0, Math.floor(Number(lv.count) || 0)), remaining);
+			if (c > 0) { kept.push(Object.assign({}, lv, { count: c })); remaining -= c; }
+		});
+		if (!kept.length) mqSinglePlan(); else state.wizard.mqLevels = kept;
+		syncMqLevelsVisibility();
+	}
+	function syncMqLevelsVisibility() {
+		var group = $('kidsMqLevelsGroup');
+		if (!group) return;
+		var show = state.wizard.game_type === 'math-quest';
+		group.hidden = !show;
+		if (show) renderKidsMqLevels();
+	}
+	function renderKidsMqLevels() {
+		var group = $('kidsMqLevelsGroup');
+		if (!group || group.hidden) return;
+		var list = $('kidsMqLevelsList');
+		if (!list) return;
+		var offset = 0, parts = [];
+		state.wizard.mqLevels.forEach(function (lv, i) {
+			var count = Math.max(0, Math.floor(Number(lv.count) || 0));
+			var qs = state.wizard.questions.slice(offset, offset + count);
+			offset += count;
+			var isLast = i === state.wizard.mqLevels.length - 1;
+			var chips = qs.map(function (q) {
+				var t = String(q.text || '').trim();
+				var short = t.length > 38 ? t.slice(0, 37) + '…' : (t || '—');
+				return '<span class="kids-mq-chip" title="' + esc(t) + '">' + esc(short) + '</span>';
+			}).join('');
+			if (!chips) chips = '<span class="kids-mq-chip kids-mq-chip-empty">no questions yet — add some in step 3</span>';
+			var canSplit = qs.length >= 2 && state.wizard.mqLevels.length < 12;
+			var superscript = 'next unlocks at ' + Math.floor(Number(lv.pass_stars) || 1) + '⭐ · ' + qs.length + ' question(s)';
+			parts.push(
+				'<div class="kids-mq-level" data-idx="' + i + '">' +
+					'<div class="kids-mq-level-head">' +
+						'<span class="kids-mq-level-num" aria-hidden="true">🦖</span>' +
+						'<input type="text" class="form-control kids-mq-name" maxlength="60" placeholder="Level name" data-field="name" value="' + esc(lv.name || '') + '" />' +
+						'<select class="form-control kids-mq-pass" data-field="pass_stars" title="Stars needed to unlock the NEXT level">' +
+							[1, 2, 3].map(function (n) {
+								return '<option value="' + n + '"' + (Number(lv.pass_stars) === n ? ' selected' : '') + '>' + n + '⭐ to unlock next</option>';
+							}).join('') +
+						'</select>' +
+						'<select class="form-control kids-mq-art" data-field="art" title="Level artwork on the adventure map">' +
+							[['home', '🏠 Home'], ['treasure', '💎 Treasure'], ['temple', '🏛️ Temple'], ['sunset', '🌅 Sunset']].map(function (a) {
+								return '<option value="' + a[0] + '"' + (lv.art === a[0] ? ' selected' : '') + '>' + a[1] + '</option>';
+							}).join('') +
+						'</select>' +
+					'</div>' +
+					'<div class="kids-mq-chips">' + chips + '</div>' +
+					'<div class="kids-mq-level-actions">' +
+						(canSplit ? '<button type="button" class="kids-mq-act" data-act="split" title="Cut this level in two">✂ Split</button>' : '') +
+						(i > 0 ? '<button type="button" class="kids-mq-act kids-mq-act-danger" data-act="merge" title="Merge this level into the previous one">⤴ Merge into level ' + i + '</button>' : '') +
+						'<span class="kids-mq-summary">' + esc(superscript) + '</span>' +
+					'</div>' +
+				'</div>'
+			);
+		});
+		list.innerHTML = parts.join('');
+		// Field events (no re-render on typing — keeps the caret in place).
+		Array.prototype.forEach.call(list.querySelectorAll('.kids-mq-level'), function (row) {
+			var idx = Number(row.dataset.idx) || 0;
+			var lv = state.wizard.mqLevels[idx];
+			if (!lv) return;
+			var inEl = row.querySelector('[data-field="name"]');
+			if (inEl) {
+				inEl.addEventListener('input', function () { lv.name = inEl.value; });
+			}
+			var passEl = row.querySelector('[data-field="pass_stars"]');
+			if (passEl) {
+				passEl.addEventListener('change', function () { lv.pass_stars = Math.min(3, Math.max(1, Number(passEl.value) || 1)); });
+			}
+			var artEl = row.querySelector('[data-field="art"]');
+			if (artEl) {
+				artEl.addEventListener('change', function () { lv.art = MQ_ART_VALUES.indexOf(artEl.value) >= 0 ? artEl.value : 'home'; });
+			}
+			var splitBtn = row.querySelector('[data-act="split"]');
+			if (splitBtn) splitBtn.addEventListener('click', function () { mqSplitLevel(idx); });
+			var mergeBtn = row.querySelector('[data-act="merge"]');
+			if (mergeBtn) mergeBtn.addEventListener('click', function () { mqMergeLevel(idx); });
+		});
+	}
+	function mqSplitLevel(idx) {
+		var plan = state.wizard.mqLevels;
+		var lv = plan[idx];
+		var count = lv ? Math.floor(Number(lv.count) || 0) : 0;
+		if (!lv || count < 2) { toast('Need at least 2 questions to split', 'warning'); return; }
+		if (plan.length >= 12) { toast('A game can have 12 levels at most', 'warning'); return; }
+		var first = Math.max(1, Math.floor(count / 2));
+		lv.count = first;
+		plan.splice(idx + 1, 0, {
+			id: mqNewLevelId(),
+			name: 'Level ' + (idx + 2),
+			pass_stars: 1,
+			art: 'home',
+			count: count - first,
+		});
+		renderKidsMqLevels();
+	}
+	function mqMergeLevel(idx) {
+		var plan = state.wizard.mqLevels;
+		if (idx <= 0 || !plan[idx]) return;
+		plan[idx - 1].count += Math.max(0, Math.floor(Number(plan[idx].count) || 0));
+		plan.splice(idx, 1);
+		if (!plan.length) mqSinglePlan();
+		renderKidsMqLevels();
+	}
+	function mqAddLevel() {
+		var plan = state.wizard.mqLevels;
+		if (plan.length >= 12) { toast('A game can have 12 levels at most', 'warning'); return; }
+		var last = plan[plan.length - 1];
+		if (!last || Math.floor(Number(last.count) || 0) < 2) { toast('Split a level or add questions first', 'warning'); return; }
+		last.count -= 1;
+		plan.push({ id: mqNewLevelId(), name: 'Level ' + (plan.length + 1), pass_stars: 1, art: 'home', count: 1 });
+		renderKidsMqLevels();
+	}
+	function mqResetLevels() { mqSinglePlan(); renderKidsMqLevels(); }
+
+	/** config_json for the wizard payload — Math Quest carries the level plan. */
+	function buildKidsGameConfig() {
+		var base = {
+			time_per_q: Number($('kidsGameTimePerQ').value) || 15,
+			max_hints: Number($('kidsGameMaxHints').value) || 0,
+			mascot_theme: $('kidsGameMascotTheme').value || null,
+			allow_replay: $('kidsGameAllowReplay').checked !== false,
+			show_explanations: $('kidsGameShowExplanations').checked !== false,
+		};
+		if (state.wizard.game_type !== 'math-quest') return base;
+		ensureMqLevels();
+		var offset = 0, levels = [];
+		state.wizard.mqLevels.forEach(function (lv, i) {
+			var count = Math.max(0, Math.floor(Number(lv.count) || 0));
+			var ids = state.wizard.questions.slice(offset, offset + count).map(function (q) { return String(q.id); });
+			offset += count;
+			levels.push({
+				id: String(lv.id || mqNewLevelId()).slice(0, 80),
+				name: String(lv.name || '').trim().slice(0, 60) || ('Level ' + (i + 1)),
+				questions: ids,
+				pass_stars: Math.min(3, Math.max(1, Math.floor(Number(lv.pass_stars) || 1))),
+				art: MQ_ART_VALUES.indexOf(lv.art) >= 0 ? lv.art : 'home',
+			});
+		});
+		return Object.assign(base, { levels: levels });
 	}
 
 	/* Step 2 — theme */
@@ -909,24 +1120,27 @@
 			grade: ($('kidsAIGrade') || {}).value || 'cp',
 			subject: String($('kidsGameSubject').value || '').trim() || null,
 			questions_json: JSON.stringify(state.wizard.questions),
-			config_json: JSON.stringify({
-				time_per_q: Number($('kidsGameTimePerQ').value) || 15,
-				max_hints: Number($('kidsGameMaxHints').value) || 0,
-				mascot_theme: $('kidsGameMascotTheme').value || null,
-				allow_replay: $('kidsGameAllowReplay').checked !== false,
-				show_explanations: $('kidsGameShowExplanations').checked !== false,
-			}),
+			config_json: JSON.stringify(buildKidsGameConfig()),
 		};
 	}
 	function updateKidsWizardPreview() {
 		var prev = $('kidsWizardPreview');
 		if (!prev) return;
 		var meta = gameTypeMeta(state.wizard.game_type) || {};
+		var levelsLine = '';
+		if (state.wizard.game_type === 'math-quest') {
+			ensureMqLevels();
+			var total = 0;
+			state.wizard.mqLevels.forEach(function (lv) { total += Math.max(0, Math.floor(Number(lv.count) || 0)); });
+			levelsLine = '<div class="preview-row"><span class="preview-label">Adventure levels</span><span class="preview-value">' +
+				state.wizard.mqLevels.length + ' level(s) · ' + total + ' question(s)</span></div>';
+		}
 		prev.innerHTML =
 			'<div class="preview-row"><span class="preview-label">Game</span><span class="preview-value">' + esc(meta.icon || '') + ' ' + esc(meta.label || state.wizard.game_type) + '</span></div>' +
 			'<div class="preview-row"><span class="preview-label">Name</span><span class="preview-value">' + esc($('kidsGameName').value || '—') + '</span></div>' +
 			'<div class="preview-row"><span class="preview-label">Theme / Grade / Subject</span><span class="preview-value">' + esc(state.wizard.theme) + ' · ' + esc(($('kidsAIGrade') || {}).value || '—') + ' · ' + esc($('kidsGameSubject').value || '—') + '</span></div>' +
-			'<div class="preview-row"><span class="preview-label">Questions</span><span class="preview-value">' + state.wizard.questions.length + ' question(s)</span></div>';
+			'<div class="preview-row"><span class="preview-label">Questions</span><span class="preview-value">' + state.wizard.questions.length + ' question(s)</span></div>' +
+			levelsLine;
 	}
 	function publishKidsGame(presetId) {
 		var id = presetId || state.editingId || ($('kidsGameWizardId') || {}).value || null;
@@ -1226,6 +1440,10 @@
 		if (backBtn && !backBtn.__kidsBound) { backBtn.__kidsBound = true; backBtn.addEventListener('click', kidsWizardPrevStep); }
 		var nextBtn = $('kidsWizardNextBtn');
 		if (nextBtn && !nextBtn.__kidsBound) { nextBtn.__kidsBound = true; nextBtn.addEventListener('click', kidsWizardNextStep); }
+		var mqAdd = $('kidsMqAddLevel');
+		if (mqAdd && !mqAdd.__kidsBound) { mqAdd.__kidsBound = true; mqAdd.addEventListener('click', mqAddLevel); }
+		var mqReset = $('kidsMqResetLevels');
+		if (mqReset && !mqReset.__kidsBound) { mqReset.__kidsBound = true; mqReset.addEventListener('click', mqResetLevels); }
 		var pubBtn = $('kidsWizardPublishBtn');
 		if (pubBtn && !pubBtn.__kidsBound) { pubBtn.__kidsBound = true; pubBtn.addEventListener('click', function () { publishKidsGame(); }); }
 		var sharePrint = $('kidsSharePrintBtn');

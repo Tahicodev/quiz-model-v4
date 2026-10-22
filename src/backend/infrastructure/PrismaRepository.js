@@ -46,6 +46,7 @@ const MODEL_MAP = {
 	teacher_assignments: 'teacherAssignment',
 	kidsGames: 'kidsGame',
 	kidsGameSessions: 'kidsGameSession',
+	kidsQuestProgress: 'kidQuestProgress',
 	kidsChampionships: 'kidsChampionship',
 	kidsChampionshipScores: 'kidsChampionshipScore',
 	// NOTE: Prisma camelCases "AIConfig" to "aIConfig" on the client delegate.

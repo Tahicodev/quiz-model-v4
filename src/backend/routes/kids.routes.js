@@ -203,6 +203,20 @@ router.post('/games/:id/session', requireRole(KIDS_PLAY_ROLES), validate(KidsAut
   } catch (err) { next(err); }
 });
 
+/**
+ * GET /api/v1/kids/games/:id/quest-progress — Math Quest per-level progress
+ * for the signed-in player (best verified stars + deterministic unlock
+ * chain, computed server-side from KidQuestProgress rows). Anonymous PIN
+ * play has no progress rows — the map stays session-only there.
+ */
+router.get('/games/:id/quest-progress', requireRole(KIDS_PLAY_ROLES), async (req, res, next) => {
+  try {
+    const { kidsGameSvc } = getContainer();
+    const progress = await kidsGameSvc.questProgress(req.params.id, req.user);
+    res.json(progress);
+  } catch (err) { next(err); }
+});
+
 router.get('/', requireRole(KIDS_CRUD_ROLES), validateQuery(KidsGameFilterSchema), async (req, res, next) => {
   try {
     const { kidsGameSvc } = getContainer();
@@ -348,6 +362,7 @@ router.post('/ai/generate', requireRole(KIDS_CRUD_ROLES), validate(KidsAIGenerat
       'build-a-tower': 'draggable',
       'magic-words': 'fill-blank',
       'code-explorer': 'code',
+      'math-quest': 'multiple-choice',
     };
     const aiType = aiTypeMap[game_type] || 'multiple-choice';
 

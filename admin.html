@@ -4057,6 +4057,19 @@
 						<label for="kidsGameDescription">Description <span class="text-muted">(for other teachers)</span></label>
 						<textarea id="kidsGameDescription" class="form-control" rows="2" placeholder="Optional description..."></textarea>
 					</div>
+					<!-- Math Quest only: multi-level adventure editor.
+					     Level 1 = first questions; Split cuts a level in two;
+					     Merge unites a level with the previous one. The kid unlocks
+					     the next level by earning the level's pass stars. -->
+					<div class="form-group" id="kidsMqLevelsGroup" hidden>
+						<label>Adventure levels</label>
+						<p class="kids-mq-levels-hint">Split the questions into levels. The next level unlocks when the kid earns the level's pass stars.</p>
+						<div id="kidsMqLevelsList" class="kids-mq-levels"></div>
+						<div class="kids-mq-levels-actions">
+							<button type="button" id="kidsMqAddLevel" class="btn btn-secondary btn-sm">+ Add level</button>
+							<button type="button" id="kidsMqResetLevels" class="btn btn-sm kids-mq-reset-btn">Reset to one level</button>
+						</div>
+					</div>
 				</div>
 
 				<!-- Step 5: Publish & Share -->

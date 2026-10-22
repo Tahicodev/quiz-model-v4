@@ -11,6 +11,7 @@ import {
   KidsGameFilterSchema,
   KidsSessionCreateSchema,
   KidsSessionCompleteSchema,
+  KidQuestLevelsSchema,
 } from '../../shared/schemas/kids-game.schema.js';
 
 function parseJson(value, fallback) {
@@ -252,6 +253,65 @@ function checkAnswer(question, given) {
   }
 }
 
+/**
+ * Math Quest: server-side mirror of the client quest core's planLevels.
+ * Normalizes the teacher's config_json.levels into
+ * [{index, id, name, questionIds, thresholdStars}] and returns null when the
+ * config does not carry a valid level partition — the caller then treats the
+ * whole game as one implicit 'default' level (backward compatibility).
+ * client/server agreement note: the client core requires the same level shape
+ * (stable non-empty `id` strings + explicit question lists), so both sides
+ * either agree on the plan or agree on the fallback.
+ */
+export function questLevels(config, questions) {
+  const list = Array.isArray(questions) ? questions : [];
+  const byId = new Set(list.map(q => String(q?.id)));
+  const raw = config && Array.isArray(config.levels) ? config.levels : null;
+  const valid = Array.isArray(raw) && raw.length > 0 && raw.length <= 12 &&
+    raw.every(l => l && typeof l === 'object' &&
+      typeof l.id === 'string' && l.id.trim() !== '' && l.id.length <= 80 &&
+      typeof l.name === 'string' && l.name.trim() !== '' &&
+      Array.isArray(l.questions) && l.questions.length > 0 &&
+      l.questions.every(id => byId.has(String(id))));
+  if (valid) {
+    const seen = new Set();
+    const seenIds = new Set();
+    let total = 0;
+    for (const l of raw) {
+      // level ids key the KidQuestProgress unique triple — they must be unique
+      if (seenIds.has(String(l.id))) { valid = false; break; }
+      seenIds.add(String(l.id));
+      for (const id of l.questions) {
+        const key = String(id);
+        if (seen.has(key)) { valid = false; break; }
+        seen.add(key); total++;
+      }
+      if (!valid) break;
+    }
+    if (valid && total !== list.length) valid = false;
+  }
+  if (!valid) return null;
+  return raw.map((l, i) => ({
+    index: i,
+    id: l.id.trim().slice(0, 80),
+    name: String(l.name).trim(),
+    questionIds: l.questions.map(id => String(id)),
+    thresholdStars: (Number.isInteger(l.pass_stars) && l.pass_stars >= 1 && l.pass_stars <= 3) ? l.pass_stars : 1,
+  }));
+}
+
+/** The implicit single level every Math Quest game falls back to. */
+function defaultQuestLevel(questions) {
+  const list = Array.isArray(questions) ? questions : [];
+  return [{
+    index: 0,
+    id: 'default',
+    name: 'Level 1',
+    questionIds: list.map(q => String(q.id)),
+    thresholdStars: 1,
+  }];
+}
+
 export class KidsGameService {
   #repo;
 
@@ -301,6 +361,12 @@ export class KidsGameService {
       return nq;
     });
 
+    // Math Quest: when the teacher ships a level plan, validate it against
+    // BOTH the strict level schema and the actual question snapshot — the
+    // plan and the config must stay a partition of the same question ids.
+    const config = parseJson(parsed.data.config_json, {});
+    this.#validateQuestLevels(parsed.data.game_type, config, questions);
+
     const created = await this.#repo.create('kidsGames', {
       ...parsed.data,
       questions_json: JSON.stringify(questions),
@@ -340,6 +406,14 @@ export class KidsGameService {
       parsed.data.config_json = parsed.data.config_json
         ? JSON.stringify(parseJson(parsed.data.config_json, {}))
         : null;
+    }
+
+    // Math Quest level plans: validate against the effective game type (the
+    // PATCH may carry a new game_type, or only a config for an existing one).
+    const resolvedType = parsed.data.game_type || existing.game_type;
+    if (parsed.data.config_json !== undefined) {
+      const questions = parseJson(parsed.data.questions_json ?? existing.questions_json, []);
+      this.#validateQuestLevels(resolvedType, parsed.data.config_json ? parseJson(parsed.data.config_json, {}) : {}, questions);
     }
 
     const updated = await this.#repo.update('kidsGames', id, parsed.data);
@@ -710,7 +784,46 @@ export class KidsGameService {
       });
     }
 
-    const stars = calculateStars(score, totalPoints);
+    // ── Math Quest: scope this run to the adventure level the answers
+    // belong to. The level is derived from the answered question ids first
+    // (never trusted from the client); the optional client-supplied level_id
+    // hint is honoured only after validating the answers really fit inside
+    // it. Non-quest games and runs that cover the whole game either hit the
+    // implicit 'default' level or stay whole-game — both preserve the
+    // original platform behaviour for every other game type.
+    const plan = this.#questPlanFor(game, questions);
+    const answeredIds = answers.map(a => String(a.question_id));
+    const answeredSet = new Set(answeredIds);
+    let level = plan.find(
+      (lv) => lv.questionIds.length === answeredSet.size &&
+        lv.questionIds.every(id => answeredSet.has(id)),
+    ) || null;
+    if (!level && parsed.data.level_id) {
+      const hinted = plan.find(lv => lv.id === parsed.data.level_id);
+      if (hinted && answeredSet.size > 0 && answeredIds.every(id => hinted.questionIds.includes(id))) {
+        level = hinted;
+      }
+    }
+    // Denominator for stars: the level's own points for a level-scoped run
+    // (a 3-question level with 2 correct is 67%, not 2/10 of the whole map).
+    let scopedPoints;
+    if (level) {
+      const allowed = new Set(level.questionIds);
+      scopedPoints = questions
+        .filter(q => allowed.has(String(q.id)))
+        .reduce((sum, q) => sum + (Number(q.points) || 1), 0);
+    } else {
+      scopedPoints = totalPoints;
+    }
+    const stars = calculateStars(score, scopedPoints);
+
+    // Unlock-chain is enforced SERVER-side: a user-linked run does not earn
+    // persistent progress for a level whose previous levels were never
+    // passed (the planned/id-scoped grading itself still stands).
+    if (session.user_id && level) {
+      const unlockable = await this.#levelUnlockable(level, plan, game.id, session.user_id);
+      if (!unlockable) level = null;
+    }
 
     await this.#repo.update('kidsGameSessions', sessionId, {
       score,
@@ -722,6 +835,17 @@ export class KidsGameService {
     await this.#repo.update('kidsGames', game.id, {
       play_count: (Number(game.play_count) || 0) + 1,
     });
+
+    // Math Quest progress: normalized level + user-linked run → ratchet the
+    // student's best stars for that level (MAX upsert; games with the
+    // fallback config attribute whole-game runs to the 'default' level).
+    // Rewards live ONLY here — client stars are never trusted. Progress must
+    // never break the play flow (best-effort like result recording).
+    if (session.user_id && level) {
+      try {
+        await this.#ratchetQuestProgress({ game, session, levelId: level.id, stars });
+      } catch { /* progress recording is best-effort */ }
+    }
 
     // Unified results: every completion (anonymous PIN included) is recorded
     // like any other game so dashboards, history and tournaments all see it.
@@ -738,6 +862,13 @@ export class KidsGameService {
       percent: totalPoints > 0 ? Math.round((score / totalPoints) * 100) : 0,
       answers: detailedAnswers,
       result_id: resultId,
+      // Math Quest extras (null for plain kids games): which level the run
+      // belonged to and the level-scoped denominator behind `stars`.
+      quest: level ? {
+        level_id: level.id,
+        level_name: level.name,
+        level_total_points: scopedPoints,
+      } : null,
     };
   }
 
@@ -863,6 +994,7 @@ export class KidsGameService {
       'build-a-tower': 'draggable',
       'magic-words': 'fill-blank',
       'code-explorer': 'code',
+      'math-quest': 'multiple-choice',
     };
     return map[gameType] || 'multiple-choice';
   }
@@ -883,5 +1015,150 @@ export class KidsGameService {
     if (user.role === 'admin' || user.role === 'super_admin') return;
     if (game.teacher_id === user.id) return;
     throw new ForbiddenError();
+  }
+
+  /**
+   * Math Quest: validate an optional config_json.levels plan — the football
+   * schema AND the question partition must both agree, or the create/update
+   * is rejected. Absent levels are valid (the game falls back to one level).
+   */
+  #validateQuestLevels(gameType, config, questions) {
+    if (String(gameType) !== 'math-quest') return;
+    const levels = config && config.levels;
+    if (levels == null) return;
+    if (!Array.isArray(levels)) {
+      throw new ValidationError({ config_json: ['levels must be a list of levels'] });
+    }
+    const parsed = KidQuestLevelsSchema.safeParse(levels);
+    if (!parsed.success) {
+      throw new ValidationError({ config_json: ['Each level needs an id, a title, and 1-30 question ids (1-12 levels, pass_stars 1-3)'] });
+    }
+    const ids = new Set(questions.map(q => String(q.id)));
+    const seen = new Set();
+    const seenIds = new Set();
+    for (const level of levels) {
+      if (seenIds.has(String(level.id))) {
+        throw new ValidationError({ config_json: [`The level id "${level.id}" is used more than once`] });
+      }
+      seenIds.add(String(level.id));
+      for (const qid of level.questions) {
+        if (!ids.has(String(qid))) {
+          throw new ValidationError({ config_json: [`Level "${level.name}" references an unknown question id`] });
+        }
+        if (seen.has(String(qid))) {
+          throw new ValidationError({ config_json: [`Each question can be used by only one level ("${level.name}")`] });
+        }
+        seen.add(String(qid));
+      }
+    }
+    if (seen.size !== questions.length) {
+      throw new ValidationError({ config_json: ['Every question must be assigned to one level'] });
+    }
+  }
+
+  /** Normalized quest plan for a game (validated config or the fallback). */
+  #questPlanFor(game, questions) {
+    const plan = questLevels(parseJson(game.config_json, {}), questions);
+    return plan || defaultQuestLevel(questions);
+  }
+
+  /**
+   * Unlock-chain gate read at submit time: levels after position 0 only
+   * count when every earlier level has best stars >= its pass threshold.
+   * Mirrors questProgress's chain so recorded progress can never skip ids.
+   */
+  async #levelUnlockable(level, plan, gameId, userId) {
+    if (!level || level.index === 0) return true;
+    const { data: rows } = await this.#repo.getAll('kidsQuestProgress', {
+      filters: { game_id: gameId, user_id: userId },
+      limit: 50,
+    });
+    const best = {};
+    for (const row of rows || []) {
+      const cur = Number(row.best_stars) || 0;
+      best[row.level_id] = Math.max(best[row.level_id] ?? 0, cur);
+    }
+    for (const lv of plan) {
+      if (lv.index >= level.index) break;
+      if ((best[lv.id] ?? 0) < lv.thresholdStars) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Publish a verified level result to KidQuestProgress (MAX-ratchet).
+   * Rows are keyed (game, user, level) via the unique triple, so repeated
+   * submissions can never duplicate; best_stars only ever moves upward.
+   * Replays with a lower score keep the best verified result.
+   */
+  async #ratchetQuestProgress({ game, session, levelId, stars }) {
+    const st = Math.max(0, Math.min(3, Number(stars) || 0));
+    const delegate = this.#repo.modelFor('kidsQuestProgress');
+    const key = { game_id: game.id, user_id: session.user_id, level_id: levelId };
+    const school = session.school_id || game.school_id;
+    // 1) Row exists with a best that already covers this run → count only.
+    const same = await delegate.updateMany({
+      where: { ...key, best_stars: { gte: st } },
+      data: { play_count: { increment: 1 } },
+    });
+    if (same.count > 0) return;
+    // 2) Row exists with a worse best → ratchet the best up and count.
+    const low = await delegate.updateMany({
+      where: { ...key, best_stars: { lt: st } },
+      data: { best_stars: { set: st }, play_count: { increment: 1 } },
+    });
+    if (low.count > 0) return;
+    // 3) No row yet → create (a concurrent creator trips the unique guard).
+    try {
+      await delegate.create({ data: { school_id: school, ...key, best_stars: st, play_count: 1 } });
+    } catch (err) {
+      if (err?.code !== 'P2002') throw err;
+      const row = await delegate.findUnique({ where: { game_id_user_id_level_id: key } });
+      if (!row) throw err;
+      if ((Number(row.best_stars) || 0) < st) {
+        await delegate.update({ where: { id: row.id }, data: { best_stars: { set: st } } });
+      }
+      await delegate.updateMany({ where: { id: row.id }, data: { play_count: { increment: 1 } } });
+    }
+  }
+
+  /**
+   * Quest progress for one student + one game: normalized levels with the
+   * student's best server-verified stars and the deterministic unlock chain
+   * computed server-side (level i+1 unlocks only when level i's best stars
+   * reach its configured pass threshold; the first level is always open).
+   */
+  async questProgress(gameId, user) {
+    if (!user || !user.id) throw new ForbiddenError();
+    const game = await this.getById(gameId, user.school_id);
+    if (!game || game.status !== 'published') throw new NotFoundError('Game not found or not published');
+    const questions = parseJson(game.questions_json, []);
+    const plan = this.#questPlanFor(game, questions);
+    const { data: rows } = await this.#repo.getAll('kidsQuestProgress', {
+      filters: { game_id: game.id, user_id: user.id },
+      limit: 50,
+    });
+    const best = {};
+    for (const row of rows || []) {
+      const cur = Number(row.best_stars) || 0;
+      best[row.level_id] = Math.max(best[row.level_id] ?? 0, cur);
+    }
+    let prevPassed = true;
+    const levels = plan.map((lv) => {
+      const unlocked = prevPassed;
+      const passed = (best[lv.id] ?? 0) >= lv.thresholdStars;
+      prevPassed = prevPassed && passed;
+      return {
+        index: lv.index,
+        id: lv.id,
+        name: lv.name,
+        question_count: lv.questionIds.length,
+        pass_stars: lv.thresholdStars,
+        best_stars: best[lv.id] ?? null,
+        passed,
+        unlocked,
+      };
+    });
+    return { game_id: game.id, levels };
   }
 }

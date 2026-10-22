@@ -155,6 +155,76 @@
 			return String(o == null ? '' : o);
 		}).filter(function (s) { return s !== ''; });
 	}
+
+	/** Matching-pairs block data for a question. Mirrors the training-mode
+	 * parser (split tokens on | and newlines, single-token commas, arrows
+	 * -->, ->, =>, →, ::, = and ":"). Pairs may live in the ANSWER only
+	 * (canonical stored format) or in the option strings. Each pair keeps
+	 * its raw token so submissions grade byte-for-byte against the answer. */
+	function kidPairs(question) {
+		var out = [];
+		var seen = {};
+		function remember(left, right, raw) {
+			var key = left + '\u0001' + right;
+			if (seen[key]) return;
+			seen[key] = 1;
+			out.push({ raw: raw, left: left, right: right });
+		}
+		function pushToken(raw) {
+			raw = String(raw || '').trim();
+			if (!raw) return;
+			var seps = ['-->', '->', '=>', '→', '::', '='];
+			for (var si = 0; si < seps.length; si++) {
+				var i = raw.indexOf(seps[si]);
+				if (i > 0) {
+					var left = raw.slice(0, i).trim();
+					var right = raw.slice(i + seps[si].length).trim();
+					if (left && right) remember(left, right, raw);
+					return;
+				}
+			}
+			var c = raw.indexOf(':');
+			if (c > 0) {
+				var l2 = raw.slice(0, c).trim();
+				var r2 = raw.slice(c + 1).trim();
+				if (l2 && r2) remember(l2, r2, raw);
+			}
+		}
+		// Splits "A-->1|B-->2" and pipe/newline variants; a lone token with
+		// commas (the kid-canonical comma-joined form) splits there instead.
+		function collectTokens(chunk) {
+			var tokens = [];
+			String(chunk).split(/[\|]+/).forEach(function (piece) {
+				piece.split(/\r?\n/).forEach(function (t) {
+					t = t.trim();
+					if (t) tokens.push(t);
+				});
+			});
+			if (tokens.length === 1 && tokens[0].indexOf(',') >= 0) {
+				tokens = tokens[0].split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+			}
+			return tokens;
+		}
+		// 1) Canonical stored format: pairs live in the answer.
+		var answer = String((question && question.answer) || '').trim();
+		if (answer.indexOf('meta::') === 0) {
+			var parts = answer.split('::');
+			if (parts.length >= 3) answer = parts.slice(2).join('::');
+		}
+		if (answer) collectTokens(answer).forEach(pushToken);
+		if (out.length) return out;
+		// 2) Option strings carrying pair syntax ("A-->1").
+		var opts = kidOptions(question);
+		opts.forEach(function (opt) { collectTokens(opt).forEach(pushToken); });
+		if (out.length) return out;
+		// 3) Flat alternating options: ["left1","right1","left2","right2"].
+		if (opts.length >= 4 && opts.length % 2 === 0 && !opts.some(function (s) { return /-->|->|=>|→|::/.test(s); })) {
+			for (var i = 0; i + 1 < opts.length; i += 2) {
+				if (opts[i] && opts[i + 1]) remember(opts[i], opts[i + 1], opts[i] + '-->' + opts[i + 1]);
+			}
+		}
+		return out;
+	}
 	function shuffle(arr) {
 		var a = arr.slice();
 		for (var i = a.length - 1; i > 0; i--) {
@@ -474,6 +544,15 @@
 						self.answers = [];
 						self.score = 0;
 						document.getElementById('kidProgress').hidden = false;
+						// Math Quest (guarded): the adventure map owns the flow after
+						// a session starts — EXCEPT championship challenge runs,
+						// which play the whole game exactly like every other kids
+						// game (no map, no per-level scoping). All other game types
+						// keep the original behavior unchanged.
+						if (self.game && self.game.game_type === 'math-quest' && window.MathQuestUI && !self.championshipFromUrl()) {
+							window.MathQuestUI.afterSessionStart(self);
+							return;
+						}
 						self.next();
 						return;
 					}
@@ -579,9 +658,17 @@
 			var map = {
 				'bubble-pop': 'bubble-pop', 'star-collector': 'star-collector', 'leap-frog': 'leap-frog',
 				'sort-it-out': 'sort-it-out', 'pair-party': 'pair-party', 'build-a-tower': 'build-a-tower',
-				'magic-words': 'magic-words', 'code-explorer': 'code-explorer',
+				'magic-words': 'magic-words', 'code-explorer': 'code-explorer', 'math-quest': 'math-quest',
 			};
 			var key = map[this.game.game_type] || 'bubble-pop';
+			// Question-type delegation (same pattern as Math Quest core): the
+			// kid matching UI lives in pair-party, so a matching question in
+			// any other game falls through to it. math-quest delegates by
+			// question type itself — never bypass its quest wrapper here.
+			var qType = String(q.type || '');
+			if ((qType === 'matching' || qType === 'matching-pairs') && key !== 'pair-party' && key !== 'math-quest') {
+				key = 'pair-party';
+			}
 			var Ctor = (window.KidsGameRenderers || {})[key];
 			if (!Ctor) {
 				this.screen('<div class="kid-card"><p class="hint">This game is not available yet.</p></div>');
@@ -607,12 +694,28 @@
 					stars: clientStars,
 					completed: true,
 					championship_id: this.championshipFromUrl() || undefined,
+					// Math Quest hint (server re-validates against the answers)
+					level_id: (window.MathQuestUI && window.MathQuestUI.currentLevelId
+						&& window.MathQuestUI.currentLevelId()) || undefined,
 				}),
-			}).then(function (r) { return r.json(); })
-				.then(function (res) { self.results(res); })
-				.catch(function () { self.results({ score: self.score, stars: clientStars, totalPoints: totalPoints, percent: 0 }); });
+		}).then(function (r) { return r.json(); })
+			.then(function (res) {
+				// Math Quest: mark the response as the server-verified payload
+				// so the quest results screen can distinguish it from the
+				// offline fallback (which skips this tagging).
+				if (res) res.mq_verified = true;
+				self.results(res);
+			})
+			.catch(function () { self.results({ score: self.score, stars: clientStars, totalPoints: totalPoints, percent: 0 }); });
 		},
 		results: function (res) {
+			// Math Quest (guarded): deck out the results screen in quest art
+			// and give the kid a way back to the adventure map — EXCEPT
+			// championship runs, which keep the platform's original results.
+			if (this.game && this.game.game_type === 'math-quest' && window.MathQuestUI && !this.championshipFromUrl()) {
+				window.MathQuestUI.showResults(this, res);
+				return;
+			}
 			var stars = Number(res.stars) || 0;
 			var total = (this.game.questions || []).length;
 			MascotManager.set('celebrate');
@@ -719,6 +822,7 @@
 	window.KidsPlayer = window.KidsPlayer || {};
 	window.KidsPlayer.engine = engine;
 	window.KidsPlayer.options = kidOptions;
+	window.KidsPlayer.pairs = kidPairs;
 	window.KidsPlayer.shuffle = shuffle;
 	window.KidsPlayer.check = clientCheck;
 	window.KidsPlayer.colors = BUBBLE_COLORS;

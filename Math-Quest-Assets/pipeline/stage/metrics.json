@@ -1,0 +1,858 @@
+{
+  "mq-dino-idle": {
+    "source": "source-prompts/Main mascot and character poses/mq-dino-idle.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/characters/mq-dino-idle.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 73.11,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-dino-celebrate": {
+    "source": "source-prompts/Main mascot and character poses/mq-dino-celebrate.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/characters/mq-dino-celebrate.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 70.86,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-dino-thinking": {
+    "source": "source-prompts/Main mascot and character poses/mq-dino-thinking.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/characters/mq-dino-thinking.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 73.39,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-dino-surprised": {
+    "source": "source-prompts/Main mascot and character poses/mq-dino-surprised.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/characters/mq-dino-surprised.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.1,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-dino-encourage": {
+    "source": "source-prompts/Main mascot and character poses/mq-dino-encourage.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/characters/mq-dino-encourage.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 73.06,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-jungle-home": {
+    "source": "source-prompts/Main backgrounds and game scenarios/Jungle home world.jpg",
+    "operations": [
+      "webp"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/backgrounds/mq-jungle-home.webp",
+        "format": "webp",
+        "width": 1536,
+        "height": 1024,
+        "webp_quality": 90
+      }
+    ],
+    "src_width": 1536,
+    "src_height": 1024
+  },
+  "mq-adventure-trail": {
+    "source": "source-prompts/Main backgrounds and game scenarios/Adventure trail.jpg",
+    "operations": [
+      "webp"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/backgrounds/mq-adventure-trail.webp",
+        "format": "webp",
+        "width": 1536,
+        "height": 1024,
+        "webp_quality": 90
+      }
+    ],
+    "src_width": 1536,
+    "src_height": 1024
+  },
+  "mq-treasure-clearing": {
+    "source": "source-prompts/Main backgrounds and game scenarios/Treasure clearing.jpg",
+    "operations": [
+      "webp"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/backgrounds/mq-treasure-clearing.webp",
+        "format": "webp",
+        "width": 1536,
+        "height": 1024,
+        "webp_quality": 90
+      }
+    ],
+    "src_width": 1536,
+    "src_height": 1024
+  },
+  "mq-ancient-temple": {
+    "source": "source-prompts/Main backgrounds and game scenarios/Ancient temple.jpg",
+    "operations": [
+      "webp"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/backgrounds/mq-ancient-temple.webp",
+        "format": "webp",
+        "width": 1536,
+        "height": 1024,
+        "webp_quality": 90
+      }
+    ],
+    "src_width": 1536,
+    "src_height": 1024
+  },
+  "mq-sunset-jungle": {
+    "source": "source-prompts/Main backgrounds and game scenarios/Sunset jungle.jpg",
+    "operations": [
+      "webp"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/backgrounds/mq-sunset-jungle.webp",
+        "format": "webp",
+        "width": 1536,
+        "height": 1024,
+        "webp_quality": 90
+      }
+    ],
+    "src_width": 1536,
+    "src_height": 1024
+  },
+  "mq-chest-closed": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Closed chest.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/props/mq-chest-closed.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 49.97,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-chest-open": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Open chest with an empty visible interior.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/props/mq-chest-open.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 49.02,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-chest-open-glow": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Open chest with a soft golden glow, but no coins or stars inside.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/props/mq-chest-open-glow.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 48.07,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-signpost": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Blank wooden signpost.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/props/mq-signpost.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 68.9,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-gate": {
+    "source": "source-prompts/Additional gameplay objects/Level gate.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/props/mq-gate.png",
+        "format": "png",
+        "width": 1680,
+        "height": 944,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 52.39,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1680,
+    "src_height": 944
+  },
+  "mq-crystal": {
+    "source": "source-prompts/Additional gameplay objects/Collectible crystal.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/props/mq-crystal.png",
+        "format": "png",
+        "width": 1680,
+        "height": 944,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.85,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1680,
+    "src_height": 944
+  },
+  "mq-pedestal": {
+    "source": "source-prompts/Terrain tiles and reusable platforms/Reward pedestal.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/props/mq-pedestal.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 58.37,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-grass-tile": {
+    "source": "source-prompts/Terrain tiles and reusable platforms/Grass terrain tile.jpg",
+    "operations": [
+      "tile-check"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/terrain/mq-grass-tile.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "original_seam": {
+          "left_right_mean": 5.5,
+          "top_bottom_mean": 4.97,
+          "left_right_p95": 14.0,
+          "top_bottom_p95": 14.0,
+          "seamless": true
+        },
+        "final_seam": {
+          "left_right_mean": 5.5,
+          "top_bottom_mean": 4.97,
+          "left_right_p95": 14.0,
+          "top_bottom_p95": 14.0,
+          "seamless": true
+        },
+        "correction_method": "as-is"
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264,
+    "tile_preview": "pipeline/debug/tile-preview-mq-grass-tile.png"
+  },
+  "mq-path-tile": {
+    "source": "source-prompts/Terrain tiles and reusable platforms/Sandy adventure path tile.jpg",
+    "operations": [
+      "tile-check"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/terrain/mq-path-tile.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "original_seam": {
+          "left_right_mean": 16.33,
+          "top_bottom_mean": 12.09,
+          "left_right_p95": 28.0,
+          "top_bottom_p95": 24.0,
+          "seamless": false
+        },
+        "final_seam": {
+          "left_right_mean": 5.13,
+          "top_bottom_mean": 4.81,
+          "left_right_p95": 15.0,
+          "top_bottom_p95": 12.0,
+          "seamless": true
+        },
+        "correction_method": "inset-crop 60px + lanczos resize"
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264,
+    "tile_preview": "pipeline/debug/tile-preview-mq-path-tile.png"
+  },
+  "mq-floating-platform": {
+    "source": "source-prompts/Terrain tiles and reusable platforms/Floating grassy platform.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/terrain/mq-floating-platform.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 62.83,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-coin": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Gold coin collectible.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/rewards/mq-coin.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 60.1,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-star": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Golden star collectible.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/rewards/mq-star.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 67.23,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-trophy": {
+    "source": "source-prompts/Additional gameplay objects/Trophy.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/rewards/mq-trophy.png",
+        "format": "png",
+        "width": 1680,
+        "height": 944,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 73.01,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1680,
+    "src_height": 944
+  },
+  "mq-confetti": {
+    "source": "source-prompts/Additional gameplay objects/Celebration effects.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/effects/mq-confetti.png",
+        "format": "png",
+        "width": 1680,
+        "height": 944,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 89.48,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1680,
+    "src_height": 944
+  },
+  "mq-jungle-decorations": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Jungle decoration set.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/decorations/mq-jungle-decorations.png",
+        "format": "png",
+        "width": 1536,
+        "height": 1024,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.29,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1536,
+    "src_height": 1024
+  },
+  "math-quest-icon": {
+    "source": "source-prompts/Game icon and thumbnails/Math Quest game icon.jpg",
+    "operations": [
+      "matte"
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/icons/math-quest-icon.png",
+        "format": "png",
+        "width": 1264,
+        "height": 1264,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 7.24,
+          "loose_junk_px": 0
+        }
+      }
+    ],
+    "src_width": 1264,
+    "src_height": 1264
+  },
+  "mq-decor-bush": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Jungle decoration set.jpg",
+    "operations": [
+      "crop-from-matted-sheet"
+    ],
+    "src_width": 453,
+    "src_height": 355,
+    "crop_box": [
+      72,
+      139,
+      525,
+      494
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/decorations/mq-decor-bush.png",
+        "format": "png",
+        "width": 453,
+        "height": 355,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.29,
+          "loose_junk_px": 0
+        }
+      }
+    ]
+  },
+  "mq-decor-palm": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Jungle decoration set.jpg",
+    "operations": [
+      "crop-from-matted-sheet"
+    ],
+    "src_width": 402,
+    "src_height": 468,
+    "crop_box": [
+      586,
+      43,
+      988,
+      511
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/decorations/mq-decor-palm.png",
+        "format": "png",
+        "width": 402,
+        "height": 468,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.29,
+          "loose_junk_px": 0
+        }
+      }
+    ]
+  },
+  "mq-decor-plant": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Jungle decoration set.jpg",
+    "operations": [
+      "crop-from-matted-sheet"
+    ],
+    "src_width": 454,
+    "src_height": 378,
+    "crop_box": [
+      1011,
+      120,
+      1465,
+      498
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/decorations/mq-decor-plant.png",
+        "format": "png",
+        "width": 454,
+        "height": 378,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.29,
+          "loose_junk_px": 0
+        }
+      }
+    ]
+  },
+  "mq-decor-flowers": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Jungle decoration set.jpg",
+    "operations": [
+      "crop-from-matted-sheet"
+    ],
+    "src_width": 398,
+    "src_height": 308,
+    "crop_box": [
+      109,
+      602,
+      507,
+      910
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/decorations/mq-decor-flowers.png",
+        "format": "png",
+        "width": 398,
+        "height": 308,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.29,
+          "loose_junk_px": 0
+        }
+      }
+    ]
+  },
+  "mq-decor-rock": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Jungle decoration set.jpg",
+    "operations": [
+      "crop-from-matted-sheet"
+    ],
+    "src_width": 407,
+    "src_height": 304,
+    "crop_box": [
+      569,
+      597,
+      976,
+      901
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/decorations/mq-decor-rock.png",
+        "format": "png",
+        "width": 407,
+        "height": 304,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.29,
+          "loose_junk_px": 0
+        }
+      }
+    ]
+  },
+  "mq-decor-grass": {
+    "source": "source-prompts/Reusable jungle objects and rewards/Jungle decoration set.jpg",
+    "operations": [
+      "crop-from-matted-sheet"
+    ],
+    "src_width": 276,
+    "src_height": 230,
+    "crop_box": [
+      1102,
+      661,
+      1378,
+      891
+    ],
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/decorations/mq-decor-grass.png",
+        "format": "png",
+        "width": 276,
+        "height": 230,
+        "matting": {
+          "tol": 24.0,
+          "neutral_min": 176,
+          "neutral_span": 36,
+          "bg_removed_pct": 71.29,
+          "loose_junk_px": 0
+        }
+      }
+    ]
+  },
+  "mq-level-home": {
+    "source": "source-prompts/Game icon and thumbnails/Level thumbnail set.jpg",
+    "operations": [
+      "crop-from-sheet",
+      "corner-key-white"
+    ],
+    "src_width": 729,
+    "src_height": 481,
+    "crop_box": [
+      28,
+      20,
+      757,
+      501
+    ],
+    "corner_gutter_removed_px": 14651,
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/thumbnails/mq-level-home.png",
+        "format": "png",
+        "width": 729,
+        "height": 481
+      }
+    ]
+  },
+  "mq-level-treasure": {
+    "source": "source-prompts/Game icon and thumbnails/Level thumbnail set.jpg",
+    "operations": [
+      "crop-from-sheet",
+      "corner-key-white"
+    ],
+    "src_width": 729,
+    "src_height": 481,
+    "crop_box": [
+      779,
+      20,
+      1508,
+      501
+    ],
+    "corner_gutter_removed_px": 15155,
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/thumbnails/mq-level-treasure.png",
+        "format": "png",
+        "width": 729,
+        "height": 481
+      }
+    ]
+  },
+  "mq-level-temple": {
+    "source": "source-prompts/Game icon and thumbnails/Level thumbnail set.jpg",
+    "operations": [
+      "crop-from-sheet",
+      "corner-key-white"
+    ],
+    "src_width": 729,
+    "src_height": 481,
+    "crop_box": [
+      28,
+      522,
+      757,
+      1003
+    ],
+    "corner_gutter_removed_px": 14651,
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/thumbnails/mq-level-temple.png",
+        "format": "png",
+        "width": 729,
+        "height": 481
+      }
+    ]
+  },
+  "mq-level-sunset": {
+    "source": "source-prompts/Game icon and thumbnails/Level thumbnail set.jpg",
+    "operations": [
+      "crop-from-sheet",
+      "corner-key-white"
+    ],
+    "src_width": 729,
+    "src_height": 480,
+    "crop_box": [
+      779,
+      523,
+      1508,
+      1003
+    ],
+    "corner_gutter_removed_px": 14120,
+    "outputs": [
+      {
+        "relpath": "public/assets/games/math-quest/thumbnails/mq-level-sunset.png",
+        "format": "png",
+        "width": 729,
+        "height": 480
+      }
+    ]
+  }
+}

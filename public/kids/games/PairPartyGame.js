@@ -18,11 +18,20 @@
 	PairPartyGame.prototype.render = function () {
 		var KP = window.KidsPlayer;
 		var self = this;
-		var raws = KP.options(this.question);
-		this.pairs = raws.map(function (r) {
-			var p = splitPair(r);
-			return { raw: r, left: p[0], right: p[1] };
-		}).filter(function (p) { return p.left && p.right; });
+		// Preferred: the platform parser — it keeps each pair's RAW token so
+		// the submitted answer grades exactly against the stored one, and it
+		// also finds pairs that live only in the ANSWER (training-mode
+		// parity: "Associez chaque notion à sa définition." often stores them
+		// there with an empty options list).
+		var parsed = (KP.pairs ? KP.pairs(this.question) : []);
+		if (parsed.length) {
+			this.pairs = parsed;
+		} else {
+			this.pairs = KP.options(this.question).map(function (r) {
+				var p = splitPair(r);
+				return { raw: r, left: p[0], right: p[1] };
+			}).filter(function (p) { return p.left && p.right; });
+		}
 		var lefts = KP.shuffle(this.pairs.map(function (p) { return p.left; }));
 		var rights = KP.shuffle(this.pairs.map(function (p) { return p.right; }));
 		this.root.innerHTML = '<div class="kid-card"><p class="kid-question">' + esc(this.question.text || 'Match the pairs! 🎴') + '</p>' +

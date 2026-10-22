@@ -1,21 +1,21 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>🧸 Kids Games — Play</title>
-<link rel="stylesheet" href="/kids/kids-player.css" />
+<title>ًں§¸ Kids Games â€” Play</title>
+<link rel="stylesheet" href="/kids/kids-player.css?v=2026-10-22-mq4" />
 </head>
 <body class="kid-body">
 <div class="kid-wrap">
 	<div class="kid-header">
-		<div id="kidMascot" class="kid-mascot" aria-hidden="true">🦊</div>
+		<div id="kidMascot" class="kid-mascot" aria-hidden="true">ًں¦ٹ</div>
 		<div class="kid-title">
 			<h1 id="kidGameName">Kids Game</h1>
-			<p id="kidGameSub">Loading… ⏳</p>
+			<p id="kidGameSub">Loadingâ€¦ âڈ³</p>
 		</div>
 		<div class="spacer"></div>
-		<button id="kidSoundBtn" class="kid-sound-btn" aria-label="Toggle sound">🔊</button>
+		<button id="kidSoundBtn" class="kid-sound-btn" aria-label="Toggle sound">ًں”ٹ</button>
 	</div>
 	<div class="kid-progress" id="kidProgress" hidden>
 		<span id="kidProgressLabel">1/1</span>
@@ -26,7 +26,7 @@
 </div>
 <div class="kid-stars-rain" id="kidStarsRain" hidden></div>
 <!-- Engine first: it owns the window.KidsPlayer registry the games below register into. -->
-		<script src="/kids/kids-player.js?v=2026-10-06-r2"></script>
+		<script src="/kids/kids-player.js?v=2026-10-22-mq4"></script>
 <script src="/kids/games/BubblePopGame.js"></script>
 <script src="/kids/games/StarCollectorGame.js"></script>
 <script src="/kids/games/LeapFrogGame.js"></script>
@@ -35,5 +35,8 @@
 <script src="/kids/games/BuildATowerGame.js"></script>
 <script src="/kids/games/MagicWordsGame.js"></script>
 <script src="/kids/games/CodeExplorerGame.js"></script>
+<!-- Math Quest (stage 2): core logic first, then DOM module. -->
+  <script src="/kids/games/math-quest-core.js?v=2026-10-22-mq4"></script>
+<script src="/kids/games/MathQuestGame.js?v=2026-10-22-mq4"></script>
 </body>
 </html>

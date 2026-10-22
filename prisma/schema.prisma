@@ -120,6 +120,7 @@ model User {
   teacherAssignments       TeacherAssignment[]
   kidsGames                KidsGame[]          @relation("KidsGameTeacher")
   kidsGameSessions         KidsGameSession[]   @relation("KidsSessionPlayer")
+  kidQuestProgress         KidQuestProgress[]  @relation("KidQuestProgressUser")
   createdKidsChampionships KidsChampionship[]  @relation("KidsChampionshipCreator")
   devices                  Device[]            @relation("DeviceAssignedUser")
 
@@ -690,6 +691,7 @@ model KidsGame {
   teacher  User              @relation("KidsGameTeacher", fields: [teacher_id], references: [id], onDelete: Cascade)
   category Category?         @relation(fields: [category_id], references: [id], onDelete: SetNull)
   sessions KidsGameSession[]
+  questProgress KidQuestProgress[]
   tournaments Tournament[]
 
   @@index([school_id])
@@ -725,6 +727,33 @@ model KidsGameSession {
   @@index([school_id])
   @@index([tournament_id])
   @@index([created_at])
+}
+
+// ─── Math Quest per-level progress ───────────────────────────────────────────
+// One row per (game, student, level). Written ONLY by the server right after
+// it re-grades a completed session, with best_stars ratcheting upward
+// (MAX-merge) so replays can never erase a best verified result. Repeated
+// submissions cannot duplicate rows thanks to the unique triple.
+// level_id strings come from the teacher's config_json.levels (stable ids);
+// the single-level fallback config uses the synthetic 'default' level id.
+model KidQuestProgress {
+  id         String   @id @default(uuid())
+  school_id  String
+  game_id    String
+  user_id    String
+  level_id   String
+  best_stars Int      @default(0) // 0..3, server-verified max across replays
+  play_count Int      @default(0) // informational: how many completed runs fed this row
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  game KidsGame @relation(fields: [game_id], references: [id], onDelete: Cascade)
+  user User     @relation("KidQuestProgressUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([game_id, user_id, level_id])
+  @@index([school_id])
+  @@index([user_id])
+  @@index([game_id])
 }
 
 // ─── Kids Championship ──────────────────────────────────────────────────────

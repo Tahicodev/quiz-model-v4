@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 const KIDS_GAME_TYPES = [
   'bubble-pop', 'star-collector', 'leap-frog', 'sort-it-out',
-  'pair-party', 'build-a-tower', 'magic-words', 'code-explorer'
+  'pair-party', 'build-a-tower', 'magic-words', 'code-explorer',
+  'math-quest'
 ];
 
 const KIDS_THEMES = [
@@ -67,7 +68,29 @@ export const KidsSessionCompleteSchema = z.object({
   // ?championship=<id>, the player echoes it back on completion and the
   // server records the (server-graded) score against that championship.
   championship_id: z.string().uuid().optional(),
+  // Math Quest hint — WHICH adventure level this completed run belongs to.
+  // The server never trusts it blind: it first re-derives the level from the
+  // answered question ids; the hint is only honoured after validating that
+  // the answers really fit inside that level. Scores/stars above are graded
+  // server-side regardless.
+  level_id:     z.string().max(80).optional(),
 });
+
+// ─── Math Quest level plan (teacher-curated config_json.levels) ─────────────
+// Every level needs a stable id (progress rows and unlock logic key on it),
+// a title, and an explicit question-id list. pass_stars (1..3) is the
+// threshold a student's best stars on this level must reach to unlock the
+// NEXT level; missing → 1 (any completed star unlocks). `art` picks one of
+// the four shipped map thumbnails; missing → a graceful CSS/emoji fallback.
+export const KidQuestLevelSchema = z.object({
+  id:         z.string().min(1).max(80),
+  name:       z.string().min(1).max(60),
+  questions:  z.array(z.string().min(1)).min(1).max(30),
+  pass_stars: z.number().int().min(1).max(3).optional(),
+  art:        z.enum(['home', 'treasure', 'temple', 'sunset']).optional(),
+});
+
+export const KidQuestLevelsSchema = z.array(KidQuestLevelSchema).min(1).max(12);
 
 export const KidsBrowseSchema = z.object({
   search: z.string().optional(),

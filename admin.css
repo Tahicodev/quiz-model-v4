@@ -4642,3 +4642,54 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		flex-wrap: wrap;
 	}
 }
+
+/* ═══ Math Quest adventure-level editor (Kids Games Studio wizard, step 4) ═══ */
+.kids-mq-levels-hint {
+	font-size: 12.5px;
+	color: #64748b;
+	margin: 2px 0 10px;
+}
+.kids-mq-levels { display: flex; flex-direction: column; gap: 12px; }
+.kids-mq-level {
+	border: 1px solid #e2e8f0;
+	border-radius: 14px;
+	padding: 10px 12px;
+	background: #f8fafc;
+}
+.kids-mq-level-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.kids-mq-level-num { font-size: 1.1rem; }
+.kids-mq-name { flex: 1 1 160px; min-width: 140px; }
+.kids-mq-pass, .kids-mq-art { flex: 0 1 auto; width: auto; min-width: 130px; }
+.kids-mq-chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.kids-mq-chip {
+	background: #e0f2fe;
+	border: 1px solid #bae6fd;
+	color: #0369a1;
+	border-radius: 999px;
+	padding: 3px 10px;
+	font-size: 12px;
+	max-width: 260px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.kids-mq-chip-empty { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; }
+.kids-mq-level-actions { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kids-mq-act {
+	background: #fff;
+	border: 1px solid #cbd5e1;
+	border-radius: 8px;
+	padding: 3px 10px;
+	font-size: 12.5px;
+	cursor: pointer;
+	transition: all 150ms ease;
+}
+.kids-mq-act:hover { border-color: #4f46e5; background: #eef2ff; }
+.kids-mq-act-danger:hover { border-color: #dc2626; background: #fef2f2; }
+.kids-mq-summary { font-size: 12px; color: #64748b; margin-left: auto; }
+.kids-mq-levels-actions { margin-top: 10px; display: flex; gap: 8px; }
+.kids-mq-reset-btn {
+	background: #fff;
+	border: 1px solid #cbd5e1;
+	color: #475569;
+}

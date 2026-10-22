@@ -377,3 +377,217 @@ body.kid-body::before {
 	.kid-toast-emoji { animation: none; }
 	.kid-toast { transition: opacity 150ms ease; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Math Quest — single-scene adventure mode
+   Architecture: the ADVENTURE LANDSCAPE is painted once on .kid-wrap
+   (mq-map-mode). Characters, props, gates and UI float over that ONE scene —
+   no scene-in-a-card, no second background. In quiz mode (mq-quiz-mode) the
+   scene steps aside and the platform's own quiz presentation takes over.
+   Shell chrome (.kid-header) is hidden ONLY while Math Quest runs.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Compact Math Quest header (replaces the shell header for MQ only) ── */
+.kid-wrap.mq-header-ready .kid-header { display: none; }
+.mq-header {
+	display: flex; align-items: center; gap: 10px;
+	padding: 12px 2px 6px;
+	color: #fff;
+}
+.mq-player {
+	display: flex; align-items: center; gap: 8px;
+	font-weight: 800; font-size: 1rem;
+	text-shadow: 0 2px 6px rgba(0,0,0,.5);
+	white-space: nowrap;
+}
+.mq-player-avatar {
+	width: 40px; height: 40px; border-radius: 50%;
+	background: rgba(255,255,255,.9);
+	display: inline-flex; align-items: center; justify-content: center;
+	font-size: 1.3rem;
+	box-shadow: 0 2px 8px rgba(0,0,0,.3);
+	border: 2px solid #fff;
+}
+.mq-header .mq-title {
+	flex: 1; text-align: center;
+	font-weight: 800; font-size: 1.1rem;
+	text-shadow: 0 2px 6px rgba(0,0,0,.5);
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mq-sound {
+	font-size: 1.1rem; line-height: 1;
+	background: rgba(255,255,255,.92); border: none; border-radius: 50%;
+	width: 40px; height: 40px; flex: 0 0 auto;
+	cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+
+/* ── THE scene: one dominant adventure landscape on the wrap itself ── */
+.kid-wrap.mq-map-mode {
+	max-width: none;
+	background:
+		linear-gradient(180deg, rgba(4,47,33,.18) 0%, rgba(4,47,33,.05) 40%, rgba(4,47,33,.55) 100%),
+		url('/kids/assets/math-quest/backgrounds/mq-adventure-trail.webp') center / cover no-repeat,
+		linear-gradient(180deg, #065f46 0%, #16a34a 55%, #a3e635 100%);
+	min-height: 100vh;
+}
+/* Focused quiz: platform layout returns (no map behind the questions) */
+.kid-wrap.mq-quiz-mode { max-width: 960px; }
+
+/* Transparent stages that FLOAT over the scene */
+.mq-map, .mq-results {
+	position: relative;
+	min-height: 420px;
+	max-width: 960px;
+	margin: 0 auto;
+	z-index: 1;
+}
+
+.mq-map-sign, .mq-result-card {
+	position: relative;
+	margin: 10px auto 0;
+	max-width: 520px;
+	background: rgba(255,255,255,.92);
+	border-radius: 18px;
+	padding: 12px 18px;
+	text-align: center;
+	box-shadow: 0 10px 30px rgba(0,0,0,.25);
+	z-index: 2;
+}
+.mq-map-sign h2 { margin: 6px 0 2px; font-size: 1.15rem; }
+.mq-map-hello { display: inline-block; background: #166534; color: #fff; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 10px; border-radius: 999px; margin: 0; }
+
+/* Level gates / markers on the trail */
+.mq-level-list {
+	position: relative; z-index: 2;
+	display: flex; flex-direction: column; align-items: center; gap: 26px;
+	padding: 20px 12px 150px;
+}
+.mq-level-node {
+	position: relative;
+	width: min(420px, 92%);
+	border-radius: 20px;
+	background: rgba(255,255,255,.94);
+	padding: 12px;
+	box-shadow: 0 12px 30px rgba(0,0,0,.3);
+	text-align: left;
+}
+.mq-node-thumb, .mq-node-gate { position: absolute; top: -18px; width: 74px; height: 74px; object-fit: contain; }
+.mq-node-thumb { left: 14px; }
+.mq-node-gate { right: 14px; }
+.mq-node-thumb img, .mq-node-gate img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mq-node-body { padding: 0 84px 0 96px; }
+.mq-node-name { margin: 4px 0 2px; font-size: 1.1rem; }
+.mq-node-meta { margin: 0 0 6px; color: #475569; font-size: .85rem; }
+.mq-stars-big { display: inline-flex; gap: 2px; font-size: 1rem; }
+.mq-stars-big .lit { text-shadow: 0 0 10px rgba(245,158,11,.8); }
+.mq-node-btn {
+	margin-left: auto; display: block;
+	background: #16a34a; color: #fff; font-weight: 700;
+	border: none; border-radius: 999px; padding: 10px 18px; font-size: 1rem; cursor: pointer;
+	box-shadow: 0 6px 0 #166534;
+	transition: transform 120ms ease;
+}
+.mq-node-btn:hover { transform: translateY(-2px); }
+.mq-node-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #166534; }
+.mq-node-btn:disabled { background: #94a3b8; box-shadow: 0 4px 0 #64748b; cursor: not-allowed; }
+.mq-close { background: #16a34a; }
+.mq-done .mq-node-btn { background: #f59e0b; box-shadow: 0 6px 0 #b45309; }
+.mq-done .mq-node-btn:active { box-shadow: 0 2px 0 #b45309; }
+.mq-done .mq-node-thumb { filter: drop-shadow(0 0 8px rgba(245,158,11,.9)); }
+
+/* ── Locked / replayable states (stage 2) ── */
+.mq-locked { opacity: .82; }
+.mq-locked .mq-node-thumb { filter: grayscale(.7) brightness(.85); }
+.mq-locked .mq-node-btn { background: #64748b; box-shadow: 0 6px 0 #475569; cursor: not-allowed; }
+.mq-locked .mq-node-btn:hover { transform: none; }
+.mq-node-lock {
+	position: absolute; top: -14px; right: 10px;
+	width: 44px; height: 44px; border-radius: 50%;
+	background: #475569; color: #fff;
+	display: none; align-items: center; justify-content: center;
+	font-size: 1.15rem; box-shadow: 0 4px 10px rgba(0,0,0,.35);
+	z-index: 3;
+}
+.mq-locked .mq-node-lock { display: flex; }
+.mq-locked .mq-node-gate { display: none; }
+.mq-ready .mq-node-btn { background: #16a34a; }
+/* unlocked + beaten → replayable: subtle replay pulse (blocked by reduced-motion) */
+.mq-done { border-color: #f59e0b; }
+
+/* Adventure-trail connectors between gates (dotted path the kid follows) */
+.mq-level-node:not(:last-child)::after {
+	content: '';
+	position: absolute;
+	left: 50%; bottom: -26px;
+	width: 6px; height: 20px;
+	transform: translateX(-50%);
+	background: repeating-linear-gradient(180deg, #fde68a 0 6px, transparent 6px 12px);
+	border-radius: 3px;
+	opacity: .9;
+	pointer-events: none;
+}
+
+/* ── Characters + props layered over the scene (their manifest roles) ── */
+.mq-map-dino, .mq-result-dino {
+	position: absolute;
+	right: 4%;
+	bottom: 6px;
+	width: 130px; height: 130px;
+	object-fit: contain;
+	filter: drop-shadow(0 10px 18px rgba(0,0,0,.4));
+	z-index: 2;
+	pointer-events: none;
+}
+.mq-prop { position: absolute; object-fit: contain; pointer-events: none; z-index: 1; }
+.mq-prop-palm { left: -12px; bottom: -10px; width: 170px; height: 210px; opacity: .95; filter: drop-shadow(0 8px 14px rgba(0,0,0,.35)); }
+.mq-prop-rock { left: 26%; bottom: 4px; width: 96px; height: 72px; opacity: .9; }
+
+/* ── Results: UI card + reward props inside the SAME scene ── */
+.mq-results { min-height: calc(100vh - 170px); }
+.mq-result-card { margin: 26px auto 0; padding: 22px 24px 18px; }
+.mq-result-card h2 { margin: 0 0 4px; font-size: 1.25rem; }
+.mq-stars-big { display: flex; justify-content: center; gap: 6px; font-size: 2rem; line-height: 2rem; }
+.mq-stars-big .lit { text-shadow: 0 0 16px rgba(245,158,11,.85); }
+.mq-coins-big { display: flex; justify-content: center; align-items: center; gap: 4px; margin-top: 8px; }
+.mq-coin { width: 34px; height: 34px; display: inline-block; border-radius: 50%; opacity: .3; background: radial-gradient(circle at 30% 30%, #fde68a, #b45309); box-shadow: 0 0 8px rgba(245,158,11,.7); }
+.mq-coin.lit { opacity: 1; }
+/* when the coin image asset exists it replaces the lit gradient coins */
+.mq-coins-big.mq-coin-art .mq-coin { display: none; }
+.mq-coin-art-img { width: 36px; height: 36px; object-fit: contain; }
+.mq-prop-chest { left: 3%; bottom: 30px; width: 120px; height: 120px; filter: drop-shadow(0 8px 16px rgba(0,0,0,.4)); z-index: 2; }
+.mq-prop-trophy { right: 22%; top: 90px; width: 74px; height: 74px; filter: drop-shadow(0 6px 12px rgba(0,0,0,.4)); animation: mq-trophy-pop .5s ease; }
+@keyframes mq-trophy-pop { from { transform: scale(0); } to { transform: scale(1); } }
+.mq-confetti-art {
+	inset: 0; width: 100%; height: 100%;
+	opacity: .95; z-index: 2;
+	mix-blend-mode: multiply; pointer-events: none;
+}
+
+/* images that never loaded keep their CSS/emoji variants visible */
+.mq-map img.mq-hidden-until-load, .mq-results img.mq-hidden-until-load { visibility: hidden; }
+
+/* temporary marker class while src="" placeholders are still probing */
+.mq-map img[src=""], .mq-results img[src=""], .mq-node-thumb img[src=""], .mq-node-gate img[src=""] { visibility: hidden; }
+.mq-results-actions { margin-top: 14px; }
+.mq-result-card .hint { margin: 10px 0 0; }
+@media (max-width: 640px) {
+	.mq-header { padding-top: 8px; }
+	.mq-player-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+	.mq-header .mq-title { font-size: .95rem; }
+	.mq-map, .mq-results { min-height: 380px; }
+	.mq-node-body { padding: 0 8px 0 84px; }
+	.mq-node-gate, .mq-locked .mq-node-lock { display: none; }
+	.mq-locked .mq-node-name::after { content: ' 🔒'; }
+	.mq-map-dino, .mq-result-dino { width: 80px; height: 80px; }
+	.mq-prop-palm { width: 110px; height: 136px; opacity: .8; }
+	.mq-prop-rock { width: 64px; height: 48px; }
+	.mq-prop-chest { width: 84px; height: 84px; bottom: 18px; }
+	.mq-prop-trophy { width: 52px; height: 52px; right: 12%; top: 60px; }
+	.mq-result-card { margin: 16px 10px 110px; }
+	.mq-level-list { gap: 20px; padding-bottom: 110px; }
+	.mq-level-node:not(:last-child)::after { bottom: -22px; height: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.mq-node-btn { transition: none; }
+	.mq-prop-trophy { animation: none; }
+}

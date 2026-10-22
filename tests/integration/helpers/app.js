@@ -33,6 +33,8 @@ import bulkRoutes from '../../../src/backend/routes/bulk.routes.js';
 import notificationRoutes from '../../../src/backend/routes/notifications.routes.js';
 import teacherMessageRoutes from '../../../src/backend/routes/teacher-messages.routes.js';
 import devicesRoutes from '../../../src/backend/routes/devices.routes.js';
+import kidsChampionshipRoutes from '../../../src/backend/routes/kids-championships.routes.js';
+import kidsRoutes from '../../../src/backend/routes/kids.routes.js';
 
 // Container (needed for route handlers)
 import { createContainer } from '../../../src/backend/container.js';
@@ -68,6 +70,9 @@ app.use('/api/v1/bootstrap',   bootstrapRoutes);
 app.use('/api/v1/bulk',        bulkRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/teacher-messages', teacherMessageRoutes);
+// Kids routes: championships must mount before kids (same order as server.js)
+app.use('/api/v1/kids/championships', kidsChampionshipRoutes);
+app.use('/api/v1/kids', kidsRoutes);
 app.use('/api/v1/devices', devicesRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
