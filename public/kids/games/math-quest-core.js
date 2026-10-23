@@ -214,6 +214,7 @@
 		'true-false': 'leap-frog',
 		'fill-blank': 'magic-words',
 		'order': 'build-a-tower',
+		'draggable': 'build-a-tower',           // kid-canonical type for 'order' questions (stack with ▲▼)
 		'matching': 'pair-party',
 		'odd-one-out': 'sort-it-out',
 		'code': 'code-explorer',
@@ -227,16 +228,95 @@
 		return DELEGATES[type] || 'bubble-pop';
 	}
 
+	/* ── Presentation layer (stage 4, presentation only — never grading) ── */
+	// Canonical kid types come from KidsGameService.normalizeKidQuestion:
+	// 'multiple-choice'(+allowMultipleAnswers), 'true-false', 'odd-one-out',
+	// 'matching', 'draggable', 'fill-blank', 'code'(+codeAnswerMode).
+	// Only types with a COMPLETE template map here; everything else keeps the
+	// platform renderer via the fallback chain in MathQuestGame. The kid's
+	// canonical 'order' type ('draggable') formally means the tower-steps
+	// interaction — rendered by the order-cards template, so there is exactly
+	// ONE ordering composition, never two.
+	var TEMPLATE_FOR_TYPE = {
+		'multiple-choice': 'story-cards',
+		'draggable': 'order-cards',   // tower-steps composition (▲▼ ordering)
+		'true-false': 'gate-choose',
+		'matching': 'pair-match',
+		'fill-blank': 'rune-word',
+	};
+	/** art-pick needs per-option art for EVERY option (normalized by the
+	 * server as `option_images`, aligned with the label order); anything
+	 * incomplete stays on the story-cards text composition. */
+	function optionImagesComplete(q) {
+		var imgs = q ? q.option_images : null;
+		if (!Array.isArray(imgs) || imgs.length < 2) return false;
+		for (var i = 0; i < imgs.length; i++) {
+			if (typeof imgs[i] !== 'string' || !imgs[i].trim()) return false;
+		}
+		return true;
+	}
+	function defaultTemplateFor(question) {
+		var q = question || {};
+		var type = String(q.type || '');
+		if (type === 'multiple-choice' && q.allowMultipleAnswers) return null; // no multi-select template yet
+		if (type === 'multiple-choice' && optionImagesComplete(q)) return 'art-pick';
+		return TEMPLATE_FOR_TYPE[type] || null;
+	}
+
+	/* ── Teacher presentation picks (stage 5, per level) ────────────────── */
+	// config_json.levels[i].template overrides the per-question inference.
+	// Compatibility is ALWAYS re-checked against the actual question data:
+	// templates own rendering only, and a bad pick must never break a run —
+	// an incompatible pick falls back to the automatic inference (which
+	// itself falls back to the platform renderer when nothing fits).
+	var TEMPLATE_TYPES = {
+		'story-cards': 'multiple-choice',
+		'order-cards': 'draggable',
+		'gate-choose': 'true-false',
+		'pair-match': 'matching',
+		'rune-word': 'fill-blank',
+	};
+	var MQ_TEMPLATES = ['auto', 'story-cards', 'art-pick', 'gate-choose', 'order-cards', 'pair-match', 'rune-word'];
+	/** Is this template playable with THIS question right now?
+	 * art-pick additionally needs complete per-option art for every option
+	 * (story-cards keeps playing from plain text). Option-count minimums and
+	 * any deeper shape problems are enforced by the templates themselves at
+	 * render time (they throw → MathQuestGame falls back). */
+	function templateCompatible(key, question) {
+		var q = question || {};
+		var type = String(q.type || '');
+		if (key === 'art-pick') return type === 'multiple-choice' && !q.allowMultipleAnswers && optionImagesComplete(q);
+		if (key === 'auto') return true;
+		var want = TEMPLATE_TYPES[key];
+		if (!want) return false;
+		if (type !== want) return false;
+		if (want === 'multiple-choice' && q.allowMultipleAnswers) return false; // no multi-select template yet
+		return true;
+	}
+	/** Presentation pick for one question inside one level: the teacher's
+	 * stored pick when it is compatible, else the automatic inference. */
+	function teacherTemplateFor(question, config, levelIndex) {
+		var ls = config && Array.isArray(config.levels) ? config.levels : null;
+		var lv = ls && ls.length ? ls[Math.min(Math.max(levelIndex || 0, 0), ls.length - 1)] : null;
+		var pick = lv && typeof lv.template === 'string' ? lv.template : 'auto';
+		if (pick !== 'auto' && templateCompatible(pick, question)) return pick;
+		return defaultTemplateFor(question);
+	}
+
 	var MathQuestCore = {
-		VERSION: 'stage-2',
+		VERSION: 'stage-5',
 		SCREENS: SCREENS,
 		ASSETS: ASSETS,
 		DINO_FOR_MOOD: DINO_FOR_MOOD,
+		MQ_TEMPLATES: MQ_TEMPLATES,
 		next: next,
 		planLevels: planLevels,
 		computeProgress: computeProgress,
 		levelPlayable: levelPlayable,
 		delegateKey: delegateKey,
+		defaultTemplateFor: defaultTemplateFor,
+		templateCompatible: templateCompatible,
+		teacherTemplateFor: teacherTemplateFor,
 		/** Cosmetic coin count: 1 coin per server-verified star (0..3). */
 		coinsForStars: function (stars) {
 			return Math.max(0, Math.min(3, Number(stars) || 0));

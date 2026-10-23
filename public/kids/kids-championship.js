@@ -455,9 +455,18 @@
 			var last = 0;
 			try { last = Number(sessionStorage.getItem('kidsLoginBounceAt') || 0); } catch (_) { /* ignore */ }
 			if (Date.now() - last < 3 * 60 * 1000) {
-				screen('<div class="kid-card"><h2>Session expired 😴</h2>' +
-					'<p class="hint">Please sign in again so your score counts!</p>' +
-					'<a class="kid-btn green" href="' + championshipLoginUrl() + '">Sign in</a></div>');
+				screen('<div class="kid-card kid-signin">' +
+					'<div class="kid-signin-lock" aria-hidden="true">🔑</div>' +
+					'<p class="kid-win-kicker">Magic key expired</p>' +
+					'<h2 class="kid-win-title">Let\u2019s sign in again!</h2>' +
+					'<p class="kid-signin-copy">Your session went to sleep 😴 — sign in again so your stars and scores keep counting!</p>' +
+					'<div class="kid-signin-steps" aria-hidden="true">' +
+						'<span>1 · Sign in</span><span>2 · Come back</span><span>3 · Keep playing</span>' +
+					'</div>' +
+					'<div class="kid-signin-actions">' +
+						'<a class="kid-btn green kid-win-cta" href="' + championshipLoginUrl() + '">Sign In 🔑</a>' +
+						'<a class="kid-btn ghost" href="/kids/">Back to Kids Hub 🏠</a>' +
+					'</div></div>');
 				return;
 			}
 			try { sessionStorage.setItem('kidsLoginBounceAt', String(Date.now())); } catch (_) { /* ignore */ }

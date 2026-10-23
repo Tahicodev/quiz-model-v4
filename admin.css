@@ -4200,14 +4200,36 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	white-space: nowrap;
 }
 
+/* Bulk selection column — same idiom as the other tabs' lists. */
+#devices .checkbox-cell {
+	text-align: center;
+	width: 40px;
+}
+
+#devices .checkbox-cell input[type='checkbox'] {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+}
+
+/* Selected rows get the same highlight tint as questions/exams/classes.
+   The accent bar stays on the machine cell (blocked/staff rules below). */
+#devices table.data-table tbody tr.device-card.question-row-selected {
+	background-color: var(--primary-light);
+}
+
+#devices table.data-table tbody tr.device-card.question-row-selected td:first-child {
+	box-shadow: inset 3px 0 0 var(--primary);
+}
+
 /* Blocked rows get a subtle red tint so they stand out in the list. */
-#devices tr.device-card.is-blocked td:first-child {
+#devices tr.device-card.is-blocked td.device-cell-machine {
 	box-shadow: inset 3px 0 0 #ef4444;
 }
 
 /* Staff machines (teachers/admins) get an amber tint + role badge so they
    stand out from student exam devices. */
-#devices tr.device-card.is-staff td:first-child {
+#devices tr.device-card.is-staff td.device-cell-machine {
 	box-shadow: inset 3px 0 0 #f59e0b;
 }
 
@@ -4535,7 +4557,8 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		border-radius: 11px !important;
 	}
 
-	#devices tr.device-card.is-blocked td:first-child {
+	#devices tr.device-card.is-blocked td.device-cell-machine,
+	#devices tr.device-card.question-row-selected td:first-child {
 		box-shadow: none;
 	}
 
@@ -4693,3 +4716,31 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	border: 1px solid #cbd5e1;
 	color: #475569;
 }
+.kids-wizard-footer .btn[hidden] { display: none !important; }
+
+/* ═══ Kids Games Studio — ONE design language for every game wizard ═══
+   The generic wizard (kw-*) and the Math Quest levels editor (kids-mq-*)
+   share the same dialect: slate surfaces, one indigo focus ring, identical
+   card geometry, identical hover lifts, identical pill chips. */
+.kids-wizard-body .form-control:focus-visible,
+.kids-wizard-body input:focus-visible,
+.kids-wizard-body select:focus-visible,
+.kids-wizard-body textarea:focus-visible {
+	border-color: #4f46e5;
+	box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+	outline: none;
+}
+.kids-mq-level {
+	transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.kids-mq-level:hover {
+	border-color: #c7d2fe;
+	box-shadow: 0 6px 18px rgba(79, 70, 229, 0.1);
+}
+.kids-mq-chip {
+	background: #eef2ff;
+	border-color: #c7d2fe;
+	color: #4338ca;
+}
+.kids-mq-chip-empty { background: #f8fafc; border-color: #e2e8f0; color: #94a3b8; }
+.kids-mq-levels-hint, .kids-wizard-step-hint { color: #64748b; }

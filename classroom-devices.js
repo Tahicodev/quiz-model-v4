@@ -33,9 +33,9 @@
 	var onlineIds = new Set();
 	var socketAttached = false;
 	var loading = false;
-	// Columns in the machine rows (Machine, Type, IP, User, Status,
+	// Columns in the machine rows (Select, Machine, Type, IP, User, Status,
 	// Last seen, Actions) — session panels span all of them.
-	var DEVICES_COLS = 7;
+	var DEVICES_COLS = 8;
 	function token() {
 		if (window.__authToken) return window.__authToken;
 		try {
@@ -573,6 +573,11 @@
 
 				return (
 					'<tr class="device-card' + (blocked ? ' is-blocked' : '') + (staffRow ? ' is-staff' : '') + '" data-device-id="' + id + '">' +
+					// Bulk selection — same checkbox cell as the other tabs' lists
+					// (persisted across re-renders by BulkSelect.restore('devices')).
+					'<td class="checkbox-cell" data-label="Select">' +
+					'<input type="checkbox" class="device-checkbox" data-id="' + id + '" onchange="toggleBulkRowSelection(this, \'devices\')" />' +
+					'</td>' +
 					'<td class="device-cell-machine">' +
 					'<span class="device-dot ' + (online ? 'is-online' : 'is-offline') + '" title="' + (online ? 'En ligne' : 'Hors ligne') + '"></span>' +
 					'<div class="device-id-block"><div class="device-name">' + esc(hostname) +
@@ -612,6 +617,79 @@
 			.join('');
 
 		body.innerHTML = html;
+		// Re-apply persisted selection (top selection survives re-renders) and
+		// refresh the "N selected" bar. The shared helper may be absent in
+		// bare unit-test sandboxes — never break the table for it.
+		try {
+			if (window.BulkSelect && typeof window.BulkSelect.restore === 'function') {
+				window.BulkSelect.restore('devices');
+			}
+		} catch (e) { /* selection UI is best-effort */ }
+	}
+
+	/**
+	 * Bulk forget — exactly the single "Oublier" action applied to every
+	 * selected machine, with the same server rules (a teacher may only forget
+	 * their own scope; foreign ids just fail and stay selected so the user
+	 * can retry them). One confirm, one bar, per-device DELETE calls.
+	 */
+	async function deleteSelectedDevices() {
+		var ids = [];
+		try {
+			if (window.BulkSelect && typeof window.BulkSelect.getSelectedIds === 'function') {
+				ids = window.BulkSelect.getSelectedIds('devices') || [];
+			} else {
+				// Fallback for sandboxes without the shared helper.
+				ids = Array.prototype.slice
+					.call(document.querySelectorAll('.device-checkbox:checked'))
+					.map(function (cb) { return cb.getAttribute('data-id'); })
+					.filter(Boolean);
+			}
+		} catch (e) { ids = []; }
+		if (!ids.length) {
+			toast('Aucun appareil sélectionné', 'error');
+			return;
+		}
+		var ok = window.confirm(
+			'Oublier ' + ids.length +
+			' appareil(s) ? (ne bloque pas — un appareil réapparaîtra à sa prochaine connexion)',
+		);
+		if (!ok) return;
+		var results = await Promise.allSettled(
+			ids.map(function (id) {
+				return api('/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+			}),
+		);
+		var done = [];
+		var failed = [];
+		var failMsg = '';
+		results.forEach(function (r, i) {
+			if (r.status === 'fulfilled') {
+				done.push(ids[i]);
+			} else {
+				failed.push(ids[i]);
+				if (!failMsg && r.reason && r.reason.message) failMsg = r.reason.message;
+			}
+		});
+		if (done.length) {
+			devices = devices.filter(function (d) {
+				return done.indexOf(String(d.id)) === -1;
+			});
+			try {
+				if (window.BulkSelect && typeof window.BulkSelect.removeIds === 'function') {
+					window.BulkSelect.removeIds('devices', done);
+				}
+			} catch (e) { /* bar refresh is best-effort */ }
+			toast(done.length + ' appareil(s) oublié(s)', 'success');
+		}
+		if (failed.length) {
+			toast(
+				failed.length + ' échec(s) sur ' + ids.length + ' appareil(s)' +
+				(failMsg ? ' : ' + failMsg : ''),
+				'error',
+			);
+		}
+		render();
 	}
 
 	async function setStatus(id, status) {
@@ -878,6 +956,7 @@
 		assign: assign,
 		rename: rename,
 		forget: forget,
+		deleteSelectedDevices: deleteSelectedDevices,
 		endUserSessions: endUserSessions,
 		refreshSessions: refreshSessions,
 	};

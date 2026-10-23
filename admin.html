@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Admin Dashboard</title>
-		<script>window.__ADMIN_BUILD__='2026-10-16-r2';try{console.log('[admin.html] build',window.__ADMIN_BUILD__);}catch(e){}</script>
+		<script>window.__ADMIN_BUILD__='2026-10-23-mq12';try{console.log('[admin.html] build',window.__ADMIN_BUILD__);}catch(e){}</script>
 		<link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" />
 			<script>
 			// Gate the dashboard behind login: unless a remembered quiz session
@@ -41,7 +41,7 @@
 			})();
 		</script>
 		<link rel="stylesheet" href="styles.css?v=2026-10-14-r24" />
-		<link rel="stylesheet" href="admin.css?v=2026-10-14-r40" />
+		<link rel="stylesheet" href="admin.css?v=2026-10-23-mq12" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-16-r2" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r5" />
 		<script>
@@ -145,7 +145,7 @@
 		<script src="realtime-admin.js?v=2026-10-14-r2" defer></script>
 
 		<!-- Admin page scripts -->
-		<script src="bulk-selection.js?v=2026-10-08-r1" defer></script>
+		<script src="bulk-selection.js?v=2026-10-23-mq12" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
 		<script src="category-management.js?v=2026-10-14-r1" defer></script>
 		<script src="questions-management.js?v=2026-10-16-r3" defer></script>
@@ -157,10 +157,11 @@
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
-		<script src="classroom-devices.js?v=2026-10-14-r8" defer></script>
+		<script src="classroom-devices.js?v=2026-10-23-mq12" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-10-12-r6" defer></script>
-		<script src="kids-games-management.js?v=2026-10-06-r1" defer></script>
+		<script src="kids-games-management.js?v=2026-10-23-mq13" defer></script>
+		<script src="/kids/games/math-quest-core.js?v=2026-10-23-mq12" defer></script>
 <script src="kids-championships-management.js?v=2026-10-06-r4" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
@@ -1745,9 +1746,26 @@
 						</div>
 
 						<div class="table-container">
+							<!-- Bulk selection: same bar as the other tabs' lists.
+							     Select rows → delete several devices at once. -->
+							<div id="bulk-actions-devices" class="bulk-actions-container hidden">
+								<span class="selection-info">
+									<span id="selected-count-devices">0</span> selected
+								</span>
+								<button type="button" class="btn btn-danger-soft" onclick="window.ClassroomDevices.deleteSelectedDevices()">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="3 6 5 6 21 6"></polyline>
+										<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+									</svg>
+									<span>Delete Selected</span>
+								</button>
+							</div>
 							<table class="data-table" id="devicesTable">
 								<thead>
 								<tr>
+										<th class="checkbox-cell" style="width: 40px">
+											<input type="checkbox" id="selectAllDevices" onchange="toggleBulkSelectAllGeneric(this, 'devices')" />
+										</th>
 										<th>Machine</th>
 										<th>Type</th>
 										<th>IP</th>

@@ -82,12 +82,22 @@ export const KidsSessionCompleteSchema = z.object({
 // threshold a student's best stars on this level must reach to unlock the
 // NEXT level; missing → 1 (any completed star unlocks). `art` picks one of
 // the four shipped map thumbnails; missing → a graceful CSS/emoji fallback.
+// `template` (stage 5) is an optional teacher presentation pick per level;
+// 'auto' (or missing) keeps the per-question inference. The runtime
+// re-checks compatibility with the actual question data before using it —
+// an incompatible/absent pick never breaks a run (client fallback chain).
+export const MQ_TEMPLATE_VALUES = [
+  'auto', 'story-cards', 'art-pick', 'gate-choose',
+  'order-cards', 'pair-match', 'rune-word',
+];
+
 export const KidQuestLevelSchema = z.object({
   id:         z.string().min(1).max(80),
   name:       z.string().min(1).max(60),
   questions:  z.array(z.string().min(1)).min(1).max(30),
   pass_stars: z.number().int().min(1).max(3).optional(),
   art:        z.enum(['home', 'treasure', 'temple', 'sunset']).optional(),
+  template:   z.enum(MQ_TEMPLATE_VALUES).optional().nullable(),
 });
 
 export const KidQuestLevelsSchema = z.array(KidQuestLevelSchema).min(1).max(12);

@@ -101,6 +101,35 @@ export function normalizeKidQuestion(raw) {
     answer = answer.split('|').map(s => s.trim()).filter(Boolean).join(',');
   }
   const labels = optionsToLabels(q.options_json ?? q.options);
+  // Stage-4 art-pick: preserve per-option artwork ONLY when every option
+  // carries a usable image aligned with the label order (all-or-nothing, so
+  // label grids can never accidentally claim art). Object options attach
+  // `image`; an option string only counts as art when it is itself a URL.
+  // Questions already normalized with complete art pass their option_images
+  // through unchanged, so create→play re-normalization stays idempotent.
+  const srcOptions = parseJson(q.options_json ?? q.options, []);
+  const toArtUrl = (u) => {
+    const s = typeof u === 'string' ? u.trim() : '';
+    return s && /^(https?:\/\/|\/)/i.test(s) ? s : '';
+  };
+  const artFromOptions = Array.isArray(srcOptions) ? srcOptions.map((o) => {
+    if (o && typeof o === 'object') return toArtUrl(o.image);
+    if (typeof o === 'string') return toArtUrl(o);
+    return '';
+  }) : [];
+  const priorArt = Array.isArray(q.option_images)
+    ? q.option_images.map((u) => (typeof u === 'string' ? u.trim() : '')).filter(Boolean)
+    : [];
+  let option_images = null;
+  if (
+    artFromOptions.length >= 2
+    && artFromOptions.length === labels.length
+    && artFromOptions.every(Boolean)
+  ) {
+    option_images = artFromOptions;
+  } else if (priorArt.length >= 2 && priorArt.length === labels.length) {
+    option_images = priorArt;
+  }
   return {
     id: q.id || q.question_id || `kidq-${Math.random().toString(36).slice(2, 10)}`,
     type,
@@ -111,6 +140,7 @@ export function normalizeKidQuestion(raw) {
     points: Number(q.points) || 1,
     difficulty: q.difficulty || 'easy',
     media_url: q.media_url ?? q.mediaUrl ?? q.image ?? null,
+    option_images,
     allowMultipleAnswers: Boolean(q.allowMultipleAnswers || meta.multi),
     codeAnswerMode: codeAnswerMode || null,
     codeSnippet: q.codeSnippet || null,
@@ -1031,7 +1061,7 @@ export class KidsGameService {
     }
     const parsed = KidQuestLevelsSchema.safeParse(levels);
     if (!parsed.success) {
-      throw new ValidationError({ config_json: ['Each level needs an id, a title, and 1-30 question ids (1-12 levels, pass_stars 1-3)'] });
+      throw new ValidationError({ config_json: ['Each level needs an id, a title, 1-30 question ids, and valid pass_stars (1-3) / template (1-12 levels)'] });
     }
     const ids = new Set(questions.map(q => String(q.id)));
     const seen = new Set();

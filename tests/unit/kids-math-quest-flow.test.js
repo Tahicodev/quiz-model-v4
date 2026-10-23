@@ -30,6 +30,7 @@ const SCRIPTS = [
 	'games/MagicWordsGame.js',
 	'games/CodeExplorerGame.js',
 	'games/math-quest-core.js',
+	'games/MathQuestTemplates.js',
 	'games/MathQuestGame.js',
 ];
 
@@ -194,10 +195,15 @@ async function boot({ patchError = false, multi = false } = {}) {
 	return window.KidsPlayerEngine;
 }
 
+/** Answer the current story-cards question: select the option card, then
+ * confirm — the MQ presentation layer's select-then-confirm interaction. */
 function answerCurrent(correctAnswer) {
-	const bubble = document.querySelector('.kid-bubble[data-opt="' + correctAnswer + '"]');
-	if (!bubble) throw new Error('no bubble for ' + correctAnswer);
-	bubble.click();
+	const card = document.querySelector('.mq-card-opt[data-opt="' + correctAnswer + '"]');
+	if (!card) throw new Error('no answer card for ' + correctAnswer);
+	card.click();
+	const confirm = document.querySelector('.mq-confirm');
+	if (!confirm || confirm.disabled) throw new Error('confirm not enabled after picking');
+	confirm.click();
 	return vi.advanceTimersByTimeAsync(300).then(() => settle(24))
 		.then(() => vi.advanceTimersByTimeAsync(1650)).then(() => settle(24));
 }
@@ -232,17 +238,24 @@ describe('math-quest full flow (single level plan, server-verified)', () => {
 		expect(document.querySelector('.mq-header .mq-title').textContent).toContain('Level 1 — Jungle Trail');
 		expect(document.getElementById('kidProgress').hidden).toBe(false);
 		expect(document.getElementById('kidProgressLabel').textContent).toContain('1/3');
-		expect(document.querySelector('.kid-bubble')).toBeTruthy(); // delegated to BubblePop
+		// stage 3: MQ renders its OWN story-cards template (not the bubble game)
+		expect(document.querySelector('.mq-panel .mq-scroll')).toBeTruthy();
+		expect(document.querySelectorAll('.mq-card-opt').length).toBe(4);
+		expect(document.querySelector('.mq-confirm').disabled).toBe(true);
 
-		// 3) Answer three questions (the correct bubble) + feed the timers.
+		// 3) Answer three questions (select card → confirm) + feed the timers.
 		// The first answer asserts the duplicate-prevention lock WHILE feedback
 		// is on screen (before the auto-advance clears `locked` again).
-		const firstBubble = document.querySelector('.kid-bubble[data-opt="12"]');
-		expect(firstBubble, 'bubble for 12').toBeTruthy();
-		firstBubble.click();
+		const firstCard = document.querySelector('.mq-card-opt[data-opt="12"]');
+		expect(firstCard, 'answer card for 12').toBeTruthy();
+		firstCard.click();
+		expect(document.querySelector('.mq-card-opt[aria-pressed="true"]')).toBeTruthy();
+		document.querySelector('.mq-confirm').click();
 		await vi.advanceTimersByTimeAsync(300);
 		await settle(24);
 		expect(window.KidsPlayerEngine.locked).toBe(true); // duplicate-prevention lock is up
+		expect(document.querySelector('.mq-card-opt.mq-correct')).toBeTruthy(); // feedback on the picked card
+		expect(document.querySelector('.mq-card-star')).toBeTruthy(); // mq-star reward art
 		await vi.advanceTimersByTimeAsync(1650);
 		await settle(24);
 		for (let i = 1; i < 3; i++) {
@@ -270,7 +283,7 @@ describe('math-quest full flow (single level plan, server-verified)', () => {
 		const engine = await boot();
 		document.querySelector('.mq-level-node.mq-ready .mq-node-btn').click();
 		await settle(24);
-		expect(document.querySelector('.kid-bubble')).toBeTruthy();
+		expect(document.querySelector('.mq-panel')).toBeTruthy(); // stage-3 template live
 		const before = engine.answers.length;
 		engine.answer('12'); // locked already? not yet locked pre-click — simulate late double call instead
 		expect(engine.answers.length).toBe(before + 1);
@@ -283,8 +296,8 @@ describe('math-quest full flow (single level plan, server-verified)', () => {
 		document.querySelector('.mq-level-node.mq-ready .mq-node-btn').click();
 		await settle(24);
 		for (let i = 0; i < 3; i++) {
-			const bubble = document.querySelector('.kid-bubble[data-opt="' + ['12', '8', '12'][i] + '"]');
-			if (bubble) bubble.click();
+			const card = document.querySelector('.mq-card-opt[data-opt="' + ['12', '8', '12'][i] + '"]');
+			if (card) { card.click(); document.querySelector('.mq-confirm').click(); }
 			await vi.advanceTimersByTimeAsync(300);
 			await settle(24);
 			await vi.advanceTimersByTimeAsync(1650);
@@ -301,7 +314,8 @@ describe('math-quest full flow (single level plan, server-verified)', () => {
 		await settle(24);
 		const firstSession = engine.sessionId;
 		for (let i = 0; i < 3; i++) {
-			document.querySelector('.kid-bubble[data-opt="' + ['12', '8', '12'][i] + '"]').click();
+			document.querySelector('.mq-card-opt[data-opt="' + ['12', '8', '12'][i] + '"]').click();
+			document.querySelector('.mq-confirm').click();
 			await vi.advanceTimersByTimeAsync(300);
 			await settle(24);
 			await vi.advanceTimersByTimeAsync(1650);
@@ -334,6 +348,20 @@ describe('multi-level adventure (stage 2)', () => {
 		expect(nodes[1].classList.contains('mq-locked')).toBe(true);
 		expect(nodes[1].querySelector('.mq-node-btn').disabled).toBe(true);
 		expect(nodes[1].textContent).toContain('Pass level 1');
+		// every gate carries the gate artwork — locked INCLUDED (greyed gate
+		// = the locked metaphor; overlays are dynamic DOM, never baked art)
+		expect(document.querySelector('.mq-level-node.mq-ready .mq-node-gate img')).toBeTruthy();
+		expect(document.querySelector('.mq-level-node.mq-locked .mq-node-gate img')).toBeTruthy();
+		expect(nodes[0].querySelector('.mq-gate-num').textContent).toBe('1');
+		expect(nodes[1].querySelector('.mq-gate-num').textContent).toBe('2');
+		// the node is one coherent unit: badges live ON the art block, the
+		// information plate is a distinct sibling (visible layer separation)
+		expect(nodes[0].querySelector('.mq-node-art .mq-node-gate img')).toBeTruthy();
+		expect(nodes[0].querySelector('.mq-node-art .mq-gate-num')).toBeTruthy();
+		expect(nodes[0].querySelector('.mq-node-plate .mq-node-btn')).toBeTruthy();
+		expect(nodes[0].querySelector('.mq-node-plate .mq-gate-num')).toBeNull(); // number is NOT in the plate
+		// the old floating thumbnail chips are gone (single dominant scene)
+		expect(document.querySelector('.mq-node-thumb')).toBeNull();
 	});
 
 	it('scopes level 1 to its own question and unlocks level 2 after passing', async () => {

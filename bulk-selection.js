@@ -32,6 +32,7 @@
 		exams: new Set(),
 		classes: new Set(),
 		results: new Set(),
+		devices: new Set(),
 	};
 
 	function getConfig(tableId) {
@@ -258,6 +259,14 @@
 		selectAllId: 'selectAllResults',
 		barId: 'bulk-actions-results',
 		countId: 'selected-count-results',
+		addBtnId: null,
+		rowSelectedClass: 'question-row-selected',
+	});
+	register('devices', {
+		checkboxClass: 'device-checkbox',
+		selectAllId: 'selectAllDevices',
+		barId: 'bulk-actions-devices',
+		countId: 'selected-count-devices',
 		addBtnId: null,
 		rowSelectedClass: 'question-row-selected',
 	});

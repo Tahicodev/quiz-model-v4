@@ -14,15 +14,14 @@
 	var API = '/api/v1/kids';
 	var AVATARS = ['🦊', '🐸', '🐵', '🐼', '🦁', '🐯', '🐨', '🐷', '🐰', '🐙'];
 	var BUBBLE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
-	var THEME_FALLBACK = {
-		jungle: 'linear-gradient(135deg,#166534,#4ade80)', space: 'linear-gradient(135deg,#0f172a,#7c3aed)',
-		ocean: 'linear-gradient(135deg,#0c4a6e,#38bdf8)', farm: 'linear-gradient(135deg,#65a30d,#fef08a)',
-		castle: 'linear-gradient(135deg,#4c1d95,#c4b5fd)', dinosaur: 'linear-gradient(135deg,#14532d,#a3e635)',
-		forest: 'linear-gradient(135deg,#052e16,#34d399)', city: 'linear-gradient(135deg,#1e3a8a,#93c5fd)',
-		circus: 'linear-gradient(135deg,#9a3412,#fbbf24)', magic: 'linear-gradient(135deg,#581c87,#f0abfc)',
-		school: 'linear-gradient(135deg,#0f766e,#99f6e0)', superhero: 'linear-gradient(135deg,#b91c1c,#fca5a5)',
-	};
 	var MASCOT_EMOJI = { idle: '🦊', happy: '😄', encourage: '💪', excited: '🤩', amazed: '😲', celebrate: '🎉' };
+	/* Kid themes (mirrors src/shared KIDS_THEMES): each gets its own CSS
+	 * presentation world on body.kid-theme-<name> — scenery, palette and
+	 * floating decorations match the mascot theme the teacher picked. */
+	var KIDS_THEME_KEYS = [
+		'jungle', 'space', 'ocean', 'farm', 'castle', 'dinosaur',
+		'forest', 'city', 'circus', 'magic', 'school', 'superhero',
+	];
 
 	/* ── Asset probing (extensions vary) ─────────────────────────────────── */
 	function probeImage(urls) {
@@ -395,9 +394,18 @@
 			return false;
 		},
 		expiredScreen: function () {
-			this.screen('<div class="kid-card"><h2>Session expired 😴</h2>' +
-				'<p class="hint">Please sign in again so your score counts!</p>' +
-				'<a class="kid-btn green" href="' + this.loginUrl() + '">Sign in</a></div>');
+			this.screen('<div class="kid-card kid-signin">' +
+				'<div class="kid-signin-lock" aria-hidden="true">🔑</div>' +
+				'<p class="kid-win-kicker">Magic key expired</p>' +
+				'<h2 class="kid-win-title">Let\u2019s sign in again!</h2>' +
+				'<p class="kid-signin-copy">Your session went to sleep 😴 — sign in again so your stars and scores keep counting!</p>' +
+				'<div class="kid-signin-steps" aria-hidden="true">' +
+					'<span>1 · Sign in</span><span>2 · Come back</span><span>3 · Keep playing</span>' +
+				'</div>' +
+				'<div class="kid-signin-actions">' +
+					'<a class="kid-btn green kid-win-cta" href="' + this.loginUrl() + '">Sign In 🔑</a>' +
+					'<a class="kid-btn ghost" href="/kids/">Back to Kids Hub 🏠</a>' +
+				'</div></div>');
 		},
 		/** Display name for a logged-in player: account copy first, then
 		 * the JWT payload. Empty when nothing resolves (the server still
@@ -429,12 +437,26 @@
 		screen: function (html) {
 			document.getElementById('kidScreen').innerHTML = html;
 		},
+		/** Theme presentation: body.kid-theme-<theme> drives the CSS world
+		 * (scenery, palette, drifting decorations). When the school drops a
+		 * real bg-<theme> photo into /kids/assets, it is layered under the
+		 * theme sky (kid-theme-photo) so painted art and floaters compose;
+		 * otherwise the pure-CSS scene stands alone. */
 		applyTheme: function () {
-			var theme = (this.game && this.game.theme) || 'jungle';
+			var raw = (this.game && this.game.theme) || 'jungle';
+			var theme = KIDS_THEME_KEYS.indexOf(String(raw)) >= 0 ? String(raw) : 'jungle';
+			var body = document.body;
+			KIDS_THEME_KEYS.forEach(function (t) {
+				body.classList.remove('kid-theme-' + t);
+			});
+			body.classList.remove('kid-theme-photo');
+			body.classList.add('kid-theme-' + theme);
+			body.style.background = '';
 			probeImage(themeBackgrounds(theme)).then(function (src) {
-				document.body.style.background = src
-					? 'url("' + src + '") center/cover no-repeat fixed'
-					: (THEME_FALLBACK[theme] || THEME_FALLBACK.jungle);
+				if (src) {
+					body.style.background = 'url("' + src + '") center/cover no-repeat fixed';
+					body.classList.add('kid-theme-photo');
+				}
 			});
 		},
 		load: function () {
@@ -723,15 +745,35 @@
 			this.starsRain(60);
 			var badge = stars >= 3 ? 'star-master' : 'finish';
 			var self = this;
-			var html = '<div class="kid-card"><h2>Well done, ' + escapeName(this.player.name) + '! 🎉</h2>' +
-				'<div class="kid-stars-big">' + [0, 1, 2].map(function (i) {
-					return '<span class="' + (i < stars ? 'lit' : 'dim') + '">⭐</span>';
-				}).join('') + '</div>' +
-				'<p class="hint">Score: <b>' + res.score + '</b> / ' + total + ' questions</p>' +
+			var pct = total ? Math.min(100, Math.round((this.score / total) * 100)) : 0;
+			var html = '<div class="kid-card kid-win">' +
+				'<div class="kid-win-glow" aria-hidden="true"></div>' +
+				'<div class="kid-win-medal" aria-hidden="true">🏅</div>' +
+				'<p class="kid-win-kicker">Quest complete!</p>' +
+				'<h2 class="kid-win-title">Well done, ' + escapeName(this.player.name) + '!</h2>' +
+				'<div class="kid-stars-big kid-win-stars" role="img" aria-label="' + stars + ' of 3 stars">' +
+					[0, 1, 2].map(function (i) {
+						return '<span class="' + (i < stars ? 'lit pop' : 'dim') + '" style="--pop-i:' + i + '">⭐</span>';
+					}).join('') +
+				'</div>' +
+				'<div class="kid-win-score">' +
+					'<svg class="kid-win-ring" viewBox="0 0 96 96" role="img" aria-label="Accuracy ' + pct + ' percent">' +
+						'<defs><linearGradient id="kidRingGrad" x1="0" y1="0" x2="1" y2="1">' +
+							'<stop offset="0%" style="stop-color:var(--kid-primary, #6d28d9)"/>' +
+							'<stop offset="100%" style="stop-color:var(--kid-primary-2, #4f46e5)"/>' +
+						'</linearGradient></defs>' +
+						'<circle class="kid-win-ring-track" cx="48" cy="48" r="40"/>' +
+						'<circle class="kid-win-ring-fill" cx="48" cy="48" r="40" style="--kid-ring:' + Math.min(100, pct) + '"/>' +
+					'</svg>' +
+					'<div class="kid-win-pct"><b>' + pct + '%</b></div>' +
+				'</div>' +
+				'<p class="kid-win-caption">Score: <b>' + res.score + '</b> / ' + total + ' questions</p>' +
 				championshipStrip(res) +
 				'<img class="kid-badge" id="kidBadge" alt="Badge" style="display:none" />' +
-				'<div><button class="kid-btn green" id="kidAgain">Play Again 🔁</button> ' +
-				'<a class="kid-btn" href="/kids/">New PIN</a></div></div>';
+				'<div class="kid-win-actions">' +
+					'<button class="kid-btn green kid-win-cta" id="kidAgain">Play Again 🔁</button>' +
+					'<a class="kid-btn ghost" href="/kids/">New PIN</a>' +
+				'</div></div>';
 			this.screen(html);
 			probeImage(badgeSources('finish')).then(function () { /* warm cache */ });
 			probeImage(badgeSources(badge)).then(function (src) {

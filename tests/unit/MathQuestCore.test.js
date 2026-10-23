@@ -221,3 +221,85 @@ describe('cosmetic coin rule (v1: never persisted)', () => {
 		expect(MQC.coinsForStars('x')).toBe(0);
 	});
 });
+
+describe('defaultTemplateFor — stage 3+4 template mapping', () => {
+	it('maps single-answer multiple-choice → story-cards (or art-pick with complete art)', () => {
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', options_json: '[]', answer: 'x' })).toBe('story-cards');
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', option_images: ['/x.png', '/y.png'] })).toBe('art-pick');
+	});
+	it('art-pick needs art for EVERY option, aligned and non-empty', () => {
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', option_images: ['/x.png'] })).toBe('story-cards');
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', option_images: ['/x.png', ''] })).toBe('story-cards');
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', option_images: ['/x.png', '  '] })).toBe('story-cards');
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', option_images: ['/x.png', 42] })).toBe('story-cards');
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', option_images: [] })).toBe('story-cards');
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', option_images: null })).toBe('story-cards');
+	});
+	it('maps order questions (kid type draggable → order-cards + tower fallback)', () => {
+		expect(MQC.defaultTemplateFor({ type: 'draggable' })).toBe('order-cards');
+		expect(MQC.delegateKey({ type: 'order' })).toBe('build-a-tower');
+		expect(MQC.delegateKey({ type: 'draggable' })).toBe('build-a-tower');
+	});
+	it('maps the stage-4 types to their own templates', () => {
+		expect(MQC.defaultTemplateFor({ type: 'true-false' })).toBe('gate-choose');
+		expect(MQC.defaultTemplateFor({ type: 'matching' })).toBe('pair-match');
+		expect(MQC.defaultTemplateFor({ type: 'fill-blank' })).toBe('rune-word');
+	});
+	it('multi-select MCQ keeps the platform renderer until its template exists', () => {
+		expect(MQC.defaultTemplateFor({ type: 'multiple-choice', allowMultipleAnswers: true })).toBeNull();
+	});
+	it('exotic types stay with the platform renderers (legacy fallback path)', () => {
+		expect(MQC.defaultTemplateFor({ type: 'odd-one-out' })).toBeNull();
+		expect(MQC.defaultTemplateFor({ type: 'code' })).toBeNull();
+		expect(MQC.defaultTemplateFor({ type: 'unknown-watever' })).toBeNull();
+		expect(MQC.defaultTemplateFor(null)).toBeNull();
+	});
+});
+
+describe('teacherTemplateFor — stage-5 per-level presentation picks', () => {
+	const CONFIG = {
+		levels: [
+			{ id: 'l1', name: 'Story', questions: ['q1'], template: 'story-cards' },
+			{ id: 'l2', name: 'Gates', questions: ['q2'], template: 'gate-choose' },
+			{ id: 'l3', name: 'Art', questions: ['q3'], template: 'auto' },
+		],
+	};
+
+	it('a compatible teacher pick wins over the automatic inference', () => {
+		expect(MQC.teacherTemplateFor({ type: 'true-false' }, CONFIG, 1)).toBe('gate-choose');
+		expect(MQC.teacherTemplateFor({ type: 'multiple-choice', options_json: '[]', answer: 'x' }, CONFIG, 0)).toBe('story-cards');
+	});
+
+	it("an auto pick (or missing template key) keeps the automatic inference", () => {
+		expect(MQC.teacherTemplateFor({ type: 'multiple-choice', option_images: ['/a.png', '/b.png'] }, CONFIG, 2)).toBe('art-pick');
+		expect(MQC.teacherTemplateFor({ type: 'multiple-choice' }, {}, 0)).toBe('story-cards');
+		expect(MQC.teacherTemplateFor({ type: 'multiple-choice' }, null, 0)).toBe('story-cards');
+	});
+
+	it('an incompatible pick falls back to the automatic inference (never breaks a run)', () => {
+		// 'gate-choose' declared on a multiple-choice question → story-cards stays
+		expect(MQC.teacherTemplateFor({ type: 'multiple-choice', options_json: '[]', answer: 'x' }, CONFIG, 1)).toBe('story-cards');
+		// art-pick requires complete per-option art
+		expect(MQC.teacherTemplateFor({ type: 'draggable' }, { levels: [{ id: 'a', name: 'A', questions: [], template: 'art-pick' }] }, 0)).toBe('order-cards');
+		expect(MQC.teacherTemplateFor({ type: 'multiple-choice', option_images: ['/only-one.png'] }, { levels: [{ id: 'a', name: 'A', questions: [], template: 'art-pick' }] }, 0)).toBe('story-cards');
+		// multi-select keeps the platform renderer until its template exists
+		expect(MQC.teacherTemplateFor({ type: 'multiple-choice', allowMultipleAnswers: true }, CONFIG, 0)).toBeNull();
+	});
+
+	it('unknown stored values degrade to the automatic inference', () => {
+		expect(MQC.teacherTemplateFor({ type: 'true-false' }, { levels: [{ id: 'a', name: 'A', questions: [], template: 'bogus' }] }, 0)).toBe('gate-choose');
+		expect(MQC.teacherTemplateFor({ type: 'true-false' }, { levels: [{ id: 'a', name: 'A', questions: [], template: null }] }, 0)).toBe('gate-choose');
+		expect(MQC.teacherTemplateFor({ type: 'true-false' }, { levels: [] }, 0)).toBe('gate-choose');
+	});
+
+	it('templateCompatible mirrors the runtime compatibility matrix', () => {
+		expect(MQC.templateCompatible('auto', { type: 'anything' })).toBe(true);
+		expect(MQC.templateCompatible('pair-match', { type: 'matching' })).toBe(true);
+		expect(MQC.templateCompatible('rune-word', { type: 'fill-blank' })).toBe(true);
+		expect(MQC.templateCompatible('order-cards', { type: 'draggable' })).toBe(true);
+		expect(MQC.templateCompatible('order-cards', { type: 'true-false' })).toBe(false);
+		expect(MQC.templateCompatible('art-pick', { type: 'multiple-choice', option_images: ['/a.png', '/b.png'] })).toBe(true);
+		expect(MQC.templateCompatible('art-pick', { type: 'multiple-choice', allowMultipleAnswers: true, option_images: ['/a.png', '/b.png'] })).toBe(false);
+		expect(MQC.templateCompatible('story-cards', { type: 'multiple-choice', options_json: '[]' })).toBe(true);
+	});
+});

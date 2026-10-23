@@ -230,10 +230,52 @@
 		temple: 'levelTemple', sunset: 'levelSunset',
 	};
 
+	/* Path-anchored map: the trail background (mq-adventure-trail.webp,
+	 * 1536×1024) paints the walking route from the foreground stone steps
+	 * (lower-left) up to the ancient temple stair (upper-right). The slots
+	 * below are NORMALIZED image coordinates verified against the asset at
+	 * 1:1 — centre of each gate rides the painted path. --gs shrinks the
+	 * gate ART with distance (perspective); plates/buttons stay readable. */
+	var TRAIL_SLOT_CHAIN = [
+		{ x: .285, y: .78, gs: 1 },    // 0 · foreground stone steps (start)
+		{ x: .465, y: .73, gs: .9 },   // 1 · on the lower bend
+		{ x: .555, y: .66, gs: .83 },  // 2 · past the round tree
+		{ x: .645, y: .575, gs: .77 }, // 3 · center-right bend
+		{ x: .745, y: .475, gs: .71 }, // 4 · upper climb
+		{ x: .83, y: .385, gs: .65 },  // 5 · temple approach
+	];
+	var TRAIL_SLOTS_FOR = {
+		1: [0], 2: [0, 4], 3: [0, 3, 5], 4: [0, 1, 3, 5], 5: [0, 1, 2, 3, 5],
+	};
+	/* Subtle dotted guide that follows the PAINTED trail (viewBox = the
+	 * image's own pixel space; the stage keeps the exact 3:2 ratio, so this
+	 * overlays the art without distortion). Ends at the temple stair base. */
+	var TRAIL_ROUTE = [
+		[400, 952], [553, 865], [699, 783], [837, 701], [975, 614],
+		[1075, 548], [1144, 466], [1190, 394], [1229, 338], [1284, 282],
+	];
+	function trailSlots(count) {
+		var fixed = TRAIL_SLOTS_FOR[count];
+		if (fixed) return fixed;
+		var out = [];
+		for (var i = 0; i < count; i++) {
+			out.push(i === 0 ? 0 : Math.min(5, Math.round(i * 5 / (count - 1))));
+		}
+		// duplicates (very large plans) step one gate toward the temple
+		for (var j = 1; j < out.length; j++) {
+			if (out[j] <= out[j - 1]) out[j] = Math.min(5, out[j - 1] + 1);
+		}
+		return out;
+	}
+
 	function renderMap(engine, levels, progress) {
 		try { document.getElementById('kidProgress').hidden = true; } catch (_) { }
-		var cards = levels.map(function (lv) {
+		var slots = trailSlots(Math.max(1, levels.length));
+		var cards = levels.map(function (lv, i) {
 			var idx = lv.index;
+			var slot = TRAIL_SLOT_CHAIN[slots[i] || 0] || TRAIL_SLOT_CHAIN[0];
+			var pos = ' style="left:' + Math.round(slot.x * 1000) / 10 + '%;top:' +
+				Math.round(slot.y * 1000) / 10 + '%;--gs:' + slot.gs + ';"';
 			var p = (progress && progress[idx]) || { unlocked: idx === 0, bestStars: 0, passed: false };
 			var unlocked = !!p.unlocked;
 			var stars = displayedStars(lv);
@@ -247,46 +289,56 @@
 			var meta = !unlocked
 				? 'Pass level ' + idx + ' with ' + lv.thresholdStars + ' star(s) to unlock'
 				: esc(String(lv.questionIds.length) + ' questions');
+			// The gate IS the level marker (one transparent asset per node);
+			// number, name, stars, lock and CTA are dynamic DOM overlays —
+			// nothing is baked into the artwork.
 			var artKey = THUMB_FOR_ART[lv.art] || 'levelHome';
 			return (
-				'<div class="mq-level-node ' + stateCls + '" data-level="' + idx + '" role="listitem">' +
-					'<span class="mq-node-thumb" aria-hidden="true"><img src="" alt="" /></span>' +
-					'<span class="mq-node-gate" aria-hidden="true"><img src="" alt="" /></span>' +
-					'<span class="mq-node-lock" aria-hidden="true">🔒</span>' +
-					'<div class="mq-node-body">' +
+				'<div class="mq-level-node ' + stateCls + '" data-level="' + idx + '" data-art="' + artKey + '"' + pos + ' role="listitem">' +
+					// One coherent node: the gate artwork block owns the number
+					// badge and the padlock (positioned ON the art), while the
+					// information plate follows in normal flow — nothing leans
+					// on accidental overlap.
+					'<div class="mq-node-art">' +
+						'<span class="mq-node-gate" aria-hidden="true"><img src="" alt="" /></span>' +
+						'<span class="mq-node-lock" aria-hidden="true">🔒</span>' +
+						'<span class="mq-gate-num" aria-hidden="true">' + (idx + 1) + '</span>' +
+					'</div>' +
+					'<div class="mq-node-plate">' +
 						'<h3 class="mq-node-name">' + esc(lv.name) + '</h3>' +
 						'<p class="mq-node-meta">' + meta + '</p>' +
-						'<span class="mq-stars-big" title="Best stars on this level">' + starHtml + '</span>' +
+						'<span class="mq-stars-big mq-gate-stars" title="Best stars on this level">' + starHtml + '</span>' +
+						'<button class="mq-node-btn" ' + (unlocked ? '' : 'disabled aria-disabled="true"') + ' type="button">' + cta + '</button>' +
 					'</div>' +
-					'<button class="mq-node-btn" data-art="' + artKey + '" ' + (unlocked ? '' : 'disabled aria-disabled="true"') + ' type="button">' + cta + '</button>' +
 				'</div>'
 			);
 		}).join('');
 
 		engine.screen(
-			// No scene of its own: the adventure landscape lives on the wrap —
-			// characters, props and UI layer directly over it.
+			// The adventure landscape IS the whole kid body: the .mq-map covers
+			// the page below the shell header and .mq-map-canvas is a CENTERED
+			// 3:2 cover box of the 1536×1024 trail art, so the full-screen image
+			// and the nodes/percentages share one coordinate space at any size.
 			'<div class="mq-map" role="region" aria-label="Adventure map">' +
 				'<div class="mq-map-sign" role="heading" aria-level="2">' +
 					'<p class="mq-map-hello">Ready, ' + esc(engine.player.name || 'explorer') + '? 🗺️</p>' +
 					'<h2>Pick a level and let the quest begin!</h2>' +
 				'</div>' +
-				'<div class="mq-level-list mq-trail" role="list">' + cards + '</div>' +
-				'<img class="mq-prop mq-prop-palm" src="" alt="" aria-hidden="true" />' +
-				'<img class="mq-prop mq-prop-rock" src="" alt="" aria-hidden="true" />' +
-				'<img class="mq-map-dino" src="" alt="Dino mascot waiting on the trail" />' +
+				'<div class="mq-map-canvas mq-level-list mq-trail" role="list" ' +
+					'style="--level-n:' + Math.max(1, levels.length) + '">' +
+					'<svg class="mq-map-route" viewBox="0 0 1536 1024" preserveAspectRatio="none" aria-hidden="true">' +
+						'<polyline points="' + TRAIL_ROUTE.map(function (pt) { return pt.join(','); }).join(' ') + '" />' +
+					'</svg>' +
+					cards +
+					'<img class="mq-map-dino" src="" alt="Dino mascot waiting by the temple path" />' +
+				'</div>' +
 			'</div>'
 		);
 		setImg('.mq-map-dino', CORE.ASSETS.dinoIdle);
-		setImg('.mq-prop-palm', CORE.ASSETS.palm);
-		setImg('.mq-prop-rock', CORE.ASSETS.rock);
+		// EVERY gate gets the artwork — locked included (a greyed-open gate is
+		// exactly the "locked level" metaphor; state coloring is CSS).
 		Array.prototype.forEach.call(document.querySelectorAll('.mq-level-node'), function (node) {
-			if (node.classList.contains('mq-locked')) return;
-			var btn = node.querySelector('.mq-node-btn');
-			var artKey = (btn && btn.dataset.art) || 'levelHome';
-			var thumb = node.querySelector('.mq-node-thumb img');
 			var gate = node.querySelector('.mq-node-gate img');
-			if (thumb && CORE.ASSETS[artKey]) probe(CORE.ASSETS[artKey]).then(function (src) { if (thumb && src) thumb.src = src; });
 			if (gate) probe(CORE.ASSETS.gate).then(function (src) { if (gate && src) gate.src = src; });
 		});
 
@@ -296,30 +348,69 @@
 			var btn = node.querySelector('.mq-node-btn');
 			if (!btn) return;
 			btn.addEventListener('click', function () {
-				var idx = Number(node.dataset.level) || 0;
-				var lv = ui.lastLevels[idx];
-				if (!lv) return;
-				if (ui.screen !== CORE.SCREENS.MAP || ui.processing) return;
-				if (!dispatch('level-picked').processing) return; // machine must accept
-				ui.pendingLevelIndex = idx;
-				rememberFullQuestions(engine);      // save the whole-game list
-				engine.game.questions = levelQuestions(engine, lv);
-				engine.index = 0;                    // the level is its own run
-				engine.answers = [];
-				engine.score = 0;
-				engine.locked = false;
-				if (engine.sessionId && !ui.sessionSpent) {
-					// First run: reuse the session the shell minted at boot —
-					// one attempt = one session, no orphan rows.
-					beginLevelRun(engine);
-					return;
-				}
-				// Any later run needs a FRESH session (a completed session can
-				// never be graded twice — the server refuses double-completion).
-				engine.sessionId = null;
-				engine.createSession();
+				startLevel(engine, Number(node.dataset.level) || 0);
 			});
 		});
+		fitMapCanvas();
+	}
+
+	/* On short-wide desktops the 3:2 cover canvas towers over the map area
+	 * and the CENTERED crop hides the FIRST gate's plate — including its
+	 * Start ▶ button. This anchors the canvas so the bottom-anchored gates
+	 * always stay on screen (the art's top sky is what yields). Desktop
+	 * viewport only: ≤1079px uses the in-flow horizontal scroller. */
+	function fitMapCanvas() {
+		var canvas = document.querySelector('.mq-map-canvas');
+		var map = canvas && canvas.parentElement;
+		if (!canvas || !map) return;
+		if (!window.matchMedia('(min-width: 1080px)').matches) {
+			canvas.style.transform = '';
+			return;
+		}
+		var mapH = map.clientHeight;
+		var canvasR = canvas.getBoundingClientRect();
+		if (!mapH || !canvasR.height) return;
+		var f = 0.5; // default anchor — the CSS translate(-50%,-50%)
+		var node0 = canvas.querySelector('.mq-level-node');
+		if (node0) {
+			var nodeBottom = node0.getBoundingClientRect().bottom - canvasR.top;
+			var over = (mapH / 2 - 0.5 * canvasR.height) + nodeBottom - (mapH - 12);
+			if (over > 0) f += over / canvasR.height;
+			f = Math.min(0.92, Math.max(0.15, f));
+		}
+		canvas.style.transform = 'translate(-50%,' + (-(f * 100)).toFixed(2) + '%)';
+	}
+	window.addEventListener('resize', function () {
+		requestAnimationFrame(fitMapCanvas);
+	});
+
+	/* ONE start routine — the map's node buttons, the results-screen "keep
+	 * playing" CTAs and any future entry point share it, so every path obeys
+	 * the same machine gate (level-picked accepted only from MAP) and the
+	 * same one-attempt-per-session rule. Returns true when the run began. */
+	function startLevel(engine, idx) {
+		var lv = (ui.lastLevels || [])[idx];
+		if (!lv) return false;
+		if (ui.screen !== CORE.SCREENS.MAP || ui.processing) return false;
+		if (!dispatch('level-picked').processing) return false; // machine must accept
+		ui.pendingLevelIndex = idx;
+		rememberFullQuestions(engine);      // save the whole-game list
+		engine.game.questions = levelQuestions(engine, lv);
+		engine.index = 0;                    // the level is its own run
+		engine.answers = [];
+		engine.score = 0;
+		engine.locked = false;
+		if (engine.sessionId && !ui.sessionSpent) {
+			// First run: reuse the session the shell minted at boot —
+			// one attempt = one session, no orphan rows.
+			beginLevelRun(engine);
+			return true;
+		}
+		// Any later run needs a FRESH session (a completed session can
+		// never be graded twice — the server refuses double-completion).
+		engine.sessionId = null;
+		engine.createSession();
+		return true;
 	}
 
 	/* ════════════════ SESSION-START HOOK (called by kids-player.js) ═════ */
@@ -420,17 +511,31 @@
 		if (verified && lv && lv.thresholdStars && stars < lv.thresholdStars && levels[levelIdx + 1]) {
 			thresholdLine = '<p class="hint">Next level unlocks at ' + lv.thresholdStars + ' star(s) — try again 🔁</p>';
 		}
+		/* One loud verdict banner + a DIRECT "keep playing" CTA: the kid can
+		 * continue (next level unlocked) or retry (threshold not met) without
+		 * going back through the map. Back-to-map stays as the calm option. */
+		var passed = stars >= ((lv && lv.thresholdStars) || 1);
+		var hasNext = !!(levels && levels[levelIdx + 1]);
+		var bannerCls = stars >= 3 ? 'mq-perfect' : (passed ? 'mq-pass' : 'mq-retry');
+		var banner = passed && !hasNext
+			? 'Quest complete! Every trail beaten! 🏆'
+			: (stars >= 3 ? 'Level complete! Perfect run! 🎉'
+				: (stars > 0 ? 'Level complete! Well played 👏' : 'Almost there — give it another go 💪'));
+		var nextIdx = ui.levelIndex + 1;
+		var ctaLabel = !passed ? 'Try again 🔁' : (hasNext ? 'Continue the trail ▶' : '');
+		var actionHtml = '';
+		if (ctaLabel) actionHtml += '<button class="kid-btn green" id="mqNextBtn" type="button">' + ctaLabel + '</button>';
+		actionHtml += '<button class="kid-btn mq-secondary" id="mqBackToMap" type="button">Back to the map 🗺️</button>';
 		engine.screen(
 			'<div class="mq-results" role="region" aria-label="Level results">' +
 				'<div class="mq-card mq-result-card">' +
+					'<div class="mq-result-banner ' + bannerCls + '" role="heading" aria-level="2">' + banner + '</div>' +
 					'<h2>' + esc(lv && lv.name || 'Level') + ' — ' + esc(String(score)) + ' / ' + esc(String(total)) + ' correct</h2>' +
 					'<div class="mq-stars-big" aria-label="' + stars + ' of 3 stars">' + starHtml + '</div>' +
 					'<div class="mq-coins-big" title="Cosmetic treasure only — coins are not saved">' + coinHtml + '</div>' +
 					'<p class="hint">' + (verified ? 'Score &amp; stars confirmed on the server ✔' : 'Offline — showing your in-session score') + '</p>' +
 					thresholdLine +
-					'<div class="mq-results-actions">' +
-						'<button class="kid-btn green" id="mqBackToMap" type="button">Back to the map 🗺️</button>' +
-					'</div>' +
+					'<div class="mq-results-actions">' + actionHtml + '</div>' +
 				'</div>' +
 				'<img class="mq-prop mq-prop-chest" src="" alt="Treasure chest with your reward" />' +
 				(stars >= 3 ? '<img class="mq-prop mq-prop-trophy" src="" alt="Trophy reward" />' : '') +
@@ -464,18 +569,48 @@
 			dispatch('back-to-map');
 			showMap(engine);
 		});
+		var nextBtn = document.getElementById('mqNextBtn');
+		if (nextBtn) nextBtn.addEventListener('click', function () {
+			// land on the MAP machine state first (level-picked is only
+			// accepted there), then reuse the exact same start routine
+			// the map nodes use — fallback to the map if the machine refuses.
+			dispatch('back-to-map');
+			showMap(engine);
+			if (!startLevel(engine, passed ? nextIdx : ui.levelIndex)) showMap(engine);
+		});
 	}
 
-	/* ════════════════ QUIZ — delegate to the platform's pipeline ════════ */
+	/* ════════════════ QUIZ — MQ templates, platform pipeline ════════════ */
 	function MathQuestGame(engine, root, question, config) {
 		this.engine = engine; this.root = root; this.question = question; this.config = config || {};
+		this.template = null;        // MQ presentation layer (stage 3)
 		this.childKey = CORE.delegateKey(question);
 		var delegated = window.KidsGameRenderers || {};
 		this.child = null;
-		var Ctor = delegated[this.childKey];
-		if (Ctor) this.child = new Ctor(engine, root, question, config);
 	}
 	MathQuestGame.prototype.render = function () {
+		// Math Quest picks its OWN presentation template first; only types
+		// without a complete template (or a template that fails to mount)
+		// fall back to the platform renderer — which stays byte-compatible
+		// with the old games' behavior. A teacher's per-level presentation
+		// pick (stage 5) wins over the automatic inference when it actually
+		// fits the question data.
+		var gameCfg = (this.engine && this.engine.game && this.engine.game.config) || null;
+		var tplKey = CORE.teacherTemplateFor(this.question, gameCfg, ui.levelIndex);
+		var Tpl = (tplKey && window.MQTemplates && window.MQTemplates[tplKey]) || null;
+		if (Tpl) {
+			try {
+				this.template = new Tpl(this.engine, this.root, this.question, this.config);
+				this.template.render();
+				return;
+			} catch (e) {
+				try { if (this.template && this.template.destroy) this.template.destroy(); } catch (_) { }
+				this.template = null; // fall through to the legacy renderer
+			}
+		}
+		var delegated = window.KidsGameRenderers || {};
+		var Ctor = delegated[this.childKey];
+		if (Ctor) this.child = new Ctor(this.engine, this.root, this.question, this.config);
 		if (this.child) { this.child.render(); return; }
 		// Delegate unavailable: plain readable fallback so the kid can still play.
 		var opts = (window.KidsPlayer && window.KidsPlayer.options ? window.KidsPlayer.options(this.question) : []);
@@ -492,10 +627,14 @@
 		});
 	};
 	MathQuestGame.prototype.lock = function (correct, given) {
+		if (this.template && this.template.lock) { try { this.template.lock(correct, given); } catch (_) { } }
 		if (this.child && this.child.lock) { try { this.child.lock(correct, given); } catch (_) { } }
 	};
 	MathQuestGame.prototype.destroy = function () {
+		if (this.template && this.template.destroy) { try { this.template.destroy(); } catch (_) { } }
 		if (this.child && this.child.destroy) { try { this.child.destroy(); } catch (_) { } }
+		this.destroyed = true; // renderers signal teardown (mountRenderer contract)
+		this.template = null;
 		this.child = null;
 	};
 
@@ -515,6 +654,13 @@
 			if (ui.champMode) return null;
 			var lv = (ui.lastLevels || [])[ui.levelIndex];
 			return lv ? lv.id : null;
+		},
+		/** Stage-5 teacher wizard: the verified path-anchored slot chain +
+		 * route polyline, for the studio's structural map preview. Read-only. */
+		trailPreview: {
+			slots: TRAIL_SLOT_CHAIN,
+			slotsFor: TRAIL_SLOTS_FOR,
+			route: TRAIL_ROUTE,
 		},
 	};
 })();
