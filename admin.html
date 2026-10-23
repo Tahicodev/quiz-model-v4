@@ -41,9 +41,9 @@
 			})();
 		</script>
 		<link rel="stylesheet" href="styles.css?v=2026-10-14-r24" />
-		<link rel="stylesheet" href="admin.css?v=2026-10-23-mq12" />
-		<link rel="stylesheet" href="theme.css?v=2026-10-16-r2" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r5" />
+		<link rel="stylesheet" href="admin.css?v=2026-10-23-pub2" />
+		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-10-23-pub2" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -160,9 +160,9 @@
 		<script src="classroom-devices.js?v=2026-10-23-mq12" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-10-12-r6" defer></script>
-		<script src="kids-games-management.js?v=2026-10-23-mq13" defer></script>
+		<script src="kids-games-management.js?v=2026-10-23-pub1" defer></script>
 		<script src="/kids/games/math-quest-core.js?v=2026-10-23-mq12" defer></script>
-<script src="kids-championships-management.js?v=2026-10-06-r4" defer></script>
+<script src="kids-championships-management.js?v=2026-10-23-pub1" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
@@ -4081,7 +4081,7 @@
 					     the next level by earning the level's pass stars. -->
 					<div class="form-group" id="kidsMqLevelsGroup" hidden>
 						<label>Adventure levels</label>
-						<p class="kids-mq-levels-hint">Split the questions into levels. The next level unlocks when the kid earns the level's pass stars.</p>
+						<p class="kids-mq-levels-hint">Questions are played in order, level by level. Pick how many stars a kid must earn on a level to unlock the next one.</p>
 						<div id="kidsMqLevelsList" class="kids-mq-levels"></div>
 						<div class="kids-mq-levels-actions">
 							<button type="button" id="kidsMqAddLevel" class="btn btn-secondary btn-sm">+ Add level</button>
@@ -4096,7 +4096,12 @@
 						<h3>Ready to publish?</h3>
 						<p>Publishing generates the 4-letter PIN the kids type to play.</p>
 					</div>
-					<div id="kidsWizardPreview" class="kids-wizard-preview"></div>
+					<div class="kids-pub">
+						<div class="kids-pub-checklist" id="kidsPublishChecklist" aria-live="polite"></div>
+						<div class="kids-wizard-preview kids-pub-preview" id="kidsWizardPreview"></div>
+						<div class="kids-pub-result" id="kidsPublishResult" hidden></div>
+						<div class="kids-pub-champ" id="kidsPublishChamp" hidden></div>
+					</div>
 				</div>
 			</div>
 			<div class="kids-wizard-footer">

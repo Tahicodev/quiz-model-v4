@@ -49,6 +49,9 @@
 		aiResults: [],
 		manualList: [],
 		lastPublished: null,
+		/** Set once step 5 published successfully: drives the inline PIN block
+		 * and turns the footer action into "Done". Cleared on every open. */
+		publishedGame: null,
 	};
 
 	/* ── Small helpers ─────────────────────────────────────────────────────── */
@@ -302,6 +305,8 @@
 			state.wizard = { game_type: null, theme: 'jungle', questions: [], mqLevels: [] };
 			state.aiResults = [];
 			state.manualList = [];
+			state.publishedGame = null;
+			resetPublishResultPanels();
 			setFormValue('kidsGameWizardId', editId || '');
 			var titleEl = $('kidsWizardTitle');
 			if (titleEl) titleEl.textContent = editId ? 'Edit Kids Game' : 'Create Kids Game';
@@ -400,14 +405,21 @@
 			s.classList.toggle('completed', sn < state.wizardStep);
 			s.classList.toggle('locked', sn > (state.maxWizardStep || 1));
 		});
-		if (state.wizardStep === 5) updateKidsWizardPreview();
+		if (state.wizardStep === 5) { renderPublishChecklist(); updateKidsWizardPreview(); }
 		var nextBtn = $('kidsWizardNextBtn'), backBtn = $('kidsWizardBackBtn'), pubBtn = $('kidsWizardPublishBtn');
 		if (nextBtn) {
 			nextBtn.hidden = state.wizardStep === 5;
 			nextBtn.textContent = state.wizardStep === 4 ? 'Review →' : 'Next →';
 		}
 		if (backBtn) backBtn.disabled = state.wizardStep === 1;
-		if (pubBtn) pubBtn.hidden = state.wizardStep !== 5;
+		if (pubBtn) {
+			pubBtn.hidden = state.wizardStep !== 5;
+			// After publishing the same button finishes the job — the wizard
+			// stays open so the teacher can read the PIN, copy it, or make a
+			// championship out of the game they just published.
+			pubBtn.textContent = state.publishedGame ? 'Done ✓' : 'Publish Game 🚀';
+			pubBtn.className = state.publishedGame ? 'btn btn-secondary' : 'btn btn-success';
+		}
 		var hint = $('kidsWizardStepHint');
 		if (hint) hint.textContent = 'Step ' + state.wizardStep + ' of 5 — ' + (KIDS_STEP_HINTS[state.wizardStep] || '');
 		// Keep the active panel scrolled to top on step change.
@@ -518,6 +530,43 @@
 		group.hidden = !show;
 		if (show) renderKidsMqLevels();
 	}
+	/** Star threshold picker for one level. pass_stars is the score the kid
+	   must reach on THIS level to pass it and open the next one, so the label
+	   names that outcome instead of repeating one sentence per option (the
+	   native <option> list this replaced read as three identical
+	   "n⭐ to unlock next" rows). Native radios keep arrow-key navigation and
+	   screen-reader semantics for free; the star glyphs are decorative and a
+	   hidden text label carries the real name. */
+	function mqStarPickerHtml(idx, lv, isLast) {
+		var current = Math.min(3, Math.max(1, Math.floor(Number(lv.pass_stars) || 1)));
+		var label = isLast ? 'Stars to clear the final level' : 'Opens the next level at';
+		var pills = [1, 2, 3].map(function (n) {
+			var text = n === 1 ? '1 star' : n + ' stars';
+			return '<label class="kids-mq-star' + (n === current ? ' is-on' : '') + '" title="' + text + '">' +
+				'<input type="radio" class="kids-mq-star-input" name="kidsMqPass' + idx + '" value="' + n + '" data-field="pass_stars"' + (n === current ? ' checked' : '') + ' />' +
+				'<span class="kids-mq-star-glyphs" aria-hidden="true">' + '⭐'.repeat(n) + '</span>' +
+				'<span class="sr-only">' + text + '</span>' +
+			'</label>';
+		}).join('');
+		return '<div class="kids-mq-control">' +
+			'<span class="kids-mq-control-label">' + label + '</span>' +
+			'<div class="kids-mq-star-group" role="radiogroup" aria-label="' + esc(label + ' for level ' + (idx + 1)) + '">' + pills + '</div>' +
+		'</div>';
+	}
+	/** A level the teacher never renamed follows its position, so splitting or
+	   merging can never leave two cards reading "Level 2". The test is the
+	   auto-name shape rather than the level's own number: after a merge the
+	   surviving "Level 3" sits at index 2, and matching its number instead of
+	   the pattern would fossilise the gap as if the teacher had typed it. */
+	function mqIsAutoLevelName(lv) {
+		var name = String((lv && lv.name) || '').trim();
+		return !name || /^level\s*\d+$/i.test(name);
+	}
+	function mqRenumberAutoLevels() {
+		state.wizard.mqLevels.forEach(function (lv, i) {
+			if (mqIsAutoLevelName(lv)) lv.name = 'Level ' + (i + 1);
+		});
+	}
 	function renderKidsMqLevels() {
 		var group = $('kidsMqLevelsGroup');
 		if (!group || group.hidden) return;
@@ -536,28 +585,32 @@
 			}).join('');
 			if (!chips) chips = '<span class="kids-mq-chip kids-mq-chip-empty">no questions yet — add some in step 3</span>';
 			var canSplit = qs.length >= 2 && state.wizard.mqLevels.length < 12;
-			var superscript = 'next unlocks at ' + Math.floor(Number(lv.pass_stars) || 1) + '⭐ · ' + qs.length + ' question(s)';
+			var nextName = isLast ? '' : String((state.wizard.mqLevels[i + 1] || {}).name || '').trim();
+			var summary = qs.length + (qs.length === 1 ? ' question' : ' questions') +
+				(isLast ? ' · final level' : ' · unlocks “' + (nextName || ('Level ' + (i + 2))) + '”');
+			var prevName = String((state.wizard.mqLevels[i - 1] || {}).name || '').trim() || ('Level ' + i);
 			parts.push(
 				'<div class="kids-mq-level" data-idx="' + i + '">' +
 					'<div class="kids-mq-level-head">' +
-						'<span class="kids-mq-level-num" aria-hidden="true">🦖</span>' +
+						'<span class="kids-mq-level-num">' + (i + 1) + '</span>' +
 						'<input type="text" class="form-control kids-mq-name" maxlength="60" placeholder="Level name" data-field="name" value="' + esc(lv.name || '') + '" />' +
-						'<select class="form-control kids-mq-pass" data-field="pass_stars" title="Stars needed to unlock the NEXT level">' +
-							[1, 2, 3].map(function (n) {
-								return '<option value="' + n + '"' + (Number(lv.pass_stars) === n ? ' selected' : '') + '>' + n + '⭐ to unlock next</option>';
-							}).join('') +
-						'</select>' +
-						'<select class="form-control kids-mq-art" data-field="art" title="Level artwork on the adventure map">' +
-							[['home', '🏠 Home'], ['treasure', '💎 Treasure'], ['temple', '🏛️ Temple'], ['sunset', '🌅 Sunset']].map(function (a) {
-								return '<option value="' + a[0] + '"' + (lv.art === a[0] ? ' selected' : '') + '>' + a[1] + '</option>';
-							}).join('') +
-						'</select>' +
+					'</div>' +
+					'<div class="kids-mq-level-controls">' +
+						mqStarPickerHtml(i, lv, isLast) +
+						'<div class="kids-mq-control">' +
+							'<span class="kids-mq-control-label">Artwork</span>' +
+							'<select class="form-control kids-mq-art" data-field="art" title="Level artwork on the adventure map">' +
+								[['home', '🏠 Home'], ['treasure', '💎 Treasure'], ['temple', '🏛️ Temple'], ['sunset', '🌅 Sunset']].map(function (a) {
+									return '<option value="' + a[0] + '"' + (lv.art === a[0] ? ' selected' : '') + '>' + a[1] + '</option>';
+								}).join('') +
+							'</select>' +
+						'</div>' +
 					'</div>' +
 					'<div class="kids-mq-chips">' + chips + '</div>' +
 					'<div class="kids-mq-level-actions">' +
 						(canSplit ? '<button type="button" class="kids-mq-act" data-act="split" title="Cut this level in two">✂ Split</button>' : '') +
-						(i > 0 ? '<button type="button" class="kids-mq-act kids-mq-act-danger" data-act="merge" title="Merge this level into the previous one">⤴ Merge into level ' + i + '</button>' : '') +
-						'<span class="kids-mq-summary">' + esc(superscript) + '</span>' +
+						(i > 0 ? '<button type="button" class="kids-mq-act kids-mq-act-danger" data-act="merge" title="Merge this level into the one above">⤴ Merge into ' + esc(prevName) + '</button>' : '') +
+						'<span class="kids-mq-summary">' + esc(summary) + '</span>' +
 					'</div>' +
 				'</div>'
 			);
@@ -572,10 +625,19 @@
 			if (inEl) {
 				inEl.addEventListener('input', function () { lv.name = inEl.value; });
 			}
-			var passEl = row.querySelector('[data-field="pass_stars"]');
-			if (passEl) {
-				passEl.addEventListener('change', function () { lv.pass_stars = Math.min(3, Math.max(1, Number(passEl.value) || 1)); });
-			}
+			Array.prototype.forEach.call(row.querySelectorAll('[data-field="pass_stars"]'), function (input) {
+				input.addEventListener('change', function () {
+					if (!input.checked) return;
+					lv.pass_stars = Math.min(3, Math.max(1, Number(input.value) || 1));
+					// Repaint the selected pill in place; a full re-render here
+					// would drop focus mid keyboard navigation.
+					var starsGroup = input.closest('.kids-mq-star-group');
+					if (starsGroup) Array.prototype.forEach.call(starsGroup.querySelectorAll('.kids-mq-star'), function (lbl) {
+						var radio = lbl.querySelector('input');
+						lbl.classList.toggle('is-on', !!radio && radio.checked);
+					});
+				});
+			});
 			var artEl = row.querySelector('[data-field="art"]');
 			if (artEl) {
 				artEl.addEventListener('change', function () { lv.art = MQ_ART_VALUES.indexOf(artEl.value) >= 0 ? artEl.value : 'home'; });
@@ -601,6 +663,7 @@
 			art: 'home',
 			count: count - first,
 		});
+		mqRenumberAutoLevels();
 		renderKidsMqLevels();
 	}
 	function mqMergeLevel(idx) {
@@ -609,6 +672,7 @@
 		plan[idx - 1].count += Math.max(0, Math.floor(Number(plan[idx].count) || 0));
 		plan.splice(idx, 1);
 		if (!plan.length) mqSinglePlan();
+		mqRenumberAutoLevels();
 		renderKidsMqLevels();
 	}
 	function mqAddLevel() {
@@ -618,6 +682,7 @@
 		if (!last || Math.floor(Number(last.count) || 0) < 2) { toast('Split a level or add questions first', 'warning'); return; }
 		last.count -= 1;
 		plan.push({ id: mqNewLevelId(), name: 'Level ' + (plan.length + 1), pass_stars: 1, art: 'home', count: 1 });
+		mqRenumberAutoLevels();
 		renderKidsMqLevels();
 	}
 	function mqResetLevels() { mqSinglePlan(); renderKidsMqLevels(); }
@@ -1123,33 +1188,249 @@
 			config_json: JSON.stringify(buildKidsGameConfig()),
 		};
 	}
+	/** Readiness of the four things that can actually break a game, each with
+	 * the step that fixes it. Kept next to the preview because they answer the
+	 * same question the teacher has on step 5: "is this ready for my class?" */
+	function publishChecks() {
+		var name = String(($('kidsGameName') || {}).value || '').trim();
+		var type = state.wizard.game_type;
+		var meta = gameTypeMeta(type) || {};
+		var questions = state.wizard.questions.length;
+		var cfg = {};
+		try { cfg = buildKidsGameConfig(); } catch (_) { cfg = {}; }
+		var checks = [
+			{
+				ok: !!type,
+				label: 'Game type',
+				value: type ? (meta.icon || '') + ' ' + (meta.label || type) : 'Not chosen yet',
+				step: 1,
+				fix: 'Choose a game',
+			},
+			{
+				ok: !!name,
+				label: 'Game name',
+				value: name || 'Not named yet',
+				step: 4,
+				fix: 'Name it',
+			},
+			{
+				ok: questions > 0,
+				label: 'Questions',
+				value: questions ? questions + ' question' + (questions === 1 ? '' : 's') + ' ready' : 'No questions yet',
+				step: 3,
+				fix: 'Add questions',
+			},
+			{
+				ok: true,
+				label: 'Play rules',
+				value: (cfg.time_per_q || 15) + 's per question · ' + (cfg.max_hints ? cfg.max_hints + ' hint' + (cfg.max_hints === 1 ? '' : 's') : 'no hints') +
+					(cfg.allow_replay === false ? ' · no replay' : ' · replay on') +
+					(cfg.show_explanations === false ? ' · answers hidden' : ' · explanations on'),
+				step: 4,
+				fix: 'Adjust',
+			},
+		];
+		// Math Quest splits the same deck across levels, so an empty level means
+		// a kid walks into a dead map — worth flagging before publishing.
+		if (type === 'math-quest' && questions > 0) {
+			ensureMqLevels();
+			var empty = state.wizard.mqLevels.filter(function (lv) { return Math.max(0, Math.floor(Number(lv.count) || 0)) === 0; }).length;
+			checks.push({
+				ok: empty === 0,
+				label: 'Adventure levels',
+				value: empty ? empty + ' empty level' + (empty === 1 ? '' : 's') : state.wizard.mqLevels.length + ' level' + (state.wizard.mqLevels.length === 1 ? '' : 's') + ' with questions',
+				step: 3,
+				fix: 'Fix levels',
+			});
+		}
+		return checks;
+	}
+
+	/** Step 5 top block: what is ready, what is not, and a link straight to the
+	 * step that fixes it (all four are earlier steps, so the jump is free). */
+	function renderPublishChecklist() {
+		var box = $('kidsPublishChecklist');
+		if (!box) return;
+		var published = !!state.publishedGame;
+		var checks = publishChecks();
+		var blockers = published ? 0 : checks.filter(function (c) { return !c.ok; }).length;
+		box.innerHTML =
+			'<div class="kids-pub-head">' +
+				(published
+					? '<span class="kids-pub-flag ok">🚀 Published</span><span class="kids-pub-sum">The kids can play it right now.</span>'
+					: blockers
+						? '<span class="kids-pub-flag wait">⚠️ ' + blockers + ' thing' + (blockers === 1 ? '' : 's') + ' to fix</span><span class="kids-pub-sum">Fix them below — or publish anyway and edit later.</span>'
+						: '<span class="kids-pub-flag ok">✅ All set</span><span class="kids-pub-sum">Everything a kid needs is in place.</span>') +
+			'</div>' +
+			checks.map(function (c) {
+				return '<div class="kids-pub-check' + (c.ok ? ' ok' : ' todo') + '">' +
+					'<span class="kids-pub-check-mark" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span>' +
+					'<span class="kids-pub-check-label">' + esc(c.label) + '</span>' +
+					'<span class="kids-pub-check-value">' + esc(c.value) + '</span>' +
+					(c.ok ? '' : '<button type="button" class="kids-pub-fix" data-jump="' + c.step + '">' + esc(c.fix) + ' →</button>') +
+					'</div>';
+			}).join('');
+		box.querySelectorAll('[data-jump]').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				kidsWizardGoToStep(Number(btn.getAttribute('data-jump')) || 1);
+			});
+		});
+	}
+
+	/** Step 5 card: the game as the kids will meet it — theme colours, the
+	 * rules that change how it feels, and the level path for Math Quest. */
 	function updateKidsWizardPreview() {
 		var prev = $('kidsWizardPreview');
 		if (!prev) return;
 		var meta = gameTypeMeta(state.wizard.game_type) || {};
-		var levelsLine = '';
-		if (state.wizard.game_type === 'math-quest') {
+		var theme = state.wizard.theme || 'jungle';
+		var grade = ($('kidsAIGrade') || {}).value || '—';
+		var subject = String(($('kidsGameSubject') || {}).value || '').trim();
+		var cfg = {};
+		try { cfg = buildKidsGameConfig(); } catch (_) { cfg = {}; }
+		var questions = state.wizard.questions.length;
+		var rules = [
+			'⏱ ' + (cfg.time_per_q || 15) + 's',
+			'💡 ' + (cfg.max_hints ? cfg.max_hints + ' hint' + (cfg.max_hints === 1 ? '' : 's') : 'no hints'),
+			cfg.allow_replay === false ? '🚫 no replay' : '🔁 replay',
+			cfg.show_explanations === false ? '🙈 no explanations' : '💬 explanations',
+		];
+		var levels = '';
+		if (state.wizard.game_type === 'math-quest' && questions) {
 			ensureMqLevels();
-			var total = 0;
-			state.wizard.mqLevels.forEach(function (lv) { total += Math.max(0, Math.floor(Number(lv.count) || 0)); });
-			levelsLine = '<div class="preview-row"><span class="preview-label">Adventure levels</span><span class="preview-value">' +
-				state.wizard.mqLevels.length + ' level(s) · ' + total + ' question(s)</span></div>';
+			levels = '<div class="kids-pub-levels">' +
+				state.wizard.mqLevels.map(function (lv, i) {
+					var last = i === state.wizard.mqLevels.length - 1;
+					return '<div class="kids-pub-level">' +
+						'<span class="kids-pub-level-name">' + esc(String(lv.name || 'Level ' + (i + 1)).slice(0, 40)) + '</span>' +
+						'<span class="kids-pub-level-meta">' + Math.max(0, Math.floor(Number(lv.count) || 0)) + ' q · ' +
+							(lv.pass_stars || 1) + '⭐ ' + (last ? 'final' : 'to pass') + '</span></div>';
+				}).join('<span class="kids-pub-arrow" aria-hidden="true">→</span>') +
+				'</div>';
 		}
 		prev.innerHTML =
-			'<div class="preview-row"><span class="preview-label">Game</span><span class="preview-value">' + esc(meta.icon || '') + ' ' + esc(meta.label || state.wizard.game_type) + '</span></div>' +
-			'<div class="preview-row"><span class="preview-label">Name</span><span class="preview-value">' + esc($('kidsGameName').value || '—') + '</span></div>' +
-			'<div class="preview-row"><span class="preview-label">Theme / Grade / Subject</span><span class="preview-value">' + esc(state.wizard.theme) + ' · ' + esc(($('kidsAIGrade') || {}).value || '—') + ' · ' + esc($('kidsGameSubject').value || '—') + '</span></div>' +
-			'<div class="preview-row"><span class="preview-label">Questions</span><span class="preview-value">' + state.wizard.questions.length + ' question(s)</span></div>' +
-			levelsLine;
+			'<div class="kids-pub-kid" style="background:' + (THEME_BG[theme] || THEME_BG.jungle) + '">' +
+				'<div class="kids-pub-kid-icon" aria-hidden="true">' + esc(meta.icon || '🎮') + '</div>' +
+				'<div class="kids-pub-kid-title">' + esc(String(($('kidsGameName') || {}).value || '').trim() || 'Your game') + '</div>' +
+				'<div class="kids-pub-kid-sub">' + esc(meta.label || state.wizard.game_type || '—') + ' · ' + esc(String(grade).toUpperCase()) + (subject ? ' · ' + esc(subject) : '') + '</div>' +
+				'<div class="kids-pub-kid-count">' + questions + ' question' + (questions === 1 ? '' : 's') + '</div>' +
+				'<div class="kids-pub-kid-rules">' + rules.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' +
+			'</div>' +
+			'<p class="kids-pub-note">👀 What the kids see when they type your PIN' +
+				(theme !== (($('kidsGameMascotTheme') || {}).value || theme) ? ' · mascot ' + esc(String(($('kidsGameMascotTheme') || {}).value || theme)) : '') +
+			'</p>' +
+			levels;
 	}
+
+	/** Step 5 after a successful publish: the PIN, QR and share actions stay
+	 * INSIDE the step instead of covering it with a modal — the teacher keeps
+	 * the checklist, the preview and the code in one place. */
+	function renderPublishResult(game) {
+		var box = $('kidsPublishResult');
+		if (!box) return;
+		var pin = game.pin || '----';
+		var url = game.pin ? playUrl(game.pin) : '';
+		var meta = gameTypeMeta(game.game_type) || {};
+		box.hidden = false;
+		box.innerHTML =
+			'<div class="kids-pub-pin">' +
+				'<div class="kids-pub-pin-label">Tell your class this PIN</div>' +
+				'<div class="kids-pub-pin-code" id="kidsPublishPin">' + esc(pin) + '</div>' +
+				'<div class="kids-pub-pin-url"><a id="kidsPublishUrl" href="' + esc(url || '#') + '" target="_blank" rel="noopener">' + esc(url || '—') + '</a></div>' +
+			'</div>' +
+			'<div class="kids-pub-qr" id="kidsPublishQR"></div>' +
+			'<div class="kids-pub-actions">' +
+				'<button type="button" class="btn btn-primary" id="kidsPublishCopyBtn">📋 Copy PIN</button>' +
+				'<button type="button" class="btn btn-secondary" id="kidsPublishCopyUrlBtn">🔗 Copy link</button>' +
+				'<button type="button" class="btn btn-secondary" id="kidsPublishPrintBtn">🖨 Print card</button>' +
+				'<button type="button" class="btn btn-secondary" id="kidsPublishPreviewBtn">▶ Preview as a kid</button>' +
+				'<button type="button" class="btn btn-ghost" id="kidsPublishShareBtn">More sharing options</button>' +
+			'</div>';
+		renderPinQR($('kidsPublishQR'), url);
+		var bind = function (id, fn) { var el = $(id); if (el) el.addEventListener('click', fn); };
+		bind('kidsPublishCopyBtn', function () { copyTextToClipboard(pin, 'PIN ' + pin + ' copied'); });
+		bind('kidsPublishCopyUrlBtn', function () { if (url) copyTextToClipboard(url, 'Link copied'); });
+		bind('kidsPublishPrintBtn', function () { printKidsPinCard(); });
+		bind('kidsPublishPreviewBtn', function () { if (url) window.open(url, '_blank'); });
+		bind('kidsPublishShareBtn', function () { openKidsShareModal(game.id, game); });
+		// Publish-step championship bridge: this game, one tap, ready to join.
+		var champBox = $('kidsPublishChamp');
+		if (champBox) {
+			champBox.hidden = false;
+			champBox.innerHTML =
+				'<div class="kids-pub-champ-emoji" aria-hidden="true">🏆</div>' +
+				'<div class="kids-pub-champ-copy">' +
+					'<b>Turn it into a championship?</b>' +
+					'<span>One tap creates a Kids Championship with ' + esc(meta.label || 'this game') + ' as a challenge — you get a class code to share.</span>' +
+				'</div>' +
+				'<button type="button" class="btn btn-success" id="kidsPublishChampBtn">Make a championship 🏆</button>';
+			var champBtn = $('kidsPublishChampBtn');
+			if (champBtn) champBtn.addEventListener('click', function () {
+				var tabBtn = document.querySelector('[data-games-studio-tab="kids-championships"]');
+				if (tabBtn) tabBtn.click();
+				if (window.KidsChampionships && window.KidsChampionships.openCreate) {
+					window.KidsChampionships.openCreate({
+						gameIds: [game.id],
+						name: game.name ? game.name + ' Championship' : '',
+					});
+				} else {
+					toast('Open the 🏆 Kids Championships tab to create it', 'info');
+				}
+			});
+		}
+	}
+
+	/** One QR renderer for the share modal and the publish step. */
+	function renderPinQR(container, url) {
+		if (!container) return;
+		container.innerHTML = '';
+		if (!url) return;
+		try {
+			if (window.qrcode) {
+				var qrObj = window.qrcode(0, 'M');
+				qrObj.addData(url);
+				qrObj.make();
+				container.innerHTML = qrObj.createImgTag(4, 4);
+				return;
+			}
+		} catch (_) { /* fall through to the plain link */ }
+		container.innerHTML = '<a href="' + esc(url) + '">' + esc(url) + '</a>';
+	}
+
+	/** Hide the post-publish blocks when the wizard is opened (or reopened for
+	 * another game) so a stale PIN never lingers under a fresh draft. */
+	function resetPublishResultPanels() {
+		var result = $('kidsPublishResult');
+		if (result) { result.hidden = true; result.innerHTML = ''; }
+		var champ = $('kidsPublishChamp');
+		if (champ) { champ.hidden = true; champ.innerHTML = ''; }
+	}
+
+	/** Publish succeeded: show the PIN inline, re-render the checklist as all
+	 * green and let the footer button close the wizard. */
+	function setKidsWizardPublished(game) {
+		renderPublishResult(game);
+		renderPublishChecklist();
+		goToWizardStep(5);
+		var hint = $('kidsWizardStepHint');
+		if (hint) hint.textContent = 'Published ✓ — PIN ' + (game.pin || '----') + ' is ready to share';
+		var result = $('kidsPublishResult');
+		if (result && result.scrollIntoView) {
+			try { result.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) { /* older browsers */ }
+		}
+	}
+
 	function publishKidsGame(presetId) {
+		if (state.publishedGame) { closeKidsGameWizard(); return Promise.resolve(); }
 		var id = presetId || state.editingId || ($('kidsGameWizardId') || {}).value || null;
 		var doPublish = function (gameId) {
 			return kidsApi('POST', '/' + encodeURIComponent(gameId) + '/publish').then(function (game) {
 				state.lastPublished = game;
-				closeKidsGameWizard();
+				state.publishedGame = game;
 				renderKidsGameList();
-				openKidsShareModal(game.id, game);
+				// Stay on step 5: the PIN appears inline next to the checklist
+				// instead of a modal stacked on top of the wizard.
+				setKidsWizardPublished(game);
 				toast('Game published! PIN: ' + game.pin, 'success');
 			});
 		};
@@ -1200,20 +1481,7 @@
 				if (game.pin) urlEl.href = url;
 				else urlEl.removeAttribute('href');
 			}
-			var qr = $('kidsShareQR');
-			if (qr) {
-				qr.innerHTML = '';
-				try {
-					if (game.pin && window.qrcode) {
-						var qrObj = window.qrcode(0, 'M');
-						qrObj.addData(playUrl(game.pin));
-						qrObj.make();
-						qr.innerHTML = qrObj.createImgTag(4, 4);
-					} else if (game.pin) {
-						qr.innerHTML = '<a href="' + esc(playUrl(game.pin)) + '">' + esc(playUrl(game.pin)) + '</a>';
-					}
-				} catch (_) { qr.textContent = game.pin ? playUrl(game.pin) : ''; }
-			}
+			renderPinQR($('kidsShareQR'), game.pin ? playUrl(game.pin) : '');
 			setModal('kidsGameShareModal', true);
 		};
 		if (preloaded && preloaded.pin) { done(preloaded); return; }
@@ -1502,6 +1770,10 @@
 	window.openKidsManualEditor = openKidsManualEditor;
 	window.renderKidsManualQuestions = renderKidsManualQuestions;
 	window.updateKidsWizardPreview = updateKidsWizardPreview;
+	window.renderPublishChecklist = renderPublishChecklist;
+	window.renderPublishResult = renderPublishResult;
+	window.setKidsWizardPublished = setKidsWizardPublished;
+	window.renderPinQR = renderPinQR;
 	window.publishKidsGame = publishKidsGame;
 	window.openKidsShareModal = openKidsShareModal;
 	window.closeKidsShareModal = closeKidsShareModal;

@@ -15,6 +15,12 @@
 	var AVATARS = ['🦊', '🐸', '🐵', '🐼', '🦁', '🐯', '🐨', '🐷', '🐰', '🐙'];
 	var BUBBLE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
 	var MASCOT_EMOJI = { idle: '🦊', happy: '😄', encourage: '💪', excited: '🤩', amazed: '😲', celebrate: '🎉' };
+	/* Mirrors the teacher-side icon map: used for the hub's "Play again" chips. */
+	var GAME_TYPE_ICONS = {
+		'bubble-pop': '🫧', 'star-collector': '🌟', 'leap-frog': '🐸',
+		'sort-it-out': '🧺', 'pair-party': '🎴', 'build-a-tower': '🏗️',
+		'magic-words': '🪄', 'code-explorer': '🔭', 'math-quest': '🧮',
+	};
 	/* Kid themes (mirrors src/shared KIDS_THEMES): each gets its own CSS
 	 * presentation world on body.kid-theme-<name> — scenery, palette and
 	 * floating decorations match the mascot theme the teacher picked. */
@@ -109,6 +115,11 @@
 	};
 
 	/* ── Client-side answer check (mirror of backend, plan §12) ──────────── */
+	function escapeHtml(s) {
+		return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+			return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+		});
+	}
 	function splitTokens(raw) {
 		return String(raw == null ? '' : raw).split(/[|,;]/).map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
 	}
@@ -252,11 +263,18 @@
 		init: function () {
 			MascotManager.el = document.getElementById('kidMascot');
 			this.pin = this.pinFromUrl();
+			// The hub's sound toggle is written to the same flag, so a kid who
+			// turned sound off at the entrance is not blasted by the first blip.
+			try { SoundManager.muted = localStorage.getItem('kidSoundMuted') === '1'; } catch (_) { /* ignore */ }
 			var soundBtn = document.getElementById('kidSoundBtn');
-			if (soundBtn) soundBtn.addEventListener('click', function () {
-				var muted = SoundManager.toggle();
-				soundBtn.textContent = muted ? '🔇' : '🔊';
-			});
+			if (soundBtn) {
+				soundBtn.textContent = SoundManager.muted ? '🔇' : '🔊';
+				soundBtn.addEventListener('click', function () {
+					var muted = SoundManager.toggle();
+					soundBtn.textContent = muted ? '🔇' : '🔊';
+					try { localStorage.setItem('kidSoundMuted', muted ? '1' : '0'); } catch (_) { /* ignore */ }
+				});
+			}
 			if (!this.pin) {
 				this.screen('<div class="kid-card"><h2>Oops! 😅</h2><p class="hint">No game PIN found.</p><a class="kid-btn" href="/kids/">Back</a></div>');
 				return;
@@ -280,9 +298,141 @@
 			var q = new URLSearchParams(window.location.search).get('tournament');
 			return q ? String(q) : null;
 		},
+		/** The championship this run counts for: the lobby passes it in the
+		 * URL, and when the kid instead walks in through the hub and picks a
+		 * championship on the offer screen, the choice is stashed for the rest
+		 * of the visit. Both paths must resolve here — this single function
+		 * feeds the session PATCH, the results card and the Math Quest bypass,
+		 * so nothing downstream needs to know which door was used. */
 		championshipFromUrl: function () {
 			var q = new URLSearchParams(window.location.search).get('championship');
-			return q ? String(q) : null;
+			if (q) return String(q);
+			if (window.KidsStore && window.KidsStore.run) return window.KidsStore.run();
+			try { return sessionStorage.getItem('kidChampionshipRun') || null; } catch (_) { return null; }
+		},
+		/** `game_ids` is a JSON string in the DB and an array after the service
+		 * parses it — accept both rather than trusting the transport. */
+		championshipGameIds: function (c) {
+			var raw = c && c.game_ids;
+			if (Array.isArray(raw)) return raw.map(String);
+			if (typeof raw === 'string' && raw) {
+				try {
+					var parsed = JSON.parse(raw);
+					return Array.isArray(parsed) ? parsed.map(String) : [];
+				} catch (_) { return []; }
+			}
+			return [];
+		},
+		/** Welcome-line text for a championship run: name it when we know it,
+		 * so the kid sees where the points are going. */
+		championshipBadge: function () {
+			var name = this.champInfo && this.champInfo.name;
+			var emoji = (this.champInfo && this.champInfo.emoji) || '🏆';
+			return name
+				? 'Counts for ' + escapeHtml(emoji + ' ' + name) + ' — every point helps! ⭐'
+				: 'Kids Championship ' + emoji + ' — this run counts for your best score, so every point helps!';
+		},
+		/** Active championships this game is a challenge of. Runs before the
+		 * first question so the kid can opt in; any failure (offline, stale
+		 * token, no login) resolves to [] so play is never blocked. */
+		detectChampionship: function () {
+			var self = this;
+			var token = this.validStoredToken();
+			if (!token || !this.game || !this.game.id) return Promise.resolve([]);
+			return fetch(API + '/championships/browse?status=active&limit=100', {
+				headers: { 'Authorization': 'Bearer ' + token },
+			})
+				.then(function (r) { return r.ok ? r.json() : null; })
+				.then(function (payload) {
+					var rows = payload && (payload.data || payload.items) ? (payload.data || payload.items) : (Array.isArray(payload) ? payload : []);
+					return rows
+						.filter(function (c) { return self.championshipGameIds(c).indexOf(String(self.game.id)) >= 0; })
+						.map(function (c) {
+							return {
+								id: String(c.id),
+								name: c.name || 'Championship',
+								emoji: c.emoji || '🏆',
+								code: c.code ? String(c.code).toUpperCase() : '',
+							};
+						});
+				})
+				.catch(function () { return []; });
+		},
+		/** Name/emoji of a championship we only know by id. The lobby usually
+		 * stored it a moment ago (same visit), so this is usually free; the
+		 * public `/view/:id` endpoint covers every other case. */
+		resolveChampInfo: function (id) {
+			var self = this;
+			var stored = window.KidsStore && window.KidsStore.championship ? window.KidsStore.championship() : null;
+			if (stored && stored.id === String(id)) {
+				this.champInfo = stored;
+				return Promise.resolve(stored);
+			}
+			return fetch('/api/v1/kids/championships/view/' + encodeURIComponent(id))
+				.then(function (r) { return r.ok ? r.json() : null; })
+				.then(function (c) {
+					if (!c || !c.id) return null;
+					var info = { id: String(c.id), name: c.name || '', emoji: c.emoji || '🏆', code: c.code ? String(c.code).toUpperCase() : '' };
+					self.champInfo = info;
+					if (window.KidsStore && window.KidsStore.setChampionship) window.KidsStore.setChampionship(info);
+					return info;
+				})
+				.catch(function () { return null; });
+		},
+		/** The one funnel from "we know who is playing" to the first question:
+		 * a championship this game belongs to may claim the run first. */
+		afterIdentity: function () {
+			var self = this;
+			var id = this.championshipFromUrl();
+			if (id) {
+				this.resolveChampInfo(id).then(function () { self.createSession(); });
+				return;
+			}
+			this.detectChampionship().then(function (list) {
+				if (!list.length) { self.createSession(); return; }
+				self.offerChampionship(list);
+			});
+		},
+		/** "This counts for 🏆 Jungle Cup!" — one championship confirms, several
+		 * are picked from chips, and "Just play" is always one tap away. */
+		offerChampionship: function (list) {
+			var self = this;
+			MascotManager.set('excited');
+			var single = list.length === 1 ? list[0] : null;
+			var html = '<div class="kid-card kid-champ-offer">' +
+				'<div class="kid-champ-offer-emoji" aria-hidden="true">' + escapeHtml(single ? single.emoji : '🏆') + '</div>' +
+				(single
+					? '<h2>This game counts for<br>' + escapeHtml(single.name) + '!</h2>' +
+						'<p class="hint">Play it and your best score goes on the podium. Every point helps! ⭐</p>'
+					: '<h2>Which championship is this for?</h2>' +
+						'<p class="hint">This game is a challenge in ' + list.length + ' championships. Pick one — or just play! 🎮</p>') +
+				(single
+					? '<button class="kid-btn green" id="kidChampYes">Yes, count my score 🏆</button>'
+					: '<div class="kid-champ-offer-list">' + list.map(function (c, i) {
+						return '<button class="kid-champ-chip" data-i="' + i + '">' + escapeHtml(c.emoji) + ' ' + escapeHtml(c.name) + '</button>';
+					}).join('') + '</div>') +
+				'<button class="kid-btn ghost" id="kidChampNo">' + (single ? 'Just play 🎮' : 'Not now 🎮') + '</button>' +
+				'</div>';
+			this.screen(html);
+			var pick = function (c) {
+				if (window.KidsStore && window.KidsStore.setRun) window.KidsStore.setRun(c.id);
+				else { try { sessionStorage.setItem('kidChampionshipRun', c.id); } catch (_) { /* ignore */ } }
+				self.champInfo = c;
+				if (window.KidsStore && window.KidsStore.setChampionship) window.KidsStore.setChampionship(c);
+				SoundManager.play('celebration');
+				self.createSession();
+			};
+			var yes = document.getElementById('kidChampYes');
+			if (yes && single) yes.addEventListener('click', function () { pick(single); });
+			var listEl = document.querySelector('.kid-champ-offer-list');
+			if (listEl) listEl.addEventListener('click', function (e) {
+				var b = e.target.closest('.kid-champ-chip');
+				if (b) pick(list[Number(b.getAttribute('data-i'))]);
+			});
+			document.getElementById('kidChampNo').addEventListener('click', function () {
+				if (window.KidsStore && window.KidsStore.setRun) window.KidsStore.setRun(null);
+				self.createSession();
+			});
 		},
 		/** Logged-in students play linked (results count); else anonymous PIN.
 		 * Student portal copies are checked first so a shared browser never
@@ -473,6 +623,15 @@
 					document.getElementById('kidGameSub').textContent = (game.grade ? String(game.grade).toUpperCase() + ' · ' : '') + (game.subject || 'Have fun! 🎉');
 					self.applyTheme();
 					MascotManager.set('idle');
+					// Feed the hub's "Play again" chips with the real name and
+					// icon — the hub can only know the PIN when the kid types it.
+					if (window.KidsStore && window.KidsStore.rememberGame) {
+						window.KidsStore.rememberGame({
+							pin: self.pin,
+							name: game.name || '',
+							icon: GAME_TYPE_ICONS[game.game_type] || '🎮',
+						});
+					}
 					self.welcome();
 				})
 				.catch(function () {
@@ -485,16 +644,19 @@
 			// Logged-in players skip name entry entirely: the account name
 			// is used and the server links results by token.
 			if (this.validStoredToken()) {
-				var accountName = this.resolveAccountName();
+				var remembered = window.KidsStore && window.KidsStore.player ? window.KidsStore.player() : null;
 				var avatar = '🦊';
 				try { avatar = localStorage.getItem('kidAvatar') || avatar; } catch (_) { /* ignore */ }
-				self.player = { name: accountName, avatar: avatar };
-				self.createSession();
+				self.player = {
+					name: this.resolveAccountName() || (remembered && remembered.name) || '',
+					avatar: (remembered && remembered.avatar) || avatar,
+				};
+				this.afterIdentity();
 				return;
 			}
 			var badges = '';
 			if (this.tournamentFromUrl()) badges += '<p class="hint">Tournament mode 🏆 — your score feeds the leaderboard!</p>';
-			if (this.championshipFromUrl()) badges += '<p class="hint">Kids Championship 🏆 — this run counts for your best score, so every point helps!</p>';
+			if (this.championshipFromUrl()) badges += '<p class="hint">' + this.championshipBadge() + '</p>';
 			// Note: logged-in players never see this form — welcome()
 			// auto-starts them above, so no "logged in" badge is needed.
 			var html = '<div class="kid-card"><h2>Hi! 👋</h2>' +
@@ -516,24 +678,25 @@
 				var name = String(document.getElementById('kidName').value || '').trim();
 				if (!name) { document.getElementById('kidWelcomeErr').textContent = 'Tell me your name so I can cheer for you! 📣'; return; }
 				try { localStorage.setItem('kidAvatar', chosen); } catch (_) { /* ignore */ }
+				if (window.KidsStore && window.KidsStore.setPlayer) window.KidsStore.setPlayer({ name: name, avatar: chosen });
 				self.player = { name: name, avatar: chosen };
-				self.createSession();
+				self.afterIdentity();
 			};
 			document.getElementById('kidStart').addEventListener('click', start);
 			document.getElementById('kidName').addEventListener('keydown', function (e) { if (e.key === 'Enter') start(); });
-			// Championship flow: pre-fill the lobby identity so the kid only
-			// has to press Start (no retyping their name + avatar).
-			if (this.championshipFromUrl()) {
-				try {
-					var pre = JSON.parse(localStorage.getItem('kidChampionshipPlayer') || 'null');
-					if (pre && pre.name) {
-						document.getElementById('kidName').value = pre.name;
-						if (pre.avatar) {
-							chosen = pre.avatar;
-							document.querySelectorAll('.kid-avatar').forEach(function (x) { x.classList.toggle('selected', x.dataset.a === pre.avatar); });
-						}
-					}
-				} catch (_) { /* ignore */ }
+			// Pre-fill the remembered player so a kid never types their name
+			// twice: the hub, the championship lobby and this form all read
+			// the same store (with the lobby's legacy key as a fallback).
+			var remembered = window.KidsStore && window.KidsStore.player ? window.KidsStore.player() : null;
+			if (!remembered) {
+				try { remembered = JSON.parse(localStorage.getItem('kidChampionshipPlayer') || 'null'); } catch (_) { /* ignore */ }
+			}
+			if (remembered && remembered.name) {
+				document.getElementById('kidName').value = remembered.name;
+			}
+			if (remembered && remembered.avatar && AVATARS.indexOf(remembered.avatar) >= 0) {
+				chosen = remembered.avatar;
+				document.querySelectorAll('.kid-avatar').forEach(function (x) { x.classList.toggle('selected', x.dataset.a === remembered.avatar); });
 			}
 		},
 		createSession: function () {
@@ -740,17 +903,22 @@
 			}
 			var stars = Number(res.stars) || 0;
 			var total = (this.game.questions || []).length;
+			// Score is in POINTS, questions are in COUNT: they only coincide
+			// when every question is worth 1. Use the server's total when it
+			// sent one, and fall back to summing the deck locally.
+			var totalPoints = Number(res.totalPoints) || (this.game.questions || []).reduce(function (s, q) { return s + (Number(q.points) || 1); }, 0);
 			MascotManager.set('celebrate');
 			SoundManager.play('celebration');
 			this.starsRain(60);
 			var badge = stars >= 3 ? 'star-master' : 'finish';
 			var self = this;
-			var pct = total ? Math.min(100, Math.round((this.score / total) * 100)) : 0;
+			var earned = Number(res.score) || 0;
+			var pct = totalPoints ? Math.min(100, Math.round((earned / totalPoints) * 100)) : 0;
 			var html = '<div class="kid-card kid-win">' +
 				'<div class="kid-win-glow" aria-hidden="true"></div>' +
 				'<div class="kid-win-medal" aria-hidden="true">🏅</div>' +
 				'<p class="kid-win-kicker">Quest complete!</p>' +
-				'<h2 class="kid-win-title">Well done, ' + escapeName(this.player.name) + '!</h2>' +
+				'<h2 class="kid-win-title">Well done, ' + escapeHtml(this.player.name) + '!</h2>' +
 				'<div class="kid-stars-big kid-win-stars" role="img" aria-label="' + stars + ' of 3 stars">' +
 					[0, 1, 2].map(function (i) {
 						return '<span class="' + (i < stars ? 'lit pop' : 'dim') + '" style="--pop-i:' + i + '">⭐</span>';
@@ -767,8 +935,9 @@
 					'</svg>' +
 					'<div class="kid-win-pct"><b>' + pct + '%</b></div>' +
 				'</div>' +
-				'<p class="kid-win-caption">Score: <b>' + res.score + '</b> / ' + total + ' questions</p>' +
-				championshipStrip(res) +
+				'<p class="kid-win-caption">Score: <b>' + earned + '</b> / ' + totalPoints + ' points' +
+					(total !== totalPoints ? ' · ' + total + ' question' + (total === 1 ? '' : 's') : '') + '</p>' +
+				championshipPodium(res) +
 				'<img class="kid-badge" id="kidBadge" alt="Badge" style="display:none" />' +
 				'<div class="kid-win-actions">' +
 					'<button class="kid-btn green kid-win-cta" id="kidAgain">Play Again 🔁</button>' +
@@ -788,25 +957,65 @@
 				self.index = 0; self.answers = []; self.score = 0;
 				self.createSession();
 			});
-			function championshipStrip(res) {
+			/** The champion's card on the results screen: what this run was
+			 * worth, where it put the kid, and who they are chasing. Built
+			 * from `res.championship`, which the server only sends when the
+			 * run actually counted. */
+			function championshipPodium(res) {
 				var ch = res.championship;
-				if (!ch || !ch.recorded) return '';
-				var my = ch.my;
-				var back = '/kids/championship?id=' + encodeURIComponent(self.championshipFromUrl());
-				var rank = my
-					? 'You are <b>#' + my.rank + '</b>' +
-						(my.rank === 1 ? ' — champion of the championship! 🏆' : ' of ' + (ch.leaderboard ? ch.leaderboard.length : '?') + ' players')
-					: '';
-				return '<div class="kid-champ-strip">🏆 <b>+' + ch.points + ' pts</b>' +
-					(ch.improved ? ' — your best yet! 🎉' : '') +
-					'<br>' + rank + '</div>' +
-					'<a class="kid-btn" href="' + escapeName(back) + '">Back to Championship 🏆</a>';
-			}
-
-			function escapeName(s) {
-				return String(s).replace(/[&<>"']/g, function (c) {
-					return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-				});
+				var runId = self.championshipFromUrl();
+				var back = '/kids/championship?id=' + encodeURIComponent(runId || '');
+				// A championship run the server refused to record has to say so:
+				// silence looks exactly like a lost score to a nine-year-old.
+				if (!ch || !ch.recorded) {
+					if (!runId) return '';
+					return '<div class="kid-champ-podium missed">' +
+						'<div class="kid-podium-head"><span aria-hidden="true">🎗️</span><b>Not counted this time</b></div>' +
+						'<p class="kid-podium-line">Your stars are saved! ⭐ Ask your teacher to check the championship.</p>' +
+						'<a class="kid-btn ghost" href="' + escapeHtml(back) + '">Back to Championship 🏆</a></div>';
+				}
+				var my = ch.my || null;
+				var board = Array.isArray(ch.leaderboard) ? ch.leaderboard : [];
+				var rank = my ? Number(my.rank) || 0 : 0;
+				var medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🎖️';
+				var players = board.length || (my ? 1 : 0);
+				var champName = (self.champInfo && self.champInfo.name) || ch.name || '';
+				var line = rank === 1
+					? '<b>You are #1 — champion of ' + (champName ? escapeHtml(champName) : 'the championship') + '! 🏆</b>'
+					: rank
+						? 'You are <b>#' + rank + '</b> of ' + players + ' player' + (players === 1 ? '' : 's') + ' ' + medal
+						: 'Your score is on the board! ' + medal;
+				// Who is just ahead, who is right behind — the whole point of a
+				// championship when you are nine. Only rendered when there is
+				// somebody else to compare with.
+				var rows = '';
+				if (rank) {
+					[rank - 1, rank, rank + 1].forEach(function (r) {
+						if (r < 1) return;
+						var row = null;
+						for (var i = 0; i < board.length; i++) {
+							if (Number(board[i].rank) === r) { row = board[i]; break; }
+						}
+						if (!row) return;
+						rows += '<div class="kid-podium-row' + (r === rank ? ' me' : '') + '">' +
+							'<span class="pos">' + (r === rank ? medal : '#' + r) + '</span>' +
+							'<span class="who">' + escapeHtml(r === rank ? 'You' : (row.player_name || '')) + '</span>' +
+							'<span class="pts">' + (Number(row.points) || 0) + ' pts</span></div>';
+					});
+				}
+				// Keep the hub's shortcut fresh: it shows rank + points in one tap.
+				if (my && window.KidsStore && window.KidsStore.setStanding) {
+					window.KidsStore.setStanding(my.rank, my.points);
+				}
+				return '<div class="kid-champ-podium">' +
+					'<div class="kid-podium-head"><span aria-hidden="true">🏆</span><b>+' + (Number(ch.points) || 0) + ' pts</b>' +
+						(ch.improved ? '<span class="kid-podium-best">your best yet! 🎉</span>' : '') + '</div>' +
+					'<p class="kid-podium-line">' + line + '</p>' +
+					(rows ? '<div class="kid-podium-rows">' + rows + '</div>' : '') +
+					'<div class="kid-podium-actions">' +
+						'<a class="kid-btn" href="' + escapeHtml(back) + '">Back to Championship 🏆</a>' +
+						'<a class="kid-btn ghost" href="/kids/">More games 🎮</a>' +
+					'</div></div>';
 			}
 		},
 		/**

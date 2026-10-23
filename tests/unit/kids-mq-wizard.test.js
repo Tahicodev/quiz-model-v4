@@ -68,9 +68,14 @@ describe('Math Quest wizard levels editor', () => {
 		expect(rows2.length).toBe(2);
 		const chips = [...document.querySelectorAll('#kidsMqLevelsList .kids-mq-level .kids-mq-chip')];
 		expect(chips.length).toBe(3); // no chips lost
-		// preview sees the new plan
+		// preview sees the new plan as the kid's level path
 		window.updateKidsWizardPreview();
-		expect(document.getElementById('kidsWizardPreview').textContent).toContain('2 level(s)');
+		const preview = document.getElementById('kidsWizardPreview');
+		const previewLevels = [...preview.querySelectorAll('.kids-pub-level')];
+		expect(previewLevels.length).toBe(2);
+		expect(previewLevels.map((l) => l.querySelector('.kids-pub-level-name').textContent)).toEqual(['Level 1', 'Level 2']);
+		expect(previewLevels[0].querySelector('.kids-pub-level-meta').textContent).toContain('to pass');
+		expect(previewLevels[1].querySelector('.kids-pub-level-meta').textContent).toContain('final');
 	});
 
 	it('split and merge keep every question assigned exactly once', () => {
@@ -98,7 +103,79 @@ describe('Math Quest wizard levels editor', () => {
 		expect(chips.length).toBe(3);
 	});
 
+	it('star picker replaces the repeated "to unlock next" option list', () => {
+		window.openKidsGameWizard();
+		window.selectKidsGameType('math-quest');
+		document.getElementById('kidsGameName').value = 'Dev Game';
+		window.KidsGames.state.wizard.questions = [
+			{ id: 'q1', type: 'multiple-choice', text: 'A?', options_json: '[]', answer: 'x' },
+			{ id: 'q2', type: 'multiple-choice', text: 'B?', options_json: '[]', answer: 'y' },
+			{ id: 'q3', type: 'multiple-choice', text: 'C?', options_json: '[]', answer: 'z' },
+		];
+		window.kidsWizardNextStep(); window.kidsWizardNextStep(); window.kidsWizardNextStep();
+		const list = document.getElementById('kidsMqLevelsList');
+		// the <select> that printed three near-identical rows is gone (the
+		// Artwork <select> stays — it is the only other option list here)
+		expect(list.querySelectorAll('select[data-field="pass_stars"]').length).toBe(0);
+		expect(list.innerHTML).not.toContain('to unlock next');
+		// one radiogroup per level, three star radios inside it
+		const group = list.querySelector('[role="radiogroup"]');
+		expect(group).toBeTruthy();
+		const radios = group.querySelectorAll('input[type="radio"]');
+		expect([...radios].map((r) => r.value)).toEqual(['1', '2', '3']);
+		// star glyphs are decorative; a text label carries the real name
+		expect([...group.querySelectorAll('.sr-only')].map((n) => n.textContent))
+			.toEqual(['1 star', '2 stars', '3 stars']);
+		// a single level IS the final level, so it must not promise "next"
+		expect(group.getAttribute('aria-label')).toContain('final level');
+		expect(list.querySelector('.kids-mq-summary').textContent).toContain('final level');
+		// picking "2 stars" writes through to the plan and repaints the pill
+		group.querySelector('input[value="2"]').click();
+		expect(window.KidsGames.state.wizard.mqLevels[0].pass_stars).toBe(2);
+		const on = group.querySelectorAll('.kids-mq-star.is-on');
+		expect(on.length).toBe(1);
+		expect(on[0].querySelector('input').value).toBe('2');
+		// a non-final level is labelled as an unlock threshold instead
+		document.getElementById('kidsMqAddLevel').click();
+		const groups = document.querySelectorAll('#kidsMqLevelsList [role="radiogroup"]');
+		expect(groups.length).toBe(2);
+		expect(groups[0].getAttribute('aria-label')).toContain('Opens the next level at');
+		expect(groups[1].getAttribute('aria-label')).toContain('final level');
+		// the earlier choice survives the re-render
+		expect(window.KidsGames.state.wizard.mqLevels[0].pass_stars).toBe(2);
+	});
+
+	it('split then merge renumbers auto names instead of leaving "Level 1" twice', () => {
+		window.openKidsGameWizard();
+		window.selectKidsGameType('math-quest');
+		document.getElementById('kidsGameName').value = 'Dev Game';
+		window.KidsGames.state.wizard.questions = [
+			{ id: 'q1', type: 'multiple-choice', text: 'A?', options_json: '[]', answer: 'x' },
+			{ id: 'q2', type: 'multiple-choice', text: 'B?', options_json: '[]', answer: 'y' },
+			{ id: 'q3', type: 'multiple-choice', text: 'C?', options_json: '[]', answer: 'z' },
+		];
+		window.kidsWizardNextStep(); window.kidsWizardNextStep(); window.kidsWizardNextStep();
+		const names = () => [...document.querySelectorAll('#kidsMqLevelsList .kids-mq-name')].map((el) => el.value);
+		const rows = () => [...document.querySelectorAll('#kidsMqLevelsList .kids-mq-level')];
+		// 3 levels → auto names Level 1/2/3
+		rows()[0].querySelector('[data-act="split"]').click();
+		rows()[1].querySelector('[data-act="split"]').click();
+		expect(names()).toEqual(['Level 1', 'Level 2', 'Level 3']);
+		// merging the middle one used to leave a gap: "Level 1" + "Level 3"
+		rows()[1].querySelector('[data-act="merge"]').click();
+		expect(rows().length).toBe(2);
+		expect(names()).toEqual(['Level 1', 'Level 2']);
+		// a level the teacher renamed keeps its name when the plan shifts
+		const first = document.querySelector('#kidsMqLevelsList .kids-mq-name');
+		first.value = 'Jungle Trail';
+		first.dispatchEvent(new window.Event('input'));
+		rows()[1].querySelector('[data-act="merge"]').click();
+		expect(window.KidsGames.state.wizard.mqLevels.length).toBe(1);
+		expect(names()).toEqual(['Jungle Trail']);
+	});
+
 	it('edit hydration: existing 2-level plan keeps stable ids and names', async () => {
+
 		const game = {
 			id: 'game-abc', game_type: 'math-quest', theme: 'jungle', grade: 'cp', name: 'Saved',
 			questions_json: JSON.stringify([

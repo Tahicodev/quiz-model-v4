@@ -28,11 +28,11 @@ html[data-theme='dark'] {
 	--bg-surface: #101a2c;
 	--bg-surface-alt: #17233a;
 
-	--text-main: #1e29e8;
+	--text-main: #e6edf7;
 	--text-secondary: #a8b7cd;
 	--text-muted: #74839c;
 	--text-inverted: #ffffff;
-	--text-primary: #1e29e8;
+	--text-primary: #e6edf7;
 
 	--border-color: #223047;
 	--border-focus: #60a5fa;
@@ -335,9 +335,14 @@ html[data-theme='dark'] .class-game-chip .class-game-name {
 }
 
 /* Setup wizard panels */
-html[data-theme='dark'] .sw-panel,
-html[data-theme='dark'] .sw-info-item {
+html[data-theme='dark'] .sw-panel {
 	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+/* Light mode gives these #f8fafc on a white panel; keep the same step down. */
+html[data-theme='dark'] .sw-info-item {
+	background: var(--bg-surface-alt);
 	border-color: var(--border-color);
 }
 
@@ -384,6 +389,31 @@ html[data-theme='dark'] .sw-copy-btn {
 
 html[data-theme='dark'] .sw-step:hover {
 	background: var(--bg-surface-alt);
+}
+
+/* The three setup-wizard containers are painted #fff / #f8fafc in admin.css
+   and are not remapped anywhere else. Now that --text-main is a light colour
+   their inherited text would land light-on-white, so give them the same dark
+   surfaces their inner panels already use. */
+html[data-theme='dark'] #setupWizardModal .sw-modal-content {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] #setupWizardModal .sw-steps {
+	background: var(--bg-body);
+	border-right-color: var(--border-color);
+}
+
+html[data-theme='dark'] #setupWizardModal .sw-modal-footer {
+	background: var(--bg-surface);
+	border-top-color: var(--border-color);
+}
+
+/* The warning toast keeps its amber surface in dark mode, so its label has to
+   stay dark rather than inherit the now-light --text-main. */
+html[data-theme='dark'] .enhanced-toast-warning {
+	color: #1e293b;
 }
 
 /* Quick-start / tournament panels */

@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>🧸 Kids Games — Play</title>
-<link rel="stylesheet" href="/kids/kids-player.css?v=2026-10-23-mq15" />
+<link rel="stylesheet" href="/kids/kids-player.css?v=2026-10-23-hub2" />
 </head>
 <body class="kid-body">
 <div class="kid-wrap">
@@ -25,8 +25,11 @@
 	<div id="kidScreen"></div>
 </div>
 <div class="kid-stars-rain" id="kidStarsRain" hidden></div>
+<!-- Shared kid identity/championship store first: the engine reads it for the
+     remembered player and for the championship a run counts for. -->
+<script src="/kids/kids-store.js?v=2026-10-23-hub1"></script>
 <!-- Engine first: it owns the window.KidsPlayer registry the games below register into. -->
-		<script src="/kids/kids-player.js?v=2026-10-23-mq13"></script>
+		<script src="/kids/kids-player.js?v=2026-10-23-hub1"></script>
 <script src="/kids/games/BubblePopGame.js"></script>
 <script src="/kids/games/StarCollectorGame.js"></script>
 <script src="/kids/games/LeapFrogGame.js"></script>

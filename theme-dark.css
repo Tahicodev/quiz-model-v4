@@ -5464,6 +5464,40 @@ html[data-theme='dark'] .kids-wizard-preview {
 }
 html[data-theme='dark'] .kids-wizard-preview .preview-label { color: var(--text-secondary); }
 html[data-theme='dark'] .kids-wizard-preview .preview-value { color: var(--text-main); }
+/* Step 5 "Ready to publish?" — admin.css styles the checklist light-first;
+   without these the rows keep near-white fills inside the dark modal. The
+   kid preview and the inline PIN keep their own saturated palettes on
+   purpose: they are imitations of the child's screen. */
+html[data-theme='dark'] .kids-pub-checklist {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-pub-check { border-bottom-color: var(--border-color); }
+html[data-theme='dark'] .kids-pub-check-label { color: var(--text-main); }
+html[data-theme='dark'] .kids-pub-check-value { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-pub-sum,
+html[data-theme='dark'] .kids-pub-note { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-pub-flag.ok { background: rgba(34, 197, 94, 0.22); color: #86efac; }
+html[data-theme='dark'] .kids-pub-flag.wait { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+html[data-theme='dark'] .kids-pub-level {
+	background: rgba(79, 70, 229, 0.18);
+	border-color: rgba(79, 70, 229, 0.4);
+}
+html[data-theme='dark'] .kids-pub-level-name { color: #c7d2fe; }
+html[data-theme='dark'] .kids-pub-level-meta { color: #a5b4fc; }
+html[data-theme='dark'] .kids-pub-result {
+	background: rgba(6, 95, 70, 0.35);
+	border-color: rgba(52, 211, 153, 0.55);
+}
+html[data-theme='dark'] .kids-pub-pin-label { color: #6ee7b7; }
+html[data-theme='dark'] .kids-pub-pin-code { color: #a7f3d0; }
+html[data-theme='dark'] .kids-pub-pin-url a { color: #6ee7b7; }
+html[data-theme='dark'] .kids-pub-champ {
+	background: rgba(245, 158, 11, 0.14);
+	border-color: rgba(245, 158, 11, 0.5);
+}
+html[data-theme='dark'] .kids-pub-champ-copy b { color: #fcd34d; }
+html[data-theme='dark'] .kids-pub-champ-copy span { color: var(--text-secondary); }
 html[data-theme='dark'] .kw-count-pill {
 	background: rgba(79, 70, 229, 0.25);
 	color: #c7d2fe;
@@ -5476,6 +5510,60 @@ html[data-theme='dark'] .kids-share-game-icon { background: rgba(79, 70, 229, 0.
 html[data-theme='dark'] .kids-share-game-text strong { color: var(--text-main); }
 html[data-theme='dark'] .kids-share-game-text small { color: var(--text-secondary); }
 html[data-theme='dark'] .kids-share-steps { color: var(--text-secondary); }
+/* Math Quest adventure-level editor (step 4). admin.css styles it light-first,
+   so without these the cards keep a near-white background inside the dark
+   modal and the Split/Merge pills render blank (white text on white fill). */
+html[data-theme='dark'] .kids-mq-level {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-mq-level:hover {
+	border-color: rgba(79, 70, 229, 0.55);
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+html[data-theme='dark'] .kids-mq-control-label { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-mq-star-group {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-mq-star:hover { background: var(--bg-surface-alt); }
+html[data-theme='dark'] .kids-mq-star.is-on {
+	background: rgba(79, 70, 229, 0.3);
+	border-color: rgba(129, 140, 248, 0.6);
+}
+html[data-theme='dark'] .kids-mq-chip {
+	background: rgba(79, 70, 229, 0.22);
+	border-color: rgba(129, 140, 248, 0.4);
+	color: #c7d2fe;
+}
+html[data-theme='dark'] .kids-mq-chip-empty {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-muted);
+}
+html[data-theme='dark'] .kids-mq-act {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .kids-mq-act:hover {
+	border-color: #4f46e5;
+	background: rgba(79, 70, 229, 0.2);
+	color: #c7d2fe;
+}
+html[data-theme='dark'] .kids-mq-act-danger:hover {
+	border-color: rgba(239, 68, 68, 0.6);
+	background: rgba(239, 68, 68, 0.15);
+	color: #fca5a5;
+}
+html[data-theme='dark'] .kids-mq-summary,
+html[data-theme='dark'] .kids-mq-levels-hint { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-mq-reset-btn {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .kids-mq-reset-btn:hover { border-color: #4f46e5; color: #c7d2fe; }
 /* Attribution badges on dark. */
 html[data-theme='dark'] .q-owner-badge {
 	background: var(--bg-surface-alt);

@@ -3653,7 +3653,99 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	color: #fff;
 }
 
-/* Wizard Preview */
+/* Step 5 — "Ready to publish?": readiness checklist, kid preview, inline PIN.
+   Same slate + indigo language as the rest of the wizard; the kid preview is
+   the only intentionally saturated block, because it imitates the child's UI. */
+.kids-pub { display: flex; flex-direction: column; gap: 16px; }
+
+.kids-pub-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.kids-pub-flag { font-size: .82rem; font-weight: 800; border-radius: 999px; padding: 4px 12px; white-space: nowrap; }
+.kids-pub-flag.ok { background: #dcfce7; color: #166534; }
+.kids-pub-flag.wait { background: #fef3c7; color: #92400e; }
+.kids-pub-sum { color: #64748b; font-size: .9rem; }
+
+.kids-pub-checklist {
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	padding: 16px 18px;
+}
+.kids-pub-check { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px dashed #e2e8f0; flex-wrap: wrap; }
+.kids-pub-check:last-child { border-bottom: none; }
+.kids-pub-check-mark {
+	flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+	display: flex; align-items: center; justify-content: center;
+	font-weight: 800; font-size: .9rem;
+}
+.kids-pub-check.ok .kids-pub-check-mark { background: #dcfce7; color: #166534; }
+.kids-pub-check.todo .kids-pub-check-mark { background: #fef3c7; color: #92400e; }
+.kids-pub-check-label { font-weight: 700; color: #334155; min-width: 130px; }
+.kids-pub-check-value { color: #475569; flex: 1; min-width: 160px; }
+.kids-pub-fix { flex: 0 0 auto; font-size: .85rem; }
+.kids-pub-check.todo .kids-pub-fix { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+
+/* Kid preview: the one card that shows the game through a child's eyes. */
+.kids-wizard-preview.kids-pub-preview { padding: 16px; }
+.kids-pub-kid {
+	border-radius: 18px; padding: 22px 20px; text-align: center; color: #fff;
+	text-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+	box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .35);
+}
+.kids-pub-kid-icon { font-size: 3rem; line-height: 1; }
+.kids-pub-kid-title { font-size: 1.35rem; font-weight: 800; margin-top: 6px; }
+.kids-pub-kid-sub { font-size: .92rem; opacity: .95; margin-top: 2px; }
+.kids-pub-kid-count {
+	display: inline-block; margin-top: 10px; background: rgba(255, 255, 255, .92); color: #1e293b;
+	border-radius: 999px; padding: 4px 14px; font-weight: 800; font-size: .88rem; text-shadow: none;
+}
+.kids-pub-kid-rules { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+.kids-pub-kid-rules span {
+	background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .5);
+	border-radius: 999px; padding: 4px 12px; font-size: .82rem; font-weight: 700;
+}
+.kids-pub-note { color: #64748b; font-size: .85rem; margin: 12px 0 0; text-align: center; }
+.kids-pub-levels { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+.kids-pub-level {
+	background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 12px;
+	padding: 8px 12px; text-align: left; min-width: 120px;
+}
+.kids-pub-level-name { display: block; font-weight: 700; color: #312e81; font-size: .92rem; }
+.kids-pub-level-meta { display: block; color: #4338ca; font-size: .8rem; }
+.kids-pub-arrow { color: #94a3b8; font-weight: 800; }
+
+/* Both panels below carry the `hidden` attribute until the game is published.
+   Their own `display: flex` outranks the UA's `[hidden]` rule, which left two
+   empty bordered boxes sitting under the kid preview on step 5. */
+.kids-pub-result[hidden], .kids-pub-champ[hidden] { display: none !important; }
+
+/* Inline PIN block — replaces stacking the share modal over the wizard. */
+.kids-pub-result {
+	background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+	border: 2px solid #34d399; border-radius: 14px; padding: 18px;
+	display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+}
+.kids-pub-pin { flex: 1; min-width: 240px; }
+.kids-pub-pin-label { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #047857; }
+.kids-pub-pin-code {
+	font-family: "Courier New", monospace; font-size: 2.6rem; font-weight: 800; letter-spacing: .3em;
+	color: #065f46; line-height: 1.1; margin: 4px 0;
+}
+.kids-pub-pin-url a { color: #047857; font-size: .86rem; word-break: break-all; }
+.kids-pub-qr { flex: 0 0 auto; background: #fff; padding: 8px; border-radius: 10px; line-height: 0; }
+.kids-pub-qr a { font-size: .75rem; }
+.kids-pub-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+
+/* Publish-step championship bridge */
+.kids-pub-champ {
+	display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+	background: #fffbeb; border: 2px dashed #f59e0b; border-radius: 14px; padding: 16px 18px;
+}
+.kids-pub-champ-emoji { font-size: 2rem; }
+.kids-pub-champ-copy { flex: 1; min-width: 220px; display: flex; flex-direction: column; }
+.kids-pub-champ-copy b { color: #92400e; }
+.kids-pub-champ-copy span { color: #a16207; font-size: .88rem; }
+
+/* Wizard Preview (kept for the legacy row markup) */
 .kids-wizard-preview {
 	background: #f8fafc;
 	border: 1px solid #e2e8f0;
@@ -4676,13 +4768,82 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-mq-level {
 	border: 1px solid #e2e8f0;
 	border-radius: 14px;
-	padding: 10px 12px;
+	padding: 12px;
 	background: #f8fafc;
 }
-.kids-mq-level-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.kids-mq-level-num { font-size: 1.1rem; }
-.kids-mq-name { flex: 1 1 160px; min-width: 140px; }
-.kids-mq-pass, .kids-mq-art { flex: 0 1 auto; width: auto; min-width: 130px; }
+/* Badge + name share one row; the controls below get their own row so a long
+   level name can never push the star picker onto a line of its own. */
+.kids-mq-level-head {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr);
+	gap: 10px;
+	align-items: center;
+}
+.kids-mq-level-num {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	background: #4f46e5;
+	color: #fff;
+	font-size: 12.5px;
+	font-weight: 700;
+	line-height: 1;
+}
+.kids-mq-name { width: 100%; min-width: 0; }
+.kids-mq-level-controls {
+	margin-top: 10px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 10px 22px;
+}
+.kids-mq-control { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.kids-mq-control-label {
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: #64748b;
+}
+.kids-mq-art { width: 100%; min-width: 148px; }
+/* Star threshold picker. The radios are real inputs (arrow keys, screen
+   readers) hidden behind star pills; :focus-within keeps the ring visible. */
+.kids-mq-star-group {
+	display: flex;
+	gap: 4px;
+	padding: 3px;
+	background: #fff;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+}
+.kids-mq-star {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 48px;
+	min-height: 32px;
+	padding: 0 8px;
+	border: 1px solid transparent;
+	border-radius: 7px;
+	cursor: pointer;
+	transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+.kids-mq-star:hover { background: #f1f5f9; }
+.kids-mq-star.is-on { background: #eef2ff; border-color: #c7d2fe; }
+.kids-mq-star:focus-within { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.25); }
+.kids-mq-star-glyphs { font-size: 12.5px; line-height: 1; letter-spacing: -1px; }
+.kids-mq-star-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	margin: 0;
+	pointer-events: none;
+}
 .kids-mq-chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 .kids-mq-chip {
 	background: #e0f2fe;
@@ -4698,17 +4859,20 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 }
 .kids-mq-chip-empty { background: #f1f5f9; border-color: #e2e8f0; color: #94a3b8; }
 .kids-mq-level-actions { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* The colour is set here on purpose: these buttons used to inherit their text
+   colour, which left them white-on-white in the dark theme. */
 .kids-mq-act {
 	background: #fff;
 	border: 1px solid #cbd5e1;
 	border-radius: 8px;
-	padding: 3px 10px;
+	padding: 4px 10px;
 	font-size: 12.5px;
+	color: #475569;
 	cursor: pointer;
-	transition: all 150ms ease;
+	transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
 }
-.kids-mq-act:hover { border-color: #4f46e5; background: #eef2ff; }
-.kids-mq-act-danger:hover { border-color: #dc2626; background: #fef2f2; }
+.kids-mq-act:hover { border-color: #4f46e5; background: #eef2ff; color: #4338ca; }
+.kids-mq-act-danger:hover { border-color: #dc2626; background: #fef2f2; color: #b91c1c; }
 .kids-mq-summary { font-size: 12px; color: #64748b; margin-left: auto; }
 .kids-mq-levels-actions { margin-top: 10px; display: flex; gap: 8px; }
 .kids-mq-reset-btn {

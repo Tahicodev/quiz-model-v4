@@ -14,7 +14,6 @@
 	var AVATARS = ['🦊', '🐸', '🐵', '🐼', '🦁', '🐯', '🐨', '🐷', '🐰', '🐙'];
 	var STORE_KEY = 'kidChampionshipPlayer';
 	var SFX_CELEBRATE = '/kids/assets/sfx-celebration.mp3';
-
 	var state = {
 		view: 'boot',
 		championship: null,
@@ -37,7 +36,15 @@
 	}
 	function screen(html) { ($('kcScreen') || {}).innerHTML = html; }
 
+	/** Identity now lives in the shared kid store, so a kid who already typed
+	 * their name at the hub (or in a game) is not asked twice. The old
+	 * lobby-only key is still read and written, so a page served from an
+	 * older cache keeps working during the rollout. */
 	function readStored() {
+		if (window.KidsStore && window.KidsStore.player) {
+			var p = window.KidsStore.player();
+			if (p && p.name) return p;
+		}
 		try {
 			var raw = localStorage.getItem(STORE_KEY);
 			if (raw) return JSON.parse(raw);
@@ -46,6 +53,21 @@
 	}
 	function storePlayer(p) {
 		try { localStorage.setItem(STORE_KEY, JSON.stringify(p)); } catch (_) { /* ignore */ }
+		if (window.KidsStore && window.KidsStore.setPlayer) window.KidsStore.setPlayer(p);
+	}
+	/** The championship a kid is in — the hub's "back in 🏆" shortcut and the
+	 * player's instant title both read this, so keep it fresh on every poll. */
+	function rememberChampionship(me) {
+		var c = state.championship;
+		if (!c || !window.KidsStore || !window.KidsStore.setChampionship) return;
+		window.KidsStore.setChampionship({
+			id: c.id,
+			code: c.code || state.code || '',
+			name: c.name || '',
+			emoji: c.emoji || '🏆',
+			rank: me ? me.rank : 0,
+			points: me ? me.points : 0,
+		});
 	}
 
 	function loud(kind) {
@@ -117,11 +139,14 @@
 			'<div id="kcJoinErr" class="kid-error"></div>' +
 			'</div>';
 		screen(html);
-		var chosen = AVATARS[0];
+		// A kid who picked their name at the hub only has to tap Join.
+		var known = (window.KidsStore && window.KidsStore.player && window.KidsStore.player()) || null;
+		var chosen = known && AVATARS.indexOf(known.avatar) >= 0 ? known.avatar : AVATARS[0];
 		var row = $('kcAvatars');
-		row.innerHTML = AVATARS.map(function (a, i) {
-			return '<button type="button" class="kc-emoji' + (i === 0 ? ' selected' : '') + '" data-a="' + a + '">' + a + '</button>';
+		row.innerHTML = AVATARS.map(function (a) {
+			return '<button type="button" class="kc-emoji' + (a === chosen ? ' selected' : '') + '" data-a="' + a + '">' + a + '</button>';
 		}).join('');
+		if (known && known.name) $('kcName').value = known.name;
 		row.addEventListener('click', function (e) {
 			var b = e.target.closest('.kc-emoji');
 			if (!b) return;
@@ -194,6 +219,7 @@
 		state.view = 'lobby';
 		renderLobby();
 		lastRankSeen();
+		rememberChampionship(meOnBoard());
 		if (state.championship.status === 'active') startPolling();
 		else stopPolling();
 	}
@@ -245,7 +271,7 @@
 			'<div class="kc-standings">' + standingsHtml() + '</div>' +
 			'<p class="hint" style="margin-top:12px">' +
 			'<a class="kid-btn" href="javascript:switchIdentity()">Not ' + escapeName(state.player.name) + '? Change name</a>' +
-			'<a class="kid-btn" href="/kids/">Exit</a>' +
+			'<a class="kid-btn ghost" href="/kids/">🎮 More games</a>' +
 			'</p>' +
 			'</div>';
 		screen(html);
@@ -326,6 +352,9 @@
 		stopPolling();
 		state.player = null;
 		try { localStorage.removeItem(STORE_KEY); } catch (_) { /* ignore */ }
+		// Also drop the shared identity: leaving it behind would put this
+		// kid's name back on the hub for the next player in the room.
+		if (window.KidsStore && window.KidsStore.forgetPlayer) window.KidsStore.forgetPlayer();
 		identityScreen();
 	}
 
@@ -359,6 +388,7 @@
 				state.playerDetail = data.player || state.playerDetail;
 				if (state.championship.status === 'finished') stopPolling();
 				renderLobby();
+				rememberChampionship(meOnBoard());
 				celebrateImprovement();
 			})
 			.catch(function () { /* transient — keep the current lobby */ });
@@ -393,11 +423,17 @@
 		} catch (_) { return null; }
 	}
 
-	// First non-expired token across the known stores. Expired
-	// student-scoped copies are dropped so a stale login forces a
-	// re-sign-in; other portals' copies are never touched.
-	function validLoginToken() {
-		var candidates = [];
+// First non-expired token across the known stores. Expired
+// student-scoped copies are dropped so a stale login forces a
+// re-sign-in; other portals' copies are never touched.
+// The shared store owns this logic now; the scan below is the fallback for
+// a cached page that still loads without kids-store.js.
+function validLoginToken() {
+	if (window.KidsStore && window.KidsStore.token) {
+		var shared = window.KidsStore.token();
+		if (shared) return shared;
+	}
+	var candidates = [];
 		try {
 			if (window.__authToken) candidates.push({ token: window.__authToken, scoped: false });
 			var s = JSON.parse(sessionStorage.getItem('quizSession') || localStorage.getItem('quizSession') || 'null');
@@ -443,10 +479,17 @@
 
 	function boot() {
 		var soundBtn = $('kcSoundBtn');
-		if (soundBtn) soundBtn.addEventListener('click', function () {
-			state.muted = !state.muted;
+		// Same flag as the hub and the player: a kid who muted the entrance
+		// stays muted all the way through the celebration.
+		try { state.muted = localStorage.getItem('kidSoundMuted') === '1'; } catch (_) { /* ignore */ }
+		if (soundBtn) {
 			soundBtn.textContent = state.muted ? '🔇' : '🔊';
-		});
+			soundBtn.addEventListener('click', function () {
+				state.muted = !state.muted;
+				soundBtn.textContent = state.muted ? '🔇' : '🔊';
+				try { localStorage.setItem('kidSoundMuted', state.muted ? '1' : '0'); } catch (_) { /* ignore */ }
+			});
+		}
 		// Direct links require a valid (non-expired) login so results
 		// count. Otherwise bounce to the workspace sign-in and back
 		// afterwards; a bounce guard stops redirect loops when sign-in

@@ -152,22 +152,37 @@
 		else { modal.classList.remove('active'); modal.style.display = 'none'; modal.setAttribute('aria-hidden', 'true'); }
 	}
 
-	function openCreate() {
+	/**
+	 * Open the create wizard. `opts.gameIds` / `opts.name` come from the
+	 * publish step ("make a championship out of the game I just published"):
+	 * the game arrives ticked and the wizard opens on the challenges step.
+	 * A bare click handler passes a MouseEvent in here, so only a plain object
+	 * carrying a gameIds array is treated as a preset.
+	 */
+	function openCreate(opts) {
+		var preset = opts && typeof opts === 'object' && Array.isArray(opts.gameIds) && !opts.currentTarget ? opts : null;
 		state.editingId = null;
 		state.editingCode = null;
 		state.selectedEmoji = '🏆';
-		state.selectedGameIds = [];
+		state.selectedGameIds = preset ? preset.gameIds.filter(Boolean).slice(0, MAX_GAMES) : [];
 		state.gameSearch = '';
 		setFormValue('kidsChampionshipId', '');
-		setFormValue('kidsChampionshipName', '');
+		setFormValue('kidsChampionshipName', preset && preset.name ? String(preset.name).slice(0, 100) : '');
 		setFormValue('kidsChampionshipDescription', '');
 		setFormValue('kidsChampionshipGameSearch', '');
 		$('kidsChampionshipModalTitle').textContent = 'New Championship';
 		$('saveKidsChampionshipBtn').textContent = 'Start Championship 🚀';
 		renderEmojiRow();
 		goStep(1, { force: true });
-		loadGames();
 		setModal('kidsChampionshipModal', true);
+		loadGames().then(function () {
+			if (!preset) return;
+			updateSelectionUI();
+			renderGamesGrid();
+			// The ticked game is the whole point of the preset — jump straight
+			// to the challenges step instead of making the teacher hunt for it.
+			if (state.selectedGameIds.length) goStep(2, { force: true });
+		});
 	}
 
 	function openEdit(id) {
@@ -347,8 +362,10 @@
 		state.loadedGames = [];
 		state.gamesLoaded = false;
 		renderGamesGrid();
-		if (!window.API || typeof window.API.raw !== 'function') { updateSelectionUI(); return; }
-		window.API.raw('GET', '/kids?status=published&limit=100&orderBy=name&direction=asc')
+		if (!window.API || typeof window.API.raw !== 'function') { updateSelectionUI(); return Promise.resolve(); }
+		// Returned so openCreate's preset can act once the grid knows which of
+		// its game ids still exist.
+		return window.API.raw('GET', '/kids?status=published&limit=100&orderBy=name&direction=asc')
 			.then(function (res) {
 				state.loadedGames = normalizeList(res);
 				state.gamesLoaded = true;
