@@ -17687,6 +17687,38 @@
 			const wantsJoin =
 				params.has('game') || params.has('examId') || params.has('join');
 			if (!wantsLogin && !wantsJoin) return;
+			// Kids' expired-session screen deliberately sends students here with
+			// `?login=1`. The local copies are not proof of a live server session:
+			// clear only student auth cache so the startup auth event cannot send
+			// the student straight back to Kids before they can re-authenticate.
+			if (wantsLogin) {
+				try {
+					[
+						'quizSession',
+						'quizSessionRemember',
+						'quizSession:student',
+						'quizAuthToken',
+						'quizAuthToken:student',
+						'quizCurrentUser',
+						'quizCurrentUser:student',
+						'studentInfo',
+					].forEach((key) => {
+						sessionStorage.removeItem(key);
+						localStorage.removeItem(key);
+					});
+				} catch (_) {
+					/* Storage may be unavailable; the modal still gives a retry path. */
+				}
+				window.__authToken = '';
+				window.__AUTH_SESSION_EXPIRED__ = true;
+				try {
+					window.Auth?.setCurrentUser?.(null, null);
+				} catch (_) {
+					/* non-fatal */
+				}
+				showAuthModal();
+				return;
+			}
 			if (getStudentContext()) {
 				continuePendingLoginRedirect();
 				return;

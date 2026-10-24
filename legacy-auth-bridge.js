@@ -294,6 +294,26 @@
     };
   }
 
+  // A Kids session-expiry recovery arrives on the workspace with
+  // ?login=1&next=/kids/....  The workspace also listens for auth:changed,
+  // but make the post-login return explicit here: this is the one place that
+  // knows the server has accepted the new student session.
+  function returnToKidsAfterStudentLogin() {
+    try {
+      var next = new URLSearchParams(window.location.search).get('next');
+      if (!next) return false;
+      var destination = new URL(next, window.location.origin);
+      if (destination.origin !== window.location.origin) return false;
+      if (destination.pathname !== '/kids' && destination.pathname.indexOf('/kids/') !== 0) {
+        return false;
+      }
+      window.location.replace(destination.pathname + destination.search + destination.hash);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // â”€â”€ Persist session in the format auth.js expects â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // sessionStorage is per-tab and always safe. The localStorage copies are
   // SHARED with every other tab of this browser: the admin portal and the
@@ -624,6 +644,7 @@
         }
 
         showMsg('Login successful', 'success');
+        returnToKidsAfterStudentLogin();
       }).catch(function (err) {
         if (err && err.code === 'SESSION_ACTIVE') {
           form.dataset.loggingIn = '';
