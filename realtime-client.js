@@ -919,7 +919,39 @@
 		});
 
 		// Receive synced games from admin
+		socket.on('admin:syncKidsGames', (payload = {}) => {
+			window.dispatchEvent(
+				new CustomEvent('quiz:kids-games-updated', { detail: payload }),
+			);
+		});
+
+		socket.on('student:refreshBootstrap', (payload = {}) => {
+			const user = window.Auth?.getCurrentUser?.();
+			if (String(user?.role || '').toLowerCase() !== 'student') return;
+			const scope = payload?.scope;
+		if (scope?.type === 'teacher' && Array.isArray(scope.classIds) && scope.classIds.length) {
+				const classId = String(user?.class_id || user?.classId || '').trim();
+				if (classId && !scope.classIds.map(String).includes(classId)) return;
+			}
+			if (typeof window.__legacyBridgeBootstrap === 'function') {
+				window.__legacyBridgeBootstrap();
+			}
+		});
+
 		socket.on('admin:syncGames', (payload) => {
+			// A student workspace replaces its game list from the tenant-scoped
+			// database bootstrap. An admin/teacher browser broadcasts only its own
+			// cached subset, so accepting that payload afterwards can erase games
+			// from another assigned teacher. Individual game state events continue
+			// to update live lobbies; only this non-authoritative full-list relay is
+			// ignored once the DB snapshot has arrived.
+			const activeUser = window.Auth?.getCurrentUser?.();
+			if (
+				window.__DATABASE_GAMES_AUTHORITATIVE__ &&
+				String(activeUser?.role || '').toLowerCase() === 'student'
+			) {
+				return;
+			}
 			receivedInitialGamesSync = true;
 			if (shouldSkipDuplicateSync(payload, 'quizGames', 'games')) {
 				return;

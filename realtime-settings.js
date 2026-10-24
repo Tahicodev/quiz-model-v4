@@ -135,6 +135,53 @@
 		return Boolean(socket && socket === window.__QUIZ_LEGACY_SOCKET__);
 	}
 
+	// Defined during script initialization so the Realtime button is usable
+	// before a teacher has ever pressed the legacy Games sync button.
+	window.syncClassroomDataToStudents = function () {
+		const isAdmin = window.Auth?.isAdmin?.() === true;
+		const isTeacher = window.Auth?.isTeacher?.() === true;
+		if (!isAdmin && !isTeacher) return Promise.resolve(false);
+		const currentUser = window.Auth?.getCurrentUser?.() || null;
+		const scope = isTeacher && !isAdmin
+			? {
+				type: 'teacher',
+				teacherId: String(currentUser?.id || ''),
+				classIds: Array.from(new Set((window.Auth?.getTeacherClassIds?.() || []).map(String).filter(Boolean))),
+			}
+			: { type: 'school' };
+		const emit = (socketInstance) => socketInstance.emit('admin:refreshStudentBootstrap', {
+			scope,
+			syncedAt: new Date().toISOString(),
+		});
+		if (realtimeSocket?.connected) {
+			emit(realtimeSocket);
+			showRealtimeStatus('Refreshing classroom data on student devices…', 'success');
+			return Promise.resolve(true);
+		}
+		const tempSocket = window.getSocket?.();
+		if (!tempSocket) return Promise.resolve(false);
+		const cached = isSharedCachedSocket(tempSocket);
+		return new Promise((resolve) => {
+			let settled = false;
+			const finish = (ok) => {
+				if (settled) return;
+				settled = true;
+				if (!cached) tempSocket.disconnect();
+				resolve(ok);
+			};
+			const send = () => {
+				tempSocket.emit('identify', getAdminIdentifyPayload());
+				emit(tempSocket);
+				finish(true);
+			};
+			if (tempSocket.connected) send();
+			else {
+				tempSocket.once('connect', send);
+				tempSocket.once('connect_error', () => finish(false));
+			}
+		});
+	};
+
 	function gamificationPayloadFingerprint(payload) {
 		return JSON.stringify([
 			payload?.quizGamification || null,
@@ -238,7 +285,7 @@
 
 		socket.on('clients:update', (clients) => {
 			if (!realtimeFeatureEnabled) return;
-			console.log('Received clients update:', clients);
+			console.debug('Received clients update:', clients);
 			updateDeviceHistory(clients);
 		});
 
@@ -1439,6 +1486,123 @@
 			return;
 		}
 
+		// Kids Games live in their own database table, not `quizGames`. Send an
+		// invalidation rather than copying game content through the socket: each
+		// student then reloads their own teacher/class-scoped catalog from the DB.
+		const syncKidsGames = (socketInstance, isTemp = false) => {
+			if (!socketInstance || !window.API?.raw) return Promise.resolve(false);
+			return window.API.raw('GET', '/kids/?limit=100')
+				.then((result) => {
+					const rows = Array.isArray(result) ? result : result?.data || [];
+					const currentUser = window.Auth?.getCurrentUser?.() || null;
+					const classIds = isTeacher && !isAdmin
+						? (window.Auth?.getTeacherClassIds?.() || [])
+						: [];
+					// Emit even with zero rows: deleting a teacher's final Kids Game
+					// must remove it from student devices immediately.
+					const payload = {
+						count: rows.length,
+						syncedAt: new Date().toISOString(),
+					};
+					if (isTeacher && !isAdmin) {
+						payload.scope = {
+							type: 'teacher',
+							teacherId: String(currentUser?.id || ''),
+							classIds: Array.from(new Set(classIds.map(String).filter(Boolean))),
+						};
+					}
+					socketInstance.emit('admin:syncKidsGames', payload);
+					showRealtimeStatus(
+						`Synced ${rows.length} Kids Game${rows.length === 1 ? '' : 's'}`,
+						'success',
+					);
+					logDeviceActivity(
+						'sync_kids_games',
+						`Synced ${rows.length} Kids Games`,
+						isTemp ? 'Temp connection used (realtime toggle off)' : 'Database refresh signal',
+					);
+					return true;
+				})
+				.catch((error) => {
+					console.warn('[realtime] Kids Games sync check failed:', error);
+					return false;
+				});
+		};
+
+		window.syncKidsGamesToClients = function () {
+			if (!isAdmin && !isTeacher) return Promise.resolve(false);
+			if (realtimeSocket && realtimeSocket.connected) return syncKidsGames(realtimeSocket, false);
+			if (typeof io === 'undefined') return Promise.resolve(false);
+			const tempSocket = window.getSocket?.();
+			if (!tempSocket) return Promise.resolve(false);
+			const cached = isSharedCachedSocket(tempSocket);
+			return new Promise((resolve) => {
+				let settled = false;
+				const finish = (value) => {
+					if (settled) return;
+					settled = true;
+					if (!cached) tempSocket.disconnect();
+					resolve(value);
+				};
+				const emit = () => {
+					tempSocket.emit('identify', getAdminIdentifyPayload());
+					syncKidsGames(tempSocket, true).then(finish);
+				};
+				if (tempSocket.connected) emit();
+				else {
+					tempSocket.once('connect', emit);
+					tempSocket.once('connect_error', () => finish(false));
+				}
+			});
+		};
+
+		// Refresh the complete student-facing database snapshot. This deliberately
+		// sends an invalidation, rather than copying browser localStorage: the
+		// bootstrap endpoint applies the student's class and teacher permissions
+		// for classes, exams, training questions, regular games and Kids Games.
+		window.syncClassroomDataToStudents = function () {
+			if (!isAdmin && !isTeacher) return Promise.resolve(false);
+			const currentUser = window.Auth?.getCurrentUser?.() || null;
+			const scope = isTeacher && !isAdmin
+				? {
+					type: 'teacher',
+					teacherId: String(currentUser?.id || ''),
+					classIds: Array.from(new Set((window.Auth?.getTeacherClassIds?.() || []).map(String).filter(Boolean))),
+				}
+				: { type: 'school' };
+			const emit = (socketInstance) => {
+				socketInstance.emit('admin:refreshStudentBootstrap', {
+					scope,
+					syncedAt: new Date().toISOString(),
+				});
+				return true;
+			};
+			if (realtimeSocket?.connected) {
+				emit(realtimeSocket);
+				showRealtimeStatus('Refreshing classroom data on student devices…', 'success');
+				return Promise.resolve(true);
+			}
+			const tempSocket = window.getSocket?.();
+			if (!tempSocket) return Promise.resolve(false);
+			const cached = isSharedCachedSocket(tempSocket);
+			return new Promise((resolve) => {
+				const finish = (ok) => {
+					if (!cached) tempSocket.disconnect();
+					resolve(ok);
+				};
+				const send = () => {
+					tempSocket.emit('identify', getAdminIdentifyPayload());
+					emit(tempSocket);
+					finish(true);
+				};
+				if (tempSocket.connected) send();
+				else {
+					tempSocket.once('connect', send);
+					tempSocket.once('connect_error', () => finish(false));
+				}
+			});
+		};
+
 		const buildScopedGamesPayload = (sourceGames = []) => {
 			let games = Array.isArray(sourceGames) ? sourceGames : [];
 			let teacherScope = null;
@@ -1469,7 +1633,10 @@
 				};
 				games = games.filter((game) => {
 					if (!game) return false;
-					if (game.ownerId && currentUser && game.ownerId === currentUser.id) {
+					const gameOwnerId = String(
+						game.ownerId || game.creator_id || game.created_by || game.teacher_id || '',
+					);
+					if (gameOwnerId && currentUser && gameOwnerId === String(currentUser.id)) {
 						return true;
 					}
 					const gameClasses = Array.isArray(game.classIds) ? game.classIds : [];
@@ -1484,7 +1651,11 @@
 			const scoped = buildScopedGamesPayload(sourceGames);
 			const games = scoped.games;
 			if (!games.length) {
-				showRealtimeStatus('No games to sync', 'error');
+				// A local-only legacy game cannot safely be sent as a replacement
+				// for the database catalog. Still refresh every student from their
+				// own authorised database snapshot (including Kids Games).
+				window.syncClassroomDataToStudents?.();
+				showRealtimeStatus('No regular games are saved in the database. Student devices are refreshing their database content.', 'info');
 				return;
 			}
 			const payload = {
@@ -1521,6 +1692,7 @@
 		};
 
 		if (realtimeSocket && realtimeSocket.connected) {
+			syncKidsGames(realtimeSocket, false);
 			if (!syncWithAuthoritativeList(realtimeSocket, false)) {
 				emitSync(realtimeSocket, localGames, false);
 			}
@@ -1548,6 +1720,7 @@
 
 		tempSocket.on('connect', () => {
 			tempSocket.emit('identify', getAdminIdentifyPayload());
+			syncKidsGames(tempSocket, true);
 			if (!syncWithAuthoritativeList(tempSocket, true)) {
 				emitSync(tempSocket, localGames, true);
 			}
@@ -2081,6 +2254,7 @@
 	 * is pushed here. Used by the periodic Auto-Sync loop. (Kept the legacy
 	 * function name for existing callers.)
 	 */
+	let lastAutoTrainingFingerprint = '';
 	window.pushUncategorizedQuestions = function (opts = {}) {
 		if (!realtimeSocket || !realtimeSocket.connected) {
 			if (!opts.quiet) {
@@ -2106,17 +2280,25 @@
 							q.category === '' ||
 							q.category === 'uncategorized',
 					);
+		let fingerprint = '';
+		try {
+			fingerprint = JSON.stringify(trainingQuestions);
+		} catch (_) {
+			fingerprint = String(trainingQuestions.length);
+		}
+		if (opts.quiet && fingerprint && fingerprint === lastAutoTrainingFingerprint) {
+			return true;
+		}
 
 		realtimeSocket.emit('admin:pushSettings', {
 			quizQuestions: trainingQuestions,
 		});
+		lastAutoTrainingFingerprint = fingerprint;
 
 		const message = `Auto-synced ${trainingQuestions.length} training questions to devices`;
 
 		if (!opts.quiet) {
 			showRealtimeStatus(message, 'success');
-		} else {
-			console.log('[auto-sync]', message);
 		}
 		return true;
 	};

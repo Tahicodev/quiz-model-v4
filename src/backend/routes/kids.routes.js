@@ -156,16 +156,17 @@ router.get('/browse', requireRole(KIDS_PLAY_ROLES), validateQuery(KidsBrowseSche
     } catch (_) {
       scope = null;
     }
-    // Teacher-controlled visibility (same rule as regular games): a kids
-    // game assigned to classes is delivered only to students of those
-    // classes; an unassigned game stays hidden from the browse list.
-    // PIN-direct play is a separate anonymous flow and is unaffected.
+    // A class assignment narrows a Kids Game to those classes. The Kids
+    // Studio does not require choosing classes when publishing, so an empty
+    // assignment means "all of this teacher's students", not "nobody".
+    // Author visibility below still prevents another teacher's games from
+    // entering the student's catalog. PIN-direct play is unaffected.
     const studentClassId = String(req.user?.class_id || '').trim();
     const games = (result.data || []).filter((game) => {
       const assigned = Array.isArray(game?.classIds)
         ? game.classIds.map((id) => String(id || '').trim()).filter(Boolean)
         : [];
-      if (!assigned.length) return false;
+      if (!assigned.length) return true;
       if (studentClassId && assigned.includes(studentClassId)) return true;
       return false;
     }).filter((game) =>

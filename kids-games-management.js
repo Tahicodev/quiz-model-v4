@@ -80,6 +80,12 @@
 		if (!window.API || typeof window.API.raw !== 'function') return Promise.reject(new Error('API client not ready'));
 		return window.API.raw(method, '/kids' + path, body);
 	}
+	function notifyKidsCatalogChanged() {
+		if (typeof window.syncKidsGamesToClients !== 'function') return;
+		Promise.resolve(window.syncKidsGamesToClients()).catch(function (err) {
+			console.warn('[kids-games] realtime catalog notification failed:', err);
+		});
+	}
 	function gameTypeMeta(id) {
 		for (var i = 0; i < KIDS_GAME_TYPES.length; i++) if (KIDS_GAME_TYPES[i].id === id) return KIDS_GAME_TYPES[i];
 		return null;
@@ -1431,6 +1437,7 @@
 				// Stay on step 5: the PIN appears inline next to the checklist
 				// instead of a modal stacked on top of the wizard.
 				setKidsWizardPublished(game);
+				notifyKidsCatalogChanged();
 				toast('Game published! PIN: ' + game.pin, 'success');
 			});
 		};
@@ -1554,12 +1561,14 @@
 		kidsApi('DELETE', '/' + encodeURIComponent(id)).then(function () {
 			toast('Kids game deleted', 'success');
 			renderKidsGameList();
+			notifyKidsCatalogChanged();
 		}).catch(function (err) { toast('Delete failed: ' + (err && err.message), 'error'); });
 	}
 	function archiveKidsGame(id) {
 		kidsApi('POST', '/' + encodeURIComponent(id) + '/archive').then(function () {
 			toast('Kids game archived', 'success');
 			renderKidsGameList();
+			notifyKidsCatalogChanged();
 		}).catch(function (err) { toast('Archive failed: ' + (err && err.message), 'error'); });
 	}
 

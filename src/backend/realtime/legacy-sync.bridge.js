@@ -132,6 +132,7 @@ export function registerLegacySyncHandlers(io) {
 					const cache = syncCache.get(schoolId);
 					if (cache?.users) socket.emit('admin:syncUsers', cache.users);
 					if (cache?.games) socket.emit('admin:syncGames', cache.games);
+					if (cache?.kidsGames) socket.emit('admin:syncKidsGames', cache.kidsGames);
 					if (cache?.gamification)
 						socket.emit('admin:syncGamification', cache.gamification);
 					// Replay the last pushed exam session so a device that (re)connects
@@ -274,6 +275,42 @@ export function registerLegacySyncHandlers(io) {
 			} else {
 				io.emit('admin:syncGames', payload);
 			}
+		});
+
+		// Kids Games remain database-authoritative and are not serialized into
+		// the legacy `quizGames` payload. This lightweight signal tells students
+		// to refetch their own class/teacher-scoped Kids catalog.
+		socket.on('admin:syncKidsGames', (payload = {}) => {
+			if (!isAdminSocket(socket)) return;
+			const schoolId = schoolIdOf();
+			if (schoolId) {
+				const cache = syncCache.get(schoolId) || {};
+				cache.kidsGames = payload;
+				syncCache.set(schoolId, cache);
+				io.to(`school:${schoolId}`).except(socket.id).emit('admin:syncKidsGames', payload);
+			} else {
+				io.emit('admin:syncKidsGames', payload);
+			}
+			logger.debug(
+				{ schoolId, count: Number(payload?.count) || 0 },
+				'legacy bridge: Kids Games refresh signalled',
+			);
+		});
+
+		// Student content is database-authoritative. A teacher can ask their
+		// classroom devices to re-bootstrap all content they are allowed to see,
+		// without exposing another teacher's rows through a socket payload.
+		socket.on('admin:refreshStudentBootstrap', (payload = {}) => {
+			if (!isAdminSocket(socket)) return;
+			const schoolId = schoolIdOf();
+			if (!schoolId) return;
+			io.to(`school:${schoolId}`)
+				.except(socket.id)
+				.emit('student:refreshBootstrap', {
+					scope: payload?.scope || { type: 'school' },
+					syncedAt: payload?.syncedAt || new Date().toISOString(),
+				});
+			logger.debug({ schoolId, scope: payload?.scope?.type || 'school' }, 'legacy bridge: student bootstrap refresh signalled');
 		});
 
 		socket.on('admin:syncGamification', (payload = {}) => {

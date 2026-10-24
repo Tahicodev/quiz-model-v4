@@ -134,7 +134,7 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js" defer></script>
 		<script src="api-client.js?v=2026-10-14-r2" defer></script>
-		<script src="auth.js?v=2026-10-14-r7" defer></script>
+		<script src="auth.js?v=2026-10-24-r8" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="settings.js?v=2026-10-14-r1" defer></script>
 
@@ -155,7 +155,7 @@
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="overview-dashboard.js?v=2026-10-14-r2" defer></script>
 		<script src="global-search.js" defer></script>
-		<script src="realtime-settings.js?v=2026-09-24-r3" defer></script>
+		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="classroom-devices.js?v=2026-10-23-mq12" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
@@ -6188,11 +6188,17 @@
 									<small class="text-muted" style="display: block; margin-top: 6px;">Sends student/teacher accounts to connected devices (admins excluded).</small>
 								</div>
 								<div class="form-group">
+									<button type="button" class="btn btn-secondary" onclick="window.syncClassroomDataToStudents()">
+										Sync My Classroom Data
+									</button>
+									<small class="text-muted" style="display: block; margin-top: 6px;">Refreshes each connected student's permitted classes, exams, training, regular games and Kids Games from the database.</small>
+								</div>
+								<div class="form-group">
 									<button type="button" class="btn btn-secondary" onclick="window.syncGamesToClients()">
 										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M7 4h10l2 4H5l2-4z"></path><rect x="4" y="8" width="16" height="8" rx="2" ry="2"></rect></svg>
-										Sync Games
+										Sync Regular + Kids Games
 									</button>
-									<small class="text-muted" style="display: block; margin-top: 6px;">Pushes games to connected student devices.</small>
+									<small class="text-muted" style="display: block; margin-top: 6px;">Refreshes both regular and Kids Games from the database on connected student devices.</small>
 								</div>
 
 								<div class="form-group" data-teacher-hide>

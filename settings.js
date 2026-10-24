@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS = {
 	// Teacher access controls (rev stamps the defaults revision — see auth.js
 	// getTeacherAccessSettings; bumped whenever a default flips meaning).
 	teacherAccess: {
-		rev: 2,
+		rev: 3,
 		tabs: {
 			overview: true,
 			questions: true,
@@ -49,7 +49,7 @@ const DEFAULT_SETTINGS = {
 			// The Data tab carries a teacher-scoped "My Data" section; the
 			// school-wide backup groups inside it stay markup-gated to admins.
 			data: true,
-			realtime: false,
+			realtime: true,
 			'ai-generation': true,
 			users: true,
 			games: true,
@@ -655,7 +655,7 @@ function readTeacherAccessForm() {
 	};
 
 	const nextAccess = {
-		rev: 2,
+		rev: 3,
 		tabs: { ...access.tabs },
 		settings: access.settings,
 		settingsTabs: { ...access.settingsTabs },

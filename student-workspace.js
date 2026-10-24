@@ -225,7 +225,11 @@
 	});
 
 	function hasStudentRestApi() {
-		return typeof window.API?.raw === 'function' && Boolean(window.__authToken);
+		// API.raw resolves this tab's token from its session storage when the
+		// in-memory value has not been initialized yet. Requiring
+		// `window.__authToken` here used to send freshly signed-in students down
+		// the incomplete realtime-cache path instead of the database path.
+		return typeof window.API?.raw === 'function';
 	}
 
 	function submitGameAnswerViaApi(gameId, context, answer, questionId) {
@@ -680,6 +684,44 @@
 
 	function refreshGamesFromAdmin(context) {
 		if (!context) return;
+		// The realtime relay only knows the last staff browser that pushed its
+		// local cache. That is not a complete view for a student assigned to
+		// multiple teachers. Ask the tenant-scoped bootstrap endpoint instead:
+		// it applies the student's teacher/class visibility rules in the DB and
+		// is therefore the source of truth for the complete game list.
+		if (hasStudentRestApi()) {
+			setGamesRefreshButtonBusy(true);
+			window.API.raw('GET', '/bootstrap')
+				.then((payload) => {
+					const games = payload?.data?.games;
+					if (!Array.isArray(games)) {
+						throw new Error('The server returned an invalid games list.');
+					}
+					// This is a full DB snapshot, so replacement deliberately removes
+					// stale/local-only games as well as adding every eligible teacher game.
+					applyServerGameListSnapshot(games, context, true);
+					window.__DATABASE_GAMES_AUTHORITATIVE__ = true;
+					return Promise.all(
+						games.map((game) =>
+							syncGameStateNow(String(game.id), context).catch(() => null),
+						),
+					);
+				})
+				.then(() => {
+					renderGamesPanel(context);
+					renderGameStage(context);
+					showToast('Games synced from the database.', 'success');
+				})
+				.catch((error) => {
+					console.warn('[student-workspace] database game refresh failed:', error);
+					showToast('Could not sync games from the database. Please try again.', 'error');
+				})
+				.finally(() => setGamesRefreshButtonBusy(false));
+			return;
+		}
+
+		// Offline legacy fallback only. It is intentionally not used when the
+		// authenticated database API is available.
 		const socket = getSocket();
 		if (!socket || !socket.connected) {
 			showToast(
@@ -3315,7 +3357,10 @@
 			return true;
 		}
 		const gameClassIds = getGameClassIds(game);
-		if (!gameClassIds.length) return false;
+		// The server's database snapshot already limits unassigned games to
+		// this student's teachers. Do not hide those valid teacher games again
+		// in the browser; explicit class assignments below stay restrictive.
+		if (!gameClassIds.length) return true;
 		// The student must be in one of the assigned classes. A student with no
 		// resolvable class keys can never match a class-scoped game — previously
 		// this fell through to `return true`, leaking other classes' games.
@@ -8301,16 +8346,17 @@
 				() => null,
 			);
 			if (myToken !== kidsSectionToken) return;
-			// Teacher-controlled visibility (mirrors the server browse rule
-			// and the regular-games gate): only kids games explicitly
-			// assigned to one of the student's classes are listed.
+			// Explicit class IDs narrow a Kids Game; no assignment means the
+			// published game is available to all students of that teacher. The
+			// API has already enforced the teacher/class ownership boundary.
 			const classKeys = getStudentClassAccessKeys(context);
 			const games = (Array.isArray(gamesRes?.data) ? gamesRes.data : []).filter(
 				(g) => {
 					const ids = (Array.isArray(g?.classIds) ? g.classIds : [])
 						.map((id) => String(id || '').trim())
 						.filter(Boolean);
-					if (!ids.length || !classKeys.size) return false;
+					if (!ids.length) return true;
+					if (!classKeys.size) return false;
 					return ids.some(
 						(id) => classKeys.has(id) || classKeys.has(id.toLowerCase()),
 					);
@@ -17807,6 +17853,7 @@
 	});
 
 	window.addEventListener('auth:changed', () => {
+		const context = getStudentContext();
 		bindGameSocket();
 		// Identity may have changed (login/logout): drop the cached
 		// primaire detection (a logged-out fetch always resolves false)
@@ -17816,6 +17863,29 @@
 		renderWorkspace();
 		ensureKidsPrimaireStatus().then(() => refreshKidsModePanels());
 		continuePendingLoginRedirect();
+		// Re-authentication is a fresh session boundary: replace any browser
+		// cache with the database-authoritative set of games visible to this
+		// student (including every assigned teacher's games).
+		refreshGamesFromAdmin(context);
+	});
+
+	// A staff "Sync Games" action sends this only as an invalidation. The
+	// catalog itself is always reloaded from /kids/browse, which applies the
+	// student's teacher and class access rules on the database.
+	window.addEventListener('quiz:kids-games-updated', (event) => {
+		const context = getStudentContext();
+		const scope = event?.detail?.scope;
+		// Teacher-originated invalidations include their assigned classes. Avoid
+		// waking every primaire student's catalog request for a change that cannot
+		// affect them; the API remains the final server-side visibility check.
+		if (scope?.type === 'teacher' && Array.isArray(scope.classIds) && scope.classIds.length) {
+			const studentClasses = getStudentClassAccessKeys(context);
+			const affected = scope.classIds.some((id) =>
+				studentClasses.has(String(id)) || studentClasses.has(String(id).toLowerCase()),
+			);
+			if (!affected) return;
+		}
+		renderStudentKidsSection(context);
 	});
 
 	// Safety net: the SaaS login bridge may succeed without firing the

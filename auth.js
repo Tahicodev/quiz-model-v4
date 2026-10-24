@@ -840,7 +840,7 @@
 		// rev stamps the shape/semantics of these defaults. Bump it whenever
 		// a default flips meaning (e.g. the Data tab growing a teacher-safe
 		// view) so previously auto-saved maps cannot pin stale values.
-		rev: 2,
+		rev: 3,
 		tabs: {
 			overview: true,
 			questions: true,
@@ -863,7 +863,10 @@
 			// The Data tab carries a teacher-scoped "My Data" section; the
 			// school-wide backup groups inside it stay markup-gated to admins.
 			data: true,
-			realtime: false,
+			// Teachers can enable/disable their own realtime connection and
+			// refresh the games assigned to their students. Server host, users,
+			// and school-wide broadcast settings stay separately markup-gated.
+			realtime: true,
 			'ai-generation': true,
 			users: true,
 		},
@@ -915,6 +918,12 @@
 		// explicit revoke — fall back to the default (visible).
 		if (stored.rev !== DEFAULT_TEACHER_ACCESS.rev && mergedSettingsTabs.data === false) {
 			mergedSettingsTabs.data = DEFAULT_TEACHER_ACCESS.settingsTabs.data;
+		}
+		// Realtime was originally stored as admin-only (`false`). Version 3
+		// grants teachers their own scoped realtime workspace, so migrate that
+		// old default without overriding a deliberate choice made in v3+.
+		if (stored.rev !== DEFAULT_TEACHER_ACCESS.rev && mergedSettingsTabs.realtime === false) {
+			mergedSettingsTabs.realtime = DEFAULT_TEACHER_ACCESS.settingsTabs.realtime;
 		}
 		return {
 			tabs: mergedTabs,
@@ -1213,7 +1222,7 @@
 				// Admin-only sections must stay hidden for teachers regardless of
 				// the settingsTabs map (which never lists them). Data is NOT in
 				// this list: teachers get a scoped "My Data" view there.
-				if (key === 'teacher-access' || key === 'realtime' || key === 'setup') {
+				if (key === 'teacher-access' || key === 'setup') {
 					btn.classList.add('role-hidden');
 					return;
 				}
@@ -1231,7 +1240,7 @@
 				if (!key) return;
 				// Same admin-only protection for the section panels themselves
 				// (Data excepted — teachers see its scoped groups only).
-				if (key === 'teacher-access' || key === 'realtime' || key === 'setup') {
+				if (key === 'teacher-access' || key === 'setup') {
 					section.classList.add('role-hidden');
 					return;
 				}
