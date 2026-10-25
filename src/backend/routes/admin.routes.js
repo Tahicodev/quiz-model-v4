@@ -545,4 +545,40 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
 	}
 });
 
+/**
+ * GET /api/v1/admin/overview
+ * Admin-only, read-only school-wide analytics bundle for the Admin Dashboard
+ * Overview. Aggregation runs server-side (Prisma count/groupBy/aggregate) so
+ * the browser never downloads the full users/results/exams tables. The route is
+ * gated by `adminOnly`, so a teacher can never reach school-wide statistics
+ * through it; the Teacher Overview stays client-scoped and untouched.
+ *
+ * Query params (all optional):
+ *   academicYear = 'current' | 'all' | '<start>-<end>'
+ *   period       = 'today' | '7d' | '30d' | 'month' | 'term' | 'year' | 'custom'
+ *   from, to     = ISO dates (used when period=custom)
+ *   teacherId    = restrict teacher/content metrics to one teacher
+ *   classId      = restrict applicable metrics to one class
+ */
+router.get('/overview', adminOnly, async (req, res, next) => {
+  try {
+    const { overviewAnalyticsSvc } = getContainer();
+    const q = req.query || {};
+    const data = await overviewAnalyticsSvc.getSchoolOverview({
+      schoolId: req.schoolId,
+      filters: {
+        academicYear: q.academicYear,
+        period: q.period,
+        from: q.from,
+        to: q.to,
+        teacherId: q.teacherId,
+        classId: q.classId,
+      },
+    });
+    res.json({ data });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

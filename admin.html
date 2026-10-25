@@ -632,6 +632,13 @@
 							class="sort-wrapper collapsible-filter-controls overview-filters"
 							id="overviewFilterBar"
 						>
+							<div id="overviewAcademicYearFilterWrap" class="overview-filter" hidden>
+								<label for="overviewAcademicYearFilter">Academic year</label>
+								<select id="overviewAcademicYearFilter" title="Reporting window for the school year (records are dated, not year-tagged)">
+									<option value="current">This academic year</option>
+									<option value="all">All years</option>
+								</select>
+							</div>
 							<div id="overviewTeacherFilterWrap" class="overview-filter">
 								<label for="overviewTeacherFilter">Teacher</label>
 								<select id="overviewTeacherFilter" title="Filter overview by teacher">
@@ -671,6 +678,9 @@
 									<option value="today">Today</option>
 									<option value="7d">Last 7 days</option>
 									<option value="30d">Last 30 days</option>
+									<option value="month">Current month</option>
+									<option value="term">Current term</option>
+									<option value="year">This academic year</option>
 								</select>
 							</div>
 						</div>
@@ -683,6 +693,7 @@
 							<button type="button" class="overview-scope-clear" id="overviewClearFilters" onclick="window.clearOverviewFilters()">Clear filters</button>
 						</div>
 
+						<div id="legacyOverviewBlocks">
 						<div class="kpi-section-title">People &amp; Students</div>
 						<div class="kpi-grid">
 							<div
@@ -1075,6 +1086,106 @@
 									<h3 id="kpi-top-class">-</h3>
 									<p>Top Performing Class</p>
 								</div>
+							</div>
+						</div>
+
+						</div>
+						<!-- /legacyOverviewBlocks -->
+
+						<!-- School-wide analytics: ADMIN SESSION ONLY. Populated from
+						     GET /api/v1/admin/overview (server-side Prisma aggregates).
+						     Hidden for teachers, whose Overview stays the classroom view. -->
+						<div id="adminSchoolInsights" hidden>
+							<div class="overview-scope-bar" id="adminSchoolMetaBar">
+								<span class="overview-scope-label" id="adminSchoolScopeLabel"></span>
+								<span class="text-muted text-xs" id="adminSchoolStatus"></span>
+							</div>
+
+							<div class="kpi-section-title">School at a Glance</div>
+							<div class="kpi-grid">
+								<div class="stat-card cyan" data-tooltip="Distinct registered students (account records, role = student). Not exam attempts; each student is counted once regardless of how many results they have.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-total-students">-</h3><p>Registered Students</p></div>
+								</div>
+								<div class="stat-card green" data-tooltip="Distinct students who completed at least one qualifying activity (exam, training, tournament or game submission) during the selected reporting period. Multiple activities by the same student count once.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-active-students">-</h3><p>Active Students</p></div>
+								</div>
+								<div class="stat-card blue" data-tooltip="Active Students ÷ Registered Students for the same scope. Shown only when the denominator is greater than zero.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-participation">-</h3><p>Participation Rate</p></div>
+								</div>
+								<div class="stat-card rose" data-tooltip="Students with at least 2 formal exam attempts in the period and no passing result. Transparent rule — not an arbitrary 'at risk' label.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-needing-attention">-</h3><p>Students Needing Attention</p></div>
+								</div>
+							</div>
+
+							<div class="kpi-section-title">Educational Content &amp; Assessment</div>
+							<div class="kpi-grid">
+								<div class="stat-card blue" data-tooltip="Distinct valid questions in the school bank (current-state; never date-filtered). When a teacher is selected this counts only that teacher's authored questions.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-total-questions">-</h3><p>Total Questions</p></div>
+								</div>
+								<div class="stat-card green" data-tooltip="Exams currently configured active (status = active) and not flagged as training. A snapshot of exam configuration, independent of the reporting period.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-active-exams">-</h3><p>Active Exams</p></div>
+								</div>
+								<div class="stat-card amber" data-tooltip="Distinct exams that produced at least one finalized formal-exam result in the reporting period. Exam definitions are not counted as conducted exams.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-exams-conducted">-</h3><p>Exams Conducted</p></div>
+								</div>
+								<div class="stat-card purple" data-tooltip="Categories that actually contain at least one question, out of all categories. Identifies thin content coverage. No curriculum-compliance claim is made (that mapping data does not exist).">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-content-coverage">-</h3><p>Content Coverage</p></div>
+								</div>
+								<div class="stat-card indigo" data-tooltip="Assignment-level completion cannot be computed reliably: legacy exams often store their target classes only in options_json, not in the exam_classes junction. Shown as unavailable rather than fabricated.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-completion">n/a</h3><p>Assessment Completion Rate</p></div>
+								</div>
+							</div>
+
+							<div class="kpi-section-title">Student Achievement &amp; Performance</div>
+							<div class="kpi-grid">
+								<div class="stat-card blue" data-tooltip="Arithmetic mean of eligible finalized formal-exam results in the period, normalized to /20 (score ÷ 5). Training, game and tournament results are excluded. Based on N eligible results.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-avg-score">-</h3><p>Average Exam Score (/20)</p></div>
+								</div>
+								<div class="stat-card green" data-tooltip="Passing finalized formal-exam results ÷ all eligible finalized formal-exam results in the period. Uses each result's passed flag (exam-configured threshold; default 10/20).">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-pass-rate">-</h3><p>Pass Rate</p></div>
+								</div>
+								<div class="stat-card purple" data-tooltip="Distinct students with at least one passing formal-exam result in the period. Training success is never counted as certification.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-certified">-</h3><p>Certified Students</p></div>
+								</div>
+								<div class="stat-card rose" data-tooltip="Students who sat at least one formal exam in the period but have not passed one. Computed from the same assessed population as Certified (not simply total − certified).">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-pending">-</h3><p>Pending Success</p></div>
+								</div>
+								<div class="stat-card indigo" data-tooltip="Difference between the average /20 score in the period and the immediately preceding equal-length period. The relative % is shown only when the prior average is non-zero; small samples are reported as insufficient data.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-trend">-</h3><p>Average Score Trend</p></div>
+								</div>
+								<div class="stat-card cyan" data-tooltip="Class with the highest average eligible formal-exam score in the period, subject to a minimum sample size. Reports 'insufficient data' when no class clears the threshold.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-top-class">-</h3><p>Top Performing Class</p></div>
+								</div>
+							</div>
+
+							<div class="dashboard-panel" id="schClassComparisonPanel">
+								<div class="panel-header"><h3>Class Performance Comparison</h3><span class="text-muted text-xs" id="schClassComparisonNote"></span></div>
+								<div class="panel-body"><div id="schClassComparison" class="overview-table-wrap"></div></div>
+							</div>
+
+							<div class="kpi-section-title">Teacher &amp; Class Insights</div>
+							<div class="dashboard-panel" id="schTeacherPanel">
+								<div class="panel-header"><h3>Teacher Activity &amp; Performance</h3><span class="text-muted text-xs" id="schTeacherNote"></span></div>
+								<div class="panel-body"><div id="schTeacherTable" class="overview-table-wrap"></div></div>
+							</div>
+							<div class="dashboard-panel" id="schAttentionPanel">
+								<div class="panel-header"><h3>Classes Needing Attention</h3><span class="text-muted text-xs">Transparent criteria: low average (&lt; 8/20) or low pass rate (&lt; 40%) with enough results</span></div>
+								<div class="panel-body"><div id="schAttentionList" class="overview-table-wrap"></div></div>
 							</div>
 						</div>
 

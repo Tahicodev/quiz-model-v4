@@ -29,6 +29,7 @@ import { GamificationService } from './services/GamificationService.js';
 import { TeacherMessageService } from './services/TeacherMessageService.js';
 import { TeacherAssignmentService } from './services/TeacherAssignmentService.js';
 import { DeviceService } from './services/DeviceService.js';
+import { OverviewAnalyticsService } from './services/OverviewAnalyticsService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
 import { QuestionService } from '../frontend/services/QuestionService.js';
@@ -88,6 +89,9 @@ export function createContainer() {
     teacherMessageSvc: new TeacherMessageService(repo),
     teacherAssignmentSvc: new TeacherAssignmentService(repo),
     deviceSvc: new DeviceService(repo),
+
+    // School-wide analytics for the Admin Dashboard Overview (admin-only).
+    overviewAnalyticsSvc: new OverviewAnalyticsService(repo),
   });
 
   return _container;

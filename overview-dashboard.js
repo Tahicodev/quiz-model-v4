@@ -29,6 +29,11 @@ function initDashboard() {
 	updateDashboardStats();
 	renderRecentActivity();
 	updateGreeting();
+	// Admin sessions overlay the correct, server-aggregated school-wide metrics
+	// on top of the client path above. Teachers keep the scoped classroom view
+	// untouched (the client path already rendered their numbers).
+	renderAdminOverviewChrome();
+	if (overviewIsAdmin()) loadAdminOverview();
 }
 
 // ── Scope bar ────────────────────────────────────────────────────────────────
@@ -195,6 +200,14 @@ function overviewModeFilterValue() {
 	return String(document.getElementById('overviewModeFilter')?.value || '');
 }
 
+// Academic-year reporting window (admin-only filter). 'current' anchors the
+// derived school-year window; 'all' un-bounds it. Teachers never use it.
+function overviewAcademicYearValue() {
+	return String(
+		document.getElementById('overviewAcademicYearFilter')?.value || 'current',
+	);
+}
+
 function overviewPeriodWindow() {
 	const key = overviewPeriodFilterValue();
 	const nowMs = Date.now();
@@ -214,9 +227,15 @@ function overviewPeriodWindow() {
 }
 
 function overviewPeriodLabelText(key) {
-	return { '': 'last 30 days', today: 'today', '7d': 'last 7 days', '30d': 'last 30 days' }[
-		key || ''
-	] || 'last 30 days';
+	return {
+		'': 'last 30 days',
+		today: 'today',
+		'7d': 'last 7 days',
+		'30d': 'last 30 days',
+		month: 'current month',
+		term: 'current term',
+		year: 'this academic year',
+	}[key || ''] || 'last 30 days';
 }
 
 function overviewResultInWindow(r, win) {
@@ -890,6 +909,16 @@ function populateOverviewFilters() {
 			stuEl.dataset.listenerAdded = 'true';
 		}
 	}
+	// Period / Mode / Academic-year re-run the whole Overview (the server
+	// admin aggregate and the client teacher path both read these).
+	['overviewPeriodFilter', 'overviewModeFilter', 'overviewAcademicYearFilter'].forEach(
+		(id) => {
+			const el = document.getElementById(id);
+			if (!el || el.dataset.listenerAdded) return;
+			el.addEventListener('change', () => initDashboard());
+			el.dataset.listenerAdded = 'true';
+		},
+	);
 }
 
 function updateGreeting() {
@@ -2959,3 +2988,301 @@ function formatTimeAgo(dateString) {
 
 // Expose to window
 window.initDashboard = initDashboard;
+
+// ============================================
+// ADMIN SCHOOL-WIDE OVERVIEW (server-backed)
+// ============================================
+// Admins get correct, tenant-scoped, server-aggregated metrics from
+// GET /api/v1/admin/overview. Teachers never touch this path. When the request
+// fails (offline edge / error), we gracefully degrade to the client-computed
+// legacy blocks rather than showing a blank dashboard. Values are never
+// fabricated: missing → '-' / 'Insufficient data'.
+let adminOverviewToken = 0;
+const adminOverviewPrev = Object.create(null);
+
+function renderAdminOverviewChrome() {
+	const isAdmin = overviewIsAdmin();
+	const ayWrap = document.getElementById('overviewAcademicYearFilterWrap');
+	if (ayWrap) ayWrap.hidden = !isAdmin;
+	const legacy = document.getElementById('legacyOverviewBlocks');
+	const adminSec = document.getElementById('adminSchoolInsights');
+	if (!isAdmin) {
+		if (adminSec) adminSec.hidden = true;
+		if (legacy) legacy.hidden = false;
+		return;
+	}
+	// Admin: the server section replaces the legacy grids (legacy values stay
+	// in the DOM as a degraded fallback but are hidden while loading/loaded).
+	if (adminSec) adminSec.hidden = false;
+}
+
+function ovCardText(id, text) {
+	const el = document.getElementById(id);
+	if (el) el.textContent = text;
+}
+
+// Count-up only when the value actually changed (avoids replaying on every
+// render / minor refresh, per the animation requirement).
+function ovCardNumber(id, num, suffix = '') {
+	const el = document.getElementById(id);
+	if (!el) return;
+	if (num == null || Number.isNaN(num)) {
+		el.textContent = '-';
+		adminOverviewPrev[id] = null;
+		return;
+	}
+	if (adminOverviewPrev[id] === num) {
+		el.textContent = num + suffix;
+		return;
+	}
+	adminOverviewPrev[id] = num;
+	animateValue(id, 0, num, 700, suffix);
+}
+
+function ovCardTooltip(id, text) {
+	const el = document.getElementById(id);
+	const card = el && el.closest('.stat-card');
+	if (card && text) card.setAttribute('data-tooltip', text);
+}
+
+function ovDash(v, unit = '') {
+	return v == null ? '-' : `${v}${unit}`;
+}
+
+function ovEsc(s) {
+	return String(s == null ? '' : s)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
+}
+
+function ovBuildTable(containerId, headers, rows) {
+	const wrap = document.getElementById(containerId);
+	if (!wrap) return;
+	wrap.textContent = '';
+	if (!rows || !rows.length) {
+		const empty = document.createElement('p');
+		empty.className = 'text-muted';
+		empty.textContent = 'No data for the selected scope.';
+		wrap.appendChild(empty);
+		return;
+	}
+	const table = document.createElement('table');
+	table.className = 'overview-comparison-table';
+	const thead = document.createElement('thead');
+	const hr = document.createElement('tr');
+	headers.forEach((h) => {
+		const th = document.createElement('th');
+		th.textContent = h;
+		hr.appendChild(th);
+	});
+	thead.appendChild(hr);
+	table.appendChild(thead);
+	const tbody = document.createElement('tbody');
+	rows.forEach((row) => {
+		const tr = document.createElement('tr');
+		row.forEach((cell) => {
+			const td = document.createElement('td');
+			td.textContent = cell == null ? '-' : String(cell);
+			tr.appendChild(td);
+		});
+		tbody.appendChild(tr);
+	});
+	table.appendChild(tbody);
+	wrap.appendChild(table);
+}
+
+async function loadAdminOverview() {
+	if (!overviewIsAdmin()) return;
+	const statusEl = document.getElementById('adminSchoolStatus');
+	const legacy = document.getElementById('legacyOverviewBlocks');
+	const adminSec = document.getElementById('adminSchoolInsights');
+	const token = ++adminOverviewToken;
+	if (statusEl) statusEl.textContent = 'Loading school-wide analytics…';
+	const params = {
+		academicYear: overviewAcademicYearValue(),
+		period: overviewPeriodFilterValue(),
+		teacherId: String(document.getElementById('overviewTeacherFilter')?.value || ''),
+		classId: String(document.getElementById('overviewClassFilter')?.value || ''),
+	};
+	try {
+		if (!window.API || typeof window.API.list !== 'function') {
+			throw new Error('REST client unavailable');
+		}
+		const payload = await window.API.list('admin/overview', params);
+		if (token !== adminOverviewToken) return; // superseded by a newer request
+		const data = payload && payload.data;
+		if (!data || !data.sections) throw new Error('Unexpected response shape');
+		applyAdminOverview(data);
+		if (adminSec) adminSec.hidden = false;
+		if (legacy) legacy.hidden = true; // server numbers replace the legacy grids
+		if (statusEl) {
+			const gen = data.meta && data.meta.generatedAt
+				? new Date(data.meta.generatedAt).toLocaleString()
+				: new Date().toLocaleString();
+			statusEl.textContent = `Updated ${gen}`;
+		}
+	} catch (err) {
+		if (token !== adminOverviewToken) return;
+		if (adminSec) adminSec.hidden = true;
+		if (legacy) legacy.hidden = false; // graceful degradation
+		if (statusEl) {
+			statusEl.textContent =
+				'School-wide analytics unavailable — showing basic stats.';
+		}
+		console.warn('[overview] admin analytics failed:', err && err.message);
+	}
+}
+
+function applyAdminOverview(data) {
+	const g = data.sections.glance || {};
+	const c = data.sections.content || {};
+	const a = data.sections.achievement || {};
+	const e = data.sections.engagement || {};
+	const t = data.sections.teacherInsights || {};
+	const meta = data.meta || {};
+	const scope = meta.scope || {};
+
+	// ── Scope / academic-year recap ────────────────────────────────────────
+	const scopeLabel = document.getElementById('adminSchoolScopeLabel');
+	if (scopeLabel) {
+		const parts = [];
+		if (scope.academicYear === 'all') parts.push('All years');
+		else if (scope.academicYearLabel) parts.push(`AY ${scope.academicYearLabel}`);
+		if (scope.periodLabel) parts.push(scope.periodLabel);
+		if (scope.teacherId) parts.push('one teacher');
+		if (scope.classId) parts.push('one class');
+		scopeLabel.textContent = parts.join(' · ') || 'Whole school';
+	}
+	const aySel = document.getElementById('overviewAcademicYearFilter');
+	if (aySel && !aySel.dataset.bound) {
+		aySel.dataset.bound = 'true';
+	}
+
+	// ── Section A — School at a Glance ─────────────────────────────────────
+	ovCardNumber('sch-total-students', g.totalStudents?.value);
+	ovCardNumber('sch-active-students', g.activeStudents?.value);
+	ovDashSet('sch-participation', g.participationRate?.value, '%',
+		g.participationRate?.denominator
+			? `Participation rate: ${g.activeStudents?.value ?? '-'} active of ${g.participationRate.denominator} registered students in the period.`
+		: null);
+	ovCardNumber('sch-needing-attention', g.studentsNeedingAttention?.value);
+	if (g.studentsNeedingAttention?.rule) {
+		ovCardTooltip('sch-needing-attention', `Students needing attention — ${g.studentsNeedingAttention.rule}`);
+	}
+
+	// ── Section B — Content & Assessment ───────────────────────────────────
+	ovCardNumber('sch-total-questions', c.totalQuestions?.value);
+	ovCardNumber('sch-active-exams', c.activeExams?.value);
+	ovCardNumber('sch-exams-conducted', a.examsConducted?.value);
+	const cov = c.contentCoverage || {};
+	ovCardText(
+		'sch-content-coverage',
+		cov.totalCategories != null ? `${cov.categoriesWithQuestions}/${cov.totalCategories}` : '-',
+	);
+	ovCardTooltip(
+		'sch-content-coverage',
+		`${cov.categoriesWithQuestions ?? '-'} of ${cov.totalCategories ?? '-'} categories contain at least one question. No curriculum-compliance claim (data absent).`,
+	);
+	ovCardText('sch-completion', 'n/a');
+
+	// ── Section C — Achievement ────────────────────────────────────────────
+	ovDashSet('sch-avg-score', a.avgExamScore?.value, '/20',
+		`Average exam score (/20) across ${a.avgExamScore?.sample ?? 0} eligible finalized formal-exam results in the period. Training/game excluded.`);
+	ovDashSet('sch-pass-rate', a.passRate?.value, '%',
+		`Pass rate: ${a.passRate?.passed ?? '-'} passing of ${a.passRate?.total ?? '-'} eligible finalized formal-exam results.`);
+	ovCardNumber('sch-certified', a.certifiedStudents?.value);
+	ovCardNumber('sch-pending', a.pendingSuccess?.value);
+
+	const trendEl = document.getElementById('sch-trend');
+	const trend = a.avgScoreTrend || {};
+	if (trendEl) {
+		if (trend.insufficient || trend.deltaAbs == null) {
+			trendEl.textContent = 'Insufficient data';
+			ovCardTooltip('sch-trend', 'Average score trend needs at least the minimum sample in both the current and preceding equal-length periods.');
+		} else {
+			const arrow = trend.deltaAbs > 0 ? '▲' : trend.deltaAbs < 0 ? '▼' : '▬';
+			trendEl.textContent = `${arrow} ${trend.deltaAbs > 0 ? '+' : ''}${trend.deltaAbs}/20`;
+			const rel = trend.deltaPct != null ? ` (${trend.deltaPct > 0 ? '+' : ''}${trend.deltaPct}%)` : '';
+			const card = trendEl.closest('.stat-card');
+			if (card) card.className = `stat-card ${trend.deltaAbs >= 0 ? 'green' : 'rose'}`;
+			ovCardTooltip(
+				'sch-trend',
+				`Trend: ${trend.current ?? '-'}/20 this period vs ${trend.previous ?? '-'}/20 the previous equal-length period${rel}. Samples: ${trend.currentSample ?? 0} / ${trend.previousSample ?? 0}.`,
+			);
+		}
+	}
+	const topEl = document.getElementById('sch-top-class');
+	const top = a.topClass || {};
+	if (topEl) {
+		if (top.value) {
+			topEl.textContent = top.value;
+			ovCardTooltip('sch-top-class', `Top class: ${top.value} — ${top.avgScore20}/20 across ${top.sample} eligible results (min sample ${a.minSampleForRank}).`);
+		} else {
+			topEl.textContent = 'Insufficient data';
+			ovCardTooltip('sch-top-class', `No class met the minimum sample of ${a.minSampleForRank ?? 5} eligible formal-exam results in the period.`);
+		}
+	}
+
+	// Class comparison table
+	const note = document.getElementById('schClassComparisonNote');
+	if (note) {
+		note.textContent = (a.classComparison || []).length
+			? `Formal exam results · min ranking sample ${a.minSampleForRank}`
+			: '';
+	}
+	ovBuildTable(
+		'schClassComparison',
+		['Class', 'Avg (/20)', 'Pass rate', 'Results', 'Students'],
+		(a.classComparison || []).map((row) => [
+			row.className,
+			row.avgScore20 == null ? '-' : `${row.avgScore20}/20`,
+			row.passRate == null ? '-' : `${row.passRate}%`,
+			row.sample,
+			row.students,
+		]),
+	);
+
+	// ── Section E — Teacher & Class Insights ───────────────────────────────
+	const tNote = document.getElementById('schTeacherNote');
+	if (tNote) {
+		const act = t.activeTeachers?.value;
+		tNote.textContent = act != null ? `${act} active teacher(s) in the period` : '';
+	}
+	ovBuildTable(
+		'schTeacherTable',
+		['Teacher', 'Questions', 'Exams', 'Classes', 'Assessment activity', 'Avg (/20)', 'Pass rate', 'Sample'],
+		(t.teacherActivity || []).map((row) => [
+			row.name,
+			row.questionsCreated,
+			row.examsCreated,
+			row.classesManaged,
+			row.assessmentActivity,
+			row.avgScore20 == null ? '-' : `${row.avgScore20}/20`,
+			row.passRate == null ? '-' : `${row.passRate}%`,
+			row.sampleSize,
+		]),
+	);
+	ovBuildTable(
+		'schAttentionList',
+		['Class', 'Avg (/20)', 'Pass rate', 'Results', 'Reason'],
+		(t.classesNeedingAttention || []).map((row) => [
+			row.className,
+			row.avgScore20 == null ? '-' : `${row.avgScore20}/20`,
+			row.passRate == null ? '-' : `${row.passRate}%`,
+			row.sample,
+			(row.reasons || []).join('; '),
+		]),
+	);
+
+	// Live engagement snapshot (used for the attention/live context).
+	void e; // engagement KPIs remain on the shared Live Play cards for admins.
+}
+
+function ovDashSet(id, value, unit, tooltip) {
+	const el = document.getElementById(id);
+	if (!el) return;
+	el.textContent = value == null ? '-' : `${value}${unit}`;
+	if (tooltip) ovCardTooltip(id, tooltip);
+}
