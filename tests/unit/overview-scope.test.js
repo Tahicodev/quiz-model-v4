@@ -208,6 +208,8 @@ beforeAll(() => {
     },
     escapeHtml: (s) => String(s ?? ''),
     getOwnerLabel: (id) => (id ? String(id) : ''),
+    isAutoGameCategory: (c) =>
+      String((c && c.name) || '').startsWith('Kids · '),
     getOwnerId: (item) =>
       item ? String(item.ownerId || item.created_by || '') || null : null,
   };
@@ -313,6 +315,42 @@ describe('admin overview filters', () => {
     expect(dump).toContain('Student One');
     expect(dump).not.toContain('Student Two');
   });
+
+  it('category dropdown lists every category with no teacher selected', () => {
+    seedTables();
+    setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
+    vm.runInContext('initDashboard();', ctx);
+    const opts = els.overviewCategoryFilter.children.map((o) => o.value);
+    // cat1 belongs to T1, cat2 to T2: both show school-wide.
+    expect(opts).toContain('cat1');
+    expect(opts).toContain('cat2');
+  });
+
+  it('category dropdown narrows to the selected teacher', () => {
+    seedTables();
+    setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
+    els.overviewTeacherFilter.value = T1;
+    vm.runInContext('initDashboard();', ctx);
+    const opts = els.overviewCategoryFilter.children.map((o) => o.value);
+    // Only the categories teacher One authored remain.
+    expect(opts).toContain('cat1');
+    expect(opts).not.toContain('cat2');
+  });
+
+  it('category dropdown hides game-generated Kids · buckets', () => {
+    seedTables();
+    // A kids game auto-created this bucket; it is not a real teacher category.
+    state.tables.categories.push({
+      id: 'kids-bucket',
+      name: 'Kids · Math',
+      created_by: T1,
+    });
+    setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
+    vm.runInContext('initDashboard();', ctx);
+    const opts = els.overviewCategoryFilter.children.map((o) => o.value);
+    expect(opts).toContain('cat1');
+    expect(opts).not.toContain('kids-bucket');
+  });
 });
 
 const MATH = 'math-uuid-1';
@@ -353,22 +391,28 @@ describe('category insights', () => {
     expect([c1.attempts, c1.training.a, c1.training.c, c1.exam.a]).toEqual([3, 2, 1, 1]);
   });
 
-  it('renders the needs-attention list ranked lowest first', () => {
+  it('admin sees needs-attention BY CATEGORY (management view, never a question stem)', () => {
     seedInsights();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
     vm.runInContext('initDashboard();', ctx);
     expect(els['kpi-cat-training'].textContent).toBe('33%');
     expect(els['kpi-cat-exam'].textContent).toBe('0%');
     expect(els['kpi-cat-attempts'].textContent).toBe('4');
+    // Weak CATEGORIES (not questions): one category under 50% with >=2 answers.
     expect(els['kpi-cat-struggling'].textContent).toBe('1');
     expect(els.categoryInsightsScopeLabel.textContent).toBe('All data');
     const hardHtml = els.categoryHardList.innerHTML;
     expect(hardHtml).toContain('hard-item');
-    expect(hardHtml).toContain('Capital of France?');
-    expect(hardHtml.indexOf('Capital of France?')).toBeLessThan(
-      hardHtml.indexOf('What is 2 + 2?'),
-    );
+    // A manager controls teacher content and results: category, its owner and
+    // the exam/training accuracy split are shown; an individual stem never is.
+    expect(hardHtml).toContain('Addition');
+    expect(hardHtml).toContain('Owner: Teacher One');
+    expect(hardHtml).toContain('Exam 0% · Training 33%');
+    expect(hardHtml).toContain('4 answered');
+    expect(hardHtml).toContain('25%');
     expect(hardHtml).toContain('acc-low');
+    expect(hardHtml).not.toContain('Capital of France?');
+    expect(hardHtml).not.toContain('What is 2 + 2?');
     expect(els.categoryUnattemptedLine.textContent).toBe(
       '3 questions not attempted yet',
     );
@@ -405,6 +449,22 @@ describe('category insights', () => {
     expect(
       vm.runInContext('overviewScopeClasses().map((c) => c.id)', ctx),
     ).toEqual([C1]);
+  });
+
+  it('teacher keeps the per-question remediation list ranked lowest first', () => {
+    seedInsights();
+    setRole('teacher', { id: T1, role: 'teacher', name: 'Teacher One' });
+    vm.runInContext('initDashboard();', ctx);
+    const hardHtml = els.categoryHardList.innerHTML;
+    // The teacher authored the question, so they drill into individual stems,
+    // ordered by accuracy (q11 0% before q10 50%).
+    expect(hardHtml).toContain('Capital of France?');
+    expect(hardHtml).toContain('What is 2 + 2?');
+    expect(hardHtml.indexOf('Capital of France?')).toBeLessThan(
+      hardHtml.indexOf('What is 2 + 2?'),
+    );
+    // Management-only labels must not leak into the teacher view.
+    expect(hardHtml).not.toContain('Owner:');
   });
 });
 

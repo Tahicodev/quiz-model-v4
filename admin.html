@@ -40,8 +40,8 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-14-r24" />
-		<link rel="stylesheet" href="admin.css?v=2026-10-23-pub2" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-26-examdoc2" />
+		<link rel="stylesheet" href="admin.css?v=2026-10-25-devmob1" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-10-23-pub2" />
 		<script>
@@ -132,8 +132,8 @@
 				</script>
 
 			<!-- Load shared utilities first -->
-		<script src="utils.js" defer></script>
-		<script src="api-client.js?v=2026-10-14-r2" defer></script>
+		<script src="utils.js?v=2026-10-26-catgame1" defer></script>
+		<script src="api-client.js?v=2026-10-26-examdoc1" defer></script>
 		<script src="auth.js?v=2026-10-24-r8" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="settings.js?v=2026-10-14-r1" defer></script>
@@ -147,20 +147,21 @@
 		<!-- Admin page scripts -->
 		<script src="bulk-selection.js?v=2026-10-23-mq12" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-10-14-r1" defer></script>
-		<script src="questions-management.js?v=2026-10-16-r3" defer></script>
-		<script src="exam-management.js?v=2026-10-14-r1" defer></script>
+		<script src="category-management.js?v=2026-10-26-catgame1" defer></script>
+		<script src="questions-management.js?v=2026-10-26-catgame1" defer></script>
+		<script src="exam-management.js?v=2026-10-26-examdoc1" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
-		<script src="overview-dashboard.js?v=2026-10-14-r2" defer></script>
+		<script src="exam-documents.js?v=2026-10-26-examdoc1" defer></script>
+		<script src="overview-dashboard.js?v=2026-10-26-catgame1" defer></script>
 		<script src="global-search.js" defer></script>
 		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
-		<script src="classroom-devices.js?v=2026-10-23-mq12" defer></script>
+		<script src="classroom-devices.js?v=2026-10-25-devmob1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
-		<script src="games-management.js?v=2026-10-12-r6" defer></script>
-		<script src="kids-games-management.js?v=2026-10-23-pub1" defer></script>
+		<script src="games-management.js?v=2026-10-26-catgame1" defer></script>
+		<script src="kids-games-management.js?v=2026-10-26-catgame1" defer></script>
 		<script src="/kids/games/math-quest-core.js?v=2026-10-23-mq12" defer></script>
 <script src="kids-championships-management.js?v=2026-10-23-pub1" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
@@ -1119,6 +1120,10 @@
 									<div class="stat-bar"></div>
 									<div class="stat-info"><h3 id="sch-needing-attention">-</h3><p>Students Needing Attention</p></div>
 								</div>
+								<div class="stat-card amber" data-tooltip="Registered teacher accounts in the school (role = teacher, current-state). Activity and class details are listed in the Teacher Activity table below.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-total-teachers">-</h3><p>Total Teachers</p></div>
+								</div>
 							</div>
 
 							<div class="kpi-section-title">Educational Content &amp; Assessment</div>
@@ -1186,6 +1191,30 @@
 							<div class="dashboard-panel" id="schAttentionPanel">
 								<div class="panel-header"><h3>Classes Needing Attention</h3><span class="text-muted text-xs">Transparent criteria: low average (&lt; 8/20) or low pass rate (&lt; 40%) with enough results</span></div>
 								<div class="panel-body"><div id="schAttentionList" class="overview-table-wrap"></div></div>
+							</div>
+
+							<div class="kpi-section-title">Live Learning Activity</div>
+							<div class="kpi-grid">
+								<div class="stat-card cyan" data-tooltip="Game lobbies currently waiting for players (status = waiting). A live snapshot, never date-filtered.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-game-lobbies">-</h3><p>Game Lobbies</p></div>
+								</div>
+								<div class="stat-card green" data-tooltip="Games in progress right now (status = active). A live snapshot, never date-filtered.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-live-games">-</h3><p>Live Games</p></div>
+								</div>
+								<div class="stat-card purple" data-tooltip="Tournaments currently running (status = active) out of all tournaments in the school. A live snapshot, never date-filtered.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-active-tournaments">-</h3><p>Active Tournaments</p></div>
+								</div>
+								<div class="stat-card blue" data-tooltip="Total qualifying learning activities (exam, training, tournament or game submissions) recorded by students in the reporting period.">
+									<div class="stat-bar"></div>
+									<div class="stat-info"><h3 id="sch-total-attempts">-</h3><p>Total Attempts</p></div>
+								</div>
+							</div>
+							<div class="dashboard-panel" id="schActivityTrendPanel">
+								<div class="panel-header"><h3>Activity Over Time</h3><span class="text-muted text-xs" id="schActivityTrendNote"></span></div>
+								<div class="panel-body"><div id="schActivityTrend" class="overview-table-wrap"></div></div>
 							</div>
 						</div>
 
@@ -1287,6 +1316,7 @@
 									</div>
 									<div
 										class="stat-card rose"
+										id="catStrugglingCard"
 										data-tooltip="Questions with under 50% accuracy and at least 2 attempts"
 									>
 										<div class="stat-bar"></div>
@@ -1309,7 +1339,7 @@
 										</div>
 										<div class="stat-info">
 											<h3 id="kpi-cat-struggling">0</h3>
-											<p>Struggling questions</p>
+											<p id="kpi-cat-struggling-label">Struggling questions</p>
 										</div>
 									</div>
 								</div>
@@ -1318,7 +1348,7 @@
 							     findings allowed to breathe full width — mobile too. -->
 							<div class="insights-block needs-attention-block">
 								<div class="nit-head">
-									<h4>Needs attention <small>lowest accuracy first</small></h4>
+									<h4 id="categoryInsightsBlockTitle">Needs attention <small id="categoryInsightsBlockHint">lowest accuracy first</small></h4>
 									<span class="nit-legend" aria-hidden="true">
 										<span class="nit-dot acc-high"></span>solid
 										<span class="nit-dot acc-mid"></span>mixed
@@ -1409,104 +1439,6 @@
 
 						<!-- Dashboard Content Grid -->
 						<div class="dashboard-content-grid">
-							<!-- Quick Actions Panel -->
-							<div class="dashboard-panel quick-actions-panel">
-								<div class="panel-header">
-									<h3>Quick Actions</h3>
-								</div>
-								<div class="quick-actions-grid">
-									<button
-										class="quick-action-btn"
-										onclick="openQuestionFormModal()"
-									>
-										<div class="action-icon icon-blue">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<line x1="12" y1="5" x2="12" y2="19"></line>
-												<line x1="5" y1="12" x2="19" y2="12"></line>
-											</svg>
-										</div>
-										<span>Add Question</span>
-									</button>
-									<button
-										class="quick-action-btn"
-										onclick="createNewCategory()"
-									>
-										<div class="action-icon icon-amber">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<path
-													d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
-												></path>
-												<line x1="7" y1="7" x2="7.01" y2="7"></line>
-											</svg>
-										</div>
-										<span>New Category</span>
-									</button>
-									<button class="quick-action-btn" onclick="createNewExam()">
-										<div class="action-icon icon-green">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<rect
-													x="2"
-													y="7"
-													width="20"
-													height="14"
-													rx="2"
-													ry="2"
-												></rect>
-												<path
-													d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"
-												></path>
-											</svg>
-										</div>
-										<span>Create Exam</span>
-									</button>
-									<button class="quick-action-btn" onclick="createNewClass()">
-										<div class="action-icon icon-purple">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<path
-													d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
-												></path>
-												<circle cx="9" cy="7" r="4"></circle>
-												<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-												<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-											</svg>
-										</div>
-										<span>Add Class</span>
-									</button>
-								</div>
-							</div>
-
 							<!-- Recent Activity Feed -->
 							<div class="dashboard-panel activity-panel">
 								<div class="panel-header">

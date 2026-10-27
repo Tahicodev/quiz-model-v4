@@ -746,9 +746,9 @@ function overviewResultTouchesCategories(result, stats) {
 }
 
 // Populate the Overview filter bar. The teacher dropdown is admin-only
-// (TeacherFilter hides its wrap in teacher sessions); the class and
-// category dropdowns list the scope values and preserve theirs when
-// still valid.
+// (TeacherFilter hides its wrap in teacher sessions); the class dropdown lists
+// the scope values, the category dropdown narrows to the selected teacher's
+// categories, and each preserves its pick when still valid.
 function populateOverviewFilters() {
 	try {
 		if (window.TeacherFilter) {
@@ -756,10 +756,12 @@ function populateOverviewFilters() {
 				'overviewTeacherFilter',
 				'overviewTeacherFilterWrap',
 				() => {
-					// Hierarchical filters: a new teacher resets the
-					// dependent class/student picks (their options rebuild).
+					// Hierarchical filters: a new teacher resets the dependent
+					// class/category/student picks (their options rebuild).
 					const classEl = document.getElementById('overviewClassFilter');
 					if (classEl) classEl.value = '';
+					const catElReset = document.getElementById('overviewCategoryFilter');
+					if (catElReset) catElReset.value = '';
 					const stuEl = document.getElementById('overviewStudentFilter');
 					if (stuEl) stuEl.value = '';
 					initDashboard();
@@ -808,11 +810,23 @@ function populateOverviewFilters() {
 		} catch (_) {
 			categories = [];
 		}
+		// Categories load per selected teacher: choose a teacher first and the
+		// dropdown lists only the categories that teacher authored, matching the
+		// teacher→class→student cascade. With no teacher picked the full school
+		// list stays ("All Categories"). Teacher sessions keep their own
+		// canAccessItem scope untouched.
+		const catTeacher = overviewIsAdmin()
+			? String(
+					document.getElementById('overviewTeacherFilter')?.value || '',
+				)
+			: '';
 		const visibleCats = categories.filter(
 			(c) =>
 				c &&
 				c.id &&
 				!c.isSystem &&
+				!(typeof isAutoGameCategory === 'function' && isAutoGameCategory(c)) &&
+				(!catTeacher || overviewOwnerId(c) === catTeacher) &&
 				(!window.Auth?.canAccessItem ||
 					window.Auth.canAccessItem('category', c)),
 		);
@@ -988,9 +1002,12 @@ function updateDashboardStats() {
 	);
 	animateValue('kpi-questions', 0, questions.length, 1000);
 
-	// 2. Total Categories
+	// 2. Total Categories (game-generated `Kids · …` buckets are never real
+	// categories, so they are excluded — this counts teacher-authored ones).
 	const categories = scopeAuthoredRows(
 		window.__DI_CONTAINER__.repo.getAll_sync('categories'),
+	).filter(
+		(c) => !(typeof isAutoGameCategory === 'function' && isAutoGameCategory(c)),
 	);
 	animateValue('kpi-categories', 0, categories.length, 1000);
 
@@ -1358,59 +1375,16 @@ function renderCategoryInsights() {
 	setText('kpi-cat-training', pct(t.training.c, t.training.a));
 	setText('kpi-cat-exam', pct(t.exam.c, t.exam.a));
 	setText('kpi-cat-attempts', String(t.attempts));
-	// Ranked questions: lowest accuracy first (attempted only).
-	const ranked = [...stats.perQuestion.entries()]
-		.map(([qid, e]) => ({
-			qid,
-			attempts: e.attempts,
-			correct: e.correct,
-			accuracy: e.attempts ? (e.correct / e.attempts) * 100 : null,
-		}))
-		.filter((e) => e.attempts > 0)
-		.sort((a, b) => a.accuracy - b.accuracy || b.attempts - a.attempts);
-	// Struggling: under 50% with at least 2 attempts (avoids one-off noise).
-	const struggling = ranked.filter(
-		(e) => e.accuracy < 50 && e.attempts >= 2,
-	);
-	setText('kpi-cat-struggling', String(struggling.length));
 	setText('categoryInsightsScopeLabel', overviewScopeDescription());
-	// Needs attention: the 5 lowest-accuracy questions, ranked. The class
-	// table is gone (the Class Performance chart already covers the class
-	// dimension), so these findings render full width — one rank, one
-	// breadcrumb, one try count and one accuracy chip each.
-	const hardEl = document.getElementById('categoryHardList');
-	if (hardEl) {
-		const bottom = ranked.slice(0, 5);
-		if (!bottom.length) {
-			hardEl.innerHTML =
-				'<div class="chart-empty">No answered questions in this scope yet</div>';
-		} else {
-			hardEl.innerHTML = bottom
-				.map((e, i) => {
-					const q = stats.questionsById.get(e.qid) || {};
-					const text = String(q.question || q.text || 'Question');
-					const short =
-						text.length > 70 ? text.slice(0, 70) + '...' : text;
-					const crumb = overviewCategoryBreadcrumb(
-						ovQuestionCategoryId(q),
-						stats.categories,
-					);
-					const acc = Math.round(e.accuracy);
-					const tone = acc < 50 ? 'acc-low' : acc < 80 ? 'acc-mid' : 'acc-high';
-					return (
-						`<div class="hard-item ${tone}">` +
-						`<span class="hard-rank" aria-hidden="true">${i + 1}</span>` +
-						'<div class="hard-main">' +
-						`<div class="hard-title" title="${esc(text)}">${esc(short)}</div>` +
-						`<div class="hard-meta"><span class="hard-cat">${esc(crumb || 'Uncategorized')}</span><span class="hard-tries">${e.attempts}${e.attempts === 1 ? ' try' : ' tries'}</span></div>` +
-						'</div>' +
-						`<span class="hard-acc ${tone}">${acc}%<small> acc</small></span>` +
-						`<div class="acc-bar"><span class="acc-fill ${tone}" style="width:${acc}%"></span></div>` +
-						'</div>'
-					);
-				})
-				.join('');
-		}
+
+	// Admin manages the school and never teaches or remediates individual
+	// questions, so the findings are rendered BY CATEGORY (content-owner +
+	// student accuracy) to control teacher content and results. Teachers keep
+	// the per-question remediation view.
+	if (overviewIsAdmin()) {
+		renderCategoryInsightsAdmin(stats, esc, setText);
+	} else {
+		renderCategoryInsightsTeacher(stats, esc, setText);
 	}
 	// Unattempted questions in scope.
 	const unEl = document.getElementById('categoryUnattemptedLine');
@@ -1429,6 +1403,149 @@ function renderCategoryInsights() {
 			? `${fresh} question${fresh === 1 ? '' : 's'} not attempted yet`
 			: '';
 	}
+}
+
+// ── Teacher: needs-attention = the lowest-accuracy INDIVIDUAL questions ──────
+// (the person who authored the question fixes or retrains it). Admins never see
+// this — see renderCategoryInsightsAdmin for the management (by-category) view.
+function renderCategoryInsightsTeacher(stats, esc, setText) {
+	const titleEl = document.getElementById('categoryInsightsBlockTitle');
+	if (titleEl) titleEl.innerHTML = 'Needs attention <small>lowest accuracy first</small>';
+	const lbl = document.getElementById('kpi-cat-struggling-label');
+	if (lbl) lbl.textContent = 'Struggling questions';
+	const card = document.getElementById('catStrugglingCard');
+	if (card) card.setAttribute('data-tooltip', 'Questions with under 50% accuracy and at least 2 attempts');
+
+	const ranked = [...stats.perQuestion.entries()]
+		.map(([qid, e]) => ({
+			qid,
+			attempts: e.attempts,
+			correct: e.correct,
+			accuracy: e.attempts ? (e.correct / e.attempts) * 100 : null,
+		}))
+		.filter((e) => e.attempts > 0)
+		.sort((a, b) => a.accuracy - b.accuracy || b.attempts - a.attempts);
+	const struggling = ranked.filter((e) => e.accuracy < 50 && e.attempts >= 2);
+	setText('kpi-cat-struggling', String(struggling.length));
+
+	const hardEl = document.getElementById('categoryHardList');
+	if (!hardEl) return;
+	const bottom = ranked.slice(0, 5);
+	if (!bottom.length) {
+		hardEl.innerHTML =
+			'<div class="chart-empty">No answered questions in this scope yet</div>';
+		return;
+	}
+	hardEl.innerHTML = bottom
+		.map((e, i) => {
+			const q = stats.questionsById.get(e.qid) || {};
+			const text = String(q.question || q.text || 'Question');
+			const short = text.length > 70 ? text.slice(0, 70) + '...' : text;
+			const crumb = overviewCategoryBreadcrumb(
+				ovQuestionCategoryId(q),
+				stats.categories,
+			);
+			const acc = Math.round(e.accuracy);
+			const tone = acc < 50 ? 'acc-low' : acc < 80 ? 'acc-mid' : 'acc-high';
+			return (
+				`<div class="hard-item ${tone}">` +
+				`<span class="hard-rank" aria-hidden="true">${i + 1}</span>` +
+				'<div class="hard-main">' +
+				`<div class="hard-title" title="${esc(text)}">${esc(short)}</div>` +
+				`<div class="hard-meta"><span class="hard-cat">${esc(crumb || 'Uncategorized')}</span><span class="hard-tries">${e.attempts}${e.attempts === 1 ? ' try' : ' tries'}</span></div>` +
+				'</div>' +
+				`<span class="hard-acc ${tone}">${acc}%<small> acc</small></span>` +
+				`<div class="acc-bar"><span class="acc-fill ${tone}" style="width:${acc}%"></span></div>` +
+				'</div>'
+			);
+		})
+		.join('');
+}
+
+// ── Admin: needs-attention = the lowest-accuracy CATEGORIES, each row carrying
+// the content owner (teacher who authored the category), the number of questions
+// and the exam/training accuracy split, so a manager can control teacher content
+// and student results without ever drilling into individual questions.
+function renderCategoryInsightsAdmin(stats, esc, setText) {
+	const pct = (c, a) => (a ? `${Math.round((c / a) * 100)}%` : '-');
+	const titleEl = document.getElementById('categoryInsightsBlockTitle');
+	if (titleEl) titleEl.innerHTML = 'Category performance <small>lowest accuracy first · by category</small>';
+	const lbl = document.getElementById('kpi-cat-struggling-label');
+	if (lbl) lbl.textContent = 'Weak categories';
+	const card = document.getElementById('catStrugglingCard');
+	if (card) card.setAttribute('data-tooltip', 'Categories with under 50% answer accuracy and at least 2 answered questions in scope');
+
+	// Category authorship → the teacher who owns the content (management signal).
+	let userNames = new Map();
+	try {
+		const users = window.__DI_CONTAINER__.repo.getAll_sync('users') || [];
+		userNames = new Map(users.map((u) => [String(u.id), u.name || u.username || '']));
+	} catch (_) {
+		userNames = new Map();
+	}
+	const catMetaById = new Map((stats.categories || []).map((c) => [String(c && c.id), c]));
+
+	const rows = [...stats.perCategory.entries()]
+		.map(([cid, e]) => {
+			const isUncat = cid === 'uncategorized';
+			const crumb = isUncat
+				? 'Uncategorized'
+				: overviewCategoryBreadcrumb(cid, stats.categories) || 'Unnamed';
+			const meta = !isUncat ? catMetaById.get(cid) : null;
+			const owner = meta && meta.created_by
+				? userNames.get(String(meta.created_by)) || ''
+				: '';
+			let questionCount = 0;
+			for (const q of stats.questionsById.values()) {
+				if (ovQuestionCategoryId(q) === cid) questionCount += 1;
+			}
+			return {
+				crumb,
+				owner,
+				questionCount,
+				attempts: e.attempts,
+				accuracy: e.attempts ? (e.correct / e.attempts) * 100 : null,
+				examA: e.exam.a,
+				examC: e.exam.c,
+				trainA: e.training.a,
+				trainC: e.training.c,
+			};
+		})
+		.filter((r) => r.attempts > 0)
+		.sort((a, b) => a.accuracy - b.accuracy || b.attempts - a.attempts);
+
+	const weak = rows.filter((r) => r.accuracy < 50 && r.attempts >= 2);
+	setText('kpi-cat-struggling', String(weak.length));
+
+	const hardEl = document.getElementById('categoryHardList');
+	if (!hardEl) return;
+	if (!rows.length) {
+		hardEl.innerHTML =
+			'<div class="chart-empty">No answered content in this scope yet</div>';
+		return;
+	}
+	hardEl.innerHTML = rows
+		.slice(0, 8)
+		.map((r, i) => {
+			const acc = Math.round(r.accuracy);
+			const tone = acc < 50 ? 'acc-low' : acc < 80 ? 'acc-mid' : 'acc-high';
+			const qc = `${r.questionCount}${r.questionCount === 1 ? ' question' : ' questions'}`;
+			const owner = `Owner: ${r.owner ? esc(r.owner) : '\u2014'}`;
+			const split = `Exam ${pct(r.examC, r.examA)} · Training ${pct(r.trainC, r.trainA)}`;
+			return (
+				`<div class="hard-item ${tone}">` +
+				`<span class="hard-rank" aria-hidden="true">${i + 1}</span>` +
+				'<div class="hard-main">' +
+				`<div class="hard-title">${esc(r.crumb)}</div>` +
+				`<div class="hard-meta"><span class="hard-cat">${qc} · ${owner}</span><span class="hard-tries">${r.attempts} answered</span></div>` +
+				`<div class="hard-meta"><span class="hard-cat">${split}</span></div>` +
+				'</div>' +
+				`<span class="hard-acc ${tone}">${acc}%<small> acc</small></span>` +
+				`<div class="acc-bar"><span class="acc-fill ${tone}" style="width:${acc}%"></span></div>` +
+				'</div>'
+			);
+		})
+		.join('');
 }
 
 function renderScoreDistribution(data, total) {
@@ -3105,6 +3222,9 @@ async function loadAdminOverview() {
 		period: overviewPeriodFilterValue(),
 		teacherId: String(document.getElementById('overviewTeacherFilter')?.value || ''),
 		classId: String(document.getElementById('overviewClassFilter')?.value || ''),
+		categoryId: String(document.getElementById('overviewCategoryFilter')?.value || ''),
+		studentId: String(document.getElementById('overviewStudentFilter')?.value || ''),
+		mode: overviewModeFilterValue(),
 	};
 	try {
 		if (!window.API || typeof window.API.list !== 'function') {
@@ -3153,6 +3273,13 @@ function applyAdminOverview(data) {
 		if (scope.periodLabel) parts.push(scope.periodLabel);
 		if (scope.teacherId) parts.push('one teacher');
 		if (scope.classId) parts.push('one class');
+		if (scope.categoryId) {
+			parts.push(
+				scope.categoryId === 'uncategorized' ? 'uncategorized' : 'one category',
+			);
+		}
+		if (scope.studentId) parts.push('one student');
+		if (scope.mode) parts.push(`${scope.mode === 'exam' ? 'Exams' : 'Training'} only`);
 		scopeLabel.textContent = parts.join(' · ') || 'Whole school';
 	}
 	const aySel = document.getElementById('overviewAcademicYearFilter');
@@ -3171,6 +3298,7 @@ function applyAdminOverview(data) {
 	if (g.studentsNeedingAttention?.rule) {
 		ovCardTooltip('sch-needing-attention', `Students needing attention — ${g.studentsNeedingAttention.rule}`);
 	}
+	ovCardNumber('sch-total-teachers', g.totalTeachers?.value);
 
 	// ── Section B — Content & Assessment ───────────────────────────────────
 	ovCardNumber('sch-total-questions', c.totalQuestions?.value);
@@ -3248,16 +3376,19 @@ function applyAdminOverview(data) {
 	const tNote = document.getElementById('schTeacherNote');
 	if (tNote) {
 		const act = t.activeTeachers?.value;
-		tNote.textContent = act != null ? `${act} active teacher(s) in the period` : '';
+		tNote.textContent = act != null
+			? `${act} teacher(s) had students sit their exams in the period · authorship (Questions/Exams) reflects the teacher's own activity`
+			: '';
 	}
 	ovBuildTable(
 		'schTeacherTable',
-		['Teacher', 'Questions', 'Exams', 'Classes', 'Assessment activity', 'Avg (/20)', 'Pass rate', 'Sample'],
+		['Teacher', 'Questions', 'Exams', 'Classes', 'Class details', 'Assessment activity', 'Avg (/20)', 'Pass rate', 'Sample'],
 		(t.teacherActivity || []).map((row) => [
 			row.name,
 			row.questionsCreated,
 			row.examsCreated,
 			row.classesManaged,
+			(row.classNames && row.classNames.length) ? row.classNames.join(', ') : '—',
 			row.assessmentActivity,
 			row.avgScore20 == null ? '-' : `${row.avgScore20}/20`,
 			row.passRate == null ? '-' : `${row.passRate}%`,
@@ -3276,8 +3407,42 @@ function applyAdminOverview(data) {
 		]),
 	);
 
-	// Live engagement snapshot (used for the attention/live context).
-	void e; // engagement KPIs remain on the shared Live Play cards for admins.
+	// Live engagement snapshot — active games, lobbies, tournaments and the
+	// period activity trend. These are current-state/live counts (never date-
+	// filtered for the live cards) taken straight from the DB aggregates.
+	ovCardNumber('sch-game-lobbies', e.gameLobbies?.value);
+	ovCardNumber('sch-live-games', e.liveGames?.value);
+	const atk = document.getElementById('sch-active-tournaments');
+	if (atk) {
+		const active = e.activeTournaments?.value;
+		const total = e.totalTournaments?.value;
+		atk.textContent = active == null ? '-' : `${active}${total != null ? `/${total}` : ''}`;
+		ovCardTooltip(
+			'sch-active-tournaments',
+			`${active ?? '-'} tournament(s) currently active out of ${total ?? '-'} total.`,
+		);
+	}
+	ovCardNumber('sch-total-attempts', e.totalAttempts?.value);
+
+	const trendNote = document.getElementById('schActivityTrendNote');
+	if (trendNote) {
+		const gran = e.activityTrend?.granularity;
+		trendNote.textContent = gran && gran !== 'unavailable'
+			? `Daily submissions bucketed by ${gran}`
+			: '';
+	}
+	ovBuildTable(
+		'schActivityTrend',
+		['Period', 'Exam', 'Training', 'Game', 'Tournament', 'Total'],
+		(e.activityTrend?.points || []).map((p) => [
+			p.period,
+			p.exam,
+			p.training,
+			p.game,
+			p.tournament,
+			p.total,
+		]),
+	);
 }
 
 function ovDashSet(id, value, unit, tooltip) {

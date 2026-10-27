@@ -94,6 +94,16 @@ beforeAll(async () => {
     ],
   });
 
+  // exam→question junctions so the category filter can attribute results to a
+  // category through the exam (E1 draws on CAT1, E2 on an uncategorized question).
+  await prisma.examQuestion.createMany({
+    data: [
+      { exam_id: 'E1', question_id: 'Q1' },
+      { exam_id: 'E1', question_id: 'Q2' },
+      { exam_id: 'E2', question_id: 'Q3' },
+    ],
+  });
+
   // teacher↔class assignments.
   await prisma.setting.create({
     data: { school_id: SCHOOL, key: 'teacherClassAssignments', value: JSON.stringify({ T1: ['C1'], T2: ['C2'] }), visibility: 'admin' },
@@ -235,6 +245,50 @@ describe('OverviewAnalyticsService — filters', () => {
     expect(res.sections.achievement.avgExamScore.sample).toBe(10);
     // totalStudents is a current-state count and is NOT date-filtered.
     expect(res.sections.glance.totalStudents.value).toBe(5);
+  });
+});
+
+describe('OverviewAnalyticsService — category / student / mode filters', () => {
+  it('category filter narrows content and attributes results through the exam→question junction', async () => {
+    const res = await svc.getSchoolOverview({ schoolId: SCHOOL, filters: { period: '30d', categoryId: 'CAT1' }, now: NOW });
+    // Only E1 draws on CAT1 → its 6 in-window formal results (E2 excluded).
+    expect(res.sections.achievement.avgExamScore.sample).toBe(6);
+    // Content: 2 authored CAT1 questions; only E1 is an active formal exam on CAT1.
+    expect(res.sections.content.totalQuestions.value).toBe(2);
+    expect(res.sections.content.activeExams.value).toBe(1);
+    expect(res.meta.scope.categoryId).toBe('CAT1');
+  });
+
+  it("'uncategorized' category keeps results from exams built only from uncategorized questions", async () => {
+    const res = await svc.getSchoolOverview({ schoolId: SCHOOL, filters: { period: '30d', categoryId: 'uncategorized' }, now: NOW });
+    // E2 (Q3 uncategorized) → R6,R7,R8 = 3 formal results in window.
+    expect(res.sections.achievement.avgExamScore.sample).toBe(3);
+  });
+
+  it('student filter pins the population and every result-based metric to one student', async () => {
+    const res = await svc.getSchoolOverview({ schoolId: SCHOOL, filters: { period: '30d', studentId: 'S1' }, now: NOW });
+    expect(res.meta.scope.studentId).toBe('S1');
+    expect(res.sections.glance.totalStudents.value).toBe(1);
+    // S1 in-window formal results: R1(80), R4(90) → sample 2, both passed.
+    expect(res.sections.achievement.avgExamScore.sample).toBe(2);
+    expect(res.sections.achievement.certifiedStudents.value).toBe(1);
+    expect(res.sections.achievement.pendingSuccess.value).toBe(0);
+    // Needs-attention is exam-based; S1 passed, so zero.
+    expect(res.sections.glance.studentsNeedingAttention.value).toBe(0);
+  });
+
+  it('mode filter narrows participation/activity but leaves formal achievement unchanged', async () => {
+    const training = await svc.getSchoolOverview({ schoolId: SCHOOL, filters: { period: '30d', mode: 'training' }, now: NOW });
+    // Only R5 (training, S1) counts as activity → 1 attempt, 1 active student.
+    expect(training.sections.engagement.totalAttempts.value).toBe(1);
+    expect(training.sections.glance.activeStudents.value).toBe(1);
+    // Formal achievement is exam-by-definition → unchanged (9 results).
+    expect(training.sections.achievement.avgExamScore.sample).toBe(9);
+    expect(training.meta.scope.mode).toBe('training');
+
+    const exam = await svc.getSchoolOverview({ schoolId: SCHOOL, filters: { period: '30d', mode: 'exam' }, now: NOW });
+    // Exam-mode activity in window = the 9 formal results (training R5 excluded).
+    expect(exam.sections.engagement.totalAttempts.value).toBe(9);
   });
 });
 

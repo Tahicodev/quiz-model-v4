@@ -87,6 +87,13 @@ export const config = Object.freeze({
   // LAN install (DB stores only relative URLs).
   uploadsDir: process.env.UPLOADS_DIR || 'uploads',
 
+  // ── Exam document generator ───────────────────────────────────────────────
+  // Optional path to a Unicode TTF embedded in generated PDFs. pdfkit's built-in
+  // standard fonts are WinAnsi (all French accents, but no Arabic/CJK/math
+  // glyphs) and transliterate anything outside it, reporting the substitution.
+  // Teachers write in non-Latin scripts: point this at a font file they own.
+  examDocFontTtf: process.env.EXAM_DOC_FONT_TTF || null,
+
   // ── Realtime ──────────────────────────────────────────────────────────────
   // Optional Redis adapter for multi-instance deployments.
   redisUrl: process.env.REDIS_URL || null,

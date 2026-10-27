@@ -591,12 +591,12 @@
 					'<td data-label="Type">' + typeLabel(d.device_type) + '</td>' +
 					'<td data-label="IP">' + esc(d.last_ip || '—') + '</td>' +
 					'<td data-label="Student">' + userCellHtml + '</td>' +
-					'<td data-label="Statut"><span class="badge ' +
+					'<td data-label="Status"><span class="badge ' +
 					(blocked ? 'device-badge-blocked' : 'device-badge-allowed') +
 					'">' +
 					(blocked ? 'Bloqué' : 'Autorisé') +
 					'</span></td>' +
-					'<td data-label="Vu">' + relativeTime(d.last_seen) + '</td>' +
+					'<td data-label="Last seen">' + relativeTime(d.last_seen) + '</td>' +
 					'<td class="actions-cell device-cell-actions" data-label="Actions"><div class="exam-actions">' +
 					(staffRow
 						? ''

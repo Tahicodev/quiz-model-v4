@@ -290,6 +290,64 @@
     });
   }
 
+  // ─── Binary download ────────────────────────────────────────────────────
+  // Auth is Bearer-only (see middleware/auth.js), so a generated file cannot be
+  // reached through an <a href>: it must be fetched with the same token +
+  // refresh rules as every other call, then handed to the browser as a Blob.
+  function filenameFromDisposition(value) {
+    var raw = String(value || '');
+    var star = /filename\*=UTF-8''([^;]+)/i.exec(raw);
+    if (star) {
+      try { return decodeURIComponent(star[1]); } catch (_) { /* fall through */ }
+    }
+    var plain = /filename="?([^";]+)"?/i.exec(raw);
+    return plain ? plain[1].trim() : '';
+  }
+
+  function requestBlob(method, path, body, _retried) {
+    var url = getBaseUrl() + path;
+    var init = {
+      method: method,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+      },
+    };
+    if (body !== undefined && body !== null) {
+      init.body = JSON.stringify(body);
+    }
+    return fetch(url, init).then(function (res) {
+      if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
+        return refreshAccessToken().then(function () {
+          return requestBlob(method, path, body, true);
+        });
+      }
+      if (!res.ok) {
+        return res.text().then(function (text) {
+          var err = new Error(parseError(res, text));
+          err.status = res.status;
+          // Structured error bodies (the /20 gate returns its scoring payload)
+          // stay readable by the caller.
+          try { err.payload = JSON.parse(text); } catch (_) { /* text only */ }
+          throw err;
+        });
+      }
+      var warnings = [];
+      try {
+        var header = res.headers.get('X-Exam-Doc-Warnings');
+        if (header) warnings = JSON.parse(decodeURIComponent(header)) || [];
+      } catch (_) { /* optional header */ }
+      return res.blob().then(function (blob) {
+        return {
+          blob: blob,
+          filename: filenameFromDisposition(res.headers.get('Content-Disposition')),
+          warnings: warnings,
+        };
+      });
+    });
+  }
+
   // ─── Legacy → backend field mapping ─────────────────────────────────────
   // Each mapper takes the legacy object and returns the wire shape expected
   // by the REST endpoint. Unknown fields are dropped; missing required fields
@@ -739,5 +797,8 @@
 
     /** Expose a raw request for arbitrary paths (e.g. custom routes). */
     raw: request,
+
+    /** Fetch a binary response (PDF/DOCX) with the same auth + refresh flow. */
+    blob: requestBlob,
   };
 })();

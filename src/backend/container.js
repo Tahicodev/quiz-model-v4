@@ -30,6 +30,7 @@ import { TeacherMessageService } from './services/TeacherMessageService.js';
 import { TeacherAssignmentService } from './services/TeacherAssignmentService.js';
 import { DeviceService } from './services/DeviceService.js';
 import { OverviewAnalyticsService } from './services/OverviewAnalyticsService.js';
+import { ExamDocumentService } from './services/ExamDocumentService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
 import { QuestionService } from '../frontend/services/QuestionService.js';
@@ -92,6 +93,10 @@ export function createContainer() {
 
     // School-wide analytics for the Admin Dashboard Overview (admin-only).
     overviewAnalyticsSvc: new OverviewAnalyticsService(repo),
+
+    // Printable exam documents (PDF/DOCX). Read-only over exams and questions:
+    // the only thing it writes is its own header slice inside options_json.
+    examDocSvc: new ExamDocumentService(repo),
   });
 
   return _container;

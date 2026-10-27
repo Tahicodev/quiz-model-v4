@@ -4531,7 +4531,16 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	}
 
 	#devices table.data-table tbody tr.device-card {
-		display: block;
+		position: relative;
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		grid-template-areas:
+			'machine machine'
+			'student student'
+			'type ip'
+			'status seen'
+			'actions actions';
+		column-gap: 14px;
 		background: var(--bg-surface);
 		border: 1px solid var(--bg-surface-alt);
 		border-radius: 16px;
@@ -4539,7 +4548,8 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 			0 4px 6px -1px rgba(0, 0, 0, 0.05),
 			0 2px 4px -1px rgba(0, 0, 0, 0.03);
 		margin: 16px 12px;
-		padding: 6px 16px 14px;
+		/* Right gutter keeps room for the pinned top-right checkbox. */
+		padding: 14px 46px 12px 16px;
 	}
 
 	#devices table.data-table tbody tr.device-card.is-blocked {
@@ -4656,11 +4666,13 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 	/* Card header: machine name row (no data-label on this cell). */
 	#devices tbody td.device-cell-machine {
+		grid-area: machine;
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 12px 0 10px;
+		padding: 0 0 10px;
 		border-bottom: 1px solid var(--bg-surface-alt);
+		min-width: 0;
 	}
 
 	#devices .device-dot {
@@ -4673,30 +4685,62 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		font-size: 1rem;
 	}
 
-	/* Labelled rows. */
+	/* Labeled tiles: compact "label over value" stack. Type · IP and
+	   Status · Last seen sit side by side; the assign select spans the card. */
 	#devices tbody td[data-label] {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 12px;
-		padding: 9px 0;
-		border-bottom: 1px solid var(--bg-body);
-		text-align: right;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: flex-start;
+		gap: 4px;
+		padding: 8px 0;
+		border-bottom: none;
+		text-align: left;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	#devices tbody td[data-label]::before {
 		content: attr(data-label);
-		font-weight: 600;
-		color: #64748b;
-		font-size: 0.75rem;
+		font-size: 0.66rem;
+		font-weight: 700;
+		color: #94a3b8;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		text-align: left;
 		flex: 0 0 auto;
 	}
 
-	#devices tbody td[data-label] > * {
-		min-width: 0;
+	#devices tbody td[data-label='Student'] { grid-area: student; }
+	#devices tbody td[data-label='Type'] { grid-area: type; }
+	#devices tbody td[data-label='IP'] { grid-area: ip; }
+	#devices tbody td[data-label='Status'] { grid-area: status; }
+	#devices tbody td[data-label='Last seen'] { grid-area: seen; }
+	#devices tbody td[data-label='Actions'] { grid-area: actions; }
+
+	#devices tbody td[data-label='Student'] {
+		border-bottom: 1px solid var(--bg-body);
+	}
+
+	/* Checkbox pinned top-right like the other tabs' cards — never a
+	   full-width "Select" row of its own. */
+	#devices tbody td.checkbox-cell {
+		position: absolute;
+		top: 14px;
+		right: 14px;
+		display: block;
+		width: auto;
+		padding: 0;
+		border: none;
+	}
+
+	#devices tbody td.checkbox-cell::before {
+		content: none;
+	}
+
+	#devices tbody td.checkbox-cell input[type='checkbox'] {
+		width: 20px;
+		height: 20px;
 	}
 
 	#devices .device-assign {
@@ -4704,11 +4748,6 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		width: 100%;
 		min-height: 44px;
 		font-size: 16px; /* no iOS auto-zoom on focus */
-	}
-
-	#devices td[data-label] .device-assign {
-		flex: 1 1 auto;
-		max-width: 70%;
 	}
 
 	/* Actions row: same treatment as the Classes/Exams/Categories cards —
@@ -4746,15 +4785,18 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	}
 }
 
-/* Small phones: labelled rows wrap so values take the full width. */
+/* Small phones: detail tiles stack single-column so values never crowd. */
 @media (max-width: 640px) {
-	#devices td[data-label] .device-assign {
-		max-width: 100%;
-		flex-basis: 100%;
-	}
-
-	#devices tbody td[data-label] {
-		flex-wrap: wrap;
+	#devices table.data-table tbody tr.device-card {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas:
+			'machine'
+			'student'
+			'type'
+			'ip'
+			'status'
+			'seen'
+			'actions';
 	}
 }
 

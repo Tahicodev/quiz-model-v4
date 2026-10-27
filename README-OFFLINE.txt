@@ -135,6 +135,17 @@ Notes
     AI_IMAGE_SIZE         image size (default 1024x1024)
     AI_IMAGE_MAX_TOTAL    max images generated per request (default 20)
     AI_IMAGE_CONCURRENCY  parallel image calls (default 2)
+- Exam documents (PDF / Word): the "Exam Documents" button in Exam
+  Management builds a printable subject and answer key on the server.
+  This uses two extra libraries ("docx" and "pdfkit") that ship inside
+  the bundled node_modules, so nothing has to be downloaded on the new
+  machine. BUT: after any change to package.json / package-lock.json on
+  the build machine, the offline bundle MUST be regenerated before you
+  copy it out (node scripts/generate-offline-bundle.mjs) — an old bundle
+  carries the old dependency tree and exports would fail to start.
+  Optional server setting for PDF only:
+    EXAM_DOC_FONT_TTF     path to a .ttf font, for non-Latin scripts
+                          (e.g. Arabic). Word files never need it.
 - Option A is built for Windows x64 (win32-x64): it bundles installed
   node_modules + Prisma engines for that platform, so install is instant
   and independent of your npm version.

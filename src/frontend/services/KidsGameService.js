@@ -560,28 +560,16 @@ export class KidsGameService {
     await this.#pruneCategoryIfEmpty(game.category_id);
   }
 
-  async #syncBank(game, currentUser) {
-    const schoolId = currentUser?.school_id ?? game.school_id;
-    const teacherId = currentUser?.id ?? game.teacher_id;
-    if (!schoolId || !teacherId) return;
-    const oldCategoryId = game.category_id || null;
-    const categoryId = await this.#ensureBankCategory(game, schoolId, teacherId);
-    if (oldCategoryId && oldCategoryId !== categoryId) {
-      // Game moved to another subject: drop its copies from the old bucket.
-      await this.#removeBankCopies({ ...game, category_id: oldCategoryId });
-      await this.#pruneCategoryIfEmpty(oldCategoryId);
-    }
-    if (game.category_id !== categoryId) {
-      await this.#repo.update('kidsGames', game.id, { category_id: categoryId });
-      game.category_id = categoryId;
-    }
-    await this.#removeBankCopies({ ...game, category_id: categoryId });
-    const questions = Array.isArray(game.questions_json) ? game.questions_json : parseJson(game.questions_json, []);
-    for (const q of questions) {
-      await this.#repo.create('questions', toBankQuestion(q, {
-        schoolId, teacherId, categoryId, gameId: game.id,
-      }));
-    }
+  // ─── Bank sync (disabled) ────────────────────────────────────────────────
+  // Publishing a kids game used to mirror its question copies into the shared
+  // Category/Question bank under a synthetic `Kids · <subject>` bucket. That
+  // polluted the teacher's real category list, so games now live in the Games
+  // area only: nothing is pushed into the bank and no bucket is ever created.
+  // Existing `Kids · …` buckets and their copies are intentionally left as-is
+  // ("hide but keep" — the UI filters them out); deleting a whole game still
+  // cleans its legacy copies via #removeBankCopies in delete().
+  async #syncBank() {
+    return;
   }
 
   // ─── Publish / PIN ───

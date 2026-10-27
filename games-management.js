@@ -982,7 +982,11 @@
 			const name = String(cat.name || '')
 				.trim()
 				.toLowerCase();
-			return id !== 'uncategorized' && name !== 'uncategorized';
+			return (
+				id !== 'uncategorized' &&
+				name !== 'uncategorized' &&
+				!(typeof isAutoGameCategory === 'function' && isAutoGameCategory(cat))
+			);
 		});
 		select.innerHTML =
 			'<option value="">All Categories</option>' +

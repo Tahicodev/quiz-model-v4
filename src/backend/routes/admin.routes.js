@@ -559,6 +559,9 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
  *   from, to     = ISO dates (used when period=custom)
  *   teacherId    = restrict teacher/content metrics to one teacher
  *   classId      = restrict applicable metrics to one class
+ *   studentId    = narrow result-based metrics + student population to one student
+ *   categoryId   = narrow content + results to one category ('uncategorized' supported)
+ *   mode         = 'exam' | 'training' (narrows participation/activity counts)
  */
 router.get('/overview', adminOnly, async (req, res, next) => {
   try {
@@ -573,6 +576,9 @@ router.get('/overview', adminOnly, async (req, res, next) => {
         to: q.to,
         teacherId: q.teacherId,
         classId: q.classId,
+        studentId: q.studentId,
+        categoryId: q.categoryId,
+        mode: q.mode,
       },
     });
     res.json({ data });

@@ -771,6 +771,7 @@
 			window.API.list('categories', { limit: 200 }).then(function (res) {
 				var cats = (res && res.data) || res || [];
 				cats.forEach(function (c) {
+					if (typeof isAutoGameCategory === 'function' && isAutoGameCategory(c)) return;
 					var opt = document.createElement('option');
 					opt.value = c.id; opt.textContent = c.name;
 					catSel.appendChild(opt);

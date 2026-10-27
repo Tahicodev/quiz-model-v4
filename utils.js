@@ -42,6 +42,23 @@ function getOwnerId(item) {
 }
 
 /**
+ * Auto-generated game categories.
+ * Publishing a kids game used to mirror its questions into the shared bank
+ * under a synthetic subject bucket named `Kids · <subject>`. Games must live
+ * in the Games area only, so these buckets are never treated as real
+ * categories: they are hidden from every category list and dropdown. The
+ * marker is the name prefix (the same signature the kids bank-sync uses to
+ * prune them), because the category table has no dedicated source column.
+ * @param {object} category
+ * @returns {boolean} true when this is a game-generated bucket, not a teacher category
+ */
+const AUTO_GAME_CATEGORY_PREFIX = 'Kids · ';
+function isAutoGameCategory(category) {
+    if (!category) return false;
+    return String(category.name || '').startsWith(AUTO_GAME_CATEGORY_PREFIX);
+}
+
+/**
  * Human label for an owner id: "You" for the current user, the user's name
  * for anyone else (resolved from the cached users table), or '' when there
  * is no recorded author. There is no shared library anymore — every teacher

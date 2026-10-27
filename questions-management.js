@@ -687,6 +687,7 @@ function loadCategoriesForAssignment() {
 	select.innerHTML = '<option value="">-- Select a category --</option>';
 
 	savedCategories.forEach((category) => {
+		if (typeof isAutoGameCategory === 'function' && isAutoGameCategory(category)) return;
 		const option = document.createElement('option');
 		option.value = category.id;
 		option.textContent = category.name;

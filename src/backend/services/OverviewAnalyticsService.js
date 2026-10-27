@@ -192,33 +192,70 @@ export class OverviewAnalyticsService {
     return {};
   }
 
+  // Relation filter that keeps only results whose parent exam contains at least
+  // one question in the selected category ('uncategorized' → a question with no
+  // category). Returns null when no category filter is active.
+  #examCategoryFilter(categoryId) {
+    if (!categoryId) return null;
+    const question =
+      categoryId === 'uncategorized'
+        ? { category_id: null }
+        : { category_id: String(categoryId) };
+    return { examQuestions: { some: { question } } };
+  }
+
+  // Combine the class/teacher result-scope with the optional per-request
+  // student / category / mode narrowing into one `fc` (filter context) the
+  // section builders thread through. Kept as a plain object (never instance
+  // state) so concurrent requests can't leak filters between each other.
+  #buildFilterContext({ classId, teacherClassIds, studentId, categoryId, mode }) {
+    return {
+      scope: this.#resultScope(classId, teacherClassIds),
+      studentId: studentId ? String(studentId) : '',
+      categoryId: categoryId ? String(categoryId) : '',
+      mode: mode ? String(mode) : '',
+      examCategory: this.#examCategoryFilter(categoryId),
+    };
+  }
+
   #dateWindowFilter(field, window) {
     if (!window || !window.start || !window.end) return {};
     return { [field]: { gte: window.start, lte: window.end } };
   }
 
   // Formal, finalized exam results: mode 'exam', a real non-training exam id, and
-  // (relation-scoped) the exam is not flagged as a training activity.
-  #formalExamBaseWhere(schoolId, scope) {
-    return {
+  // (relation-scoped) the exam is not flagged as a training activity. The student
+  // and category filters narrow the same population. The Mode filter is intentionally
+  // NOT applied here — formal achievement (average score, pass rate, certification)
+  // is exam-based by definition, so selecting a mode leaves these metrics unchanged.
+  #formalExamBaseWhere(schoolId, fc) {
+    const exam = { is_training: false };
+    if (fc.examCategory) Object.assign(exam, fc.examCategory);
+    const where = {
       school_id: schoolId,
       mode: RESULT_MODE.EXAM,
       exam_id: { not: null },
-      ...scope,
-      // Exclude practice: an exam-mode result whose parent exam is a training run.
-      exam: { is_training: false },
+      ...fc.scope,
+      exam,
     };
+    if (fc.studentId) where.user_id = fc.studentId;
+    return where;
   }
 
   // Any qualifying learning activity (submitted exam / training / tournament /
   // game result) tied to a real student account. Used for participation.
-  #activityBaseWhere(schoolId, scope) {
-    return {
+  #activityBaseWhere(schoolId, fc) {
+    const where = {
       school_id: schoolId,
       user_id: { not: null },
-      mode: { in: [RESULT_MODE.EXAM, RESULT_MODE.TRAINING, RESULT_MODE.TOURNAMENT, RESULT_MODE.GAME] },
-      ...scope,
+      mode: fc.mode
+        ? fc.mode
+        : { in: [RESULT_MODE.EXAM, RESULT_MODE.TRAINING, RESULT_MODE.TOURNAMENT, RESULT_MODE.GAME] },
+      ...fc.scope,
     };
+    if (fc.studentId) where.user_id = fc.studentId;
+    if (fc.examCategory) where.exam = fc.examCategory;
+    return where;
   }
 
   // Authorship scope for content entities (questions / exams) when a teacher is
@@ -259,8 +296,22 @@ export class OverviewAnalyticsService {
     const teacherId = filters.teacherId ? String(filters.teacherId) : '';
     const classId = filters.classId ? String(filters.classId) : '';
     const teacherClassIds = teacherId ? await this.#teacherClassIds(schoolId, teacherId) : [];
+    const studentId = filters.studentId ? String(filters.studentId) : '';
+    const categoryId = filters.categoryId ? String(filters.categoryId) : '';
+    const mode =
+      filters.mode === RESULT_MODE.EXAM || filters.mode === RESULT_MODE.TRAINING
+        ? filters.mode
+        : '';
 
-    const scope = this.#resultScope(classId, teacherClassIds);
+    // Single per-request filter context threaded through every section so all
+    // seven Overview filters behave consistently (never instance state).
+    const fc = this.#buildFilterContext({
+      classId,
+      teacherClassIds,
+      studentId,
+      categoryId,
+      mode,
+    });
     const prev = precedingWindow(window);
 
     const [
@@ -270,11 +321,11 @@ export class OverviewAnalyticsService {
       engagement,
       teacherInsights,
     ] = await Promise.all([
-      this.#sectionGlance(schoolId, scope, window),
-      this.#sectionContent(schoolId, teacherId, classId, teacherClassIds),
-      this.#sectionAchievement(schoolId, scope, window, prev, teacherClassIds),
-      this.#sectionEngagement(schoolId, scope, window),
-      this.#sectionTeacherInsights(schoolId, teacherId, classId, teacherClassIds, window),
+      this.#sectionGlance(schoolId, fc, window, { studentId }),
+      this.#sectionContent(schoolId, teacherId, classId, teacherClassIds, { categoryId }),
+      this.#sectionAchievement(schoolId, fc, window, prev, { studentId }),
+      this.#sectionEngagement(schoolId, fc, window),
+      this.#sectionTeacherInsights(schoolId, teacherId, classId, teacherClassIds, window, fc),
     ]);
 
     return {
@@ -290,6 +341,9 @@ export class OverviewAnalyticsService {
           periodEnd: window.end ? window.end.toISOString() : null,
           teacherId: teacherId || null,
           classId: classId || null,
+          studentId: studentId || null,
+          categoryId: categoryId || null,
+          mode: mode || null,
         },
         thresholds: {
           passNormalized: 10, // /20
@@ -303,6 +357,19 @@ export class OverviewAnalyticsService {
             'Exam-class assignments are not reliably recorded for legacy exams, so an assignment-level completion rate cannot be computed.',
           curriculumCompliance: 'No curriculum-mapping data exists in the schema.',
         },
+        // How each optional filter narrows this bundle — surfaced so the UI can
+        // explain scope without guessing.
+        filterSemantics: {
+          studentId: studentId
+            ? 'All result-based metrics and the student population are narrowed to this one student.'
+            : null,
+          categoryId: categoryId
+            ? 'Content metrics use the category directly; result-based metrics use each exam\'s question→category junction (legacy exams without a recorded junction contribute no results).'
+            : null,
+          mode: mode
+            ? 'Participation, activity and engagement counts reflect the selected mode only. Formal achievement metrics (average score, pass rate, certification) are exam-based by definition and stay unchanged.'
+            : null,
+        },
       },
       sections: { glance, content, achievement, engagement, teacherInsights },
     };
@@ -310,9 +377,10 @@ export class OverviewAnalyticsService {
 
   // ── Section A — School at a Glance ───────────────────────────────────────
 
-  async #sectionGlance(schoolId, scope, window) {
+  async #sectionGlance(schoolId, fc, window) {
     const studentFilter = { school_id: schoolId, role: ROLES.STUDENT };
-    const totalStudentsWhere = scope.user ? { ...studentFilter, ...scope.user } : studentFilter;
+    if (fc.studentId) studentFilter.id = fc.studentId;
+    const totalStudentsWhere = fc.scope.user ? { ...studentFilter, ...fc.scope.user } : studentFilter;
 
     const [totalStudents, totalTeachers, totalClasses] = await Promise.all([
       this.#m.user.count({ where: totalStudentsWhere }),
@@ -323,7 +391,7 @@ export class OverviewAnalyticsService {
     // Distinct students with ≥1 qualifying activity in the reporting window.
     const activeGroups = await this.#m.result.groupBy({
       by: ['user_id'],
-      where: { ...this.#activityBaseWhere(schoolId, scope), ...this.#dateWindowFilter('date_taken', window) },
+      where: { ...this.#activityBaseWhere(schoolId, fc), ...this.#dateWindowFilter('date_taken', window) },
       _count: { _all: true },
     });
     const activeStudents = activeGroups.filter((g) => g.user_id).length;
@@ -332,10 +400,12 @@ export class OverviewAnalyticsService {
     // Prisma cannot `_sum` a Boolean, so passing students are gathered with a
     // second groupBy and subtracted from the repeated-attempt set.
     const formalWindowed = {
-      ...this.#formalExamBaseWhere(schoolId, scope),
+      ...this.#formalExamBaseWhere(schoolId, fc),
       ...this.#dateWindowFilter('date_taken', window),
-      user_id: { not: null },
     };
+    // Only require a real student account when a single student is not already
+    // pinned by the filter (otherwise the bare `user_id` would overwrite it).
+    if (!fc.studentId) formalWindowed.user_id = { not: null };
     const [attemptGroups, passingAttemptGroups] = await Promise.all([
       this.#m.result.groupBy({
         by: ['user_id'],
@@ -378,18 +448,27 @@ export class OverviewAnalyticsService {
 
   // ── Section B — Educational Content & Assessment ─────────────────────────
 
-  async #sectionContent(schoolId, teacherId, classId, teacherClassIds) {
+  async #sectionContent(schoolId, teacherId, classId, teacherClassIds, { categoryId } = {}) {
     const authorQ = this.#authorScope('created_by', teacherId);
     const authorE = this.#authorScope('creator_id', teacherId);
+    // Question-category filter for the content metrics. 'uncategorized' maps to
+    // questions with no category_id; a concrete id filters to that category.
+    const catQ = categoryId
+      ? categoryId === 'uncategorized'
+        ? { category_id: null }
+        : { category_id: String(categoryId) }
+      : {};
 
     const [totalQuestions, activeExams, totalCategories] = await Promise.all([
-      this.#m.question.count({ where: { school_id: schoolId, ...authorQ } }),
+      this.#m.question.count({ where: { school_id: schoolId, ...authorQ, ...catQ } }),
       this.#m.exam.count({
         where: {
           school_id: schoolId,
           status: EXAM_STATUS.ACTIVE,
           is_training: false,
           ...authorE,
+          // When a category is selected, keep only exams that draw on it.
+          ...(categoryId ? { examQuestions: { some: { question: catQ } } } : {}),
         },
       }),
       this.#m.category.count({ where: { school_id: schoolId, ...this.#authorScope('created_by', teacherId) } }),
@@ -398,7 +477,7 @@ export class OverviewAnalyticsService {
     // Content coverage: distinct categories that actually hold questions.
     const catGroups = await this.#m.question.groupBy({
       by: ['category_id'],
-      where: { school_id: schoolId, category_id: { not: null }, ...authorQ },
+      where: { school_id: schoolId, category_id: { not: null }, ...authorQ, ...catQ },
       _count: { _all: true },
     });
     const distribution = catGroups
@@ -423,8 +502,8 @@ export class OverviewAnalyticsService {
 
   // ── Section C — Student Achievement & Performance ────────────────────────
 
-  async #sectionAchievement(schoolId, scope, window, prev, teacherClassIds) {
-    const formalBase = this.#formalExamBaseWhere(schoolId, scope);
+  async #sectionAchievement(schoolId, fc, window, prev) {
+    const formalBase = this.#formalExamBaseWhere(schoolId, fc);
     const formalWindow = { ...formalBase, ...this.#dateWindowFilter('date_taken', window) };
 
     const [agg, passedCount] = await Promise.all([
@@ -458,14 +537,16 @@ export class OverviewAnalyticsService {
     });
     const certifiedStudents = certifiedGroups.filter((g) => g.user_id).length;
 
-    const studentFilter = scope.user
-      ? { school_id: schoolId, role: ROLES.STUDENT, ...scope.user }
-      : { school_id: schoolId, role: ROLES.STUDENT };
+    const studentFilter = { school_id: schoolId, role: ROLES.STUDENT };
+    if (fc.scope.user) Object.assign(studentFilter, fc.scope.user);
+    if (fc.studentId) studentFilter.id = fc.studentId;
     const totalStudents = await this.#m.user.count({ where: studentFilter });
     // Eligible = students who actually sat at least one formal exam in the window.
+    const satWhere = { ...formalWindow };
+    if (!fc.studentId) satWhere.user_id = { not: null };
     const satGroups = await this.#m.result.groupBy({
       by: ['user_id'],
-      where: { ...formalWindow, user_id: { not: null } },
+      where: satWhere,
       _count: { _all: true },
     });
     const assessedStudents = satGroups.filter((g) => g.user_id).length;
@@ -503,7 +584,7 @@ export class OverviewAnalyticsService {
 
     // Per-class averages: group by student, then map to class (Result lacks a
     // class_id) — bounded, avoids N+1 and avoids downloading raw results.
-    const classComparison = await this.#classComparison(schoolId, scope, window);
+    const classComparison = await this.#classComparison(schoolId, fc, window);
     const eligible = classComparison.filter((c) => c.sample >= MIN_RESULTS_FOR_RANK);
     const topClass =
       eligible.length
@@ -531,12 +612,12 @@ export class OverviewAnalyticsService {
     };
   }
 
-  async #classComparison(schoolId, scope, window) {
+  async #classComparison(schoolId, fc, window) {
     const where = {
-      ...this.#formalExamBaseWhere(schoolId, scope),
+      ...this.#formalExamBaseWhere(schoolId, fc),
       ...this.#dateWindowFilter('date_taken', window),
-      user_id: { not: null },
     };
+    if (!fc.studentId) where.user_id = { not: null };
     const byStudent = await this.#m.result.groupBy({
       by: ['user_id'],
       where,
@@ -594,16 +675,16 @@ export class OverviewAnalyticsService {
 
   // ── Section D — Engagement, Games & Live Activity ────────────────────────
 
-  async #sectionEngagement(schoolId, scope, window) {
+  async #sectionEngagement(schoolId, fc, window) {
     const activityWindow = {
-      ...this.#activityBaseWhere(schoolId, scope),
+      ...this.#activityBaseWhere(schoolId, fc),
       ...this.#dateWindowFilter('date_taken', window),
     };
     const [totalAttempts, completedAssessments] = await Promise.all([
       this.#m.result.count({ where: activityWindow }),
       this.#m.result.count({
         where: {
-          ...this.#formalExamBaseWhere(schoolId, scope),
+          ...this.#formalExamBaseWhere(schoolId, fc),
           ...this.#dateWindowFilter('date_taken', window),
         },
       }),
@@ -618,7 +699,7 @@ export class OverviewAnalyticsService {
     ]);
 
     // Activity trend: daily counts over the window (exam vs training vs game).
-    const activityTrend = await this.#activityTrend(schoolId, scope, window);
+    const activityTrend = await this.#activityTrend(schoolId, fc, window);
 
     return {
       totalAttempts: { value: totalAttempts, basis: 'period' },
@@ -631,10 +712,10 @@ export class OverviewAnalyticsService {
     };
   }
 
-  async #activityTrend(schoolId, scope, window) {
+  async #activityTrend(schoolId, fc, window) {
     if (!window.start || !window.end) return { granularity: 'unavailable', points: [] };
     const rows = await this.#m.result.findMany({
-      where: { ...this.#activityBaseWhere(schoolId, scope), ...this.#dateWindowFilter('date_taken', window) },
+      where: { ...this.#activityBaseWhere(schoolId, fc), ...this.#dateWindowFilter('date_taken', window) },
       select: { date_taken: true, mode: true },
     });
     const spanDays = Math.max(
@@ -664,7 +745,7 @@ export class OverviewAnalyticsService {
 
   // ── Section E — Teacher & Class Insights ─────────────────────────────────
 
-  async #sectionTeacherInsights(schoolId, teacherId, classId, teacherClassIds, window) {
+  async #sectionTeacherInsights(schoolId, teacherId, classId, teacherClassIds, window, fc) {
     const teachers = await this.#m.user.findMany({
       where: {
         school_id: schoolId,
@@ -695,7 +776,7 @@ export class OverviewAnalyticsService {
       this.#m.result.groupBy({
         by: ['exam_id'],
         where: {
-          ...this.#formalExamBaseWhere(schoolId, this.#resultScope(classId, teacherClassIds)),
+          ...this.#formalExamBaseWhere(schoolId, fc),
           ...this.#dateWindowFilter('date_taken', window),
         },
         _count: { _all: true },
@@ -705,7 +786,7 @@ export class OverviewAnalyticsService {
       this.#m.result.groupBy({
         by: ['exam_id'],
         where: {
-          ...this.#formalExamBaseWhere(schoolId, this.#resultScope(classId, teacherClassIds)),
+          ...this.#formalExamBaseWhere(schoolId, fc),
           ...this.#dateWindowFilter('date_taken', window),
           passed: true,
         },
@@ -743,7 +824,8 @@ export class OverviewAnalyticsService {
       passedByTeacher.set(owner, (passedByTeacher.get(owner) || 0) + g._count._all);
     }
 
-    // Classes managed per teacher from the assignment setting.
+    // Classes managed per teacher from the assignment setting. The setting only
+    // stores class ids, so resolve them to human-readable names for the table.
     const settingRow = await this.#m.setting.findFirst({
       where: { school_id: schoolId, key: 'teacherClassAssignments' },
       select: { value: true },
@@ -752,19 +834,31 @@ export class OverviewAnalyticsService {
     try {
       assignmentMap = JSON.parse(settingRow?.value || '{}') || {};
     } catch { /* treat as empty */ }
+    const schoolClasses = await this.#m.class.findMany({
+      where: { school_id: schoolId },
+      select: { id: true, name: true },
+    });
+    const classNameById = new Map(schoolClasses.map((c) => [c.id, c.name]));
 
     const activeTeacherSet = new Set();
     const teacherRows = teachers.map((t) => {
       const conducted = conductedByTeacher.get(t.id) || 0;
       if (conducted > 0) activeTeacherSet.add(t.id);
       const weighted = scoreWeightedByTeacher.get(t.id) || 0;
+      // Teacher-authored activity (their own work), never inferred from student
+      // results: questions/exams they created and the classes they manage.
+      const assignedIds = Array.isArray(assignmentMap[t.id])
+        ? [...new Set(assignmentMap[t.id].map(String))].filter(Boolean)
+        : [];
+      const classNames = assignedIds.map((id) => classNameById.get(id) || id);
       return {
         teacherId: t.id,
         name: t.name || t.username,
         status: t.status,
         questionsCreated: questionsByAuthor.get(t.id) || 0,
         examsCreated: examsByCreator.get(t.id) || 0,
-        classesManaged: Array.isArray(assignmentMap[t.id]) ? assignmentMap[t.id].length : 0,
+        classesManaged: classNames.length,
+        classNames,
         assessmentActivity: conducted,
         avgScore20: conducted > 0 ? round2(weighted / conducted / 5) : null,
         passRate: conducted > 0 ? round1((passedByTeacher.get(t.id) || 0) / conducted * 100) : null,
@@ -774,11 +868,7 @@ export class OverviewAnalyticsService {
 
     // Classes needing attention: low avg (< 8/20) or low pass rate (< 40%) with
     // enough results to be meaningful. Reason strings are explicit.
-    const classComparison = await this.#classComparison(
-      schoolId,
-      this.#resultScope(classId, teacherClassIds),
-      window,
-    );
+    const classComparison = await this.#classComparison(schoolId, fc, window);
     const classesNeedingAttention = classComparison
       .filter((c) => c.sample >= MIN_RESULTS_FOR_RANK)
       .map((c) => {

@@ -1274,7 +1274,12 @@ function populateCategoryFilter() {
 	// the exact category — training/count roll-up is what spans subtrees).
 	if (Array.isArray(savedCategories)) {
 		const rows = savedCategories.filter(
-			(category) => category && category.id && category.name && !category.isSystem,
+			(category) =>
+				category &&
+				category.id &&
+				category.name &&
+				!category.isSystem &&
+				!(typeof isAutoGameCategory === 'function' && isAutoGameCategory(category)),
 		);
 		for (const { category, depth } of getOrderedCategoryTree(rows)) {
 			const option = document.createElement('option');
@@ -2868,7 +2873,11 @@ function loadCategoriesIntoSelect(selectElementId = 'category') {
 	// filed in categories without subcategories — parents are shown (indented)
 	// but disabled so the structure stays visible.
 	for (const { category, depth } of getOrderedCategoryTree(
-		visibleCategories.filter((c) => !c.isSystem),
+		visibleCategories.filter(
+			(c) =>
+				!c.isSystem &&
+				!(typeof isAutoGameCategory === 'function' && isAutoGameCategory(c)),
+		),
 	)) {
 		const option = document.createElement('option');
 		option.value = category.id;
@@ -2932,7 +2941,11 @@ function loadCategoriesIntoFilters() {
 
 		// Add categories to select (hierarchical labels)
 		for (const { category, depth } of getOrderedCategoryTree(
-			visibleCategories.filter((c) => !c.isSystem),
+			visibleCategories.filter(
+				(c) =>
+					!c.isSystem &&
+					!(typeof isAutoGameCategory === 'function' && isAutoGameCategory(c)),
+			),
 		)) {
 			const option = document.createElement('option');
 			option.value = category.id;
@@ -3105,6 +3118,9 @@ function updateCategoryList(categoriesList = categories) {
 		: '';
 
 	const visibleCategories = categoriesList.filter((category) => {
+		if (typeof isAutoGameCategory === 'function' && isAutoGameCategory(category)) {
+			return false;
+		}
 		if (
 			window.Auth?.canAccessItem &&
 			!window.Auth.canAccessItem('category', category)
