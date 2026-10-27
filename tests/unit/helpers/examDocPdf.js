@@ -48,21 +48,37 @@ export function pdfStreams(buffer) {
   return streams;
 }
 
+/** Visible text of one content stream, fragments concatenated. */
+function extractText(stream) {
+  let out = '';
+  const hex = /<([0-9A-Fa-f]+)>/g;
+  let match;
+  while ((match = hex.exec(stream))) {
+    out += decodeWinAnsi(Buffer.from(match[1], 'hex'));
+  }
+  const literal = /\(((?:\\.|[^()\\])*)\)/g;
+  while ((match = literal.exec(stream))) {
+    out += decodeWinAnsi(Buffer.from(match[1].replace(/\\([nrt()\\])/g, '$1'), 'latin1'));
+  }
+  return out;
+}
+
 /** Visible text of the whole document, fragments concatenated. */
 export function pdfText(buffer) {
   let out = '';
-  for (const stream of pdfStreams(buffer)) {
-    const hex = /<([0-9A-Fa-f]+)>/g;
-    let match;
-    while ((match = hex.exec(stream))) {
-      out += decodeWinAnsi(Buffer.from(match[1], 'hex'));
-    }
-    const literal = /\(((?:\\.|[^()\\])*)\)/g;
-    while ((match = literal.exec(stream))) {
-      out += decodeWinAnsi(Buffer.from(match[1].replace(/\\([nrt()\\])/g, '$1'), 'latin1'));
-    }
-  }
+  for (const stream of pdfStreams(buffer)) out += extractText(stream);
   return out;
+}
+
+/**
+ * Visible text per page, in page order. Content streams are the only ones that
+ * carry `BT` text blocks, so image and font streams drop out: a test can then
+ * assert that a heading and its table really share a sheet.
+ */
+export function pdfPageTexts(buffer) {
+  return pdfStreams(buffer)
+    .filter((stream) => stream.includes('BT'))
+    .map((stream) => extractText(stream));
 }
 
 /** Number of page objects the file really declares. */

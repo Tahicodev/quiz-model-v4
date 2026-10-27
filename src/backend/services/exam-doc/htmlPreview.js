@@ -63,7 +63,13 @@ function renderHeader(model) {
       <div class="ed-title-block">
         <h1 class="ed-title">${escapeHtml(header.title || 'Examen')}</h1>
         <div class="ed-meta">${meta}</div>
-        <div class="ed-score-badge">Note : <strong>${escapeHtml(model.scoring.label)}</strong></div>
+        ${
+          // The grade never appears on the subject: the student note box stays
+          // empty, only the confidential key prints the total.
+          model.meta.document === 'answer_key'
+            ? `<div class="ed-score-badge">Note : <strong>${escapeHtml(model.scoring.label)}</strong></div>`
+            : ''
+        }
       </div>
     </header>`;
 }
@@ -222,7 +228,11 @@ export function renderExamDocumentHtml(model) {
     <main class="ed-body">${renderItems(model)}</main>
     ${renderWarnings(model)}
     <footer class="ed-footer">
-      <div class="ed-total">Total : <strong>${escapeHtml(model.scoring.label)}</strong></div>
+      <div class="ed-total">
+        ${model.meta.document === 'answer_key'
+          ? `Total : <strong>${escapeHtml(model.scoring.label)}</strong>`
+          : `Barème : <strong>${formatPoints(model.scoring.total)} points</strong>`}
+      </div>
       ${header.scaleNote ? `<div class="ed-scale-note">${escapeHtml(header.scaleNote)}</div>` : ''}
       ${closing}
     </footer>

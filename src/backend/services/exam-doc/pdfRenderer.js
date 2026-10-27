@@ -6,14 +6,19 @@
  *
  * Layout rules that matter for a printable exam:
  *  - A4 portrait 595.28×841.89pt, 42pt margins.
- *  - Each question is measured before it is drawn (`heightOfString`), so a
- *    question heading is never separated from its content by a page break.
+ *  - EVERY block is measured before it is drawn (`heightOfString`) and pushed to
+ *    the next page when it does not fit — question groups, table rows and choice
+ *    lines alike. A frame and its text therefore always land on the same sheet:
+ *    pdfkit starts a page per `text()` call once the explicit `y` is past the
+ *    bottom limit, which used to tear tables apart.
  *  - Standard fonts are WinAnsi-encoded: all French accents are native, any
  *    character outside that set is transliterated AND reported, never silently
  *    mangled. `EXAM_DOC_FONT_TTF` embeds a real Unicode font when supplied.
  *  - "Page i / n" is stamped afterwards through `bufferedPageRange()`.
- *  - Black ink only — no colour-coded answers, so a grayscale photocopy stays
- *    readable and the answer key carries no visual "cheat" cue.
+ *  - Black ink for the content — no colour-coded answers, so a grayscale
+ *    photocopy stays readable and the answer key carries no visual "cheat" cue.
+ *    The masthead and the grade box are the only coloured areas, one accent
+ *    colour dark enough to survive a photocopier.
  */
 
 import PDFDocument from 'pdfkit';
@@ -31,6 +36,26 @@ const USABLE_H = PDF_PAGE.height - PDF_MARGIN * 2 - FOOTER_H;
 const BODY = 12;
 const SMALL = 10;
 const TINY = 9;
+
+// Single accent for the masthead + grade box. Dark enough that a grayscale
+// photocopy keeps the header readable; the content itself stays black.
+const NAVY = '#1F3A5F';
+const GREY = '#5B6472';
+const HAIRLINE = '#C9D1D9';
+const FIELD_BG = '#F6F8FA';
+const NOTE_W = 126; // ≈ 4.4 cm: a teacher writes "17,5" in red inside it
+const NOTE_H = 58;
+const LOGO_MAX_W = 132;
+const LOGO_MAX_H = 54;
+const DISC_R = 20; // fallback logo: a plain disc carrying the school initial
+const HEADER_BAND_MIN = 52;
+const RULE_GAP = 8;
+const RULE_T = 2.4;
+const TITLE_GAP = 7;
+const TITLE_SIZE = 15;
+const SUB_GAP = 3;
+const TAG_SIZE = 9;
+const MASTHEAD_RIGHT_W = 170;
 
 // pdfkit's standard fonts have no box/circle glyphs: the answer markers are
 // printed in their ASCII spelling, which is what teachers expect on paper.
@@ -106,69 +131,104 @@ class PdfBuilder {
     }
   }
 
+  /**
+   * The masthead: logo (or a fallback disc), the institutional block, the title
+   * and the run-through information line. Absolute-free: it is one measured op
+   * that the layout engine moves as a unit.
+   */
   headerNode(model) {
-    const { header } = model;
-    const ops = [];
-    const push = (value, opts) => {
-      if (value === null || value === undefined || String(value).trim() === '') return;
-      ops.push(this.txt(String(value), opts));
-    };
-
-    push(header.ministry, { size: SMALL, align: 'center', spaceAfter: 1 });
-    push(header.academy, { size: SMALL, align: 'center', spaceAfter: 5 });
+    const { header, meta, scoring } = model;
+    const isKey = meta.document === 'answer_key';
+    const enc = (value) => this.ctx.encode(String(value ?? ''));
+    const stack = (entries) =>
+      entries
+        .map(([text, opts]) => ({ text: enc(text), ...opts }))
+        .filter((line) => line.text.trim() !== '');
 
     const scale = Number(header.logoScale) || 1;
-    const logo = this.picture(header.logoDataUrl || header.logoUrl, { maxW: 170, maxH: 50 * scale });
-    if (logo) ops.push(image(logo, { maxW: 170, align: 'center', spaceAfter: 5 }));
+    const logo = this.picture(header.logoDataUrl || header.logoUrl, {
+      maxW: LOGO_MAX_W,
+      maxH: LOGO_MAX_H * scale,
+    });
 
-    push(header.schoolName, { face: 'bold', size: 13, align: 'center', spaceAfter: 1 });
-    push(header.academicYear, { size: SMALL, align: 'center', spaceAfter: 7 });
-    push(header.title || 'Examen', { face: 'bold', size: 15, align: 'center', spaceAfter: 5 });
+    const schoolName = String(header.schoolName || meta.examName || 'Examen').trim();
+    const left = stack([
+      [schoolName, { face: 'headBold', size: 14, color: NAVY, lineGap: 0.5 }],
+      [[header.subject, header.level, header.group].filter(Boolean).join('   ·   '), {
+        face: 'head', size: 9.5, color: GREY, lineGap: 0.5, spaceBefore: 1,
+      }],
+      [[header.ministry, header.academy].filter(Boolean).join('   ·   '), {
+        face: 'head', size: 8, color: GREY, lineGap: 0,
+      }],
+    ]);
+    const right = stack([
+      [header.academicYear ? `Année scolaire ${header.academicYear}` : '', {
+        face: 'head', size: 9.5, color: GREY, align: 'right', lineGap: 0,
+      }],
+      [[header.sessionType, header.term].filter(Boolean).join('   ·   '), {
+        face: 'head', size: 9, color: GREY, align: 'right', lineGap: 0,
+      }],
+    ]);
+    const subtitleParts = [
+      header.teacherName ? `Enseignant : ${header.teacherName}` : null,
+      header.durationMinutes ? `Durée : ${header.durationMinutes} min` : null,
+      // A date the teacher did not fill stays a blank to write on paper, never a guess.
+      `Date : ${header.date || '____/____/______'}`,
+      isKey ? `Barème : ${formatPoints(scoring.total)} points` : null,
+    ].filter(Boolean);
+    const subtitle = enc(subtitleParts.join('     ·     '));
 
-    const meta = [
-      ['Matière', header.subject],
-      ['Enseignant', header.teacherName],
-      ['Niveau / Classe', header.level],
-      ['Groupe', header.group],
-      ['Session', header.sessionType],
-      ['Trimestre', header.term],
-      ['Date', header.date],
-      header.durationMinutes ? ['Durée', `${header.durationMinutes} min`] : null,
-    ]
-      .filter(Boolean)
-      .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
-      .map(([label, value]) => `${label} : ${value}`);
-    if (meta.length) ops.push(this.txt(meta.join('     '), { size: SMALL, align: 'center', spaceAfter: 5 }));
-
-    ops.push(this.txt(`Note : ${model.scoring.label}`, { face: 'bold', align: 'center', spaceAfter: 3 }));
-    ops.push(rule({ thickness: 1.4, spaceAfter: 9 }));
+    const ops = [
+      {
+        t: 'masthead',
+        logo,
+        initials: schoolName.slice(0, 1).toUpperCase(),
+        left,
+        right,
+        title: enc(header.title || meta.examName || 'Examen'),
+        tag: isKey ? enc('CORRIGÉ — document enseignant, ne pas distribuer') : '',
+        subtitle,
+        spaceBefore: 0,
+        spaceAfter: 9,
+      },
+    ];
+    const identity = this.identityNode(model);
+    if (identity) ops.push(identity);
+    if (header.instructions) {
+      ops.push(
+        this.txt(
+          isKey
+            ? `Consignes données aux élèves : ${header.instructions}`
+            : `Consignes : ${header.instructions}`,
+          { size: SMALL, spaceAfter: 6 },
+        ),
+      );
+    }
+    // The barème is printed on the confidential key only: on the student paper
+    // the grade box is meant to stay empty.
+    if (isKey) ops.push(this.txt(`Note : ${model.scoring.label}`, { face: 'bold', align: 'center', spaceAfter: 3 }));
+    ops.push(rule({ thickness: 1.4, spaceAfter: 8 }));
     return group(ops, { label: 'header' });
   }
 
+  /**
+   * Identity fields + grade box, one block: the fields are drawn as real dotted
+   * rules on a light plate, and the grade gets a dedicated ~4.4 × 2 cm box.
+   */
   identityNode(model) {
     if (model.meta.document !== 'student') return null;
     const { header } = model;
-    const row = [];
-    if (header.studentNameField !== false) row.push({ label: 'Nom & prénom :', width: CONTENT_W * 0.37 });
-    if (header.studentNumberField !== false) row.push({ label: 'N° :', width: CONTENT_W * 0.17 });
-    if (header.showClassField !== false) row.push({ label: 'Classe :', width: CONTENT_W * 0.2 });
-    row.push({ label: `Note :  / ${EXAM_DOC_TARGET_SCORE}`, width: CONTENT_W * 0.26 });
-    const ops = [
-      cells(
-        row.map((cell) => ({
-          text: this.ctx.encode(cell.label),
-          width: cell.width,
-          height: 22,
-          border: 'bottom',
-          size: SMALL,
-        })),
-        { spaceBefore: 2, spaceAfter: 10 },
-      ),
-    ];
-    if (header.instructions) {
-      ops.push(this.txt(`Consignes : ${header.instructions}`, { size: SMALL, spaceAfter: 8 }));
-    }
-    return group(ops, { label: 'identity' });
+    const fields = [];
+    if (header.studentNameField !== false) fields.push('Nom & prénom :');
+    if (header.studentNumberField !== false) fields.push('N° :');
+    if (header.showClassField !== false) fields.push('Classe :');
+    return {
+      t: 'identity',
+      rows: fields.length >= 3 ? [[fields[0]], fields.slice(1)] : [fields],
+      showNote: true,
+      spaceBefore: 2,
+      spaceAfter: 9,
+    };
   }
 
   blockOps(item) {
@@ -205,8 +265,21 @@ class PdfBuilder {
         }
         break;
       case 'sequence': {
-        const pool = block.pool.map((o) => `${o.letter}. ${o.text || '(image)'}`).join('     ');
-        if (pool) ops.push(this.txt(`Éléments à placer : ${pool}`, { size: SMALL, spaceAfter: 5 }));
+        // One element per line: glued into a single paragraph, "A. … B. … C. …"
+        // is unreadable and the student cannot tell where an item stops.
+        if (block.pool.length) {
+          ops.push(this.txt('Éléments à placer :', { size: SMALL, spaceAfter: 2 }));
+          for (const option of block.pool) {
+            ops.push(
+              this.txt(`${option.letter}. ${option.text || '(image)'}`, {
+                indent: 14,
+                size: SMALL,
+                spaceAfter: option.image ? 2 : 1,
+                lineGap: 1.5,
+              }),
+            );
+          }
+        }
         for (const option of block.pool) {
           const pic = this.picture(option.image, { maxW: 100, maxH: 55 });
           if (pic) ops.push(image(pic, { maxW: 100, spaceBefore: 0, spaceAfter: 4 }));
@@ -225,27 +298,39 @@ class PdfBuilder {
         break;
       }
       case 'pairs': {
-        const half = CONTENT_W / 2;
-        const rows = [
-          { text: this.ctx.encode('Colonne A'), width: half, height: 18, border: 'box', face: 'bold', size: SMALL },
-          { text: this.ctx.encode('Colonne B'), width: half, height: 18, border: 'box', face: 'bold', size: SMALL },
-        ];
+        // Two content columns plus a narrow answer column: without it the table
+        // asks for a connection the student has nowhere to write down. Heights
+        // leave room for a hand-drawn link or a letter.
+        const colA = CONTENT_W * 0.37;
+        const colB = CONTENT_W * 0.38;
+        const colR = CONTENT_W * 0.25;
+        const head = (label, width, align) => ({
+          text: this.ctx.encode(label),
+          width,
+          height: 18,
+          border: 'box',
+          face: 'bold',
+          size: SMALL,
+          align,
+        });
+        const rows = [head('Colonne A', colA), head('Colonne B', colB), head('Réponse', colR, 'center')];
         const n = Math.max(block.lefts.length, (block.rights || []).length);
+        const cell = (text, width, opts = {}) => ({
+          text: this.ctx.encode(text),
+          width,
+          height: 20,
+          border: 'box',
+          size: BODY,
+          ...opts,
+        });
         for (let i = 0; i < n; i++) {
           const left = block.lefts[i];
           const right = block.rights[i];
-          rows.push({
-            text: this.ctx.encode(left ? `${left.n}. ${left.text}` : ''),
-            width: half,
-            height: 16,
-            border: 'box',
-          });
-          rows.push({
-            text: this.ctx.encode(right ? `${right.letter}. ${right.text}` : ''),
-            width: half,
-            height: 16,
-            border: 'box',
-          });
+          rows.push(cell(left ? `${left.n}. ${left.text}` : '', colA));
+          rows.push(cell(right ? `${right.letter}. ${right.text}` : '', colB));
+          // The answer cell stays empty on purpose: it is where the student
+          // writes the letter, and the row already lines up with column A.
+          rows.push(cell('', colR));
         }
         ops.push(cells(rows, { spaceAfter: 6 }));
         break;
@@ -371,8 +456,16 @@ class PdfBuilder {
   }
 
   footerNode(model) {
+    const isKey = model.meta.document === 'answer_key';
     const ops = [rule({ thickness: 0.8, spaceBefore: 6, spaceAfter: 5 })];
-    ops.push(this.txt(`Total : ${model.scoring.label}`, { face: 'bold', align: 'right', spaceAfter: 3 }));
+    ops.push(
+      this.txt(
+        // The student paper carries the barème as a statement, not as a grade:
+        // printing "Note : 20 / 20" on the subject gives away the correction.
+        isKey ? `Total : ${model.scoring.label}` : `Barème : ${formatPoints(model.scoring.total)} points`,
+        { face: 'bold', align: 'right', spaceAfter: 3 },
+      ),
+    );
     if (model.header.scaleNote) {
       ops.push(this.txt(model.header.scaleNote, { size: TINY, face: 'italic', align: 'center', spaceAfter: 4 }));
     }
@@ -387,9 +480,9 @@ class PdfBuilder {
   }
 
   build(model) {
+    // The identity fields belong to the header keep-group: splitting them off
+    // would let a page break land between the title block and the name box.
     const nodes = [this.headerNode(model)];
-    const identity = this.identityNode(model);
-    if (identity) nodes.push(identity);
     for (const section of model.sections) nodes.push(this.sectionNode(section, model));
     const warnings = this.warningsNode(model);
     if (warnings) nodes.push(warnings);
@@ -398,7 +491,13 @@ class PdfBuilder {
   }
 }
 
-/** Layout engine: measures a keep-group, then breaks the page before it. */
+/**
+ * Layout engine. Every block — keep-group, table row, choice line, banner — is
+ * measured and given a page-break guard before it is drawn, because pdfkit
+ * writes vectors at the exact `y` asked for while `text()` silently starts a new
+ * page once `y` is past the bottom limit: an unguarded table therefore left its
+ * frames on one sheet and its words on the next.
+ */
 class PdfLayout {
   constructor(doc, faces) {
     this.doc = doc;
@@ -420,6 +519,29 @@ class PdfLayout {
     if (this.y + height > this.pageBottom && this.y > PDF_MARGIN) this.newPage();
   }
 
+  /**
+   * Draw one flow node. Groups keep their own "stay together" rule and their
+   * children are still guarded individually, so a group taller than the page
+   * breaks cleanly at a row or a line instead of at an arbitrary glyph.
+   */
+  visit(node) {
+    if (!node) return;
+    if (node.t === 'group') {
+      if (node.keep) {
+        const h = this.measure(node);
+        if (h <= USABLE_H) this.ensure(h);
+        else if (this.y > PDF_MARGIN + 4) this.newPage();
+      }
+      for (const child of node.ops) this.visit(child);
+      return;
+    }
+    const h = this.measure(node);
+    // Anything that does not fit on an empty page must be allowed to flow
+    // (ensure() would refuse it anyway and pdfkit splits long text itself).
+    if (h > 0 && h < USABLE_H) this.ensure(h);
+    this.draw(node);
+  }
+
   measure(op) {
     const doc = this.doc;
     switch (op.t) {
@@ -429,6 +551,10 @@ class PdfLayout {
         return op.spaceBefore + op.thickness + op.spaceAfter;
       case 'image':
         return op.spaceBefore + op.pic.height + op.spaceAfter;
+      case 'masthead':
+        return this.#mastheadGeom(op).total;
+      case 'identity':
+        return (op.spaceBefore || 0) + NOTE_H + (op.spaceAfter || 0);
       case 'text':
       case 'code': {
         this.face(op.face, op.size);
@@ -450,6 +576,50 @@ class PdfLayout {
       default:
         return 0;
     }
+  }
+
+  /** Geometry of the masthead, shared by `measure` and the drawer. */
+  #mastheadGeom(op) {
+    const doc = this.doc;
+    const L = PDF_MARGIN;
+    const R = PDF_PAGE.width - PDF_MARGIN;
+    const logoW = op.logo ? Math.min(op.logo.width, LOGO_MAX_W) : 0;
+    const logoH = op.logo ? (op.logo.height * logoW) / op.logo.width : 0;
+    const mark = op.logo ? logoW : op.left.length || op.right.length ? DISC_R * 2 : 0;
+    const textX = L + (mark ? mark + 14 : 0);
+    const rightW = MASTHEAD_RIGHT_W;
+    const leftW = Math.max(120, R - textX - (op.right.length ? rightW + 18 : 0));
+    const stackH = (lines, width) =>
+      lines.reduce((acc, line) => {
+        this.face(line.face, line.size);
+        return acc + (line.spaceBefore || 0) + doc.heightOfString(line.text, { width, lineGap: line.lineGap || 0 });
+      }, 0);
+    // The band is as tall as its tallest element: the logo HEIGHT (its width only
+    // moves the text column), the disc, or the two text stacks.
+    const band = Math.max(HEADER_BAND_MIN, logoH, op.logo ? 0 : mark, stackH(op.left, leftW) + 4, stackH(op.right, rightW) + 4);
+    this.face('headBold', TITLE_SIZE);
+    const titleH = doc.heightOfString(op.title, { width: CONTENT_W - 20, lineGap: 0 });
+    this.face('head', 9.5);
+    const subH = op.subtitle ? doc.heightOfString(op.subtitle, { width: CONTENT_W, lineGap: 1 }) : 0;
+    const tagH = op.tag ? TAG_SIZE * 1.3 + SUB_GAP : 0;
+    const body = band + RULE_GAP + RULE_T + TITLE_GAP + titleH + tagH + subH + SUB_GAP;
+    return {
+      L, R, logoW, logoH, mark, textX, rightW, leftW, band, titleH, subH, tagH,
+      total: (op.spaceBefore || 0) + body + (op.spaceAfter || 0),
+    };
+  }
+
+  /** One line of the masthead stacks: returns the y just after it. */
+  #drawLine(line, x, y, width) {
+    const doc = this.doc;
+    this.face(line.face, line.size);
+    doc.fillColor(line.color || '#000000');
+    doc.text(line.text, x, y + (line.spaceBefore || 0), {
+      width,
+      lineGap: line.lineGap || 0,
+      align: line.align || 'left',
+    });
+    return doc.y;
   }
 
   #rowChunks(rows) {
@@ -542,46 +712,164 @@ class PdfLayout {
         this.y = Math.max(doc.y, this.y + BODY * 1.2) + op.spaceAfter;
         break;
       }
+      case 'masthead': {
+        const g = this.#mastheadGeom(op);
+        this.y += op.spaceBefore || 0;
+        const top = this.y;
+        if (op.logo) {
+          doc.image(op.logo.buffer, g.L, top, { width: g.logoW, height: g.logoH });
+        } else if (g.mark) {
+          // No readable logo (private storage, unsupported format, corrupt
+          // upload): a plain disc with the school initial, never an empty hole.
+          const cy = top + g.band / 2;
+          doc.fillColor(NAVY).circle(g.L + DISC_R, cy, DISC_R).fill();
+          doc.font(this.faces.headBold).fontSize(17).fillColor('#FFFFFF');
+          doc.text(op.initials, g.L, cy - 7, { width: DISC_R * 2, align: 'center', lineGap: 0 });
+        }
+        let ly = top + 1;
+        for (const line of op.left) ly = this.#drawLine(line, g.textX, ly, g.leftW);
+        let ry = top + 1;
+        for (const line of op.right) ry = this.#drawLine(line, g.R - g.rightW, ry, g.rightW);
+
+        const ruleY = top + g.band + RULE_GAP;
+        doc.fillColor(NAVY).rect(g.L, ruleY, CONTENT_W, RULE_T).fill();
+        let y = ruleY + RULE_T + TITLE_GAP;
+        this.face('headBold', TITLE_SIZE);
+        doc.fillColor(NAVY);
+        doc.text(op.title, g.L + 10, y, { width: CONTENT_W - 20, align: 'center', lineGap: 0 });
+        y = doc.y + SUB_GAP;
+        if (op.tag) {
+          this.face('headBold', TAG_SIZE);
+          doc.fillColor(GREY);
+          doc.text(op.tag, g.L + 10, y, { width: CONTENT_W - 20, align: 'center', characterSpacing: 0.6, lineGap: 0 });
+          y = doc.y + SUB_GAP;
+        }
+        if (op.subtitle) {
+          this.face('head', 9.5);
+          doc.fillColor(GREY);
+          doc.text(op.subtitle, g.L, y, { width: CONTENT_W, align: 'center', lineGap: 1 });
+          y = doc.y + SUB_GAP;
+        }
+        this.y = y + (op.spaceAfter || 0);
+        break;
+      }
+      case 'identity': {
+        this.y += op.spaceBefore || 0;
+        const top = this.y;
+        const L = PDF_MARGIN;
+        const R = PDF_PAGE.width - PDF_MARGIN;
+        const boxW = R - L - (op.showNote ? NOTE_W + 12 : 0);
+        const rows = (op.rows || []).filter((row) => row.length);
+        if (rows.length) {
+          doc.fillColor(FIELD_BG).roundedRect(L, top, boxW, NOTE_H, 6).fill();
+          doc.strokeColor(HAIRLINE).lineWidth(0.8).roundedRect(L, top, boxW, NOTE_H, 6).stroke();
+          let y = top + 13;
+          for (const row of rows) {
+            const seg = boxW / row.length;
+            row.forEach((label, i) => {
+              const x = L + 12 + i * seg;
+              this.face('head', SMALL);
+              doc.fillColor('#111111');
+              doc.text(label, x, y, { width: seg - 10, lineBreak: false, lineGap: 0 });
+              // A dotted rule the student actually writes on, drawn instead of
+              // a row of typed dots (which reads as noise at the photocopier).
+              const from = x + doc.widthOfString(label) + 5;
+              doc
+                .lineWidth(0.7)
+                .strokeColor(GREY)
+                .dash(1.6, { spaceWidth: 2.6 })
+                .moveTo(from, y + 11)
+                .lineTo(x + seg - 16, y + 11)
+                .stroke()
+                .undash();
+            });
+            y += 22;
+          }
+        }
+        if (op.showNote) {
+          const nx = R - NOTE_W;
+          doc.strokeColor(NAVY).lineWidth(1.2).roundedRect(nx, top, NOTE_W, NOTE_H, 6).stroke();
+          this.face('head', 8);
+          doc.fillColor(GREY).text('NOTE', nx + 9, top + 7, { lineGap: 0 });
+          this.face('headBold', 15);
+          doc
+            .fillColor(NAVY)
+            .text(`/ ${EXAM_DOC_TARGET_SCORE}`, nx + NOTE_W - 62, top + NOTE_H - 22, {
+              width: 53,
+              align: 'right',
+              lineGap: 0,
+            });
+        }
+        this.y = top + NOTE_H + (op.spaceAfter || 0);
+        break;
+      }
       case 'cells': {
         this.y += op.spaceBefore;
         for (const row of this.#rowChunks(op.rows)) {
           const h = this.#rowHeight(row);
-          let x = PDF_MARGIN;
-          for (const cell of row) {
-            doc.lineWidth(0.6).strokeColor('#000000');
-            if (cell.border === 'box') {
-              doc.rect(x, this.y, cell.width, h).stroke();
-            } else if (cell.border === 'bottom') {
-              doc.moveTo(x + 2, this.y + h).lineTo(x + cell.width - 2, this.y + h).stroke();
-            }
-            if (cell.text) {
-              this.face(cell.face, cell.size);
-              doc.fillColor('#000000').text(cell.text, x + 4, this.y + 3, { width: cell.width - 8, lineGap: 0 });
-            }
-            x += cell.width;
-          }
+          // One row is the atomic unit of a table: breaking before it keeps the
+          // frame and its text on the same sheet.
+          this.ensure(h);
+          this.#drawRow(row, h);
           this.y += h + 0.5;
         }
         this.y += op.spaceAfter;
         break;
       }
       case 'group':
-        for (const child of op.ops) this.draw(child);
+        for (const child of op.ops) this.visit(child);
         break;
       default:
         break;
     }
   }
 
-  render(nodes) {
-    for (const node of nodes) {
-      if (node.t === 'group' && node.keep) {
-        const h = this.measure(node);
-        if (h <= USABLE_H) this.ensure(h);
-        else if (this.y > PDF_MARGIN + 4) this.newPage();
-      }
-      this.draw(node);
+  /**
+   * A visual table row: borders first, then text. Neighbouring bordered cells
+   * are outlined as one run, because stroking each cell on its own printed the
+   * shared edge twice and made the dividers look bolder than the outline.
+   */
+  #drawRow(row, h) {
+    const doc = this.doc;
+    const top = this.y;
+    const xs = [];
+    let x = PDF_MARGIN;
+    for (const cell of row) {
+      xs.push(x);
+      x += cell.width || 0;
     }
+    const rowEnd = x;
+    doc.lineWidth(0.6).strokeColor('#000000');
+
+    for (let i = 0; i < row.length; i++) {
+      const cell = row[i];
+      if (cell.border !== 'bottom') continue;
+      doc.moveTo(xs[i] + 2, top + h).lineTo(xs[i] + (cell.width || 0) - 2, top + h).stroke();
+    }
+    let run = -1;
+    for (let i = 0; i <= row.length; i++) {
+      const inRun = i < row.length && row[i].border === 'box';
+      if (inRun && run < 0) run = i;
+      if (!inRun && run >= 0) {
+        const x0 = xs[run];
+        const x1 = i === row.length ? rowEnd : xs[i];
+        doc.rect(x0, top, x1 - x0, h).stroke();
+        for (let j = run + 1; j < i; j++) doc.moveTo(xs[j], top).lineTo(xs[j], top + h).stroke();
+        run = -1;
+      }
+    }
+    for (let i = 0; i < row.length; i++) {
+      const cell = row[i];
+      if (!cell.text) continue;
+      this.face(cell.face, cell.size);
+      doc
+        .fillColor(cell.color || '#000000')
+        .text(cell.text, xs[i] + 4, top + 3, { width: (cell.width || 0) - 8, lineGap: 0, align: cell.align || 'left' });
+    }
+  }
+
+  render(nodes) {
+    for (const node of nodes) this.visit(node);
   }
 
   stampFooters(model, pages) {
@@ -627,7 +915,14 @@ function resolveFaces(doc, ctx) {
       doc.font('ed-custom');
       // One face supplied → one face used. Weight differences are honest: no
       // synthetic bolding, so nothing looks bolder than the file really is.
-      return { regular: 'ed-custom', bold: 'ed-custom', italic: 'ed-custom', mono: 'ed-custom' };
+      return {
+        regular: 'ed-custom',
+        bold: 'ed-custom',
+        italic: 'ed-custom',
+        mono: 'ed-custom',
+        head: 'ed-custom',
+        headBold: 'ed-custom',
+      };
     } catch (_) {
       ctx.warn({
         type: 'font-fallback',
@@ -635,7 +930,18 @@ function resolveFaces(doc, ctx) {
       });
     }
   }
-  return { regular: 'Times-Roman', bold: 'Times-Bold', italic: 'Times-Italic', mono: 'Courier' };
+  return {
+    regular: 'Times-Roman',
+    bold: 'Times-Bold',
+    italic: 'Times-Italic',
+    mono: 'Courier',
+    // The masthead takes the sans face: Helvetica is one of the 14 standard PDF
+    // fonts, so header and body still read as two different registers without an
+    // embedded TTF. Set EXAM_DOC_FONT_TTF (Lato, Inter, Source Sans 3…) to have
+    // the whole paper drawn with a real embedded typeface.
+    head: 'Helvetica',
+    headBold: 'Helvetica-Bold',
+  };
 }
 
 /**

@@ -428,8 +428,12 @@ describe('export', () => {
       expect(pdfContent, 'pdf missing: ' + stem).toContain(stem);
       expect(docxContent, 'docx missing: ' + stem).toContain(stem);
     }
-    expect(pdfContent).toContain('Total : 20 / 20');
-    expect(docxContent).toContain('Total : 20 / 20');
+    // The subject states the barème and keeps the grade box empty, in both
+    // formats: "Note : 20 / 20" on a student sheet gives the correction away.
+    expect(pdfContent).toContain('Barème : 20 points');
+    expect(docxContent).toContain('Barème : 20 points');
+    expect(pdfContent).not.toContain('Note : 20 / 20');
+    expect(docxContent).not.toContain('Note : 20 / 20');
     for (const secret of [SECRET_ANSWER, SECRET_FEEDBACK]) {
       expect(pdfContent, 'the subject must not carry ' + secret).not.toContain(secret);
       expect(docxContent, 'the subject must not carry ' + secret).not.toContain(secret);

@@ -184,14 +184,18 @@ class DocxBuilder {
       .map(([label, value]) => `${label} : ${value}`);
     if (meta.length) out.push(para([run(meta.join('     '), { size: SMALL })], { align: AlignmentType.CENTER, spaceAfter: 100, keepNext: true }));
 
-    out.push(
-      para([run(`Note : ${model.scoring.label}`, { bold: true })], {
-        align: AlignmentType.CENTER,
-        spaceAfter: 80,
-        keepNext: true,
-        border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: '000000', space: 4 } },
-      }),
-    );
+    // The grade is printed on the confidential key only: on the student paper
+    // the note box has to stay empty (same rule as the PDF renderer).
+    if (model.meta.document === 'answer_key') {
+      out.push(
+        para([run(`Note : ${model.scoring.label}`, { bold: true })], {
+          align: AlignmentType.CENTER,
+          spaceAfter: 80,
+          keepNext: true,
+          border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: '000000', space: 4 } },
+        }),
+      );
+    }
     return out;
   }
 
@@ -492,13 +496,22 @@ class DocxBuilder {
   }
 
   footerChildren(model) {
+    const isKey = model.meta.document === 'answer_key';
     const out = [
-      para([run(`Total : ${model.scoring.label}`, { bold: true })], {
-        align: AlignmentType.RIGHT,
-        spaceBefore: 160,
-        spaceAfter: 60,
-        border: { top: { style: BorderStyle.SINGLE, size: 6, color: '808080', space: 4 } },
-      }),
+      para(
+        [
+          run(
+            isKey ? `Total : ${model.scoring.label}` : `Barème : ${formatPoints(model.scoring.total)} points`,
+            { bold: true },
+          ),
+        ],
+        {
+          align: AlignmentType.RIGHT,
+          spaceBefore: 160,
+          spaceAfter: 60,
+          border: { top: { style: BorderStyle.SINGLE, size: 6, color: '808080', space: 4 } },
+        },
+      ),
     ];
     if (model.header.scaleNote) {
       out.push(para([run(model.header.scaleNote, { italics: true, size: TINY })], { align: AlignmentType.CENTER, spaceAfter: 60 }));

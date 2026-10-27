@@ -47,3 +47,6 @@ certs/
 
 # mkcert binaries — only needed inside the distributed package (dist/)
 vendor/mkcert/
+
+# Demo exam PDFs — regenerate with: node scripts/generate-demo-exam-pdf.mjs
+demo-pdf/

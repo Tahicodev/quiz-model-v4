@@ -20,9 +20,12 @@ import {
 } from '../../src/backend/services/exam-doc/pdfRenderer.js';
 import { toWinAnsi } from '../../src/backend/services/exam-doc/text.js';
 import { ExamDocumentService } from '../../src/backend/services/ExamDocumentService.js';
-import { pdfPageCount, pdfText } from './helpers/examDocPdf.js';
+import { pdfPageCount, pdfPageTexts, pdfText } from './helpers/examDocPdf.js';
 import { makeBrokenPng, makePng, pngDataUrl } from './helpers/examDocPng.js';
 import {
+  CATEGORY_GRAMMAR,
+  CATEGORY_SCIENCE,
+  CREATOR_ID,
   EXAM_ID,
   SCHOOL_ID,
   SECRET_TOKENS,
@@ -111,13 +114,27 @@ describe('text printed on the paper', () => {
     expect(studentText).toContain('Entourez l’intrus de la série.'); // U+2019 is WinAnsi
   });
 
-  it('prints the barème: header grade, per-question points, subtotals and total', () => {
-    expect(studentText).toContain('Note : 20 / 20');
-    expect(studentText).toContain('Note :  / 20'); // blank grade for the student
+  it('prints the barème without giving the grade away on the subject', () => {
+    expect(studentText).not.toContain('Note : 20 / 20'); // the answer stays off the student paper
+    expect(studentText).toContain('NOTE'); // empty grade box instead
+    expect(studentText).toContain('/ 20');
     expect(studentText).toContain('3 pts');
-    expect(studentText).toContain('Total : 20 / 20');
+    expect(studentText).toContain('Barème : 20 points');
+    expect(keyText).toContain('Total : 20 / 20');
     expect(studentText).toContain('Grammaire');
     expect(studentText).toContain('Sciences');
+  });
+
+  it('prints the header information the teacher can fill on paper', () => {
+    // School, level, year, teacher, duration: the institutional block must be
+    // readable, and an unfilled date has to stay a blank to write on.
+    expect(studentText).toContain('Lycée Victor Hugo');
+    expect(studentText).toContain('3ème A');
+    expect(studentText).toContain('Année scolaire 2025-2026');
+    expect(studentText).toContain('Enseignant : Mme Aïchouche');
+    expect(studentText).toContain('Durée : 60 min');
+    expect(studentText).toContain('Date : ____/____/______');
+    expect(studentText).toContain('Nom & prénom :');
   });
 
   it('stamps a numbered footer on every page and closes the paper', async () => {
@@ -156,10 +173,66 @@ describe('normalization is visible on paper', () => {
     expect(model.scoring.normalized).toBe(true);
     expect(model.items.map((item) => item.points)).toEqual([2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5]);
     const text = pdfText((await renderExamDocumentPdf(model)).buffer);
-    expect(text).toContain('Total : 20 / 20');
-    expect(text).toContain('Note : 20 / 20');
+    expect(text).toContain('Barème : 20 points');
+    expect(text).not.toContain('Note : 20 / 20');
     expect(text).toContain('normalisé sur 20');
     expect(text).toContain('2,5 pts'); // French decimal sign on paper
+  });
+});
+
+describe('page breaks', () => {
+  /** Two long stems and a 12-row matching table: the table cannot avoid the bottom limit. */
+  function pairHeavyFixtures() {
+    const stem = (n) =>
+      `Question ${n} — ` +
+      'Dans un texte de plusieurs paragraphes, l’élève doit retrouver les notions étudiées, les ' +
+      'définir avec ses propres mots et illustrer chaque définition par un exemple personnel. '.repeat(2);
+    const pairs = Array.from({ length: 12 }, (_, i) => ({ left: `Ville ${i + 1}`, right: `Pays ${i + 1}` }));
+    return [
+      { id: 'q-torn-a', type: 'mcq', text: stem(1), options_json: JSON.stringify(['Un', 'Deux', 'Trois']), answer: 'Un', explanation: 'ZÉPHYR-TORN-A', category_id: CATEGORY_GRAMMAR },
+      { id: 'q-torn-b', type: 'mcq', text: stem(2), options_json: JSON.stringify(['Quatre', 'Cinq']), answer: 'Cinq', explanation: 'ZÉPHYR-TORN-B', category_id: CATEGORY_SCIENCE },
+      { id: 'q-torn-c', type: 'match', text: 'Reliez chaque ville à son pays.', options_json: null, answer: JSON.stringify(pairs), explanation: 'ZÉPHYR-TORN-C', category_id: CATEGORY_SCIENCE },
+    ].map((row, index) => ({
+      ...row,
+      points: [4, 8, 8][index],
+      order_index: index,
+      points_override: null,
+      school_id: SCHOOL_ID,
+      created_by: CREATOR_ID,
+      media_url: null,
+    }));
+  }
+
+  it('keeps a table on one sheet instead of tearing it across pages', async () => {
+    // Regression: an unguarded row drew its frame below the bottom limit and
+    // pdfkit then started a page per `text()` call — a 12-row table became 12
+    // pages, and the footer reported "Page 30 / 34".
+    const model = await serviceFor(pairHeavyFixtures(), { document: 'student' });
+    const { pages, buffer } = await renderExamDocumentPdf(model);
+    const perPage = pdfPageTexts(buffer);
+    expect(pdfPageCount(buffer)).toBe(pages);
+    expect(pages).toBeLessThanOrEqual(perPage.length + 1);
+    expect(pages).toBeLessThanOrEqual(3);
+
+    const tablePage = perPage.findIndex((text) => text.includes('Colonne A'));
+    expect(tablePage).toBeGreaterThanOrEqual(0);
+    // The heading, the instruction and every row live with the table.
+    expect(perPage[tablePage]).toContain('Question 3');
+    expect(perPage[tablePage]).toContain('Reliez chaque ville à son pays.');
+    expect(perPage[tablePage]).toContain('Ville 12');
+    expect(perPage[tablePage]).toContain('Pays 12');
+    // Page numbering counts the sheets that really exist.
+    expect(perPage[tablePage]).toContain(`Page ${tablePage + 1} / ${pages}`);
+  });
+
+  it('never splits the masthead from the identity fields', async () => {
+    const model = await serviceFor(questionFixtures(), { document: 'student' });
+    const { buffer } = await renderExamDocumentPdf(model);
+    const first = pdfPageTexts(buffer)[0];
+    expect(first).toContain('Lycée Victor Hugo');
+    expect(first).toContain('NOTE');
+    expect(first).toContain('Nom & prénom :');
+    expect(first).toContain('Question 1');
   });
 });
 
