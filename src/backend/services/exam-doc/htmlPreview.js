@@ -9,6 +9,7 @@
  */
 
 import { formatPoints, optionLetter } from './text.js';
+import { examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
 
 const escapeHtml = (value) =>
   String(value ?? '')
@@ -28,61 +29,75 @@ function imgTag(src, cls) {
   return `<img class="${cls}" src="${escapeHtml(ref)}" alt="">`;
 }
 
-function metaRow(label, value) {
-  if (value === null || value === undefined || String(value).trim() === '') return '';
-  return `<div class="ed-meta-item"><span class="ed-meta-label">${escapeHtml(label)} :</span> <span class="ed-meta-value">${escapeHtml(value)}</span></div>`;
-}
-
+/**
+ * The masthead, drawn from `examHeaderParts` — the same list the PDF and the
+ * Word file print, in the same order: logo + school block on the left, year on
+ * the right, thick accent rule, centred title, information line.
+ */
 function renderHeader(model) {
-  const { header } = model;
-  const institutional = [header.ministry, header.academy].filter((v) => v && String(v).trim());
-  const top = institutional.length
-    ? `<div class="ed-institutional">${institutional.map((line) => `<div>${escapeHtml(line)}</div>`).join('')}</div>`
-    : '';
-  const logo = imgTag(header.logoDataUrl || header.logoUrl, 'ed-logo');
-  const scale = Number(header.logoScale) || 1;
-  const identity = header.schoolName
-    ? `<div class="ed-school"${scale !== 1 ? ` style="--ed-logo-scale:${scale}"` : ''}>${logo}<div class="ed-school-name">${escapeHtml(header.schoolName)}</div>${header.academicYear ? `<div class="ed-school-year">${escapeHtml(header.academicYear)}</div>` : ''}</div>`
-    : `${logo}`;
-
-  const meta = [
-    metaRow('Matière', header.subject),
-    metaRow('Enseignant', header.teacherName),
-    metaRow('Niveau / Classe', header.level),
-    metaRow('Groupe', header.group),
-    metaRow('Session', header.sessionType),
-    metaRow('Trimestre', header.term),
-    metaRow('Date', header.date),
-    header.durationMinutes ? metaRow('Durée', `${header.durationMinutes} min`) : '',
-  ].join('');
+  const parts = examHeaderParts(model);
+  if (!parts.enabled) return ''; // the teacher hid the printed header
+  const scale = parts.logoScale;
+  const logo = imgTag(parts.logo, 'ed-logo');
+  const line = (item) => `<div class="ed-masthead-${item.role}">${escapeHtml(item.text)}</div>`;
+  const left = parts.left.filter((item) => item.text).map(line).join('');
+  const right = parts.right.filter((item) => item.text).map(line).join('');
+  const info = parts.info
+    .map((item) => `<span class="ed-meta-item">${escapeHtml(item)}</span>`)
+    .join('<span class="ed-meta-sep">·</span>');
 
   return `
     <header class="ed-header">
-      ${top}
-      ${identity}
+      <div class="ed-masthead"${scale !== 1 ? ` style="--ed-logo-scale:${scale}"` : ''}>
+        ${logo ? `<div class="ed-masthead-logo">${logo}</div>` : ''}
+        <div class="ed-masthead-left">${left}</div>
+        <div class="ed-masthead-right">${right}</div>
+      </div>
+      <div class="ed-accent-rule"></div>
       <div class="ed-title-block">
-        <h1 class="ed-title">${escapeHtml(header.title || 'Examen')}</h1>
-        <div class="ed-meta">${meta}</div>
-        ${
-          // The grade never appears on the subject: the student note box stays
-          // empty, only the confidential key prints the total.
-          model.meta.document === 'answer_key'
-            ? `<div class="ed-score-badge">Note : <strong>${escapeHtml(model.scoring.label)}</strong></div>`
-            : ''
-        }
+        <h1 class="ed-title">${escapeHtml(parts.title)}</h1>
+        ${parts.tag ? `<div class="ed-tag">${escapeHtml(parts.tag)}</div>` : ''}
+        ${info ? `<div class="ed-meta">${info}</div>` : ''}
       </div>
     </header>`;
 }
 
-function renderStudentIdentity(model) {
-  if (model.meta.document !== 'student') return '';
-  const { header } = model;
-  const fields = [];
-  if (header.studentNameField !== false) fields.push('<div class="ed-id-field">Nom &amp; prénom : <span class="ed-rule"></span></div>');
-  if (header.studentNumberField !== false) fields.push('<div class="ed-id-field">N° : <span class="ed-rule ed-rule-short"></span></div>');
-  if (header.showClassField !== false) fields.push('<div class="ed-id-field">Classe : <span class="ed-rule ed-rule-short"></span></div>');
-  fields.push('<div class="ed-id-field ed-id-note">Note : <span class="ed-rule ed-rule-short"></span> / 20</div>');
-  return `<section class="ed-identity">${fields.join('')}</section>`;
+/**
+ * Fill-in area (identity plate + grade box), the instruction line and the
+ * closing rule: the preview counterpart of the PDF `identity` op.
+ */
+function renderIdentityBlock(model) {
+  const { rows, showNote, noteLabel, noteSuffix } = examIdentityParts(model);
+  const parts = [];
+  if (rows.length || showNote) {
+    const plate = rows.length
+      ? `<div class="ed-id-plate">${rows
+          .map(
+            (row) =>
+              `<div class="ed-id-row">${row
+                .map((label) => `<span class="ed-id-field">${escapeHtml(label)}</span>`)
+                .join('')}</div>`,
+          )
+          .join('')}</div>`
+      : '';
+    const note = showNote
+      ? `<div class="ed-note-box"><span class="ed-note-label">${escapeHtml(noteLabel)}</span><span class="ed-note-max">${escapeHtml(noteSuffix)}</span></div>`
+      : '';
+    parts.push(`<section class="ed-identity">${plate}${note}</section>`);
+  }
+  const instructions = examInstructions(model);
+  if (instructions) {
+    // The wording comes from `headerLayout`, so the preview says exactly what
+    // the paper says (including the "données aux élèves" framing on the key).
+    parts.push(`<section class="ed-instructions"><p>${escapeHtml(instructions)}</p></section>`);
+  }
+  // The grade never appears on the subject: the student note box stays empty,
+  // only the confidential key prints the total.
+  if (model.meta.document === 'answer_key') {
+    parts.push(`<div class="ed-score-badge">Note : <strong>${escapeHtml(model.scoring.label)}</strong></div>`);
+  }
+  parts.push('<div class="ed-header-close"></div>');
+  return parts.join('');
 }
 
 function renderBlock(block) {
@@ -103,22 +118,33 @@ function renderBlock(block) {
       parts.push('<div class="ed-blanks-line"><span class="ed-rule"></span></div>');
       break;
     case 'sequence':
-      parts.push(
-        `<div class="ed-pool">${block.pool.map((o) => `<span class="ed-pool-item">${escapeHtml(o.text)}${imgTag(o.image, 'ed-option-img')}</span>`).join('')}</div>`,
-      );
+      // One element per line, lettered: the same readable pool the PDF and Word
+      // print, instead of a wrapped strip of chips where the letters vanish.
+      if (block.pool.length) {
+        parts.push(
+          `<div class="ed-pool"><div class="ed-pool-title">Éléments à placer :</div>${block.pool
+            .map(
+              (o) =>
+                `<div class="ed-pool-item"><span class="ed-letter">${escapeHtml(o.letter)}.</span> ${escapeHtml(o.text)}${imgTag(o.image, 'ed-option-img')}</div>`,
+            )
+            .join('')}</div>`,
+        );
+      }
       parts.push(
         `<ol class="ed-slots">${Array.from({ length: block.slots }, () => '<li><span class="ed-rule ed-rule-medium"></span></li>').join('')}</ol>`,
       );
       break;
     case 'pairs':
+      // The third column is where the student writes the letter: without it the
+      // table asks for a connection with nowhere to note it down.
       parts.push(`
         <table class="ed-pairs">
-          <thead><tr><th>Colonne A</th><th>Colonne B</th></tr></thead>
+          <thead><tr><th class="ed-pairs-a">Colonne A</th><th class="ed-pairs-b">Colonne B</th><th class="ed-pairs-r">Réponse</th></tr></thead>
           <tbody>
             ${Array.from({ length: Math.max(block.lefts.length, block.rights.length) }, (_, i) => {
               const left = block.lefts[i];
               const right = block.rights[i];
-              return `<tr><td>${left ? `${left.n}. ${escapeHtml(left.text)}` : ''}</td><td>${right ? `${right.letter}. ${escapeHtml(right.text)}` : ''}</td></tr>`;
+              return `<tr><td>${left ? `${left.n}. ${escapeHtml(left.text)}` : ''}</td><td>${right ? `${right.letter}. ${escapeHtml(right.text)}` : ''}</td><td></td></tr>`;
             }).join('')}
           </tbody>
         </table>`);
@@ -212,10 +238,6 @@ function renderWarnings(model) {
 /** @param {object} model output of ExamDocumentService.buildExamDocument */
 export function renderExamDocumentHtml(model) {
   const { header } = model;
-  const instructions =
-    model.meta.document === 'student' && header.instructions
-      ? `<section class="ed-instructions"><h3>Consignes</h3><p>${escapeHtml(header.instructions)}</p></section>`
-      : '';
   const closing =
     model.meta.document === 'student'
       ? '<div class="ed-closing">— Fin du sujet —</div>'
@@ -223,8 +245,7 @@ export function renderExamDocumentHtml(model) {
 
   return `<article class="ed-paper ed-paper--${model.meta.document}">
     ${renderHeader(model)}
-    ${renderStudentIdentity(model)}
-    ${instructions}
+    ${renderIdentityBlock(model)}
     <main class="ed-body">${renderItems(model)}</main>
     ${renderWarnings(model)}
     <footer class="ed-footer">

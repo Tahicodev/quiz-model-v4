@@ -26,6 +26,7 @@ import {
   Footer,
   Header,
   HeadingLevel,
+  HeightRule,
   ImageRun,
   LevelFormat,
   Packer,
@@ -36,12 +37,14 @@ import {
   TableCell,
   TableRow,
   TabStopType,
+  TableLayoutType,
   TextRun,
+  VerticalAlignTable,
   WidthType,
 } from 'docx';
 import { config } from '../../config.js';
-import { EXAM_DOC_TARGET_SCORE } from '../../../shared/schemas/examDocument.schema.js';
 import { formatPoints, resolveImage, imageDimensions } from './text.js';
+import { HEADER_INK, examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
 
 // A4 in twips (1440 twips = 1 inch): 210×297mm.
 const PAGE_W = 11906;
@@ -56,18 +59,38 @@ const SMALL = 20; // 10pt
 const TINY = 18;
 
 const FONT = 'Times New Roman';
+const HEAD_FONT = 'Calibri'; // the masthead reads as a different register, as in the PDF
 const MARKER = { radio: '○', checkbox: '□' };
 
+// Same accent and same neutrals as the PDF, taken from `headerLayout` so the
+// Word sheet cannot drift from the printed one. Office colours carry no '#'.
+const ACCENT = HEADER_INK.accentHex;
+const MUTED = HEADER_INK.mutedHex;
+const HAIRLINE = HEADER_INK.hairlineHex;
+const FIELD_BG = HEADER_INK.fieldBgHex;
+
+// Typography of each masthead line, keyed by the role `headerLayout` names it.
+// Sizes are half-points, i.e. twice the pt the PDF uses for the same line.
+const MASTHEAD_RUN = {
+  school: { bold: true, size: 28, color: ACCENT, font: HEAD_FONT },
+  programme: { size: 20, color: MUTED, font: HEAD_FONT },
+  institution: { size: 17, color: MUTED, font: HEAD_FONT },
+  year: { size: 20, color: MUTED, font: HEAD_FONT },
+  session: { size: 18, color: MUTED, font: HEAD_FONT },
+};
+
 const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER };
+const DOTTED_RULE = { style: BorderStyle.DOTTED, size: 6, color: MUTED };
 
 const run = (text, opts = {}) =>
   new TextRun({
     text,
-    font: FONT,
+    font: opts.font || FONT,
     size: opts.size ?? BODY,
     bold: !!opts.bold,
     italics: !!opts.italics,
-    color: '000000',
+    color: opts.color || '000000',
     keepNext: !!opts.keepNext,
     keepLines: !!opts.keepLines,
     ...(opts.break ? { break: opts.break } : {}),
@@ -143,110 +166,216 @@ class DocxBuilder {
     }
   }
 
+  /**
+   * Masthead band → thick accent rule → centred title → information line, in the
+   * order and wording `headerLayout` defines (the PDF draws the same list). Word
+   * has no absolute positioning, so the logo-left / year-right split is a
+   * borderless one-row table: same sheet, still fully editable in Word.
+   */
   headerChildren(model) {
-    const { header } = model;
-    const out = [];
-    const push = (value, opts = {}) => {
-      if (value === null || value === undefined || String(value).trim() === '') return;
-      out.push(para([run(String(value), { size: opts.size ?? BODY, bold: opts.bold })], {
-        align: AlignmentType.CENTER,
-        spaceAfter: opts.spaceAfter ?? 60,
-        keepNext: true,
-      }));
-    };
+    const parts = examHeaderParts(model);
+    if (!parts.enabled) return []; // teacher switch: no printed header at all
 
-    push(header.ministry, { size: SMALL });
-    push(header.academy, { size: SMALL, spaceAfter: 120 });
-
-    const scale = Number(header.logoScale) || 1;
-    const logo = this.imageElement(header.logoDataUrl || header.logoUrl, {
-      maxWPx: Math.min(170, CONTENT_PX / 3),
-      maxHPx: Math.round(50 * scale * 96 / 72),
+    const leftLines = parts.left.filter((line) => line.text);
+    const rightLines = parts.right.filter((line) => line.text);
+    const logo = this.imageElement(parts.logo, {
+      maxWPx: 130,
+      maxHPx: Math.round(52 * parts.logoScale * (96 / 72)), // pt → px at 96 dpi
     });
-    if (logo) out.push(para([logo], { align: AlignmentType.CENTER, spaceAfter: 120, keepNext: true }));
 
-    push(header.schoolName, { bold: true, size: 26 });
-    push(header.academicYear, { size: SMALL, spaceAfter: 160 });
-    push(header.title || 'Examen', { bold: true, size: 30, spaceAfter: 120 });
+    const cells = [];
+    if (logo) {
+      cells.push(
+        new TableCell({
+          width: { size: 18, type: WidthType.PERCENTAGE },
+          borders: NO_BORDERS,
+          verticalAlign: VerticalAlignTable.CENTER,
+          children: [para([logo], { spaceAfter: 0 })],
+        }),
+      );
+    }
+    cells.push(
+      new TableCell({
+        width: { size: logo ? 54 : 72, type: WidthType.PERCENTAGE },
+        borders: NO_BORDERS,
+        children: leftLines.map((line, i) =>
+          para([run(line.text, MASTHEAD_RUN[line.role])], {
+            spaceBefore: i === 0 ? 0 : 20,
+            spaceAfter: 0,
+            keepNext: true,
+          }),
+        ),
+      }),
+    );
+    cells.push(
+      new TableCell({
+        width: { size: 28, type: WidthType.PERCENTAGE },
+        borders: NO_BORDERS,
+        children: rightLines.map((line) =>
+          para([run(line.text, MASTHEAD_RUN[line.role])], {
+            align: AlignmentType.RIGHT,
+            spaceAfter: 0,
+          }),
+        ),
+      }),
+    );
 
-    const meta = [
-      ['Matière', header.subject],
-      ['Enseignant', header.teacherName],
-      ['Niveau / Classe', header.level],
-      ['Groupe', header.group],
-      ['Session', header.sessionType],
-      ['Trimestre', header.term],
-      ['Date', header.date],
-      header.durationMinutes ? ['Durée', `${header.durationMinutes} min`] : null,
-    ]
-      .filter(Boolean)
-      .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
-      .map(([label, value]) => `${label} : ${value}`);
-    if (meta.length) out.push(para([run(meta.join('     '), { size: SMALL })], { align: AlignmentType.CENTER, spaceAfter: 100, keepNext: true }));
+    const out = [
+      new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        layout: TableLayoutType.FIXED,
+        rows: [new TableRow({ children: cells })],
+      }),
+    ];
 
+    // The thick accent rule, the coloured band that separates the masthead from
+    // the title (18 eighths of a point ≈ the 2.4pt stroke the PDF draws).
+    out.push(
+      para([run(' ', { size: 4 })], {
+        spaceBefore: 20,
+        spaceAfter: 100,
+        keepNext: true,
+        border: { bottom: { style: BorderStyle.SINGLE, size: 18, color: ACCENT, space: 1 } },
+      }),
+    );
+    out.push(
+      para([run(parts.title, { bold: true, size: 30, color: ACCENT, font: HEAD_FONT })], {
+        align: AlignmentType.CENTER,
+        spaceAfter: parts.tag ? 40 : 60,
+        keepNext: true,
+      }),
+    );
+    if (parts.tag) {
+      out.push(
+        para([run(parts.tag, { bold: true, size: TINY, color: MUTED, font: HEAD_FONT })], {
+          align: AlignmentType.CENTER,
+          spaceAfter: 60,
+          keepNext: true,
+        }),
+      );
+    }
+    if (parts.info.length) {
+      out.push(
+        para([run(parts.info.join(`   ${'·'}   `), { size: SMALL, color: MUTED, font: HEAD_FONT })], {
+          align: AlignmentType.CENTER,
+          spaceAfter: 120,
+          keepNext: true,
+        }),
+      );
+    }
     // The grade is printed on the confidential key only: on the student paper
     // the note box has to stay empty (same rule as the PDF renderer).
     if (model.meta.document === 'answer_key') {
       out.push(
         para([run(`Note : ${model.scoring.label}`, { bold: true })], {
           align: AlignmentType.CENTER,
-          spaceAfter: 80,
+          spaceAfter: 60,
           keepNext: true,
-          border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: '000000', space: 4 } },
         }),
       );
     }
     return out;
   }
 
+  /**
+   * Fill-in area under the title, then the closing hairline — the Word mirror of
+   * the PDF `identity` op plus the rule that ends the header block.
+   */
   identityChildren(model) {
-    if (model.meta.document !== 'student') return [];
-    const { header } = model;
-    const fields = [];
-    if (header.studentNameField !== false) fields.push({ label: 'Nom & prénom :', w: 38 });
-    if (header.studentNumberField !== false) fields.push({ label: 'N° :', w: 17 });
-    if (header.showClassField !== false) fields.push({ label: 'Classe :', w: 20 });
-    fields.push({ label: `Note :  / ${EXAM_DOC_TARGET_SCORE}`, w: 25 });
-
-    const row = new TableRow({
-      children: fields.map((field) =>
-        new TableCell({
-          width: { size: field.w, type: WidthType.PERCENTAGE },
-          borders: {
-            top: NO_BORDER,
-            left: NO_BORDER,
-            right: NO_BORDER,
-            bottom: { style: BorderStyle.SINGLE, size: 6, color: '404040' },
-          },
-          margins: { bottom: 120, top: 40, left: 40, right: 40 },
-          children: [para([run(field.label, { size: SMALL })], { spaceAfter: 0 })],
-        }),
-      ),
-    });
-
-    const out = [
-      new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        layout: 'fixed',
-        rows: [row],
-      }),
-    ];
-    if (header.instructions) {
+    const { rows, showNote, noteLabel, noteSuffix } = examIdentityParts(model);
+    const out = [];
+    if (rows.length || showNote) out.push(this.identityTable({ rows, showNote, noteLabel, noteSuffix }));
+    const instructions = examInstructions(model);
+    if (instructions) {
+      const line = { style: BorderStyle.SINGLE, size: 4, color: HAIRLINE, space: 2 };
       out.push(
-        para([run('Consignes : ', { bold: true, size: SMALL }), run(header.instructions, { size: SMALL })], {
+        para([run(instructions, { size: SMALL })], {
           spaceBefore: 120,
-          spaceAfter: 160,
+          spaceAfter: 120,
           keepNext: true,
-          border: {
-            top: { style: BorderStyle.SINGLE, size: 4, color: '808080', space: 2 },
-            bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080', space: 2 },
-            left: { style: BorderStyle.SINGLE, size: 4, color: '808080', space: 2 },
-            right: { style: BorderStyle.SINGLE, size: 4, color: '808080', space: 2 },
-          },
+          border: { top: line, bottom: line, left: line, right: line },
         }),
       );
     }
+    out.push(
+      para([run(' ', { size: 2 })], {
+        spaceBefore: 40,
+        spaceAfter: 120,
+        border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: '000000', space: 1 } },
+      }),
+    );
     return out;
+  }
+
+  /**
+   * Identity fields on a light plate, grade in a dedicated box next to them.
+   * Word has no rounded rectangle, so the plate is a nested table (one row per
+   * field line, dotted bottom border = the rule the student writes on) inside a
+   * borderless wrapper cell. No vertical merges: Word and LibreOffice both
+   * render this reliably.
+   */
+  identityTable({ rows, showNote, noteLabel, noteSuffix }) {
+    const cols = rows.reduce((max, row) => Math.max(max, row.length), 2);
+    const fieldRows = rows.map((row) => {
+      let used = 0;
+      const cells = row.map((label, index) => {
+        const last = index === row.length - 1;
+        const span = last ? cols - used : 1;
+        used += span;
+        return new TableCell({
+          ...(span > 1 ? { columnSpan: span } : {}),
+          width: { size: (100 / cols) * span, type: WidthType.PERCENTAGE },
+          borders: { ...NO_BORDERS, bottom: DOTTED_RULE },
+          shading: { type: ShadingType.CLEAR, fill: FIELD_BG, color: 'auto' },
+          margins: { top: 60, bottom: 110, left: 100, right: 140 },
+          children: [para([run(label, { size: SMALL, font: HEAD_FONT })], { spaceAfter: 0 })],
+        });
+      });
+      return new TableRow({ children: cells });
+    });
+
+    const cells = [];
+    if (rows.length) {
+      cells.push(
+        new TableCell({
+          width: { size: showNote ? 72 : 100, type: WidthType.PERCENTAGE },
+          borders: NO_BORDERS,
+          // A table cell may not end on a nested table: the hairline paragraph
+          // closes it, and doubles as the gap under the last field.
+          children: [
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              layout: TableLayoutType.FIXED,
+              rows: fieldRows,
+            }),
+            para([run(' ', { size: 2 })], { spaceAfter: 0 }),
+          ],
+        }),
+      );
+    }
+    if (showNote) {
+      const box = { style: BorderStyle.SINGLE, size: 12, color: ACCENT };
+      cells.push(
+        new TableCell({
+          width: { size: rows.length ? 28 : 100, type: WidthType.PERCENTAGE },
+          borders: { top: box, bottom: box, left: box, right: box },
+          margins: { top: 80, bottom: 80, left: 120, right: 120 },
+          children: [
+            para([run(noteLabel, { size: TINY, color: MUTED, font: HEAD_FONT })], { spaceAfter: 0 }),
+            para([run(' ', { size: 16 })], { spaceAfter: 0 }),
+            para([run(noteSuffix, { bold: true, size: 26, color: ACCENT, font: HEAD_FONT })], {
+              align: AlignmentType.RIGHT,
+              spaceAfter: 0,
+            }),
+          ],
+        }),
+      );
+    }
+    return new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      layout: TableLayoutType.FIXED,
+      rows: [new TableRow({ height: { value: 1150, rule: HeightRule.ATLEAST }, children: cells })],
+    });
   }
 
   blockChildren(item) {
@@ -292,8 +421,21 @@ class DocxBuilder {
         }
         break;
       case 'sequence': {
-        const pool = block.pool.map((o) => `${o.letter}. ${o.text || '(image)'}`).join('     ');
-        if (pool) out.push(para([run(`Éléments à placer : ${pool}`, { size: SMALL })], { spaceAfter: 100, keepNext: true }));
+        // One element per line, as in the PDF: glued into a single paragraph,
+        // "A. … B. … C. …" is unreadable and the student cannot tell where an
+        // item stops.
+        if (block.pool.length) {
+          out.push(para([run('Éléments à placer :', { size: SMALL })], { spaceAfter: 40, keepNext: true }));
+          block.pool.forEach((option, i) => {
+            out.push(
+              para([run(`${option.letter}. ${option.text || '(image)'}`, { size: SMALL })], {
+                indent: 284,
+                spaceAfter: i === block.pool.length - 1 ? 60 : 20,
+                keepNext: true,
+              }),
+            );
+          });
+        }
         for (const option of block.pool) {
           const img = this.imageElement(option.image, { maxWPx: 100, maxHPx: 55 });
           if (img) out.push(para([img], { spaceAfter: 60, keepNext: true }));
@@ -312,18 +454,26 @@ class DocxBuilder {
         break;
       }
       case 'pairs': {
+        // Two content columns plus a narrow answer column, exactly like the PDF:
+        // without a place to write the letter, the table asks for a connection
+        // the student has nowhere to note down.
+        const COL_W = [37, 38, 25];
+        const headCell = (label, width, align) =>
+          new TableCell({
+            width: { size: width, type: WidthType.PERCENTAGE },
+            borders: boxBorders(),
+            shading: { type: ShadingType.CLEAR, fill: 'F2F2F2', color: 'auto' },
+            margins: { top: 60, bottom: 60, left: 80, right: 80 },
+            children: [para([run(label, { bold: true, size: SMALL })], { align, spaceAfter: 0 })],
+          });
         const rows = [
           new TableRow({
             tableHeader: true,
-            children: ['Colonne A', 'Colonne B'].map((label) =>
-              new TableCell({
-                width: { size: 50, type: WidthType.PERCENTAGE },
-                borders: boxBorders(),
-                shading: { type: ShadingType.CLEAR, fill: 'F2F2F2', color: 'auto' },
-                margins: { top: 60, bottom: 60, left: 80, right: 80 },
-                children: [para([run(label, { bold: true, size: SMALL })], { spaceAfter: 0 })],
-              }),
-            ),
+            children: [
+              headCell('Colonne A', COL_W[0]),
+              headCell('Colonne B', COL_W[1]),
+              headCell('Réponse', COL_W[2], AlignmentType.CENTER),
+            ],
           }),
         ];
         const n = Math.max(block.lefts.length, (block.rights || []).length);
@@ -335,9 +485,10 @@ class DocxBuilder {
               children: [
                 left ? `${left.n}. ${left.text}` : '',
                 right ? `${right.letter}. ${right.text}` : '',
-              ].map((value) =>
+                '', // the student writes the letter here
+              ].map((value, column) =>
                 new TableCell({
-                  width: { size: 50, type: WidthType.PERCENTAGE },
+                  width: { size: COL_W[column], type: WidthType.PERCENTAGE },
                   borders: boxBorders(),
                   margins: { top: 60, bottom: 60, left: 80, right: 80 },
                   children: [para([run(value)], { spaceAfter: 0 })],
@@ -349,7 +500,7 @@ class DocxBuilder {
         out.push(
           new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
-            layout: 'fixed',
+            layout: TableLayoutType.FIXED,
             rows,
           }),
         );

@@ -17,6 +17,11 @@ export const EXAM_DOC_PAPER_CSS = `
   --ed-rule: #6b7280;
   --ed-key-bg: #f8fafc;
   --ed-key-border: #cbd5e1;
+  /* One accent for the whole paper, the same value the PDF and Word use. */
+  --ed-accent: #1f3a5f;
+  --ed-accent-bg: #f6f8fa;
+  --ed-hairline: #c9d1d9;
+  --ed-sans: 'Segoe UI', Helvetica, Arial, sans-serif;
   box-sizing: border-box;
   width: 210mm;
   max-width: 100%;
@@ -31,27 +36,37 @@ export const EXAM_DOC_PAPER_CSS = `
 }
 .ed-paper *, .ed-paper *::before, .ed-paper *::after { box-sizing: border-box; }
 
-/* ── Header ─────────────────────────────────────────────────────────────── */
-.ed-header { border-bottom: 2px solid var(--ed-ink); padding-bottom: 8px; margin-bottom: 12px; }
-.ed-institutional { text-align: center; font-size: 10.5pt; letter-spacing: .02em; text-transform: uppercase; color: var(--ed-muted); }
-.ed-school { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
-.ed-logo { height: calc(48px * var(--ed-logo-scale, 1)); width: auto; max-width: 160px; object-fit: contain; }
-.ed-school-name { font-weight: 700; font-size: 13pt; }
-.ed-school-year { font-size: 10.5pt; color: var(--ed-muted); }
-.ed-title-block { margin-top: 10px; text-align: center; }
-.ed-title { font-size: 15pt; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .03em; }
-.ed-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font-size: 10.5pt; }
-.ed-meta-label { color: var(--ed-muted); }
-.ed-meta-value { font-weight: 600; }
-.ed-score-badge { margin-top: 6px; font-size: 11pt; }
+/* ── Header: masthead band, accent rule, title, information line ────────── */
+.ed-header { margin-bottom: 10px; }
+.ed-masthead { display: flex; align-items: center; gap: 14px; font-family: var(--ed-sans); }
+.ed-masthead-logo { flex: 0 0 auto; }
+.ed-logo { height: calc(54px * var(--ed-logo-scale, 1)); width: auto; max-width: 132px; object-fit: contain; }
+.ed-masthead-left { flex: 1 1 auto; min-width: 0; }
+.ed-masthead-right { flex: 0 0 auto; margin-left: auto; text-align: right; }
+.ed-masthead-school { font-weight: 700; font-size: 14pt; line-height: 1.25; color: var(--ed-accent); }
+.ed-masthead-programme { font-size: 9.5pt; color: var(--ed-muted); }
+.ed-masthead-institution { font-size: 8.5pt; color: var(--ed-muted); }
+.ed-masthead-year { font-size: 9.5pt; color: var(--ed-muted); }
+.ed-masthead-session { font-size: 8.5pt; color: var(--ed-muted); }
+.ed-accent-rule { height: 2.5px; background: var(--ed-accent); margin: 8px 0 7px; }
+.ed-title-block { text-align: center; font-family: var(--ed-sans); }
+.ed-title { font-size: 15pt; margin: 0; color: var(--ed-accent); letter-spacing: .03em; }
+.ed-tag { font-size: 9pt; letter-spacing: .06em; color: var(--ed-muted); margin-top: 3px; }
+.ed-meta { margin-top: 3px; font-size: 10pt; color: var(--ed-muted); display: flex; flex-wrap: wrap; justify-content: center; gap: 0 9px; }
+.ed-meta-sep { color: var(--ed-hairline); }
 
-/* ── Student identification ─────────────────────────────────────────────── */
-.ed-identity { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: flex-end; font-size: 11pt; margin-bottom: 10px; }
-.ed-id-field { display: flex; align-items: flex-end; gap: 6px; }
-.ed-id-note { margin-left: auto; }
-.ed-rule { display: inline-block; border-bottom: 1px solid var(--ed-rule); min-width: 140px; height: 1.1em; }
-.ed-rule-medium { min-width: 90px; }
-.ed-rule-short { min-width: 70px; }
+/* ── Student identification: light plate + dedicated grade box ──────────── */
+.ed-identity { display: flex; align-items: stretch; gap: 12px; font-family: var(--ed-sans); margin: 10px 0; }
+.ed-id-plate { flex: 1 1 auto; background: var(--ed-accent-bg); border: 1px solid var(--ed-hairline); border-radius: 6px; padding: 10px 12px; }
+.ed-id-row { display: flex; gap: 18px; }
+.ed-id-row + .ed-id-row { margin-top: 12px; }
+.ed-id-field { flex: 1 1 0; display: flex; align-items: flex-end; gap: 6px; min-width: 0; font-size: 10.5pt; }
+.ed-id-field::after { content: ''; flex: 1 1 auto; height: 1em; border-bottom: 1px dotted var(--ed-rule); }
+.ed-note-box { flex: 0 0 118px; min-height: 58px; display: flex; flex-direction: column; justify-content: space-between; padding: 6px 9px; border: 1.5px solid var(--ed-accent); border-radius: 6px; }
+.ed-note-label { font-size: 8pt; letter-spacing: .08em; color: var(--ed-muted); }
+.ed-note-max { font-size: 15pt; font-weight: 700; color: var(--ed-accent); text-align: right; }
+.ed-score-badge { text-align: center; font-size: 11pt; margin: 6px 0; }
+.ed-header-close { border-bottom: 1.5px solid var(--ed-ink); margin: 10px 0 12px; }
 
 .ed-instructions { border: 1px solid var(--ed-line); padding: 8px 10px; font-size: 10.5pt; margin-bottom: 12px; }
 .ed-instructions h3 { margin: 0 0 4px; font-size: 10.5pt; text-transform: uppercase; letter-spacing: .04em; }
@@ -76,15 +91,21 @@ export const EXAM_DOC_PAPER_CSS = `
 .ed-letter { font-weight: 600; }
 
 .ed-blanks-line { margin: 6px 0; }
-.ed-pool { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 4px 0 6px; }
-.ed-pool-item { border: 1px solid var(--ed-line); border-radius: 3px; padding: 2px 8px; font-size: 10.5pt; }
+.ed-rule { display: inline-block; border-bottom: 1px solid var(--ed-rule); min-width: 140px; height: 1.1em; }
+.ed-rule-medium { min-width: 90px; }
+.ed-rule-short { min-width: 70px; }
+.ed-pool { margin: 4px 0 6px; }
+.ed-pool-title { font-size: 10.5pt; }
+.ed-pool-item { margin: 2px 0 2px 14px; font-size: 10.5pt; }
 .ed-slots { margin: 4px 0 6px 22px; padding-left: 8px; }
 .ed-slots li { margin-bottom: 6px; }
 
 .ed-pairs { width: 100%; border-collapse: collapse; margin: 4px 0 8px; font-size: 10.5pt; }
-.ed-pairs th, .ed-pairs td { border: 1px solid var(--ed-line); padding: 5px 8px; text-align: left; width: 50%; }
+.ed-pairs th, .ed-pairs td { border: 1px solid var(--ed-line); padding: 5px 8px; text-align: left; }
 .ed-pairs th { background: #f3f4f6; font-weight: 600; }
-
+.ed-pairs-a, .ed-pairs td:nth-child(1) { width: 37%; }
+.ed-pairs-b, .ed-pairs td:nth-child(2) { width: 38%; }
+.ed-pairs-r, .ed-pairs td:nth-child(3) { width: 25%; text-align: center; }
 .ed-code { font-family: 'Courier New', monospace; font-size: 10pt; background: #f9fafb; border: 1px solid var(--ed-key-border); padding: 6px 8px; white-space: pre-wrap; margin: 4px 0 6px; }
 .ed-answer-line { border-bottom: 1px dotted var(--ed-rule); height: 22px; }
 

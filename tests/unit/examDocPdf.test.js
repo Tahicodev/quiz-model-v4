@@ -131,7 +131,7 @@ describe('text printed on the paper', () => {
     expect(studentText).toContain('Lycée Victor Hugo');
     expect(studentText).toContain('3ème A');
     expect(studentText).toContain('Année scolaire 2025-2026');
-    expect(studentText).toContain('Enseignant : Mme Aïchouche');
+    expect(studentText).toContain('Mme Aïchouche');
     expect(studentText).toContain('Durée : 60 min');
     expect(studentText).toContain('Date : ____/____/______');
     expect(studentText).toContain('Nom & prénom :');

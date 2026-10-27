@@ -26,6 +26,7 @@ import { existsSync } from 'node:fs';
 import { config } from '../../config.js';
 import { EXAM_DOC_TARGET_SCORE } from '../../../shared/schemas/examDocument.schema.js';
 import { formatPoints, toWinAnsi, resolveImage } from './text.js';
+import { HEADER_INK, examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
 
 export const PDF_PAGE = Object.freeze({ width: 595.28, height: 841.89 });
 export const PDF_MARGIN = 42;
@@ -37,12 +38,24 @@ const BODY = 12;
 const SMALL = 10;
 const TINY = 9;
 
-// Single accent for the masthead + grade box. Dark enough that a grayscale
-// photocopy keeps the header readable; the content itself stays black.
-const NAVY = '#1F3A5F';
-const GREY = '#5B6472';
-const HAIRLINE = '#C9D1D9';
-const FIELD_BG = '#F6F8FA';
+// Single accent for the masthead + grade box, shared with the Word and the
+// preview renderers so the three sheets carry the same colours. Dark enough
+// that a grayscale photocopy stays readable; the content itself stays black.
+const NAVY = HEADER_INK.accent;
+const GREY = HEADER_INK.muted;
+const HAIRLINE = HEADER_INK.hairline;
+const FIELD_BG = HEADER_INK.fieldBg;
+
+// Typography of each masthead line, keyed by the role `headerLayout` names it.
+// The content and the order live there, only the look lives here.
+const MASTHEAD_LINE = {
+  school: { face: 'headBold', size: 14, color: NAVY, lineGap: 0.5 },
+  programme: { face: 'head', size: 9.5, color: GREY, lineGap: 0.5, spaceBefore: 1 },
+  institution: { face: 'head', size: 8, color: GREY, lineGap: 0 },
+  year: { face: 'head', size: 9.5, color: GREY, align: 'right', lineGap: 0 },
+  session: { face: 'head', size: 9, color: GREY, align: 'right', lineGap: 0 },
+};
+
 const NOTE_W = 126; // ≈ 4.4 cm: a teacher writes "17,5" in red inside it
 const NOTE_H = 58;
 const LOGO_MAX_W = 132;
@@ -134,76 +147,42 @@ class PdfBuilder {
   /**
    * The masthead: logo (or a fallback disc), the institutional block, the title
    * and the run-through information line. Absolute-free: it is one measured op
-   * that the layout engine moves as a unit.
+   * that the layout engine moves as a unit. WHICH lines are printed, in which
+   * order and with which wording comes from `headerLayout`, the same source the
+   * Word and the preview renderers read — the three sheets cannot drift apart.
    */
   headerNode(model) {
-    const { header, meta, scoring } = model;
-    const isKey = meta.document === 'answer_key';
+    const parts = examHeaderParts(model);
+    const isKey = model.meta.document === 'answer_key';
     const enc = (value) => this.ctx.encode(String(value ?? ''));
-    const stack = (entries) =>
-      entries
-        .map(([text, opts]) => ({ text: enc(text), ...opts }))
-        .filter((line) => line.text.trim() !== '');
+    const stack = (lines) =>
+      lines
+        .filter((line) => line.text !== '')
+        .map((line) => ({ text: enc(line.text), ...MASTHEAD_LINE[line.role] }));
 
-    const scale = Number(header.logoScale) || 1;
-    const logo = this.picture(header.logoDataUrl || header.logoUrl, {
-      maxW: LOGO_MAX_W,
-      maxH: LOGO_MAX_H * scale,
-    });
-
-    const schoolName = String(header.schoolName || meta.examName || 'Examen').trim();
-    const left = stack([
-      [schoolName, { face: 'headBold', size: 14, color: NAVY, lineGap: 0.5 }],
-      [[header.subject, header.level, header.group].filter(Boolean).join('   ·   '), {
-        face: 'head', size: 9.5, color: GREY, lineGap: 0.5, spaceBefore: 1,
-      }],
-      [[header.ministry, header.academy].filter(Boolean).join('   ·   '), {
-        face: 'head', size: 8, color: GREY, lineGap: 0,
-      }],
-    ]);
-    const right = stack([
-      [header.academicYear ? `Année scolaire ${header.academicYear}` : '', {
-        face: 'head', size: 9.5, color: GREY, align: 'right', lineGap: 0,
-      }],
-      [[header.sessionType, header.term].filter(Boolean).join('   ·   '), {
-        face: 'head', size: 9, color: GREY, align: 'right', lineGap: 0,
-      }],
-    ]);
-    const subtitleParts = [
-      header.teacherName ? `Enseignant : ${header.teacherName}` : null,
-      header.durationMinutes ? `Durée : ${header.durationMinutes} min` : null,
-      // A date the teacher did not fill stays a blank to write on paper, never a guess.
-      `Date : ${header.date || '____/____/______'}`,
-      isKey ? `Barème : ${formatPoints(scoring.total)} points` : null,
-    ].filter(Boolean);
-    const subtitle = enc(subtitleParts.join('     ·     '));
-
-    const ops = [
-      {
+    const ops = [];
+    if (parts.enabled) {
+      const logo = this.picture(parts.logo, {
+        maxW: LOGO_MAX_W,
+        maxH: LOGO_MAX_H * parts.logoScale,
+      });
+      ops.push({
         t: 'masthead',
         logo,
-        initials: schoolName.slice(0, 1).toUpperCase(),
-        left,
-        right,
-        title: enc(header.title || meta.examName || 'Examen'),
-        tag: isKey ? enc('CORRIGÉ — document enseignant, ne pas distribuer') : '',
-        subtitle,
+        initials: parts.initials,
+        left: stack(parts.left),
+        right: stack(parts.right),
+        title: enc(parts.title),
+        tag: enc(parts.tag),
+        subtitle: enc(parts.info.join('     ·     ')),
         spaceBefore: 0,
         spaceAfter: 9,
-      },
-    ];
+      });
+    }
     const identity = this.identityNode(model);
     if (identity) ops.push(identity);
-    if (header.instructions) {
-      ops.push(
-        this.txt(
-          isKey
-            ? `Consignes données aux élèves : ${header.instructions}`
-            : `Consignes : ${header.instructions}`,
-          { size: SMALL, spaceAfter: 6 },
-        ),
-      );
-    }
+    const instructions = examInstructions(model);
+    if (instructions) ops.push(this.txt(instructions, { size: SMALL, spaceAfter: 6 }));
     // The barème is printed on the confidential key only: on the student paper
     // the grade box is meant to stay empty.
     if (isKey) ops.push(this.txt(`Note : ${model.scoring.label}`, { face: 'bold', align: 'center', spaceAfter: 3 }));
@@ -216,19 +195,9 @@ class PdfBuilder {
    * rules on a light plate, and the grade gets a dedicated ~4.4 × 2 cm box.
    */
   identityNode(model) {
-    if (model.meta.document !== 'student') return null;
-    const { header } = model;
-    const fields = [];
-    if (header.studentNameField !== false) fields.push('Nom & prénom :');
-    if (header.studentNumberField !== false) fields.push('N° :');
-    if (header.showClassField !== false) fields.push('Classe :');
-    return {
-      t: 'identity',
-      rows: fields.length >= 3 ? [[fields[0]], fields.slice(1)] : [fields],
-      showNote: true,
-      spaceBefore: 2,
-      spaceAfter: 9,
-    };
+    const { rows, showNote } = examIdentityParts(model);
+    if (!rows.length && !showNote) return null;
+    return { t: 'identity', rows, showNote, spaceBefore: 2, spaceAfter: 9 };
   }
 
   blockOps(item) {

@@ -24,6 +24,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { ExamDocumentService } from '../src/backend/services/ExamDocumentService.js';
 import { renderExamDocumentPdf } from '../src/backend/services/exam-doc/pdfRenderer.js';
+import { renderExamDocumentDocx } from '../src/backend/services/exam-doc/docxRenderer.js';
 
 const SCHOOL_ID = 'school-demo';
 const CREATOR_ID = 'user-demo-teacher';
@@ -334,9 +335,15 @@ async function main() {
       return;
     }
     const { buffer, pages, warnings } = await renderExamDocumentPdf(model, options);
-    const file = resolve(args.out, document === 'student' ? 'sujet-exam-demo.pdf' : 'corrige-exam-demo.pdf');
+    const ext = document === 'student' ? 'sujet-exam-demo' : 'corrige-exam-demo';
+    const file = resolve(args.out, `${ext}.pdf`);
     writeFileSync(file, buffer);
     console.log(`${document === 'student' ? 'Sujet    ' : 'Corrigé  '} : ${pages} page(s), ${buffer.length} octets → ${file}`);
+    // Also produce the Word version so the header can be compared side by side
+    const docxResult = await renderExamDocumentDocx(model, options);
+    const docxFile = resolve(args.out, `${ext}.docx`);
+    writeFileSync(docxFile, docxResult.buffer);
+    console.log(`   Word   : ${docxResult.buffer.length} octets → ${docxFile}`);
     for (const w of warnings) console.log(`   alerte [${w.type}] ${w.message}`);
   }
 }

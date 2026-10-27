@@ -41,6 +41,11 @@
 		{ name: 'showClassField', label: 'Champ Classe' },
 	];
 
+	// Display switches: they change the printed sheet, never the stored data.
+	const DISPLAY_TOGGLES = [
+		{ name: 'showHeader', label: 'Afficher l’en-tête (logo, établissement, titre, informations)' },
+	];
+
 	function edEscape(unsafe) {
 		return String(unsafe ?? '')
 			.replace(/&/g, '&amp;')
@@ -101,13 +106,13 @@
 
 	function edHeaderForm(header) {
 		const inputs = HEADER_FIELDS.map((field) => edTextField(field, header[field.name])).join('');
-		const toggles = TOGGLES.map(
-			(toggle) => `
+		const toggle = (item, checked) => `
 			<label class="ed-check">
-				<input type="checkbox" data-ed-field="${toggle.name}" ${header[toggle.name] === false ? '' : 'checked'}>
-				<span>${edEscape(toggle.label)}</span>
-			</label>`,
-		).join('');
+				<input type="checkbox" data-ed-field="${item.name}" ${checked ? 'checked' : ''}>
+				<span>${edEscape(item.label)}</span>
+			</label>`;
+		const displayToggles = DISPLAY_TOGGLES.map((item) => toggle(item, header[item.name] !== false)).join('');
+		const toggles = TOGGLES.map((item) => toggle(item, header[item.name] !== false)).join('');
 		const logoSrc = header.logoDataUrl || header.logoUrl || '';
 		return `
 			<div class="ed-form-grid">${inputs}
@@ -124,6 +129,12 @@
 				<label class="ed-label" for="ed-field-instructions">Consignes affichées sur le sujet</label>
 				<textarea class="ed-input ed-textarea" id="ed-field-instructions" data-ed-field="instructions" rows="3"
 					placeholder="Une seule réponse par question. Barème indicatif.">${edEscape(header.instructions || '')}</textarea>
+			</div>
+
+			<div class="ed-fieldset">
+				<span class="ed-fieldset-title">Affichage</span>
+				<div class="ed-checks">${displayToggles}</div>
+				<p class="ed-help">Sans l’en-tête, la feuille démarre directement sur les questions ; les champs d’identification et la case NOTE restent imprimés.</p>
 			</div>
 
 			<div class="ed-fieldset">

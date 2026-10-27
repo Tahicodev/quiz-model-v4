@@ -159,6 +159,7 @@ export class ExamDocumentService {
       date: null,
       durationMinutes: exam.duration ?? null,
       instructions: null,
+      showHeader: true,
       studentNameField: true,
       studentNumberField: true,
       showClassField: true,

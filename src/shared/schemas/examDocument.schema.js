@@ -48,6 +48,7 @@ export const ExamDocHeaderSchema = z.object({
   instructions: nullableText(1200),
 
   // ── Presentation settings (document only; never touch stored scores) ──────
+  showHeader: z.boolean().nullish(), // the whole masthead band (logo, school, title)
   studentNameField: z.boolean().nullish(),
   studentNumberField: z.boolean().nullish(),
   showClassField: z.boolean().nullish(),
