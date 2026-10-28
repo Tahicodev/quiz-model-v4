@@ -149,9 +149,20 @@ class PdfBuilder {
     const SMALL = this.S.small;
     const BODY = this.S.body;
     const CONTENT_W = this.CONTENT_W;
+    // The width the pairs table is traced at. In one column this equals the
+    // full content width (so the Classique sheet is byte-identical); in two
+    // columns it is a SINGLE column, so a matching table stays inside one
+    // column instead of breaking out to a full-width band that wastes the rest
+    // of the page and forces an early page break.
+    const TW = this.cfg.colW;
     const { image, cells } = this.ops;
     const ops = [];
-    if (block.instruction) {
+    const inline = this.cfg.question.answerStyle === 'inline';
+    // In the inline style the three interactive types carry their own tailored
+    // instruction, so the generic one is suppressed for them.
+    const inlineTailored = inline && (block.kind === 'pairs' || block.kind === 'sequence'
+      || (block.kind === 'blanks' && Array.isArray(block.bank) && block.bank.length));
+    if (block.instruction && !inlineTailored) {
       ops.push(this.txt(block.instruction, { size: SMALL, face: 'italic', spaceAfter: 2 }));
     }
 
@@ -177,6 +188,15 @@ class PdfBuilder {
         // "Réponses" block instead of on the blank itself. The confidential key
         // leaves the writing out — its answers are already listed, numbered.
         if (isKey) break;
+        if (inline && Array.isArray(block.bank) && block.bank.length) {
+          // Inline: a numbered option bank; the student writes the option number
+          // directly in each `(n)` gap of the sentence (no separate answer lines).
+          ops.push(this.txt("Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.", { size: SMALL, face: 'italic', spaceAfter: 3 }));
+          ops.push(this.txt('Options :', { size: SMALL, face: 'bold', spaceBefore: 1, spaceAfter: 2 }));
+          const bankLine = block.bank.map((w, i) => `(${i + 1})\u00a0${w}`).join('\u00a0\u00a0\u00a0');
+          ops.push(this.txt(bankLine, { size: SMALL, indent: 14, spaceAfter: 4, lineGap: 1.5 }));
+          break;
+        }
         for (let i = 1; i <= (block.blanks || 1); i++) {
           if (i === 1) ops.push(this.txt('Réponses :', { size: SMALL, face: 'bold', spaceBefore: 1, spaceAfter: 3 }));
           ops.push(
@@ -192,6 +212,17 @@ class PdfBuilder {
         break;
       }
       case 'sequence': {
+        // Inline: every option carries a box to write the rank; no numbered
+        // writing lines underneath (the answer is the number in the box).
+        if (inline) {
+          ops.push(this.txt("Rangez : écrivez dans chaque case le numéro d'ordre correspondant (1 = premier).", { size: SMALL, face: 'italic', spaceAfter: 2 }));
+          for (const option of block.pool) {
+            ops.push(this.txt(`[    ]\u00a0\u00a0${option.letter}. ${option.text || '(image)'}`, { indent: 14, spaceAfter: option.image ? 3 : 2, lineGap: 1.5 }));
+            const pic = this.picture(option.image, { maxW: 100, maxH: 55 });
+            if (pic) ops.push(image(pic, { maxW: 100, indent: 28, spaceBefore: 0, spaceAfter: 4 }));
+          }
+          break;
+        }
         // One element per line: glued into a single paragraph, "A. … B. … C. …"
         // is unreadable and the student cannot tell where an item stops.
         if (block.pool.length) {
@@ -225,12 +256,38 @@ class PdfBuilder {
         break;
       }
       case 'pairs': {
-        // Two content columns plus a narrow answer column: without it the table
-        // asks for a connection the student has nowhere to write down. Heights
-        // leave room for a hand-drawn link or a letter.
-        const colA = CONTENT_W * 0.37;
-        const colB = CONTENT_W * 0.38;
-        const colR = CONTENT_W * 0.25;
+        // Inline: the two lists are printed one after the other (no table, no
+        // headers), then a small answer grid records the pairs. The grid is
+        // horizontal (numbers across the top) when every column clears ~34pt, so
+        // few items read compactly; otherwise a vertical N°/Lettre table for
+        // long or numerous items.
+        if (inline) {
+          ops.push(this.txt('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', { size: SMALL, face: 'italic', spaceAfter: 4 }));
+          for (const left of block.lefts) ops.push(this.txt(`${left.n}. ${left.text}`, { size: SMALL, spaceAfter: 1, lineGap: 1 }));
+          for (const right of (block.rights || [])) ops.push(this.txt(`${right.letter}. ${right.text}`, { size: SMALL, spaceAfter: 1, lineGap: 1 }));
+          const count = Math.max(block.lefts.length, (block.rights || []).length);
+          const hd = (t, w, align) => ({ text: this.ctx.encode(t), width: w, height: 16, border: 'box', face: 'bold', size: SMALL, align });
+          const cellv = (t, w, align) => ({ text: this.ctx.encode(t), width: w, height: 22, border: 'box', size: SMALL, align });
+          const rows = [];
+          if (count > 0 && TW / count >= 34) {
+            for (let i = 0; i < count; i++) rows.push(hd(`${i + 1}`, TW / count, 'center'));
+            for (let i = 0; i < count; i++) rows.push(cellv('', TW / count, 'center'));
+          } else {
+            const numW = 44;
+            const ansW = TW - numW;
+            rows.push(hd('N°', numW, 'center'), hd('Lettre', ansW, 'center'));
+            for (let i = 0; i < count; i++) rows.push(cellv(`${i + 1}`, numW, 'center'), cellv('', ansW, 'center'));
+          }
+          ops.push(cells(rows, { spaceBefore: 6, spaceAfter: 6 }));
+          break;
+        }
+        // Two content columns plus a narrow answer column, traced INSIDE a single
+        // layout column (TW): without a place to write the letter the table asks
+        // for a connection the student has nowhere to note down. Heights leave
+        // room for a hand-drawn link or a letter.
+        const colA = TW * 0.37;
+        const colB = TW * 0.38;
+        const colR = TW * 0.25;
         const head = (label, width, align) => ({
           text: this.ctx.encode(label),
           width,
@@ -259,7 +316,7 @@ class PdfBuilder {
           // writes the letter, and the row already lines up with column A.
           rows.push(cell('', colR));
         }
-        ops.push(cells(rows, { spaceAfter: 6, span: true }));
+        ops.push(cells(rows, { spaceAfter: 6 }));
         break;
       }
       case 'code':

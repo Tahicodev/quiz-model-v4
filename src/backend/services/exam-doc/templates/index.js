@@ -156,6 +156,7 @@ export function resolveTemplate(template = null, overrides = null) {
     answerLines: 2,
     answerLineHeight: 14,
     keepTogether: 'block',
+    answerStyle: 'classic',
     ...(base.question || {}),
     ...(base.question?.answerSpace || {}),
   };
@@ -227,7 +228,11 @@ export function overridesFromLayout(layout = {}) {
   const out = {};
   if (layout.columns != null) out.page = { columns: layout.columns };
   if (layout.density != null) out.theme = { density: layout.density };
-  if (layout.answerLines != null) out.question = { answerSpace: { lines: layout.answerLines } };
+  if (layout.answerLines != null || layout.answerStyle != null) {
+    out.question = {};
+    if (layout.answerLines != null) out.question.answerSpace = { lines: layout.answerLines };
+    if (layout.answerStyle != null) out.question.answerStyle = layout.answerStyle;
+  }
   return Object.keys(out).length ? out : null;
 }
 

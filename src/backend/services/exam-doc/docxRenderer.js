@@ -61,6 +61,7 @@ const CONTENT_PX = Math.round((CONTENT_W / 1440) * 96);
 let BODY = 24; // half-points → 12pt
 let SMALL = 20; // 10pt
 let TINY = 18;
+let ANSWER_STYLE = 'classic'; // 'classic' | 'inline' (student answer layout)
 
 const FONT = 'Times New Roman';
 const HEAD_FONT = 'Calibri'; // the masthead reads as a different register, as in the PDF
@@ -110,6 +111,7 @@ function applyDocxTheme(cfg) {
   FIELD_BG = noHash(C.fieldBg);
   MASTHEAD_RUN = buildMastheadRun();
   DOTTED_RULE = { style: BorderStyle.DOTTED, size: 6, color: MUTED };
+  ANSWER_STYLE = cfg.question?.answerStyle === 'inline' ? 'inline' : 'classic';
 }
 
 const run = (text, opts = {}) =>
@@ -411,7 +413,10 @@ class DocxBuilder {
     const block = item.block;
     const out = [];
     const tail = () => true;
-    if (block.instruction) {
+    const inline = ANSWER_STYLE === 'inline';
+    const inlineTailored = inline && (block.kind === 'pairs' || block.kind === 'sequence'
+      || (block.kind === 'blanks' && Array.isArray(block.bank) && block.bank.length));
+    if (block.instruction && !inlineTailored) {
       out.push(
         para([run(block.instruction, { size: SMALL, italics: true })], {
           spaceAfter: 60,
@@ -443,6 +448,13 @@ class DocxBuilder {
         // answer on the matching numbered line of this "Réponses" block. The
         // confidential key skips it — its answers are listed, already numbered.
         if (isKey) break;
+        if (inline && Array.isArray(block.bank) && block.bank.length) {
+          // Inline: numbered option bank; the student writes the option number in
+          // each `(n)` gap of the sentence, so there are no answer lines here.
+          out.push(para([run("Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.", { size: SMALL, italics: true })], { spaceAfter: 40, keepNext: true }));
+          out.push(para([run('Options : ', { bold: true, size: SMALL }), run(block.bank.map((w, i) => `(${i + 1}) ${w}`).join('    '))], { indent: 284, spaceAfter: 80 }));
+          break;
+        }
         const total = block.blanks || 1;
         out.push(para([run('Réponses :', { bold: true, size: SMALL })], { spaceAfter: 40, keepNext: true }));
         for (let i = 1; i <= total; i++) {
@@ -457,6 +469,19 @@ class DocxBuilder {
         break;
       }
       case 'sequence': {
+        // Inline: each option carries a `[   ]` box to write the rank; the
+        // numbered writing lines underneath are dropped (the box is the answer).
+        if (inline) {
+          out.push(para([run("Rangez : écrivez dans chaque case le numéro d'ordre correspondant (1 = premier).", { size: SMALL, italics: true })], { spaceAfter: 40, keepNext: true }));
+          block.pool.forEach((option, i) => {
+            const isLast = i === block.pool.length - 1;
+            const kids = [run('[      ]   ', { bold: true }), run(`${option.letter}. ${option.text || '(image)'}`)];
+            const img = this.imageElement(option.image, { maxWPx: 100, maxHPx: 55 });
+            if (img) kids.push(run('', { break: 1 }), img);
+            out.push(para(kids, { indent: 284, spaceAfter: isLast ? 80 : 40, keepNext: !isLast }));
+          });
+          break;
+        }
         // One element per line, as in the PDF: glued into a single paragraph,
         // "A. … B. … C. …" is unreadable and the student cannot tell where an
         // item stops.
@@ -490,6 +515,31 @@ class DocxBuilder {
         break;
       }
       case 'pairs': {
+        // Inline: the two lists print one after the other (no table, no column
+        // headers), then a small answer grid records the pairs — horizontal when
+        // the columns stay readable, otherwise a vertical N°/Lettre table.
+        if (inline) {
+          out.push(para([run('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', { size: SMALL, italics: true })], { spaceAfter: 40, keepNext: true }));
+          block.lefts.forEach((l, i) => out.push(para([run(`${l.n}. ${l.text}`)], { spaceAfter: i === block.lefts.length - 1 ? 60 : 20, keepNext: true })));
+          (block.rights || []).forEach((r, i, arr) => out.push(para([run(`${r.letter}. ${r.text}`)], { spaceAfter: i === arr.length - 1 ? 60 : 20, keepNext: true })));
+          const count = Math.max(block.lefts.length, (block.rights || []).length);
+          const gridCell = (label, pct, opts = {}) => new TableCell({
+            width: { size: pct, type: WidthType.PERCENTAGE },
+            borders: boxBorders(),
+            margins: { top: 40, bottom: 40, left: 60, right: 60 },
+            children: [para([run(label, { bold: !!opts.head, size: SMALL })], { align: opts.center ? AlignmentType.CENTER : undefined, spaceAfter: 0 })],
+          });
+          const gridRows = [];
+          if (count > 0 && 100 / count >= 12) {
+            gridRows.push(new TableRow({ tableHeader: true, children: Array.from({ length: count }, (_, i) => gridCell(`${i + 1}`, 100 / count, { head: true, center: true })) }));
+            gridRows.push(new TableRow({ children: Array.from({ length: count }, () => gridCell('', 100 / count, { center: true })) }));
+          } else {
+            gridRows.push(new TableRow({ tableHeader: true, children: [gridCell('N°', 30, { head: true, center: true }), gridCell('Lettre', 70, { head: true, center: true })] }));
+            for (let i = 0; i < count; i++) gridRows.push(new TableRow({ children: [gridCell(`${i + 1}`, 30, { center: true }), gridCell('', 70)] }));
+          }
+          out.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, layout: TableLayoutType.FIXED, rows: gridRows }));
+          break;
+        }
         // Two content columns plus a narrow answer column, exactly like the PDF:
         // without a place to write the letter, the table asks for a connection
         // the student has nowhere to note down.

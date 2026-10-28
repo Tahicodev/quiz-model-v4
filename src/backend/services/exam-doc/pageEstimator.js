@@ -66,6 +66,7 @@ function blockHeight(measure, block, cfg, colW, isKey) {
   const S = cfg.theme.sizes;
   const D = cfg.theme.density;
   const q = cfg.question;
+  const inline = !isKey && q.answerStyle === 'inline';
   const bodyLine = (t, width, lineGap = 1) => measure.height(t, { size: S.body, width, lineGap });
   switch (block.kind) {
     case 'options': {
@@ -81,6 +82,14 @@ function blockHeight(measure, block, cfg, colW, isKey) {
       // label plus one numbered writing line per blank (mirrors pdfRenderer).
       // The confidential key prints none of that — just the instruction.
       if (isKey) return 0;
+      if (inline && Array.isArray(block.bank) && block.bank.length) {
+        // Inline: one instruction line + a wrapped numbered option bank. No
+        // numbered writing lines (the student writes the option number in the gap).
+        const bankLine = block.bank.map((w, i) => `(${i + 1}) ${w}`).join('    ');
+        let h = bodyLine("Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.", colW, 1.5);
+        h += bodyLine(`Options : ${bankLine}`, colW - 14, 1.5) + 4;
+        return h * D;
+      }
       const n = block.blanks || 1;
       let h = bodyLine('Réponses :', colW) + 3;
       h += n * (20 + 4);
@@ -89,14 +98,45 @@ function blockHeight(measure, block, cfg, colW, isKey) {
     case 'sequence': {
       let h = 0;
       const pool = block.pool || [];
+      if (inline) {
+        // Inline: instruction + one `[ ]` box line per pool item; no numbered
+        // writing lines (the box is the answer).
+        h += bodyLine("Rangez : écrivez dans chaque case le numéro d'ordre correspondant (1 = premier).", colW, 1.5);
+        for (const o of pool) h += bodyLine(`[ ] ${o.letter}. ${o.text || '(image)'}`, colW - 14, 1) + 2;
+        return h * D;
+      }
       h += bodyLine('Éléments à placer :', colW) + 2;
       for (const o of pool) h += bodyLine(`${o.letter}. ${o.text || '(image)'}`, colW - 14, 1.5) + 1;
       h += (block.slots || 1) * (20 + 4);
       return h * D;
     }
     case 'pairs': {
-      const rows = Math.max((block.lefts || []).length, (block.rights || []).length);
-      return ((rows + 1) * 20 + 10) * D;
+      const lefts = block.lefts || [];
+      const rights = block.rights || [];
+      const rows = Math.max(lefts.length, rights.length);
+      if (inline) {
+        // Inline: instruction + the two stacked lists (lefts then rights) + a
+        // small answer grid (horizontal 2-row when few columns, else vertical).
+        let h = bodyLine('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', colW, 1.5);
+        for (const l of lefts) h += bodyLine(`${l.n}. ${l.text}`, colW, 1) + 2;
+        for (const r of rights) h += bodyLine(`${r.letter}. ${r.text}`, colW, 1) + 2;
+        h += rows > 0 && rows <= 6 ? 2 * 22 : (rows + 1) * 20;
+        return h * D;
+      }
+      // Classic: the table is now traced inside ONE column, so each cell wraps
+      // against the column fractions (0.37 / 0.38 / 0.25 of colW), mirroring
+      // pdfRenderer `#rowHeight`. This replaces the old full-width band model.
+      const colA = colW * 0.37;
+      const colB = colW * 0.38;
+      let h = 18 + 0.5; // header row + first rule
+      for (let i = 0; i < rows; i++) {
+        const l = lefts[i];
+        const r = rights[i];
+        const lh = l ? measure.height(`${l.n}. ${l.text}`, { size: S.body, width: colA - 8, lineGap: 0 }) : 0;
+        const rh = r ? measure.height(`${r.letter}. ${r.text}`, { size: S.body, width: colB - 8, lineGap: 0 }) : 0;
+        h += Math.max(20, lh + 6, rh + 6) + 0.5;
+      }
+      return (h + 8) * D;
     }
     case 'code': {
       const codeLines = String(block.snippet || '').split('\n').length || 1;
@@ -176,10 +216,9 @@ export function estimateAnalytic(model, cfg) {
       }
       for (const item of section.items) {
         const ih = itemHeight(measure, item, cfg, colW, isKey);
-        // `pairs` tables are drawn as a full-width band that breaks out of the
-        // columns; packing one into a single half-width column would under-count
-        // pages badly on table-heavy papers.
-        const full = columns > 1 && item.block.kind === 'pairs';
+        // Matching-pair tables are traced inside a single column (they no longer
+        // break out to a full-width band), so they pack like any other item.
+        const full = false;
         blocks.push({ h: ih, full });
         if (full) fullArea += ih * columns;
         else normalArea += ih;

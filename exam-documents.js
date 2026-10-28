@@ -467,6 +467,10 @@
 						<input type="checkbox" data-ed-role="tpl-manual"${manual ? ' checked' : ''}>
 						<span>Manual settings (density / answer space)</span>
 					</label>
+					<label class="ed-check">
+						<input type="checkbox" data-ed-role="tpl-inline"${state.layout.answerStyle === 'inline' ? ' checked' : ''}>
+						<span>Compact inline answers (no tables: numbered blank bank, [ ] order boxes, stacked match lists)</span>
+					</label>
 				</div>
 				<div class="ed-manual-controls"${manual ? '' : ' hidden'}>
 					<label class="ed-range-label">
@@ -604,7 +608,11 @@
 			page: { columns: state.layout.columns === 2 ? 2 : 1 },
 		};
 		if (state.layout.density != null) template.theme = { density: state.layout.density };
-		if (state.layout.answerLines != null) template.question = { answerSpace: { lines: state.layout.answerLines } };
+		if (state.layout.answerLines != null || state.layout.answerStyle === 'inline') {
+			template.question = {};
+			if (state.layout.answerLines != null) template.question.answerSpace = { lines: state.layout.answerLines };
+			if (state.layout.answerStyle === 'inline') template.question.answerStyle = 'inline';
+		}
 		const next = [...state.custom, { id, name: name.slice(0, 60), baseId: state.templateId, template }];
 		edSetBusy(state, true);
 		return edApi('PUT', `${API_BASE}/${encodeURIComponent(state.examId)}/templates`, { templates: next })
@@ -656,6 +664,12 @@
 			const label = host.querySelector('[data-ed-role="lines-value"]');
 			if (label) label.textContent = String(state.layout.answerLines);
 		});
+		const inline = host.querySelector('[data-ed-role="tpl-inline"]');
+		inline?.addEventListener('change', () => {
+			state.layout.answerStyle = inline.checked ? 'inline' : 'classic';
+			edRenderTemplatePanel(state);
+			edBindTemplateControls(state);
+		});
 	}
 
 	// ─── Requests ────────────────────────────────────────────────────────────
@@ -679,6 +693,7 @@
 		if (state.layout.columns != null) layout.columns = state.layout.columns;
 		if (state.layout.density != null) layout.density = state.layout.density;
 		if (state.layout.answerLines != null) layout.answerLines = state.layout.answerLines;
+		if (state.layout.answerStyle && state.layout.answerStyle !== 'classic') layout.answerStyle = state.layout.answerStyle;
 		if (Object.keys(layout).length) body.layout = layout;
 		// A "Tenir en N pages" result is carried verbatim so preview and file match.
 		if (state.templateOverrides && Object.keys(state.templateOverrides).length) {
@@ -948,6 +963,7 @@
 		const layoutBits = [edEscape(tplName), state.layout.columns === 2 ? '2 columns' : '1 column'];
 		if (state.layout.density != null) layoutBits.push(`density ${edPoints(state.layout.density)}`);
 		if (state.layout.answerLines != null) layoutBits.push(`${state.layout.answerLines} answer line(s)`);
+		if (state.layout.answerStyle === 'inline') layoutBits.push('inline answers');
 		if (state.templateOverrides) layoutBits.push('"fit to N pages" adjustment');
 		const est = state.estimate;
 		const pagesValue = est
@@ -1000,7 +1016,7 @@
 			busy: false,
 			// Template layer (Génération personnalisée).
 			templateId: 'classique',
-			layout: { columns: 1, density: null, answerLines: null },
+			layout: { columns: 1, density: null, answerLines: null, answerStyle: 'classic' },
 			// Progressive disclosure of the layout controls on step 3.
 			layoutOpen: false,
 			templateOverrides: null,

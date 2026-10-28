@@ -120,6 +120,11 @@ const QuestionSchema = z
       .partial()
       .optional(),
     keepTogether: z.enum(['question', 'block']),
+    // 'classic' prints the current tables / Réponses writing lines.
+    // 'inline' is the compact student-answer style (stacked lists for matching,
+    // numbered option bank for fill-blank, [ ] rank boxes for ordering). It only
+    // changes the student paper; the answer key is unaffected either way.
+    answerStyle: z.enum(['classic', 'inline']),
   })
   .partial();
 

@@ -108,6 +108,23 @@ export const EXAM_DOC_PAPER_CSS = `
 .ed-code { font-family: 'Courier New', monospace; font-size: 10pt; background: #f9fafb; border: 1px solid var(--ed-key-border); padding: 6px 8px; white-space: pre-wrap; margin: 4px 0 6px; }
 .ed-answer-line { border-bottom: 1px dotted var(--ed-rule); height: 22px; }
 
+/* ── Inline / compact student answer style (Layout toggle) ──────────────── */
+.ed-bank { margin: 2px 0 6px; font-size: 10.5pt; line-height: 1.8; }
+.ed-bank-opt { display: inline-block; margin-right: 14px; white-space: nowrap; }
+.ed-order-list { margin: 2px 0 6px; }
+.ed-order-item { display: flex; align-items: center; gap: 6px; margin: 3px 0 3px 14px; font-size: 10.5pt; }
+.ed-box { display: inline-block; width: 1.6em; height: 1.1em; border: 1.4px solid var(--ed-ink); border-radius: 2px; flex: 0 0 auto; }
+.ed-pairs-lists { display: flex; flex-wrap: wrap; gap: 4px 28px; margin: 2px 0 8px; }
+.ed-plain { list-style: none; margin: 0; padding: 0; flex: 1 1 240px; font-size: 10.5pt; }
+.ed-plain li { margin: 2px 0; }
+.ed-match-grid { border-collapse: collapse; margin: 4px 0 8px; font-size: 10.5pt; }
+.ed-match-grid th, .ed-match-grid td { border: 1px solid var(--ed-line); padding: 4px 8px; text-align: center; }
+.ed-match-grid th { background: #f3f4f6; font-weight: 600; }
+.ed-match-h td { min-width: 34px; height: 1.6em; }
+.ed-match-v { min-width: 160px; }
+.ed-match-v td:nth-child(1) { width: 40%; }
+.ed-match-v td:nth-child(2) { width: 60%; }
+
 /* ── Answer key ─────────────────────────────────────────────────────────── */
 .ed-key { background: var(--ed-key-bg); border: 1px solid var(--ed-key-border); border-radius: 3px; padding: 6px 9px; margin-top: 4px; font-size: 10.5pt; }
 .ed-key-label { text-transform: uppercase; letter-spacing: .04em; font-size: 9.5pt; color: var(--ed-muted); }

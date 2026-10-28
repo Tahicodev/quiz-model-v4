@@ -80,6 +80,7 @@ export const ExamDocBuildSchema = z.object({
       columns: z.union([z.literal(1), z.literal(2)]).nullish(),
       density: z.number().min(TEMPLATE_LIMITS.minDensity).max(TEMPLATE_LIMITS.maxDensity).nullish(),
       answerLines: z.number().int().min(0).max(TEMPLATE_LIMITS.maxAnswerLines).nullish(),
+      answerStyle: z.enum(['classic', 'inline']).nullish(),
     })
     .partial()
     .optional(),

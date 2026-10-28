@@ -101,9 +101,11 @@ function renderIdentityBlock(model) {
   return parts.join('');
 }
 
-function renderBlock(block, isKey = false) {
+function renderBlock(block, isKey = false, inline = false) {
   const parts = [];
-  if (block.instruction) parts.push(`<p class="ed-instruction">${escapeHtml(block.instruction)}</p>`);
+  const inlineTailored = inline && (block.kind === 'pairs' || block.kind === 'sequence'
+    || (block.kind === 'blanks' && Array.isArray(block.bank) && block.bank.length));
+  if (block.instruction && !inlineTailored) parts.push(`<p class="ed-instruction">${escapeHtml(block.instruction)}</p>`);
 
   switch (block.kind) {
     case 'options':
@@ -119,6 +121,17 @@ function renderBlock(block, isKey = false) {
       // Numbered gap markers live in the sentence; the student answers on the
       // numbered lines of this "Réponses" list. The key lists the answers.
       if (isKey) break;
+      if (inline && Array.isArray(block.bank) && block.bank.length) {
+        // Inline: numbered option bank; the student writes the option number in
+        // each `(n)` gap of the sentence, so there are no answer lines here.
+        parts.push(`<p class="ed-instruction">Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.</p>`);
+        parts.push(
+          `<p class="ed-bank"><strong>Options :</strong> ${block.bank
+            .map((w, i) => `<span class="ed-bank-opt">(${i + 1})&nbsp;${escapeHtml(w)}</span>`)
+            .join(' ')}</p>`,
+        );
+        break;
+      }
       parts.push(
         `<div class="ed-pool-title">Réponses :</div><ol class="ed-slots ed-blank-answers">${Array.from(
           { length: block.blanks || 1 },
@@ -127,6 +140,20 @@ function renderBlock(block, isKey = false) {
       );
       break;
     case 'sequence':
+      // Inline: each option carries a `[   ]` box to write the rank; the numbered
+      // writing lines underneath are dropped (the box is the answer).
+      if (inline) {
+        parts.push(`<p class="ed-instruction">Rangez : écrivez dans chaque case le numéro d'ordre correspondant (1 = premier).</p>`);
+        parts.push(
+          `<div class="ed-order-list">${(block.pool || [])
+            .map(
+              (o) =>
+                `<div class="ed-order-item"><span class="ed-box"></span> <span class="ed-letter">${escapeHtml(o.letter)}.</span> ${escapeHtml(o.text || '(image)')}${imgTag(o.image, 'ed-option-img')}</div>`,
+            )
+            .join('')}</div>`,
+        );
+        break;
+      }
       // One element per line, lettered: the same readable pool the PDF and Word
       // print, instead of a wrapped strip of chips where the letters vanish.
       if (block.pool.length) {
@@ -144,6 +171,39 @@ function renderBlock(block, isKey = false) {
       );
       break;
     case 'pairs':
+      // Inline: the two lists print one after the other (no table, no column
+      // headers), then a small answer grid records the pairs — horizontal when
+      // the columns stay readable, otherwise a vertical N°/Lettre table.
+      if (inline) {
+        const count = Math.max(block.lefts.length, (block.rights || []).length);
+        parts.push(`<p class="ed-instruction">Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.</p>`);
+        parts.push(
+          `<div class="ed-pairs-lists"><ul class="ed-plain">${block.lefts
+            .map((l) => `<li>${l.n}. ${escapeHtml(l.text)}</li>`)
+            .join('')}</ul><ul class="ed-plain ed-plain-letters">${(block.rights || [])
+            .map((r) => `<li>${r.letter}. ${escapeHtml(r.text)}</li>`)
+            .join('')}</ul></div>`,
+        );
+        if (count > 0 && count <= 6) {
+          parts.push(
+            `<table class="ed-match-grid ed-match-h"><thead><tr>${Array.from(
+              { length: count },
+              (_, i) => `<th>${i + 1}</th>`,
+            ).join('')}</tr></thead><tbody><tr>${Array.from(
+              { length: count },
+              () => '<td></td>',
+            ).join('')}</tr></tbody></table>`,
+          );
+        } else {
+          parts.push(
+            `<table class="ed-match-grid ed-match-v"><thead><tr><th>N°</th><th>Lettre</th></tr></thead><tbody>${Array.from(
+              { length: count },
+              (_, i) => `<tr><td>${i + 1}</td><td></td></tr>`,
+            ).join('')}</tbody></table>`,
+          );
+        }
+        break;
+      }
       // The third column is where the student writes the letter: without it the
       // table asks for a connection with nowhere to note it down.
       parts.push(`
@@ -199,6 +259,7 @@ function writingLines(item) {
 
 function renderItems(model, cfg) {
   const isKey = model.meta.document === 'answer_key';
+  const inlineMode = !isKey && cfg?.question?.answerStyle === 'inline';
   return model.sections
     .map((section) => {
       const heading = section.title
@@ -219,7 +280,7 @@ function renderItems(model, cfg) {
                 ${item.answer?.missing ? '<div class="ed-key-warning">Réponse manquante — à vérifier avant distribution.</div>' : ''}
               </div>`
             : '';
-          const lines = isKey ? 0 : writingLines(item);
+          const lines = isKey ? 0 : inlineMode ? 0 : writingLines(item);
           return `
             <article class="ed-question">
               <div class="ed-question-head">
@@ -227,7 +288,7 @@ function renderItems(model, cfg) {
                 <span class="ed-question-points">${formatPoints(item.points)} pt${item.points === 1 ? '' : 's'}</span>
               </div>
               ${stem}${media}
-              ${renderBlock(item.block, isKey)}
+              ${renderBlock(item.block, isKey, inlineMode)}
               ${renderLines(lines)}
               ${answerKey}
             </article>`;

@@ -203,6 +203,12 @@ export function buildStudentContent({ type, options, row, pairs = [], points = 1
       };
     case 'fill-blank': {
       const blanks = countBlanks(text) || 1;
+      // Candidate words the app may store as options. They are non-confidential
+      // (shown to the student as a bank); which one belongs to which gap is only
+      // in the answer key. The inline style uses them as the numbered options.
+      const bank = options
+        .map((o) => String(o.text ?? '').trim())
+        .filter(Boolean);
       return {
         block: {
           ...base,
@@ -210,6 +216,7 @@ export function buildStudentContent({ type, options, row, pairs = [], points = 1
           instruction: 'Complétez les espaces.',
           blanks,
           lines: 1,
+          bank,
         },
         warnings: [],
       };
