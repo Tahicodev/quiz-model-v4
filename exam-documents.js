@@ -25,54 +25,54 @@
 	const API_BASE = '/exam-documents';
 
 	const HEADER_FIELDS = [
-		{ name: 'ministry', label: 'Ministère', placeholder: 'Ministère de l’Éducation nationale, du Préscolaire et des Sports' },
-		{ name: 'academy', label: 'Académie / Direction', placeholder: 'Académie régionale' },
-		{ name: 'schoolName', label: 'Établissement', placeholder: 'Nom de l’école' },
-		{ name: 'academicYear', label: 'Année scolaire', placeholder: '2025-2026' },
-		{ name: 'title', label: 'Titre de l’épreuve', placeholder: 'Devoir surveillé n°1' },
+		{ name: 'ministry', label: 'Ministry', placeholder: 'Ministère de l’Éducation nationale, du Préscolaire et des Sports' },
+		{ name: 'academy', label: 'Academy / Directorate', placeholder: 'Académie régionale' },
+		{ name: 'schoolName', label: 'School', placeholder: 'Nom de l’école' },
+		{ name: 'academicYear', label: 'Academic year', placeholder: '2025-2026' },
+		{ name: 'title', label: 'Exam title', placeholder: 'Devoir surveillé n°1' },
 		{ name: 'sessionType', label: 'Session', placeholder: 'Première session / Rattrapage' },
-		{ name: 'subject', label: 'Matière', placeholder: 'Mathématiques' },
-		{ name: 'teacherName', label: 'Enseignant', placeholder: 'Nom du professeur' },
-		{ name: 'level', label: 'Niveau / Classe', placeholder: '3ème année collège' },
-		{ name: 'group', label: 'Groupe', placeholder: 'Groupe A' },
-		{ name: 'term', label: 'Trimestre', placeholder: 'Trimestre 2' },
+		{ name: 'subject', label: 'Subject', placeholder: 'Mathématiques' },
+		{ name: 'teacherName', label: 'Teacher', placeholder: 'Nom du professeur' },
+		{ name: 'level', label: 'Level / Class', placeholder: '3ème année collège' },
+		{ name: 'group', label: 'Group', placeholder: 'Groupe A' },
+		{ name: 'term', label: 'Term', placeholder: 'Trimestre 2' },
 		{ name: 'date', label: 'Date', placeholder: '12/03/2026' },
-		{ name: 'durationMinutes', label: 'Durée (minutes)', type: 'number', placeholder: '60', max: 600 },
+		{ name: 'durationMinutes', label: 'Duration (minutes)', type: 'number', placeholder: '60', max: 600 },
 	];
 
 	const TOGGLES = [
-		{ name: 'studentNameField', label: 'Champ Nom & prénom' },
-		{ name: 'studentNumberField', label: 'Champ N° élève' },
-		{ name: 'showClassField', label: 'Champ Classe' },
+		{ name: 'studentNameField', label: 'Name field' },
+		{ name: 'studentNumberField', label: 'Student number field' },
+		{ name: 'showClassField', label: 'Class field' },
 	];
 
 	// Display switches: they change the printed sheet, never the stored data.
 	const DISPLAY_TOGGLES = [
-		{ name: 'showHeader', label: 'Afficher l\u2019en-tête (logo, établissement, titre, informations)' },
+		{ name: 'showHeader', label: 'Show the header (logo, school, title, information)' },
 	];
 	
 	// Individual header elements the teacher can show/hide via the Revue tab.
 	const REVIEW_FIELDS = [
-		{ name: 'logo', label: 'Logo de l\u2019établissement' },
-		{ name: 'schoolName', label: 'Nom de l\u2019établissement' },
-		{ name: 'subject', label: 'Matière' },
-		{ name: 'level', label: 'Niveau / Classe' },
-		{ name: 'group', label: 'Groupe' },
-		{ name: 'ministry', label: 'Ministère' },
-		{ name: 'academy', label: 'Académie / Direction' },
-		{ name: 'academicYear', label: 'Année scolaire' },
+		{ name: 'logo', label: 'School logo' },
+		{ name: 'schoolName', label: 'School name' },
+		{ name: 'subject', label: 'Subject' },
+		{ name: 'level', label: 'Level / Class' },
+		{ name: 'group', label: 'Group' },
+		{ name: 'ministry', label: 'Ministry' },
+		{ name: 'academy', label: 'Academy / Directorate' },
+		{ name: 'academicYear', label: 'Academic year' },
 		{ name: 'sessionType', label: 'Session' },
-		{ name: 'term', label: 'Trimestre' },
-		{ name: 'title', label: 'Titre de l\u2019épreuve' },
-		{ name: 'teacherName', label: 'Enseignant' },
-		{ name: 'durationMinutes', label: 'Durée' },
+		{ name: 'term', label: 'Term' },
+		{ name: 'title', label: 'Exam title' },
+		{ name: 'teacherName', label: 'Teacher' },
+		{ name: 'durationMinutes', label: 'Duration' },
 		{ name: 'date', label: 'Date' },
-		{ name: 'instructions', label: 'Consignes' },
-		{ name: 'studentNameField', label: 'Champ Nom & prénom' },
-		{ name: 'studentNumberField', label: 'Champ N° élève' },
-		{ name: 'showClassField', label: 'Champ Classe' },
-		{ name: 'noteBox', label: 'Case NOTE' },
-		{ name: 'scoring', label: 'Barème (corrigé)' },
+		{ name: 'instructions', label: 'Instructions' },
+		{ name: 'studentNameField', label: 'Name field' },
+		{ name: 'studentNumberField', label: 'Student number field' },
+		{ name: 'showClassField', label: 'Class field' },
+		{ name: 'noteBox', label: 'Grade box' },
+		{ name: 'scoring', label: 'Marking scheme (answer key)' },
 	];
 
 	// The guided flow. The last step is the recap + preview + export target; the
@@ -80,10 +80,10 @@
 	// steps of their own, so the teacher configures first and looks at the result
 	// once, with every earlier choice summarised above the rendering.
 	const ED_STEPS = [
-		{ name: 'header', label: 'En-tête', hint: 'Établissement et devoir' },
-		{ name: 'review', label: 'Revue', hint: 'Éléments imprimés' },
-		{ name: 'template', label: 'Mise en page', hint: 'Modèle et pagination' },
-		{ name: 'preview', label: 'Aperçu & export', hint: 'Récapitulatif et rendu' },
+		{ name: 'header', label: 'Header', hint: 'School and assignment' },
+		{ name: 'review', label: 'Review', hint: 'Printed elements' },
+		{ name: 'template', label: 'Layout', hint: 'Template and pagination' },
+		{ name: 'preview', label: 'Preview & export', hint: 'Summary and render' },
 	];
 
 	const LAST_STEP = ED_STEPS.length - 1;
@@ -104,7 +104,7 @@
 
 	function edApi(method, path, body) {
 		if (!window.API || typeof window.API.raw !== 'function') {
-			return Promise.reject(new Error('API client indisponible (api-client.js non chargé).'));
+			return Promise.reject(new Error('API client unavailable (api-client.js not loaded).'));
 		}
 		return window.API.raw(method, path, body);
 	}
@@ -159,47 +159,47 @@
 		return `
 			<div class="ed-form-grid">${inputs}
 				<div class="ed-field">
-					<label class="ed-label" for="ed-field-grouping">Regroupement des questions</label>
+					<label class="ed-label" for="ed-field-grouping">Question grouping</label>
 					<select class="ed-input" id="ed-field-grouping" data-ed-field="grouping">
-						<option value="none"${header.grouping === 'by-category' ? '' : ' selected'}>Une seule suite continue</option>
-						<option value="by-category"${header.grouping === 'by-category' ? ' selected' : ''}>Par catégorie (exercices)</option>
+						<option value="none"${header.grouping === 'by-category' ? '' : ' selected'}>One continuous sequence</option>
+						<option value="by-category"${header.grouping === 'by-category' ? ' selected' : ''}>By category (exercises)</option>
 					</select>
 				</div>
 			</div>
 
 			<div class="ed-field ed-field--full">
-				<label class="ed-label" for="ed-field-instructions">Consignes affichées sur le sujet</label>
+				<label class="ed-label" for="ed-field-instructions">Instructions shown on the paper</label>
 				<textarea class="ed-input ed-textarea" id="ed-field-instructions" data-ed-field="instructions" rows="3"
 					placeholder="Une seule réponse par question. Barème indicatif.">${edEscape(header.instructions || '')}</textarea>
 			</div>
 
 			<div class="ed-fieldset">
-				<span class="ed-fieldset-title">Affichage</span>
+				<span class="ed-fieldset-title">Display</span>
 				<div class="ed-checks">${displayToggles}</div>
-				<p class="ed-help">Sans l’en-tête, la feuille démarre directement sur les questions ; les champs d’identification et la case NOTE restent imprimés.</p>
+				<p class="ed-help">Without the header the sheet starts directly on the questions; the identification fields and the grade box are still printed.</p>
 			</div>
 
 			<div class="ed-fieldset">
-				<span class="ed-fieldset-title">Logo de l’établissement</span>
+				<span class="ed-fieldset-title">School logo</span>
 				<div class="ed-logo-row">
 					<span class="ed-logo-preview${logoSrc ? ' has-image' : ''}" data-ed-role="logo-preview">
-						${logoSrc ? `<img src="${edEscape(logoSrc)}" alt="">` : '<span class="ed-logo-empty">Aucun logo</span>'}
+						${logoSrc ? `<img src="${edEscape(logoSrc)}" alt="">` : '<span class="ed-logo-empty">No logo</span>'}
 					</span>
 					<div class="ed-logo-controls">
 						<input type="file" accept="image/png,image/jpeg" class="ed-input ed-file" data-ed-role="logo-file">
 						<label class="ed-range-label">
-							Taille <span data-ed-role="scale-value">${edPoints(header.logoScale || 1)}×</span>
+							Size <span data-ed-role="scale-value">${edPoints(header.logoScale || 1)}×</span>
 							<input type="range" min="0.2" max="1.5" step="0.05" class="ed-range"
 								data-ed-field="logoScale" value="${edEscape(header.logoScale || 1)}">
 						</label>
-						<button type="button" class="btn btn-secondary btn-sm" data-ed-role="logo-clear">Retirer le logo</button>
+						<button type="button" class="btn btn-secondary btn-sm" data-ed-role="logo-clear">Remove logo</button>
 					</div>
 				</div>
-				<p class="ed-help">Le logo est enregistré comme fichier téléversé ; il ne grossit pas les données de l’examen.</p>
+				<p class="ed-help">The logo is stored as an uploaded file; it does not bloat the exam data.</p>
 			</div>
 
 			<div class="ed-fieldset">
-				<span class="ed-fieldset-title">Champs d’identification (sujet élève)</span>
+				<span class="ed-fieldset-title">Identification fields (student paper)</span>
 				<div class="ed-checks">${toggles}</div>
 			</div>`;
 	}
@@ -252,12 +252,12 @@
 		// printed, and the result is looked at once, in the final step.
 		return `
 			<div class="ed-review-section">
-				<h4 class="ed-review-title">Éléments affichés sur la feuille</h4>
-				<p class="ed-help">Décochez un élément pour le masquer sur le document généré. Les données restent enregistrées, seules l’impression est affectée.</p>
+				<h4 class="ed-review-title">Elements shown on the sheet</h4>
+				<p class="ed-help">Uncheck an element to hide it on the generated document. The data stays saved; only the printing is affected.</p>
 				<div class="ed-review-grid">${items}</div>
 				<div class="ed-review-actions">
-					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="review-all">Tout afficher</button>
-					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="review-none">Tout masquer</button>
+					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="review-all">Show all</button>
+					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="review-none">Hide all</button>
 				</div>
 			</div>`;
 	}
@@ -266,7 +266,7 @@
 	function edBanner(state, doc) {
 		const preview = state.previews[doc];
 		if (!preview) {
-			return `<div class="ed-banner ed-banner-idle">Aperçu non généré — cliquez sur « Actualiser l’aperçu ».</div>`;
+			return `<div class="ed-banner ed-banner-idle">Preview not generated — click “Refresh preview”.</div>`;
 		}
 		const scoring = preview.scoring || {};
 		const sections = (scoring.sections || [])
@@ -280,18 +280,18 @@
 			: '';
 		const error = scoring.error
 			? `<div class="ed-banner-error">${edEscape(scoring.error.message)}
-					<button type="button" class="btn btn-warning btn-sm" data-ed-role="normalize">Ajuster sur 20</button>
+					<button type="button" class="btn btn-warning btn-sm" data-ed-role="normalize">Adjust to /20</button>
 				</div>`
 			: '';
 		const normalized = scoring.normalized
-			? `<span class="ed-chip ed-chip-muted">Barème enregistré conservé : ${edPoints(scoring.naturalTotal)} pts</span>`
+			? `<span class="ed-chip ed-chip-muted">Stored marking scheme kept: ${edPoints(scoring.naturalTotal)} pts</span>`
 			: '';
 		const ok = scoring.valid20 || scoring.normalized;
 		return `
 			<div class="ed-banner ${ok ? 'ed-banner-ok' : 'ed-banner-bad'}">
 				<div class="ed-banner-main">
-					<span class="ed-total">Total : <strong>${edPoints(scoring.total)} / ${scoring.scale || 20}</strong></span>
-					<span class="ed-chip ${ok ? 'ed-chip-ok' : 'ed-chip-bad'}">${ok ? 'Barème conforme' : 'Barème non conforme'}</span>
+					<span class="ed-total">Total: <strong>${edPoints(scoring.total)} / ${scoring.scale || 20}</strong></span>
+					<span class="ed-chip ${ok ? 'ed-chip-ok' : 'ed-chip-bad'}">${ok ? 'Marking scheme OK' : 'Marking scheme not /20'}</span>
 					${normalized}
 				</div>
 				${sections ? `<ul class="ed-subtotals">${sections}</ul>` : ''}
@@ -304,7 +304,7 @@
 		const preview = state.previews[doc];
 		if (!preview) {
 			return `<div class="ed-preview ed-preview-empty" data-ed-role="preview">
-				<p>L’aperçu affiche le document exact qui sera exporté — pas l’interface de quiz.</p>
+				<p>The preview shows the exact document that will be exported — not the quiz interface.</p>
 			</div>`;
 		}
 		return `<div class="ed-preview" data-ed-role="preview">${preview.html || ''}</div>`;
@@ -314,12 +314,12 @@
 		const isKey = doc === 'answer_key';
 		return `
 			<div class="ed-toolbar">
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="refresh" data-ed-doc="${doc}">Actualiser l’aperçu</button>
+				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="refresh" data-ed-doc="${doc}">Refresh preview</button>
 				<span class="ed-toolbar-sep"></span>
-				<button type="button" class="btn btn-primary btn-sm" data-ed-role="export" data-ed-format="pdf" data-ed-doc="${doc}">Exporter PDF</button>
-				<button type="button" class="btn btn-primary btn-sm" data-ed-role="export" data-ed-format="docx" data-ed-doc="${doc}">Exporter Word</button>
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="print" data-ed-doc="${doc}">Imprimer</button>
-				${isKey ? '<span class="ed-confidential">Document confidentiel — réservé à l’enseignant.</span>' : ''}
+				<button type="button" class="btn btn-primary btn-sm" data-ed-role="export" data-ed-format="pdf" data-ed-doc="${doc}">Export PDF</button>
+				<button type="button" class="btn btn-primary btn-sm" data-ed-role="export" data-ed-format="docx" data-ed-doc="${doc}">Export Word</button>
+				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="print" data-ed-doc="${doc}">Print</button>
+				${isKey ? '<span class="ed-confidential">Confidential document — teacher only.</span>' : ''}
 			</div>`;
 	}
 
@@ -334,19 +334,19 @@
 			.join('');
 		return `
 			<div class="ed-normalize" data-ed-role="normalize-panel">
-				<h4>Normalisation du barème sur 20</h4>
-				<p>Le total enregistré est de <strong>${edPoints(scoring.naturalTotal)}</strong> points. Répartition
-					proportionnelle proposée (pas de 0,25, somme exacte de 20). Les points de l’examen ne seront
-					<strong>pas</strong> modifiés : cet ajustement n’existe que sur le document imprimé.</p>
+				<h4>Normalise the marking scheme to /20</h4>
+				<p>The stored total is <strong>${edPoints(scoring.naturalTotal)}</strong> points. Proposed proportional
+					repartition (0.25 steps, exact sum of 20). The exam points will <strong>not</strong>
+					be changed: this adjustment exists only on the printed document.</p>
 				<div class="ed-table-wrap">
 					<table class="ed-table">
-						<thead><tr><th>Question</th><th>Enregistré</th><th>Imprimé</th></tr></thead>
+						<thead><tr><th>Question</th><th>Stored</th><th>Printed</th></tr></thead>
 						<tbody>${rows}</tbody>
 					</table>
 				</div>
 				<div class="ed-normalize-actions">
-					<button type="button" class="btn btn-primary btn-sm" data-ed-role="normalize-confirm">Confirmer et appliquer à l’impression</button>
-					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="normalize-cancel">Annuler</button>
+					<button type="button" class="btn btn-primary btn-sm" data-ed-role="normalize-confirm">Confirm and apply to print</button>
+					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="normalize-cancel">Cancel</button>
 				</div>
 			</div>`;
 	}
@@ -363,8 +363,8 @@
 				data-ed-role="tpl-card" data-ed-template="${edEscape(tpl.id)}"
 				aria-pressed="${active ? 'true' : 'false'}">
 				<span class="ed-tpl-name">${edEscape(tpl.name)}</span>
-				<span class="ed-tpl-meta">${tpl.columns === 2 ? '2 colonnes' : '1 colonne'} · ${edEscape(tpl.headerVariant || '')}</span>
-				${tpl.custom ? '<span class="ed-tpl-tag">perso</span>' : ''}
+				<span class="ed-tpl-meta">${tpl.columns === 2 ? '2 columns' : '1 column'} · ${edEscape(tpl.headerVariant || '')}</span>
+				${tpl.custom ? '<span class="ed-tpl-tag">custom</span>' : ''}
 			</button>`;
 	}
 
@@ -375,25 +375,38 @@
 				edTemplateCard({ id: t.id, name: t.name, columns: t.template?.page?.columns || 1, headerVariant: t.template?.header?.variant, custom: true }, t.id === state.templateId),
 			),
 		].join('');
+
+		// Progressive disclosure: the step opens with the template picker only.
+		// The "Layout" controls (columns, density, estimate, page budget, saving a
+		// custom template) stay hidden until the teacher opens them on purpose.
+		if (!state.layoutOpen) {
+			return `
+				<div class="ed-tpl-cards" data-ed-role="tpl-cards">${cards}</div>
+				<p class="ed-help">Pick a template. To fine-tune columns, density or the page budget — and to save a custom template — open the layout options.</p>
+				<div class="ed-toolbar">
+					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-expand-layout">Customise layout →</button>
+				</div>`;
+		}
+
 		const est = state.estimate;
 		const estimateBox = est
 			? `
 				<div class="ed-estimate">
-					<span>Pages estimées\u00a0: <strong>${est.analytic}</strong>${est.range ? ` (fourchette ${est.range[0]}–${est.range[1]})` : ''}</span>
-					${est.exact != null ? `<span> Rendu réel\u00a0: <strong>${est.exact}</strong></span>` : ''}
-					${est.lastPageFill != null ? `<span> Dernière page remplie\u00a0: <strong>${edFmtPct(est.lastPageFill)}</strong></span>` : ''}
+					<span>Estimated pages\u00a0: <strong>${est.analytic}</strong>${est.range ? ` (range ${est.range[0]}–${est.range[1]})` : ''}</span>
+					${est.exact != null ? `<span> Actual render\u00a0: <strong>${est.exact}</strong></span>` : ''}
+					${est.lastPageFill != null ? `<span> Last page filled\u00a0: <strong>${edFmtPct(est.lastPageFill)}</strong></span>` : ''}
 				</div>`
-			: '<p class="ed-help">Choisissez un modèle puis lancez l’estimation pour connaître le nombre de pages.</p>';
+			: '<p class="ed-help">Choose a template then run the estimate to know the page count.</p>';
 		const suggestions = [];
-		if (state.layout.columns !== 2) suggestions.push('Passer à 2 colonnes économise généralement 1 page.');
+		if (state.layout.columns !== 2) suggestions.push('Switching to 2 columns usually saves 1 page.');
 		if (state.templateOverrides && Object.keys(state.templateOverrides).length) {
-			suggestions.push('Un ajustement « Tenir en N pages » est actif — les exports l’utiliseront.');
+			suggestions.push('A “Fit to N pages” adjustment is active — exports will use it.');
 		}
 		const cmp = state.comparison
 			? `
 				<div class="ed-table-wrap">
 					<table class="ed-table">
-						<thead><tr><th>Modèle</th><th>Pages</th></tr></thead>
+						<thead><tr><th>Template</th><th>Pages</th></tr></thead>
 						<tbody>${state.comparison
 							.map((row) => `<tr class="${row.id === state.templateId ? 'ed-row-active' : ''}"><td>${edEscape(row.name)}</td><td>${row.pages}</td></tr>`)
 							.join('')}</tbody>
@@ -403,9 +416,9 @@
 		const fit = state.fit
 			? `
 				<div class="ed-fit-result${state.fit.fits ? ' ok' : ' bad'}">
-					<strong>${state.fit.fits ? `${state.fit.pages} page(s) — objectif atteint` : `${state.fit.pages} page(s), objectif non atteignable`}</strong>
-					${state.fit.levers && state.fit.levers.length ? `<span> Leviers appliqués\u00a0: ${state.fit.levers.map(edEscape).join(', ')}</span>` : ''}
-					<button type="button" class="btn btn-primary btn-sm" data-ed-role="tpl-fit-apply">Appliquer au document</button>
+					<strong>${state.fit.fits ? `${state.fit.pages} page(s) — target met` : `${state.fit.pages} page(s), target not reachable`}</strong>
+					${state.fit.levers && state.fit.levers.length ? `<span> Levers applied\u00a0: ${state.fit.levers.map(edEscape).join(', ')}</span>` : ''}
+					<button type="button" class="btn btn-primary btn-sm" data-ed-role="tpl-fit-apply">Apply to document</button>
 				</div>`
 			: '';
 		const manual = state.layout.density != null || state.layout.answerLines != null;
@@ -413,57 +426,59 @@
 			<div class="ed-tpl-cards" data-ed-role="tpl-cards">${cards}</div>
 
 			<div class="ed-fieldset">
-				<span class="ed-fieldset-title">Mise en page</span>
+				<span class="ed-fieldset-title">Layout</span>
 				<div class="ed-checks">
 					<label class="ed-radio">
-						<span>Colonnes</span>
+						<span>Columns</span>
 						<select class="ed-input" data-ed-role="tpl-columns">
-							<option value="1"${state.layout.columns === 2 ? '' : ' selected'}>1 colonne</option>
-							<option value="2"${state.layout.columns === 2 ? ' selected' : ''}>2 colonnes</option>
+							<option value="1"${state.layout.columns === 2 ? '' : ' selected'}>1 column</option>
+							<option value="2"${state.layout.columns === 2 ? ' selected' : ''}>2 columns</option>
 						</select>
 					</label>
 					<label class="ed-check">
 						<input type="checkbox" data-ed-role="tpl-manual"${manual ? ' checked' : ''}>
-						<span>Réglages manuels (densité / espace de réponse)</span>
+						<span>Manual settings (density / answer space)</span>
 					</label>
 				</div>
 				<div class="ed-manual-controls"${manual ? '' : ' hidden'}>
 					<label class="ed-range-label">
-						Densité <span data-ed-role="density-value">${state.layout.density != null ? edPoints(state.layout.density) : 'auto'}</span>
+						Density <span data-ed-role="density-value">${state.layout.density != null ? edPoints(state.layout.density) : 'auto'}</span>
 						<input type="range" min="0.7" max="1.3" step="0.05" class="ed-range" data-ed-role="tpl-density"
 							value="${state.layout.density != null ? state.layout.density : 1}">
 					</label>
 					<label class="ed-range-label">
-						Lignes de réponse <span data-ed-role="lines-value">${state.layout.answerLines != null ? state.layout.answerLines : 'auto'}</span>
+						Answer lines <span data-ed-role="lines-value">${state.layout.answerLines != null ? state.layout.answerLines : 'auto'}</span>
 						<input type="range" min="0" max="12" step="1" class="ed-range" data-ed-role="tpl-lines"
 							value="${state.layout.answerLines != null ? state.layout.answerLines : 2}">
 					</label>
 				</div>
-				<p class="ed-help">Marges fixes\u00a0: la densité et l’espace de réponse sont les seuls leviers, la police ne descend jamais sous 9\u00a0pt.</p>
+				<p class="ed-help">Fixed margins: density and answer space are the only levers; the font never goes below 9\u00a0pt.</p>
 			</div>
 
 			<div class="ed-toolbar">
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-estimate">Estimer les pages</button>
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-compare">Comparer les 5 modèles</button>
+				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-estimate">Estimate pages</button>
+				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-compare">Compare the 5 templates</button>
 			</div>
 			${estimateBox}
 			${suggestions.length ? `<ul class="ed-suggest">${suggestions.map((s) => `<li>${edEscape(s)}</li>`).join('')}</ul>` : ''}
 			${cmp}
 
 			<div class="ed-fieldset">
-				<span class="ed-fieldset-title">Tenir en N pages</span>
+				<span class="ed-fieldset-title">Fit to N pages</span>
 				<div class="ed-fit-row">
-					<label class="ed-range-label">Objectif
+					<label class="ed-range-label">Target
 						<input type="number" min="1" max="40" class="ed-input" data-ed-role="tpl-fit-target" value="3" style="width:5rem">
 					</label>
-					<button type="button" class="btn btn-primary btn-sm" data-ed-role="tpl-fit">Optimiser</button>
-					${state.templateOverrides ? '<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-clear-overrides">Retirer l’ajustement</button>' : ''}
+					<button type="button" class="btn btn-primary btn-sm" data-ed-role="tpl-fit">Optimize</button>
+					${state.templateOverrides ? '<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-clear-overrides">Remove the adjustment</button>' : ''}
 				</div>
 				${fit}
 			</div>
 
 			<div class="ed-toolbar">
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-save-custom">Enregistrer comme modèle personnalisé</button>
+				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-save-custom">Save as custom template</button>
+				<span class="ed-toolbar-sep"></span>
+				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-collapse-layout">← Hide layout options</button>
 			</div>`;
 	}
 
@@ -492,7 +507,7 @@
 				state.templatesLoaded = true;
 				render();
 			})
-			.catch((err) => edToast(err?.message || 'Modèles indisponibles.', 'error'));
+			.catch((err) => edToast(err?.message || 'Templates unavailable.', 'error'));
 	}
 
 	function edBoundDoc(state) {
@@ -510,7 +525,7 @@
 				edBindTemplateControls(state);
 				return result;
 			})
-			.catch((err) => edToast(err?.message || 'Estimation impossible.', 'error'))
+			.catch((err) => edToast(err?.message || 'Cannot estimate the page count.', 'error'))
 			.finally(() => edSetBusy(state, false));
 	}
 
@@ -545,12 +560,12 @@
 				edRenderTemplatePanel(state);
 				edBindTemplateControls(state);
 			})
-			.catch((err) => edToast(err?.message || 'Optimisation impossible.', 'error'))
+			.catch((err) => edToast(err?.message || 'Optimization failed.', 'error'))
 			.finally(() => edSetBusy(state, false));
 	}
 
 	function edSaveCustomTemplate(state) {
-		const name = window.prompt('Nom du modèle personnalisé', 'Mon modèle');
+		const name = window.prompt('Custom template name', 'My template');
 		if (!name) return;
 		const id = `custom-${Date.now().toString(36)}`;
 		// Snapshot the current look: base template + the manual levers, nothing else.
@@ -568,13 +583,13 @@
 			.then((saved) => {
 				state.custom = (saved && saved.templates) || next;
 				state.templateId = id;
-				edToast('Modèle personnalisé enregistré.', 'success');
+				edToast('Custom template saved.', 'success');
 				edRenderTemplatePanel(state);
 				edBindTemplateControls(state);
 			})
 			.catch((err) => {
 				const payload = err && err.payload;
-				edToast((payload && payload.error && payload.error.message) || err?.message || 'Modèle refusé (hors bornes).', 'error');
+				edToast((payload && payload.error && payload.error.message) || err?.message || 'Template rejected (out of bounds).', 'error');
 			})
 			.finally(() => edSetBusy(state, false));
 	}
@@ -658,7 +673,7 @@
 				return result;
 			})
 			.catch((err) => {
-				edToast(err?.message || "L\u2019aperçu a échoué.", 'error');
+				edToast(err?.message || 'The preview failed to render.', 'error');
 			})
 			.finally(() => {
 				state.busy = false;
@@ -679,7 +694,7 @@
 
 	function edExport(state, doc, format) {
 		if (!window.API || typeof window.API.blob !== 'function') {
-			edToast('Client API incomplet : téléchargement indisponible.', 'error');
+			edToast('API client incomplete: download unavailable.', 'error');
 			return Promise.resolve();
 		}
 		const body = edRequestBody(state, doc);
@@ -698,8 +713,8 @@
 				setTimeout(() => URL.revokeObjectURL(url), 4000);
 				const warn = (result.warnings || []).filter((w) => w && w.type !== 'image-skipped');
 				edToast(
-					`Fichier ${format === 'pdf' ? 'PDF' : 'Word'} téléchargé.` +
-						(warn.length ? ` ${warn.length} avertissement(s) de rendu.` : ''),
+					`File ${format === 'pdf' ? 'PDF' : 'Word'} downloaded.` +
+						(warn.length ? ` ${warn.length} render warning(s).` : ''),
 					warn.length ? 'warning' : 'success',
 				);
 				if (warn.length) console.warn('[exam-documents] render warnings', warn);
@@ -707,14 +722,14 @@
 			.catch((err) => {
 				const payload = err && err.payload;
 				if (payload && payload.error) {
-					edToast(payload.error.message || 'Export refusé : barème non conforme.', 'error');
+					edToast(payload.error.message || 'Export refused: marking scheme not compliant.', 'error');
 					state.previews[doc] = Object.assign({}, state.previews[doc], {
 						scoring: payload.scoring || state.previews?.[doc]?.scoring,
 						warnings: payload.warnings || [],
 					});
 					edRenderDocumentPanels(state);
 				} else {
-					edToast(err?.message || "La génération du fichier a échoué.", 'error');
+					edToast(err?.message || 'File generation failed.', 'error');
 				}
 			})
 			.finally(() => edSetBusy(state, false));
@@ -723,12 +738,12 @@
 	function edPrint(state, doc) {
 		const preview = state.previews[doc];
 		if (!preview || !preview.printHtml) {
-			edToast('Générez d’abord l’aperçu avant d’imprimer.', 'warning');
+			edToast('Generate the preview first before printing.', 'warning');
 			return Promise.resolve();
 		}
 		const win = window.open('', '_blank', 'width=900,height=1100');
 		if (!win) {
-			edToast('Fenêtre d’impression bloquée par le navigateur.', 'error');
+			edToast('Print window blocked by the browser.', 'error');
 			return Promise.resolve();
 		}
 		win.document.open();
@@ -798,8 +813,8 @@
 		if (isStudentUser()) return '';
 		return `
 			<div class="ed-doc-switch" role="tablist" aria-label="Document">
-				<button type="button" class="ed-doc-tab active" role="tab" data-ed-role="doc-switch" data-ed-doc="student">Sujet \u00e9l\u00e8ve</button>
-				<button type="button" class="ed-doc-tab" role="tab" data-ed-role="doc-switch" data-ed-doc="answer_key">Corrig\u00e9</button>
+				<button type="button" class="ed-doc-tab active" role="tab" data-ed-role="doc-switch" data-ed-doc="student">Student paper</button>
+				<button type="button" class="ed-doc-tab" role="tab" data-ed-role="doc-switch" data-ed-doc="answer_key">Answer key</button>
 			</div>`;
 	}
 
@@ -811,9 +826,11 @@
 		if (prev) prev.disabled = state.step === 0;
 		if (next) {
 			next.disabled = state.step >= LAST_STEP;
-			next.textContent = state.step === LAST_STEP - 1 ? 'Voir l’aperçu →' : 'Suivant →';
+			next.textContent = state.step === LAST_STEP - 1 ? 'See the preview →' : 'Next →';
+			// The last step has no next: hide the button entirely instead of greying it out.
+			next.style.display = state.step >= LAST_STEP ? 'none' : '';
 		}
-		if (ind) ind.textContent = `Étape ${state.step + 1} sur ${ED_STEPS.length} · ${ED_STEPS[state.step].label}`;
+		if (ind) ind.textContent = `Step ${state.step + 1} of ${ED_STEPS.length} · ${ED_STEPS[state.step].label}`;
 	}
 
 	function edShowStep(state, index) {
@@ -872,19 +889,19 @@
 	function edRecapHtml(state) {
 		const form = edFormHost(state.modal);
 		const live = form ? edCollectHeader(form, state) : (state.header || {});
-		const empty = '<span class="ed-recap-empty">non renseign\u00e9</span>';
+		const empty = '<span class="ed-recap-empty">not filled in</span>';
 		const txt = (v) => (v === null || v === undefined || String(v).trim() === '') ? empty : edEscape(String(v));
 		const hasDur = live.durationMinutes !== null && live.durationMinutes !== undefined && String(live.durationMinutes).trim() !== '';
 
 		const headerRows = [
-			edRecapRow('Établissement', txt(live.schoolName)),
-			edRecapRow('Mati\u00e8re', txt(live.subject)),
-			edRecapRow('Niveau / Classe', txt(live.level)),
-			edRecapRow('Groupe', txt(live.group)),
-			edRecapRow('Intitul\u00e9', txt(live.title)),
+			edRecapRow('School', txt(live.schoolName)),
+			edRecapRow('Subject', txt(live.subject)),
+			edRecapRow('Level / Class', txt(live.level)),
+			edRecapRow('Group', txt(live.group)),
+			edRecapRow('Title', txt(live.title)),
 			edRecapRow('Session', txt(live.sessionType)),
 			edRecapRow('Date', txt(live.date)),
-			edRecapRow('Dur\u00e9e', hasDur ? `${edEscape(String(live.durationMinutes))} min` : '<span class="ed-recap-empty">non renseign\u00e9e</span>'),
+			edRecapRow('Duration', hasDur ? `${edEscape(String(live.durationMinutes))} min` : '<span class="ed-recap-empty">not filled in</span>'),
 		].join('');
 
 		const totalRev = REVIEW_FIELDS.length;
@@ -894,42 +911,42 @@
 			return f ? f.label : name;
 		});
 		const reviewValue = hiddenArr.length
-			? `${totalRev - hiddenArr.length}/${totalRev} · masqu\u00e9 : <em>${edEscape(hiddenLabels.join(', '))}</em>`
-			: `${totalRev}/${totalRev} · tout est imprim\u00e9`;
+			? `${totalRev - hiddenArr.length}/${totalRev} · hidden: <em>${edEscape(hiddenLabels.join(', '))}</em>`
+			: `${totalRev}/${totalRev} · everything is printed`;
 
 		const built = state.builtIn.find((t) => t.id === state.templateId);
 		const custom = state.custom.find((t) => t.id === state.templateId);
 		const tplName = (built && built.name) || (custom && custom.name) || state.templateId;
-		const layoutBits = [edEscape(tplName), state.layout.columns === 2 ? '2 colonnes' : '1 colonne'];
-		if (state.layout.density != null) layoutBits.push(`densit\u00e9 ${edPoints(state.layout.density)}`);
-		if (state.layout.answerLines != null) layoutBits.push(`${state.layout.answerLines} ligne(s) de r\u00e9ponse`);
-		if (state.templateOverrides) layoutBits.push('ajustement \u00ab tenir en N pages \u00bb');
+		const layoutBits = [edEscape(tplName), state.layout.columns === 2 ? '2 columns' : '1 column'];
+		if (state.layout.density != null) layoutBits.push(`density ${edPoints(state.layout.density)}`);
+		if (state.layout.answerLines != null) layoutBits.push(`${state.layout.answerLines} answer line(s)`);
+		if (state.templateOverrides) layoutBits.push('"fit to N pages" adjustment');
 		const est = state.estimate;
 		const pagesValue = est
-			? `<strong>${est.analytic} page(s)</strong>${est.exact != null ? ` (rendu ${est.exact})` : ''}`
-			: '<span class="ed-recap-empty">non estim\u00e9</span>';
+			? `<strong>${est.analytic} page(s)</strong>${est.exact != null ? ` (render ${est.exact})` : ''}`
+			: '<span class="ed-recap-empty">not estimated</span>';
 
 		return `
-			<h4 class="ed-recap-title">R\u00e9capitulatif de vos choix</h4>
+			<h4 class="ed-recap-title">Summary of your choices</h4>
 			<div class="ed-recap-grid">
 				<div class="ed-recap-card">
-					<span class="ed-recap-card-title">En-t\u00eate</span>
+					<span class="ed-recap-card-title">Header</span>
 					${headerRows}
 				</div>
 				<div class="ed-recap-card">
-					<span class="ed-recap-card-title">Revue</span>
-					${edRecapRow('Él\u00e9ments imprim\u00e9s', reviewValue)}
-					${edRecapRow('Logo', live.logoUrl ? 'oui' : '<span class="ed-recap-empty">aucun</span>')}
-					${edRecapRow('Consignes', live.instructions ? 'affich\u00e9es' : '<span class="ed-recap-empty">aucune</span>')}
+					<span class="ed-recap-card-title">Review</span>
+					${edRecapRow('Printed elements', reviewValue)}
+					${edRecapRow('Logo', live.logoUrl ? 'yes' : '<span class="ed-recap-empty">none</span>')}
+					${edRecapRow('Instructions', live.instructions ? 'shown' : '<span class="ed-recap-empty">none</span>')}
 				</div>
 				<div class="ed-recap-card">
-					<span class="ed-recap-card-title">Mise en page</span>
-					${edRecapRow('Mod\u00e8le', edEscape(tplName))}
+					<span class="ed-recap-card-title">Layout</span>
+					${edRecapRow('Template', edEscape(tplName))}
 					${edRecapRow('Pagination', pagesValue)}
-					${edRecapRow('Bar\u00e8me', state.normalization.mode === 'scale-to-20' ? 'normalis\u00e9 sur 20' : 'tel qu\u2019enregistr\u00e9')}
+					${edRecapRow('Marking scheme', state.normalization.mode === 'scale-to-20' ? 'normalized to 20' : 'as stored')}
 				</div>
 			</div>
-			<p class="ed-recap-note">V\u00e9rifiez ces r\u00e9glages, puis examinez le rendu ci-dessous. Le sujet et le corrig\u00e9 s\u2019exportent s\u00e9par\u00e9ment.</p>`;
+			<p class="ed-recap-note">Check these settings, then look at the rendering below. The student paper and the answer key are exported separately.</p>`;
 	}
 
 	function edRenderRecap(state) {
@@ -942,7 +959,7 @@
 		const examsRow = (window.__DI_CONTAINER__?.repo?.getAll_sync?.('exams') || []).find(
 			(e) => String(e.id) === String(examId),
 		);
-		const examName = (examsRow && (examsRow.name || examsRow.title)) || 'Examen';
+		const examName = (examsRow && (examsRow.name || examsRow.title)) || 'Exam';
 
 		const state = {
 			examId: String(examId),
@@ -956,6 +973,8 @@
 			// Template layer (Génération personnalisée).
 			templateId: 'classique',
 			layout: { columns: 1, density: null, answerLines: null },
+			// Progressive disclosure of the layout controls on step 3.
+			layoutOpen: false,
 			templateOverrides: null,
 			builtIn: [],
 			custom: [],
@@ -1001,13 +1020,13 @@
 					</div>
 					<button class="close-btn" aria-label="Close">&times;</button>
 				</div>
-				<div class="ed-stepper" role="tablist" aria-label="Parcours de génération">${edStepRailHtml()}</div>
+				<div class="ed-stepper" role="tablist" aria-label="Generation flow">${edStepRailHtml()}</div>
 				<div class="modal-body ed-body">
 					<section class="ed-panel active" data-ed-panel="header">
 						<div class="ed-form-host">${edHeaderForm({ logoScale: 1, grouping: 'none' })}</div>
-						<p class="ed-help">Les champs vides restent vides sur le papier : rien n’est inventé. Nom de l’école, année, enseignant, classe, titre et durée sont pré-remplis depuis vos données enregistrées.</p>
+						<p class="ed-help">Empty fields stay empty on the paper: nothing is invented. School name, year, teacher, class, title and duration are pre-filled from your saved data.</p>
 						<div class="ed-header-actions">
-							<button type="button" class="btn btn-primary btn-sm" data-ed-role="save-header">Enregistrer l’en-tête</button>
+							<button type="button" class="btn btn-primary btn-sm" data-ed-role="save-header">Save header</button>
 						</div>
 					</section>
 					<section class="ed-panel" data-ed-panel="review">${edReviewPanelHtml()}</section>
@@ -1022,10 +1041,10 @@
 					</section>
 				</div>
 				<div class="modal-footer ed-stepper-footer">
-					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="step-prev" disabled>← Précédent</button>
+					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="step-prev" disabled>← Previous</button>
 					<span class="ed-step-indicator" data-ed-role="step-indicator"></span>
-					<button type="button" class="btn btn-primary btn-sm" data-ed-role="step-next">Suivant →</button>
-					<button type="button" class="btn btn-secondary ed-close-btn">Fermer</button>
+					<button type="button" class="btn btn-primary btn-sm" data-ed-role="step-next">Next →</button>
+					<button type="button" class="btn btn-secondary ed-close-btn">Close</button>
 				</div>
 			</div>`;
 
@@ -1064,7 +1083,7 @@
 			logoPreview.classList.toggle('has-image', !!src);
 			logoPreview.innerHTML = src
 				? `<img src="${edEscape(src)}" alt="">`
-				: '<span class="ed-logo-empty">Aucun logo</span>';
+				: '<span class="ed-logo-empty">No logo</span>';
 		};
 		const logoFile = modal.querySelector('[data-ed-role="logo-file"]');
 		logoFile?.addEventListener('change', () => {
@@ -1084,12 +1103,12 @@
 							state.logoDataUrl = null;
 							setLogoPreview(uploaded.url);
 							edApplyHeaderToForm(state);
-							edToast('Logo enregistré.', 'success');
+							edToast('Logo saved.', 'success');
 						}
 					})
-					.catch((err) => edToast(err?.message || 'Le logo n’a pas pu être téléversé.', 'error'));
+					.catch((err) => edToast(err?.message || 'The logo could not be uploaded.', 'error'));
 			};
-			reader.onerror = () => edToast('Image illisible.', 'error');
+			reader.onerror = () => edToast('Unreadable image.', 'error');
 			reader.readAsDataURL(file);
 		});
 		modal.querySelector('[data-ed-role="logo-clear"]')?.addEventListener('click', () => {
@@ -1110,12 +1129,12 @@
 					state.header = Object.assign({}, state.header, (saved && saved.header) || header);
 					state.logoDataUrl = null;
 					edApplyHeaderToForm(state);
-					edToast('En-tête enregistré pour cet examen.', 'success');
+					edToast('Header saved for this exam.', 'success');
 					// Any preview built with unsaved edits must be rebuilt.
 					state.previews = { student: null, answer_key: null };
 					edRenderDocumentPanels(state);
 				})
-				.catch((err) => edToast(err?.message || "L’en-tête n’a pas pu être enregistré.", 'error'))
+				.catch((err) => edToast(err?.message || 'The header could not be saved.', 'error'))
 				.finally(() => edSetBusy(state, false));
 		});
 
@@ -1157,7 +1176,7 @@
 			} else if (role === 'normalize-confirm') {
 				state.normalization = { mode: 'scale-to-20', confirmed: true };
 				edRefreshPreview(state, state.activeDocument);
-				edToast('Barème normalisé sur 20 pour l’impression (données de l’examen inchangées).', 'success');
+				edToast('Marking scheme normalized to 20 for printing (exam data unchanged).', 'success');
 			} else if (role === 'normalize-cancel') {
 				state.normalization = { mode: 'as-is', confirmed: false };
 				edRefreshPreview(state, state.activeDocument);
@@ -1193,7 +1212,7 @@
 				if (state.fit && state.fit.template) {
 					state.templateOverrides = state.fit.template;
 					state.previews = { student: null, answer_key: null };
-					edToast('Ajustement appliqué — régénérez l’aperçu pour le voir.', 'success');
+					edToast('Adjustment applied — refresh the preview to see it.', 'success');
 					edRenderTemplatePanel(state);
 					edBindTemplateControls(state);
 					edRenderDocumentPanels(state);
@@ -1207,6 +1226,13 @@
 				edRenderDocumentPanels(state);
 			} else if (role === 'tpl-save-custom') {
 				edSaveCustomTemplate(state);
+			} else if (role === 'tpl-expand-layout') {
+				state.layoutOpen = true;
+				edRenderTemplatePanel(state);
+				edBindTemplateControls(state);
+			} else if (role === 'tpl-collapse-layout') {
+				state.layoutOpen = false;
+				edRenderTemplatePanel(state);
 			}
 		});
 
@@ -1216,7 +1242,7 @@
 				state.header = Object.assign({}, (result && result.header) || {});
 				edApplyHeaderToForm(state);
 			})
-			.catch((err) => edToast(err?.message || "L’en-tête n’a pas pu être chargé.", 'error'));
+			.catch((err) => edToast(err?.message || 'The header could not be loaded.', 'error'));
 	}
 
 	function edApplyHeaderToForm(state) {
@@ -1236,7 +1262,7 @@
 			logoPreview.classList.toggle('has-image', !!src);
 			logoPreview.innerHTML = src
 				? `<img src="${edEscape(src)}" alt="">`
-				: '<span class="ed-logo-empty">Aucun logo</span>';
+				: '<span class="ed-logo-empty">No logo</span>';
 		}
 		// Apply hiddenFields to the review checkboxes (unchecked = hidden).
 		const hidden = new Set(Array.isArray(state.header.hiddenFields) ? state.header.hiddenFields : []);
