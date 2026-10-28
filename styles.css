@@ -22489,6 +22489,15 @@ textarea,
 	overflow: hidden;
 }
 
+/* In the school-wide Overview tab, panels that follow a KPI grid or another
+   panel have no .kpi-section-title above them, so they need the same top
+   spacing the titled sections get (Class Performance Comparison, Classes
+   Needing Attention, Activity Over Time). */
+#adminSchoolInsights .kpi-grid + .dashboard-panel,
+#adminSchoolInsights .dashboard-panel + .dashboard-panel {
+	margin-top: var(--space-lg);
+}
+
 .dashboard-panel .panel-header {
 	display: flex;
 	justify-content: space-between;
@@ -47107,8 +47116,12 @@ body.student-workspace .workspace-panel > * {
 	gap: 8px;
 	flex-wrap: wrap;
 	padding-bottom: 12px;
-	margin-bottom: 12px;
+	margin: 16px 0 12px;
 	border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.exam-documents-modal .ed-toolbar:first-child {
+	margin-top: 0;
 }
 
 .exam-documents-modal .ed-toolbar-sep {
@@ -47553,21 +47566,38 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	align-items: flex-start;
 	padding: 12px;
 	border: 1px solid var(--border-color, #e2e8f0);
+	border-left: 5px solid var(--tpl-accent, #94a3b8);
 	border-radius: 10px;
 	background: #fff;
 	color: #0f172a;
 	cursor: pointer;
 	text-align: left;
-	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .exam-documents-modal .ed-tpl-card:hover {
-	border-color: var(--ed-accent, #1f3a5f);
+	border-color: var(--tpl-accent, #94a3b8);
+	background: var(--tpl-accent-soft, #f1f5f9);
 }
 
 .exam-documents-modal .ed-tpl-card.active {
-	border-color: var(--ed-accent, #1f3a5f);
-	box-shadow: 0 0 0 2px rgba(31, 58, 95, 0.18);
+	border-color: var(--tpl-accent, #94a3b8);
+	background: var(--tpl-accent-soft, #f1f5f9);
+	box-shadow: 0 0 0 1px var(--tpl-accent, #94a3b8);
+}
+
+.exam-documents-modal .ed-tpl-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.exam-documents-modal .ed-tpl-dot {
+	flex: 0 0 auto;
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	background: var(--tpl-accent, #94a3b8);
 }
 
 .exam-documents-modal .ed-tpl-name {

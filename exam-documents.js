@@ -357,12 +357,40 @@
 		return `${Math.round(Number(value) * 100)}\u00a0%`;
 	}
 
-	function edTemplateCard(tpl, active) {
+	// Fixed accent per built-in model so each card is easy to tell apart.
+	// Custom templates have dynamic ids, so they cycle through ED_CUSTOM_TPL_PALETTE.
+	const ED_TPL_COLORS = {
+		classique: { c: '#1f3a5f', bg: '#eef2f7' },
+		moderne: { c: '#0f766e', bg: '#e6f4f1' },
+		compact: { c: '#b45309', bg: '#fbf0e2' },
+		officiel: { c: '#6d28d9', bg: '#f1ebfb' },
+		college: { c: '#15803d', bg: '#e9f6ec' },
+	};
+	const ED_CUSTOM_TPL_PALETTE = [
+		{ c: '#be123c', bg: '#fdeaef' },
+		{ c: '#0369a1', bg: '#e6f1f8' },
+		{ c: '#7c2d12', bg: '#f6ece7' },
+		{ c: '#4d7c0f', bg: '#eef5e4' },
+		{ c: '#6b21a8', bg: '#f2eafb' },
+		{ c: '#0e7490', bg: '#e5f2f6' },
+	];
+
+	function edTemplateAccent(id, isCustom, index) {
+		if (!isCustom && ED_TPL_COLORS[id]) return ED_TPL_COLORS[id];
+		return ED_CUSTOM_TPL_PALETTE[Math.abs(index || 0) % ED_CUSTOM_TPL_PALETTE.length];
+	}
+
+	function edTemplateCard(tpl, active, accent) {
+		const tone = accent || { c: '#94a3b8', bg: '#f1f5f9' };
 		return `
 			<button type="button" class="ed-tpl-card${active ? ' active' : ''}"
+				style="--tpl-accent:${tone.c};--tpl-accent-soft:${tone.bg}"
 				data-ed-role="tpl-card" data-ed-template="${edEscape(tpl.id)}"
 				aria-pressed="${active ? 'true' : 'false'}">
-				<span class="ed-tpl-name">${edEscape(tpl.name)}</span>
+				<span class="ed-tpl-head">
+					<span class="ed-tpl-dot" aria-hidden="true"></span>
+					<span class="ed-tpl-name">${edEscape(tpl.name)}</span>
+				</span>
 				<span class="ed-tpl-meta">${tpl.columns === 2 ? '2 columns' : '1 column'} · ${edEscape(tpl.headerVariant || '')}</span>
 				${tpl.custom ? '<span class="ed-tpl-tag">custom</span>' : ''}
 			</button>`;
@@ -370,9 +398,9 @@
 
 	function edTemplatePanelHtml(state) {
 		const cards = [
-			...state.builtIn.map((t) => edTemplateCard(t, t.id === state.templateId)),
-			...state.custom.map((t) =>
-				edTemplateCard({ id: t.id, name: t.name, columns: t.template?.page?.columns || 1, headerVariant: t.template?.header?.variant, custom: true }, t.id === state.templateId),
+			...state.builtIn.map((t) => edTemplateCard(t, t.id === state.templateId, edTemplateAccent(t.id, false))),
+			...state.custom.map((t, i) =>
+				edTemplateCard({ id: t.id, name: t.name, columns: t.template?.page?.columns || 1, headerVariant: t.template?.header?.variant, custom: true }, t.id === state.templateId, edTemplateAccent(t.id, true, i)),
 			),
 		].join('');
 
