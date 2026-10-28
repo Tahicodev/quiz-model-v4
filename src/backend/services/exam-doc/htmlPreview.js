@@ -8,8 +8,9 @@
  * its own typography inside the admin page (and in the print window).
  */
 
-import { formatPoints, optionLetter } from './text.js';
+import { formatPoints, optionLetter, numberBlankGaps } from './text.js';
 import { examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
+import { resolveForRenderer } from './templates/index.js';
 
 const escapeHtml = (value) =>
   String(value ?? '')
@@ -100,7 +101,7 @@ function renderIdentityBlock(model) {
   return parts.join('');
 }
 
-function renderBlock(block) {
+function renderBlock(block, isKey = false) {
   const parts = [];
   if (block.instruction) parts.push(`<p class="ed-instruction">${escapeHtml(block.instruction)}</p>`);
 
@@ -115,7 +116,15 @@ function renderBlock(block) {
       );
       break;
     case 'blanks':
-      parts.push('<div class="ed-blanks-line"><span class="ed-rule"></span></div>');
+      // Numbered gap markers live in the sentence; the student answers on the
+      // numbered lines of this "Réponses" list. The key lists the answers.
+      if (isKey) break;
+      parts.push(
+        `<div class="ed-pool-title">Réponses :</div><ol class="ed-slots ed-blank-answers">${Array.from(
+          { length: block.blanks || 1 },
+          () => '<li><span class="ed-rule ed-rule-medium"></span></li>',
+        ).join('')}</ol>`,
+      );
       break;
     case 'sequence':
       // One element per line, lettered: the same readable pool the PDF and Word
@@ -188,7 +197,7 @@ function writingLines(item) {
   }
 }
 
-function renderItems(model) {
+function renderItems(model, cfg) {
   const isKey = model.meta.document === 'answer_key';
   return model.sections
     .map((section) => {
@@ -197,7 +206,8 @@ function renderItems(model) {
         : '';
       const items = section.items
         .map((item) => {
-          const stem = `<div class="ed-question-text">${escapeHtml(item.block.text)}</div>`;
+          const rawStem = item.block.kind === 'blanks' ? numberBlankGaps(item.block.text).text : item.block.text;
+          const stem = `<div class="ed-question-text">${escapeHtml(rawStem || '(énoncé vide)')}</div>`;
           const media = imgTag(item.block.media, 'ed-question-img');
           const answerKey = isKey
             ? `<div class="ed-key">
@@ -217,7 +227,7 @@ function renderItems(model) {
                 <span class="ed-question-points">${formatPoints(item.points)} pt${item.points === 1 ? '' : 's'}</span>
               </div>
               ${stem}${media}
-              ${renderBlock(item.block)}
+              ${renderBlock(item.block, isKey)}
               ${renderLines(lines)}
               ${answerKey}
             </article>`;
@@ -235,33 +245,46 @@ function renderWarnings(model) {
     .join('')}</ul></section>`;
 }
 
-/** @param {object} model output of ExamDocumentService.buildExamDocument */
-export function renderExamDocumentHtml(model) {
-  const { header } = model;
-  const closing =
-    model.meta.document === 'student'
-      ? '<div class="ed-closing">— Fin du sujet —</div>'
-      : '<div class="ed-closing ed-closing-key">— Fin du corrigé —</div>';
+/**
+ * Inline CSS custom properties that override the paper defaults with the
+ * resolved template theme. The stylesheet keeps its Classique values as the
+ * baseline, so for the default template these vars equal the defaults (no
+ * visible change); any other template recolours and rescales the preview the
+ * same way the PDF and Word do.
+ */
+function paperThemeStyle(cfg) {
+  const C = cfg.theme.colors;
+  const lower = (h) => String(h).toLowerCase();
+  return [
+    `--ed-accent:${lower(C.accent)}`,
+    `--ed-accent-bg:${lower(C.fieldBg)}`,
+    `--ed-hairline:${lower(C.hairline)}`,
+    `font-size:${cfg.theme.sizes.body}pt`,
+  ].join(';');
+}
 
-  return `<article class="ed-paper ed-paper--${model.meta.document}">
+/** @param {object} model output of ExamDocumentService.buildExamDocument */
+export function renderExamDocumentHtml(model, options = {}) {
+  const cfg = resolveForRenderer(options);
+  const { header } = model;
+  const scaleNote = header.scaleNote
+    ? `<div class="ed-scale-note">${escapeHtml(header.scaleNote)}</div>`
+    : '';
+
+  const columns = cfg.page.columns;
+  const bodyStyle = columns > 1 ? ` style="column-count:${columns};column-gap:${cfg.page.gutter}px"` : '';
+
+  return `<article class="ed-paper ed-paper--${model.meta.document}" style="${paperThemeStyle(cfg)}">
     ${renderHeader(model)}
     ${renderIdentityBlock(model)}
-    <main class="ed-body">${renderItems(model)}</main>
+    <main class="ed-body"${bodyStyle}>${renderItems(model, cfg)}</main>
     ${renderWarnings(model)}
-    <footer class="ed-footer">
-      <div class="ed-total">
-        ${model.meta.document === 'answer_key'
-          ? `Total : <strong>${escapeHtml(model.scoring.label)}</strong>`
-          : `Barème : <strong>${formatPoints(model.scoring.total)} points</strong>`}
-      </div>
-      ${header.scaleNote ? `<div class="ed-scale-note">${escapeHtml(header.scaleNote)}</div>` : ''}
-      ${closing}
-    </footer>
+    ${scaleNote}
   </article>`;
 }
 
 /** Standalone document for the print window (A4, no admin chrome). */
-export function renderPrintablePage(model, css) {
+export function renderPrintablePage(model, css, options = {}) {
   const title = `${model.meta.document === 'answer_key' ? 'Corrigé — ' : 'Sujet — '}${model.meta.examName}`;
   return `<!doctype html>
 <html lang="fr">
@@ -270,7 +293,7 @@ export function renderPrintablePage(model, css) {
 <title>${escapeHtml(title)}</title>
 <style>${css}</style>
 </head>
-<body class="ed-print-body">${renderExamDocumentHtml(model)}</body>
+<body class="ed-print-body">${renderExamDocumentHtml(model, options)}</body>
 </html>`;
 }
 

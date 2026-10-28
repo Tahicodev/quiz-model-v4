@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "college",
+  "name": "Collège",
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margin": { "top": 40, "right": 40, "bottom": 40, "left": 40 },
+    "columns": 1,
+    "gutter": 18,
+    "rule": { "between": false }
+  },
+  "theme": {
+    "fonts": {
+      "regular": "Times-Roman",
+      "bold": "Times-Bold",
+      "italic": "Times-Italic",
+      "mono": "Courier",
+      "head": "Helvetica",
+      "headBold": "Helvetica-Bold"
+    },
+    "sizes": { "body": 12.5, "small": 10.5, "tiny": 9.5, "title": 16 },
+    "colors": {
+      "accent": "#1F3A5F",
+      "muted": "#5B6472",
+      "hairline": "#C9D1D9",
+      "fieldBg": "#F6F8FA"
+    },
+    "density": 1.05
+  },
+  "header": {
+    "variant": "classique",
+    "anonymity": false,
+    "fullOnFirstPage": true,
+    "compactOnFollow": true
+  },
+  "footer": {
+    "variant": "turn-page",
+    "total": true,
+    "encouragement": "Bon courage !"
+  },
+  "question": {
+    "pointBadge": true,
+    "vectorBoxes": true,
+    "separators": "rule",
+    "answerSpace": { "lines": 3, "lineHeight": 16 },
+    "keepTogether": "block"
+  }
+}

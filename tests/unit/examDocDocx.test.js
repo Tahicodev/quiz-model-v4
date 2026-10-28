@@ -101,9 +101,7 @@ describe('document body', () => {
     expect(xml).toContain('○ A.'); // radio marker keeps the real glyph in Word
     expect(xml).toContain('B.');
     expect(xml).toContain('Paris');
-    expect(xml).toContain('Barème : 20 points'); // the subject states the barème, not a grade
     expect(xml).not.toContain('Note : 20 / 20');
-    expect(xml).toContain('— Fin du sujet —');
   });
 
   it('prints the sections, the subtotals and the per-question points', async () => {
@@ -148,7 +146,6 @@ describe('document body', () => {
       normalization: { mode: 'scale-to-20', confirmed: true },
     });
     const { xml } = await renderDocx(model);
-    expect(xml).toContain('Barème : 20 points');
     expect(xml).toContain('2,5 pts');
     expect(xml).toContain('normalisé sur 20');
   });

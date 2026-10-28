@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "officiel",
+  "name": "Officiel",
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margin": { "top": 48, "right": 48, "bottom": 48, "left": 48 },
+    "columns": 1,
+    "gutter": 18,
+    "rule": { "between": false }
+  },
+  "theme": {
+    "fonts": {
+      "regular": "Times-Roman",
+      "bold": "Times-Bold",
+      "italic": "Times-Italic",
+      "mono": "Courier",
+      "head": "Helvetica",
+      "headBold": "Helvetica-Bold"
+    },
+    "sizes": { "body": 12, "small": 10, "tiny": 9, "title": 15 },
+    "colors": {
+      "accent": "#1F3A5F",
+      "muted": "#5B6472",
+      "hairline": "#C9D1D9",
+      "fieldBg": "#F6F8FA"
+    },
+    "density": 1.0
+  },
+  "header": {
+    "variant": "officiel",
+    "anonymity": true,
+    "fullOnFirstPage": true,
+    "compactOnFollow": true
+  },
+  "footer": {
+    "variant": "title+number",
+    "total": true,
+    "encouragement": "Bon courage !"
+  },
+  "question": {
+    "pointBadge": false,
+    "vectorBoxes": true,
+    "separators": "rule",
+    "answerSpace": { "lines": 2, "lineHeight": 15 },
+    "keepTogether": "question"
+  }
+}

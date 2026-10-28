@@ -27932,6 +27932,7 @@ tr[data-id],
 		line-height: 1.35;
 		-webkit-box-orient: vertical;
 		-webkit-line-clamp: 3;
+		line-clamp: 3;
 	}
 
 	#question-list-table .question-meta {
@@ -28384,6 +28385,7 @@ tr[data-id],
 	#question-list-table .question-text {
 		font-size: 0.82rem;
 		-webkit-line-clamp: 4;
+		line-clamp: 4;
 	}
 
 	#question-list-table .option-badge,
@@ -30089,6 +30091,7 @@ tr[data-id],
 		line-height: 1.3;
 		-webkit-box-orient: vertical;
 		-webkit-line-clamp: 3;
+		line-clamp: 3;
 	}
 
 	#examModal .question-meta {
@@ -37056,6 +37059,7 @@ body.student-workspace
 	text-overflow: ellipsis;
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
+	line-clamp: 2;
 	-webkit-box-orient: vertical;
 }
 
@@ -43783,6 +43787,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	}
 	#question-list-table .question-text {
 		-webkit-line-clamp: 5 !important;
+		line-clamp: 5 !important;
 	}
 	#question-list-table .question-meta {
 		display: flex !important;
@@ -44022,6 +44027,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		display: -webkit-box !important;
 		-webkit-box-orient: vertical !important;
 		-webkit-line-clamp: 2 !important;
+		line-clamp: 2 !important;
 		overflow: hidden !important;
 	}
 	#categoryList tbody tr td:nth-child(3)::before {
@@ -45634,6 +45640,7 @@ html[data-theme='dark'] #assignClassExamsModal.is-open .modal-body .search-wrapp
 		display: -webkit-box !important;
 		-webkit-box-orient: vertical !important;
 		-webkit-line-clamp: 2 !important;
+		line-clamp: 2 !important;
 		overflow: hidden !important;
 		color: var(--text-muted) !important;
 		font-size: 0.78rem !important;
@@ -46280,6 +46287,7 @@ body.cat-dragging * {
 		white-space: normal;
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
+		line-clamp: 2;
 		-webkit-box-orient: vertical;
 	}
 	.hard-acc {
@@ -46686,18 +46694,135 @@ body.student-workspace .workspace-panel > * {
 	color: var(--text-muted, #64748b);
 }
 
-.exam-documents-modal .ed-tabs {
+/* ── Guided stepper rail ───────────────────────────────────────────────────── */
+.exam-documents-modal .ed-stepper {
 	display: flex;
+	align-items: stretch;
 	flex: 0 0 auto;
-	gap: 6px;
-	flex-wrap: wrap;
-	padding: 12px 20px 0;
+	gap: 2px;
+	padding: 12px 20px;
 	border-bottom: 1px solid var(--border-color, #e2e8f0);
 	background: var(--bg-surface, #f1f5f9);
+	overflow-x: auto;
 }
 
-.exam-documents-modal .ed-tab-btn {
-	padding: 9px 18px;
+.exam-documents-modal .ed-step-btn {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 1 1 0;
+	min-width: 0;
+	padding: 8px 12px;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-md, 10px);
+	color: var(--text-secondary, #475569);
+	text-align: left;
+	cursor: pointer;
+	transition: background var(--transition-fast, 120ms ease), color var(--transition-fast, 120ms ease);
+}
+
+.exam-documents-modal .ed-step-btn:hover {
+	background-color: var(--bg-surface-alt, #e2e8f0);
+	color: var(--text-main, #0f172a);
+}
+
+.exam-documents-modal .ed-step-num {
+	flex: 0 0 auto;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: 700;
+	font-size: 0.85rem;
+	background: var(--bg-surface-alt, #e2e8f0);
+	color: var(--text-secondary, #475569);
+	border: 1px solid var(--border-color, #cbd5e1);
+	transition: all var(--transition-fast, 120ms ease);
+}
+
+.exam-documents-modal .ed-step-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.exam-documents-modal .ed-step-label {
+	font-weight: 600;
+	font-size: 0.9rem;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.exam-documents-modal .ed-step-hint {
+	font-size: 0.74rem;
+	color: var(--text-muted, #94a3b8);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.exam-documents-modal .ed-step-btn.active {
+	color: var(--primary, #6366f1);
+}
+
+.exam-documents-modal .ed-step-btn.active .ed-step-num {
+	background: var(--primary, #6366f1);
+	color: #ffffff;
+	border-color: var(--primary, #6366f1);
+}
+
+.exam-documents-modal .ed-step-btn.done {
+	color: var(--text-main, #0f172a);
+}
+
+.exam-documents-modal .ed-step-btn.done .ed-step-num {
+	background: var(--primary-light, rgba(99, 102, 241, 0.15));
+	color: var(--primary, #6366f1);
+	border-color: var(--primary, #6366f1);
+}
+
+.exam-documents-modal .ed-step-btn.locked {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.exam-documents-modal .ed-step-btn.locked:hover {
+	background: transparent;
+	color: var(--text-secondary, #475569);
+}
+
+.exam-documents-modal .ed-step-sep {
+	flex: 0 0 auto;
+	align-self: center;
+	width: 14px;
+	height: 2px;
+	border-radius: 2px;
+	background: var(--border-color, #cbd5e1);
+}
+
+/* ── Document (sujet / corrigé) switch inside the final step ───────────────── */
+.exam-documents-modal .ed-doc {
+	display: none;
+}
+
+.exam-documents-modal .ed-doc.active {
+	display: block;
+	animation: fadeIn 0.2s ease;
+}
+
+.exam-documents-modal .ed-doc-switch {
+	display: flex;
+	gap: 6px;
+	margin: 4px 0 16px;
+	border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.exam-documents-modal .ed-doc-tab {
+	padding: 8px 16px;
 	background: transparent;
 	border: none;
 	border-bottom: 2px solid transparent;
@@ -46705,21 +46830,92 @@ body.student-workspace .workspace-panel > * {
 	color: var(--text-secondary, #475569);
 	font-size: 0.95rem;
 	font-weight: 500;
-	white-space: nowrap;
 	cursor: pointer;
 	transition: all var(--transition-fast, 120ms ease);
 }
 
-.exam-documents-modal .ed-tab-btn:hover {
+.exam-documents-modal .ed-doc-tab:hover {
 	background-color: var(--bg-surface-alt, #e2e8f0);
 	color: var(--text-main, #0f172a);
 }
 
-.exam-documents-modal .ed-tab-btn.active {
+.exam-documents-modal .ed-doc-tab.active {
 	background-color: var(--primary-light, rgba(99, 102, 241, 0.12));
 	border-bottom-color: var(--primary, #6366f1);
 	color: var(--primary, #6366f1);
 	font-weight: 600;
+}
+
+/* ── Recap of the teacher's choices ────────────────────────────────────────── */
+.exam-documents-modal .ed-recap {
+	margin-bottom: 18px;
+	padding: 14px 16px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 12px;
+	background: var(--bg-surface, #f8fafc);
+}
+
+.exam-documents-modal .ed-recap-title {
+	margin: 0 0 12px;
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: var(--text-main, #0f172a);
+}
+
+.exam-documents-modal .ed-recap-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 12px;
+}
+
+.exam-documents-modal .ed-recap-card {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: #ffffff;
+	border: 1px solid var(--border-color, #e2e8f0);
+}
+
+.exam-documents-modal .ed-recap-card-title {
+	font-size: 0.76rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	font-weight: 700;
+	color: var(--primary, #6366f1);
+	margin-bottom: 4px;
+}
+
+.exam-documents-modal .ed-recap-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 0.85rem;
+	line-height: 1.35;
+}
+
+.exam-documents-modal .ed-recap-label {
+	color: var(--text-muted, #64748b);
+	flex: 0 0 auto;
+}
+
+.exam-documents-modal .ed-recap-value {
+	color: var(--text-main, #0f172a);
+	text-align: right;
+	font-weight: 500;
+}
+
+.exam-documents-modal .ed-recap-empty {
+	color: var(--text-muted, #94a3b8);
+	font-style: italic;
+	font-weight: 400;
+}
+
+.exam-documents-modal .ed-recap-note {
+	margin: 12px 0 0;
+	font-size: 0.8rem;
+	color: var(--text-muted, #64748b);
 }
 
 .exam-documents-modal .ed-body {
@@ -47105,6 +47301,75 @@ body.student-workspace .workspace-panel > * {
 	min-height: 40px;
 }
 
+/* ── Stepper footer navigation ─────────────────────────────────────────────── */
+.exam-documents-modal .ed-stepper-footer {
+	justify-content: space-between;
+}
+
+.exam-documents-modal .ed-stepper-footer .btn {
+	min-width: 0;
+}
+
+.exam-documents-modal .ed-step-indicator {
+	margin-inline: auto;
+	font-size: 0.85rem;
+	font-weight: 500;
+	color: var(--text-secondary, #475569);
+	white-space: nowrap;
+	text-align: center;
+}
+
+/* ── Review tab ───────────────────────────────────────────────────────────────── */
+.exam-documents-modal .ed-review-section {
+	margin-bottom: 18px;
+}
+
+.exam-documents-modal .ed-review-title {
+	margin: 0 0 6px;
+	font-size: 0.95rem;
+	font-weight: 700;
+	color: var(--text-main, #0f172a);
+}
+
+.exam-documents-modal .ed-review-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+	gap: 6px 16px;
+	margin-top: 10px;
+}
+
+.exam-documents-modal .ed-review-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 8px;
+	border-radius: 6px;
+	font-size: 0.86rem;
+	color: var(--text-main, #0f172a);
+	cursor: pointer;
+	transition: background 0.15s;
+}
+
+.exam-documents-modal .ed-review-item:hover {
+	background: var(--bg-surface-alt, #f1f5f9);
+}
+
+.exam-documents-modal .ed-review-item input[type="checkbox"] {
+	accent-color: var(--primary, #6366f1);
+	width: 16px;
+	height: 16px;
+}
+
+.exam-documents-modal .ed-review-actions {
+	display: flex;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.exam-documents-modal .ed-review-preview {
+	margin-top: 16px;
+}
+
 html[data-theme='dark'] .exam-documents-modal .modal-content,
 html[data-theme='dark'] .exam-documents-modal .ed-body,
 html[data-theme='dark'] .exam-documents-modal .modal-footer {
@@ -47117,7 +47382,7 @@ html[data-theme='dark'] .exam-documents-modal .modal-header {
 	border-bottom-color: var(--border-color);
 }
 
-html[data-theme='dark'] .exam-documents-modal .ed-tabs,
+html[data-theme='dark'] .exam-documents-modal .ed-stepper,
 html[data-theme='dark'] .exam-documents-modal .ed-fieldset,
 html[data-theme='dark'] .exam-documents-modal .ed-normalize,
 html[data-theme='dark'] .exam-documents-modal .ed-banner {
@@ -47128,6 +47393,37 @@ html[data-theme='dark'] .exam-documents-modal .ed-input,
 html[data-theme='dark'] .exam-documents-modal .ed-logo-preview {
 	background-color: var(--bg-surface);
 	color: var(--text-main);
+}
+
+html[data-theme='dark'] .exam-documents-modal .ed-recap {
+	background-color: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .exam-documents-modal .ed-recap-card {
+	background-color: var(--bg-body);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .exam-documents-modal .ed-recap-value {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .exam-documents-modal .ed-step-num {
+	background-color: var(--bg-surface);
+	color: var(--text-secondary);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .exam-documents-modal .ed-step-btn.active .ed-step-num,
+html[data-theme='dark'] .exam-documents-modal .ed-step-btn.done .ed-step-num {
+	background-color: var(--primary);
+	color: #ffffff;
+	border-color: var(--primary);
+}
+
+html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
+	background-color: var(--bg-surface);
 }
 
 @media (max-width: 860px) {
@@ -47181,13 +47477,16 @@ html[data-theme='dark'] .exam-documents-modal .ed-logo-preview {
 	}
 
 	.exam-documents-modal .modal-header,
-	.exam-documents-modal .ed-tabs,
+	.exam-documents-modal .ed-stepper,
+	.exam-documents-modal .ed-recap,
+	.exam-documents-modal .ed-doc-switch,
 	.exam-documents-modal .ed-toolbar,
 	.exam-documents-modal .ed-banner,
 	.exam-documents-modal .ed-normalize-host,
 	.exam-documents-modal .ed-gate-hint,
 	.exam-documents-modal .modal-footer,
-	.exam-documents-modal .ed-panel:not(.active) {
+	.exam-documents-modal .ed-panel:not(.active),
+	.exam-documents-modal .ed-doc:not(.active) {
 		display: none !important;
 	}
 
@@ -47205,4 +47504,132 @@ html[data-theme='dark'] .exam-documents-modal .ed-logo-preview {
 		padding: 0;
 		box-shadow: none;
 	}
+}
+
+/* ─── Génération personnalisée : modèles, pagination, tenir-en-N-pages ─── */
+.exam-documents-modal .ed-tpl-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 10px;
+	margin-bottom: 16px;
+}
+
+.exam-documents-modal .ed-tpl-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	align-items: flex-start;
+	padding: 12px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 10px;
+	background: #fff;
+	color: #0f172a;
+	cursor: pointer;
+	text-align: left;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exam-documents-modal .ed-tpl-card:hover {
+	border-color: var(--ed-accent, #1f3a5f);
+}
+
+.exam-documents-modal .ed-tpl-card.active {
+	border-color: var(--ed-accent, #1f3a5f);
+	box-shadow: 0 0 0 2px rgba(31, 58, 95, 0.18);
+}
+
+.exam-documents-modal .ed-tpl-name {
+	font-weight: 700;
+	font-size: 0.95rem;
+	color: #0f172a;
+}
+
+.exam-documents-modal .ed-tpl-meta {
+	font-size: 0.76rem;
+	color: #475569;
+}
+
+.exam-documents-modal .ed-tpl-tag {
+	font-size: 0.68rem;
+	font-weight: 600;
+	color: #0f6e6e;
+	background: #ecfdf5;
+	border-radius: 999px;
+	padding: 1px 8px;
+}
+
+.exam-documents-modal .ed-radio {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.88rem;
+	color: var(--text-main, #0f172a);
+}
+
+.exam-documents-modal .ed-manual-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 12px;
+}
+
+.exam-documents-modal .ed-estimate {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 20px;
+	align-items: center;
+	padding: 12px 14px;
+	margin: 10px 0;
+	border-radius: 10px;
+	background: #f6f8fa;
+	border: 1px solid var(--border-color, #e2e8f0);
+	font-size: 0.88rem;
+	color: #0f172a;
+}
+
+.exam-documents-modal .ed-estimate strong {
+	color: #0f172a;
+}
+
+.exam-documents-modal .ed-suggest {
+	margin: 6px 0 14px;
+	padding-left: 20px;
+	font-size: 0.82rem;
+	color: var(--text-secondary, #475569);
+}
+
+.exam-documents-modal .ed-row-active td {
+	font-weight: 700;
+	background: #f6f8fa;
+	color: #0f172a;
+}
+
+.exam-documents-modal .ed-fit-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.exam-documents-modal .ed-fit-result {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 18px;
+	align-items: center;
+	margin-top: 12px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	font-size: 0.88rem;
+}
+
+.exam-documents-modal .ed-fit-result.ok {
+	background: #ecfdf5;
+	border: 1px solid #34d399;
+	color: #065f46;
+}
+
+.exam-documents-modal .ed-fit-result.bad {
+	background: #fef2f2;
+	border: 1px solid #fca5a5;
+	color: #991b1b;
 }

@@ -90,7 +90,6 @@ export const EXAM_DOC_PAPER_CSS = `
 .ed-marker { font-family: 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif; }
 .ed-letter { font-weight: 600; }
 
-.ed-blanks-line { margin: 6px 0; }
 .ed-rule { display: inline-block; border-bottom: 1px solid var(--ed-rule); min-width: 140px; height: 1.1em; }
 .ed-rule-medium { min-width: 90px; }
 .ed-rule-short { min-width: 70px; }
@@ -118,11 +117,8 @@ export const EXAM_DOC_PAPER_CSS = `
 .ed-warnings { border: 1px dashed var(--ed-key-border); padding: 8px 10px; font-size: 10.5pt; margin-top: 10px; }
 .ed-warnings-title { margin: 0 0 4px; font-size: 10.5pt; text-transform: uppercase; }
 
-/* ── Footer ─────────────────────────────────────────────────────────────── */
-.ed-footer { margin-top: 16px; border-top: 1px solid var(--ed-line); padding-top: 8px; font-size: 10.5pt; }
-.ed-total { text-align: right; }
-.ed-scale-note { color: var(--ed-muted); font-style: italic; font-size: 9.5pt; margin-top: 4px; }
-.ed-closing { text-align: center; margin-top: 12px; color: var(--ed-muted); }
+/* ── Scale note (normalization disclosure) ─────────────────────────────────── */
+.ed-scale-note { color: var(--ed-muted); font-style: italic; font-size: 9.5pt; margin-top: 16px; text-align: center; }
 `;
 
 /** Print-window additions: A4 page box, no admin chrome, page numbers. */

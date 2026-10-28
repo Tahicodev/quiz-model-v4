@@ -119,8 +119,7 @@ describe('text printed on the paper', () => {
     expect(studentText).toContain('NOTE'); // empty grade box instead
     expect(studentText).toContain('/ 20');
     expect(studentText).toContain('3 pts');
-    expect(studentText).toContain('Barème : 20 points');
-    expect(keyText).toContain('Total : 20 / 20');
+    expect(keyText).toContain('Barème : 20 points'); // the key header info line
     expect(studentText).toContain('Grammaire');
     expect(studentText).toContain('Sciences');
   });
@@ -143,8 +142,6 @@ describe('text printed on the paper', () => {
     for (let i = 1; i <= pages; i += 1) {
       expect(text).toContain('Page ' + i + ' / ' + pages);
     }
-    expect(text).toContain('— Fin du sujet —');
-    expect(keyText).toContain('— Fin du corrigé —');
     expect(keyText).toContain('CORRIGÉ — Devoir surveillé n°1 — confidentiel');
   });
 
@@ -173,9 +170,8 @@ describe('normalization is visible on paper', () => {
     expect(model.scoring.normalized).toBe(true);
     expect(model.items.map((item) => item.points)).toEqual([2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5, 2.5]);
     const text = pdfText((await renderExamDocumentPdf(model)).buffer);
-    expect(text).toContain('Barème : 20 points');
-    expect(text).not.toContain('Note : 20 / 20');
     expect(text).toContain('normalisé sur 20');
+    expect(text).not.toContain('Note : 20 / 20');
     expect(text).toContain('2,5 pts'); // French decimal sign on paper
   });
 });

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "classique",
+  "name": "Classique",
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margin": { "top": 42, "right": 42, "bottom": 42, "left": 42 },
+    "columns": 1,
+    "gutter": 18,
+    "rule": { "between": false }
+  },
+  "theme": {
+    "fonts": {
+      "regular": "Times-Roman",
+      "bold": "Times-Bold",
+      "italic": "Times-Italic",
+      "mono": "Courier",
+      "head": "Helvetica",
+      "headBold": "Helvetica-Bold"
+    },
+    "sizes": { "body": 12, "small": 10, "tiny": 9, "title": 15 },
+    "colors": {
+      "accent": "#1F3A5F",
+      "muted": "#5B6472",
+      "hairline": "#C9D1D9",
+      "fieldBg": "#F6F8FA"
+    },
+    "density": 1.0
+  },
+  "header": {
+    "variant": "bandeau",
+    "anonymity": false,
+    "fullOnFirstPage": true,
+    "compactOnFollow": false
+  },
+  "footer": {
+    "variant": "title+number",
+    "total": true,
+    "encouragement": "Bon courage !"
+  },
+  "question": {
+    "pointBadge": true,
+    "vectorBoxes": true,
+    "separators": "rule",
+    "answerSpace": { "lines": 2, "lineHeight": 14 },
+    "keepTogether": "block"
+  }
+}

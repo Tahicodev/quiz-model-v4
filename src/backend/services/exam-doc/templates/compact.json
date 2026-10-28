@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "compact",
+  "name": "Compact",
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margin": { "top": 34, "right": 34, "bottom": 34, "left": 34 },
+    "columns": 2,
+    "gutter": 18,
+    "rule": { "between": true }
+  },
+  "theme": {
+    "fonts": {
+      "regular": "Times-Roman",
+      "bold": "Times-Bold",
+      "italic": "Times-Italic",
+      "mono": "Courier",
+      "head": "Helvetica",
+      "headBold": "Helvetica-Bold"
+    },
+    "sizes": { "body": 10.5, "small": 9.5, "tiny": 9, "title": 14 },
+    "colors": {
+      "accent": "#1F3A5F",
+      "muted": "#5B6472",
+      "hairline": "#C9D1D9",
+      "fieldBg": "#F6F8FA"
+    },
+    "density": 0.82
+  },
+  "header": {
+    "variant": "minimal",
+    "anonymity": false,
+    "fullOnFirstPage": true,
+    "compactOnFollow": true
+  },
+  "footer": {
+    "variant": "number",
+    "total": true,
+    "encouragement": "Bon courage !"
+  },
+  "question": {
+    "pointBadge": true,
+    "vectorBoxes": true,
+    "separators": "rule",
+    "answerSpace": { "lines": 1, "lineHeight": 13 },
+    "keepTogether": "block"
+  }
+}

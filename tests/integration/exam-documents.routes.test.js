@@ -428,10 +428,10 @@ describe('export', () => {
       expect(pdfContent, 'pdf missing: ' + stem).toContain(stem);
       expect(docxContent, 'docx missing: ' + stem).toContain(stem);
     }
-    // The subject states the barème and keeps the grade box empty, in both
-    // formats: "Note : 20 / 20" on a student sheet gives the correction away.
-    expect(pdfContent).toContain('Barème : 20 points');
-    expect(docxContent).toContain('Barème : 20 points');
+    // The subject keeps the grade box empty, in both formats:
+    // "Note : 20 / 20" on a student sheet gives the correction away.
+    expect(pdfContent).toContain('NOTE');
+    expect(docxContent).toContain('NOTE');
     expect(pdfContent).not.toContain('Note : 20 / 20');
     expect(docxContent).not.toContain('Note : 20 / 20');
     for (const secret of [SECRET_ANSWER, SECRET_FEEDBACK]) {
@@ -452,5 +452,132 @@ describe('export', () => {
     const res = await exportBinary(ownerToken, examId, { document: 'student', format: 'pdf' });
     expect(res.headers['x-exam-doc-url']).toBeUndefined();
     expect(res.body.length).toBeGreaterThan(0);
+  });
+});
+
+describe('estimate (page estimator route)', () => {
+  it('returns an analytic and exact page count with a last-page fill', async () => {
+    const res = await request(app)
+      .post(`${BASE}/${examId}/estimate`)
+      .set(auth(ownerToken))
+      .send({ document: 'student', templateId: 'classique' });
+    expect(res.status).toBe(200);
+    expect(res.body.analytic).toBeGreaterThanOrEqual(1);
+    expect(res.body.exact).toBeGreaterThanOrEqual(1);
+    expect(Math.abs(res.body.analytic - res.body.exact)).toBeLessThanOrEqual(1);
+    expect(res.body.lastPageFill).toBeGreaterThanOrEqual(0);
+    expect(res.body.lastPageFill).toBeLessThanOrEqual(1);
+    expect(res.body.range).toHaveLength(2);
+  });
+
+  it('two columns pack into no more pages than one', async () => {
+    const one = await request(app)
+      .post(`${BASE}/${examId}/estimate`)
+      .set(auth(ownerToken))
+      .send({ document: 'student', templateId: 'classique', layout: { columns: 1 } });
+    const two = await request(app)
+      .post(`${BASE}/${examId}/estimate`)
+      .set(auth(ownerToken))
+      .send({ document: 'student', templateId: 'classique', layout: { columns: 2 } });
+    expect(two.status).toBe(200);
+    expect(two.body.exact).toBeLessThanOrEqual(one.body.exact);
+  });
+
+  it('analytic-only skips the dry render', async () => {
+    const res = await request(app)
+      .post(`${BASE}/${examId}/estimate`)
+      .set(auth(ownerToken))
+      .send({ document: 'student', exact: false });
+    expect(res.status).toBe(200);
+    expect(res.body.exact).toBeUndefined();
+    expect(res.body.analytic).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('fit-pages optimizer', () => {
+  it('a generous budget already fits and changes nothing', async () => {
+    const res = await request(app)
+      .post(`${BASE}/${examId}/fit-pages`)
+      .set(auth(ownerToken))
+      .send({ document: 'student', templateId: 'classique', targetPages: 40 });
+    expect(res.status).toBe(200);
+    expect(res.body.fits).toBe(true);
+    expect(res.body.levers).toEqual([]);
+  });
+
+  it('a tight budget tunes the safe levers without dropping below the 9pt floor', async () => {
+    const res = await request(app)
+      .post(`${BASE}/${examId}/fit-pages`)
+      .set(auth(ownerToken))
+      .send({ document: 'student', templateId: 'classique', targetPages: 1 });
+    expect(res.status).toBe(200);
+    expect(res.body.pages).toBeLessThanOrEqual(2);
+    const sizes = res.body.templateOverrides?.theme?.sizes;
+    if (sizes) {
+      for (const value of Object.values(sizes)) expect(value).toBeGreaterThanOrEqual(9);
+    }
+  });
+});
+
+describe('custom template persistence (examDocTemplates slice)', () => {
+  const custom = {
+    id: 'mon-modele',
+    name: 'Mon modèle',
+    baseId: 'classique',
+    template: {
+      schemaVersion: 1,
+      id: 'mon-modele',
+      name: 'Mon modèle',
+      page: { columns: 2 },
+      theme: { colors: { accent: '#AA0000' }, density: 0.9 },
+      footer: { variant: 'number', total: false },
+    },
+  };
+
+  it('stores a valid custom template without disturbing the legacy blob', async () => {
+    const res = await request(app)
+      .put(`${BASE}/${examId}/templates`)
+      .set(auth(ownerToken))
+      .send({ templates: [custom] });
+    expect(res.status).toBe(200);
+    expect(res.body.templates[0].id).toBe('mon-modele');
+
+    const saved = await prisma.exam.findUnique({ where: { id: examId } });
+    const blob = JSON.parse(saved.options_json);
+    expect(blob.examDocTemplates).toHaveLength(1);
+    // Zero-migration: the legacy slices the feature shares options_json with survive.
+    expect(blob.presetSnapshot).toBeDefined();
+    expect(blob.classes).toBeDefined();
+
+    const back = await request(app).get(`${BASE}/${examId}/templates`).set(auth(ownerToken));
+    expect(back.status).toBe(200);
+    expect(back.body.custom[0].template.page.columns).toBe(2);
+    expect(back.body.builtIn.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it('refuses a template outside the safe bounds', async () => {
+    const bad = {
+      id: 'mauvais',
+      name: 'Mauvais',
+      template: {
+        schemaVersion: 1,
+        id: 'mauvais',
+        name: 'Mauvais',
+        theme: { sizes: { body: 4 } }, // below the 9pt floor
+      },
+    };
+    const res = await request(app)
+      .put(`${BASE}/${examId}/templates`)
+      .set(auth(ownerToken))
+      .send({ templates: [bad] });
+    expect(res.status).toBe(422);
+  });
+
+  it('lists the five built-in templates for the cards', async () => {
+    const res = await request(app).get(`${BASE}/templates/built-ins`).set(auth(ownerToken));
+    expect(res.status).toBe(200);
+    expect(res.body.templates.map((t) => t.id)).toEqual(
+      expect.arrayContaining(['classique', 'moderne', 'compact', 'officiel', 'college']),
+    );
   });
 });

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "moderne",
+  "name": "Moderne",
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margin": { "top": 44, "right": 46, "bottom": 44, "left": 46 },
+    "columns": 1,
+    "gutter": 20,
+    "rule": { "between": false }
+  },
+  "theme": {
+    "fonts": {
+      "regular": "Times-Roman",
+      "bold": "Times-Bold",
+      "italic": "Times-Italic",
+      "mono": "Courier",
+      "head": "Helvetica",
+      "headBold": "Helvetica-Bold"
+    },
+    "sizes": { "body": 11.5, "small": 10, "tiny": 9, "title": 16 },
+    "colors": {
+      "accent": "#0F6E6E",
+      "muted": "#5B6472",
+      "hairline": "#CBD5E1",
+      "fieldBg": "#F1F8F8"
+    },
+    "density": 1.0
+  },
+  "header": {
+    "variant": "bandeau",
+    "anonymity": false,
+    "fullOnFirstPage": true,
+    "compactOnFollow": true
+  },
+  "footer": {
+    "variant": "number+encouragement",
+    "total": true,
+    "encouragement": "Bon courage !"
+  },
+  "question": {
+    "pointBadge": true,
+    "vectorBoxes": true,
+    "separators": "none",
+    "answerSpace": { "lines": 2, "lineHeight": 15 },
+    "keepTogether": "block"
+  }
+}

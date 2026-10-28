@@ -12,12 +12,17 @@
  *     node scripts/generate-demo-exam-pdf.mjs --logo "Kids assets/placeholder-scene.png"
  *     node scripts/generate-demo-exam-pdf.mjs --no-logo        # shows the fallback disc
  *     node scripts/generate-demo-exam-pdf.mjs --out C:\tmp --font C:\fonts\Lato-Regular.ttf
+ *     node scripts/generate-demo-exam-pdf.mjs --template compact   # one built-in only
+ *
+ * With no --template, every built-in template is rendered (PDF + DOCX) into a
+ * per-template subfolder, which is the regression check for the template engine.
  *
  * Options:
- *   --out <dir>     output folder (default: demo-pdf)
- *   --logo <file>   PNG/JPEG embedded in the masthead (default: a repo asset when present)
- *   --no-logo       force the logo-less header
- *   --font <file>   embed a Unicode TTF instead of the standard PDF fonts
+ *   --out <dir>      output folder (default: demo-pdf)
+ *   --logo <file>    PNG/JPEG embedded in the masthead (default: a repo asset when present)
+ *   --no-logo        force the logo-less header
+ *   --font <file>    embed a Unicode TTF instead of the standard PDF fonts
+ *   --template <id>  render only this built-in template (classique|moderne|compact|officiel|college)
  */
 
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -25,6 +30,7 @@ import { extname, resolve } from 'node:path';
 import { ExamDocumentService } from '../src/backend/services/ExamDocumentService.js';
 import { renderExamDocumentPdf } from '../src/backend/services/exam-doc/pdfRenderer.js';
 import { renderExamDocumentDocx } from '../src/backend/services/exam-doc/docxRenderer.js';
+import { listTemplates, resolveTemplate } from '../src/backend/services/exam-doc/templates/index.js';
 
 const SCHOOL_ID = 'school-demo';
 const CREATOR_ID = 'user-demo-teacher';
@@ -294,13 +300,14 @@ function logoDataUrl(explicit, disabled) {
 }
 
 function parseArgs(argv) {
-  const out = { out: 'demo-pdf', logo: null, noLogo: false, font: null };
+  const out = { out: 'demo-pdf', logo: null, noLogo: false, font: null, template: null };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--logo') out.logo = argv[++i];
     else if (arg === '--no-logo') out.noLogo = true;
     else if (arg === '--out') out.out = argv[++i];
     else if (arg === '--font') out.font = argv[++i];
+    else if (arg === '--template') out.template = argv[++i];
     else if (arg === '--help' || arg === '-h') out.help = true;
   }
   return out;
@@ -321,30 +328,49 @@ async function main() {
   mkdirSync(args.out, { recursive: true });
   console.log(logo ? `Logo intégré : ${logo.slice(0, 24)}…` : 'Logo : aucun fichier lisible → pastille avec l’initiale.');
 
-  for (const document of ['student', 'answer_key']) {
-    const model = await service.buildExamDocument({
-      examId: EXAM_ID,
-      schoolId: SCHOOL_ID,
-      document,
-      header,
-      normalization: { mode: 'as-is', confirmed: false },
-    });
-    if (model.scoring.error) {
-      console.error(`Barème non conforme (${model.scoring.error.message}) — la démo n’est pas produite.`);
-      process.exitCode = 1;
-      return;
+  // Which templates to render: the one asked for, or every built-in.
+  const builtIns = listTemplates();
+  const targets = args.template
+    ? builtIns.filter((t) => t.id === args.template)
+    : builtIns;
+  if (!targets.length) {
+    console.error(`Modèle inconnu : ${args.template} (existe : ${builtIns.map((t) => t.id).join(', ')})`);
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const tpl of targets) {
+    const cfg = resolveTemplate(tpl.id);
+    const templateDir = args.template ? args.out : resolve(args.out, tpl.id);
+    mkdirSync(templateDir, { recursive: true });
+    for (const document of ['student', 'answer_key']) {
+      const model = await service.buildExamDocument({
+        examId: EXAM_ID,
+        schoolId: SCHOOL_ID,
+        document,
+        header,
+        normalization: { mode: 'as-is', confirmed: false },
+      });
+      if (model.scoring.error) {
+        console.error(`Barème non conforme (${model.scoring.error.message}) — la démo n’est pas produite.`);
+        process.exitCode = 1;
+        return;
+      }
+      const { buffer, pages, warnings, lastPageFill } = await renderExamDocumentPdf(model, {
+        ...options,
+        template: cfg,
+      });
+      const ext = document === 'student' ? `sujet-exam-${tpl.id}` : `corrige-exam-${tpl.id}`;
+      const file = resolve(templateDir, `${ext}.pdf`);
+      writeFileSync(file, buffer);
+      const fill = lastPageFill != null ? ` (dernière page ${Math.round(lastPageFill * 100)}%)` : '';
+      console.log(`[${tpl.id}] ${document === 'student' ? 'Sujet   ' : 'Corrigé '} : ${pages} page(s)${fill}, ${buffer.length} octets → ${file}`);
+      // Also produce the Word version so the header can be compared side by side
+      const docxResult = await renderExamDocumentDocx(model, { ...options, template: cfg });
+      const docxFile = resolve(templateDir, `${ext}.docx`);
+      writeFileSync(docxFile, docxResult.buffer);
+      for (const w of warnings) console.log(`   alerte [${w.type}] ${w.message}`);
     }
-    const { buffer, pages, warnings } = await renderExamDocumentPdf(model, options);
-    const ext = document === 'student' ? 'sujet-exam-demo' : 'corrige-exam-demo';
-    const file = resolve(args.out, `${ext}.pdf`);
-    writeFileSync(file, buffer);
-    console.log(`${document === 'student' ? 'Sujet    ' : 'Corrigé  '} : ${pages} page(s), ${buffer.length} octets → ${file}`);
-    // Also produce the Word version so the header can be compared side by side
-    const docxResult = await renderExamDocumentDocx(model, options);
-    const docxFile = resolve(args.out, `${ext}.docx`);
-    writeFileSync(docxFile, docxResult.buffer);
-    console.log(`   Word   : ${docxResult.buffer.length} octets → ${docxFile}`);
-    for (const w of warnings) console.log(`   alerte [${w.type}] ${w.message}`);
   }
 }
 

@@ -1,0 +1,914 @@
+/* ============================================================================
+   QX PREMIUM SURFACE SYSTEM
+   Refined Light + Accents · slide-in drawers · glassmorphism · gradient CTAs
+   Only targets management CRUD surfaces & student workspace chrome.
+   Overview / Questions / Results / Activity tabs are intentionally untouched.
+   Loaded AFTER styles.css so it wins on equal specificity.
+   ============================================================================ */
+
+:root {
+	/* Brand gradient */
+	--qx-grad: linear-gradient(135deg, #3b82f6 0%, #6366f1 55%, #8b5cf6 100%);
+	--qx-grad-soft: linear-gradient(135deg, #eff6ff 0%, #eef2ff 100%);
+	--qx-grad-text: linear-gradient(120deg, #2563eb 0%, #7c3aed 100%);
+	/* Glass surfaces */
+	--qx-glass: rgba(255, 255, 255, 0.82);
+	--qx-glass-strong: rgba(255, 255, 255, 0.94);
+	--qx-glass-brd: rgba(226, 232, 240, 0.9);
+	--qx-glass-brd-hi: rgba(255, 255, 255, 0.7);
+	/* Elevation */
+	--qx-sh-1: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.06);
+	--qx-sh-2: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.06);
+	--qx-sh-3: 0 12px 32px -8px rgba(15, 23, 42, 0.18), 0 4px 12px -4px rgba(15, 23, 42, 0.1);
+	--qx-sh-pop: 0 24px 64px -16px rgba(37, 99, 235, 0.28), 0 8px 24px -8px rgba(15, 23, 42, 0.16);
+	/* Focus glow */
+	--qx-ring: 0 0 0 3px rgba(59, 130, 246, 0.16), 0 0 0 1px #3b82f6;
+	--qx-ring-danger: 0 0 0 3px rgba(239, 68, 68, 0.14), 0 0 0 1px #ef4444;
+	/* Radius scale */
+	--qx-r-sm: 8px;
+	--qx-r-md: 12px;
+	--qx-r-lg: 16px;
+	--qx-r-xl: 20px;
+	/* Motion */
+	--qx-ease: cubic-bezier(0.22, 1, 0.36, 1);
+	--qx-fast: 180ms var(--qx-ease);
+	--qx-med: 320ms var(--qx-ease);
+	--qx-slow: 480ms var(--qx-ease);
+}
+
+@keyframes qxSlideInRight {
+	from { transform: translateX(48px); opacity: 0; }
+	to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes qxFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes qxPopIn {
+	from { transform: translateY(14px) scale(0.97); opacity: 0; }
+	to   { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+@keyframes qxRipple { to { transform: scale(2.4); opacity: 0; } }
+@keyframes qxSpin { to { transform: rotate(360deg); } }
+
+/* ---------------------------------------------------------------------------
+   DRAWER OVERLAY — re-skin entity modals as right slide-in panels.
+   Behaviour (open/close/display) still driven by existing JS; we only restyle.
+   Legacy rules force these modals centereed with !important, so the drawer
+   layout must use !important + equal/higher specificity to own the geometry.
+   ------------------------------------------------------------------------- */
+#categoryModal.modal,
+#examModal.modal,
+#classModal.modal,
+#userModal.modal,
+#quickCategoryModal.modal,
+#categoryAssignmentModal.modal,
+#studentProfileModal.modal,
+#categoryModal.modal[style],
+#examModal.modal[style],
+#classModal.modal[style],
+#userModal.modal[style],
+#quickCategoryModal.modal[style],
+#categoryAssignmentModal.modal[style],
+#studentProfileModal.modal[style] {
+	padding: 0 !important;
+	align-items: stretch !important;
+	justify-content: flex-end !important;
+	background: linear-gradient(120deg, rgba(15,23,42,0.42), rgba(30,27,75,0.38)) !important;
+	background-color: transparent !important;
+	backdrop-filter: blur(8px) saturate(1.1);
+	-webkit-backdrop-filter: blur(8px) saturate(1.1);
+}
+
+/* dashed grid pattern shown behind the drawer content area */
+#categoryModal.modal.active::after,
+#examModal.modal.active::after,
+#classModal.modal.active::after,
+#userModal.modal.active::after,
+#categoryAssignmentModal.modal.active::after,
+#categoryModal.modal[style*='flex']::after,
+#examModal.modal[style*='flex']::after,
+#classModal.modal[style*='flex']::after,
+#userModal.modal[style*='flex']::after,
+#categoryAssignmentModal.modal[style*='flex']::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	background-image:
+		repeating-linear-gradient(0deg, rgba(148,163,184,0.08) 0 1px, transparent 1px 28px),
+		repeating-linear-gradient(90deg, rgba(148,163,184,0.08) 0 1px, transparent 1px 28px);
+	mask-image: linear-gradient(to right, rgba(0,0,0,0.85), transparent 55%);
+	-webkit-mask-image: linear-gradient(to right, rgba(0,0,0,0.85), transparent 55%);
+}
+/* ensure the drawer panel stacks above the pattern */
+#categoryModal .modal-content,
+#examModal .modal-content,
+#classModal .modal-content,
+#userModal .modal-content,
+#categoryAssignmentModal .modal-content,
+#quickCategoryModal .modal-content,
+#studentProfileModal .modal-content {
+	position: relative;
+	z-index: 1;
+}
+
+#categoryModal .modal-content,
+#examModal .modal-content,
+#classModal .modal-content,
+#userModal .modal-content,
+#categoryAssignmentModal .modal-content,
+#studentProfileModal .modal-content {
+	width: 560px !important;
+	max-width: 96vw !important;
+	height: 100% !important;
+	max-height: 100vh !important;
+	margin: 0 0 0 auto !important;
+	border-radius: 0 !important;
+	border-left: 1px solid var(--qx-glass-brd-hi) !important;
+	background: var(--qx-glass-strong) !important;
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	box-shadow: -24px 0 64px -16px rgba(15, 23, 42, 0.28) !important;
+	display: flex !important;
+	flex-direction: column;
+	overflow: hidden !important;
+	animation: qxSlideInRight var(--qx-med);
+}
+
+/* Large editors get a wider drawer */
+#categoryModal .modal-content,
+#examModal .modal-content {
+	width: min(820px, 96vw) !important;
+}
+
+/* Small helper modal stays a centered premium pop */
+#quickCategoryModal.modal,
+#quickCategoryModal.modal[style] {
+	align-items: center !important;
+	justify-content: center !important;
+}
+#quickCategoryModal .modal-content {
+	height: auto !important;
+	max-height: 90vh !important;
+	margin: auto !important;
+	border-radius: var(--qx-r-xl) !important;
+	border: 1px solid var(--qx-glass-brd) !important;
+	box-shadow: var(--qx-sh-pop) !important;
+	animation: qxPopIn var(--qx-med);
+}
+
+/* --- Premium drawer header ------------------------------------------------ */
+#categoryModal .modal-header,
+#examModal .modal-header,
+#classModal .modal-header,
+#userModal .modal-header,
+#quickCategoryModal .modal-header,
+#categoryAssignmentModal .modal-header,
+#studentProfileModal .modal-header {
+	position: relative;
+	display: flex !important;
+	padding: 20px 24px !important;
+	border-bottom: 1px solid var(--qx-glass-brd) !important;
+	background:
+		linear-gradient(180deg, rgba(255,255,255,0.7), rgba(248,250,252,0.5)),
+		var(--qx-grad-soft) !important;
+	border-radius: 0 !important;
+	overflow: hidden;
+}
+/* gradient accent bar */
+#categoryModal .modal-header::before,
+#examModal .modal-header::before,
+#classModal .modal-header::before,
+#userModal .modal-header::before,
+#quickCategoryModal .modal-header::before,
+#categoryAssignmentModal .modal-header::before,
+#studentProfileModal .modal-header::before {
+	content: '';
+	position: absolute;
+	inset: 0 0 auto 0;
+	height: 3px;
+	background: var(--qx-grad);
+	opacity: 0.95;
+}
+#categoryModal .modal-header h2,
+#examModal .modal-header h2,
+#classModal .modal-header h2,
+#userModal .modal-header h2,
+#quickCategoryModal .modal-header h2,
+#categoryAssignmentModal .modal-header h2,
+#studentProfileModal .modal-header h2 {
+	font-family: 'Space Grotesk', var(--font-sans);
+	font-size: 1.25rem;
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	background: var(--qx-grad-text);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+/* entity icon injected by qx-ui.js */
+.qx-entity-icon {
+	width: 38px;
+	height: 38px;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 11px;
+	background: var(--qx-grad);
+	color: #fff;
+	box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.6), inset 0 1px 0 rgba(255,255,255,0.35);
+	-webkit-text-fill-color: #fff; /* counter the gradient-text parent */
+}
+.qx-entity-icon svg { width: 20px; height: 20px; }
+
+/* close button → premium icon chip */
+#categoryModal .modal-header .close,
+#examModal .modal-header .close,
+#classModal .modal-header .close,
+#userModal .modal-header .close,
+#quickCategoryModal .modal-header .close,
+#categoryAssignmentModal .modal-header .close,
+#studentProfileModal .modal-header .close {
+	width: 34px;
+	height: 34px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 10px;
+	font-size: 22px;
+	font-weight: 400;
+	line-height: 1;
+	color: var(--text-secondary);
+	background: rgba(241, 245, 249, 0.7);
+	border: 1px solid var(--qx-glass-brd);
+	transition: var(--qx-fast);
+	flex-shrink: 0;
+}
+#categoryModal .modal-header .close:hover,
+#examModal .modal-header .close:hover,
+#classModal .modal-header .close:hover,
+#userModal .modal-header .close:hover,
+#quickCategoryModal .modal-header .close:hover,
+#categoryAssignmentModal .modal-header .close:hover,
+#studentProfileModal .modal-header .close:hover {
+	background: #fee2e2;
+	color: var(--danger);
+	border-color: #fecaca;
+	transform: rotate(90deg);
+}
+
+/* --- Drawer body ---------------------------------------------------------- */
+/* Legacy locks modal-content to display:block and clamps .modal-body height;
+   override so the drawer is a flex column with a scrollable middle region. */
+#categoryModal .modal-content,
+#examModal .modal-content,
+#classModal .modal-content,
+#userModal .modal-content,
+#categoryAssignmentModal .modal-content,
+#quickCategoryModal .modal-content,
+#studentProfileModal .modal-content {
+	display: flex !important;
+	flex-direction: column;
+}
+#categoryModal .modal-body,
+#examModal .modal-body,
+#classModal .modal-body,
+#userModal .modal-body,
+#quickCategoryModal .modal-body,
+#categoryAssignmentModal .modal-body,
+#studentProfileModal .modal-body {
+	max-height: none !important;
+	padding: 24px;
+	background:
+		radial-gradient(1200px 400px at 120% -10%, rgba(99,102,241,0.06), transparent 60%),
+		radial-gradient(900px 360px at -20% -10%, rgba(59,130,246,0.05), transparent 60%),
+		#fbfcfe;
+}
+
+/* --- Premium footer / form actions ---------------------------------------- */
+#categoryModal .form-actions,
+#examModal .form-actions,
+#classModal .form-actions,
+#userModal .form-actions,
+#quickCategoryModal .form-actions,
+#categoryAssignmentModal .form-actions {
+	position: sticky;
+	bottom: 0;
+	margin: 24px -24px -24px;
+	padding: 16px 24px;
+	background: rgba(255, 255, 255, 0.86);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border-top: 1px solid var(--qx-glass-brd);
+	box-shadow: 0 -8px 24px -12px rgba(15, 23, 42, 0.08);
+	z-index: 5;
+}
+
+/* ---------------------------------------------------------------------------
+   PREMIUM FORM FIELDS (scoped to drawer surfaces only)
+   ------------------------------------------------------------------------- */
+#categoryModal .form-control,
+#categoryModal input[type='text'],
+#categoryModal input[type='number'],
+#categoryModal select,
+#categoryModal textarea,
+#examModal .form-control,
+#examModal input[type='text'],
+#examModal input[type='number'],
+#examModal input[type='date'],
+#examModal input[type='datetime-local'],
+#examModal select,
+#examModal textarea,
+#classModal .form-control,
+#classModal input[type='text'],
+#classModal select,
+#userModal .form-control,
+#userModal input,
+#userModal select,
+#quickCategoryModal input,
+#categoryAssignmentModal input,
+#categoryAssignmentModal select,
+#studentProfileModal .form-control {
+	padding: 11px 14px;
+	font-size: var(--text-sm);
+	border: 1.5px solid var(--border-color);
+	border-radius: var(--qx-r-md);
+	background: #ffffff;
+	box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+	transition: border-color var(--qx-fast), box-shadow var(--qx-fast), background var(--qx-fast);
+}
+#categoryModal .form-control:hover,
+#examModal .form-control:hover,
+#classModal .form-control:hover,
+#userModal .form-control:hover,
+#studentProfileModal .form-control:hover,
+#quickCategoryModal input:hover {
+	border-color: #cbd5e1;
+}
+#categoryModal input:focus,
+#categoryModal select:focus,
+#categoryModal textarea:focus,
+#examModal input:focus,
+#examModal select:focus,
+#examModal textarea:focus,
+#classModal input:focus,
+#classModal select:focus,
+#classModal textarea:focus,
+#userModal input:focus,
+#userModal select:focus,
+#studentProfileModal .form-control:focus,
+#quickCategoryModal input:focus,
+#categoryAssignmentModal input:focus,
+#categoryAssignmentModal select:focus {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: var(--qx-ring);
+	background: #ffffff;
+}
+
+#categoryModal .form-group > label,
+#examModal .form-group > label,
+#classModal .form-group > label,
+#userModal .form-group > label,
+#studentProfileModal .form-group > label,
+#quickCategoryModal .form-group > label {
+	font-size: 0.8125rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	color: var(--text-main);
+	margin-bottom: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   PREMIUM BUTTONS (scoped)
+   ------------------------------------------------------------------------- */
+#categoryModal .btn-primary,
+#examModal .btn-primary,
+#classModal .btn-primary,
+#userModal .btn-primary,
+#categoryAssignmentModal .btn-primary,
+#studentProfileModal .btn-primary {
+	background: var(--qx-grad);
+	background-size: 160% 160%;
+	color: #fff;
+	border: none;
+	border-radius: var(--qx-r-md);
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	padding: 11px 22px;
+	box-shadow: 0 4px 14px -4px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.18);
+	transition: transform var(--qx-fast), box-shadow var(--qx-fast), background-position var(--qx-med);
+	position: relative;
+	overflow: hidden;
+}
+#categoryModal .btn-primary:hover,
+#examModal .btn-primary:hover,
+#classModal .btn-primary:hover,
+#userModal .btn-primary:hover,
+#categoryAssignmentModal .btn-primary:hover,
+#studentProfileModal .btn-primary:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 8px 22px -6px rgba(99, 102, 241, 0.55), inset 0 1px 0 rgba(255,255,255,0.22);
+	background-position: 100% 50%;
+}
+#categoryModal .btn-primary:active,
+#examModal .btn-primary:active,
+#classModal .btn-primary:active,
+#userModal .btn-primary:active {
+	transform: translateY(0);
+	box-shadow: 0 2px 8px -2px rgba(59, 130, 246, 0.4);
+}
+
+#categoryModal .btn-secondary,
+#examModal .btn-secondary,
+#classModal .btn-secondary,
+#userModal .btn-secondary,
+#categoryAssignmentModal .btn-secondary {
+	background: #ffffff;
+	border: 1.5px solid var(--border-color);
+	color: var(--text-secondary);
+	border-radius: var(--qx-r-md);
+	font-weight: 500;
+	padding: 11px 20px;
+	transition: var(--qx-fast);
+}
+#categoryModal .btn-secondary:hover,
+#examModal .btn-secondary:hover,
+#classModal .btn-secondary:hover,
+#userModal .btn-secondary:hover,
+#categoryAssignmentModal .btn-secondary:hover {
+	background: var(--bg-surface-alt);
+	border-color: #cbd5e1;
+	color: var(--text-main);
+	transform: translateY(-1px);
+}
+
+/* Button ripple element (injected by qx-ui.js) */
+.qx-ripple {
+	position: absolute;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.5);
+	transform: scale(0);
+	animation: qxRipple 560ms var(--qx-ease) forwards;
+	pointer-events: none;
+}
+
+/* Button loading state */
+.qx-btn-loading { color: transparent !important; pointer-events: none; }
+.qx-btn-loading::after {
+	content: '';
+	position: absolute;
+	top: 50%; left: 50%;
+	width: 16px; height: 16px;
+	margin: -8px 0 0 -8px;
+	border: 2px solid rgba(255,255,255,0.45);
+	border-top-color: #fff;
+	border-radius: 50%;
+	animation: qxSpin 640ms linear infinite;
+}
+
+/* ---------------------------------------------------------------------------
+   SCOPED LIST / TABLE POLISH — Categories / Exams / Classes list areas only.
+   Each rule is prefixed by the tab section id so other tabs are unaffected.
+   ------------------------------------------------------------------------- */
+#categories .table-container,
+#exams .table-container,
+#classes .table-container {
+	background: var(--qx-glass-strong);
+	border: 1px solid var(--qx-glass-brd);
+	border-radius: var(--qx-r-lg);
+	box-shadow: var(--qx-sh-2);
+	overflow: hidden;
+}
+#categories .table-container table thead th,
+#exams .table-container table thead th,
+#classes .table-container table thead th {
+	background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	border-bottom: 1px solid var(--qx-glass-brd);
+	padding: 12px 16px;
+}
+#categories .table-container tbody tr,
+#exams .table-container tbody tr,
+#classes .table-container tbody tr {
+	transition: background var(--qx-fast), transform var(--qx-fast);
+}
+#categories .table-container tbody tr:hover,
+#exams .table-container tbody tr:hover,
+#classes .table-container tbody tr:hover {
+	background: var(--primary-light);
+}
+
+/* Toolbar polish (scoped) */
+#categories .toolbar h2,
+#exams .toolbar h2,
+#classes .toolbar h2 {
+	font-family: 'Space Grotesk', var(--font-sans);
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	color: var(--text-main);
+}
+#categories .search-wrapper input,
+#exams .search-wrapper input,
+#classes .search-wrapper input {
+	border: 1.5px solid var(--border-color);
+	border-radius: var(--qx-r-md);
+	padding: 9px 14px 9px 36px;
+	background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 12px center;
+	transition: border-color var(--qx-fast), box-shadow var(--qx-fast);
+	box-shadow: var(--qx-sh-1);
+}
+#categories .search-wrapper input:focus,
+#exams .search-wrapper input:focus,
+#classes .search-wrapper input:focus {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: var(--qx-ring);
+}
+#categories .sort-wrapper select,
+#exams .sort-wrapper select,
+#classes .sort-wrapper select {
+	border: 1.5px solid var(--border-color);
+	border-radius: var(--qx-r-md);
+	padding: 9px 12px;
+	background: #fff;
+	box-shadow: var(--qx-sh-1);
+	font-weight: 500;
+	transition: var(--qx-fast);
+}
+#categories .sort-wrapper select:focus,
+#exams .sort-wrapper select:focus,
+#classes .sort-wrapper select:focus {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: var(--qx-ring);
+}
+
+/* Primary "+ New" buttons on scoped toolbars */
+#add-category-btn,
+#create-exam-btn,
+#create-class-btn {
+	background: var(--qx-grad);
+	background-size: 160% 160%;
+	border: none;
+	border-radius: var(--qx-r-md);
+	font-weight: 600;
+	box-shadow: 0 4px 14px -4px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.18);
+	transition: transform var(--qx-fast), box-shadow var(--qx-fast), background-position var(--qx-med);
+	position: relative;
+	overflow: hidden;
+}
+#add-category-btn:hover,
+#create-exam-btn:hover,
+#create-class-btn:hover {
+	transform: translateY(-1px);
+	background-position: 100% 50%;
+	box-shadow: 0 8px 22px -6px rgba(99, 102, 241, 0.55), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+
+/* ---------------------------------------------------------------------------
+   GAMES & TOURNAMENT STUDIOS — premium segmented control + control cards
+   ------------------------------------------------------------------------- */
+.game-admin-panel,
+.tournament-studio-panel {
+	background: var(--qx-glass-strong);
+	border: 1px solid var(--qx-glass-brd);
+	border-radius: var(--qx-r-lg);
+	box-shadow: var(--qx-sh-2);
+}
+.game-admin-panel .panel-header h3,
+.tournament-studio-panel h3,
+.tournament-studio-panel h4 {
+	font-family: 'Space Grotesk', var(--font-sans);
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	color: var(--text-main);
+}
+
+/* Gradient-primary on studio save buttons */
+#gameForm button[type='submit'],
+#saveTournamentPlannerBtn {
+	background: var(--qx-grad);
+	background-size: 160% 160%;
+	color: #fff !important;
+	border: none;
+	border-radius: var(--qx-r-md);
+	font-weight: 600;
+	box-shadow: 0 4px 14px -4px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.18);
+	transition: transform var(--qx-fast), box-shadow var(--qx-fast), background-position var(--qx-med);
+	position: relative;
+	overflow: hidden;
+}
+#gameForm button[type='submit']:hover,
+#saveTournamentPlannerBtn:hover {
+	transform: translateY(-1px);
+	background-position: 100% 50%;
+	box-shadow: 0 8px 22px -6px rgba(99, 102, 241, 0.55), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+#gameForm .form-control,
+.tournament-studio-panel .form-control,
+.tournament-studio-panel input,
+.tournament-studio-panel select,
+.tournament-studio-panel textarea {
+	border: 1.5px solid var(--border-color);
+	border-radius: var(--qx-r-md);
+	transition: border-color var(--qx-fast), box-shadow var(--qx-fast);
+}
+#gameForm .form-control:focus,
+.tournament-studio-panel input:focus,
+.tournament-studio-panel select:focus,
+.tournament-studio-panel textarea:focus {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: var(--qx-ring);
+}
+
+/* ---------------------------------------------------------------------------
+   STUDENT WORKSPACE — premium chrome
+   ------------------------------------------------------------------------- */
+.workspace-header {
+	background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,250,252,0.75));
+	backdrop-filter: blur(16px);
+	-webkit-backdrop-filter: blur(16px);
+	border-bottom: 1px solid var(--qx-glass-brd);
+	box-shadow: var(--qx-sh-1);
+}
+.workspace-logo {
+	background: var(--qx-grad);
+	box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.6), inset 0 1px 0 rgba(255,255,255,0.3);
+	font-weight: 700;
+}
+.workspace-brand h1 {
+	font-family: 'Space Grotesk', var(--font-sans);
+	letter-spacing: -0.02em;
+}
+
+/* Hero stat cards — elevated + gradient numbers */
+.hero-card {
+	background: var(--qx-glass-strong);
+	border: 1px solid var(--qx-glass-brd);
+	border-radius: var(--qx-r-lg);
+	box-shadow: var(--qx-sh-1);
+	transition: transform var(--qx-med), box-shadow var(--qx-med), border-color var(--qx-med);
+	position: relative;
+	overflow: hidden;
+}
+.hero-card::after {
+	content: '';
+	position: absolute;
+	inset: 0 0 auto 0;
+	height: 2px;
+	background: var(--qx-grad);
+	opacity: 0;
+	transition: opacity var(--qx-med);
+}
+.hero-card:hover {
+	transform: translateY(-4px);
+	box-shadow: var(--qx-sh-3);
+	border-color: rgba(99, 102, 241, 0.3);
+}
+.hero-card:hover::after { opacity: 1; }
+.hero-card .hero-value {
+	font-family: 'Space Grotesk', var(--font-sans);
+	font-weight: 700;
+	background: var(--qx-grad-text);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+.hero-card.accent {
+	background: var(--qx-grad);
+	border-color: transparent;
+	box-shadow: var(--qx-sh-3);
+}
+.hero-card.accent .hero-value,
+.hero-card.accent .hero-label,
+.hero-card.accent .hero-footnote {
+	background: none;
+	-webkit-text-fill-color: #fff;
+	color: #fff;
+}
+
+/* Workspace panels */
+.workspace-panel {
+	background: var(--qx-glass-strong);
+	border: 1px solid var(--qx-glass-brd);
+	border-radius: var(--qx-r-lg);
+	box-shadow: var(--qx-sh-1);
+	transition: box-shadow var(--qx-med);
+}
+.workspace-panel:hover { box-shadow: var(--qx-sh-2); }
+.workspace-panel .panel-header h2 {
+	font-family: 'Space Grotesk', var(--font-sans);
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+/* Workspace tab strip — premium pill */
+.workspace-tab-btn {
+	border-radius: var(--qx-r-md);
+	font-weight: 600;
+	transition: var(--qx-fast);
+	position: relative;
+}
+.workspace-tab-btn.active {
+	background: var(--qx-grad);
+	color: #fff;
+	box-shadow: 0 4px 12px -4px rgba(99, 102, 241, 0.5);
+}
+.workspace-tab-btn:not(.active):hover {
+	background: var(--qx-grad-soft);
+	color: var(--text-main);
+}
+
+/* Workspace primary buttons */
+.workspace-btn:not(.ghost) {
+	background: var(--qx-grad);
+	background-size: 160% 160%;
+	border: none;
+	border-radius: var(--qx-r-md);
+	font-weight: 600;
+	box-shadow: 0 4px 14px -4px rgba(59, 130, 246, 0.5);
+	transition: transform var(--qx-fast), box-shadow var(--qx-fast), background-position var(--qx-med);
+	position: relative;
+	overflow: hidden;
+}
+.workspace-btn:not(.ghost):hover {
+	transform: translateY(-1px);
+	background-position: 100% 50%;
+	box-shadow: 0 8px 22px -6px rgba(99, 102, 241, 0.55);
+}
+.workspace-btn.ghost {
+	border: 1.5px solid var(--border-color);
+	border-radius: var(--qx-r-md);
+	transition: var(--qx-fast);
+}
+.workspace-btn.ghost:hover {
+	background: var(--bg-surface-alt);
+	border-color: #cbd5e1;
+}
+
+/* Filter chips */
+.filter-chip {
+	border-radius: var(--radius-full);
+	border: 1.5px solid var(--border-color);
+	font-weight: 500;
+	transition: var(--qx-fast);
+}
+.filter-chip.active {
+	background: var(--qx-grad);
+	border-color: transparent;
+	color: #fff;
+	box-shadow: 0 3px 10px -3px rgba(99, 102, 241, 0.5);
+}
+.filter-chip:not(.active):hover { border-color: #cbd5e1; background: var(--bg-surface-alt); }
+
+/* Premium pop for student auth + game modals (centered, elevated) */
+#studentAuthModal.modal,
+#studentGameModal.modal {
+	background: linear-gradient(120deg, rgba(15,23,42,0.45), rgba(30,27,75,0.4));
+	backdrop-filter: blur(10px) saturate(1.15);
+	-webkit-backdrop-filter: blur(10px) saturate(1.15);
+}
+#studentAuthModal .modal-content,
+#studentGameModal .modal-content {
+	border-radius: var(--qx-r-xl);
+	border: 1px solid var(--qx-glass-brd);
+	background: var(--qx-glass-strong);
+	backdrop-filter: blur(20px);
+	box-shadow: var(--qx-sh-pop);
+	animation: qxPopIn var(--qx-med);
+}
+#studentAuthModal .auth-modal-mark {
+	background: var(--qx-grad);
+	box-shadow: 0 8px 20px -6px rgba(99, 102, 241, 0.6);
+}
+#studentAuthModal .auth-input {
+	border: 1.5px solid var(--border-color);
+	border-radius: var(--qx-r-md);
+	transition: border-color var(--qx-fast), box-shadow var(--qx-fast);
+}
+#studentAuthModal .auth-input:focus {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: var(--qx-ring);
+}
+#studentAuthModal .auth-submit-btn {
+	background: var(--qx-grad);
+	background-size: 160% 160%;
+	border: none;
+	border-radius: var(--qx-r-md);
+	font-weight: 600;
+	box-shadow: 0 4px 14px -4px rgba(59, 130, 246, 0.5);
+	transition: transform var(--qx-fast), box-shadow var(--qx-fast), background-position var(--qx-med);
+	position: relative;
+	overflow: hidden;
+}
+#studentAuthModal .auth-submit-btn:hover {
+	transform: translateY(-1px);
+	background-position: 100% 50%;
+	box-shadow: 0 8px 22px -6px rgba(99, 102, 241, 0.55);
+}
+
+/* ---------------------------------------------------------------------------
+   SEGMENTED CONTROLS — games/tournament studios + user/profile sub-tabs
+   ------------------------------------------------------------------------- */
+.games-studio-tabs,
+.tournament-studio-tabs,
+.profile-tabs {
+	position: relative;
+	background: var(--qx-glass);
+	border: 1px solid var(--qx-glass-brd);
+	border-radius: var(--qx-r-md);
+	padding: 4px;
+	backdrop-filter: blur(10px);
+	box-shadow: var(--qx-sh-1);
+}
+.games-studio-tab-btn,
+.tournament-studio-tab-btn,
+.profile-tab-btn {
+	border-radius: 10px;
+	font-weight: 600;
+	transition: color var(--qx-fast), background var(--qx-fast);
+	position: relative;
+	z-index: 2; /* keep label above the sliding thumb */
+}
+/* sliding thumb injected by qx-ui.js */
+.qx-seg-thumb {
+	position: absolute;
+	top: 4px;
+	bottom: 4px;
+	left: 0;
+	width: 0;
+	opacity: 0;
+	background: var(--qx-grad);
+	border-radius: 10px;
+	box-shadow: 0 4px 12px -4px rgba(99, 102, 241, 0.5);
+	transition: left var(--qx-med), width var(--qx-med), opacity var(--qx-fast);
+	z-index: 1;
+}
+.games-studio-tab-btn.active,
+.tournament-studio-tab-btn.active,
+.profile-tab-btn.active {
+	color: #fff !important;
+	background: var(--qx-grad);
+	box-shadow: 0 4px 12px -4px rgba(99, 102, 241, 0.5);
+	text-shadow: 0 1px 2px rgba(15, 23, 42, 0.2);
+}
+.games-studio-tab-btn.active svg,
+.tournament-studio-tab-btn.active svg { stroke: #fff; }
+.games-studio-tab-btn:not(.active):hover,
+.tournament-studio-tab-btn:not(.active):hover {
+	background: var(--qx-grad-soft);
+	color: var(--text-main);
+}
+
+/* --- Drawer mobile fallback: slide-in becomes bottom sheet ---------------- */
+@media (max-width: 640px) {
+	#categoryModal.modal,
+	#examModal.modal,
+	#classModal.modal,
+	#userModal.modal,
+	#categoryAssignmentModal.modal,
+	#studentProfileModal.modal {
+		align-items: flex-end;
+		justify-content: center;
+	}
+	#categoryModal .modal-content,
+	#examModal .modal-content,
+	#classModal .modal-content,
+	#userModal .modal-content,
+	#categoryAssignmentModal .modal-content,
+	#studentProfileModal .modal-content {
+		width: 100%;
+		max-width: 100%;
+		height: 94vh;
+		border-left: none;
+		border-top: 1px solid var(--qx-glass-brd-hi);
+		border-radius: var(--qx-r-xl) var(--qx-r-xl) 0 0;
+		animation: qxPopIn var(--qx-med);
+		box-shadow: 0 -16px 48px -16px rgba(15, 23, 42, 0.32);
+	}
+	/* grab handle */
+	#categoryModal .modal-header::after,
+	#examModal .modal-header::after,
+	#classModal .modal-header::after,
+	#userModal .modal-header::after,
+	#categoryAssignmentModal .modal-header::after,
+	#studentProfileModal .modal-header::after {
+		content: '';
+		display: block;
+		width: 40px; height: 4px;
+		margin: 6px auto 0;
+		border-radius: 999px;
+		background: #cbd5e1;
+	}
+}

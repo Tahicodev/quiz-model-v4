@@ -72,6 +72,8 @@ function joinBits(bits) {
 
 /**
  * Everything the top of the sheet prints, in display order.
+ * Individual elements are suppressed when their field name appears in
+ * `header.hiddenFields` (set by the teacher via the Revue tab).
  * @returns {{
  *   enabled: boolean, logo: string|null, logoScale: number, initials: string,
  *   left: Array<{text: string, role: string}>, right: Array<{text: string, role: string}>,
@@ -83,34 +85,61 @@ export function examHeaderParts(model) {
   const isKey = meta.document === 'answer_key';
   const school = String(header.schoolName || meta.examName || 'Examen').trim();
   const line = (text, role) => ({ text: String(text ?? '').trim(), role });
+  const hidden = new Set(Array.isArray(header.hiddenFields) ? header.hiddenFields : []);
+  const isHidden = (field) => hidden.has(field);
+  const allHidden = (...fields) => fields.every((f) => isHidden(f));
 
   return {
     // `showHeader` is a presentation switch only: it never touches the answers,
     // the barème or the identity fields below it.
     enabled: header.showHeader !== false,
-    logo: header.logoDataUrl || header.logoUrl || null,
+    logo: isHidden('logo') ? null : (header.logoDataUrl || header.logoUrl || null),
     logoScale: Number(header.logoScale) || 1,
     initials: school.slice(0, 1).toUpperCase(),
     left: [
-      line(school, 'school'),
-      line(joinBits([header.subject, header.level, header.group]), 'programme'),
-      line(joinBits([header.ministry, header.academy]), 'institution'),
+      isHidden('schoolName') ? line('', 'school') : line(school, 'school'),
+      allHidden('subject', 'level', 'group')
+        ? line('', 'programme')
+        : line(joinBits([
+            isHidden('subject') ? null : header.subject,
+            isHidden('level') ? null : header.level,
+            isHidden('group') ? null : header.group,
+          ]), 'programme'),
+      allHidden('ministry', 'academy')
+        ? line('', 'institution')
+        : line(joinBits([
+            isHidden('ministry') ? null : header.ministry,
+            isHidden('academy') ? null : header.academy,
+          ]), 'institution'),
     ],
     right: [
-      line(header.academicYear ? `Année scolaire ${header.academicYear}` : '', 'year'),
-      line(joinBits([header.sessionType, header.term]), 'session'),
+      isHidden('academicYear')
+        ? line('', 'year')
+        : line(header.academicYear ? `Année scolaire ${header.academicYear}` : '', 'year'),
+      allHidden('sessionType', 'term')
+        ? line('', 'session')
+        : line(joinBits([
+            isHidden('sessionType') ? null : header.sessionType,
+            isHidden('term') ? null : header.term,
+          ]), 'session'),
     ],
     // The title is the one line every format prints in capitals: doing the
     // casing here (instead of per renderer) keeps PDF, Word and preview showing
     // the same characters, and an accented title stays correctly accented.
-    title: String(header.title || meta.examName || 'Examen').trim().toUpperCase(),
+    title: isHidden('title')
+      ? ''
+      : String(header.title || meta.examName || 'Examen').trim().toUpperCase(),
     tag: isKey ? 'CORRIGÉ — document enseignant, ne pas distribuer' : '',
     info: [
-      teacherLabel(header.teacherName),
-      header.durationMinutes ? `Durée : ${header.durationMinutes} min` : null,
+      isHidden('teacherName') ? null : teacherLabel(header.teacherName),
+      isHidden('durationMinutes') || !header.durationMinutes
+        ? null
+        : `Durée : ${header.durationMinutes} min`,
       // A date the teacher did not fill stays a blank to write on paper.
-      `Date : ${String(header.date ?? '').trim() || DATE_BLANK}`,
-      isKey ? `Barème : ${formatPoints(scoring.total)} points` : null,
+      isHidden('date')
+        ? null
+        : `Date : ${String(header.date ?? '').trim() || DATE_BLANK}`,
+      isKey && !isHidden('scoring') ? `Barème : ${formatPoints(scoring.total)} points` : null,
     ].filter(Boolean),
   };
 }
@@ -123,13 +152,14 @@ export function examHeaderParts(model) {
 export function examIdentityParts(model) {
   if (model.meta.document !== 'student') return { rows: [], showNote: false };
   const { header } = model;
+  const hidden = new Set(Array.isArray(header.hiddenFields) ? header.hiddenFields : []);
   const fields = [];
-  if (header.studentNameField !== false) fields.push('Nom & prénom :');
-  if (header.studentNumberField !== false) fields.push('N° :');
-  if (header.showClassField !== false) fields.push('Classe :');
+  if (header.studentNameField !== false && !hidden.has('studentNameField')) fields.push('Nom & prénom :');
+  if (header.studentNumberField !== false && !hidden.has('studentNumberField')) fields.push('N° :');
+  if (header.showClassField !== false && !hidden.has('showClassField')) fields.push('Classe :');
   return {
     rows: fields.length >= 3 ? [[fields[0]], fields.slice(1)] : fields.length ? [fields] : [],
-    showNote: true,
+    showNote: !hidden.has('noteBox'),
     noteLabel: 'NOTE',
     noteSuffix: `/ ${EXAM_DOC_TARGET_SCORE}`,
   };
@@ -137,6 +167,8 @@ export function examIdentityParts(model) {
 
 /** The instruction line, worded for the audience holding the sheet. */
 export function examInstructions(model) {
+  const hidden = new Set(Array.isArray(model.header.hiddenFields) ? model.header.hiddenFields : []);
+  if (hidden.has('instructions')) return null;
   const text = String(model.header.instructions ?? '').trim();
   if (!text) return null;
   return model.meta.document === 'answer_key'

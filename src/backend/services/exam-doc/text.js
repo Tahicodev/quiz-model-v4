@@ -34,6 +34,32 @@ export function optionLetter(index) {
   return label;
 }
 
+// ─── Fill-in-the-blank numbering ─────────────────────────────────────────────
+/**
+ * A fill-blank stem hides its gaps behind whatever token the teacher typed —
+ * `____`, `…`, `...`, `( )`, `-  `, `[ ]`. The same pattern is used both to count
+ * the blanks (questionRenderers) and to number them on paper (renderers), so a
+ * count and its numbered markers can never drift apart.
+ */
+export const BLANK_TOKEN_RE = /_{2,}|\.\.\.|…|\(\s{2,}\)|- {2,}|\[[\s]*\]/g;
+
+/**
+ * Rewrite a fill-blank stem so every gap becomes a numbered marker followed by a
+ * short rule — the "numéro + petit trait" style, e.g. `La (1) ____ est grande.`.
+ * The student writes the real answer on the matching numbered line of the
+ * "Réponses" block printed under the question, so the inline trait only marks
+ * where each gap sits. Numbering restarts at 1 for every question. Returns the
+ * rewritten stem and how many blanks were labelled.
+ */
+export function numberBlankGaps(text) {
+  let n = 0;
+  const out = String(text ?? '').replace(BLANK_TOKEN_RE, () => {
+    n += 1;
+    return ` (${n}) ____`;
+  });
+  return { text: out, count: n };
+}
+
 // ─── WinAnsi sanitising for PDF ──────────────────────────────────────────────
 // pdfkit's built-in standard fonts are WinAnsi-encoded (cp1252): all French
 // accents plus œ/Œ/smart quotes/– — … are directly encodable. Anything else

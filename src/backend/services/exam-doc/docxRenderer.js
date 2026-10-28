@@ -43,8 +43,9 @@ import {
   WidthType,
 } from 'docx';
 import { config } from '../../config.js';
-import { formatPoints, resolveImage, imageDimensions } from './text.js';
+import { formatPoints, resolveImage, imageDimensions, numberBlankGaps } from './text.js';
 import { HEADER_INK, examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
+import { resolveForRenderer } from './templates/index.js';
 
 // A4 in twips (1440 twips = 1 inch): 210×297mm.
 const PAGE_W = 11906;
@@ -54,9 +55,12 @@ const CONTENT_W = PAGE_W - MARGIN * 2;
 // Word images are sized in pixels at 96 dpi.
 const CONTENT_PX = Math.round((CONTENT_W / 1440) * 96);
 
-const BODY = 24; // half-points → 12pt
-const SMALL = 20; // 10pt
-const TINY = 18;
+// Half-point sizes and Office (no-'#') colours. They start at the historical
+// Classique values and are re-derived from the resolved template in
+// `applyDocxTheme`, so the Word sheet reads the same model as the PDF.
+let BODY = 24; // half-points → 12pt
+let SMALL = 20; // 10pt
+let TINY = 18;
 
 const FONT = 'Times New Roman';
 const HEAD_FONT = 'Calibri'; // the masthead reads as a different register, as in the PDF
@@ -64,24 +68,49 @@ const MARKER = { radio: '○', checkbox: '□' };
 
 // Same accent and same neutrals as the PDF, taken from `headerLayout` so the
 // Word sheet cannot drift from the printed one. Office colours carry no '#'.
-const ACCENT = HEADER_INK.accentHex;
-const MUTED = HEADER_INK.mutedHex;
-const HAIRLINE = HEADER_INK.hairlineHex;
-const FIELD_BG = HEADER_INK.fieldBgHex;
+let ACCENT = HEADER_INK.accentHex;
+let MUTED = HEADER_INK.mutedHex;
+let HAIRLINE = HEADER_INK.hairlineHex;
+let FIELD_BG = HEADER_INK.fieldBgHex;
 
 // Typography of each masthead line, keyed by the role `headerLayout` names it.
 // Sizes are half-points, i.e. twice the pt the PDF uses for the same line.
-const MASTHEAD_RUN = {
-  school: { bold: true, size: 28, color: ACCENT, font: HEAD_FONT },
-  programme: { size: 20, color: MUTED, font: HEAD_FONT },
-  institution: { size: 17, color: MUTED, font: HEAD_FONT },
-  year: { size: 20, color: MUTED, font: HEAD_FONT },
-  session: { size: 18, color: MUTED, font: HEAD_FONT },
-};
+let MASTHEAD_RUN = buildMastheadRun();
+function buildMastheadRun() {
+  return {
+    school: { bold: true, size: 28, color: ACCENT, font: HEAD_FONT },
+    programme: { size: 20, color: MUTED, font: HEAD_FONT },
+    institution: { size: 17, color: MUTED, font: HEAD_FONT },
+    year: { size: 20, color: MUTED, font: HEAD_FONT },
+    session: { size: 18, color: MUTED, font: HEAD_FONT },
+  };
+}
 
 const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
 const NO_BORDERS = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER };
-const DOTTED_RULE = { style: BorderStyle.DOTTED, size: 6, color: MUTED };
+let DOTTED_RULE = { style: BorderStyle.DOTTED, size: 6, color: MUTED };
+
+const noHash = (hex) => String(hex).replace('#', '').toUpperCase();
+
+/**
+ * Point the module colours/sizes at a resolved template config. The whole
+ * `DocxBuilder.build` is synchronous (the only `await` is `Packer.toBuffer`,
+ * after the children tree already exists), so reassigning these module bindings
+ * around the build is race-free: no other render interleaves during it.
+ */
+function applyDocxTheme(cfg) {
+  const S = cfg.theme.sizes;
+  const C = cfg.theme.colors;
+  BODY = Math.round(S.body * 2);
+  SMALL = Math.round(S.small * 2);
+  TINY = Math.round(S.tiny * 2);
+  ACCENT = noHash(C.accent);
+  MUTED = noHash(C.muted);
+  HAIRLINE = noHash(C.hairline);
+  FIELD_BG = noHash(C.fieldBg);
+  MASTHEAD_RUN = buildMastheadRun();
+  DOTTED_RULE = { style: BorderStyle.DOTTED, size: 6, color: MUTED };
+}
 
 const run = (text, opts = {}) =>
   new TextRun({
@@ -378,7 +407,7 @@ class DocxBuilder {
     });
   }
 
-  blockChildren(item) {
+  blockChildren(item, isKey = false) {
     const block = item.block;
     const out = [];
     const tail = () => true;
@@ -409,17 +438,24 @@ class DocxBuilder {
         });
         break;
       }
-      case 'blanks':
-        for (let i = 0; i < (block.blanks || 1); i++) {
+      case 'blanks': {
+        // The sentence only carries the numbered gap; the student writes each
+        // answer on the matching numbered line of this "Réponses" block. The
+        // confidential key skips it — its answers are listed, already numbered.
+        if (isKey) break;
+        const total = block.blanks || 1;
+        out.push(para([run('Réponses :', { bold: true, size: SMALL })], { spaceAfter: 40, keepNext: true }));
+        for (let i = 1; i <= total; i++) {
           out.push(
-            para([run(' ', { size: SMALL })], {
-              spaceAfter: 100,
-              keepNext: i + 1 < (block.blanks || 1),
+            para([run(`${i}. `, { bold: true }), run(' ', { size: SMALL })], {
+              spaceAfter: i === total ? 100 : 60,
+              keepNext: i < total,
               border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '404040', space: 2 } },
             }),
           );
         }
         break;
+      }
       case 'sequence': {
         // One element per line, as in the PDF: glued into a single paragraph,
         // "A. … B. … C. …" is unreadable and the student cannot tell where an
@@ -597,12 +633,12 @@ class DocxBuilder {
       ),
     );
     out.push(
-      para([run(item.block.text || '(énoncé vide)')], { spaceAfter: 60, keepNext: true }),
+      para([run(item.block.kind === 'blanks' ? numberBlankGaps(item.block.text).text || '(énoncé vide)' : item.block.text || '(énoncé vide)')], { spaceAfter: 60, keepNext: true }),
     );
     const media = this.imageElement(item.block.media, { maxWPx: Math.round(CONTENT_PX * 0.7), maxHPx: 190 });
     if (media) out.push(para([media], { spaceAfter: 80, keepNext: true }));
 
-    out.push(...this.blockChildren(item));
+    out.push(...this.blockChildren(item, isKey));
 
     if (!isKey) {
       const lines = writingLines(item);
@@ -647,32 +683,12 @@ class DocxBuilder {
   }
 
   footerChildren(model) {
-    const isKey = model.meta.document === 'answer_key';
-    const out = [
-      para(
-        [
-          run(
-            isKey ? `Total : ${model.scoring.label}` : `Barème : ${formatPoints(model.scoring.total)} points`,
-            { bold: true },
-          ),
-        ],
-        {
-          align: AlignmentType.RIGHT,
-          spaceBefore: 160,
-          spaceAfter: 60,
-          border: { top: { style: BorderStyle.SINGLE, size: 6, color: '808080', space: 4 } },
-        },
-      ),
-    ];
+    // Only the normalization disclosure is printed at the bottom; the barème
+    // total and the "Fin du sujet" closing were removed at the teacher's request.
+    const out = [];
     if (model.header.scaleNote) {
-      out.push(para([run(model.header.scaleNote, { italics: true, size: TINY })], { align: AlignmentType.CENTER, spaceAfter: 60 }));
+      out.push(para([run(model.header.scaleNote, { italics: true, size: TINY })], { align: AlignmentType.CENTER, spaceBefore: 120, spaceAfter: 60 }));
     }
-    out.push(
-      para(
-        [run(model.meta.document === 'answer_key' ? '— Fin du corrigé —' : '— Fin du sujet —', { size: SMALL })],
-        { align: AlignmentType.CENTER, spaceBefore: 120 },
-      ),
-    );
     return out;
   }
 
@@ -710,10 +726,14 @@ function writingLines(item) {
 
 /**
  * @param {object} model output of `ExamDocumentService#buildExamDocument`
- * @param {object} [options] { uploadsDir }
+ * @param {object} [options] { uploadsDir, template }
  * @returns {Promise<{ buffer: Buffer, warnings: object[] }>}
  */
 export async function renderExamDocumentDocx(model, options = {}) {
+  // The Word sheet reads the SAME resolved template as the PDF: colours and
+  // sizes come from it, so the three formats cannot drift. Without a template
+  // the built-in Classique config reproduces the historical constants exactly.
+  applyDocxTheme(resolveForRenderer(options));
   const warnings = [];
   const seen = new Set();
   const ctx = {

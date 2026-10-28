@@ -32,12 +32,21 @@ import {
   ExamDocBuildSchema,
   ExamDocExportSchema,
   ExamDocHeaderSchema,
+  ExamDocEstimateSchema,
+  ExamDocFitPagesSchema,
+  ExamDocTemplatesSchema,
 } from '../../shared/schemas/examDocument.schema.js';
 import { getContainer } from '../container.js';
 import { renderExamDocumentHtml, renderPrintablePage } from '../services/exam-doc/htmlPreview.js';
 import { EXAM_DOC_PAPER_CSS, EXAM_DOC_PRINT_CSS } from '../services/exam-doc/previewCss.js';
 import { renderExamDocumentPdf } from '../services/exam-doc/pdfRenderer.js';
 import { renderExamDocumentDocx } from '../services/exam-doc/docxRenderer.js';
+import {
+  resolveTemplate,
+  requestOverrides,
+  listTemplates,
+} from '../services/exam-doc/templates/index.js';
+import { estimateAnalytic, estimateExact, fitToPages } from '../services/exam-doc/pageEstimator.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant, requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]));
@@ -77,6 +86,23 @@ function slugify(value) {
 
 function documentSlug(document) {
   return document === 'answer_key' ? 'answer-key' : 'student';
+}
+
+/**
+ * Resolve the frozen engine config for a request: a built-in id, a persisted
+ * custom template (looked up by id), or the Classique default — merged with the
+ * live layout overrides. Resolved ONCE so the preview, the estimate and the
+ * export all read byte-identical geometry.
+ */
+async function resolveCfg(examDocSvc, req) {
+  const templateId = req.body?.templateId || req.query?.templateId || null;
+  const custom = await examDocSvc
+    .getCustomTemplate(req.params.examId, req.schoolId, templateId)
+    .catch(() => null);
+  return resolveTemplate(
+    custom || templateId || 'classique',
+    requestOverrides({ layout: req.body?.layout, templateOverrides: req.body?.templateOverrides }),
+  );
 }
 
 router.get('/:examId/header', async (req, res, next) => {
@@ -122,7 +148,8 @@ router.post('/:examId/preview', validate(ExamDocBuildSchema), async (req, res, n
       header: req.body.header || null,
       normalization: req.body.normalization || null,
     });
-    const html = renderExamDocumentHtml(model);
+    const cfg = await resolveCfg(examDocSvc, req);
+    const html = renderExamDocumentHtml(model, { template: cfg });
     res.json({
       meta: model.meta,
       header: model.header,
@@ -131,7 +158,7 @@ router.post('/:examId/preview', validate(ExamDocBuildSchema), async (req, res, n
       confidentiality: model.confidentiality,
       sections: model.sections.map((s) => ({ id: s.id, title: s.title, subtotal: s.subtotal, count: s.items.length })),
       html,
-      printHtml: renderPrintablePage(model, `${EXAM_DOC_PAPER_CSS}\n${EXAM_DOC_PRINT_CSS}`),
+      printHtml: renderPrintablePage(model, `${EXAM_DOC_PAPER_CSS}\n${EXAM_DOC_PRINT_CSS}`, { template: cfg }),
     });
   } catch (err) {
     next(err);
@@ -162,10 +189,11 @@ router.post('/:examId/export', validate(ExamDocExportSchema), async (req, res, n
     }
 
     const format = req.body.format;
+    const cfg = await resolveCfg(examDocSvc, req);
     const rendered =
       format === 'pdf'
-        ? await renderExamDocumentPdf(model)
-        : await renderExamDocumentDocx(model);
+        ? await renderExamDocumentPdf(model, { template: cfg })
+        : await renderExamDocumentDocx(model, { template: cfg });
     const warnings = rendered.warnings || [];
     if (warnings.length) res.setHeader('X-Exam-Doc-Warnings', encodeURIComponent(JSON.stringify(warnings)));
 
@@ -190,6 +218,104 @@ router.post('/:examId/export', validate(ExamDocExportSchema), async (req, res, n
     }
 
     res.send(rendered.buffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Template system: built-ins, custom persistence, estimation, fit-N-pages ──
+
+/** Built-in card metadata (global, no per-exam state). */
+router.get('/templates/built-ins', (req, res) => {
+  res.json({ templates: listTemplates() });
+});
+
+/** The exam's built-ins + persisted custom templates. */
+router.get('/:examId/templates', async (req, res, next) => {
+  try {
+    const { examSvc, examDocSvc } = getContainer();
+    await loadExam(examSvc, req.params.examId, req);
+    const { templates, rejected } = await examDocSvc.listTemplates(req.params.examId, req.schoolId);
+    res.json({ builtIn: listTemplates(), custom: templates, rejected });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/:examId/templates', validate(ExamDocTemplatesSchema), async (req, res, next) => {
+  try {
+    const { examSvc, examDocSvc, auditSvc } = getContainer();
+    const exam = await loadExam(examSvc, req.params.examId, req);
+    const { templates } = await examDocSvc.saveTemplates(exam.id, req.schoolId, req.body.templates);
+    await auditSvc
+      .log({
+        schoolId: req.schoolId,
+        actorId: req.user.id,
+        entityType: 'exam',
+        entityId: exam.id,
+        action: 'update-document-templates',
+        ip: req.ip,
+      })
+      .catch(() => {});
+    res.json({ templates });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Instant page estimate; runs the exact dry render unless `exact:false`. */
+router.post('/:examId/estimate', validate(ExamDocEstimateSchema), async (req, res, next) => {
+  try {
+    const { examSvc, examDocSvc } = getContainer();
+    await loadExam(examSvc, req.params.examId, req);
+    const model = await examDocSvc.buildExamDocument({
+      examId: req.params.examId,
+      schoolId: req.schoolId,
+      document: req.body.document,
+      header: req.body.header || null,
+      normalization: req.body.normalization || null,
+    });
+    const cfg = await resolveCfg(examDocSvc, req);
+    const analytic = estimateAnalytic(model, cfg);
+    const body = {
+      template: cfg.name,
+      columns: cfg.page.columns,
+      analytic: analytic.pages,
+      range: analytic.range,
+    };
+    if (req.body.exact !== false) {
+      const exact = await estimateExact(model, cfg);
+      body.exact = exact.pages;
+      body.lastPageFill = exact.lastPageFill;
+    }
+    res.json(body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** "Tenir en N pages": returns the adjusted template that reaches the budget. */
+router.post('/:examId/fit-pages', validate(ExamDocFitPagesSchema), async (req, res, next) => {
+  try {
+    const { examSvc, examDocSvc } = getContainer();
+    await loadExam(examSvc, req.params.examId, req);
+    const model = await examDocSvc.buildExamDocument({
+      examId: req.params.examId,
+      schoolId: req.schoolId,
+      document: req.body.document,
+      header: req.body.header || null,
+      normalization: req.body.normalization || null,
+    });
+    const cfg = await resolveCfg(examDocSvc, req);
+    const result = await fitToPages(model, cfg, req.body.targetPages);
+    res.json({
+      targetPages: req.body.targetPages,
+      fits: result.fits,
+      pages: result.pages,
+      levers: result.levers,
+      template: cfg.id,
+      templateOverrides: result.template,
+    });
   } catch (err) {
     next(err);
   }

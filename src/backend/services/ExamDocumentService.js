@@ -22,6 +22,7 @@ import {
   EXAM_DOC_TARGET_SCORE,
   EXAM_DOC_POINT_STEP,
   sanitizeExamDocHeader,
+  sanitizeExamDocTemplates,
 } from '../../shared/schemas/examDocument.schema.js';
 import {
   splitQuestion,
@@ -110,6 +111,47 @@ export class ExamDocumentService {
     return { header: clean, defaults: await this.#defaultHeader(exam, schoolId) };
   }
 
+  // ─── Custom templates (Step 5) ──────────────────────────────────────────────
+  /**
+   * The teacher's custom templates, read from the `examDocTemplates` slice of
+   * `Exam.options_json` and re-validated through the Zod bounds on the way out,
+   * so a hand-edited blob can never reach the renderer with unsafe geometry.
+   * @returns {Promise<{ templates: object[], rejected: object[] }>}
+   */
+  async listTemplates(examId, schoolId) {
+    const exam = await this.#getExam(examId, schoolId);
+    const stored = parseJsonObject(exam.options_json).examDocTemplates || [];
+    const { templates, rejected } = sanitizeExamDocTemplates(stored);
+    return { templates, rejected };
+  }
+
+  /** Read-modify-write of the `examDocTemplates` slice only (zero migration). */
+  async saveTemplates(examId, schoolId, templates) {
+    const exam = await this.#getExam(examId, schoolId);
+    const blob = parseJsonObject(exam.options_json);
+    const { ok, templates: clean, rejected } = sanitizeExamDocTemplates(templates || []);
+    if (!ok) {
+      const err = new ValidationError({ templates: rejected.map((r) => `${r.id} : ${r.reason}`) });
+      err.details = rejected;
+      throw err;
+    }
+    if (clean.length) blob.examDocTemplates = clean;
+    else delete blob.examDocTemplates;
+    await this.#repo.update('exams', exam.id, { options_json: JSON.stringify(blob) });
+    return { templates: clean };
+  }
+
+  /**
+   * Look one custom template up by id, so a route can hand the raw template
+   * object to the registry instead of the built-in id. Returns null if absent.
+   */
+  async getCustomTemplate(examId, schoolId, id) {
+    if (!id) return null;
+    const { templates } = await this.listTemplates(examId, schoolId);
+    const found = templates.find((t) => t.id === id);
+    return found ? found.template : null;
+  }
+
   async #getExam(examId, schoolId) {
     const exam = schoolId
       ? await this.#repo.query('exam.withQuestions', { examId: String(examId), schoolId: String(schoolId) })
@@ -160,6 +202,7 @@ export class ExamDocumentService {
       durationMinutes: exam.duration ?? null,
       instructions: null,
       showHeader: true,
+      hiddenFields: [],
       studentNameField: true,
       studentNumberField: true,
       showClassField: true,
