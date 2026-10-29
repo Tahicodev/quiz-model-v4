@@ -34,6 +34,7 @@ import {
   ExamDocHeaderSchema,
   ExamDocEstimateSchema,
   ExamDocFitPagesSchema,
+  ExamDocHeaderPresetsSchema,
   ExamDocTemplatesSchema,
 } from '../../shared/schemas/examDocument.schema.js';
 import { getContainer } from '../container.js';
@@ -46,7 +47,7 @@ import {
   requestOverrides,
   listTemplates,
 } from '../services/exam-doc/templates/index.js';
-import { estimateAnalytic, estimateExact, fitToPages } from '../services/exam-doc/pageEstimator.js';
+import { estimateAnalytic, estimateExact, fitToPages, packExamModel } from '../services/exam-doc/pageEstimator.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant, requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]));
@@ -105,6 +106,23 @@ async function resolveCfg(examDocSvc, req) {
   );
 }
 
+/**
+ * The paper the four document routes hand to the renderers: the model packed to
+ * the resolved geometry (columns filled to the bottom, questions numbered in
+ * placement order). Packing mutates and returns the same model, so the preview,
+ * the Word file, the PDF and the estimate all describe one identical paper.
+ */
+function paperModel(model, cfg) {
+  try {
+    return packExamModel(model, cfg);
+  } catch (err) {
+    // A packing failure must never cost the teacher his document: the plain
+    // bank order is still a perfectly valid paper.
+    console.warn('[exam-documents] page packing skipped:', err && err.message);
+    return model;
+  }
+}
+
 router.get('/:examId/header', async (req, res, next) => {
   try {
     const { examSvc, examDocSvc } = getContainer();
@@ -137,6 +155,38 @@ router.put('/:examId/header', validate(ExamDocHeaderSchema), async (req, res, ne
   }
 });
 
+router.get('/:examId/header-presets', async (req, res, next) => {
+  try {
+    const { examSvc, examDocSvc } = getContainer();
+    await loadExam(examSvc, req.params.examId, req);
+    const result = await examDocSvc.listHeaderPresets(req.params.examId, req.schoolId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/:examId/header-presets', validate(ExamDocHeaderPresetsSchema), async (req, res, next) => {
+  try {
+    const { examSvc, examDocSvc, auditSvc } = getContainer();
+    const exam = await loadExam(examSvc, req.params.examId, req);
+    const result = await examDocSvc.saveHeaderPresets(exam.id, req.schoolId, req.body.presets);
+    await auditSvc
+      .log({
+        schoolId: req.schoolId,
+        actorId: req.user.id,
+        entityType: 'exam',
+        entityId: exam.id,
+        action: 'update-document-header-presets',
+        ip: req.ip,
+      })
+      .catch(() => {});
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/:examId/preview', validate(ExamDocBuildSchema), async (req, res, next) => {
   try {
     const { examSvc, examDocSvc } = getContainer();
@@ -149,7 +199,8 @@ router.post('/:examId/preview', validate(ExamDocBuildSchema), async (req, res, n
       normalization: req.body.normalization || null,
     });
     const cfg = await resolveCfg(examDocSvc, req);
-    const html = renderExamDocumentHtml(model, { template: cfg });
+    const paper = paperModel(model, cfg);
+    const html = renderExamDocumentHtml(paper, { template: cfg });
     res.json({
       meta: model.meta,
       header: model.header,
@@ -158,7 +209,7 @@ router.post('/:examId/preview', validate(ExamDocBuildSchema), async (req, res, n
       confidentiality: model.confidentiality,
       sections: model.sections.map((s) => ({ id: s.id, title: s.title, subtotal: s.subtotal, count: s.items.length })),
       html,
-      printHtml: renderPrintablePage(model, `${EXAM_DOC_PAPER_CSS}\n${EXAM_DOC_PRINT_CSS}`, { template: cfg }),
+      printHtml: renderPrintablePage(paper, `${EXAM_DOC_PAPER_CSS}\n${EXAM_DOC_PRINT_CSS}`, { template: cfg }),
     });
   } catch (err) {
     next(err);
@@ -190,10 +241,11 @@ router.post('/:examId/export', validate(ExamDocExportSchema), async (req, res, n
 
     const format = req.body.format;
     const cfg = await resolveCfg(examDocSvc, req);
+    const paper = paperModel(model, cfg);
     const rendered =
       format === 'pdf'
-        ? await renderExamDocumentPdf(model, { template: cfg })
-        : await renderExamDocumentDocx(model, { template: cfg });
+        ? await renderExamDocumentPdf(paper, { template: cfg })
+        : await renderExamDocumentDocx(paper, { template: cfg });
     const warnings = rendered.warnings || [];
     if (warnings.length) res.setHeader('X-Exam-Doc-Warnings', encodeURIComponent(JSON.stringify(warnings)));
 
@@ -276,7 +328,8 @@ router.post('/:examId/estimate', validate(ExamDocEstimateSchema), async (req, re
       normalization: req.body.normalization || null,
     });
     const cfg = await resolveCfg(examDocSvc, req);
-    const analytic = estimateAnalytic(model, cfg);
+    const paper = paperModel(model, cfg);
+    const analytic = estimateAnalytic(paper, cfg);
     const body = {
       template: cfg.name,
       columns: cfg.page.columns,
@@ -284,7 +337,7 @@ router.post('/:examId/estimate', validate(ExamDocEstimateSchema), async (req, re
       range: analytic.range,
     };
     if (req.body.exact !== false) {
-      const exact = await estimateExact(model, cfg);
+      const exact = await estimateExact(paper, cfg);
       body.exact = exact.pages;
       body.lastPageFill = exact.lastPageFill;
     }
@@ -307,7 +360,7 @@ router.post('/:examId/fit-pages', validate(ExamDocFitPagesSchema), async (req, r
       normalization: req.body.normalization || null,
     });
     const cfg = await resolveCfg(examDocSvc, req);
-    const result = await fitToPages(model, cfg, req.body.targetPages);
+    const result = await fitToPages(paperModel(model, cfg), cfg, req.body.targetPages);
     res.json({
       targetPages: req.body.targetPages,
       fits: result.fits,

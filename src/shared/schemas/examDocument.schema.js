@@ -14,7 +14,7 @@
  */
 
 import { z } from 'zod';
-import { TEMPLATE_LIMITS, safeParseExamTemplate, ExamTemplateOverrideSchema } from './examTemplate.schema.js';
+import { TEMPLATE_LIMITS, HEADER_LAYOUT_VARIANTS, safeParseExamTemplate, ExamTemplateOverrideSchema } from './examTemplate.schema.js';
 
 export const EXAM_DOC_TARGET_SCORE = 20;
 export const EXAM_DOC_POINT_STEP = 0.25;
@@ -50,6 +50,9 @@ export const ExamDocHeaderSchema = z.object({
 
   // ── Presentation settings (document only; never touch stored scores) ──────
   showHeader: z.boolean().nullish(), // the whole masthead band (logo, school, title)
+  // Finer switch: hides only the top band (logo, school, academic year) while
+  // the centred title and the Prof./Durée/Date information line stay printed.
+  showMastheadBand: z.boolean().nullish(),
   hiddenFields: z.array(z.string().max(40)).nullish(), // individual field names to hide
   studentNameField: z.boolean().nullish(),
   studentNumberField: z.boolean().nullish(),
@@ -81,6 +84,9 @@ export const ExamDocBuildSchema = z.object({
       density: z.number().min(TEMPLATE_LIMITS.minDensity).max(TEMPLATE_LIMITS.maxDensity).nullish(),
       answerLines: z.number().int().min(0).max(TEMPLATE_LIMITS.maxAnswerLines).nullish(),
       answerStyle: z.enum(['classic', 'inline']).nullish(),
+      // The header LAYOUT picked in the Layout step: merged as `header.variant`,
+      // so it wins over the template's own header and the three formats agree.
+      headerVariant: z.enum(HEADER_LAYOUT_VARIANTS).nullish(),
     })
     .partial()
     .optional(),
@@ -99,6 +105,21 @@ export const ExamDocEstimateSchema = ExamDocBuildSchema.extend({
 /** "Tenir en N pages": the server tunes the safe levers to hit a page budget. */
 export const ExamDocFitPagesSchema = ExamDocBuildSchema.extend({
   targetPages: z.number().int().min(1).max(40),
+});
+
+/** Header-preset slice persisted in `Exam.options_json.examDocHeaderPresets`. */
+export const ExamDocHeaderPresetsSchema = z.object({
+  presets: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1).max(40),
+          name: z.string().min(1).max(60),
+          header: z.record(z.any()),
+        })
+        .strict(),
+    )
+    .max(20),
 });
 
 /** Custom template slice persisted in `Exam.options_json.examDocTemplates`. */
@@ -127,6 +148,29 @@ export function sanitizeExamDocHeader(input = {}) {
     out[key] = value;
   }
   return out;
+}
+
+/**
+ * Header-preset list validator: each entry keeps its id/name and a header
+ * sanitised through `sanitizeExamDocHeader` (unknown keys dropped, no logo
+ * base64 blobs stored). Empty or duplicate entries are refused so a
+ * hand-edited blob can never poison the header form.
+ */
+export function sanitizeExamDocHeaderPresets(input = []) {
+  const list = Array.isArray(input) ? input : Array.isArray(input?.presets) ? input.presets : [];
+  const presets = [];
+  const seen = new Set();
+  for (const entry of list) {
+    const name = String(entry?.name ?? '').trim().slice(0, 60);
+    const header = sanitizeExamDocHeader(entry?.header || {});
+    delete header.logoDataUrl; // the base64 copy is transient, never persisted
+    if (!name || !Object.keys(header).length) continue;
+    const id = String(entry?.id ?? '').trim().slice(0, 40) || `hdr-${presets.length + 1}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    presets.push({ id, name, header });
+  }
+  return presets;
 }
 
 /**

@@ -23,7 +23,7 @@
 
 import PDFDocument from 'pdfkit';
 import { renderExamDocumentPdf } from './pdfRenderer.js';
-import { numberBlankGaps } from './text.js';
+import { blankStem } from './text.js';
 import { TEMPLATE_LIMITS } from '../../../shared/schemas/examTemplate.schema.js';
 
 // Vertical glue the engine leaves around every question: the split's spaceBefore,
@@ -85,7 +85,7 @@ function blockHeight(measure, block, cfg, colW, isKey) {
       if (inline && Array.isArray(block.bank) && block.bank.length) {
         // Inline: one instruction line + a wrapped numbered option bank. No
         // numbered writing lines (the student writes the option number in the gap).
-        const bankLine = block.bank.map((w, i) => `(${i + 1}) ${w}`).join('    ');
+        const bankLine = block.bank.map((w, i) => `${i + 1}. ${w}`).join('    ');
         let h = bodyLine("Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.", colW, 1.5);
         h += bodyLine(`Options : ${bankLine}`, colW - 14, 1.5) + 4;
         return h * D;
@@ -115,12 +115,12 @@ function blockHeight(measure, block, cfg, colW, isKey) {
       const rights = block.rights || [];
       const rows = Math.max(lefts.length, rights.length);
       if (inline) {
-        // Inline: instruction + the two stacked lists (lefts then rights) + a
-        // small answer grid (horizontal 2-row when few columns, else vertical).
+        // Inline: instruction + the two stacked lists (lefts then rights) + the
+        // answer grid, always TWO COLUMNS x ROWS (`N° | Lettre`).
         let h = bodyLine('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', colW, 1.5);
         for (const l of lefts) h += bodyLine(`${l.n}. ${l.text}`, colW, 1) + 2;
         for (const r of rights) h += bodyLine(`${r.letter}. ${r.text}`, colW, 1) + 2;
-        h += rows > 0 && rows <= 6 ? 2 * 22 : (rows + 1) * 20;
+        h += 16 + rows * 18 + 12;
         return h * D;
       }
       // Classic: the table is now traced inside ONE column, so each cell wraps
@@ -159,8 +159,14 @@ function itemHeight(measure, item, cfg, colW, isKey) {
   const q = cfg.question;
   // Head group: the "Question N / pts" split line + the stem.
   let h = (measure.height('Question 0', { name: 'bold', size: S.body, width: colW * 0.6 }) + 2 + 2) * D;
-  h += (measure.height(item.block.kind === 'blanks' ? numberBlankGaps(item.block.text).text : item.block.text, { size: S.body, width: colW, lineGap: 2.5 }) + 2) * D;
-  // The answer block.
+  // Same stem the engine prints: `(n)` gap markers only exist on the sheet that
+  // numbers its answer lines (see `blankStem`).
+  const stemText = blankStem(item.block, { inline: !isKey && q.answerStyle === 'inline' });
+  const stemStack = (measure.height(stemText, { size: S.body, width: colW, lineGap: 2.5 }) + 2) * D;
+  h += stemStack;
+  // The answer block. `blockHeight` already traces the matching table INSIDE one
+  // column at the stacked widths: there is no right-float variant any more, so
+  // the stem and the table simply add up.
   h += blockHeight(measure, item.block, cfg, colW, isKey);
   // Writing lines on the student sheet (mirrors the builder's writingLines()).
   if (!isKey) {
@@ -180,13 +186,23 @@ function headerHeight(measure, cfg) {
   const S = cfg.theme.sizes;
   const D = cfg.theme.density;
   const H = cfg.header;
+  // The header LAYOUT moves the same elements around, so it costs vertical space
+  // differently: `centre` stacks the band on the axis, `split` shares the title
+  // row with the identity, `boxed`/`banner` add a frame or a bar, `minimal` is
+  // the tightest. Mirrors the per-variant body of `#mastheadGeom`.
+  const variant = H.variant === 'officiel' ? 'boxed' : H.variant || 'bandeau';
   let h = 0;
   h += H.bandMin + H.ruleGap + H.ruleT;
   h += measure.height('Titre du sujet', { name: 'headBold', size: S.title, width: cfg.contentW }) + H.titleGap;
   h += H.noteH; // identity plate / grade box row
   h += measure.height('Instructions de l’exam, consignes et barème éventuels.', { size: S.small, width: cfg.contentW, lineGap: 1.5 }) * 1.5;
   h += 24; // rules, spacing, info line
-  return h * D;
+  if (variant === 'centre') h += H.bandMin * 0.9; // band lines no longer share a row
+  else if (variant === 'split') h -= H.bandMin * 0.55; // identity sits BESIDE the title
+  else if (variant === 'boxed') h += 22; // frame padding + inner rule
+  else if (variant === 'banner') h += 16; // filled title bar padding
+  else if (variant === 'minimal') h -= 14; // no rule, smaller title
+  return Math.max(40, h * D);
 }
 
 /**
@@ -217,57 +233,45 @@ export function estimateAnalytic(model, cfg) {
       for (const item of section.items) {
         const ih = itemHeight(measure, item, cfg, colW, isKey);
         // Matching-pair tables are traced inside a single column (they no longer
-        // break out to a full-width band), so they pack like any other item.
-        const full = false;
-        blocks.push({ h: ih, full });
-        if (full) fullArea += ih * columns;
-        else normalArea += ih;
+        // break out to a full-width band), and questions flow across columns
+        // like the engine does — so every block just packs sequentially.
+        blocks.push({ h: ih });
+        normalArea += ih;
       }
     }
 
-    // Band-aware greedy packing. Normal items fill a column left-to-right; a
-    // full-width band sits below the taller column and pushes BOTH columns down
-    // by its height. Page 1 reserves the masthead as a full-width band.
+    // Engine-aware packing. A question whose body fits a column is a keep
+    // unit: the engine's `ensure` moves the WHOLE group to the next column
+    // when the remaining strip is too small, so the strip is wasted, not
+    // back-filled. Only items taller than a column actually flow and split.
+    // Mirroring that here keeps the analytic count from running optimistic.
     const runningReserve = cfg.header.fullOnFirstPage && cfg.header.compactOnFollow ? 24 : 0;
-    const cols = new Array(columns).fill(header);
+    const used = new Array(columns).fill(header);
     let pages = 1;
-    const newPage = () => {
-      pages += 1;
-      cols.fill(runningReserve);
+    let c = 0;
+    const advance = () => {
+      c += 1;
+      if (c >= columns) {
+        pages += 1;
+        c = 0;
+        used.fill(runningReserve);
+      }
     };
-    for (const { h, full } of blocks) {
-      if (full) {
-        if (h > capacity) {
-          newPage();
-          const spanPages = Math.ceil(h / capacity);
-          for (let k = 1; k < spanPages; k++) newPage();
-          cols.fill(h - (spanPages - 1) * capacity);
-        } else {
-          if (Math.max(...cols) + h > capacity) newPage();
-          cols.fill(Math.max(...cols) + h);
+    for (const { h } of blocks) {
+      if (h <= capacity) {
+        if (used[c] + h > capacity) advance();
+        used[c] += h;
+      } else {
+        let rest = h;
+        while (rest > 0) {
+          const avail = capacity - used[c];
+          if (rest <= avail) {
+            used[c] += rest;
+            break;
+          }
+          rest -= avail;
+          advance();
         }
-        continue;
-      }
-      if (h > capacity) {
-        // Too tall to stay whole: flow it across whole columns.
-        const spanCols = Math.ceil(h / capacity);
-        newPage();
-        for (let k = 1; k < spanCols; k++) newPage();
-        cols.fill(0);
-        cols[columns - 1] = h - (spanCols - 1) * capacity;
-        continue;
-      }
-      let placed = false;
-      for (let c = 0; c < columns; c++) {
-        if (cols[c] + h <= capacity) {
-          cols[c] += h;
-          placed = true;
-          break;
-        }
-      }
-      if (!placed) {
-        newPage();
-        cols[0] += h;
       }
     }
 
@@ -279,6 +283,101 @@ export function estimateAnalytic(model, cfg) {
       capacity,
       columns,
     };
+  } finally {
+    measure.end();
+  }
+}
+
+/**
+ * Column-first-fit packing plan: reorder the questions so the sheet fills every
+ * column to the bottom before a page break, and number them in the order they
+ * are placed.
+ *
+ * The engine flows strictly top-to-bottom, so a paper built straight from the
+ * question bank leaves a hole whenever the next question is taller than the
+ * strip still free at the bottom of the column — the teacher reads that as
+ * wasted paper and an extra sheet. Here the same measured heights the analytic
+ * estimate uses are packed differently: at every position the FIRST question of
+ * the queue that still fits the strip is placed (a later, smaller one may
+ * therefore jump ahead), and only when nothing fits is the column abandoned.
+ * The result is written back into the model — order plus printed numbers — so
+ * the PDF, the Word file and the HTML preview all render the identical paper
+ * (they only ever draw the order they are given) and the estimate matches it.
+ *
+ * Reordering stays INSIDE a section: a question never jumps out of its
+ * « Exercice 2 · … » heading into another one, so the document keeps its
+ * structure. The heights are always measured as a STUDENT sheet, which is what
+ * makes an answer key carry the very same order and numbering as the subject it
+ * corrects.
+ *
+ * @param {object} model output of `ExamDocumentService#buildExamDocument`
+ * @param {object} cfg resolved engine config
+ * @returns {object} the same model, with `sections[].items` reordered and renumbered
+ */
+export function packExamModel(model, cfg) {
+  const sections = model && model.sections;
+  if (!Array.isArray(sections) || sections.length === 0) return model;
+  const measure = createMeasurer(cfg);
+  try {
+    const columns = Math.max(1, cfg.page.columns);
+    const capacity = cfg.usableH;
+    const colW = cfg.colW;
+    const S = cfg.theme.sizes;
+    let used = headerHeight(measure, cfg); // page 1, first column carries the header
+    let col = 0;
+    const advance = () => {
+      col += 1;
+      if (col >= columns) {
+        col = 0;
+        used = 0;
+      }
+    };
+    let number = 0;
+    const flat = [];
+    for (const section of sections) {
+      const items = Array.isArray(section.items) ? section.items : [];
+      if (!items.length) continue;
+      if (section.title) {
+        const th = measure.height(section.title, { name: 'bold', size: S.body, width: colW }) + 10;
+        if (used + th > capacity) advance();
+        used += th;
+      }
+      const queue = items.map((item) => ({ item, h: itemHeight(measure, item, cfg, colW, false) }));
+      const placed = [];
+      while (queue.length) {
+        let idx = queue.findIndex(({ h }) => used + h <= capacity);
+        if (idx < 0) {
+          // Nothing in the queue fits the strip. A question taller than a whole
+          // column is placed anyway — the engine splits it across the break —
+          // otherwise the column is closed and the next one starts empty.
+          idx = queue.findIndex(({ h }) => h > capacity);
+          if (idx < 0) {
+            advance();
+            continue;
+          }
+        }
+        const [entry] = queue.splice(idx, 1);
+        number += 1;
+        entry.item.number = number;
+        placed.push(entry.item);
+        flat.push(entry.item);
+        used += entry.h;
+      }
+      section.items = placed;
+    }
+    if (model.scoring && Array.isArray(model.scoring.normalizedPreview)) {
+      // The normalisation table is indexed by question, so its printed numbers
+      // have to follow the new placement order.
+      const byId = new Map(model.scoring.normalizedPreview.map((e) => [String(e.questionId), e]));
+      const next = flat
+        .map((item) => {
+          const entry = byId.get(String(item.questionId));
+          return entry ? { ...entry, number: item.number } : null;
+        })
+        .filter(Boolean);
+      if (next.length) model.scoring.normalizedPreview = next;
+    }
+    return model;
   } finally {
     measure.end();
   }

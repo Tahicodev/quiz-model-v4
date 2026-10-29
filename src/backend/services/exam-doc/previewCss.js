@@ -54,6 +54,47 @@ export const EXAM_DOC_PAPER_CSS = `
 .ed-tag { font-size: 9pt; letter-spacing: .06em; color: var(--ed-muted); margin-top: 3px; }
 .ed-meta { margin-top: 3px; font-size: 10pt; color: var(--ed-muted); display: flex; flex-wrap: wrap; justify-content: center; gap: 0 9px; }
 .ed-meta-sep { color: var(--ed-hairline); }
+.ed-rule--close { display: block; width: 100%; min-width: 0; height: 0; border-bottom: 1px solid var(--ed-hairline); margin: 8px 0 0; }
+
+/* -- Header LAYOUTS: one class per PdfLayout masthead drawer of the same
+   name. The DOM never changes (band, rule, title, information); only the
+   placement differs, exactly like the seven variants of the engine. -------- */
+
+/* classique: band, hairline, then title and information aligned LEFT. */
+.ed-header--classique .ed-accent-rule { height: 1px; background: var(--ed-hairline); }
+.ed-header--classique .ed-title-block, .ed-header--classique .ed-meta { text-align: left; justify-content: flex-start; }
+.ed-header--classique .ed-title { font-size: 16pt; letter-spacing: 0; }
+
+/* centre: everything on the vertical axis, title boxed between two rules. */
+.ed-header--centre .ed-masthead { flex-direction: column; text-align: center; gap: 4px; }
+.ed-header--centre .ed-masthead-left, .ed-header--centre .ed-masthead-right { width: 100%; margin-left: 0; text-align: center; }
+.ed-header--centre .ed-accent-rule { height: 1px; background: var(--ed-hairline); }
+.ed-header--centre .ed-title-block { border-bottom: 1px solid var(--ed-hairline); padding-bottom: 7px; }
+
+/* split: title + information on the left, logo and identity stacked right. */
+.ed-header--split { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 16px; }
+.ed-header--split .ed-title-block { order: 1; flex: 1 1 55%; text-align: left; }
+.ed-header--split .ed-meta { justify-content: flex-start; margin-top: 5px; }
+.ed-header--split .ed-masthead { order: 2; flex: 0 0 38%; flex-direction: column; text-align: right; gap: 3px; }
+.ed-header--split .ed-masthead-left, .ed-header--split .ed-masthead-right { width: 100%; margin-left: 0; text-align: right; }
+.ed-header--split .ed-accent-rule { order: 3; flex: 1 1 100%; height: 1px; background: var(--ed-hairline); margin: 2px 0 0; }
+
+/* boxed: the whole header framed in a rectangle (official-paper look). */
+.ed-header--boxed { border: 1.5px solid var(--ed-accent); padding: 9px 11px; }
+.ed-header--boxed .ed-accent-rule { height: 1px; background: var(--ed-accent); border-bottom: 1px solid var(--ed-hairline); }
+.ed-header--boxed .ed-title-block { border-bottom: 1px solid var(--ed-hairline); padding-bottom: 6px; }
+
+/* banner: the title sits in a filled accent bar, reversed out in white. */
+.ed-header--banner .ed-accent-rule { display: none; }
+.ed-header--banner .ed-title-block { background: var(--ed-accent); color: #fff; padding: 9px 12px; }
+.ed-header--banner .ed-title { color: #fff; }
+.ed-header--banner .ed-tag, .ed-header--banner .ed-meta { color: rgba(255, 255, 255, .82); }
+.ed-header--banner .ed-meta-sep { color: rgba(255, 255, 255, .45); }
+
+/* minimal: one tight centred line, no rule at all. */
+.ed-header--minimal .ed-accent-rule { display: none; }
+.ed-header--minimal .ed-title { font-size: 13.5pt; }
+.ed-header--minimal .ed-title-block { margin-top: 2px; }
 
 /* ── Student identification: light plate + dedicated grade box ──────────── */
 .ed-identity { display: flex; align-items: stretch; gap: 12px; font-family: var(--ed-sans); margin: 10px 0; }

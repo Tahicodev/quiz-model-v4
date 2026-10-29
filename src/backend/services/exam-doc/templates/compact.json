@@ -32,10 +32,10 @@
     "variant": "minimal",
     "anonymity": false,
     "fullOnFirstPage": true,
-    "compactOnFollow": true
+    "compactOnFollow": false
   },
   "footer": {
-    "variant": "number",
+    "variant": "title+number",
     "total": true,
     "encouragement": "Bon courage !"
   },

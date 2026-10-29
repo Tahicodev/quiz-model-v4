@@ -8,7 +8,7 @@
  * its own typography inside the admin page (and in the print window).
  */
 
-import { formatPoints, optionLetter, numberBlankGaps } from './text.js';
+import { formatPoints, optionLetter, blankStem } from './text.js';
 import { examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
 import { resolveForRenderer } from './templates/index.js';
 
@@ -32,12 +32,17 @@ function imgTag(src, cls) {
 
 /**
  * The masthead, drawn from `examHeaderParts` — the same list the PDF and the
- * Word file print, in the same order: logo + school block on the left, year on
- * the right, thick accent rule, centred title, information line.
+ * Word file print, in the same order. The template's header `variant` only
+ * decides WHERE those elements sit on the sheet, and every variant below maps
+ * one-to-one onto the `PdfLayout` drawer of the same name: the DOM is always
+ * band → rule → title → information, and the `ed-header--*` class restyles it.
  */
-function renderHeader(model) {
+function renderHeader(model, cfg) {
   const parts = examHeaderParts(model);
   if (!parts.enabled) return ''; // the teacher hid the printed header
+  // `officiel` is the historical name of the framed `boxed` layout.
+  const variant = cfg?.header?.variant || 'bandeau';
+  const layout = variant === 'officiel' ? 'boxed' : variant;
   const scale = parts.logoScale;
   const logo = imgTag(parts.logo, 'ed-logo');
   const line = (item) => `<div class="ed-masthead-${item.role}">${escapeHtml(item.text)}</div>`;
@@ -48,18 +53,20 @@ function renderHeader(model) {
     .join('<span class="ed-meta-sep">·</span>');
 
   return `
-    <header class="ed-header">
+    <header class="ed-header ed-header--${layout}">
+      ${parts.band ? `
       <div class="ed-masthead"${scale !== 1 ? ` style="--ed-logo-scale:${scale}"` : ''}>
         ${logo ? `<div class="ed-masthead-logo">${logo}</div>` : ''}
         <div class="ed-masthead-left">${left}</div>
         <div class="ed-masthead-right">${right}</div>
       </div>
-      <div class="ed-accent-rule"></div>
+      <div class="ed-accent-rule"></div>` : ''}
       <div class="ed-title-block">
         <h1 class="ed-title">${escapeHtml(parts.title)}</h1>
         ${parts.tag ? `<div class="ed-tag">${escapeHtml(parts.tag)}</div>` : ''}
         ${info ? `<div class="ed-meta">${info}</div>` : ''}
       </div>
+      ${layout === 'centre' ? '<div class="ed-rule ed-rule--close"></div>' : ''}
     </header>`;
 }
 
@@ -122,12 +129,13 @@ function renderBlock(block, isKey = false, inline = false) {
       // numbered lines of this "Réponses" list. The key lists the answers.
       if (isKey) break;
       if (inline && Array.isArray(block.bank) && block.bank.length) {
-        // Inline: numbered option bank; the student writes the option number in
-        // each `(n)` gap of the sentence, so there are no answer lines here.
+        // Inline: numbered option bank ("1. word  2. word …", the number in
+        // bold); the student writes the option number in each `(n)` gap of
+        // the sentence, so there are no answer lines here.
         parts.push(`<p class="ed-instruction">Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.</p>`);
         parts.push(
           `<p class="ed-bank"><strong>Options :</strong> ${block.bank
-            .map((w, i) => `<span class="ed-bank-opt">(${i + 1})&nbsp;${escapeHtml(w)}</span>`)
+            .map((w, i) => `<span class="ed-bank-opt"><strong>${i + 1}.</strong>&nbsp;${escapeHtml(w)}</span>`)
             .join(' ')}</p>`,
         );
         break;
@@ -172,8 +180,10 @@ function renderBlock(block, isKey = false, inline = false) {
       break;
     case 'pairs':
       // Inline: the two lists print one after the other (no table, no column
-      // headers), then a small answer grid records the pairs — horizontal when
-      // the columns stay readable, otherwise a vertical N°/Lettre table.
+      // headers), then the answer grid records the pairs. The grid is always
+      // two columns x rows (`N° | Lettre`): numbers spread across the page read
+      // as a fourth list of options, and the writing surface has to line up with
+      // the lines the items are written on — the same grid the PDF and Word draw.
       if (inline) {
         const count = Math.max(block.lefts.length, (block.rights || []).length);
         parts.push(`<p class="ed-instruction">Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.</p>`);
@@ -184,24 +194,12 @@ function renderBlock(block, isKey = false, inline = false) {
             .map((r) => `<li>${r.letter}. ${escapeHtml(r.text)}</li>`)
             .join('')}</ul></div>`,
         );
-        if (count > 0 && count <= 6) {
-          parts.push(
-            `<table class="ed-match-grid ed-match-h"><thead><tr>${Array.from(
-              { length: count },
-              (_, i) => `<th>${i + 1}</th>`,
-            ).join('')}</tr></thead><tbody><tr>${Array.from(
-              { length: count },
-              () => '<td></td>',
-            ).join('')}</tr></tbody></table>`,
-          );
-        } else {
-          parts.push(
-            `<table class="ed-match-grid ed-match-v"><thead><tr><th>N°</th><th>Lettre</th></tr></thead><tbody>${Array.from(
-              { length: count },
-              (_, i) => `<tr><td>${i + 1}</td><td></td></tr>`,
-            ).join('')}</tbody></table>`,
-          );
-        }
+        parts.push(
+          `<table class="ed-match-grid ed-match-v"><thead><tr><th>N°</th><th>Lettre</th></tr></thead><tbody>${Array.from(
+            { length: count },
+            (_, i) => `<tr><td>${i + 1}</td><td></td></tr>`,
+          ).join('')}</tbody></table>`,
+        );
         break;
       }
       // The third column is where the student writes the letter: without it the
@@ -267,7 +265,10 @@ function renderItems(model, cfg) {
         : '';
       const items = section.items
         .map((item) => {
-          const rawStem = item.block.kind === 'blanks' ? numberBlankGaps(item.block.text).text : item.block.text;
+          // Same rule as the PDF: the `(n)` marker only exists when the sheet
+          // numbers answer lines below; the inline surface writes the option
+          // number inside the space, so its gaps stay plain rules.
+          const rawStem = blankStem(item.block, { inline: inlineMode });
           const stem = `<div class="ed-question-text">${escapeHtml(rawStem || '(énoncé vide)')}</div>`;
           const media = imgTag(item.block.media, 'ed-question-img');
           const answerKey = isKey
@@ -336,7 +337,7 @@ export function renderExamDocumentHtml(model, options = {}) {
   const bodyStyle = columns > 1 ? ` style="column-count:${columns};column-gap:${cfg.page.gutter}px"` : '';
 
   return `<article class="ed-paper ed-paper--${model.meta.document}" style="${paperThemeStyle(cfg)}">
-    ${renderHeader(model)}
+    ${renderHeader(model, cfg)}
     ${renderIdentityBlock(model)}
     <main class="ed-body"${bodyStyle}>${renderItems(model, cfg)}</main>
     ${renderWarnings(model)}

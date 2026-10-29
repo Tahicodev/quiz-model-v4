@@ -47075,6 +47075,56 @@ body.student-workspace .workspace-panel > * {
 	flex: 1 1 240px;
 }
 
+/* Logo picker row. The native file input prints its own localized caption and
+   refuses almost every style, so it is visually replaced by a real button and
+   kept in the DOM off-screen (never display:none) to stay focusable. */
+.exam-documents-modal .ed-file-picker {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.exam-documents-modal .ed-file-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+.exam-documents-modal .ed-file-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
+.exam-documents-modal .ed-file-btn svg {
+	opacity: 0.7;
+}
+
+.exam-documents-modal .ed-file-btn:hover svg,
+.exam-documents-modal .ed-file-btn:focus-visible svg {
+	opacity: 1;
+}
+
+.exam-documents-modal .ed-file-name {
+	max-width: 220px;
+	overflow: hidden;
+	font-size: 0.8rem;
+	color: var(--text-muted, #64748b);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .exam-documents-modal .ed-range-label {
 	display: flex;
 	align-items: center;
@@ -47628,6 +47678,72 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	color: var(--text-main, #0f172a);
 }
 
+/* Header layout picker: a wireframe thumbnail per masthead layout, so the
+   teacher chooses WHERE the printed elements go without guessing. */
+.exam-documents-modal .ed-hdr-picker {
+	margin-top: 14px;
+}
+
+.exam-documents-modal .ed-hdr-picker-title {
+	display: block;
+	font-size: 0.8rem;
+	font-weight: 700;
+	color: #334155;
+	margin-bottom: 8px;
+}
+
+.exam-documents-modal .ed-hdr-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+	gap: 8px;
+}
+
+.exam-documents-modal .ed-hdr-card {
+	--ed-wire-paper: #fff;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	align-items: center;
+	padding: 8px 6px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 10px;
+	background: #fff;
+	color: #475569;
+	cursor: pointer;
+	font-size: 0.7rem;
+	line-height: 1.25;
+	text-align: center;
+	transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.exam-documents-modal .ed-hdr-card:hover {
+	border-color: #94a3b8;
+	background: #f8fafc;
+}
+
+.exam-documents-modal .ed-hdr-card.is-active {
+	border-color: #1f3a5f;
+	background: #eef2f7;
+	box-shadow: 0 0 0 1px #1f3a5f;
+	color: #1f3a5f;
+}
+
+.exam-documents-modal .ed-hdr-wire {
+	display: block;
+	width: 100%;
+	color: currentColor;
+}
+
+.exam-documents-modal .ed-hdr-wire svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.exam-documents-modal .ed-hdr-name {
+	font-weight: 600;
+}
+
 .exam-documents-modal .ed-manual-controls {
 	display: flex;
 	flex-direction: column;
@@ -47694,4 +47810,101 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	background: #fef2f2;
 	border: 1px solid #fca5a5;
 	color: #991b1b;
+}
+
+/* ─── Layout step groups + saved-header presets ─── */
+.exam-documents-modal .ed-checks--stacked {
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.exam-documents-modal .ed-section-title {
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted, #64748b);
+	margin: 2px 0 8px;
+}
+
+.exam-documents-modal .ed-layout-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 12px;
+	align-items: start;
+}
+
+.exam-documents-modal .ed-layout-grid .ed-fieldset {
+	margin-top: 0;
+	height: 100%;
+	box-sizing: border-box;
+}
+
+.exam-documents-modal .ed-layout-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 10px;
+}
+
+.exam-documents-modal .ed-inline-help {
+	margin: 0 0 2px 24px;
+	font-size: 0.76rem;
+}
+
+.exam-documents-modal .ed-fit-help {
+	margin-bottom: 10px;
+}
+
+.exam-documents-modal .ed-layout-collapse {
+	margin-top: 14px;
+}
+
+.exam-documents-modal .ed-preset-list {
+	list-style: none;
+	margin: 10px 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.exam-documents-modal .ed-preset-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: var(--radius-md, 8px);
+	background: #ffffff;
+}
+
+.exam-documents-modal .ed-preset-name {
+	flex: 0 0 auto;
+	max-width: 34%;
+	font-weight: 700;
+	font-size: 0.86rem;
+	color: var(--text-main, #0f172a);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.exam-documents-modal .ed-preset-info {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: 0.78rem;
+	color: var(--text-muted, #64748b);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.exam-documents-modal .ed-preset-actions {
+	flex: 0 0 auto;
+	display: flex;
+	gap: 6px;
 }

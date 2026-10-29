@@ -42,7 +42,10 @@ const ENGINE_DEFAULTS = Object.freeze({
     variant: 'bandeau',
     anonymity: false,
     fullOnFirstPage: true,
-    compactOnFollow: true,
+    // The exam title prints once, on the first sheet: teachers asked for no
+    // repeated "DEVOIR SURVEILLÉ N° 1" band on page 2+, and the space it
+    // reserved goes back to the questions. A template can still opt in.
+    compactOnFollow: false,
     noteW: 126, // ≈ 4.4 cm grade box
     noteH: 58,
     logoMaxW: 132,
@@ -108,6 +111,16 @@ export function resolveTemplate(template = null, overrides = null) {
   } else if (template && typeof template === 'object' && template.page && template.theme) {
     // Already a full template object (e.g. a persisted custom template).
     base = ExamTemplateSchema.parse(template);
+  } else if (template && typeof template === 'object' && (template.page || template.theme || template.header || template.question || template.footer)) {
+    // A PARTIAL custom template: "Save my template" snapshots only the levers
+    // the teacher touched plus the `baseId` of the look they were saved from.
+    // Replaying it onto that base is what keeps a Compact sheet from silently
+    // turning into Classique the moment it is stored and reloaded.
+    const partial = { ...template };
+    const baseId = typeof partial.baseId === 'string' ? partial.baseId : null;
+    delete partial.baseId;
+    const parent = BUILT_IN.get(baseId || '');
+    base = ExamTemplateSchema.parse(deepMerge(parent || BUILT_IN.get('classique'), partial));
   } else {
     base = BUILT_IN.get('classique');
   }
@@ -219,9 +232,9 @@ export function resolveForRenderer(options = {}) {
 
 /**
  * Turn the "Génération personnalisée" layout controls (columns / density /
- * answer lines) into a template-shaped override the registry can merge. Keys
- * left null are ignored so the base template's own value wins.
- * @param {{ columns?: number, density?: number, answerLines?: number }} layout
+ * answer lines / header layout) into a template-shaped override the registry can
+ * merge. Keys left null are ignored so the base template's own value wins.
+ * @param {{ columns?: number, density?: number, answerLines?: number, headerVariant?: string }} layout
  */
 export function overridesFromLayout(layout = {}) {
   if (!layout) return null;
@@ -233,6 +246,9 @@ export function overridesFromLayout(layout = {}) {
     if (layout.answerLines != null) out.question.answerSpace = { lines: layout.answerLines };
     if (layout.answerStyle != null) out.question.answerStyle = layout.answerStyle;
   }
+  // The header picker overrides the template's own layout: the teacher chooses
+  // WHERE the printed elements go independently of the paper they started from.
+  if (layout.headerVariant != null) out.header = { variant: layout.headerVariant };
   return Object.keys(out).length ? out : null;
 }
 

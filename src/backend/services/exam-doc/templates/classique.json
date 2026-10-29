@@ -29,7 +29,7 @@
     "density": 1.0
   },
   "header": {
-    "variant": "bandeau",
+    "variant": "classique",
     "anonymity": false,
     "fullOnFirstPage": true,
     "compactOnFollow": false

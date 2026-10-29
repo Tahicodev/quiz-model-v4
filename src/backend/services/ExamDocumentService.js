@@ -22,6 +22,7 @@ import {
   EXAM_DOC_TARGET_SCORE,
   EXAM_DOC_POINT_STEP,
   sanitizeExamDocHeader,
+  sanitizeExamDocHeaderPresets,
   sanitizeExamDocTemplates,
 } from '../../shared/schemas/examDocument.schema.js';
 import {
@@ -86,11 +87,17 @@ export class ExamDocumentService {
   // ─── Header ────────────────────────────────────────────────────────────────
   /**
    * Persisted header merged over defaults resolved from existing rows.
-   * @returns {{ header: object, defaults: object, saved: object }}
+   * Also carries the saved-header presets list (single round-trip for the
+   * Header tab: current header + defaults + reusable history).
+   * @returns {Promise<{ header: object, defaults: object, saved: object, presets: object[] }>}
    */
   async resolveHeader(examId, schoolId) {
     const exam = await this.#getExam(examId, schoolId);
-    return this.#headerFor(exam, schoolId);
+    const result = await this.#headerFor(exam, schoolId);
+    result.presets = sanitizeExamDocHeaderPresets(
+      parseJsonObject(exam.options_json).examDocHeaderPresets || [],
+    );
+    return result;
   }
 
   async #headerFor(exam, schoolId) {
@@ -107,8 +114,45 @@ export class ExamDocumentService {
     const clean = sanitizeExamDocHeader(header || {});
     if (Object.keys(clean).length) blob.examDocHeader = clean;
     else delete blob.examDocHeader;
+    // Every saved header also joins the reusable presets list (newest first),
+    // so the teacher can re-apply an earlier look from the Header tab.
+    // Identical consecutive saves are deduplicated; the list is capped at 20.
+    const presets = sanitizeExamDocHeaderPresets(blob.examDocHeaderPresets || []);
+    if (Object.keys(clean).length) {
+      const signature = JSON.stringify(clean);
+      if (!presets.some((p) => JSON.stringify(p.header) === signature)) {
+        const name = String(clean.title || clean.schoolName || 'Header').slice(0, 60);
+        presets.unshift({ id: `hdr-${Date.now().toString(36)}`, name, header: clean });
+        if (presets.length > 20) presets.length = 20;
+        blob.examDocHeaderPresets = presets;
+      }
+    }
     await this.#repo.update('exams', exam.id, { options_json: JSON.stringify(blob) });
-    return { header: clean, defaults: await this.#defaultHeader(exam, schoolId) };
+    return { header: clean, defaults: await this.#defaultHeader(exam, schoolId), presets };
+  }
+
+  // ─── Saved header presets (reuse the same header across exams) ──────────
+  /**
+   * The teacher's saved headers, read from the `examDocHeaderPresets` slice of
+   * `Exam.options_json` and re-sanitised on the way out, so a hand-edited blob
+   * can never inject unknown keys into the header form.
+   * @returns {Promise<{ presets: object[] }>}
+   */
+  async listHeaderPresets(examId, schoolId) {
+    const exam = await this.#getExam(examId, schoolId);
+    const stored = parseJsonObject(exam.options_json).examDocHeaderPresets || [];
+    return { presets: sanitizeExamDocHeaderPresets(stored) };
+  }
+
+  /** Read-modify-write of the `examDocHeaderPresets` slice only (zero migration). */
+  async saveHeaderPresets(examId, schoolId, presets) {
+    const exam = await this.#getExam(examId, schoolId);
+    const blob = parseJsonObject(exam.options_json);
+    const clean = sanitizeExamDocHeaderPresets(presets || []);
+    if (clean.length) blob.examDocHeaderPresets = clean;
+    else delete blob.examDocHeaderPresets;
+    await this.#repo.update('exams', exam.id, { options_json: JSON.stringify(blob) });
+    return { presets: clean };
   }
 
   // ─── Custom templates (Step 5) ──────────────────────────────────────────────
@@ -144,12 +188,17 @@ export class ExamDocumentService {
   /**
    * Look one custom template up by id, so a route can hand the raw template
    * object to the registry instead of the built-in id. Returns null if absent.
+   * The saved snapshot is only a PARTIAL (the levers the teacher touched), so
+   * the `baseId` of the template it was saved from travels with it — without it
+   * the registry would rebuild the sheet from Classique and the saved look would
+   * quietly change the first time the template is reused.
    */
   async getCustomTemplate(examId, schoolId, id) {
     if (!id) return null;
     const { templates } = await this.listTemplates(examId, schoolId);
     const found = templates.find((t) => t.id === id);
-    return found ? found.template : null;
+    if (!found) return null;
+    return { ...(found.template || {}), baseId: found.baseId || null };
   }
 
   async #getExam(examId, schoolId) {
@@ -202,6 +251,7 @@ export class ExamDocumentService {
       durationMinutes: exam.duration ?? null,
       instructions: null,
       showHeader: true,
+      showMastheadBand: true,
       hiddenFields: [],
       studentNameField: true,
       studentNumberField: true,

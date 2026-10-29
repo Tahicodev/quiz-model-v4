@@ -43,7 +43,7 @@ import {
   WidthType,
 } from 'docx';
 import { config } from '../../config.js';
-import { formatPoints, resolveImage, imageDimensions, numberBlankGaps } from './text.js';
+import { formatPoints, resolveImage, imageDimensions, blankStem } from './text.js';
 import { HEADER_INK, examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
 import { resolveForRenderer } from './templates/index.js';
 
@@ -62,6 +62,7 @@ let BODY = 24; // half-points → 12pt
 let SMALL = 20; // 10pt
 let TINY = 18;
 let ANSWER_STYLE = 'classic'; // 'classic' | 'inline' (student answer layout)
+let HEADER_VARIANT = 'bandeau'; // header LAYOUT (see `PdfLayout` masthead variants)
 
 const FONT = 'Times New Roman';
 const HEAD_FONT = 'Calibri'; // the masthead reads as a different register, as in the PDF
@@ -112,6 +113,13 @@ function applyDocxTheme(cfg) {
   MASTHEAD_RUN = buildMastheadRun();
   DOTTED_RULE = { style: BorderStyle.DOTTED, size: 6, color: MUTED };
   ANSWER_STYLE = cfg.question?.answerStyle === 'inline' ? 'inline' : 'classic';
+  // WHERE the header elements sit. `officiel` is the historical name of the
+  // framed `boxed` layout, so a template saved with it keeps the frame here too
+  // (the exact alias the PDF drawer uses).
+  HEADER_VARIANT = (() => {
+    const v = cfg.header?.variant || 'bandeau';
+    return v === 'officiel' ? 'boxed' : v;
+  })();
 }
 
 const run = (text, opts = {}) =>
@@ -198,14 +206,18 @@ class DocxBuilder {
   }
 
   /**
-   * Masthead band → thick accent rule → centred title → information line, in the
-   * order and wording `headerLayout` defines (the PDF draws the same list). Word
-   * has no absolute positioning, so the logo-left / year-right split is a
-   * borderless one-row table: same sheet, still fully editable in Word.
+   * Masthead band → rule → title → information line, in the order and wording
+   * `headerLayout` defines (the PDF draws the same list). Word has no absolute
+   * positioning, so every PDF layout is mirrored with borderless tables: the
+   * band stays a one-row logo/left/right table, `split` stands the identity
+   * BESIDE the title, `boxed` frames the whole header in one bordered cell,
+   * `banner` reverses the title out on a filled bar, and `classique`/`centre`/
+   * `minimal` move the alignment and the rule. Same sheet, still editable Word.
    */
   headerChildren(model) {
     const parts = examHeaderParts(model);
     if (!parts.enabled) return []; // teacher switch: no printed header at all
+    const variant = HEADER_VARIANT;
 
     const leftLines = parts.left.filter((line) => line.text);
     const rightLines = parts.right.filter((line) => line.text);
@@ -214,6 +226,79 @@ class DocxBuilder {
       maxHPx: Math.round(52 * parts.logoScale * (96 / 72)), // pt → px at 96 dpi
     });
 
+    // `classique`/`split` print the title LEFT, every other layout centres it.
+    const titleAlign =
+      variant === 'classique' || variant === 'split' ? AlignmentType.LEFT : AlignmentType.CENTER;
+    const stack = (lines, align) =>
+      lines.map((line, i) =>
+        para([run(line.text, MASTHEAD_RUN[line.role])], {
+          align,
+          spaceBefore: i === 0 ? 0 : 20,
+          spaceAfter: 0,
+          keepNext: true,
+        }),
+      );
+    // `centre` stacks the band on the axis, `split` right-aligns it beside the
+    // title; `bandeau`/`classique`/`boxed` keep the school left, the year right.
+    const sideAlign =
+      variant === 'centre' ? AlignmentType.CENTER : variant === 'split' ? AlignmentType.RIGHT : undefined;
+
+    const titleBlock = (align = titleAlign) => {
+      if (variant === 'banner') {
+        // One filled bar: title, label and information on the accent background.
+        const runs = [run(parts.title, { bold: true, size: 28, color: 'FFFFFF', font: HEAD_FONT })];
+        if (parts.tag) runs.push(run(parts.tag, { bold: true, size: TINY, color: 'E8EDF3', font: HEAD_FONT, break: 1 }));
+        if (parts.info.length) runs.push(run(parts.info.join(`   ${'·'}   `), { size: SMALL, color: 'E8EDF3', font: HEAD_FONT, break: 1 }));
+        return [para(runs, { align: AlignmentType.CENTER, shading: ACCENT, spaceBefore: 20, spaceAfter: 120, keepNext: true })];
+      }
+      const out = [
+        para([run(parts.title, { bold: true, size: 30, color: ACCENT, font: HEAD_FONT })], {
+          align,
+          spaceAfter: parts.tag ? 40 : 60,
+          keepNext: true,
+        }),
+      ];
+      if (parts.tag) {
+        out.push(
+          para([run(parts.tag, { bold: true, size: TINY, color: MUTED, font: HEAD_FONT })], {
+            align,
+            spaceAfter: 60,
+            keepNext: true,
+          }),
+        );
+      }
+      if (parts.info.length) {
+        out.push(
+          para([run(parts.info.join(`   ${'·'}   `), { size: SMALL, color: MUTED, font: HEAD_FONT })], {
+            align,
+            spaceAfter: 120,
+            keepNext: true,
+          }),
+        );
+      }
+      return out;
+    };
+
+    // The rule that closes the band. `minimal` needs none (the bar or the tight
+    // title does the separating), `banner` skips it because the filled bar comes
+    // right after, `boxed` doubles it like the framed PDF header, and only
+    // `bandeau` keeps the thick accent stroke.
+    const bandRule = () => {
+      if (variant === 'minimal' || variant === 'banner') return null;
+      const bottom =
+        variant === 'boxed'
+          ? { style: BorderStyle.DOUBLE, size: 6, color: ACCENT, space: 1 }
+          : variant === 'bandeau'
+            ? { style: BorderStyle.SINGLE, size: 18, color: ACCENT, space: 1 }
+            : { style: BorderStyle.SINGLE, size: 6, color: HAIRLINE, space: 1 };
+      return para([run(' ', { size: 4 })], {
+        spaceBefore: 20,
+        spaceAfter: 100,
+        keepNext: true,
+        border: { bottom },
+      });
+    };
+
     const cells = [];
     if (logo) {
       cells.push(
@@ -221,7 +306,7 @@ class DocxBuilder {
           width: { size: 18, type: WidthType.PERCENTAGE },
           borders: NO_BORDERS,
           verticalAlign: VerticalAlignTable.CENTER,
-          children: [para([logo], { spaceAfter: 0 })],
+          children: [para([logo], { align: sideAlign, spaceAfter: 0 })],
         }),
       );
     }
@@ -229,70 +314,100 @@ class DocxBuilder {
       new TableCell({
         width: { size: logo ? 54 : 72, type: WidthType.PERCENTAGE },
         borders: NO_BORDERS,
-        children: leftLines.map((line, i) =>
-          para([run(line.text, MASTHEAD_RUN[line.role])], {
-            spaceBefore: i === 0 ? 0 : 20,
-            spaceAfter: 0,
-            keepNext: true,
-          }),
-        ),
+        children: stack(leftLines, sideAlign),
       }),
     );
     cells.push(
       new TableCell({
         width: { size: 28, type: WidthType.PERCENTAGE },
         borders: NO_BORDERS,
-        children: rightLines.map((line) =>
-          para([run(line.text, MASTHEAD_RUN[line.role])], {
-            align: AlignmentType.RIGHT,
-            spaceAfter: 0,
-          }),
-        ),
+        children: stack(rightLines, AlignmentType.RIGHT),
       }),
     );
 
-    const out = [
-      new Table({
-        width: { size: 100, type: WidthType.PERCENTAGE },
-        layout: TableLayoutType.FIXED,
-        rows: [new TableRow({ children: cells })],
-      }),
-    ];
-
-    // The thick accent rule, the coloured band that separates the masthead from
-    // the title (18 eighths of a point ≈ the 2.4pt stroke the PDF draws).
-    out.push(
-      para([run(' ', { size: 4 })], {
-        spaceBefore: 20,
-        spaceAfter: 100,
-        keepNext: true,
-        border: { bottom: { style: BorderStyle.SINGLE, size: 18, color: ACCENT, space: 1 } },
-      }),
-    );
-    out.push(
-      para([run(parts.title, { bold: true, size: 30, color: ACCENT, font: HEAD_FONT })], {
-        align: AlignmentType.CENTER,
-        spaceAfter: parts.tag ? 40 : 60,
-        keepNext: true,
-      }),
-    );
-    if (parts.tag) {
+    const out = [];
+    if (variant === 'split' && parts.band) {
+      // Title and information on the left, logo and identity stacked right — the
+      // Word mirror of `#drawSplitMasthead`.
+      const side = [];
+      if (logo) side.push(para([logo], { align: AlignmentType.RIGHT, spaceAfter: 40, keepNext: true }));
+      side.push(...stack(leftLines, AlignmentType.RIGHT), ...stack(rightLines, AlignmentType.RIGHT));
       out.push(
-        para([run(parts.tag, { bold: true, size: TINY, color: MUTED, font: HEAD_FONT })], {
-          align: AlignmentType.CENTER,
-          spaceAfter: 60,
-          keepNext: true,
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          layout: TableLayoutType.FIXED,
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: 62, type: WidthType.PERCENTAGE },
+                  borders: NO_BORDERS,
+                  children: titleBlock(AlignmentType.LEFT),
+                }),
+                new TableCell({
+                  width: { size: 38, type: WidthType.PERCENTAGE },
+                  borders: NO_BORDERS,
+                  children: side,
+                }),
+              ],
+            }),
+          ],
+        }),
+      );
+      out.push(
+        para([run(' ', { size: 4 })], {
+          spaceBefore: 40,
+          spaceAfter: 120,
+          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: HAIRLINE, space: 1 } },
+        }),
+      );
+    } else {
+      if (parts.band) {
+        out.push(
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            layout: TableLayoutType.FIXED,
+            rows: [new TableRow({ children: cells })],
+          }),
+        );
+        const rule = bandRule();
+        if (rule) out.push(rule);
+      }
+      out.push(...titleBlock());
+    }
+    if (variant === 'centre') {
+      // The centred header closes the title block with a thin rule, as drawn on
+      // the axis by `#drawCentreMasthead`.
+      out.push(
+        para([run(' ', { size: 4 })], {
+          spaceBefore: 0,
+          spaceAfter: 100,
+          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: HAIRLINE, space: 1 } },
         }),
       );
     }
-    if (parts.info.length) {
+    if (variant === 'boxed') {
+      // The framed official-paper look: one rectangle around the whole header.
+      const inner = out.splice(0, out.length);
+      const box = { style: BorderStyle.SINGLE, size: 8, color: ACCENT };
       out.push(
-        para([run(parts.info.join(`   ${'·'}   `), { size: SMALL, color: MUTED, font: HEAD_FONT })], {
-          align: AlignmentType.CENTER,
-          spaceAfter: 120,
-          keepNext: true,
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          layout: TableLayoutType.FIXED,
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  width: { size: 100, type: WidthType.PERCENTAGE },
+                  borders: { top: box, bottom: box, left: box, right: box },
+                  children: inner,
+                }),
+              ],
+            }),
+          ],
         }),
       );
+      out.push(para([run(' ', { size: 4 })], { spaceBefore: 0, spaceAfter: 120 }));
     }
     // The grade is printed on the confidential key only: on the student paper
     // the note box has to stay empty (same rule as the PDF renderer).
@@ -449,10 +564,16 @@ class DocxBuilder {
         // confidential key skips it — its answers are listed, already numbered.
         if (isKey) break;
         if (inline && Array.isArray(block.bank) && block.bank.length) {
-          // Inline: numbered option bank; the student writes the option number in
-          // each `(n)` gap of the sentence, so there are no answer lines here.
+          // Inline: numbered option bank ("1. word  2. word …", the number in
+          // bold); the student writes the option number in each `(n)` gap of
+          // the sentence, so there are no answer lines here.
           out.push(para([run("Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.", { size: SMALL, italics: true })], { spaceAfter: 40, keepNext: true }));
-          out.push(para([run('Options : ', { bold: true, size: SMALL }), run(block.bank.map((w, i) => `(${i + 1}) ${w}`).join('    '))], { indent: 284, spaceAfter: 80 }));
+          const bankRuns = [];
+          block.bank.forEach((w, i) => {
+            if (i) bankRuns.push(run('    ', { size: SMALL }));
+            bankRuns.push(run(`${i + 1}.`, { bold: true, size: SMALL }), run(`\u00a0${w}`, { size: SMALL }));
+          });
+          out.push(para([run('Options : ', { bold: true, size: SMALL }), ...bankRuns], { indent: 284, spaceAfter: 80 }));
           break;
         }
         const total = block.blanks || 1;
@@ -516,8 +637,10 @@ class DocxBuilder {
       }
       case 'pairs': {
         // Inline: the two lists print one after the other (no table, no column
-        // headers), then a small answer grid records the pairs — horizontal when
-        // the columns stay readable, otherwise a vertical N°/Lettre table.
+        // headers), then the answer grid records the pairs. The grid is always
+        // two columns x rows (`N° | Lettre`): numbers spread across the page read
+        // as a fourth list of options, and the writing surface has to line up
+        // with the lines the items are written on — the same grid the PDF draws.
         if (inline) {
           out.push(para([run('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', { size: SMALL, italics: true })], { spaceAfter: 40, keepNext: true }));
           block.lefts.forEach((l, i) => out.push(para([run(`${l.n}. ${l.text}`)], { spaceAfter: i === block.lefts.length - 1 ? 60 : 20, keepNext: true })));
@@ -530,13 +653,8 @@ class DocxBuilder {
             children: [para([run(label, { bold: !!opts.head, size: SMALL })], { align: opts.center ? AlignmentType.CENTER : undefined, spaceAfter: 0 })],
           });
           const gridRows = [];
-          if (count > 0 && 100 / count >= 12) {
-            gridRows.push(new TableRow({ tableHeader: true, children: Array.from({ length: count }, (_, i) => gridCell(`${i + 1}`, 100 / count, { head: true, center: true })) }));
-            gridRows.push(new TableRow({ children: Array.from({ length: count }, () => gridCell('', 100 / count, { center: true })) }));
-          } else {
-            gridRows.push(new TableRow({ tableHeader: true, children: [gridCell('N°', 30, { head: true, center: true }), gridCell('Lettre', 70, { head: true, center: true })] }));
-            for (let i = 0; i < count; i++) gridRows.push(new TableRow({ children: [gridCell(`${i + 1}`, 30, { center: true }), gridCell('', 70)] }));
-          }
+          gridRows.push(new TableRow({ tableHeader: true, children: [gridCell('N°', 30, { head: true, center: true }), gridCell('Lettre', 70, { head: true, center: true })] }));
+          for (let i = 0; i < count; i++) gridRows.push(new TableRow({ children: [gridCell(`${i + 1}`, 30, { center: true }), gridCell('', 70)] }));
           out.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, layout: TableLayoutType.FIXED, rows: gridRows }));
           break;
         }
@@ -683,7 +801,13 @@ class DocxBuilder {
       ),
     );
     out.push(
-      para([run(item.block.kind === 'blanks' ? numberBlankGaps(item.block.text).text || '(énoncé vide)' : item.block.text || '(énoncé vide)')], { spaceAfter: 60, keepNext: true }),
+      // The inline surface writes the option number inside the space itself, so
+      // its gaps stay plain rules — exactly what the PDF traces (see `blankStem`).
+      // The answer key always keeps the numbered gaps: its answers are listed.
+      para([run(blankStem(item.block, { inline: !isKey && ANSWER_STYLE === 'inline' }))], {
+        spaceAfter: 60,
+        keepNext: true,
+      }),
     );
     const media = this.imageElement(item.block.media, { maxWPx: Math.round(CONTENT_PX * 0.7), maxHPx: 190 });
     if (media) out.push(para([media], { spaceAfter: 80, keepNext: true }));

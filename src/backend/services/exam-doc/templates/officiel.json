@@ -19,20 +19,20 @@
       "head": "Helvetica",
       "headBold": "Helvetica-Bold"
     },
-    "sizes": { "body": 12, "small": 10, "tiny": 9, "title": 15 },
+    "sizes": { "body": 12, "small": 10, "tiny": 9, "title": 16 },
     "colors": {
-      "accent": "#1F3A5F",
-      "muted": "#5B6472",
-      "hairline": "#C9D1D9",
-      "fieldBg": "#F6F8FA"
+      "accent": "#1B2A44",
+      "muted": "#4A5361",
+      "hairline": "#B8C1CC",
+      "fieldBg": "#F2F4F7"
     },
     "density": 1.0
   },
   "header": {
-    "variant": "officiel",
+    "variant": "boxed",
     "anonymity": true,
     "fullOnFirstPage": true,
-    "compactOnFollow": true
+    "compactOnFollow": false
   },
   "footer": {
     "variant": "title+number",

@@ -22,7 +22,7 @@
 import PDFDocument from 'pdfkit';
 import { existsSync } from 'node:fs';
 import { config } from '../../config.js';
-import { formatPoints, toWinAnsi, resolveImage, numberBlankGaps } from './text.js';
+import { formatPoints, toWinAnsi, resolveImage, blankStem } from './text.js';
 import { examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
 import { opHelpers, PdfLayout } from './layoutEngine.js';
 import { resolveForRenderer } from './templates/index.js';
@@ -33,10 +33,11 @@ export const PDF_PAGE = Object.freeze({ width: 595.28, height: 841.89 });
 export const PDF_MARGIN = 42;
 
 class PdfBuilder {
-  constructor(doc, ctx, cfg) {
+  constructor(doc, ctx, cfg, faces) {
     this.doc = doc;
     this.ctx = ctx;
     this.cfg = cfg;
+    this.faces = faces || null;
     this.ops = opHelpers(cfg);
     this.S = cfg.theme.sizes;
     this.D = cfg.theme.density;
@@ -101,17 +102,22 @@ class PdfBuilder {
 
     const ops = [];
     if (parts.enabled) {
-      const logo = this.picture(parts.logo, {
-        maxW: cfg.header.logoMaxW,
-        maxH: cfg.header.logoMaxH * parts.logoScale,
-      });
+      const logo = parts.band
+        ? this.picture(parts.logo, {
+            maxW: cfg.header.logoMaxW,
+            maxH: cfg.header.logoMaxH * parts.logoScale,
+          })
+        : null;
       ops.push({
         t: 'masthead',
         variant: cfg.header.variant,
+        // `hideBand`: only the top band (logo, school, year lines + rule) is
+        // dropped; the title and the Prof./Durée/Date line still print.
+        hideBand: !parts.band,
         logo,
         initials: parts.initials,
-        left: stack(parts.left),
-        right: stack(parts.right),
+        left: parts.band ? stack(parts.left) : [],
+        right: parts.band ? stack(parts.right) : [],
         title: enc(parts.title),
         tag: enc(parts.tag),
         subtitle: enc(parts.info.join('     ·     ')),
@@ -190,11 +196,19 @@ class PdfBuilder {
         if (isKey) break;
         if (inline && Array.isArray(block.bank) && block.bank.length) {
           // Inline: a numbered option bank; the student writes the option number
-          // directly in each `(n)` gap of the sentence (no separate answer lines).
+          // directly in each `(n)` gap of the sentence (no separate answer
+          // lines). Each label is a bold "N." — a shape a `(n)` gap marker in
+          // the sentence can never be confused with.
           ops.push(this.txt("Complétez : dans chaque espace, écrivez le numéro de l'option qui convient.", { size: SMALL, face: 'italic', spaceAfter: 3 }));
-          ops.push(this.txt('Options :', { size: SMALL, face: 'bold', spaceBefore: 1, spaceAfter: 2 }));
-          const bankLine = block.bank.map((w, i) => `(${i + 1})\u00a0${w}`).join('\u00a0\u00a0\u00a0');
-          ops.push(this.txt(bankLine, { size: SMALL, indent: 14, spaceAfter: 4, lineGap: 1.5 }));
+          ops.push({
+            t: 'bank',
+            label: this.ctx.encode('Options :'),
+            items: block.bank.map((w, i) => ({ n: i + 1, text: this.ctx.encode(String(w ?? '')) })),
+            size: SMALL,
+            indent: 14,
+            spaceBefore: 1 * this.D,
+            spaceAfter: 4 * this.D,
+          });
           break;
         }
         for (let i = 1; i <= (block.blanks || 1); i++) {
@@ -257,27 +271,23 @@ class PdfBuilder {
       }
       case 'pairs': {
         // Inline: the two lists are printed one after the other (no table, no
-        // headers), then a small answer grid records the pairs. The grid is
-        // horizontal (numbers across the top) when every column clears ~34pt, so
-        // few items read compactly; otherwise a vertical N°/Lettre table for
-        // long or numerous items.
+        // headers), then the answer grid records the pairs. The grid is always
+        // TWO COLUMNS x ROWS (`N° | Lettre`, one row per item): a row of numbers
+        // spread across the page reads as a fourth list of options, and the
+        // teacher asked for the writing surface to line up with the lines the
+        // items are written on.
         if (inline) {
           ops.push(this.txt('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', { size: SMALL, face: 'italic', spaceAfter: 4 }));
           for (const left of block.lefts) ops.push(this.txt(`${left.n}. ${left.text}`, { size: SMALL, spaceAfter: 1, lineGap: 1 }));
           for (const right of (block.rights || [])) ops.push(this.txt(`${right.letter}. ${right.text}`, { size: SMALL, spaceAfter: 1, lineGap: 1 }));
           const count = Math.max(block.lefts.length, (block.rights || []).length);
           const hd = (t, w, align) => ({ text: this.ctx.encode(t), width: w, height: 16, border: 'box', face: 'bold', size: SMALL, align });
-          const cellv = (t, w, align) => ({ text: this.ctx.encode(t), width: w, height: 22, border: 'box', size: SMALL, align });
+          const cellv = (t, w, align) => ({ text: this.ctx.encode(t), width: w, height: 18, border: 'box', size: SMALL, align });
           const rows = [];
-          if (count > 0 && TW / count >= 34) {
-            for (let i = 0; i < count; i++) rows.push(hd(`${i + 1}`, TW / count, 'center'));
-            for (let i = 0; i < count; i++) rows.push(cellv('', TW / count, 'center'));
-          } else {
-            const numW = 44;
-            const ansW = TW - numW;
-            rows.push(hd('N°', numW, 'center'), hd('Lettre', ansW, 'center'));
-            for (let i = 0; i < count; i++) rows.push(cellv(`${i + 1}`, numW, 'center'), cellv('', ansW, 'center'));
-          }
+          const numW = 44;
+          const ansW = TW - numW;
+          rows.push(hd('N°', numW, 'center'), hd('Lettre', ansW, 'center'));
+          for (let i = 0; i < count; i++) rows.push(cellv(`${i + 1}`, numW, 'center'), cellv('', ansW, 'center'));
           ops.push(cells(rows, { spaceBefore: 6, spaceAfter: 6 }));
           break;
         }
@@ -316,6 +326,9 @@ class PdfBuilder {
           // writes the letter, and the row already lines up with column A.
           rows.push(cell('', colR));
         }
+        // The table is traced in the flow, under the stem: an earlier attempt to
+        // hug it to the right edge of the column was dropped at the teacher's
+        // request — the wrapped cells read worse than the strip of paper saved.
         ops.push(cells(rows, { spaceAfter: 6 }));
         break;
       }
@@ -405,13 +418,21 @@ class PdfBuilder {
       spaceBefore: 2,
       spaceAfter: 2,
     });
-    head.push(this.txt(item.block.kind === 'blanks' ? numberBlankGaps(item.block.text).text || '(énoncé vide)' : item.block.text || '(énoncé vide)', { spaceAfter: 2 }));
+    // Fill-blank gaps carry a `(n)` marker only when the sheet numbers the answer
+    // lines below; the inline surface writes the option number in the space
+    // itself, so its gaps stay plain rules (`blankStem` owns that choice).
+    head.push(this.txt(blankStem(item.block, { inline: !isKey && cfg.question.answerStyle === 'inline' }) || '(énoncé vide)', { spaceAfter: 2 }));
 
     const media = this.picture(item.block.media, { maxW: CONTENT_W * 0.7, maxH: 190 });
     if (media) head.push(image(media, { maxW: CONTENT_W * 0.7, spaceAfter: 5 }));
 
-    const ops = [group(head, { keep: true, label: `question ${item.number} head` })];
-    ops.push(...this.blockOps(item, isKey));
+    // Title + stem + the answer surface (options, table, gaps) stay glued
+    // together whenever they fit a column: a heading must never be orphaned
+    // from its table or options. If the whole body does NOT fit a column, the
+    // keep-group opens up and its children flow one by one, so tall tables
+    // break at a row instead of wasting the page.
+    const body = [...head, ...this.blockOps(item, isKey)];
+    const ops = [group(body, { keep: true, label: `question ${item.number} body` })];
 
     if (!isKey) {
       const lines = this.writingLines(item);
@@ -428,7 +449,12 @@ class PdfBuilder {
     } else {
       ops.push(group(this.answerKeyOps(item), { label: 'key' }));
     }
-    return group(ops, { label: `question ${item.number}` });
+    // The question flows: the answer lines below and the answer-key block may
+    // continue in the next column on their own, so the engine never flips a
+    // whole question and leaves a blank tail. Packing stays greedy
+    // top-to-bottom and numbering keeps following the flow order, so pages end
+    // up tighter and fewer.
+    return group(ops, { keep: false, label: `question ${item.number}` });
   }
 
   sectionNode(section, model) {
@@ -580,7 +606,7 @@ export async function renderExamDocumentPdf(model, options = {}) {
     };
   }
 
-  const builder = new PdfBuilder(doc, ctx, cfg);
+  const builder = new PdfBuilder(doc, ctx, cfg, faces);
   const nodes = builder.build(model);
   const layout = new PdfLayout(doc, faces, cfg);
   layout.render(nodes);

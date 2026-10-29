@@ -50,14 +50,42 @@ export const BLANK_TOKEN_RE = /_{2,}|\.\.\.|…|\(\s{2,}\)|- {2,}|\[[\s]*\]/g;
  * "Réponses" block printed under the question, so the inline trait only marks
  * where each gap sits. Numbering restarts at 1 for every question. Returns the
  * rewritten stem and how many blanks were labelled.
+ *
+ * `numbered: false` prints the gaps as plain rules (`La ____ est grande.`).
+ * The inline answer style needs it: there the student writes the OPTION NUMBER
+ * straight into the space, so a `(1)` marker is a second numbering of the same
+ * sentence competing with the `1. 2  2. 8  3. 0` bank below it.
  */
-export function numberBlankGaps(text) {
+export function numberBlankGaps(text, { numbered = true } = {}) {
   let n = 0;
   const out = String(text ?? '').replace(BLANK_TOKEN_RE, () => {
     n += 1;
-    return ` (${n}) ____`;
+    return numbered ? ` (${n}) ____` : '____';
   });
   return { text: out, count: n };
+}
+
+/**
+ * The printed stem of a fill-blank question, gaps numbered for the surface in
+ * use. One helper for the PDF, Word and the preview, so the three sheets can
+ * never disagree about whether the gaps carry a `(n)` marker.
+ */
+export function blankStem(block, { inline = false } = {}) {
+  const raw = String(block?.text ?? '');
+  if (block?.kind !== 'blanks') return raw;
+  const hasBank = Array.isArray(block.bank) && block.bank.length > 0;
+  return numberBlankGaps(raw, { numbered: !(inline && hasBank) }).text;
+}
+
+/**
+ * Circled option number for the fill-blank bank: 1 → ①, 2 → ② … 20 → ⑳.
+ * Kept for legacy callers; the exam sheet now prints plain bold "N." labels
+ * (the circles read poorly at small sizes on paper).
+ */
+export function circledNumber(n) {
+  const i = Math.floor(Number(n));
+  if (i >= 1 && i <= 20) return String.fromCodePoint(0x2460 + i - 1);
+  return `${i}.`;
 }
 
 // ─── WinAnsi sanitising for PDF ──────────────────────────────────────────────

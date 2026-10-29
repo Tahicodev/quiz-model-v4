@@ -36,6 +36,24 @@ const hexColor = z
   .string()
   .regex(/^#[0-9A-Fa-f]{6}$/, 'must be a #RRGGBB colour');
 
+/**
+ * The header LAYOUTS the sheet can be drawn with. Each one only decides WHERE
+ * the printed elements go (the content itself is governed by the
+ * `showMastheadBand` / title switches); every value maps one-to-one onto a
+ * `PdfLayout` masthead drawer, the Word header builder and the preview CSS class
+ * of the same name. `officiel` is the historical alias of the framed `boxed`.
+ */
+export const HEADER_LAYOUT_VARIANTS = Object.freeze([
+  'bandeau',
+  'classique',
+  'centre',
+  'split',
+  'boxed',
+  'banner',
+  'minimal',
+  'officiel',
+]);
+
 const ThemeSchema = z
   .object({
     fonts: z
@@ -92,7 +110,10 @@ const PageSchema = z
 
 const HeaderSchema = z
   .object({
-    variant: z.enum(['bandeau', 'classique', 'minimal', 'officiel']),
+    // WHERE the header elements go on the sheet (see `exam-doc/headerLayout.js`
+    // for WHAT they say). `officiel` is the historical name of the framed
+    // `boxed` layout; `minimal` is the one-line header of the Compact paper.
+    variant: z.enum(HEADER_LAYOUT_VARIANTS),
     anonymity: z.boolean(),
     fullOnFirstPage: z.boolean(),
     compactOnFollow: z.boolean(),

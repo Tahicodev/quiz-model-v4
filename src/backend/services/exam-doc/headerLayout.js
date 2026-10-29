@@ -75,7 +75,7 @@ function joinBits(bits) {
  * Individual elements are suppressed when their field name appears in
  * `header.hiddenFields` (set by the teacher via the Revue tab).
  * @returns {{
- *   enabled: boolean, logo: string|null, logoScale: number, initials: string,
+ *   enabled: boolean, band: boolean, logo: string|null, logoScale: number, initials: string,
  *   left: Array<{text: string, role: string}>, right: Array<{text: string, role: string}>,
  *   title: string, tag: string, info: string[]
  * }}
@@ -93,6 +93,10 @@ export function examHeaderParts(model) {
     // `showHeader` is a presentation switch only: it never touches the answers,
     // the barème or the identity fields below it.
     enabled: header.showHeader !== false,
+    // `showMastheadBand` is the finer switch: only the top band (logo, school,
+    // academic year, side lines) disappears — the title and the information
+    // line (Prof. · Durée · Date) stay printed by default.
+    band: header.showMastheadBand !== false,
     logo: isHidden('logo') ? null : (header.logoDataUrl || header.logoUrl || null),
     logoScale: Number(header.logoScale) || 1,
     initials: school.slice(0, 1).toUpperCase(),

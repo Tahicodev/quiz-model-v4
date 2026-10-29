@@ -47,8 +47,12 @@
 	];
 
 	// Display switches: they change the printed sheet, never the stored data.
+	// The parentheses name what really prints — the band is the institutional
+	// strip (logo, ministry, academy, school, year); the header below it is the
+	// exam title over the Prof. · Durée · Date line.
 	const DISPLAY_TOGGLES = [
-		{ name: 'showHeader', label: 'Show the header (logo, school, title, information)' },
+		{ name: 'showHeader', label: 'Show the header (exam title · Prof. · Durée · Date)' },
+		{ name: 'showMastheadBand', label: 'Show the top band (logo, ministry, academy, school, year)' },
 	];
 	
 	// Individual header elements the teacher can show/hide via the Revue tab.
@@ -147,6 +151,10 @@
 	}
 
 	function edHeaderForm(header) {
+		// The logo picker is a hand-rolled row: the native file input prints its
+		// own localized caption ("Choisir un fichier" on a French browser) and
+		// takes no style, so the real input stays in the DOM hidden but
+		// focusable while a normal button drives it (see `logo-pick` below).
 		const inputs = HEADER_FIELDS.map((field) => edTextField(field, header[field.name])).join('');
 		const toggle = (item, checked) => `
 			<label class="ed-check">
@@ -156,6 +164,10 @@
 		const displayToggles = DISPLAY_TOGGLES.map((item) => toggle(item, header[item.name] !== false)).join('');
 		const toggles = TOGGLES.map((item) => toggle(item, header[item.name] !== false)).join('');
 		const logoSrc = header.logoDataUrl || header.logoUrl || '';
+		// The band toggle can only show or hide what the fields actually hold:
+		// with every band field empty, checking it changes nothing on the sheet,
+		// so say so instead of leaving the teacher hunting for a broken switch.
+		const bandHasContent = Boolean(logoSrc) || [header.ministry, header.academy, header.schoolName, header.academicYear, header.subject, header.level, header.group].some((v) => String(v || '').trim());
 		return `
 			<div class="ed-form-grid">${inputs}
 				<div class="ed-field">
@@ -175,9 +187,12 @@
 
 			<div class="ed-fieldset">
 				<span class="ed-fieldset-title">Display</span>
-				<div class="ed-checks">${displayToggles}</div>
-				<p class="ed-help">Without the header the sheet starts directly on the questions; the identification fields and the grade box are still printed.</p>
+				<div class="ed-checks ed-checks--stacked">${displayToggles}</div>
+				<p class="ed-help">Without the header the sheet starts directly on the questions; the identification fields and the grade box are still printed. Hiding only the top band keeps the title and the information line (teacher · duration · date).</p>
+				${bandHasContent ? '' : '<p class="ed-help">Heads-up: the top band is nearly empty right now — it only shows the initials disc and the exam name. Its content comes from the Logo, Ministry, Academy, School and Academic year fields above; fill at least one (or upload a logo) and the band toggle will visibly change the sheet.</p>'}
 			</div>
+
+			<div class="ed-fieldset" data-ed-role="header-presets"></div>
 
 			<div class="ed-fieldset">
 				<span class="ed-fieldset-title">School logo</span>
@@ -186,7 +201,16 @@
 						${logoSrc ? `<img src="${edEscape(logoSrc)}" alt="">` : '<span class="ed-logo-empty">No logo</span>'}
 					</span>
 					<div class="ed-logo-controls">
-						<input type="file" accept="image/png,image/jpeg" class="ed-input ed-file" data-ed-role="logo-file">
+						<div class="ed-file-picker">
+							<button type="button" class="btn btn-secondary btn-sm ed-file-btn" data-ed-role="logo-pick">
+								<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+									<path fill="currentColor" d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm-1 11h-4v-4h2v2h2v-2h-2v-2h-2v2h-2v-2h2V9h4v8Z"/>
+								</svg>
+								Choose image
+							</button>
+							<span class="ed-file-name" data-ed-role="logo-file-name">PNG or JPG, up to 2 MB</span>
+							<input type="file" accept="image/png,image/jpeg" class="ed-file-input" data-ed-role="logo-file">
+						</div>
 						<label class="ed-range-label">
 							Size <span data-ed-role="scale-value">${edPoints(header.logoScale || 1)}×</span>
 							<input type="range" min="0.2" max="1.5" step="0.05" class="ed-range"
@@ -239,6 +263,72 @@
 		}
 		header.hiddenFields = hidden.length ? hidden : [];
 		return header;
+	}
+
+	// ─── Saved headers (per-exam presets) ────────────────────────────────────────
+	// Every "Save header" records the current form as a reusable preset; the
+	// server keeps the list (newest first, max 20). The teacher can re-apply or
+	// delete any of them from this list in the Header tab.
+	function edPresetsPanelHtml(state) {
+		const list = state.headerPresets || [];
+		if (!list.length) {
+			return `
+				<span class="ed-fieldset-title">Saved headers</span>
+				<p class="ed-help">No saved header yet. Each time you press “Save header”, the current form is recorded here so you can re-apply it later.</p>`;
+		}
+		const items = list.map((p) => `
+			<li class="ed-preset-item">
+				<span class="ed-preset-name" title="${edEscape(p.name)}">${edEscape(p.name)}</span>
+				<span class="ed-preset-info">${edEscape([p.header?.schoolName, p.header?.title, p.header?.subject].filter(Boolean).join(' · ')) || '—'}</span>
+				<span class="ed-preset-actions">
+					<button type="button" class="btn btn-primary btn-sm" data-ed-role="preset-apply" data-ed-preset="${edEscape(p.id)}">Apply</button>
+					<button type="button" class="btn btn-secondary btn-sm" data-ed-role="preset-delete" data-ed-preset="${edEscape(p.id)}" aria-label="Delete saved header">Delete</button>
+				</span>
+			</li>`).join('');
+		return `
+			<span class="ed-fieldset-title">Saved headers</span>
+			<p class="ed-help">Headers are recorded automatically on every save. Apply one to fill the form (it stays unsaved until you press “Save header”).</p>
+			<ul class="ed-preset-list">${items}</ul>
+			<button type="button" class="btn btn-secondary btn-sm" data-ed-role="preset-clear">Clear the list</button>`;
+	}
+
+	function edRenderPresetsPanel(state) {
+		const host = state.modal?.querySelector('[data-ed-role="header-presets"]');
+		if (host) host.innerHTML = edPresetsPanelHtml(state);
+	}
+
+	function edSyncPresets(state, result) {
+		if (result && Array.isArray(result.presets)) state.headerPresets = result.presets;
+		edRenderPresetsPanel(state);
+	}
+
+	function edPersistPresets(state, next) {
+		return edApi('PUT', `${API_BASE}/${encodeURIComponent(state.examId)}/header-presets`, { presets: next })
+			.then((saved) => {
+				state.headerPresets = (saved && saved.presets) || next;
+				edRenderPresetsPanel(state);
+			});
+	}
+
+	function edApplyPreset(state, id) {
+		const preset = (state.headerPresets || []).find((p) => p.id === id);
+		if (!preset) return;
+		// The preset stores the header as it was saved (no logo base64 — those
+		// live in uploaded files): keep the currently loaded logo untouched.
+		const merged = Object.assign({}, preset.header);
+		if (!merged.logoUrl) merged.logoUrl = state.header?.logoUrl || null;
+		state.header = merged;
+		state.logoDataUrl = null;
+		edApplyHeaderToForm(state);
+		const logoPreview = state.modal.querySelector('[data-ed-role="logo-preview"]');
+		if (logoPreview) {
+			const src = preset.header.logoUrl || '';
+			logoPreview.classList.toggle('has-image', !!src);
+			logoPreview.innerHTML = src
+				? `<img src="${edEscape(src)}" alt="">`
+				: '<span class="ed-logo-empty">No logo</span>';
+		}
+		edToast('Saved header applied — press “Save header” to keep it.', 'success');
 	}
 
 	// ─── Review panel ─────────────────────────────────────────────────────────────────
@@ -396,6 +486,90 @@
 			</button>`;
 	}
 
+	// ─── Header layout picker ──────────────────────────────────────────────────
+	// The layouts that place the PRINTED header elements differently on the sheet.
+	// Each value mirrors one `PdfLayout` masthead drawer, one branch of the Word
+	// header builder and one preview CSS class of the same name, so the thumbnail
+	// is the sheet. The content (logo, school, ministry, year, title) is still
+	// governed by step 1: a layout never prints a line the teacher left empty.
+	// `value: null` gives the choice back to the template.
+	const ED_HEADER_LAYOUTS = [
+		{ value: null, label: 'Template default', hint: 'The header that comes with the picked template' },
+		{ value: 'bandeau', label: 'Band + centred title', hint: 'School block on top, thick rule, title centred' },
+		{ value: 'classique', label: 'Band + left title', hint: 'School block on top, hairline, title aligned left' },
+		{ value: 'centre', label: 'Centred', hint: 'Logo, school lines and title all on the axis' },
+		{ value: 'split', label: 'Split', hint: 'Title on the left, school block stacked on the right' },
+		{ value: 'boxed', label: 'Framed', hint: 'The whole header inside a rectangle (official look)' },
+		{ value: 'banner', label: 'Title bar', hint: 'Title reversed out on a filled colour bar' },
+		{ value: 'minimal', label: 'Minimal', hint: 'One tight centred line, no rule — leaves room for questions' },
+	];
+
+	/** Wireframe thumbnail of one header layout: pure SVG, no image assets. */
+	function edHeaderWireSvg(kind) {
+		const r = (x, y, w, h, o = 1) =>
+			`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1" fill="currentColor" opacity="${o}"/>`;
+		const bandLeft = r(5, 6, 13, 12, 0.9) + r(23, 7, 34, 3) + r(23, 13, 26, 2.4, 0.55);
+		const bandRight = r(82, 6, 13, 12, 0.9) + r(43, 7, 34, 3) + r(51, 13, 26, 2.4, 0.55);
+		const bandCentre = r(43.5, 3, 13, 11, 0.9) + r(30, 16, 40, 2.6) + r(34, 21, 32, 2.2, 0.55);
+		const titleCentre = r(28, 30, 44, 4.2, 0.85);
+		const titleLeft = r(5, 30, 44, 4.2, 0.85);
+		const metaCentre = r(33, 38, 34, 2.2, 0.4);
+		const metaLeft = r(5, 38, 34, 2.2, 0.4);
+		const thick = r(5, 24, 90, 3, 0.9);
+		const thin = r(5, 25, 90, 1, 0.5);
+		const body = r(5, 48, 90, 2.2, 0.28) + r(5, 54, 78, 2.2, 0.28) + r(5, 60, 84, 2.2, 0.28);
+		const bodyUp = r(5, 26, 90, 2.2, 0.28) + r(5, 32, 78, 2.2, 0.28) + r(5, 38, 84, 2.2, 0.28);
+		const white = 'var(--ed-wire-paper, #fff)';
+		let inner;
+		if (kind === 'classique') inner = bandLeft + thin + titleLeft + metaLeft + body;
+		else if (kind === 'centre') inner = bandCentre + thin + titleCentre + metaCentre + r(5, 44, 90, 1, 0.35) + body;
+		else if (kind === 'split') inner = titleLeft + metaLeft + bandRight + thin + body;
+		else if (kind === 'boxed')
+			inner =
+				`<rect x="2" y="3" width="96" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" opacity="0.8"/>` +
+				r(7, 8, 12, 11, 0.9) + r(24, 9, 32, 2.8) + r(24, 15, 24, 2.2, 0.55) + r(7, 22, 86, 2.4, 0.9) +
+				r(30, 27, 40, 4, 0.85) + r(35, 35, 30, 2.2, 0.4) + body;
+		else if (kind === 'banner')
+			inner =
+				bandLeft +
+				`<rect x="3" y="26" width="94" height="14" rx="2" fill="currentColor" opacity="0.88"/>` +
+				`<rect x="27" y="30" width="46" height="3.4" rx="1" fill="${white}"/>` +
+				`<rect x="34" y="35" width="32" height="2.2" rx="1" fill="${white}" opacity="0.75"/>` + body;
+		else if (kind === 'minimal') inner = r(30, 8, 40, 3.8, 0.85) + r(35, 15, 30, 2.2, 0.4) + bodyUp;
+		else if (kind === 'template')
+			inner =
+				`<rect x="2" y="3" width="96" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.55"/>` +
+				r(9, 9, 11, 10, 0.4) + r(24, 10, 30, 2.6, 0.4) + r(24, 15, 22, 2.2, 0.3) + r(6, 23, 88, 2.4, 0.4) +
+				r(30, 29, 40, 3.6, 0.45) + r(35, 36, 30, 2.2, 0.3) + body;
+		else inner = bandLeft + thick + titleCentre + metaCentre + body; // bandeau
+		return `<svg viewBox="0 0 100 66" role="img" aria-hidden="true">${inner}</svg>`;
+	}
+
+	/** The header-layout cards, shown inside the "Columns and content" fieldset. */
+	function edHeaderPickerHtml(state) {
+		const chosen = state.layout.headerVariant || null;
+		const built = state.builtIn.find((t) => t.id === state.templateId);
+		const custom = state.custom.find((t) => t.id === state.templateId);
+		const tplVariant = (built ? built.headerVariant : custom?.template?.header?.variant) || 'bandeau';
+		const cards = ED_HEADER_LAYOUTS.map((opt) => {
+			const active = (opt.value || null) === chosen;
+			const name = opt.value === null ? `Template default · ${tplVariant}` : opt.label;
+			return `
+				<button type="button" class="ed-hdr-card${active ? ' is-active' : ''}"
+					data-ed-role="tpl-header" data-ed-header="${edEscape(opt.value || '')}"
+					aria-pressed="${active ? 'true' : 'false'}" title="${edEscape(opt.hint)}">
+					<span class="ed-hdr-wire">${edHeaderWireSvg(opt.value === null ? 'template' : opt.value)}</span>
+					<span class="ed-hdr-name">${edEscape(name)}</span>
+				</button>`;
+		}).join('');
+		return `
+			<div class="ed-hdr-picker">
+				<span class="ed-hdr-picker-title">Header layout</span>
+				<div class="ed-hdr-cards" data-ed-role="tpl-header-cards">${cards}</div>
+				<p class="ed-help">Where the header elements sit on the sheet. What they say is set in step 1, and an empty field never prints — so switching layout here cannot lose information.</p>
+			</div>`;
+	}
+
 	function edTemplatePanelHtml(state) {
 		const cards = [
 			...state.builtIn.map((t) => edTemplateCard(t, t.id === state.templateId, edTemplateAccent(t.id, false))),
@@ -450,66 +624,84 @@
 				</div>`
 			: '';
 		const manual = state.layout.density != null || state.layout.answerLines != null;
+		// Grouped by what the teacher is doing at each moment: pick the look,
+		// tune the space, check the page budget, then keep or reuse the result —
+		// the four fieldsets below follow that order, and the destructive
+		// “hide options” escape stays pinned at the bottom.
 		return `
+			<div class="ed-section-title">Template</div>
 			<div class="ed-tpl-cards" data-ed-role="tpl-cards">${cards}</div>
 
-			<div class="ed-fieldset">
-				<span class="ed-fieldset-title">Layout</span>
-				<div class="ed-checks">
-					<label class="ed-radio">
-						<span>Columns</span>
-						<select class="ed-input" data-ed-role="tpl-columns">
-							<option value="1"${state.layout.columns === 2 ? '' : ' selected'}>1 column</option>
-							<option value="2"${state.layout.columns === 2 ? ' selected' : ''}>2 columns</option>
-						</select>
-					</label>
-					<label class="ed-check">
-						<input type="checkbox" data-ed-role="tpl-manual"${manual ? ' checked' : ''}>
-						<span>Manual settings (density / answer space)</span>
-					</label>
-					<label class="ed-check">
-						<input type="checkbox" data-ed-role="tpl-inline"${state.layout.answerStyle === 'inline' ? ' checked' : ''}>
-						<span>Compact inline answers (no tables: numbered blank bank, [ ] order boxes, stacked match lists)</span>
-					</label>
+			<div class="ed-layout-grid">
+				<div class="ed-fieldset">
+					<span class="ed-fieldset-title">Columns and content</span>
+					<div class="ed-checks ed-checks--stacked">
+						<label class="ed-radio">
+							<span>Columns</span>
+							<select class="ed-input" data-ed-role="tpl-columns">
+								<option value="1"${state.layout.columns === 2 ? '' : ' selected'}>1 column</option>
+								<option value="2"${state.layout.columns === 2 ? ' selected' : ''}>2 columns</option>
+							</select>
+						</label>
+						<label class="ed-check">
+							<input type="checkbox" data-ed-role="tpl-inline"${state.layout.answerStyle === 'inline' ? ' checked' : ''}>
+							<span>Compact inline answers</span>
+						</label>
+						<p class="ed-help ed-inline-help">No tables: numbered blank bank, [ ] order boxes, stacked match lists.</p>
+						<label class="ed-check">
+							<input type="checkbox" data-ed-role="tpl-manual"${manual ? ' checked' : ''}>
+							<span>Manual settings (density / answer space)</span>
+						</label>
+					</div>
+					<div class="ed-manual-controls"${manual ? '' : ' hidden'}>
+						<label class="ed-range-label">
+							Density <span data-ed-role="density-value">${state.layout.density != null ? edPoints(state.layout.density) : 'auto'}</span>
+							<input type="range" min="0.7" max="1.3" step="0.05" class="ed-range" data-ed-role="tpl-density"
+								value="${state.layout.density != null ? state.layout.density : 1}">
+						</label>
+						<label class="ed-range-label">
+							Answer lines <span data-ed-role="lines-value">${state.layout.answerLines != null ? state.layout.answerLines : 'auto'}</span>
+							<input type="range" min="0" max="12" step="1" class="ed-range" data-ed-role="tpl-lines"
+								value="${state.layout.answerLines != null ? state.layout.answerLines : 2}">
+						</label>
+					</div>
+					${edHeaderPickerHtml(state)}
+					<p class="ed-help">Fixed margins: density and answer space are the only levers; the font never goes below 9\u00a0pt.</p>
 				</div>
-				<div class="ed-manual-controls"${manual ? '' : ' hidden'}>
-					<label class="ed-range-label">
-						Density <span data-ed-role="density-value">${state.layout.density != null ? edPoints(state.layout.density) : 'auto'}</span>
-						<input type="range" min="0.7" max="1.3" step="0.05" class="ed-range" data-ed-role="tpl-density"
-							value="${state.layout.density != null ? state.layout.density : 1}">
-					</label>
-					<label class="ed-range-label">
-						Answer lines <span data-ed-role="lines-value">${state.layout.answerLines != null ? state.layout.answerLines : 'auto'}</span>
-						<input type="range" min="0" max="12" step="1" class="ed-range" data-ed-role="tpl-lines"
-							value="${state.layout.answerLines != null ? state.layout.answerLines : 2}">
-					</label>
+
+				<div class="ed-fieldset">
+					<span class="ed-fieldset-title">Page budget</span>
+					<div class="ed-layout-actions">
+						<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-estimate">Estimate pages</button>
+						<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-compare">Compare the 5 templates</button>
+					</div>
+					${estimateBox}
+					${suggestions.length ? `<ul class="ed-suggest">${suggestions.map((s) => `<li>${edEscape(s)}</li>`).join('')}</ul>` : ''}
+					${cmp}
 				</div>
-				<p class="ed-help">Fixed margins: density and answer space are the only levers; the font never goes below 9\u00a0pt.</p>
+
+				<div class="ed-fieldset">
+					<span class="ed-fieldset-title">Fit to N pages</span>
+					<div class="ed-fit-row">
+						<label class="ed-range-label">Target
+							<input type="number" min="1" max="40" class="ed-input" data-ed-role="tpl-fit-target" value="3" style="width:5rem">
+						</label>
+						<button type="button" class="btn btn-primary btn-sm" data-ed-role="tpl-fit">Optimize</button>
+						${state.templateOverrides ? '<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-clear-overrides">Remove the adjustment</button>' : ''}
+					</div>
+					${fit}
+				</div>
+
+				<div class="ed-fieldset">
+					<span class="ed-fieldset-title">Custom template</span>
+					<p class="ed-help ed-fit-help">Save the current template, columns and density settings as a personal model you can re-apply later.</p>
+					<div class="ed-layout-actions">
+						<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-save-custom">Save as custom template</button>
+					</div>
+				</div>
 			</div>
 
-			<div class="ed-toolbar">
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-estimate">Estimate pages</button>
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-compare">Compare the 5 templates</button>
-			</div>
-			${estimateBox}
-			${suggestions.length ? `<ul class="ed-suggest">${suggestions.map((s) => `<li>${edEscape(s)}</li>`).join('')}</ul>` : ''}
-			${cmp}
-
-			<div class="ed-fieldset">
-				<span class="ed-fieldset-title">Fit to N pages</span>
-				<div class="ed-fit-row">
-					<label class="ed-range-label">Target
-						<input type="number" min="1" max="40" class="ed-input" data-ed-role="tpl-fit-target" value="3" style="width:5rem">
-					</label>
-					<button type="button" class="btn btn-primary btn-sm" data-ed-role="tpl-fit">Optimize</button>
-					${state.templateOverrides ? '<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-clear-overrides">Remove the adjustment</button>' : ''}
-				</div>
-				${fit}
-			</div>
-
-			<div class="ed-toolbar">
-				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-save-custom">Save as custom template</button>
-				<span class="ed-toolbar-sep"></span>
+			<div class="ed-toolbar ed-layout-collapse">
 				<button type="button" class="btn btn-secondary btn-sm" data-ed-role="tpl-collapse-layout">← Hide layout options</button>
 			</div>`;
 	}
@@ -608,6 +800,9 @@
 			page: { columns: state.layout.columns === 2 ? 2 : 1 },
 		};
 		if (state.layout.density != null) template.theme = { density: state.layout.density };
+		// A header layout the teacher chose by hand belongs to the saved model,
+		// otherwise re-applying "my template" would silently drop it.
+		if (state.layout.headerVariant) template.header = { variant: state.layout.headerVariant };
 		if (state.layout.answerLines != null || state.layout.answerStyle === 'inline') {
 			template.question = {};
 			if (state.layout.answerLines != null) template.question.answerSpace = { lines: state.layout.answerLines };
@@ -694,6 +889,7 @@
 		if (state.layout.density != null) layout.density = state.layout.density;
 		if (state.layout.answerLines != null) layout.answerLines = state.layout.answerLines;
 		if (state.layout.answerStyle && state.layout.answerStyle !== 'classic') layout.answerStyle = state.layout.answerStyle;
+		if (state.layout.headerVariant) layout.headerVariant = state.layout.headerVariant;
 		if (Object.keys(layout).length) body.layout = layout;
 		// A "Tenir en N pages" result is carried verbatim so preview and file match.
 		if (state.templateOverrides && Object.keys(state.templateOverrides).length) {
@@ -727,6 +923,10 @@
 	function edSetBusy(state, busy) {
 		state.modal.querySelectorAll('[data-ed-role]').forEach((el) => {
 			if (el.classList.contains('ed-preview')) return;
+			// The saved-header list lives outside the edit flow: applying or
+			// deleting a preset must stay clickable while saves run.
+			const role = el.getAttribute('data-ed-role');
+			if (role === 'preset-apply' || role === 'preset-delete' || role === 'preset-clear') return;
 			if (busy) el.setAttribute('disabled', 'disabled');
 			else el.removeAttribute('disabled');
 		});
@@ -1008,6 +1208,7 @@
 		const state = {
 			examId: String(examId),
 			header: {},
+			headerPresets: [],
 			previews: { student: null, answer_key: null },
 			normalization: { mode: 'as-is', confirmed: false },
 			activeDocument: 'student',
@@ -1016,7 +1217,7 @@
 			busy: false,
 			// Template layer (Génération personnalisée).
 			templateId: 'classique',
-			layout: { columns: 1, density: null, answerLines: null, answerStyle: 'classic' },
+			layout: { columns: 1, density: null, answerLines: null, answerStyle: 'classic', headerVariant: null },
 			// Progressive disclosure of the layout controls on step 3.
 			layoutOpen: false,
 			templateOverrides: null,
@@ -1130,9 +1331,19 @@
 				: '<span class="ed-logo-empty">No logo</span>';
 		};
 		const logoFile = modal.querySelector('[data-ed-role="logo-file"]');
+		const logoFileName = modal.querySelector('[data-ed-role="logo-file-name"]');
+		const setLogoFileName = (text) => {
+			if (logoFileName) logoFileName.textContent = text || 'PNG or JPG, up to 2 MB';
+		};
+		// The styled button is only a proxy: the click has to land on the real
+		// input, or the browser opens no dialog at all.
+		modal.querySelector('[data-ed-role="logo-pick"]')?.addEventListener('click', () => {
+			logoFile?.click();
+		});
 		logoFile?.addEventListener('change', () => {
 			const file = logoFile.files && logoFile.files[0];
 			if (!file) return;
+			setLogoFileName(file.name);
 			const reader = new FileReader();
 			reader.onload = () => {
 				const dataUrl = String(reader.result || '');
@@ -1160,6 +1371,7 @@
 			state.header.logoDataUrl = null;
 			state.logoDataUrl = null;
 			if (logoFile) logoFile.value = '';
+			setLogoFileName('');
 			setLogoPreview('');
 			edApplyHeaderToForm(state);
 		});
@@ -1173,6 +1385,7 @@
 					state.header = Object.assign({}, state.header, (saved && saved.header) || header);
 					state.logoDataUrl = null;
 					edApplyHeaderToForm(state);
+					edSyncPresets(state, saved);
 					edToast('Header saved for this exam.', 'success');
 					// Any preview built with unsaved edits must be rebuilt.
 					state.previews = { student: null, answer_key: null };
@@ -1228,6 +1441,16 @@
 				modal.querySelectorAll('[data-ed-panel="review"] [data-ed-hide]').forEach((el) => { el.checked = true; });
 			} else if (role === 'review-none') {
 				modal.querySelectorAll('[data-ed-panel="review"] [data-ed-hide]').forEach((el) => { el.checked = false; });
+			} else if (role === 'tpl-header') {
+				// Choosing a header layout is a print decision, not a draft: rebuild
+				// the sheets so the teacher immediately sees the one they picked.
+				const v = button.getAttribute('data-ed-header');
+				state.layout.headerVariant = v || null;
+				state.previews = { student: null, answer_key: null };
+				state.estimate = null;
+				edRenderTemplatePanel(state);
+				edBindTemplateControls(state);
+				edRefreshPreview(state, state.activeDocument || 'student');
 			} else if (role === 'tpl-card') {
 				const id = button.getAttribute('data-ed-template');
 				if (id) {
@@ -1237,7 +1460,7 @@
 					const built = state.builtIn.find((t) => t.id === id);
 					const customTpl = state.custom.find((t) => t.id === id);
 					const columns = built ? built.columns : customTpl?.template?.page?.columns || 1;
-					state.layout = { columns: columns === 2 ? 2 : 1, density: null, answerLines: null };
+					state.layout = { columns: columns === 2 ? 2 : 1, density: null, answerLines: null, headerVariant: null };
 					// The rendered sheets depend on the template: force a rebuild.
 					state.previews = { student: null, answer_key: null };
 					state.estimate = null;
@@ -1277,6 +1500,19 @@
 			} else if (role === 'tpl-collapse-layout') {
 				state.layoutOpen = false;
 				edRenderTemplatePanel(state);
+			} else if (role === 'preset-apply') {
+				edApplyPreset(state, button.getAttribute('data-ed-preset'));
+			} else if (role === 'preset-delete') {
+				const id = button.getAttribute('data-ed-preset');
+				const next = (state.headerPresets || []).filter((p) => p.id !== id);
+				edPersistPresets(state, next)
+					.then(() => edToast('Saved header removed.', 'success'))
+					.catch((err) => edToast(err?.message || 'Could not remove the saved header.', 'error'));
+			} else if (role === 'preset-clear') {
+				if (!window.confirm('Remove every saved header?')) return;
+				edPersistPresets(state, [])
+					.then(() => edToast('Saved headers cleared.', 'success'))
+					.catch((err) => edToast(err?.message || 'Could not clear the list.', 'error'));
 			}
 		});
 
@@ -1285,6 +1521,7 @@
 			.then((result) => {
 				state.header = Object.assign({}, (result && result.header) || {});
 				edApplyHeaderToForm(state);
+				edSyncPresets(state, result);
 			})
 			.catch((err) => edToast(err?.message || 'The header could not be loaded.', 'error'));
 	}

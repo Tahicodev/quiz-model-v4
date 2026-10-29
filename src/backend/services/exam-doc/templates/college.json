@@ -21,18 +21,18 @@
     },
     "sizes": { "body": 12.5, "small": 10.5, "tiny": 9.5, "title": 16 },
     "colors": {
-      "accent": "#1F3A5F",
-      "muted": "#5B6472",
-      "hairline": "#C9D1D9",
-      "fieldBg": "#F6F8FA"
+      "accent": "#7C3A2D",
+      "muted": "#6B5B55",
+      "hairline": "#D8C9C4",
+      "fieldBg": "#FAF5F3"
     },
     "density": 1.05
   },
   "header": {
-    "variant": "classique",
+    "variant": "split",
     "anonymity": false,
     "fullOnFirstPage": true,
-    "compactOnFollow": true
+    "compactOnFollow": false
   },
   "footer": {
     "variant": "turn-page",

@@ -29,10 +29,10 @@
     "density": 1.0
   },
   "header": {
-    "variant": "bandeau",
+    "variant": "banner",
     "anonymity": false,
     "fullOnFirstPage": true,
-    "compactOnFollow": true
+    "compactOnFollow": false
   },
   "footer": {
     "variant": "number+encouragement",
