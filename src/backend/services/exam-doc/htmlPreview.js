@@ -180,12 +180,12 @@ function renderBlock(block, isKey = false, inline = false) {
       break;
     case 'pairs':
       // Inline: the two lists print one after the other (no table, no column
-      // headers), then the answer grid records the pairs. The grid is always
-      // two columns x rows (`N° | Lettre`): numbers spread across the page read
-      // as a fourth list of options, and the writing surface has to line up with
-      // the lines the items are written on — the same grid the PDF and Word draw.
+      // headers), then the answer grid records the pairs. The grid is TWO ROWS ×
+      // N columns — the numbers on the first row, one empty cell under each for
+      // its letter — the same surface the PDF and Word draw.
       if (inline) {
-        const count = Math.max(block.lefts.length, (block.rights || []).length);
+        const count = Math.max(1, block.lefts.length, (block.rights || []).length);
+        const col = ` style="width:${(100 / count).toFixed(3)}%"`;
         parts.push(`<p class="ed-instruction">Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.</p>`);
         parts.push(
           `<div class="ed-pairs-lists"><ul class="ed-plain">${block.lefts
@@ -195,10 +195,9 @@ function renderBlock(block, isKey = false, inline = false) {
             .join('')}</ul></div>`,
         );
         parts.push(
-          `<table class="ed-match-grid ed-match-v"><thead><tr><th>N°</th><th>Lettre</th></tr></thead><tbody>${Array.from(
-            { length: count },
-            (_, i) => `<tr><td>${i + 1}</td><td></td></tr>`,
-          ).join('')}</tbody></table>`,
+          `<table class="ed-match-grid ed-match-h"><colgroup>${Array.from({ length: count }, () => `<col${col}>`).join('')}</colgroup>` +
+            `<tbody><tr class="ed-match-num">${Array.from({ length: count }, (_, i) => `<td>${block.lefts[i] ? block.lefts[i].n : i + 1}</td>`).join('')}</tr>` +
+            `<tr class="ed-match-answer">${Array.from({ length: count }, () => '<td></td>').join('')}</tr></tbody></table>`,
         );
         break;
       }

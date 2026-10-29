@@ -161,7 +161,7 @@ class PdfBuilder {
     // column instead of breaking out to a full-width band that wastes the rest
     // of the page and forces an early page break.
     const TW = this.cfg.colW;
-    const { image, cells } = this.ops;
+    const { image, cells, group } = this.ops;
     const ops = [];
     const inline = this.cfg.question.answerStyle === 'inline';
     // In the inline style the three interactive types carry their own tailored
@@ -271,24 +271,35 @@ class PdfBuilder {
       }
       case 'pairs': {
         // Inline: the two lists are printed one after the other (no table, no
-        // headers), then the answer grid records the pairs. The grid is always
-        // TWO COLUMNS x ROWS (`N° | Lettre`, one row per item): a row of numbers
-        // spread across the page reads as a fourth list of options, and the
-        // teacher asked for the writing surface to line up with the lines the
-        // items are written on.
+        // headers), then the answer grid records the pairs. The grid is TWO ROWS
+        // × N columns — the item numbers on the first row, one empty cell under
+        // each for its letter: a row per item asked for 2N lines of paper to
+        // write N characters.
         if (inline) {
           ops.push(this.txt('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', { size: SMALL, face: 'italic', spaceAfter: 4 }));
           for (const left of block.lefts) ops.push(this.txt(`${left.n}. ${left.text}`, { size: SMALL, spaceAfter: 1, lineGap: 1 }));
           for (const right of (block.rights || [])) ops.push(this.txt(`${right.letter}. ${right.text}`, { size: SMALL, spaceAfter: 1, lineGap: 1 }));
           const count = Math.max(block.lefts.length, (block.rights || []).length);
-          const hd = (t, w, align) => ({ text: this.ctx.encode(t), width: w, height: 16, border: 'box', face: 'bold', size: SMALL, align });
-          const cellv = (t, w, align) => ({ text: this.ctx.encode(t), width: w, height: 18, border: 'box', size: SMALL, align });
-          const rows = [];
-          const numW = 44;
-          const ansW = TW - numW;
-          rows.push(hd('N°', numW, 'center'), hd('Lettre', ansW, 'center'));
-          for (let i = 0; i < count; i++) rows.push(cellv(`${i + 1}`, numW, 'center'), cellv('', ansW, 'center'));
-          ops.push(cells(rows, { spaceBefore: 6, spaceAfter: 6 }));
+          const cellW = TW / Math.max(1, count);
+          const grid = [];
+          for (let i = 0; i < count; i++) {
+            const left = block.lefts[i];
+            grid.push({
+              text: this.ctx.encode(String(left ? left.n : i + 1)),
+              width: cellW,
+              height: 15,
+              border: 'box',
+              face: 'bold',
+              size: SMALL,
+              align: 'center',
+            });
+          }
+          for (let i = 0; i < count; i++) {
+            grid.push({ text: '', width: cellW, height: 20, border: 'box', size: SMALL, align: 'center' });
+          }
+          // The two rows are ONE writing surface: glued together, a grid never
+          // splits its numbers away from the cells under them.
+          ops.push(group([cells(grid, { spaceBefore: 5, spaceAfter: 5 })], { label: 'pairs grid' }));
           break;
         }
         // Two content columns plus a narrow answer column, traced INSIDE a single
@@ -460,17 +471,20 @@ class PdfBuilder {
   sectionNode(section, model) {
     const { group } = this.ops;
     const ops = [];
-    if (section.title) {
-      ops.push(
-        this.txt(`${section.title}   (${formatPoints(section.subtotal)} pts)`, {
-          face: 'bold',
-          spaceBefore: 6,
-          spaceAfter: 4,
-        }),
-      );
-    }
+    const title = this.sectionTitleNode(section);
+    if (title) ops.push(title);
     for (const item of section.items) ops.push(this.questionNode(item, model));
     return group(ops, { keep: false, label: 'section' });
+  }
+
+  /** The section heading, its own method so the measure pass sees the real one. */
+  sectionTitleNode(section) {
+    if (!section.title) return null;
+    return this.txt(`${section.title}   (${formatPoints(section.subtotal)} pts)`, {
+      face: 'bold',
+      spaceBefore: 6,
+      spaceAfter: 4,
+    });
   }
 
   warningsNode(model) {
@@ -552,6 +566,89 @@ function resolveFaces(doc, ctx, cfg) {
 }
 
 /**
+ * Pick the faces and the text encoding for a document. Shared by the real
+ * render and the measure-only pass, so the two can never disagree about how
+ * wide a word is — which is exactly what the page packer places with.
+ */
+function applyFontMode(doc, ctx, cfg, substituted) {
+  const faces = resolveFaces(doc, ctx, cfg);
+  if (faces.regular === 'ed-custom') {
+    // Embedded Unicode font: the original characters are kept untouched.
+    ctx.encode = (value) => String(value ?? '');
+  } else {
+    ctx.encode = (value) => {
+      const { text: out, substitutions } = toWinAnsi(value);
+      for (const ch of substitutions) substituted.add(ch);
+      return out;
+    };
+  }
+  return faces;
+}
+
+/**
+ * Exact heights, taken from the layout engine's own `measure` — the same code
+ * the pagination runs on. The packer needs these rather than a hand-measured
+ * guess: when the two disagree, the packer believes a question fits a strip the
+ * renderer then refuses, moves the whole block to the next column and leaves
+ * exactly the hole at the bottom of the page the teacher sees.
+ *
+ * Nothing is drawn and the throwaway document is never finalized, so the pass
+ * costs one pdfkit instance plus the text measuring.
+ *
+ * @param {object} model document model (measured AS A STUDENT SHEET by callers
+ *   that want a subject and its key to share one order)
+ * @param {object} cfg resolved engine config
+ * @param {object} [options] { uploadsDir, fontTtf } — the same faces the export uses
+ * @returns {{ headerH: number, runningH: number, sections: Array<{ titleH: number,
+ *   items: Array<{ bodyH: number, totalH: number }> }> }}
+ */
+export function measureExamLayout(model, cfg, options = {}) {
+  const doc = new PDFDocument({
+    size: cfg.page.size,
+    layout: cfg.page.orientation,
+    margins: { top: 0, bottom: 0, left: 0, right: 0 },
+  });
+  doc._readableState.flowing = true;
+  doc.on('data', () => {}); // the implicit first page is produced and dropped
+  const ctx = {
+    uploadsDir: options.uploadsDir || config.uploadsDir,
+    fontTtf: options.fontTtf ?? config.examDocFontTtf ?? null,
+    encode: (value) => String(value ?? ''),
+    warn: () => {}, // a measure pass reports nothing: the export will
+  };
+  const faces = applyFontMode(doc, ctx, cfg, new Set());
+  const builder = new PdfBuilder(doc, ctx, cfg, faces);
+  const layout = new PdfLayout(doc, faces, cfg);
+  try {
+    return {
+      headerH: layout.measureFlow(builder.headerNode(model)),
+      runningH: cfg.header.fullOnFirstPage && cfg.header.compactOnFollow ? layout.compactHeaderH : 0,
+      sections: (model.sections || []).map((section) => {
+        const title = builder.sectionTitleNode(section);
+        return {
+          titleH: title ? layout.measureFlow(title) : 0,
+          items: (section.items || []).map((item) => {
+            const node = builder.questionNode(item, model);
+            const totalH = layout.measureFlow(node);
+            // The first child is the glued head + stem + answer surface: the
+            // unit the engine moves whole when the strip is too tight. What
+            // follows (the writing lines) flows one rule at a time.
+            const bodyH = node.ops.length ? layout.measureFlow(node.ops[0]) : totalH;
+            return { bodyH, totalH };
+          }),
+        };
+      }),
+    };
+  } finally {
+    try {
+      doc.end();
+    } catch (_) {
+      /* a measuring document was never meant to be flushed */
+    }
+  }
+}
+
+/**
  * @param {object} model output of `ExamDocumentService#buildExamDocument`
  * @param {object} [options] { uploadsDir, fontTtf, template, templateOverrides }
  * @returns {Promise<{ buffer: Buffer, warnings: object[], pages: number }>}
@@ -594,17 +691,7 @@ export async function renderExamDocumentPdf(model, options = {}) {
     },
   });
 
-  const faces = resolveFaces(doc, ctx, cfg);
-  if (faces.regular === 'ed-custom') {
-    // Embedded Unicode font: the original characters are kept untouched.
-    ctx.encode = (value) => String(value ?? '');
-  } else {
-    ctx.encode = (value) => {
-      const { text: out, substitutions } = toWinAnsi(value);
-      for (const ch of substitutions) substituted.add(ch);
-      return out;
-    };
-  }
+  const faces = applyFontMode(doc, ctx, cfg, substituted);
 
   const builder = new PdfBuilder(doc, ctx, cfg, faces);
   const nodes = builder.build(model);

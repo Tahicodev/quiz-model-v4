@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "id": "ultra",
+  "name": "Ultra compact",
+  "page": {
+    "size": "A4",
+    "orientation": "portrait",
+    "margin": { "top": 24, "right": 24, "bottom": 24, "left": 24 },
+    "columns": 2,
+    "gutter": 10,
+    "rule": { "between": true }
+  },
+  "theme": {
+    "fonts": {
+      "regular": "Times-Roman",
+      "bold": "Times-Bold",
+      "italic": "Times-Italic",
+      "mono": "Courier",
+      "head": "Helvetica",
+      "headBold": "Helvetica-Bold"
+    },
+    "sizes": { "body": 9.5, "small": 9, "tiny": 9, "title": 12 },
+    "colors": {
+      "accent": "#1F3A5F",
+      "muted": "#5B6472",
+      "hairline": "#C9D1D9",
+      "fieldBg": "#F6F8FA"
+    },
+    "density": 0.7
+  },
+  "header": {
+    "variant": "minimal",
+    "anonymity": false,
+    "fullOnFirstPage": true,
+    "compactOnFollow": false
+  },
+  "footer": {
+    "variant": "number",
+    "total": true,
+    "encouragement": "Bon courage !"
+  },
+  "question": {
+    "pointBadge": true,
+    "vectorBoxes": true,
+    "separators": "none",
+    "answerSpace": { "lines": 1, "lineHeight": 11 },
+    "keepTogether": "block",
+    "answerStyle": "inline"
+  }
+}

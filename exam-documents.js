@@ -453,6 +453,7 @@
 		classique: { c: '#1f3a5f', bg: '#eef2f7' },
 		moderne: { c: '#0f766e', bg: '#e6f4f1' },
 		compact: { c: '#b45309', bg: '#fbf0e2' },
+		ultra: { c: '#be123c', bg: '#fdeaef' },
 		officiel: { c: '#6d28d9', bg: '#f1ebfb' },
 		college: { c: '#15803d', bg: '#e9f6ec' },
 	};
@@ -481,7 +482,7 @@
 					<span class="ed-tpl-dot" aria-hidden="true"></span>
 					<span class="ed-tpl-name">${edEscape(tpl.name)}</span>
 				</span>
-				<span class="ed-tpl-meta">${tpl.columns === 2 ? '2 columns' : '1 column'} · ${edEscape(tpl.headerVariant || '')}</span>
+				<span class="ed-tpl-meta">${tpl.columns === 2 ? '2 columns' : '1 column'} · ${edEscape(tpl.headerVariant || '')}${tpl.density != null ? ` · density ${tpl.density}` : ''}</span>
 				${tpl.custom ? '<span class="ed-tpl-tag">custom</span>' : ''}
 			</button>`;
 	}
@@ -803,10 +804,12 @@
 		// A header layout the teacher chose by hand belongs to the saved model,
 		// otherwise re-applying "my template" would silently drop it.
 		if (state.layout.headerVariant) template.header = { variant: state.layout.headerVariant };
-		if (state.layout.answerLines != null || state.layout.answerStyle === 'inline') {
+		if (state.layout.answerLines != null || state.layout.answerStyle) {
 			template.question = {};
 			if (state.layout.answerLines != null) template.question.answerSpace = { lines: state.layout.answerLines };
-			if (state.layout.answerStyle === 'inline') template.question.answerStyle = 'inline';
+			// Recorded both ways: a model saved from Ultra compact with the inline
+			// style switched off must not become inline again when it is replayed.
+			if (state.layout.answerStyle) template.question.answerStyle = state.layout.answerStyle;
 		}
 		const next = [...state.custom, { id, name: name.slice(0, 60), baseId: state.templateId, template }];
 		edSetBusy(state, true);
@@ -883,12 +886,14 @@
 			},
 			templateId: state.templateId || 'classique',
 		};
-		// Only send the layout controls the teacher actually touched.
+		// Only send the layout controls the teacher actually touched. The answer
+		// style travels both ways: a template that ships `inline` (Ultra compact)
+		// has to be switchable back to the classic tables.
 		const layout = {};
 		if (state.layout.columns != null) layout.columns = state.layout.columns;
 		if (state.layout.density != null) layout.density = state.layout.density;
 		if (state.layout.answerLines != null) layout.answerLines = state.layout.answerLines;
-		if (state.layout.answerStyle && state.layout.answerStyle !== 'classic') layout.answerStyle = state.layout.answerStyle;
+		if (state.layout.answerStyle) layout.answerStyle = state.layout.answerStyle;
 		if (state.layout.headerVariant) layout.headerVariant = state.layout.headerVariant;
 		if (Object.keys(layout).length) body.layout = layout;
 		// A "Tenir en N pages" result is carried verbatim so preview and file match.
@@ -1164,6 +1169,7 @@
 		if (state.layout.density != null) layoutBits.push(`density ${edPoints(state.layout.density)}`);
 		if (state.layout.answerLines != null) layoutBits.push(`${state.layout.answerLines} answer line(s)`);
 		if (state.layout.answerStyle === 'inline') layoutBits.push('inline answers');
+		else if (state.layout.answerStyle === 'classic') layoutBits.push('classic answer tables');
 		if (state.templateOverrides) layoutBits.push('"fit to N pages" adjustment');
 		const est = state.estimate;
 		const pagesValue = est
@@ -1460,7 +1466,13 @@
 					const built = state.builtIn.find((t) => t.id === id);
 					const customTpl = state.custom.find((t) => t.id === id);
 					const columns = built ? built.columns : customTpl?.template?.page?.columns || 1;
-					state.layout = { columns: columns === 2 ? 2 : 1, density: null, answerLines: null, headerVariant: null };
+					// A template can ship its own answer style (Ultra compact is inline):
+					// the checkbox has to show what the sheet will really look like, and
+					// the teacher can still flip it from there.
+					const answerStyle = built
+						? built.answerStyle || 'classic'
+						: customTpl?.template?.question?.answerStyle || 'classic';
+					state.layout = { columns: columns === 2 ? 2 : 1, density: null, answerLines: null, answerStyle, headerVariant: null };
 					// The rendered sheets depend on the template: force a rebuild.
 					state.previews = { student: null, answer_key: null };
 					state.estimate = null;

@@ -258,6 +258,25 @@ export class PdfLayout {
   }
 
   /**
+   * Measure a node the way `visit` would see it: a `span` node is measured at
+   * the full content width, anything else inside the current column. No cursor
+   * moves and no page opens, so this is safe to run on a throwaway document —
+   * it is what the page packer asks for the heights the sheet will really use,
+   * instead of a second opinion measured by hand.
+   */
+  measureFlow(node) {
+    if (!node) return 0;
+    if (!node.span) return this.measure(node);
+    this.spanStack.push(this.mode);
+    this.mode = 'span';
+    try {
+      return this.measure(node);
+    } finally {
+      this.mode = this.spanStack.pop() || 'column';
+    }
+  }
+
+  /**
    * Geometry of the masthead, shared by `measure` and the drawer. The template's
    * header `variant` decides WHERE the elements go — WHAT they say always comes
    * from `examHeaderParts`, so no layout can print a line the teacher left empty.

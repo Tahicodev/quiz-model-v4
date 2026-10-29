@@ -8,15 +8,18 @@
  *    be a second numbering of the same sentence competing with the option bank,
  *    while the classic sheet keeps them (its "Réponses" lines are numbered);
  *  - the matching table is a normal in-flow table on the classic sheet and a
- *    two-column N°/Lettre grid on the inline one — never a table floated to the
- *    right edge, which left a hole next to the stem;
+ *    two-row grid (numbers, then the empty writing cells) on the inline one —
+ *    never a table floated to the right edge, which left a hole next to the stem;
  *  - the paper is PACKED at the model level: columns are filled to the bottom
  *    and questions are numbered in placement order, so the PDF, the Word file and
  *    the preview — which only ever draw the order they are given — cannot
  *    disagree, and the answer key keeps the subject's numbering;
  *  - a header LAYOUT only moves the printed elements: every variant draws the
  *    same title, the picker override reaches the resolved config, and the page
- *    estimator still tracks the real render for each of them.
+ *    estimator still tracks the real render for each of them;
+ *  - the Word file is a real mirror of that pagination: it takes the template
+ *    margins and columns, and a two-column sheet keeps its masthead across the
+ *    page (a full-width section, then a continuous break into the columns).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -101,28 +104,39 @@ describe('inline fill-blank stem', () => {
 });
 
 describe('matching pairs table', () => {
-  it('is a two-column N°/Lettre grid inline, and stays in flow (never floated right)', async () => {
+  it('is a two-row grid (numbers over empty writing cells) inline, and stays in flow', async () => {
     const model = await buildDocument({ questions: bankRows() }, { document: 'student' });
     const inline = cfgFor({ question: { answerStyle: 'inline' } });
     const classic = cfgFor({ question: { answerStyle: 'classic' } });
 
     const inlineHtml = renderExamDocumentHtml(model, { template: inline });
     const classicHtml = renderExamDocumentHtml(model, { template: classic });
-    expect(inlineHtml).toContain('ed-match-grid ed-match-v');
-    expect(inlineHtml).not.toContain('ed-match-h'); // the old horizontal grid
+    expect(inlineHtml).toContain('ed-match-grid ed-match-h');
+    expect(inlineHtml).not.toContain('ed-match-v'); // the old N°/Lettre column grid
     expect(classicHtml).toContain('ed-pairs');
 
-    // The grid is two columns x one row per pair: 3 pairs → header row + 3 rows.
-    const grid = /<table class="ed-match-grid ed-match-v">([\s\S]*?)<\/table>/.exec(inlineHtml);
+    // TWO rows whatever the number of pairs: 3 pairs → one row of numbers and one
+    // row of three empty cells, never one row per pair.
+    const grid = /<table class="ed-match-grid ed-match-h">([\s\S]*?)<\/table>/.exec(inlineHtml);
     expect(grid, 'inline grid').not.toBeNull();
-    expect((grid[1].match(/<tr>/g) || []).length).toBe(4);
+    expect((grid[1].match(/<tr/g) || []).length).toBe(2);
+    expect((grid[1].match(/<td/g) || []).length).toBe(6);
+    expect(grid[1]).toContain('<tr class="ed-match-num"><td>1</td><td>2</td><td>3</td></tr>');
 
     const inlinePdf = pdfText((await renderExamDocumentPdf(model, { template: inline })).buffer);
-    expect(inlinePdf).toContain('Lettre');
+    expect(inlinePdf).toContain('123'); // the numbers row, side by side
     expect(inlinePdf).not.toContain('Colonne A');
     const classicPdf = pdfText((await renderExamDocumentPdf(model, { template: classic })).buffer);
     expect(classicPdf).toContain('Colonne A');
-    expect(classicPdf).not.toContain('Lettre');
+    expect(classicPdf).not.toContain('123');
+
+    // Word mirrors the same shape: single-character cells 1 / 2 / 3 in the
+    // numbers row (the writing row under them is empty), no column table.
+    const docxXml = zipText((await renderExamDocumentDocx(model, { template: inline })).buffer, 'word/document.xml');
+    for (const n of [1, 2, 3]) {
+      expect(docxXml, `docx grid number ${n}`).toMatch(new RegExp(`<w:t[^>]*>${n}</w:t>`));
+    }
+    expect(docxXml).not.toContain('Colonne A');
   });
 });
 
@@ -250,6 +264,44 @@ describe('header layouts', () => {
       const analytic = estimateAnalytic(packed, cfg).pages;
       const exact = (await estimateExact(packed, cfg)).pages;
       expect(Math.abs(analytic - exact), variant).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('Word mirrors the columned paper', () => {
+  /** The `<w:sectPr>` blocks of the exported sheet, in document order. */
+  async function sections(model, cfg) {
+    const xml = zipText((await renderExamDocumentDocx(model, { template: cfg })).buffer, 'word/document.xml');
+    return { xml, sects: xml.match(/<w:sectPr[\s\S]*?<\/w:sectPr>/g) || [] };
+  }
+
+  it('keeps the masthead across the page, above the two columns', async () => {
+    const model = await buildDocument({}, { document: 'student' });
+    // A one-column paper stays the historical single section.
+    const one = await sections(model, resolveTemplate('classique'));
+    expect(one.sects).toHaveLength(1);
+    expect(one.sects[0]).not.toContain('<w:cols');
+
+    // Two columns split the sheet in two: the header group owns the full page
+    // width and the break is continuous, so the masthead is neither squeezed
+    // into the left column nor pushed onto a sheet of its own.
+    const two = await sections(model, resolveTemplate('ultra'));
+    expect(two.sects).toHaveLength(2);
+    expect(two.sects[0]).toContain('<w:type w:val="continuous"');
+    expect(two.sects[0]).toMatch(/<w:cols w:num="1"/);
+    expect(two.sects[1]).toMatch(/<w:cols[^/]*w:num="2"/);
+    // The title is printed before the break, i.e. in the full-width group.
+    expect(two.xml.indexOf('DEVOIR SURVEILL')).toBeGreaterThan(-1);
+    expect(two.xml.indexOf('DEVOIR SURVEILL')).toBeLessThan(two.xml.indexOf('<w:sectPr'));
+  });
+
+  it('reserves the footer strip the engine reserves, so the band never sits on a question', async () => {
+    const model = await buildDocument({}, { document: 'student' });
+    for (const id of ['classique', 'ultra']) {
+      const cfg = resolveTemplate(id);
+      const { sects } = await sections(model, cfg);
+      const bottom = Number(/w:pgMar [^/]*w:bottom="(\d+)"/.exec(sects[sects.length - 1])[1]);
+      expect(bottom, id).toBe(Math.round((cfg.margin.bottom + cfg.footerH) * 20));
     }
   });
 });

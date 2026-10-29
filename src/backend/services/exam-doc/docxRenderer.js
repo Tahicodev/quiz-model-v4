@@ -33,6 +33,7 @@ import {
   PageNumber,
   Paragraph,
   ShadingType,
+  SectionType,
   Table,
   TableCell,
   TableRow,
@@ -47,13 +48,25 @@ import { formatPoints, resolveImage, imageDimensions, blankStem } from './text.j
 import { HEADER_INK, examHeaderParts, examIdentityParts, examInstructions } from './headerLayout.js';
 import { resolveForRenderer } from './templates/index.js';
 
-// A4 in twips (1440 twips = 1 inch): 210×297mm.
-const PAGE_W = 11906;
-const PAGE_H = 16838;
-const MARGIN = 1134; // 2 cm
-const CONTENT_W = PAGE_W - MARGIN * 2;
+// A4 in twips (1440 twips = 1 inch): 210×297mm. These start at the historical
+// Classique page and are re-derived from the resolved template in
+// `applyDocxTheme`, so the Word sheet really has the margins, the page size and
+// the number of columns of the PDF it is exported next to.
+let PAGE_W = 11906;
+let PAGE_H = 16838;
+let MARGINS = { top: 1134, right: 1134, bottom: 1134, left: 1134 }; // 2 cm
+let CONTENT_W = PAGE_W - MARGINS.left - MARGINS.right;
 // Word images are sized in pixels at 96 dpi.
-const CONTENT_PX = Math.round((CONTENT_W / 1440) * 96);
+let CONTENT_PX = Math.round((CONTENT_W / 1440) * 96);
+let COLUMNS = 1;
+let GUTTER = 360; // twips between two columns
+let DENSITY = 1; // the vertical tightness the template asks for
+// Distance of the running header/footer from the page edge. Word keeps the
+// band at a FIXED distance and lets it grow INTO the text area, so a tight
+// bottom margin (Ultra: 24 pt) would print "Page 1 / 2" over the last
+// question. It is the historical 708 twips (0.49") as long as the margin can
+// host the band, and shrinks with the margin below that.
+let EDGE = { header: 708, footer: 708 };
 
 // Half-point sizes and Office (no-'#') colours. They start at the historical
 // Classique values and are re-derived from the resolved template in
@@ -95,7 +108,7 @@ let DOTTED_RULE = { style: BorderStyle.DOTTED, size: 6, color: MUTED };
 const noHash = (hex) => String(hex).replace('#', '').toUpperCase();
 
 /**
- * Point the module colours/sizes at a resolved template config. The whole
+ * Point the module colours/sizes/page geometry at a resolved template config. The whole
  * `DocxBuilder.build` is synchronous (the only `await` is `Packer.toBuffer`,
  * after the children tree already exists), so reassigning these module bindings
  * around the build is race-free: no other render interleaves during it.
@@ -106,6 +119,35 @@ function applyDocxTheme(cfg) {
   BODY = Math.round(S.body * 2);
   SMALL = Math.round(S.small * 2);
   TINY = Math.round(S.tiny * 2);
+  // Page geometry: points → twips is ×20. The same `cfg` the PDF paginates with
+  // decides the Word margins, columns and vertical spacing, so a 2-column
+  // compact paper is a 2-column compact paper in every format.
+  const pt = (v) => Math.round((Number(v) || 0) * 20);
+  PAGE_W = pt(cfg.pageW);
+  PAGE_H = pt(cfg.pageH);
+  // The engine reserves `footerH` BELOW the template margin for the running
+  // footer (`usableH = pageH - top - bottom - footerH`), so Word has to reserve
+  // the same strip: without it the last line of a tight paper is written under
+  // the "Page 1 / 2" band, which is exactly the overlap the PDF cannot have.
+  const footerH = Number(cfg.footerH) || 0;
+  MARGINS = {
+    top: pt(cfg.margin.top),
+    right: pt(cfg.margin.right),
+    bottom: pt((Number(cfg.margin.bottom) || 0) + footerH),
+    left: pt(cfg.margin.left),
+  };
+  CONTENT_W = PAGE_W - MARGINS.left - MARGINS.right;
+  CONTENT_PX = Math.round((CONTENT_W / 1440) * 96);
+  COLUMNS = cfg.page.columns > 1 ? 2 : 1;
+  GUTTER = pt(cfg.page.gutter);
+  DENSITY = cfg.theme.density ?? 1;
+  // The bands sit where the PDF draws them: 8 pt under the template's own
+  // margin line, and the historical 708 twips whenever the margin is wide
+  // enough to host them without touching the text.
+  EDGE = {
+    header: MARGINS.top >= 908 ? 708 : Math.max(115, Math.round(MARGINS.top * 0.4)),
+    footer: Math.min(708, Math.max(115, pt(Math.max(0, (Number(cfg.margin.bottom) || 0) - 8)))),
+  };
   ACCENT = noHash(C.accent);
   MUTED = noHash(C.muted);
   HAIRLINE = noHash(C.hairline);
@@ -154,9 +196,12 @@ function para(children, opts = {}) {
       : undefined,
     border: opts.border,
     spacing: {
-      before: opts.spaceBefore ?? 0,
-      after: opts.spaceAfter ?? 80,
-      line: opts.line ?? 276,
+      // `density` is the template's vertical tightness lever, applied to the
+      // Word sheet exactly as the layout engine applies it to the PDF (1.0 for
+      // Classique keeps every value byte-identical).
+      before: Math.round((opts.spaceBefore ?? 0) * DENSITY),
+      after: Math.round((opts.spaceAfter ?? 80) * DENSITY),
+      line: Math.round((opts.line ?? 276) * DENSITY),
     },
   });
 }
@@ -637,24 +682,30 @@ class DocxBuilder {
       }
       case 'pairs': {
         // Inline: the two lists print one after the other (no table, no column
-        // headers), then the answer grid records the pairs. The grid is always
-        // two columns x rows (`N° | Lettre`): numbers spread across the page read
-        // as a fourth list of options, and the writing surface has to line up
-        // with the lines the items are written on — the same grid the PDF draws.
+        // headers), then the answer grid records the pairs. The grid is TWO ROWS
+        // × N columns — the numbers on top, one empty cell under each to write
+        // its letter — the same surface the PDF and the preview draw.
         if (inline) {
           out.push(para([run('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', { size: SMALL, italics: true })], { spaceAfter: 40, keepNext: true }));
           block.lefts.forEach((l, i) => out.push(para([run(`${l.n}. ${l.text}`)], { spaceAfter: i === block.lefts.length - 1 ? 60 : 20, keepNext: true })));
           (block.rights || []).forEach((r, i, arr) => out.push(para([run(`${r.letter}. ${r.text}`)], { spaceAfter: i === arr.length - 1 ? 60 : 20, keepNext: true })));
-          const count = Math.max(block.lefts.length, (block.rights || []).length);
-          const gridCell = (label, pct, opts = {}) => new TableCell({
-            width: { size: pct, type: WidthType.PERCENTAGE },
+          const count = Math.max(1, block.lefts.length, (block.rights || []).length);
+          const cellPct = 100 / count;
+          const gridCell = (label, opts = {}) => new TableCell({
+            width: { size: cellPct, type: WidthType.PERCENTAGE },
             borders: boxBorders(),
-            margins: { top: 40, bottom: 40, left: 60, right: 60 },
-            children: [para([run(label, { bold: !!opts.head, size: SMALL })], { align: opts.center ? AlignmentType.CENTER : undefined, spaceAfter: 0 })],
+            margins: { top: opts.tall ? 150 : 40, bottom: opts.tall ? 150 : 40, left: 40, right: 40 },
+            children: [para([run(label, { bold: !!opts.head, size: SMALL })], { align: AlignmentType.CENTER, spaceAfter: 0 })],
           });
-          const gridRows = [];
-          gridRows.push(new TableRow({ tableHeader: true, children: [gridCell('N°', 30, { head: true, center: true }), gridCell('Lettre', 70, { head: true, center: true })] }));
-          for (let i = 0; i < count; i++) gridRows.push(new TableRow({ children: [gridCell(`${i + 1}`, 30, { center: true }), gridCell('', 70)] }));
+          const gridRows = [
+            new TableRow({
+              tableHeader: true,
+              children: Array.from({ length: count }, (_, i) => gridCell(String(block.lefts[i]?.n ?? i + 1), { head: true })),
+            }),
+            new TableRow({
+              children: Array.from({ length: count }, () => gridCell('', { tall: true })),
+            }),
+          ];
           out.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, layout: TableLayoutType.FIXED, rows: gridRows }));
           break;
         }
@@ -866,15 +917,29 @@ class DocxBuilder {
     return out;
   }
 
-  build(model) {
-    const children = [
-      ...this.headerChildren(model),
-      ...this.identityChildren(model),
-    ];
+  bodyChildren(model) {
+    const children = [];
     for (const section of model.sections) children.push(...this.sectionChildren(section, model));
     children.push(...this.warningsChildren(model));
     children.push(...this.footerChildren(model));
     return children;
+  }
+
+  /**
+   * Split into `[header, body]`. On a one-column paper the answer sheet is a
+   * single group (nothing has to be separated yet), so the historical byte-for-byte
+   * one-section file is kept exactly as it was. On a two-column paper the header
+   * must NOT flow into the columns — Word would squeeze the masthead and the
+   * identity block into the left half of the first column while the questions
+   * started at the top of the right one — so it returns the header alone and the
+   * body alone, and `renderExamDocumentDocx` wraps them in two sections whose
+   * break is `continuous`, which is Word's mirror of the engine's full-width
+   * masthead over a two-column question flow.
+   */
+  build(model) {
+    const head = [...this.headerChildren(model), ...this.identityChildren(model)];
+    const body = this.bodyChildren(model);
+    return COLUMNS > 1 ? [head, body] : [[...head, ...body]];
   }
 }
 
@@ -921,7 +986,42 @@ export async function renderExamDocumentDocx(model, options = {}) {
   };
 
   const isKey = model.meta.document === 'answer_key';
-  const children = new DocxBuilder(ctx).build(model);
+  const groups = new DocxBuilder(ctx).build(model);
+  // One entry per group: the paper is either a single section or, on two
+  // columns, a full-width header section followed by the columned body.
+  const pageHeader = () =>
+    new Header({
+      children: [
+        para(
+          [
+            run(isKey ? `CORRIGÉ — ${model.meta.examName} — confidentiel` : model.header.schoolName || model.meta.examName, {
+              size: TINY,
+            }),
+          ],
+          { align: isKey ? AlignmentType.CENTER : AlignmentType.RIGHT, spaceAfter: 0 },
+        ),
+      ],
+    });
+  const pageFooter = () =>
+    new Footer({
+      children: [
+        new Paragraph({
+          tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
+          children: [
+            new TextRun({ text: 'Page ', font: FONT, size: TINY, color: '000000' }),
+            new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: TINY, color: '000000' }),
+            new TextRun({ text: ' / ', font: FONT, size: TINY, color: '000000' }),
+            new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: TINY, color: '000000' }),
+            new TextRun({
+              text: `\t${isKey ? `${model.meta.examName} — confidentiel` : model.meta.examName}`,
+              font: FONT,
+              size: TINY,
+              color: '000000',
+            }),
+          ],
+        }),
+      ],
+    });
 
   const doc = new Document({
     creator: model.header.teacherName || 'Quiz App',
@@ -961,52 +1061,36 @@ export async function renderExamDocumentDocx(model, options = {}) {
         },
       },
     },
-    sections: [
-      {
-        properties: {
-          page: {
-            size: { width: PAGE_W, height: PAGE_H },
-            margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
-          },
+    sections: groups.map((children, index) => ({
+      properties: {
+        page: {
+          size: { width: PAGE_W, height: PAGE_H },
+          margin: { ...MARGINS, ...EDGE, gutter: 0 },
         },
-        headers: {
-          default: new Header({
-            children: [
-              para(
-                [
-                  run(isKey ? `CORRIGÉ — ${model.meta.examName} — confidentiel` : model.header.schoolName || model.meta.examName, {
-                    size: TINY,
-                  }),
-                ],
-                { align: isKey ? AlignmentType.CENTER : AlignmentType.RIGHT, spaceAfter: 0 },
-              ),
-            ],
-          }),
-        },
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
-                children: [
-                  new TextRun({ text: 'Page ', font: FONT, size: TINY, color: '000000' }),
-                  new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: TINY, color: '000000' }),
-                  new TextRun({ text: ' / ', font: FONT, size: TINY, color: '000000' }),
-                  new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: TINY, color: '000000' }),
-                  new TextRun({
-                    text: `\t${isKey ? `${model.meta.examName} — confidentiel` : model.meta.examName}`,
-                    font: FONT,
-                    size: TINY,
-                    color: '000000',
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-        children,
+        // The header group keeps the page width to itself; the columns start
+        // with the questions, exactly as the engine opens both columns under a
+        // full-width masthead. `continuous` on BOTH groups is what stops the
+        // break between them from turning into a page break: the readers disagree
+        // on which `w:sectPr` owns a break's type (the one that ends the previous
+        // section or the one that opens the next), so the split is declared
+        // continuous from both sides and Word/LibreOffice cannot add a sheet.
+        ...(groups.length > 1 && index === 0
+          ? { type: SectionType.CONTINUOUS, column: { count: 1, separate: false } }
+          : {
+              ...(groups.length > 1 ? { type: SectionType.CONTINUOUS } : {}),
+              ...(COLUMNS > 1
+                ? { column: { count: COLUMNS, space: GUTTER, equalWidth: true, separate: false } }
+                : {}),
+            }),
       },
-    ],
+      headers: {
+        default: pageHeader(),
+      },
+      footers: {
+        default: pageFooter(),
+      },
+      children,
+    })),
   });
 
   const buffer = await Packer.toBuffer(doc);

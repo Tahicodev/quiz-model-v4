@@ -22,7 +22,7 @@
  */
 
 import PDFDocument from 'pdfkit';
-import { renderExamDocumentPdf } from './pdfRenderer.js';
+import { renderExamDocumentPdf, measureExamLayout } from './pdfRenderer.js';
 import { blankStem } from './text.js';
 import { TEMPLATE_LIMITS } from '../../../shared/schemas/examTemplate.schema.js';
 
@@ -116,11 +116,11 @@ function blockHeight(measure, block, cfg, colW, isKey) {
       const rows = Math.max(lefts.length, rights.length);
       if (inline) {
         // Inline: instruction + the two stacked lists (lefts then rights) + the
-        // answer grid, always TWO COLUMNS x ROWS (`N° | Lettre`).
+        // answer grid, always TWO ROWS x N columns (numbers, then the cells).
         let h = bodyLine('Associez : dans la grille, écrivez la lettre qui correspond à chaque numéro.', colW, 1.5);
         for (const l of lefts) h += bodyLine(`${l.n}. ${l.text}`, colW, 1) + 2;
         for (const r of rights) h += bodyLine(`${r.letter}. ${r.text}`, colW, 1) + 2;
-        h += 16 + rows * 18 + 12;
+        h += 46;
         return h * D;
       }
       // Classic: the table is now traced inside ONE column, so each cell wraps
@@ -289,6 +289,58 @@ export function estimateAnalytic(model, cfg) {
 }
 
 /**
+ * The heights the packer places with, as `{ headerH, runningH, sections }`.
+ *
+ * `measureExamLayout` asks the layout engine for the real numbers, so a
+ * question is placed with exactly the height the sheet gives it. The analytic
+ * model built for `estimateAnalytic` is only the fallback: it is a good guess,
+ * and a good guess that runs a few points SHORT is what used to leave a hole —
+ * the packer believes the question fits, the engine moves the whole block to
+ * the next column, and the teacher gets an empty strip plus an extra sheet.
+ *
+ * Heights are always measured AS A STUDENT SHEET, which is what lets an answer
+ * key carry the very same order as the subject it corrects.
+ */
+function packingPlan(model, cfg) {
+  const columns = Math.max(1, cfg.page.columns);
+  const capacity = cfg.usableH;
+  const subjectView = { ...model, meta: { ...(model.meta || {}), document: 'student' } };
+  try {
+    const measured = measureExamLayout(subjectView, cfg);
+    return {
+      columns,
+      capacity,
+      headerH: measured.headerH,
+      runningH: measured.runningH,
+      sections: measured.sections,
+    };
+  } catch (err) {
+    const measure = createMeasurer(cfg);
+    try {
+      const colW = cfg.colW;
+      return {
+        columns,
+        capacity,
+        headerH: headerHeight(measure, cfg),
+        runningH: cfg.header.fullOnFirstPage && cfg.header.compactOnFollow ? 24 : 0,
+        sections: (model.sections || []).map((section) => ({
+          titleH: section.title
+            ? measure.height(section.title, { name: 'bold', size: cfg.theme.sizes.body, width: colW }) + 10
+            : 0,
+          // No engine measure: assume the question never splits.
+          items: (section.items || []).map((item) => {
+            const totalH = itemHeight(measure, item, cfg, colW, false);
+            return { bodyH: totalH, totalH };
+          }),
+        })),
+      };
+    } finally {
+      measure.end();
+    }
+  }
+}
+
+/**
  * Column-first-fit packing plan: reorder the questions so the sheet fills every
  * column to the bottom before a page break, and number them in the order they
  * are placed.
@@ -296,19 +348,25 @@ export function estimateAnalytic(model, cfg) {
  * The engine flows strictly top-to-bottom, so a paper built straight from the
  * question bank leaves a hole whenever the next question is taller than the
  * strip still free at the bottom of the column — the teacher reads that as
- * wasted paper and an extra sheet. Here the same measured heights the analytic
- * estimate uses are packed differently: at every position the FIRST question of
- * the queue that still fits the strip is placed (a later, smaller one may
- * therefore jump ahead), and only when nothing fits is the column abandoned.
+ * wasted paper and an extra sheet. Here the same heights the engine paginates
+ * with are packed differently: at every position the FIRST question of the
+ * queue that still fits the strip is placed (a later, smaller one may therefore
+ * jump ahead), and only when nothing fits is the column abandoned.
+ *
+ * The cursor mirrors the engine's own geometry, and that is what makes the holes
+ * go away:
+ *  - the masthead is a full-width band, so BOTH columns of page 1 start under it
+ *    (starting the second column at the top of the page is what used to place a
+ *    question the renderer then pushed away);
+ *  - pages ≥ 2 lose only the running header, when the template stamps one;
+ *  - a glued head+stem+surface group moves whole, while the writing lines under
+ *    it flow on into the next column — so a question is never all-or-nothing.
+ *
  * The result is written back into the model — order plus printed numbers — so
  * the PDF, the Word file and the HTML preview all render the identical paper
  * (they only ever draw the order they are given) and the estimate matches it.
- *
  * Reordering stays INSIDE a section: a question never jumps out of its
- * « Exercice 2 · … » heading into another one, so the document keeps its
- * structure. The heights are always measured as a STUDENT sheet, which is what
- * makes an answer key carry the very same order and numbering as the subject it
- * corrects.
+ * « Exercice 2 · … » heading into another one.
  *
  * @param {object} model output of `ExamDocumentService#buildExamDocument`
  * @param {object} cfg resolved engine config
@@ -317,70 +375,101 @@ export function estimateAnalytic(model, cfg) {
 export function packExamModel(model, cfg) {
   const sections = model && model.sections;
   if (!Array.isArray(sections) || sections.length === 0) return model;
-  const measure = createMeasurer(cfg);
-  try {
-    const columns = Math.max(1, cfg.page.columns);
-    const capacity = cfg.usableH;
-    const colW = cfg.colW;
-    const S = cfg.theme.sizes;
-    let used = headerHeight(measure, cfg); // page 1, first column carries the header
-    let col = 0;
-    const advance = () => {
-      col += 1;
-      if (col >= columns) {
-        col = 0;
-        used = 0;
-      }
-    };
-    let number = 0;
-    const flat = [];
-    for (const section of sections) {
-      const items = Array.isArray(section.items) ? section.items : [];
-      if (!items.length) continue;
-      if (section.title) {
-        const th = measure.height(section.title, { name: 'bold', size: S.body, width: colW }) + 10;
-        if (used + th > capacity) advance();
-        used += th;
-      }
-      const queue = items.map((item) => ({ item, h: itemHeight(measure, item, cfg, colW, false) }));
-      const placed = [];
-      while (queue.length) {
-        let idx = queue.findIndex(({ h }) => used + h <= capacity);
-        if (idx < 0) {
-          // Nothing in the queue fits the strip. A question taller than a whole
-          // column is placed anyway — the engine splits it across the break —
-          // otherwise the column is closed and the next one starts empty.
-          idx = queue.findIndex(({ h }) => h > capacity);
-          if (idx < 0) {
-            advance();
-            continue;
-          }
-        }
-        const [entry] = queue.splice(idx, 1);
-        number += 1;
-        entry.item.number = number;
-        placed.push(entry.item);
-        flat.push(entry.item);
-        used += entry.h;
-      }
-      section.items = placed;
+  const plan = packingPlan(model, cfg);
+  const columns = plan.columns;
+  const capacity = plan.capacity;
+  // Never let a giant header starve the flow: at least this much of a column is
+  // always up for sale, so the walk below cannot spin on an unusable page.
+  const MIN_STRIP = 60;
+  const topOf = (page) => Math.min(page === 1 ? plan.headerH : plan.runningH, capacity - MIN_STRIP);
+  let page = 1;
+  let col = 0;
+  let used = topOf(1);
+  const advance = () => {
+    col += 1;
+    if (col >= columns) {
+      col = 0;
+      page += 1;
     }
-    if (model.scoring && Array.isArray(model.scoring.normalizedPreview)) {
-      // The normalisation table is indexed by question, so its printed numbers
-      // have to follow the new placement order.
-      const byId = new Map(model.scoring.normalizedPreview.map((e) => [String(e.questionId), e]));
-      const next = flat
-        .map((item) => {
-          const entry = byId.get(String(item.questionId));
-          return entry ? { ...entry, number: item.number } : null;
-        })
-        .filter(Boolean);
-      if (next.length) model.scoring.normalizedPreview = next;
+    used = topOf(page);
+  };
+  /** Put `h` points into the flow. An `atomic` block moves whole to the next column. */
+  const place = (h, atomic) => {
+    if (h <= 0) return;
+    if (atomic) {
+      if (used + h > capacity) advance();
+      used += h;
+      return;
     }
-    return model;
-  } finally {
-    measure.end();
+    let rest = h;
+    while (rest > 0) {
+      const avail = capacity - used;
+      if (rest <= avail) {
+        used += rest;
+        return;
+      }
+      rest -= avail;
+      used = capacity;
+      advance();
+    }
+  };
+
+  let number = 0;
+  const flat = [];
+  plan.sections.forEach((planSection, index) => {
+    const section = sections[index];
+    const items = section && Array.isArray(section.items) ? section.items : [];
+    if (!items.length) return;
+    const titleH = planSection.titleH || 0;
+    if (titleH > 0) {
+      if (used + titleH > capacity) advance();
+      used += titleH;
+    }
+    const queue = items.map((item, i) => ({
+      item,
+      bodyH: planSection.items[i]?.bodyH ?? 0,
+      totalH: planSection.items[i]?.totalH ?? 0,
+    }));
+    const placed = [];
+    while (queue.length) {
+      // The first question that fits the strip whole; failing that, the first
+      // whose glued body fits (its writing lines then flow on); failing that,
+      // one taller than a whole column, which the engine splits anyway.
+      let idx = queue.findIndex((q) => used + q.totalH <= capacity);
+      let whole = idx >= 0;
+      if (idx < 0) idx = queue.findIndex((q) => used + q.bodyH <= capacity);
+      if (idx < 0) idx = queue.findIndex((q) => q.bodyH > capacity - topOf(page));
+      if (idx < 0) {
+        advance();
+        continue;
+      }
+      const [q] = queue.splice(idx, 1);
+      number += 1;
+      q.item.number = number;
+      placed.push(q.item);
+      flat.push(q.item);
+      if (whole) {
+        place(q.totalH, true);
+      } else {
+        place(q.bodyH, q.bodyH <= capacity - topOf(page));
+        place(q.totalH - q.bodyH, false);
+      }
+    }
+    section.items = placed;
+  });
+  if (model.scoring && Array.isArray(model.scoring.normalizedPreview)) {
+    // The normalisation table is indexed by question, so its printed numbers
+    // have to follow the new placement order.
+    const byId = new Map(model.scoring.normalizedPreview.map((e) => [String(e.questionId), e]));
+    const next = flat
+      .map((item) => {
+        const entry = byId.get(String(item.questionId));
+        return entry ? { ...entry, number: item.number } : null;
+      })
+      .filter(Boolean);
+    if (next.length) model.scoring.normalizedPreview = next;
   }
+  return model;
 }
 
 /**

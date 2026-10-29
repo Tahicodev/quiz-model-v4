@@ -77,7 +77,10 @@ function loadBuiltIn(name) {
   return JSON.parse(readFileSync(fileURLToPath(url), 'utf8'));
 }
 
-const BUILT_IN_NAMES = ['classique', 'moderne', 'compact', 'officiel', 'college'];
+// `ultra` is the tightest paper the schema allows (24 pt margins, 2 columns,
+// 0.7 density, 9.5 pt body, no per-question rules, inline answers): a 20-question
+// subject of short items is meant to land on two sheets.
+const BUILT_IN_NAMES = ['classique', 'moderne', 'compact', 'ultra', 'officiel', 'college'];
 const BUILT_IN = new Map();
 for (const name of BUILT_IN_NAMES) {
   const tpl = ExamTemplateSchema.parse(loadBuiltIn(name));
@@ -283,6 +286,10 @@ export function listTemplates() {
     headerVariant: tpl.header?.variant ?? 'bandeau',
     footerVariant: tpl.footer?.variant ?? 'title+number',
     density: tpl.theme?.density ?? 1,
+    // The picker has to show the answer style the paper will really use: a
+    // template can ship `answerStyle: 'inline'` (Ultra compact does), and the
+    // "Compact inline answers" checkbox is the teacher's override of it.
+    answerStyle: tpl.question?.answerStyle ?? 'classic',
   }));
 }
 

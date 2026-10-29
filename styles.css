@@ -45632,6 +45632,16 @@ html[data-theme='dark'] #assignClassExamsModal.is-open .modal-body .search-wrapp
 		border-radius: 12px !important;
 	}
 
+	/* ── Exams: the card itself is the button ──
+	   Tapping an exam card opens the MobileActionSheet with every action the
+	   row has on the desktop — Edit, Assign Questions, Assign to Classes,
+	   Analysis, Exam Documents, Push, Stop, Delete. The eight 40 px icons used
+	   to wrap over half the card and hid the least obvious entry (Exam
+	   Documents), so the bar goes and the sheet becomes the only way in. */
+	.tab-content #examList tbody tr > td.actions-cell {
+		display: none !important;
+	}
+
 	/* ── Categories: title · description · fields ── */
 	.tab-content #categoryList tbody tr > td:nth-child(2) {
 		grid-column: 1 / -1 !important;
