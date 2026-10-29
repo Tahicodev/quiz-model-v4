@@ -6,11 +6,16 @@
  * "End sessions" action; student rows keep the assign select; the Staff
  * filter isolates staff machines.
  *
+ * Same file also covers the phone structure: below 768px the machine table
+ * is not card-ified, it is replaced by #devicesMobileList — one self-
+ * contained card per machine, the machine's sessions inside that card, and
+ * no action buttons (the action sheet carries them).
+ *
  * classroom-devices.js is a classic browser script (IIFE), loaded with
  * node:vm; network goes through a stubbed global fetch.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -86,6 +91,7 @@ const els = {};
 function resetEls() {
   for (const k of Object.keys(els)) delete els[k];
   els.devicesTableBody = makeEl();
+  els.devicesMobileList = makeEl();
   els.devicesSearch = makeEl({ value: '' });
   els.deviceFilterStatus = makeEl({ value: '' });
   els.deviceFilterType = makeEl({ value: '' });
@@ -168,6 +174,11 @@ async function refresh() {
   await vm.runInContext('window.ClassroomDevices.refresh()', ctx);
 }
 
+async function setViewport(width) {
+  vm.runInContext(`window.innerWidth = ${width};`, ctx);
+  await vm.runInContext('window.ClassroomDevices.filter()', ctx);
+}
+
 describe('staff device rows', () => {
   it('renders a staff badge, no block button, and per-user end-sessions actions', async () => {
     resetEls();
@@ -199,5 +210,87 @@ describe('staff device rows', () => {
     const html = els.devicesTableBody.innerHTML;
     expect(html).toContain('Hicham');
     expect(html).not.toContain('Lab PC 1');
+  });
+});
+
+describe('phone structure (<= 768px)', () => {
+  async function mobileRefresh() {
+    resetEls();
+    await setViewport(390);
+    await refresh();
+    return els.devicesMobileList.innerHTML;
+  }
+
+  afterAll(() => {
+    vm.runInContext('window.innerWidth = 1280;', ctx);
+  });
+
+  it('renders cards instead of the table', async () => {
+    const html = await mobileRefresh();
+    expect(html.split('class="device-mcard').length - 1).toBe(2);
+    // No table markup at all, and the desktop body was emptied — one
+    // structure at a time, or BulkSelect would count each machine twice.
+    expect(html).not.toContain('<tr');
+    expect(html).not.toContain('<td');
+    expect(els.devicesTableBody.innerHTML).toBe('');
+  });
+
+  it('keeps the data and the assign picker, drops the icon buttons', async () => {
+    const html = await mobileRefresh();
+    expect(html).toContain('Hicham');
+    expect(html).toContain('device-staff-badge');
+    expect(html).toContain('Lab PC 1');
+    expect(html).toContain('device-assign');
+    // Block / rename / forget live in the action sheet, not on the card.
+    expect(html).not.toContain('exam-action-btn');
+    // Bulk selection still works from the card.
+    expect(html.split('class="device-checkbox"').length - 1).toBe(2);
+  });
+
+  it('carries the machine\'s sessions inside its own card', async () => {
+    await setViewport(390);
+    await refresh();
+    vm.runInContext("window.ClassroomDevices.toggleSessions('dev-teacher');", ctx);
+    await vm.runInContext('window.ClassroomDevices.filter()', ctx);
+    const html = els.devicesMobileList.innerHTML;
+    expect(html).toContain('dm-sessions');
+    expect(html).toContain('Chrome');
+    // The panel sits inside the teacher card, i.e. before the next machine.
+    expect(html.indexOf('dm-sessions')).toBeLessThan(html.indexOf('data-device-id="dev-student"'));
+  });
+
+  it('says so when no session comes from the machine', async () => {
+    await setViewport(390);
+    await refresh();
+    vm.runInContext("window.ClassroomDevices.toggleSessions('dev-student');", ctx);
+    await vm.runInContext('window.ClassroomDevices.filter()', ctx);
+    expect(els.devicesMobileList.innerHTML).toContain('dm-sessions-empty');
+  });
+
+  it('shows no session block to a teacher', async () => {
+    resetEls();
+    state.isAdmin = false;
+    await setViewport(390);
+    await refresh();
+    const html = els.devicesMobileList.innerHTML;
+    expect(html).toContain('device-mcard');
+    expect(html).not.toContain('dm-sessions');
+    state.isAdmin = true;
+  });
+
+  // The render split is only half the fix: the CSS has to drop the table on
+  // phones and pick the card list up again, or both structures would show.
+  it('is matched by the stylesheet', () => {
+    const css = readFileSync(path.join(ROOT, 'admin.css'), 'utf8');
+    const base = /#devices \.devices-mobile-list \{\s*display: none;/;
+    const card = /#devices #devicesTable \{\s*display: none !important;/;
+    const wide = /#devices \.devices-mobile-list \{\s*display: flex;/;
+    expect(css).toMatch(base);
+    expect(css).toMatch(card);
+    expect(css).toMatch(wide);
+    // Desktop hide first, phone swap after it — later wins at equal weight.
+    expect(css.search(wide)).toBeGreaterThan(css.search(base));
+    const block = css.lastIndexOf('@media', css.search(card));
+    expect(css.slice(block, css.indexOf('{', block))).toMatch(/max-width:\s*768px/);
   });
 });

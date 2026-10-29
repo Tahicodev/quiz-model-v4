@@ -4468,9 +4468,15 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	flex: 0 0 auto;
 }
 
+/* The phone card list is filled only by a narrow-viewport render; keeping it
+   hidden here means the table and the cards can never show at once. */
+#devices .devices-mobile-list {
+	display: none;
+}
+
 /* ============================================================
-   CLASSROOM DEVICES — phones/tablets: table rows become cards
-   (same data-label pattern as #questionTable in styles.css)
+   CLASSROOM DEVICES — phones/tablets: the machine table gives way
+   to its own card structure (#devicesMobileList)
    ============================================================ */
 @media (max-width: 768px) {
 	/* Search + refresh stack full-width inside the toggled container. */
@@ -4521,282 +4527,244 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		overflow: visible;
 	}
 
-	#devices table.data-table thead {
-		display: none;
+	/* ── The swap: table out, cards in ──
+	   The machine table is a DESKTOP shape — its sessions panel is a second
+	   row (colspan over all 8 columns) hanging under each machine, and pushing
+	   that through a card layout is what made this tab unusable on phones.
+	   Below 768px the table is dropped and classroom-devices.js renders
+	   #devicesMobileList instead (see deviceCardHtml): same data, one
+	   self-contained card per machine, the machine's sessions inside its own
+	   card. Exactly one structure is ever filled, so BulkSelect never sees two
+	   sets of checkboxes. */
+	#devices #devicesTable {
+		display: none !important;
 	}
 
-	#devices table.data-table,
-	#devices table.data-table tbody {
-		display: block;
+	#devices .devices-mobile-list {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		padding: 4px 0 12px;
 	}
 
-	#devices table.data-table tbody tr.device-card {
+	/* ── Machine card ──
+	   Right gutter is the pinned checkbox's; tapping the card opens the action
+	   sheet (Block/Allow, View sessions, End sessions per user, Rename, Forget)
+	   so no icon bar crowds the card. */
+	#devices .device-mcard {
 		position: relative;
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		grid-template-areas:
-			'machine machine'
-			'student student'
-			'type ip'
-			'status seen'
-			'actions actions';
-		column-gap: 14px;
+		padding: 14px 46px 13px 15px;
 		background: var(--bg-surface);
-		border: 1px solid var(--bg-surface-alt);
+		border: 1px solid var(--border-color);
 		border-radius: 16px;
 		box-shadow:
-			0 4px 6px -1px rgba(0, 0, 0, 0.05),
-			0 2px 4px -1px rgba(0, 0, 0, 0.03);
-		margin: 16px 12px;
-		/* Right gutter keeps room for the pinned top-right checkbox. */
-		padding: 14px 46px 12px 16px;
+			0 1px 2px rgba(15, 23, 42, 0.06),
+			0 14px 28px -20px rgba(15, 23, 42, 0.4);
+		cursor: pointer;
+		-webkit-tap-highlight-color: rgba(0, 0, 0, 0.05);
 	}
 
-	#devices table.data-table tbody tr.device-card.is-blocked {
-		border-color: rgba(239, 68, 68, 0.45);
+	#devices .device-mcard.is-blocked {
+		border-color: rgba(239, 68, 68, 0.5);
 	}
 
-	/* Sessions panel: detached card stack beneath the machine card
-	   (collapsed by default; opened from the action sheet via
-	   "View sessions" on phones, by clicking the row on desktop). */
-	#devices tr.device-sessions-subrow.is-expanded {
-		display: block;
-		margin: -8px 12px 0 28px;
-		padding: 0 10px 12px;
+	#devices .device-mcard.is-staff {
+		border-color: rgba(245, 158, 11, 0.55);
 	}
 
-	#devices tr.device-sessions-subrow.is-expanded > td {
-		display: block;
-		padding: 0;
+	/* Bulk-selection tint — same accent the table rows use. */
+	#devices .device-mcard.question-row-selected {
+		background: var(--primary-light);
+		border-color: var(--primary);
 	}
 
-	#devices .device-sessions-panel {
-		background: transparent;
-		border: none;
-		border-radius: 0;
-		overflow: visible;
-	}
-
-	/* Different structure on phones: one compact card per session group —
-	   header row (role badge · user · End action) over a labeled fact
-	   stack. No table/header at all. */
-	#devices .device-sessions-head {
-		display: none;
-	}
-
-	#devices .device-session-item {
+	/* ── Card header: online dot · name (+ session badge) over platform ·
+	   type, status badge on the right, checkbox pinned top-right ── */
+	#devices .dm-head {
 		display: grid;
-		grid-template-columns: 1fr auto auto;
-		grid-template-areas: 'user role actions';
-		gap: 6px 10px;
-		margin: 10px 0;
-		padding: 12px 14px;
-		background: var(--bg-surface);
-		border: 1px solid var(--bg-surface-alt);
-		border-radius: 14px;
-	}
-
-	#devices .device-session-item + .device-session-item {
-		border-top: 1px solid var(--bg-surface-alt);
-	}
-
-	#devices .device-session-item .device-name {
-		font-size: 1rem;
-		overflow-wrap: anywhere;
-	}
-
-	#devices .sh-user {
-		grid-area: user;
-		min-width: 0;
-	}
-
-	#devices .sh-role {
-		grid-area: role;
-		display: flex;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		align-items: center;
+		gap: 9px;
+		padding-bottom: 10px;
+		border-bottom: 1px solid var(--border-color);
 	}
 
-	#devices .sh-actions {
-		grid-area: actions;
+	#devices .dm-check {
+		position: absolute;
+		top: 15px;
+		right: 15px;
 		display: flex;
-		align-items: center;
+		z-index: 2;
 	}
 
-	/* Fact rows: full-width, labeled small caps lines. */
-	#devices .sh-cell.sh-count,
-	#devices .sh-cell.sh-seen,
-	#devices .sh-cell.sh-ip {
-		grid-column: 1 / -1;
-		display: flex;
-		align-items: baseline;
-		gap: 10px;
-		font-size: 12px;
-		color: #64748b;
-		overflow-wrap: anywhere;
+	#devices .dm-check input[type='checkbox'] {
+		width: 20px;
+		height: 20px;
 	}
 
-	#devices .sh-count::before,
-	#devices .sh-seen::before,
-	#devices .sh-ip::before {
-		content: attr(data-label);
-		flex: 0 0 auto;
-		font-size: 10px;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: #94a3b8;
-	}
-
-	#devices .sh-ip {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 2px;
-	}
-
-	#devices .device-sessions-panel .exam-action-btn {
-		width: 38px !important;
-		height: 38px !important;
-		border-radius: 11px !important;
-	}
-
-	#devices tr.device-card.is-blocked td.device-cell-machine,
-	#devices tr.device-card.question-row-selected td:first-child {
-		box-shadow: none;
-	}
-
-	/* Card header: machine name row (no data-label on this cell). */
-	#devices tbody td.device-cell-machine {
-		grid-area: machine;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 0 0 10px;
-		border-bottom: 1px solid var(--bg-surface-alt);
-		min-width: 0;
-	}
-
+	/* ── Card title ── */
 	#devices .device-dot {
 		width: 11px;
 		height: 11px;
 		margin-right: 0;
 	}
 
-	#devices .device-name {
-		font-size: 1rem;
+	#devices .dm-title {
+		min-width: 0;
 	}
 
-	/* Labeled tiles: compact "label over value" stack. Type · IP and
-	   Status · Last seen sit side by side; the assign select spans the card. */
-	#devices tbody td[data-label] {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		justify-content: flex-start;
-		gap: 4px;
-		padding: 8px 0;
-		border-bottom: none;
-		text-align: left;
-		min-width: 0;
+	#devices .dm-title .device-name {
+		font-size: 1rem;
 		overflow-wrap: anywhere;
 	}
 
-	#devices tbody td[data-label]::before {
-		content: attr(data-label);
-		font-size: 0.66rem;
-		font-weight: 700;
-		color: #94a3b8;
+	/* Platform · type on one muted line — the "Type" column folded into the
+	   header so the card has fewer fields to scan. */
+	#devices .dm-sub {
+		margin-top: 2px;
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-weight: 600;
+	}
+
+	/* ── Facts: label over value, two columns; the picker spans both ── */
+	#devices .dm-facts {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 11px 14px;
+		padding-top: 12px;
+	}
+
+	#devices .dm-fact {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 3px;
+		min-width: 0;
+	}
+
+	#devices .dm-fact-wide {
+		grid-column: 1 / -1;
+	}
+
+	#devices .dm-label {
+		color: var(--text-muted);
+		font-size: 0.6rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		text-align: left;
-		flex: 0 0 auto;
 	}
 
-	#devices tbody td[data-label='Student'] { grid-area: student; }
-	#devices tbody td[data-label='Type'] { grid-area: type; }
-	#devices tbody td[data-label='IP'] { grid-area: ip; }
-	#devices tbody td[data-label='Status'] { grid-area: status; }
-	#devices tbody td[data-label='Last seen'] { grid-area: seen; }
-	#devices tbody td[data-label='Actions'] { grid-area: actions; }
-
-	#devices tbody td[data-label='Student'] {
-		border-bottom: 1px solid var(--bg-body);
+	#devices .dm-value {
+		color: var(--text-main);
+		font-size: 0.85rem;
+		font-weight: 600;
+		line-height: 1.35;
+		overflow-wrap: anywhere;
 	}
 
-	/* Checkbox pinned top-right like the other tabs' cards — never a
-	   full-width "Select" row of its own. */
-	#devices tbody td.checkbox-cell {
-		position: absolute;
-		top: 14px;
-		right: 14px;
-		display: block;
-		width: auto;
-		padding: 0;
-		border: none;
-	}
-
-	#devices tbody td.checkbox-cell::before {
-		content: none;
-	}
-
-	#devices tbody td.checkbox-cell input[type='checkbox'] {
-		width: 20px;
-		height: 20px;
+	/* The assign picker is the only control on the card: full width, 44px
+	   tall, 16px text so iOS never zooms the page when it takes focus. */
+	#devices .dm-value-assign {
+		width: 100%;
 	}
 
 	#devices .device-assign {
-		max-width: none;
 		width: 100%;
+		max-width: none;
 		min-height: 44px;
 		font-size: 16px; /* no iOS auto-zoom on focus */
 	}
 
-	/* Actions row: same treatment as the Classes/Exams/Categories cards —
-	   icon buttons stay visible, and tapping the row opens the sheet. */
-	#devices tbody td.device-cell-actions {
-		display: block !important;
-		padding-top: 10px !important;
-		margin-top: 8px !important;
-		border-top: 1px dashed var(--border-color) !important;
-		border-bottom: none;
-		white-space: normal;
+	/* ── Live sessions, inside the machine's own card ──
+	   The phone answer to the desktop colspan sub-row: one block per user
+	   holding a sign-in on this machine, no table semantics anywhere. Hidden
+	   until the sheet's "View sessions" opens the card — the per-user End
+	   action stays in the sheet, not on the card. */
+	#devices .dm-sessions {
+		display: grid;
+		gap: 8px;
+		margin-top: 12px;
+		padding-top: 12px;
+		border-top: 1px dashed var(--border-color);
 	}
 
-	#devices tbody td.device-cell-actions::before {
-		content: none;
-	}
-
-	#devices tbody td.device-cell-actions .exam-actions {
-		justify-content: flex-start !important;
-		flex-wrap: wrap;
-		gap: 8px !important;
-	}
-
-	#devices tbody td.device-cell-actions .exam-action-btn {
-		width: 38px !important;
-		height: 38px !important;
-		border-radius: 11px !important;
-	}
-
-	#devices .device-empty {
-		display: block;
-		background: var(--bg-surface);
-		border: 1px dashed var(--bg-surface-alt);
+	#devices .dm-session {
+		padding: 10px 12px;
+		background: var(--bg-surface-alt);
+		border: 1px solid var(--border-color);
 		border-radius: 12px;
+	}
+
+	#devices .dm-session-head {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+
+	#devices .dm-session-head .device-staff-badge {
+		margin-right: 0;
+	}
+
+	#devices .dm-session-user {
+		flex: 1 1 auto;
+		min-width: 0;
+		color: var(--text-main);
+		font-size: 0.85rem;
+		font-weight: 700;
+		overflow-wrap: anywhere;
+	}
+
+	#devices .dm-session-count {
+		flex: 0 0 auto;
+		min-width: 22px;
+		padding: 0 7px;
+		background: #3b82f6;
+		border-radius: 999px;
+		color: #fff;
+		font-size: 11px;
+		font-weight: 800;
+		text-align: center;
+	}
+
+	#devices .dm-session-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 10px;
+		margin-top: 5px;
+		color: var(--text-muted);
+		font-size: 0.72rem;
+		font-weight: 600;
+		overflow-wrap: anywhere;
+	}
+
+	#devices .dm-sessions-empty {
+		padding: 4px 2px;
+		color: var(--text-muted);
+		font-size: 0.78rem;
+		font-weight: 600;
+		text-align: center;
+	}
+
+	/* Loading / error / nothing-to-show placeholder inside the card list
+	   (the table gets the same message as a colspan row instead). */
+	#devices .devices-mobile-list .device-empty {
+		padding: 18px 14px;
+		background: var(--bg-surface);
+		border: 1px dashed var(--border-color);
+		border-radius: 14px;
+		color: var(--text-muted);
+		font-size: 0.82rem;
+		font-weight: 600;
+		text-align: center;
 	}
 }
 
-/* Small phones: detail tiles stack single-column so values never crowd. */
+/* Small phones: facts stack single-column so values never crowd. */
 @media (max-width: 640px) {
-	#devices table.data-table tbody tr.device-card {
+	#devices .dm-facts {
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-areas:
-			'machine'
-			'student'
-			'type'
-			'ip'
-			'status'
-			'seen'
-			'actions';
 	}
 }
 

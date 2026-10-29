@@ -19,6 +19,15 @@
  * machine row stays clean. Each user line/button ends only that user's
  * sessions. Admin only: teachers get plain rows with no session panel (the
  * endpoint 403s for them, so it is never fetched).
+ *
+ * Two structures, one dataset — the machine table is a DESKTOP shape. A
+ * phone cannot carry it: the session panel is a second row (colspan over
+ * all 8 columns) hanging under each machine, and the card-layout CSS that
+ * turns `tr` into a grid was never meant to nest a table inside one.
+ * `render()` therefore builds the <tr> rows on wide viewports and a
+ * purpose-made card list (#devicesMobileList, #devicesTable hidden by CSS)
+ * on narrow ones; crossing the 768px breakpoint re-renders. The card keeps
+ * the machine's sessions inside the machine's own card — nothing nested.
  */
 
 (function () {
@@ -36,6 +45,12 @@
 	// Columns in the machine rows (Select, Machine, Type, IP, User, Status,
 	// Last seen, Actions) — session panels span all of them.
 	var DEVICES_COLS = 8;
+
+	// Single source of truth for the phone/desktop split — same 768px
+	// breakpoint as the tabs' CSS and the row-tap guards below.
+	function isMobileViewport() {
+		return (window.innerWidth || 1024) <= 768;
+	}
 	function token() {
 		if (window.__authToken) return window.__authToken;
 		try {
@@ -247,18 +262,37 @@
 		} catch (e) {}
 	}
 
+	/**
+	 * Placeholder (loading / error / nothing to show) in the ACTIVE structure.
+	 * `text` is markup the caller has already escaped — each shape wraps it in
+	 * its own element, so a phone never receives a stray <tr>.
+	 */
+	function setNotice(text) {
+		var body = document.getElementById('devicesTableBody');
+		var list = document.getElementById('devicesMobileList');
+		if (isMobileViewport()) {
+			if (body) body.innerHTML = '';
+			if (list) list.innerHTML = '<div class="device-empty">' + text + '</div>';
+		} else {
+			if (list) list.innerHTML = '';
+			if (body) {
+				body.innerHTML =
+					'<tr><td colspan="' + DEVICES_COLS + '" class="text-muted device-empty">' +
+					text +
+					'</td></tr>';
+			}
+		}
+	}
+
 	async function refresh() {
 		if (loading) return;
 		loading = true;
-		var body = document.getElementById('devicesTableBody');
-		if (body) {
-			body.innerHTML =
-				'<tr><td colspan="' + DEVICES_COLS + '" class="text-muted device-empty">Chargement…</td></tr>';
-		}
+		setNotice('Chargement…');
 		try {
 			attachSocket();
 			attachSheetListener();
 			attachRowToggle();
+			watchViewport();
 			await loadStudents();
 			devices = (await api('/devices')) || [];
 			// Live sign-in sessions power the per-machine "Sessions" column and
@@ -277,12 +311,7 @@
 			}
 			render();
 		} catch (err) {
-			if (body) {
-				body.innerHTML =
-					'<tr><td colspan="' + DEVICES_COLS + '" class="text-muted device-empty">Échec du chargement: ' +
-					esc(err.message) +
-					'</td></tr>';
-			}
+			setNotice('Échec du chargement: ' + esc(err.message));
 		} finally {
 			loading = false;
 		}
@@ -466,22 +495,31 @@
 
 	var sheetListenerAttached = false;
 
+	// Tap the machine → its action sheet. Bound to BOTH containers (the table
+	// body and the phone card list) because only one of them holds markup at a
+	// time; `[data-device-id]` matches `tr.device-card` and `.device-mcard`.
+	function onCardTap(e) {
+		if (!isMobileViewport()) return;
+		if (e.target.closest('button, select, input, a, textarea, label')) return;
+		var card = e.target.closest('[data-device-id]');
+		if (!card) return;
+		e.stopPropagation();
+		var id = card.getAttribute('data-device-id');
+		var d = devices.find(function (dev) {
+			return String(dev.id) === String(id);
+		});
+		if (d) openDeviceSheet(d);
+	}
+
 	function attachSheetListener() {
 		if (sheetListenerAttached) return;
-		var tbody = document.getElementById('devicesTableBody');
-		if (!tbody) return;
+		var targets = [document.getElementById('devicesTableBody'), document.getElementById('devicesMobileList')].filter(Boolean);
+		if (!targets.length) return;
 		sheetListenerAttached = true;
 		// Delegated: survives every re-render. Mirrors the other tabs — only
 		// on mobile, and never when the tap lands on a control.
-		tbody.addEventListener('click', function (e) {
-			if (window.innerWidth > 768) return;
-			if (e.target.closest('button, select, input, a, textarea, label')) return;
-			var row = e.target.closest('tr.device-card');
-			if (!row) return;
-			e.stopPropagation();
-			var id = row.getAttribute('data-device-id');
-			var d = devices.find(function (dev) { return String(dev.id) === String(id); });
-			if (d) openDeviceSheet(d);
+		targets.forEach(function (root) {
+			root.addEventListener('click', onCardTap);
 		});
 	}
 
@@ -496,7 +534,7 @@
 		if (!tbody) return;
 		rowToggleAttached = true;
 		tbody.addEventListener('click', function (e) {
-			if (window.innerWidth <= 768) return;
+			if (isMobileViewport()) return;
 			if (e.target.closest('button, select, input, a, textarea, label')) return;
 			var row = e.target.closest('tr.device-card');
 			if (!row) return;
@@ -507,20 +545,87 @@
 	}
 
 	function render() {
-		var body = document.getElementById('devicesTableBody');
-		if (!body) return;
 		var rows = visibleDevices();
 
 		renderKpis();
 		updateFiltersBadge();
 
+		// One structure at a time — the two would otherwise duplicate every
+		// `.device-checkbox` and BulkSelect would count each machine twice.
+		lastMobile = isMobileViewport();
+		if (lastMobile) {
+			renderMobileCards(rows);
+		} else {
+			renderTableRows(rows);
+		}
+	}
+
+	function emptyText() {
+		return devices.length
+			? 'Aucun appareil ne correspond à la recherche.'
+			: "Aucun appareil pour l'instant — ils apparaissent dès qu'un élève se connecte.";
+	}
+
+	function restoreSelection() {
+		// Re-apply persisted selection (it survives re-renders) and refresh the
+		// "N selected" bar. The shared helper may be absent in bare unit-test
+		// sandboxes — never break the list for it.
+		try {
+			if (window.BulkSelect && typeof window.BulkSelect.restore === 'function') {
+				window.BulkSelect.restore('devices');
+			}
+		} catch (e) { /* selection UI is best-effort */ }
+	}
+
+	// Assigned student cell, shared by both structures: staff machines get a
+	// read-only badge (they are never reassigned from here), everything else
+	// the picker.
+	function assignCellHtml(d) {
+		var linkedUser = deviceUser(d);
+		if (isStaffRow(d)) {
+			return (
+				'<span class="device-staff-badge" title="Staff machine">' +
+				esc(staffRoleLabel(linkedUser.role)) +
+				'</span> ' +
+				'<span class="device-user-name">' +
+				esc(linkedUser.name || linkedUser.id) +
+				'</span>'
+			);
+		}
+		var options =
+			'<option value="">— Non assigné —</option>' +
+			students
+				.map(function (s) {
+					return (
+						'<option value="' +
+						esc(s.id) +
+						'"' +
+						(String(s.id) === String(d.assigned_user_id) ? ' selected' : '') +
+						'>' +
+						esc(s.name || s.username) +
+						'</option>'
+					);
+				})
+				.join('');
+		return (
+			'<select class="form-control device-assign" onchange="window.ClassroomDevices.assign(\'' +
+			esc(d.id) +
+			'\', this.value)">' +
+			options +
+			'</select>'
+		);
+	}
+
+	// Desktop structure: the 8-column machine table, each machine followed by
+	// a colspan sub-row that holds its sessions panel.
+	function renderTableRows(rows) {
+		var body = document.getElementById('devicesTableBody');
+		var list = document.getElementById('devicesMobileList');
+		if (list) list.innerHTML = '';
+		if (!body) return;
+
 		if (!rows.length) {
-			body.innerHTML =
-				'<tr><td colspan="' + DEVICES_COLS + '" class="text-muted device-empty">' +
-				(devices.length
-					? 'Aucun appareil ne correspond à la recherche.'
-					: "Aucun appareil pour l'instant — ils apparaissent dès qu'un élève se connecte.") +
-				'</td></tr>';
+			setNotice(emptyText());
 			return;
 		}
 
@@ -530,7 +635,6 @@
 				var online = onlineIds.has(String(d.device_key));
 				var blocked = d.status === 'blocked';
 				var hostname = d.hostname || d.note || '(sans nom)';
-				var linkedUser = deviceUser(d);
 				var staffRow = isStaffRow(d);
 				// Total live sign-in sessions reaching this machine — shown as
 				// a count badge in the "Machine" column (0 → no badge).
@@ -538,38 +642,7 @@
 					return n + ((e.sessions || []).length || 0);
 				}, 0);
 
-				var userCellHtml;
-				if (staffRow) {
-					userCellHtml =
-						'<span class="device-staff-badge" title="Staff machine">' +
-						esc(staffRoleLabel(linkedUser.role)) +
-						'</span> ' +
-						'<span class="device-user-name">' +
-						esc(linkedUser.name || linkedUser.id) +
-						'</span>';
-				} else {
-					var options =
-						'<option value="">— Non assigné —</option>' +
-						students
-							.map(function (s) {
-								return (
-									'<option value="' +
-									esc(s.id) +
-									'"' +
-									(String(s.id) === String(d.assigned_user_id) ? ' selected' : '') +
-									'>' +
-									esc(s.name || s.username) +
-									'</option>'
-								);
-							})
-							.join('');
-					userCellHtml =
-						'<select class="form-control device-assign" onchange="window.ClassroomDevices.assign(\'' +
-						id +
-						'\', this.value)">' +
-						options +
-						'</select>';
-				}
+				var userCellHtml = assignCellHtml(d);
 
 				return (
 					'<tr class="device-card' + (blocked ? ' is-blocked' : '') + (staffRow ? ' is-staff' : '') + '" data-device-id="' + id + '">' +
@@ -617,14 +690,126 @@
 			.join('');
 
 		body.innerHTML = html;
-		// Re-apply persisted selection (top selection survives re-renders) and
-		// refresh the "N selected" bar. The shared helper may be absent in
-		// bare unit-test sandboxes — never break the table for it.
-		try {
-			if (window.BulkSelect && typeof window.BulkSelect.restore === 'function') {
-				window.BulkSelect.restore('devices');
-			}
-		} catch (e) { /* selection UI is best-effort */ }
+		restoreSelection();
+	}
+
+	// ── Phone structure ──────────────────────────────────────────────────
+	// Same data, its own DOM: no <table>, no colspan sub-row, nothing nested.
+	// One card per machine — header (checkbox · online dot · name + session
+	// badge · status), a fact grid carrying the assign picker, and the
+	// machine's live sessions inside that same card when opened. The row's
+	// icon buttons are not repeated here: tapping the card opens the
+	// MobileActionSheet, which carries Block/Allow, View sessions, End
+	// sessions per user, Rename and Forget (see openDeviceSheet).
+	function renderMobileCards(rows) {
+		var list = document.getElementById('devicesMobileList');
+		var body = document.getElementById('devicesTableBody');
+		if (body) body.innerHTML = '';
+		if (!list) return;
+
+		if (!rows.length) {
+			setNotice(emptyText());
+			return;
+		}
+		list.innerHTML = rows.map(deviceCardHtml).join('');
+		restoreSelection();
+	}
+
+	function deviceCardHtml(d) {
+		var id = esc(d.id);
+		var online = onlineIds.has(String(d.device_key));
+		var blocked = d.status === 'blocked';
+		var hostname = d.hostname || d.note || '(sans nom)';
+		var entries = isAdminSession() ? deviceSessions(d) : [];
+		var sessionCount = entries.reduce(function (n, e) {
+			return n + ((e.sessions || []).length || 0);
+		}, 0);
+
+		return (
+			'<div class="device-mcard' +
+			(blocked ? ' is-blocked' : '') +
+			(isStaffRow(d) ? ' is-staff' : '') +
+			(devicesExpanded.has(String(d.id)) ? ' is-open' : '') +
+			'" data-device-id="' + id + '">' +
+			'<div class="dm-head">' +
+			'<span class="dm-check"><input type="checkbox" class="device-checkbox" data-id="' + id + '" onchange="toggleBulkRowSelection(this, \'devices\')" /></span>' +
+			'<span class="device-dot ' + (online ? 'is-online' : 'is-offline') + '" title="' + (online ? 'En ligne' : 'Hors ligne') + '"></span>' +
+			'<div class="dm-title">' +
+			'<div class="device-name">' + esc(hostname) +
+			(sessionCount
+				? ' <span class="device-sessions-count-badge" title="' + sessionCount + ' live sign-in session' + (sessionCount > 1 ? 's' : '') + '">' + sessionCount + '</span>'
+				: '') +
+			'</div>' +
+			'<div class="dm-sub">' + (d.platform ? esc(d.platform) + ' · ' : '') + typeLabel(d.device_type) + '</div>' +
+			'</div>' +
+			'<span class="badge ' + (blocked ? 'device-badge-blocked' : 'device-badge-allowed') + '">' +
+			(blocked ? 'Bloqué' : 'Autorisé') +
+			'</span>' +
+			'</div>' +
+			'<div class="dm-facts">' +
+			'<div class="dm-fact dm-fact-wide"><span class="dm-label">Assigned student</span><span class="dm-value dm-value-assign">' + assignCellHtml(d) + '</span></div>' +
+			'<div class="dm-fact"><span class="dm-label">IP</span><span class="dm-value">' + esc(d.last_ip || '—') + '</span></div>' +
+			'<div class="dm-fact"><span class="dm-label">Last seen</span><span class="dm-value">' + relativeTime(d.last_seen) + '</span></div>' +
+			'</div>' +
+			(isAdminSession() ? mobileSessionsHtml(d, entries) : '') +
+			'</div>'
+		);
+	}
+
+	// The machine's session groups as plain stacked blocks — the phone answer
+	// to the desktop sub-row panel, with no table semantics anywhere. Hidden
+	// until the sheet's "View sessions" flips the same devicesExpanded state.
+	function mobileSessionsHtml(d, entries) {
+		if (!devicesExpanded.has(String(d.id))) return '';
+		var groups = entries
+			.map(function (entry) {
+				var u = entry.user || {};
+				var role = String(u.role || '').toLowerCase();
+				var badge =
+					role === 'admin' || role === 'super_admin'
+						? '<span class="device-staff-badge">Admin</span>'
+						: role === 'teacher'
+							? '<span class="device-staff-badge">Teacher</span>'
+							: '<span class="badge device-badge-allowed">Student</span>';
+				var sessions = Array.isArray(entry.sessions) ? entry.sessions : [];
+				var last = sessions[0] || {};
+				return (
+					'<div class="dm-session">' +
+					'<div class="dm-session-head">' + badge +
+					'<span class="dm-session-user">' + esc(u.name || u.username || u.id || '') + '</span>' +
+					'<span class="dm-session-count">' + sessions.length + '</span>' +
+					'</div>' +
+					'<div class="dm-session-meta">' +
+					'<span>' + relativeTime(last.created_at) + '</span>' +
+					'<span>' + esc(last.ip_address || '—') + (last.user_agent ? ' · ' + esc(shortAgent(last.user_agent)) : '') + '</span>' +
+					'</div>' +
+					'</div>'
+				);
+			})
+			.join('');
+		return (
+			'<div class="dm-sessions">' +
+			(groups || '<div class="dm-sessions-empty">No live sign-in session comes from this machine.</div>') +
+			'</div>'
+		);
+	}
+
+	// The structure is chosen at render time, so crossing the breakpoint has
+	// to re-render — a rotated tablet or a resized window would otherwise keep
+	// showing the markup built for the other one.
+	var viewportWatched = false;
+	var lastMobile = null;
+
+	function watchViewport() {
+		if (viewportWatched) return;
+		viewportWatched = true;
+		lastMobile = isMobileViewport();
+		window.addEventListener('resize', function () {
+			var mobile = isMobileViewport();
+			if (lastMobile === mobile) return;
+			lastMobile = mobile;
+			render();
+		});
 	}
 
 	/**
