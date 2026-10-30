@@ -901,14 +901,15 @@ body.kid-theme-superhero::after {
 }
 .mq-sound:focus-visible { outline: 4px solid #fbbf24; outline-offset: 2px; }
 
-/* ── THE scene: the trail photo IS the page background ──
-   MathQuestGame mounts one screen at a time, so outside the map there is
-   no element painting the landscape. Every Math Quest mode (map, quiz,
-   results) therefore gets ONE crisp copy of mq-adventure-trail.webp as a
-   viewport-fixed backdrop: it sits behind the compact header (player
-   name, level title, progress bar), behind the quiz panels and behind
-   the results card. position:fixed + inset:0 makes the cover crop
-   viewport-sized — it never re-crops while the quiz scrolls. */
+/* ── THE scene: ONE trail photo covers the WHOLE page (header included) ──
+   MathQuestGame mounts one screen at a time. Quiz/results paint exactly ONE
+   viewport-fixed copy of mq-adventure-trail.webp on .kid-wrap::before — it
+   sits behind the compact header, the quiz panels and the results card and
+   never re-crops while the quiz scrolls. On the MAP the single copy IS the
+   .mq-map-canvas: it spans the page from edge to edge, header zone included
+   (the header floats transparently over the painted sky), so there is never
+   a second image, no header strip with a different crop, and no gate can
+   ever be clipped or hidden behind the header. */
 .kid-wrap.mq-map-mode, .kid-wrap.mq-quiz-mode {
 	position: relative;
 	max-width: none;
@@ -919,7 +920,7 @@ body.kid-theme-superhero::after {
 /* On the map the crisp canvas must reach the screen edges — the shell's
  * side padding would only expose the backdrop at both gutters. */
 .kid-wrap.mq-map-mode { padding-left: 0; padding-right: 0; }
-.kid-wrap.mq-map-mode::before, .kid-wrap.mq-quiz-mode::before {
+.kid-wrap.mq-quiz-mode::before {
 	content: "";
 	position: fixed; inset: 0; z-index: -1;
 	background:
@@ -960,34 +961,42 @@ body.kid-theme-superhero::after {
    distance (--gs, perspective); plates and buttons stay readable.
    States: mq-ready · mq-locked (greyed + padlock) · mq-done (golden). */
 .mq-map { max-width: none; }
-/* Full-screen jungle: the canvas is a CENTERED 3:2 cover box of the
- * 1536×1024 trail art — it always covers the whole kid body below the
- * compact header (width ≥ 100% and ≥ (100vh−96px)×1.5). The exact asset
- * factor keeps percent coordinates on the painted path (no cover-crop
- * offset math, no borders, no frame). Where the cover box is wider than
- * the screen (narrow/short viewports), .mq-map scrolls horizontally to
- * follow the route; wide desktops get the whole map with no scroll.
- * Layering: .mq-map keeps the shared z-index:1 stacking context, so the
- * canvas (z −1 inside it) paints as one unit ABOVE every ancestor
- * background. The mq-header gets its own higher layer (z 2, below) so the
- * player row stays visible and clickable over the sky. */
+/* THE map stage. Coordinate contract: the trail photo is painted ONCE and
+ * the .mq-map-canvas box IS that painting — the image fills the box
+ * (background-size 100% 100%) and the gates + dotted route are percentages
+ * of the SAME box, so a gate can never drift off the painted path, whatever
+ * the screen shape. No cover-crop, no second copy inside a card.
+ * Desktop (≥1080px, see the block below) promotes this box to the whole
+ * page — header zone included — so nothing is hidden behind the header bar.
+ * Below 1080px the canvas becomes an in-flow plate and .mq-map is a
+ * horizontal scroller the kid walks the trail with. */
 .mq-map {
 	position: relative;
 	min-height: calc(100vh - 64px);
-	overflow-x: auto;
-	overflow-y: hidden;
+	overflow: auto;
+	scrollbar-width: thin;
+}
+/* The results screen (and any screen without a canvas stage) gets the single
+ * trail copy as a viewport-fixed backdrop; see the ≥1080px block, where on
+ * the MAP screen the canvas carries that one copy instead. */
+.kid-wrap.mq-map-mode::before {
+	content: "";
+	position: fixed; inset: 0; z-index: -1;
+	background:
+		linear-gradient(180deg, rgba(2,44,32,.5) 0%, rgba(2,44,32,.08) 34%, rgba(2,44,32,.45) 100%),
+		url('/kids/assets/math-quest/backgrounds/mq-adventure-trail.webp') center / cover no-repeat;
 }
 .mq-header { position: relative; z-index: 2; }
 .mq-map-canvas {
 	position: absolute;
-	left: 50%; top: 50%;
-	transform: translate(-50%, -50%);
-	width: max(100%, calc((100vh - 64px) * 1.5));
-	aspect-ratio: 1536 / 1024;
-	z-index: -1;                          /* caged inside the map layer */
-	background: url('/kids/assets/math-quest/backgrounds/mq-adventure-trail.webp') 0 0 / 100% 100% no-repeat;
+	left: 50%; top: 0;
+	transform: translateX(-50%);
+	width: max(100%, calc(100vh * 1.5));
+	height: 100%;
+	z-index: -1;                          /* behind the nodes, inside the map layer */
+	background: url('/kids/assets/math-quest/backgrounds/mq-adventure-trail.webp') 0 0 / 100% 100% no-repeat #052e1f;
 	--art-base: 150px;    /* foreground gate art width at --gs:1 */
-	--plate-max: 140px;   /* info plate max width */
+	--plate-max: 172px;   /* plate tier 1: names + CTA get a real card, not a squeezed strip */
 }
 /* The map heading floats on the sky (top-centre) — desktop only; mobile
  * keeps it in normal flow above the map. */
@@ -1121,18 +1130,48 @@ body.kid-theme-superhero::after {
 	50% { box-shadow: 0 5px 0 #166534, 0 0 0 9px rgba(253,224,71,0); }
 }
 
-/* Large screens: roomier foreground art and plates — the cover scale grows
- * with the canvas width, so bigger tiers keep their perspective contrast. */
+/* Large screens: roomiest plates — names, meta and the CTA get a full card
+ * instead of a squeezed strip. */
 @media (min-width: 1080px) {
 	.mq-map-canvas {
 		--art-base: 190px;
-		--plate-max: 196px;
+		--plate-max: 248px;
 	}
-	.mq-node-plate { padding: 10px 12px 12px; }
-	.mq-node-name { font-size: 1rem; }
-	.mq-node-meta { font-size: .78rem; }
-	.mq-gate-stars { font-size: .95rem; }
-	.mq-node-btn { padding: 8px 18px; font-size: .9rem; }
+	/* ONE background for the entire page, header included: the stage fills
+	 * the whole screen from the very top and the compact header floats over
+	 * it (fixed, transparent, z 2) — so there is ONE trail image edge to
+	 * edge, top to bottom: no themed strip above the map, no second copy,
+	 * no crop and — because the plate IS the stage box and the gates are %
+	 * of it — no gate can ever hide behind the header or be clipped away.
+	 * A 16:9 screen shows the asset at its native 3:2 ratio; wider screens
+	 * scroll the stage horizontally to follow the trail. */
+	.kid-wrap.mq-map-mode { padding-top: 0; }
+	.mq-map {
+		height: 100vh;
+		min-height: 420px;
+		overflow: auto;
+		scrollbar-width: thin;
+	}
+	/* The canvas IS the scene's single background here: one image, one box,
+	 * page-wide — the fixed backdrop copy above would double it. */
+	.kid-wrap.mq-map-scene::before { content: none; }
+	.mq-map-canvas { top: 0; height: 100%; }
+	.kid-wrap.mq-map-mode .mq-header {
+		position: fixed; top: 0; left: 0; right: 0;
+		z-index: 4;
+		padding: 12px 16px 6px;
+		background: linear-gradient(180deg, rgba(2,44,32,.55), rgba(2,44,32,0));
+	}
+	/* results screen has no canvas, but shares the fixed header → keep its
+	 * card clear of the floating player row */
+	.kid-wrap.mq-map-mode .mq-results { padding-top: 76px; }
+	/* the floating heading moves down clear of the fixed header bar */
+	.mq-map .mq-map-sign { top: 84px; }
+	.mq-node-plate { padding: 12px 16px 14px; }
+	.mq-node-name { font-size: 1.05rem; }
+	.mq-node-meta { font-size: .82rem; }
+	.mq-gate-stars { font-size: 1rem; }
+	.mq-node-btn { padding: 9px 22px; font-size: .95rem; }
 }
 /* The dino guide waits by the temple path INSIDE the canvas (canvas-relative
  * % keep it clear of the trail and of every gate slot). */
@@ -1533,7 +1572,9 @@ body.kid-theme-superhero::after {
 		position: relative;
 		left: auto; top: auto;
 		transform: none;
-		width: max(760px, calc(260px * var(--level-n, 3)), calc((100vh - 64px) * 1.5));
+		width: max(760px, calc(260px * var(--level-n, 3)), calc(100vh * 1.5));
+		height: auto;
+		aspect-ratio: 1536 / 1024;
 		margin: 12px auto 0;
 	}
 	/* hint that the trail continues off-screen */
@@ -1562,7 +1603,7 @@ body.kid-theme-superhero::after {
 	}
 	.mq-map-canvas {
 		--art-base: 150px;
-		--plate-max: 140px;
+		--plate-max: 172px;
 	}
 	.mq-node-plate { padding: 7px 9px 9px; }
 	.mq-header { padding-top: 8px; }
@@ -1578,9 +1619,11 @@ body.kid-theme-superhero::after {
 		left: auto; top: auto;
 		transform: none;
 		width: max(760px, calc(260px * var(--level-n, 3)));
+		height: auto;
+		aspect-ratio: 1536 / 1024;
 		margin: 12px auto 0;
 		--art-base: 150px;
-		--plate-max: 140px;
+		--plate-max: 172px;
 	}
 	/* heading returns to normal flow above the map */
 	.mq-map .mq-map-sign {

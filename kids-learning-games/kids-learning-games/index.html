@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#635bdb">
+  <title>Kids Learning Games</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Accueil">
+        <span class="brand-mark">✦</span>
+        <span><strong>Kids</strong><small>Learning Games</small></span>
+      </a>
+      <div class="top-meta">
+        <span class="level-pill">🌱 Espace primaire</span>
+        <span class="score-pill">⭐ <b id="total-stars">0</b></span>
+      </div>
+    </header>
+
+    <main>
+      <section id="home-view">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">APPRENDRE EN S'AMUSANT</span>
+            <h1>Prêt pour une<br><em>nouvelle aventure ?</em></h1>
+            <p>Choisis une matière, découvre un jeu et relève de petits défis !</p>
+            <div class="hero-tags"><span>🎮 Jeux interactifs</span><span>🏅 Étoiles à gagner</span><span>🌈 À ton rythme</span></div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="sun"></div><div class="cloud cloud-one"></div><div class="cloud cloud-two"></div>
+            <div class="rainbow">🌈</div><div class="hero-character">🦊</div>
+            <span class="float f1">✏️</span><span class="float f2">⭐</span><span class="float f3">🧩</span>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div><span class="eyebrow">TON ESPACE D'APPRENTISSAGE</span><h2>Que veux-tu apprendre ?</h2></div>
+          <span class="small-note">3 univers · 15 jeux</span>
+        </div>
+        <div class="category-grid" id="category-grid"></div>
+        <div class="section-heading games-heading">
+          <div><span class="eyebrow">À TOI DE JOUER</span><h2 id="games-title">Tous les jeux</h2></div>
+          <button class="text-button" id="show-all">Voir tout</button>
+        </div>
+        <div class="games-grid" id="games-grid"></div>
+      </section>
+
+      <section id="game-view" class="hidden">
+        <button class="back-button" id="back-home">← Retour aux jeux</button>
+        <div class="game-topline">
+          <div><span class="eyebrow" id="game-category-label">FRANÇAIS</span><h1 id="game-title">Jeu</h1><p id="game-subtitle"></p></div>
+          <div class="game-stats"><span>⭐ <b id="round-stars">0</b></span><span>Défi <b id="round-number">1</b>/5</span></div>
+        </div>
+        <div class="progress-track"><div id="progress-fill"></div></div>
+        <div class="play-card">
+          <div class="play-card-head"><span class="round-label" id="round-label">DÉFI 1</span><span class="encouragement" id="encouragement">Tu peux le faire ! 💪</span></div>
+          <div id="activity-area" class="activity-area"></div>
+          <div id="feedback" class="feedback" aria-live="polite"></div>
+          <div class="play-actions"><button id="check-answer" class="primary-button">Vérifier ma réponse</button><button id="next-question" class="primary-button hidden">Continuer →</button></div>
+        </div>
+        <p class="teacher-hint">💡 <strong>Astuce enseignant :</strong> les activités sont conçues pour être courtes, répétables et adaptées au primaire.</p>
+      </section>
+    </main>
+    <footer><span>✦ Kids Learning Games</span><span>Un petit défi chaque jour !</span></footer>
+  </div>
+  <script src="js/games-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

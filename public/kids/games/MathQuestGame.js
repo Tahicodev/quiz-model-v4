@@ -184,9 +184,19 @@
 	function sceneMode(mode) { // 'map' | 'quiz' | null
 		var wrap = document.querySelector('.kid-wrap');
 		if (!wrap) return;
-		wrap.classList.remove('mq-map-mode', 'mq-quiz-mode');
+		wrap.classList.remove('mq-map-mode', 'mq-quiz-mode', 'mq-map-scene');
 		if (mode === 'map') wrap.classList.add('mq-map-mode');
 		else if (mode === 'quiz') wrap.classList.add('mq-quiz-mode');
+	}
+	/** The trail photo is painted ONCE per screen. On the MAP screen the
+	 * .mq-map-canvas box itself carries it (it doubles as the node coordinate
+	 * space), so the page-level backdrop must step aside — otherwise the same
+	 * image would show twice with two different crops. On the results screen
+	 * there is no canvas, so the fixed backdrop paints the single copy.
+	 * Called right after the map HTML is mounted. */
+	function markMapScene() {
+		var wrap = document.querySelector('.kid-wrap');
+		if (wrap) wrap.classList.add('mq-map-scene');
 	}
 
 	/* ════════════════ MAP SCREEN ════════════════════════════════════════ */
@@ -315,10 +325,10 @@
 		}).join('');
 
 		engine.screen(
-			// The adventure landscape IS the whole kid body: the .mq-map covers
-			// the page below the shell header and .mq-map-canvas is a CENTERED
-			// 3:2 cover box of the 1536×1024 trail art, so the full-screen image
-			// and the nodes/percentages share one coordinate space at any size.
+			// ONE background for the whole page: .mq-map-canvas IS that image —
+			// it fills the stage edge to edge (header zone included) and doubles
+			// as the node coordinate box, so the painted trail and the gate
+			// percentages always share one space, at any screen shape.
 			'<div class="mq-map" role="region" aria-label="Adventure map">' +
 				'<div class="mq-map-sign" role="heading" aria-level="2">' +
 					'<p class="mq-map-hello">Ready, ' + esc(engine.player.name || 'explorer') + '? 🗺️</p>' +
@@ -352,33 +362,15 @@
 			});
 		});
 		fitMapCanvas();
+		markMapScene(); // the canvas now paints the scene's single background
 	}
 
-	/* On short-wide desktops the 3:2 cover canvas towers over the map area
-	 * and the CENTERED crop hides the FIRST gate's plate — including its
-	 * Start ▶ button. This anchors the canvas so the bottom-anchored gates
-	 * always stay on screen (the art's top sky is what yields). Desktop
-	 * viewport only: ≤1079px uses the in-flow horizontal scroller. */
+	/* The canvas fills the stage box exactly (no centered cover-crop any more),
+	 * so every gate is on screen by construction — nothing to re-anchor. The
+	 * hook stays as a no-op resize entry point for future scene tweaks. */
 	function fitMapCanvas() {
 		var canvas = document.querySelector('.mq-map-canvas');
-		var map = canvas && canvas.parentElement;
-		if (!canvas || !map) return;
-		if (!window.matchMedia('(min-width: 1080px)').matches) {
-			canvas.style.transform = '';
-			return;
-		}
-		var mapH = map.clientHeight;
-		var canvasR = canvas.getBoundingClientRect();
-		if (!mapH || !canvasR.height) return;
-		var f = 0.5; // default anchor — the CSS translate(-50%,-50%)
-		var node0 = canvas.querySelector('.mq-level-node');
-		if (node0) {
-			var nodeBottom = node0.getBoundingClientRect().bottom - canvasR.top;
-			var over = (mapH / 2 - 0.5 * canvasR.height) + nodeBottom - (mapH - 12);
-			if (over > 0) f += over / canvasR.height;
-			f = Math.min(0.92, Math.max(0.15, f));
-		}
-		canvas.style.transform = 'translate(-50%,' + (-(f * 100)).toFixed(2) + '%)';
+		if (canvas && canvas.style.transform) canvas.style.transform = '';
 	}
 	window.addEventListener('resize', function () {
 		requestAnimationFrame(fitMapCanvas);
