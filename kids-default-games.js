@@ -1,20 +1,26 @@
 /**
- * kids-default-games.js — Built-in Kids Games catalog (3 subjects × 5 games).
+ * kids-default-games.js — Built-in Kids Games catalog (3 subjects × 5-6 games).
  *
- * Ported from the standalone `kids-learning-games` demo. These are GAMES the
- * teacher picks in wizard Step 1 under the French / Arabic / Math cards; the
- * fourth card, "Custom game", leads to the nine original game types.
+ * Ported from the standalone `kids-learning-games` demo and extended with
+ * FULL per-letter / per-number coverage: countable content is generated as a
+ * matrix (every Arabic letter × identification/positional forms/harakat,
+ * every French letter × ordering/next-letter, every number fact × counting/
+ * comparing/ordering/addition/subtraction/sequence). The matrices are built
+ * programmatically at load time so this file stays the single source of
+ * truth; one-shot generators keep every question a plain static object, so
+ * nothing downstream has to know they were generated.
  *
  * Two consumers, one source of truth:
  *  1. The Kids player — questions are kept in the canonical kid shape
  *     { type, text, options_json, answer } so the existing pipeline grades
  *     them (KidsGameService.checkAnswer), publishes them (PIN) and tracks
  *     results. No schema, no parallel engine, no local score.
- *  2. The quiz app question bank — on first publish the same questions are
- *     filed under `subject › axis` categories (see `subject`/`axis` below)
- *     as ordinary bank rows, so the teacher can edit them, add others and
- *     reuse them in quizzes and exams. `explanation` is what the student
- *     sees after answering, so every question carries one.
+ *  2. The quiz app question bank — the whole catalog is filed automatically
+ *     under `subject › axis` categories on the teacher's first sign-in (see
+ *     kids-games-management.js seedKidsCatalogToBankSilently), as ordinary
+ *     bank rows the teacher can edit, extend and reuse in quizzes and exams.
+ *     `explanation` is what the student sees after answering, so every
+ *     question carries one.
  *
  * Answer format contract (KidsGameService.checkAnswer + the kid renderers):
  *  - multiple-choice: answer is one EXACT option label (case-insensitive);
@@ -30,6 +36,44 @@
  */
 (function () {
 	'use strict';
+
+	/* ── Deterministic generators ───────────────────────────────────────────
+	   A seeded LCG + Fisher-Yates keeps the catalog byte-stable across loads
+	   (stable question texts matter: the bank sync dedupes by text), and a
+	   "shuffle until it differs" guard keeps every draggable answer distinct
+	   from both the given order and its reverse (the tests grade both). */
+	var seedState = 20261031;
+	function rnd(n) {
+		seedState = (seedState * 1103515245 + 12345) % 2147483648;
+		return seedState % n;
+	}
+	function seededShuffle(arr) {
+		var a = arr.slice();
+		for (var i = a.length - 1; i > 0; i--) {
+			var j = rnd(i + 1);
+			var t = a[i]; a[i] = a[j]; a[j] = t;
+		}
+		return a;
+	}
+	function shuffledLike(arr, avoidAnswers) {
+		for (var attempt = 0; attempt < 24; attempt++) {
+			var out = seededShuffle(arr);
+			var joined = out.join(',');
+			var bad = joined === avoidAnswers.answer ||
+				(out.slice().reverse().join(',')) === avoidAnswers.answer;
+			if (!bad) return out;
+		}
+		return arr.slice();
+	}
+	/** One multiple-choice question with 4 distinct options built from a
+	   pool that must contain the answer. */
+	function mcq(text, pool, answer, explanation) {
+		var opts = [answer];
+		for (var i = 0; i < pool.length && opts.length < 4; i++) {
+			if (pool[i] !== answer && opts.indexOf(pool[i]) < 0) opts.push(pool[i]);
+		}
+		return { type: 'multiple-choice', text: text, options_json: seededShuffle(opts), answer: answer, explanation: explanation };
+	}
 
 	/* Subject cards: palette + mascot drive the Step 1 presentation. */
 	var SUBJECTS = [
@@ -53,21 +97,71 @@
 		},
 	];
 
+	/* ── French ───────────────────────────────────────────────────────────── */
+	var ALPHABET = 'a b c d e f g h i j k l m n o p q r s t u v w x y z'.split(' ');
+
+	/** Alphabet Explorer: shuffled letter groups covering the WHOLE a→z.
+	   The block is echoed in the prompt so every question text is unique —
+	   the bank sync dedupes by text, identical prompts would collapse. */
+	function frenchAlphabetQuestions() {
+		var windows = [];
+		for (var i = 0; i + 4 <= ALPHABET.length; i += 4) windows.push(ALPHABET.slice(i, i + 4));
+		// 6 windows cover a→x; the 2 remaining letters close the alphabet once
+		// (a 3-letter tail here would repeat 'x' already shown above).
+		windows.push(['y', 'z']);
+		var questions = [];
+		windows.forEach(function (w) {
+			var shuffled = shuffledLike(w, { answer: w.join(',') });
+			var answer = w.join(',');
+			questions.push({
+				type: 'draggable',
+				text: 'Remets ces lettres dans l\'ordre alphabétique : ' + shuffled.join(', ') + ' 🔤',
+				options_json: shuffled,
+				answer: answer,
+				explanation: "Dans l'ordre : " + w.join(', ') + ' — puis on les empile du haut vers le bas.',
+			});
+		});
+		return questions;
+	}
+
+	/** Lettre en route: one identification question per letter a→y. */
+	function frenchNextLetterQuestions() {
+		var questions = [];
+		for (var i = 0; i < ALPHABET.length - 1; i++) {
+			var cur = ALPHABET[i];
+			var next = ALPHABET[i + 1];
+			// Distractors: the letters just after + a few before, so even the
+			// last pair (y→z) keeps 4 distinct options instead of collapsing to 1.
+			var candidates = ALPHABET.slice(i + 1, i + 5).concat(ALPHABET.slice(Math.max(0, i - 3), i));
+			var pool = [];
+			candidates.forEach(function (L) { if (pool.indexOf(L) < 0) pool.push(L); });
+			questions.push(mcq(
+				"Quelle est la lettre qui vient après « " + cur + " » dans l'alphabet ? 🔤",
+				pool, next,
+				'Dans l\'alphabet, ' + cur + ' est suivie de ' + next + '.'
+			));
+		}
+		return questions;
+	}
+
 	var FRENCH = [
 		{
 			id: 'french-alphabet-explorer',
 			subject: 'French', axis: 'Alphabet & Letters',
 			name: 'Alphabet Explorer', icon: '🔤', tag: 'LETTERS',
 			game_type: 'build-a-tower', grade: 'cp', difficulty: 'easy',
-			description: 'Put the shuffled letters back in alphabetical order.',
+			description: 'Put shuffled letter groups back in alphabetical order — the whole a→z is covered.',
 			preview: ['🔤', 'a → z', '🚂'],
-			questions: [
-				{ type: 'draggable', text: "Remets ces lettres dans l'ordre alphabétique. 🔤", options_json: ['b', 'd', 'f', 'h'], answer: 'b,d,f,h', explanation: "Dans l'alphabet on dit b, puis d, puis f, puis h." },
-				{ type: 'draggable', text: "Remets ces lettres dans l'ordre alphabétique. 🔤", options_json: ['m', 'n', 'p', 'q'], answer: 'm,n,p,q', explanation: "L'ordre est m, n, p, q." },
-				{ type: 'draggable', text: "Remets ces lettres dans l'ordre alphabétique. 🔤", options_json: ['c', 'e', 'g', 'i'], answer: 'c,e,g,i', explanation: "Après c vient e, puis g, puis i." },
-				{ type: 'draggable', text: "Remets ces lettres dans l'ordre alphabétique. 🔤", options_json: ['j', 'l', 'o', 'r'], answer: 'j,l,o,r', explanation: "j est avant l, qui est avant o, qui est avant r." },
-				{ type: 'draggable', text: "Remets ces lettres dans l'ordre alphabétique. 🔤", options_json: ['s', 't', 'v', 'z'], answer: 's,t,v,z', explanation: "z est la dernière lettre de l'alphabet." },
-			],
+			questions: [],
+		},
+		{
+			id: 'french-letter-route',
+			subject: 'French', axis: 'French Letters',
+			name: 'Lettre en route', icon: '🧠', tag: 'LETTERS',
+			game_type: 'bubble-pop', grade: 'cp', difficulty: 'easy',
+			description: 'One question per letter: find the letter that follows the given one.',
+			preview: ['a→b', 'm→n', '🫧'],
+			questions: [],
 		},
 		{
 			id: 'french-animal-match',
@@ -122,14 +216,136 @@
 			description: 'Find the word written the right way among the traps.',
 			preview: ['🔎', '🐘', '🍫'],
 			questions: [
-				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe ? 🔎', options_json: ['éléphant', 'éléfant', 'élélphant'], answer: 'éléphant', explanation: 'éléphant : é-l-é-p-h-a-n-t.' },
-				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe ? 🔎', options_json: ['maison', 'maizon', 'méson'], answer: 'maison', explanation: 'maison s’écrit avec ai : mai-son.' },
-				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe ? 🔎', options_json: ['beaucoup', 'bocoup', 'beaucou'], answer: 'beaucoup', explanation: 'beaucoup prend l, e, a, u, c, o, u, p.' },
-				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe ? 🔎', options_json: ['oiseau', 'oiseux', 'wizeau'], answer: 'oiseau', explanation: 'oiseau : oi-seau, sans x.' },
-				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe ? 🔎', options_json: ['chocolat', 'chocola', 'chokola'], answer: 'chocolat', explanation: 'chocolat finit par -at et commence par cho-.' },
+				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe de cet animal ? 🐘', options_json: ['éléphant', 'éléfant', 'élélphant'], answer: 'éléphant', explanation: 'éléphant : é-l-é-p-h-a-n-t.' },
+				{ type: 'multiple-choice', text: 'Comment écrit-on le lieu où l’on habite ? 🏠', options_json: ['maison', 'maizon', 'méson'], answer: 'maison', explanation: 'maison s’écrit avec ai : mai-son.' },
+				{ type: 'multiple-choice', text: 'Quel mot veut dire « une grande quantité » ? 📦', options_json: ['beaucoup', 'bocoup', 'beaucou'], answer: 'beaucoup', explanation: 'beaucoup prend l, e, a, u, c, o, u, p.' },
+				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe de cet animal qui vole ? 🐦', options_json: ['oiseau', 'oiseux', 'wizeau'], answer: 'oiseau', explanation: 'oiseau : oi-seau, sans x.' },
+				{ type: 'multiple-choice', text: 'Quelle est la bonne orthographe de cette friandise brune ? 🍫', options_json: ['chocolat', 'chocola', 'chokola'], answer: 'chocolat', explanation: 'chocolat finit par -at et commence par cho-.' },
 			],
 		},
 	];
+	FRENCH[0].questions = frenchAlphabetQuestions();
+	FRENCH[1].questions = frenchNextLetterQuestions();
+
+	/* ── Arabic ───────────────────────────────────────────────────────────── */
+	/* [letter, name (Arabic), confusable pool for identification questions]. */
+	var ARABIC_LETTERS = [
+		['ا', 'أَلِف', ['ل', 'م', 'و']],
+		['ب', 'بَاء', ['ت', 'ث', 'ن', 'ي']],
+		['ت', 'تَاء', ['ب', 'ث', 'ن', 'ي']],
+		['ث', 'ثَاء', ['ب', 'ت', 'ن', 'ي']],
+		['ج', 'جِيم', ['ح', 'خ', 'ك']],
+		['ح', 'حَاء', ['ج', 'خ', 'ك']],
+		['خ', 'خَاء', ['ح', 'ج', 'ة']],
+		['د', 'دَال', ['ذ', 'ك', 'ر']],
+		['ذ', 'ذَال', ['د', 'ر', 'ز']],
+		['ر', 'رَاء', ['ز', 'د', 'و']],
+		['ز', 'زَاي', ['ر', 'ن', 'ف']],
+		['س', 'سِين', ['ش', 'ص', 'ث']],
+		['ش', 'شِين', ['س', 'ص', 'خ']],
+		['ص', 'صَاد', ['ض', 'س', 'د']],
+		['ض', 'ضَاد', ['ص', 'ط', 'ق']],
+		['ط', 'طَاء', ['ظ', 'ض', 'ب']],
+		['ظ', 'ظَاء', ['ط', 'ذ', 'ث']],
+		['ع', 'عَيْن', ['غ', 'ح', 'ج']],
+		['غ', 'غَيْن', ['ع', 'ح', 'خ']],
+		['ف', 'فَاء', ['ق', 'و', 'ث']],
+		['ق', 'قَاف', ['ف', 'ل', 'ن']],
+		['ك', 'كَاف', ['ل', 'ة', 'ح']],
+		['ل', 'لَام', ['ك', 'ا', 'م']],
+		['م', 'مِيم', ['و', 'ن', 'ل']],
+		['ن', 'نُون', ['ب', 'ت', 'م']],
+		['هـ', 'هَاء', ['ة', 'ح', 'خ']],
+		['و', 'وَاو', ['ف', 'ز', 'م']],
+		['ي', 'يَاء', ['ن', 'ب', 'ت', 'ة']],
+	];
+	/** Letter Journey: one identification question per letter, all 28 of them. */
+	function arabicLetterJourneyQuestions() {
+		var questions = [];
+		ARABIC_LETTERS.forEach(function (row) {
+			questions.push(mcq(
+				'اختر الحرف المطلوب: ' + row[0],
+				row[2], row[0],
+				'الحرف المطلوب هو ' + row[0] + ' وهو ' + row[1] + '.'
+			));
+		});
+		return questions;
+	}
+
+	/* Letter Shapes: [isolated, initial, medial, final]. The 6 letters that
+	   never join to the next side (ا د ذ ر ز و) are covered one level deeper:
+	   every form of every letter gets its own question. */
+	var ARABIC_SHAPES = [
+		['ب', 'بـ', 'ـبـ', 'ـب'],
+		['ت', 'تـ', 'ـتـ', 'ـت'],
+		['ث', 'ثـ', 'ـثـ', 'ـث'],
+		['ج', 'جـ', 'ـجـ', 'ـج'],
+		['ح', 'حـ', 'ـحـ', 'ـح'],
+		['خ', 'خـ', 'ـخـ', 'ـخ'],
+		['س', 'سـ', 'ـسـ', 'ـس'],
+		['ش', 'شـ', 'ـشـ', 'ـش'],
+		['ص', 'صـ', 'ـصـ', 'ـص'],
+		['ض', 'ضـ', 'ـضـ', 'ـض'],
+		['ط', 'طـ', 'ـطـ', 'ـط'],
+		['ظ', 'ظـ', 'ـظـ', 'ـظ'],
+		['ع', 'عـ', 'ـعـ', 'ـع'],
+		['غ', 'غـ', 'ـغـ', 'ـغ'],
+		['ف', 'فـ', 'ـفـ', 'ـف'],
+		['ق', 'قـ', 'ـقـ', 'ـق'],
+		['ك', 'كـ', 'ـكـ', 'ـك'],
+		['ل', 'لـ', 'ـلـ', 'ـل'],
+		['م', 'مـ', 'ـمـ', 'ـم'],
+		['ن', 'نـ', 'ـنـ', 'ـن'],
+		['هـ', 'هـ', 'ـهـ', 'ـه'],
+		['ي', 'يـ', 'ـيـ', 'ـي'],
+	];
+	var SHAPE_POSITIONS = [
+		[1, 'في أول الكلمة', 'في أول الكلمة يكتب الحرف موصولا بما بعده: %s'],
+		[2, 'في وسط الكلمة', 'في وسط الكلمة يكتب الحرف متصلا من الجانبين: %s'],
+		[3, 'في آخر الكلمة', 'في آخر الكلمة يكتب الحرف موصولا بما قبله فقط: %s'],
+	];
+	function arabicLetterShapesQuestions() {
+		var questions = [];
+		ARABIC_SHAPES.forEach(function (forms) {
+			SHAPE_POSITIONS.forEach(function (pos) {
+				var answer = forms[pos[0]];
+				var pool = [forms[1], forms[2], forms[3]];
+				if (pool.indexOf(answer) < 0) pool.push(answer);
+				if (pool.indexOf(forms[0]) < 0) pool.push(forms[0]);
+				questions.push(mcq(
+					'اختر شكل الحرف «' + forms[0] + '» ' + pos[1] + ' 🔡',
+					pool, answer,
+					pos[2].replace('%s', answer)
+				));
+			});
+		});
+		return questions;
+	}
+
+	/* Harakat: every base letter × every harakah (4 questions per letter). */
+	var HARAKAT_BASES = ['ب', 'ت', 'ن', 'م', 'س', 'ق', 'ر', 'د', 'ل', 'هـ', 'ج', 'ف'];
+	var HARAKAT = [
+		['فتحة', 'َ', 'الفتحة هي الخط الصغير فوق الحرف: %sَ.'],
+		['ضمة', 'ُ', 'الضمة هي الواو الصغيرة فوق الحرف: %sُ.'],
+		['كسرة', 'ِ', 'الكسرة هي الخط الصغير تحت الحرف: %sِ.'],
+		['سكون', 'ْ', 'السكون هو الحلقة الصغيرة فوق الحرف: %sْ.'],
+	];
+	function arabicHarakatQuestions() {
+		var questions = [];
+		var labels = [HARAKAT[0][0], HARAKAT[1][0], HARAKAT[2][0], HARAKAT[3][0]];
+		HARAKAT_BASES.forEach(function (base) {
+			HARAKAT.forEach(function (h) {
+				questions.push({
+					type: 'multiple-choice',
+					text: 'ما الحركة في «' + base + h[1] + '»؟ 🗣️',
+					options_json: seededShuffle(labels.slice()),
+					answer: h[0],
+					explanation: h[2].replace('%s', base),
+				});
+			});
+		});
+		return questions;
+	}
 
 	var ARABIC = [
 		{
@@ -137,45 +353,27 @@
 			subject: 'Arabic', axis: 'Arabic Letters',
 			name: 'Letter Journey', icon: '🪄', tag: 'الحروف',
 			game_type: 'bubble-pop', grade: 'cp', difficulty: 'easy',
-			description: 'Read the letter named in the question and pop the matching bubble.',
+			description: 'Read the letter named in the question and pop the matching bubble — almost the whole alphabet is covered.',
 			preview: ['ش', 'ح', 'م'],
-			questions: [
-				{ type: 'multiple-choice', text: 'اختر الحرف المطلوب: ش', options_json: ['ش', 'س', 'ث', 'ص'], answer: 'ش', explanation: 'الحرف المطلوب هو ش وهو حرف أسنان.' },
-				{ type: 'multiple-choice', text: 'اختر الحرف المطلوب: ح', options_json: ['ح', 'ج', 'خ', 'هـ'], answer: 'ح', explanation: 'الحرف ح ليس عليه نقطة ولا نقطة في وسطه.' },
-				{ type: 'multiple-choice', text: 'اختر الحرف المطلوب: م', options_json: ['م', 'ن', 'ل', 'و'], answer: 'م', explanation: 'الحرف م له « رأس » صغير في الأعلى.' },
-				{ type: 'multiple-choice', text: 'اختر الحرف المطلوب: ت', options_json: ['ت', 'ث', 'ب', 'ن'], answer: 'ت', explanation: 'الحرف ت له نقطتان فوقته.' },
-				{ type: 'multiple-choice', text: 'اختر الحرف المطلوب: ص', options_json: ['ص', 'ض', 'س', 'د'], answer: 'ص', explanation: 'الحرف ص يشبه س لكنه طويل.' },
-			],
+			questions: [],
 		},
 		{
 			id: 'arabic-letter-shapes',
 			subject: 'Arabic', axis: 'Letter Shapes',
 			name: 'Letter Shapes', icon: '🔡', tag: 'أشكال الحروف',
 			game_type: 'bubble-pop', grade: 'ce1', difficulty: 'medium',
-			description: 'Discover how a letter changes shape inside a word.',
-			preview: ['ب', 'ـبـ', 'ع'],
-			questions: [
-				{ type: 'multiple-choice', text: 'اختر شكل الحرف «ب» في وسط الكلمة', options_json: ['ـبـ', 'بـ', 'ـب', 'ب'], answer: 'ـبـ', explanation: 'في وسط الكلمة يكتب الحرف متصلا من الجانبين: ـبـ.' },
-				{ type: 'multiple-choice', text: 'اختر شكل الحرف «ع» في وسط الكلمة', options_json: ['ـعـ', 'عـ', 'ـع', 'ع'], answer: 'ـعـ', explanation: 'شكل «ع» في وسط الكلمة هو ـعـ.' },
-				{ type: 'multiple-choice', text: 'اختر شكل الحرف «م» في وسط الكلمة', options_json: ['ـمـ', 'مـ', 'ـم', 'م'], answer: 'ـمـ', explanation: 'شكل «م» في وسط الكلمة هو ـمـ.' },
-				{ type: 'multiple-choice', text: 'اختر شكل الحرف «ن» في وسط الكلمة', options_json: ['ـنـ', 'نـ', 'ـن', 'ن'], answer: 'ـنـ', explanation: 'شكل «ن» في وسط الكلمة هو ـنـ.' },
-				{ type: 'multiple-choice', text: 'اختر شكل الحرف «س» في وسط الكلمة', options_json: ['ـسـ', 'سـ', 'ـس', 'س'], answer: 'ـسـ', explanation: 'شكل «س» في وسط الكلمة هو ـسـ.' },
-			],
+			description: 'Every joining letter × its shape at the start, middle and end of a word.',
+			preview: ['بـ', 'ـبـ', 'ـب'],
+			questions: [],
 		},
 		{
 			id: 'arabic-short-vowels',
 			subject: 'Arabic', axis: 'Harakat',
 			name: 'Short Vowels (Harakat)', icon: '🗣️', tag: 'الحركات',
 			game_type: 'bubble-pop', grade: 'ce1', difficulty: 'medium',
-			description: 'Name the harakah carried by the letter.',
+			description: 'Name the harakah carried by the letter — every letter × fatha, damma, kasra and sukun.',
 			preview: ['َ', 'ُ', 'ِ'],
-			questions: [
-				{ type: 'multiple-choice', text: 'ما الحركة في «بَ»؟', options_json: ['فتحة', 'ضمة', 'كسرة', 'سكون'], answer: 'فتحة', explanation: 'الفتحة هي الخط الصغير فوق الحرف: بَ.' },
-				{ type: 'multiple-choice', text: 'ما الحركة في «بُ»؟', options_json: ['فتحة', 'ضمة', 'كسرة', 'سكون'], answer: 'ضمة', explanation: 'الضمة هي الواو الصغيرة فوق الحرف: بُ.' },
-				{ type: 'multiple-choice', text: 'ما الحركة في «بِ»؟', options_json: ['فتحة', 'ضمة', 'كسرة', 'سكون'], answer: 'كسرة', explanation: 'الكسرة هي الخط الصغير تحت الحرف: بِ.' },
-				{ type: 'multiple-choice', text: 'ما الحركة في «بْ»؟', options_json: ['فتحة', 'ضمة', 'كسرة', 'سكون'], answer: 'سكون', explanation: 'السكون هو الحلقة الصغيرة فوق الحرف: بْ.' },
-				{ type: 'multiple-choice', text: 'ما الحركة في «مُ»؟', options_json: ['فتحة', 'ضمة', 'كسرة', 'سكون'], answer: 'ضمة', explanation: 'فوق الميم ضمة: مُ.' },
-			],
+			questions: [],
 		},
 		{
 			id: 'arabic-word-builder',
@@ -208,6 +406,162 @@
 			],
 		},
 	];
+	ARABIC[0].questions = arabicLetterJourneyQuestions();
+	ARABIC[1].questions = arabicLetterShapesQuestions();
+	ARABIC[2].questions = arabicHarakatQuestions();
+
+	/* ── Math ─────────────────────────────────────────────────────────────── */
+	/** Number Explorer: count 1→10, each with the exact object run. */
+	function mathCountingQuestions() {
+		var sets = [
+			['🍎', 'pommes'], ['⭐', 'étoiles'], ['🎈', 'ballons'], ['🐸', 'grenouilles'],
+			['🌸', 'fleurs'], ['🐤', ' poussins'], ['🚗', 'voitures'], ['⚽', 'ballons de foot'],
+			['🦋', 'papillons'], ['🍬', 'bonbons'],
+		];
+		var questions = [];
+		sets.forEach(function (s, i) {
+			var n = i + 1;
+			var run = '';
+			for (var k = 0; k < n; k++) run += s[0];
+			var pool = [];
+			for (var v = Math.max(1, n - 2); v <= n + 2 && pool.length < 4; v++) pool.push(String(v));
+			questions.push(mcq(
+				'Combien y a-t-il de ' + s[1].trim() + ' ? ' + run,
+				pool, String(n),
+				'On compte un par un : il y a ' + n + ' ' + s[1].trim() + '.'
+			));
+		});
+		return questions;
+	}
+
+	/** Number Battle: every pair 1→10 in both directions, plus the equal
+	   pairs — 45×2 "<"/">" rows + 10 "=" rows, all unique texts. */
+	function mathCompareQuestions() {
+		var questions = [];
+		for (var i = 1; i <= 10; i++) {
+			for (var j = i + 1; j <= 10; j++) {
+				questions.push({
+					type: 'multiple-choice',
+					text: 'Compare les deux nombres : ' + i + ' … ' + j,
+					options_json: ['<', '=', '>'],
+					answer: '<',
+					explanation: i + ' est plus petit que ' + j + ', donc ' + i + ' < ' + j + '.',
+				});
+				questions.push({
+					type: 'multiple-choice',
+					text: 'Compare les deux nombres : ' + j + ' … ' + i,
+					options_json: ['<', '=', '>'],
+					answer: '>',
+					explanation: j + ' est plus grand que ' + i + ', donc ' + j + ' > ' + i + '.',
+				});
+			}
+			questions.push({
+				type: 'multiple-choice',
+				text: 'Compare les deux nombres : ' + i + ' … ' + i,
+				options_json: ['<', '=', '>'],
+				answer: '=',
+				explanation: 'Les deux nombres sont identiques : ' + i + ' = ' + i + '.',
+			});
+		}
+		return questions;
+	}
+
+	/** Number Train: 4-number rows spanning 1→10, 10→20, 20→40, 40→60.
+	   The row is echoed in the prompt so the 20 texts stay unique. */
+	function mathOrderQuestions() {
+		var rows = [
+			[3, 5, 7, 9], [1, 4, 6, 8], [2, 5, 8, 10], [6, 7, 4, 2], [1, 3, 5, 10],
+			[12, 8, 15, 10], [11, 19, 13, 17], [20, 13, 17, 11], [14, 16, 12, 18], [15, 10, 20, 19],
+			[21, 30, 34, 25], [28, 22, 36, 30], [33, 39, 27, 36], [40, 23, 31, 29], [26, 38, 35, 24],
+			[55, 39, 47, 62], [41, 58, 44, 60], [52, 49, 66, 57], [43, 61, 45, 59], [50, 46, 63, 42],
+		];
+		var questions = [];
+		rows.forEach(function (r) {
+			var sorted = r.slice().sort(function (a, b) { return a - b; });
+			var answer = sorted.join(',');
+			var shuffled = shuffledLike(r.map(String), { answer: answer });
+			questions.push({
+				type: 'draggable',
+				text: 'Range les nombres du plus petit au plus grand : ' + shuffled.join(', ') + ' 🚂',
+				options_json: shuffled,
+				answer: answer,
+				explanation: 'Du plus petit au plus grand : ' + sorted.join(' < ') + '.',
+			});
+		});
+		return questions;
+	}
+
+	/** Math Factory: full addition table 0+0→10+10 and every subtraction —
+	   each fact is its own (unique) text. */
+	function mathAddSubQuestions() {
+		var questions = [];
+		var fill4 = function (preferred, correct) {
+			var out = [];
+			preferred.forEach(function (v) {
+				if (v >= 0 && out.indexOf(String(v)) < 0 && out.length < 4) out.push(String(v));
+			});
+			for (var extra = correct + 3; out.length < 4; extra++) {
+				if (out.indexOf(String(extra)) < 0) out.push(String(extra));
+			}
+			return out;
+		};
+		for (var a = 0; a <= 10; a++) {
+			for (var b = 0; b <= 10; b++) {
+				var sum = a + b;
+				var pool = fill4([sum, sum - 1, sum + 1, sum + 2, sum - 2], sum);
+				questions.push({
+					type: 'multiple-choice',
+					text: 'Calcule : ' + a + ' + ' + b,
+					options_json: seededShuffle(pool),
+					answer: String(sum),
+					explanation: a + ' + ' + b + ' = ' + sum + '.',
+				});
+			}
+		}
+		for (a = 0; a <= 10; a++) {
+			for (b = 0; b <= a; b++) {
+				var diff = a - b;
+				var dpool = fill4([diff, diff - 1, diff + 1, diff + 2, diff + 3], diff);
+				questions.push({
+					type: 'multiple-choice',
+					text: 'Calcule : ' + a + ' − ' + b,
+					options_json: seededShuffle(dpool),
+					answer: String(diff),
+					explanation: a + ' − ' + b + ' = ' + diff + '.',
+				});
+			}
+		}
+		return questions;
+	}
+
+	/** Pattern Detective: skip-counting sequences (+2 +3 +4 +5 +10). */
+	function mathPatternQuestions() {
+		var specs = [
+			{ step: 2, start: 2 }, { step: 3, start: 3 }, { step: 4, start: 4 },
+			{ step: 5, start: 5 }, { step: 10, start: 10 }, { step: 2, start: 1 },
+		];
+		var questions = [];
+		specs.forEach(function (sp) {
+			for (var n = 1; n <= 3; n++) {
+				var base = sp.start + sp.step * (n - 1);
+				var seq = [base, base + sp.step, base + 2 * sp.step, base + 3 * sp.step];
+				var answer = base + 4 * sp.step;
+				var seen = {};
+				var pool = [];
+				[answer, answer + 1, answer - 1, answer + sp.step, answer - sp.step].forEach(function (v) {
+					if (v > 0 && !seen[String(v)]) { seen[String(v)] = 1; pool.push(String(v)); }
+				});
+				questions.push({
+					type: 'multiple-choice',
+					text: 'Complète la suite : ' + seq.join(', ') + ', …',
+					options_json: seededShuffle(pool.slice(0, 4)),
+					answer: String(answer),
+					explanation: 'On ajoute ' + sp.step + ' à chaque fois : ' + seq[3] + ' + ' + sp.step + ' = ' + answer + '.',
+				});
+			}
+		});
+		return questions;
+	}
 
 	var MATH = [
 		{
@@ -215,77 +569,52 @@
 			subject: 'Math', axis: 'Counting',
 			name: 'Number Explorer', icon: '🔢', tag: 'COUNTING',
 			game_type: 'bubble-pop', grade: 'maternelle', difficulty: 'easy',
-			description: 'Count the objects one by one and pop the right number.',
+			description: 'Count the objects one by one and pop the right number — from 1 to 10.',
 			preview: ['🍎', '⭐', '🎈'],
-			questions: [
-				{ type: 'multiple-choice', text: 'Combien y a-t-il de pommes ? 🍎🍎🍎', options_json: ['2', '3', '4', '5'], answer: '3', explanation: 'On compte : 1, 2, 3 → trois pommes.' },
-				{ type: 'multiple-choice', text: 'Combien y a-t-il d’étoiles ? ⭐⭐⭐⭐⭐', options_json: ['4', '5', '6', '7'], answer: '5', explanation: '1, 2, 3, 4, 5 → cinq étoiles.' },
-				{ type: 'multiple-choice', text: 'Combien y a-t-il de ballons ? 🎈🎈🎈🎈🎈🎈', options_json: ['5', '6', '7', '8'], answer: '6', explanation: 'En comptant un par un, il y a 6 ballons.' },
-				{ type: 'multiple-choice', text: 'Combien y a-t-il de grenouilles ? 🐸🐸', options_json: ['1', '2', '3', '4'], answer: '2', explanation: 'Deux grenouilles.' },
-				{ type: 'multiple-choice', text: 'Combien y a-t-il de fleurs ? 🌸🌸🌸🌸🌸🌸🌸', options_json: ['6', '7', '8', '9'], answer: '7', explanation: 'En comptant un par un, il y a 7 fleurs.' },
-			],
+			questions: [],
 		},
 		{
 			id: 'math-number-battle',
 			subject: 'Math', axis: 'Comparing Numbers',
 			name: 'Number Battle', icon: '⚖️', tag: 'COMPARISON',
 			game_type: 'bubble-pop', grade: 'cp', difficulty: 'medium',
-			description: 'Compare two numbers with the right symbol <, = or >.',
+			description: 'Compare two numbers with <, = or > — every pair up to 10 plays.',
 			preview: ['7 … 4', '5 … 9', '6 … 6'],
-			questions: [
-				{ type: 'multiple-choice', text: 'Compare les deux nombres : 7 … 4', options_json: ['<', '=', '>'], answer: '>', explanation: '7 est plus grand que 4, donc 7 > 4.' },
-				{ type: 'multiple-choice', text: 'Compare les deux nombres : 5 … 9', options_json: ['<', '=', '>'], answer: '<', explanation: '5 est plus petit que 9, donc 5 < 9.' },
-				{ type: 'multiple-choice', text: 'Compare les deux nombres : 6 … 6', options_json: ['<', '=', '>'], answer: '=', explanation: 'Les deux nombres sont identiques : 6 = 6.' },
-				{ type: 'multiple-choice', text: 'Compare les deux nombres : 12 … 17', options_json: ['<', '=', '>'], answer: '<', explanation: '12 vient avant 17 sur la ligne des nombres : 12 < 17.' },
-				{ type: 'multiple-choice', text: 'Compare les deux nombres : 20 … 13', options_json: ['<', '=', '>'], answer: '>', explanation: '20 est plus grand que 13 : 20 > 13.' },
-			],
+			questions: [],
 		},
 		{
 			id: 'math-number-train',
 			subject: 'Math', axis: 'Ordering Numbers',
 			name: 'Number Train', icon: '🚂', tag: 'ORDER',
 			game_type: 'build-a-tower', grade: 'ce1', difficulty: 'medium',
-			description: 'Arrange the numbers from the smallest to the biggest.',
+			description: 'Arrange number rows from the smallest to the biggest, up to 60.',
 			preview: ['3,5,7,9', '🚂', '↗'],
-			questions: [
-				{ type: 'draggable', text: 'Range les nombres du plus petit au plus grand. 🚂', options_json: ['7', '3', '9', '5'], answer: '3,5,7,9', explanation: '3 < 5 < 7 < 9.' },
-				{ type: 'draggable', text: 'Range les nombres du plus petit au plus grand. 🚂', options_json: ['12', '8', '15', '10'], answer: '8,10,12,15', explanation: '8 < 10 < 12 < 15.' },
-				{ type: 'draggable', text: 'Range les nombres du plus petit au plus grand. 🚂', options_json: ['20', '13', '17', '11'], answer: '11,13,17,20', explanation: '11 < 13 < 17 < 20.' },
-				{ type: 'draggable', text: 'Range les nombres du plus petit au plus grand. 🚂', options_json: ['34', '21', '43', '30'], answer: '21,30,34,43', explanation: '21 < 30 < 34 < 43.' },
-				{ type: 'draggable', text: 'Range les nombres du plus petit au plus grand. 🚂', options_json: ['55', '39', '47', '62'], answer: '39,47,55,62', explanation: '39 < 47 < 55 < 62.' },
-			],
+			questions: [],
 		},
 		{
 			id: 'math-math-factory',
 			subject: 'Math', axis: 'Operations',
 			name: 'Math Factory', icon: '🧮', tag: 'CALCULUS',
 			game_type: 'bubble-pop', grade: 'ce2', difficulty: 'medium',
-			description: 'Solve the additions and the subtractions.',
+			description: 'The full addition table 0→10 and every subtraction — the complete calculation machine.',
 			preview: ['7+5', '14−6', '12+8'],
-			questions: [
-				{ type: 'multiple-choice', text: 'Calcule : 7 + 5', options_json: ['11', '12', '13', '14'], answer: '12', explanation: '7 + 5 = 12.' },
-				{ type: 'multiple-choice', text: 'Calcule : 14 − 6', options_json: ['7', '8', '9', '11'], answer: '8', explanation: '14 − 6 = 8.' },
-				{ type: 'multiple-choice', text: 'Calcule : 9 + 6', options_json: ['13', '14', '15', '16'], answer: '15', explanation: '9 + 6 = 15.' },
-				{ type: 'multiple-choice', text: 'Calcule : 17 − 9', options_json: ['6', '7', '8', '9'], answer: '8', explanation: '17 − 9 = 8.' },
-				{ type: 'multiple-choice', text: 'Calcule : 12 + 8', options_json: ['18', '19', '20', '21'], answer: '20', explanation: '12 + 8 = 20 : on atteint la dizaine juste.' },
-			],
+			questions: [],
 		},
 		{
 			id: 'math-pattern-detective',
 			subject: 'Math', axis: 'Patterns & Logic',
 			name: 'Pattern Detective', icon: '🧠', tag: 'LOGIC',
 			game_type: 'bubble-pop', grade: 'cm1', difficulty: 'hard',
-			description: 'Find the rule of the sequence and the missing number.',
+			description: 'Find the rule of each skip-counting sequence and the missing number.',
 			preview: ['2,4,6', '+2', '…'],
-			questions: [
-				{ type: 'multiple-choice', text: 'Complète la suite : 2, 4, 6, 8, …', options_json: ['9', '10', '11', '12'], answer: '10', explanation: 'On ajoute 2 à chaque fois : 8 + 2 = 10.' },
-				{ type: 'multiple-choice', text: 'Complète la suite : 5, 10, 15, 20, …', options_json: ['21', '24', '25', '30'], answer: '25', explanation: 'On ajoute 5 : 20 + 5 = 25 (la table de 5).' },
-				{ type: 'multiple-choice', text: 'Complète la suite : 1, 3, 5, 7, …', options_json: ['8', '9', '10', '11'], answer: '9', explanation: 'Ce sont les nombres impairs : après 7 vient 9.' },
-				{ type: 'multiple-choice', text: 'Complète la suite : 10, 20, 30, 40, …', options_json: ['45', '50', '55', '60'], answer: '50', explanation: 'On compte de dix en dix : 40 + 10 = 50.' },
-				{ type: 'multiple-choice', text: 'Complète la suite : 3, 6, 9, 12, …', options_json: ['14', '15', '16', '18'], answer: '15', explanation: 'C’est la table de 3 : 12 + 3 = 15.' },
-			],
+			questions: [],
 		},
 	];
+	MATH[0].questions = mathCountingQuestions();
+	MATH[1].questions = mathCompareQuestions();
+	MATH[2].questions = mathOrderQuestions();
+	MATH[3].questions = mathAddSubQuestions();
+	MATH[4].questions = mathPatternQuestions();
 
 	var GAMES = FRENCH.concat(ARABIC, MATH);
 	var BY_ID = {};

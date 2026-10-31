@@ -40,7 +40,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-31-kidscat2" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-31-qscroll1" />
 		<link rel="stylesheet" href="admin.css?v=2026-10-31-kidscat2" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-10-31-kidscat2" />
@@ -147,8 +147,8 @@
 		<!-- Admin page scripts -->
 		<script src="bulk-selection.js?v=2026-10-23-mq12" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-10-26-catgame1" defer></script>
-		<script src="questions-management.js?v=2026-10-31-kidscat2" defer></script>
+		<script src="category-management.js?v=2026-10-31-kidsseed1" defer></script>
+		<script src="questions-management.js?v=2026-10-31-qscroll1" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
@@ -161,15 +161,15 @@
 		<script src="classroom-devices.js?v=2026-10-30-devcards1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-10-26-catgame1" defer></script>
-		<script src="kids-games-management.js?v=2026-10-31-kidscat1" defer></script>
-		<script src="kids-default-games.js?v=2026-10-31-kidscat1" defer></script>
+		<script src="kids-games-management.js?v=2026-10-31-kidsdel1" defer></script>
+		<script src="kids-default-games.js?v=2026-10-31-kidsseed1" defer></script>
 		<script src="/kids/games/math-quest-core.js?v=2026-10-23-mq12" defer></script>
 <script src="kids-championships-management.js?v=2026-10-23-pub1" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
-		<script src="admin-main.js?v=2026-09-17-r6" defer></script>
+		<script src="admin-main.js?v=2026-10-31-kidsseed1" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
 			<script src="legacy-auth-bridge.js?v=2026-10-16-r2" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -3361,9 +3361,6 @@
 											<p>Create themed educational games for primary/preschool students. Kids play via PIN — no login required.</p>
 										</div>
 										<div class="panel-header-actions">
-											<button type="button" class="btn btn-secondary" id="kidsBankSyncBtn" onclick="syncKidsCatalogToBank()" title="File the French / Arabic / Math built-in questions in your question bank, under subject › axis, so you can edit or extend them">
-												<span aria-hidden="true">📚</span> Built-in games → my bank
-											</button>
 											<button type="button" class="btn btn-primary" id="addKidsGameBtn">
 												<span aria-hidden="true">＋</span> New Kids Game
 											</button>
@@ -3408,7 +3405,6 @@
 														<option value="">All Status</option>
 														<option value="draft">Draft</option>
 														<option value="published">Published</option>
-														<option value="archived">Archived</option>
 													</select>
 												</div>
 												<div class="kids-filter-group" id="kidsGameFilterTeacherGroup" hidden>

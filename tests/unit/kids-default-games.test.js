@@ -3,9 +3,10 @@
  * tests/unit/kids-default-games.test.js
  *
  * Contract tests for the built-in Kids Games catalog (kids-default-games.js,
- * ported from the standalone kids-learning-games demo). These games are
- * offered in wizard Step 1 under French / Arabic / Math, and must play
- * through the EXISTING pipeline, so:
+ * ported from the standalone kids-learning-games demo and extended with the
+ * full letter/number matrices). These games are offered in wizard Step 1
+ * under French / Arabic / Math, are seeded into every teacher's question
+ * bank on first sign-in, and must play through the EXISTING pipeline, so:
  *  - every game points at a real Kids game type and a real subject card,
  *  - every question type matches what that game's renderer submits
  *    (BubblePop → option label, BuildATower → labels joined with ",",
@@ -54,13 +55,13 @@ if (!catalog) throw new Error('kids-default-games.js did not register window.Kid
 const games = catalog.list();
 
 describe('kids-default-games catalog shape', () => {
-	it('groups the 15 ported games under three subject cards', () => {
+	it('groups the ported games under three subject cards', () => {
 		expect(catalog.subjects.map((s) => s.id)).toEqual(['French', 'Arabic', 'Math']);
-		expect(games).toHaveLength(15);
-		expect(new Set(games.map((g) => g.id)).size).toBe(15);
-		catalog.subjects.forEach((s) => {
-			expect(catalog.bySubject(s.id), `games of ${s.id}`).toHaveLength(5);
-		});
+		expect(games).toHaveLength(16);
+		expect(new Set(games.map((g) => g.id)).size).toBe(16);
+		expect(catalog.bySubject('French')).toHaveLength(6);
+		expect(catalog.bySubject('Arabic')).toHaveLength(5);
+		expect(catalog.bySubject('Math')).toHaveLength(5);
 		games.forEach((g) => {
 			expect(g.name, `name of ${g.id}`).toBeTruthy();
 			expect(g.description, `description of ${g.id}`).toBeTruthy();
@@ -137,6 +138,35 @@ describe('kids-default-games catalog shape', () => {
 			expect(row.explanation, `${g.id} q${i} bank explanation`).toBeTruthy();
 			expect(row.tags).toContain('kids:g');
 		}));
+	});
+
+	it('covers the full letter/number matrices, not a 5-question sample', () => {
+		// The whole point of the matrix generation: every letter/number axis
+		// carries its complete combination, and the bank sync (which dedupes
+		// by question text) must never see two identical texts.
+		const byId = (id) => catalog.get(id);
+		expect(byId('arabic-letter-journey').questions.map((q) => q.answer)).toHaveLength(28);
+		expect(byId('arabic-letter-shapes').questions.length).toBeGreaterThanOrEqual(66);
+		expect(byId('arabic-short-vowels').questions.length).toBeGreaterThanOrEqual(48);
+		expect(byId('french-letter-route').questions.length).toBe(25);
+		expect(byId('french-alphabet-explorer').questions.length).toBeGreaterThanOrEqual(7);
+		const explorerLetters = byId('french-alphabet-explorer').questions
+			.flatMap((q) => q.answer.split(',')).join('').split('').sort().join('');
+		expect(explorerLetters).toBe('abcdefghijklmnopqrstuvwxyz');
+		expect(byId('math-number-explorer').questions.length).toBe(10);
+		expect(byId('math-number-battle').questions.length).toBe(100);
+		expect(byId('math-math-factory').questions.length).toBe(187);
+		games.forEach((g) => {
+			const texts = g.questions.map((q) => String(q.text).trim().toLowerCase());
+			expect(new Set(texts).size, `duplicate question texts in ${g.id}`).toBe(texts.length);
+		});
+	});
+
+	it('fits the automatic bank-sync payload contract', () => {
+		// kids.routes POST /bank-sync caps the games and per-game question
+		// counts (KidsBankSyncGameSchema); the seeded catalog must stay inside.
+		expect(games.length).toBeLessThanOrEqual(60);
+		games.forEach((g) => expect(g.questions.length, g.id).toBeLessThanOrEqual(200));
 	});
 });
 

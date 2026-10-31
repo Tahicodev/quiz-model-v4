@@ -102,15 +102,17 @@ export const KidQuestLevelSchema = z.object({
 
 export const KidQuestLevelsSchema = z.array(KidQuestLevelSchema).min(1).max(12);
 
-// Bulk "add the built-in games to my question bank" (see KidsGameService
-// .syncCatalog). The catalog lives browser-side, so its content is handed over
-// here; the server re-normalizes every question and only ever creates what is
-// missing, so a bogus/oversized payload cannot rewrite the teacher's own bank.
+// Bulk "seed the built-in games into my question bank" (see KidsGameService
+// .syncCatalog, auto-run on a teacher's first sign-in). The catalog lives
+// browser-side, so its content is handed over here; the server re-normalizes
+// every question and only ever creates what is missing, so a bogus/oversized
+// payload cannot rewrite the teacher's own bank. Per-game caps cover the
+// full letter/number matrices (Math Factory alone carries every 0-10 fact).
 export const KidsBankSyncGameSchema = z.object({
   id:        z.string().min(1).max(80),
   subject:   z.string().min(1).max(100),
   axis:      z.string().min(1).max(100),
-  questions: z.array(z.any()).max(60),
+  questions: z.array(z.any()).max(200),
 });
 
 export const KidsBankSyncSchema = z.object({

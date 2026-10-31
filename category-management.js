@@ -2978,6 +2978,16 @@ function categoryGripHtml(category) {
 
 // Identity cell: tree guides + toggle + grip + color + stacked name
 // (title row with sub-count pill, ancestor breadcrumb underneath).
+// Category names are clickable shortcuts to the Questions tab: the onclick
+// payload is a single-quoted JS literal, so both quotes and backslashes in
+// the name get neutralised before embedding.
+function categoryLinkArgLiteral(name) {
+	return String(name || '')
+		.replace(/\\/g, '\\\\')
+		.replace(/'/g, "\\'")
+		.replace(/[\r\n]+/g, ' ');
+}
+
 function categoryNameCellHtml(category, rowCtx, list) {
 	const depth = rowCtx?.depth || 0;
 	const guides =
@@ -3001,7 +3011,7 @@ function categoryNameCellHtml(category, rowCtx, list) {
                     <div class="category-color" style="background-color: ${category.color}"></div>
                     <span class="cat-text">
                         <span class="cat-title-row">
-                            <span class="category-name">${escapeHtml(category.name)}</span>${countPill}
+                            <span class="category-name category-questions-link" onclick="questionsFilterByCategoryName(event, '${categoryLinkArgLiteral(category.name)}')" title="Voir les questions de cette catégorie">${escapeHtml(category.name)}</span>${countPill}
                         </span>
                         ${breadcrumb ? `<span class="cat-path">${escapeHtml(breadcrumb)}</span>` : ''}
                     </span>
@@ -3384,6 +3394,14 @@ function updateCategoryList(categoriesList = categories) {
             .system-category .category-name {
                 font-style: italic;
                 color: var(--text-secondary);
+            }
+            /* Category names are Questions-tab shortcuts (see
+               admin-main.js questionsFilterByCategoryName). */
+            .category-questions-link {
+                cursor: pointer;
+            }
+            .category-questions-link:hover {
+                text-decoration: underline;
             }
         `;
 		document.head.appendChild(styleElement);

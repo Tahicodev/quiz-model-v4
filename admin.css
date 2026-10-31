@@ -3964,24 +3964,33 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	gap: 14px;
 	margin-bottom: 14px;
 }
+/* Vertical "poster" tiles: accent icon medallion on top, copy in the middle,
+   an accent footer bar carrying the CTA — one clear visual identity per
+   subject instead of four near-identical horizontal rows. */
 .kids-subject-card {
 	position: relative;
 	overflow: hidden;
 	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 16px;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+	min-height: 188px;
+	padding: 18px 18px 0;
 	text-align: left;
-	background: linear-gradient(135deg, var(--kg-tint, #eef2ff), #fff 70%);
+	background:
+		radial-gradient(150px 110px at 108% -12%, var(--kg-accent-soft, #c7d2fe) 0%, transparent 62%),
+		linear-gradient(160deg, var(--kg-tint, #eef2ff), #fff 72%);
 	border: 2px solid var(--kg-accent-soft, #c7d2fe);
-	border-radius: 18px;
+	border-radius: 22px;
 	cursor: pointer;
 	transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
-.kids-subject-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12); }
+.kids-subject-card:hover { transform: translateY(-3px); box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16); }
 .kids-subject-card.selected { outline: 3px solid var(--kg-accent, #4f46e5); outline-offset: -3px; }
 .kids-subject-card-custom {
-	background: #fff;
+	background:
+		radial-gradient(150px 110px at 108% -12%, #e2e8f0 0%, transparent 62%),
+		#fff;
 	border-color: #cbd5e1;
 	border-style: dashed;
 	--kg-accent: #475569;
@@ -3990,46 +3999,63 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 }
 .kids-subject-mascot {
 	position: absolute;
-	right: -8px;
-	bottom: -10px;
-	width: 64px;
-	height: 64px;
+	right: 12px;
+	top: 12px;
+	width: 54px;
+	height: 54px;
 	object-fit: cover;
 	object-position: top;
 	border-radius: 50%;
 	border: 3px solid #fff;
-	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+	box-shadow: 0 3px 10px rgba(15, 23, 42, 0.2);
 	transform: rotate(-6deg);
 	transition: transform 0.2s ease;
 	z-index: 0;
 }
-.kids-subject-card:hover .kids-subject-mascot { transform: rotate(4deg) scale(1.06); }
-/* Decorative layer only: text always paints above it, and on narrow cards we
-   reserve the corner so the "Open ›" label is never covered by the image. */
+.kids-subject-card:hover .kids-subject-mascot { transform: rotate(4deg) scale(1.07); }
+/* Decorative layer only: text always paints above it. */
 .kids-subject-card > :not(.kids-subject-mascot) { position: relative; z-index: 1; }
-.kids-subject-card:has(.kids-subject-mascot) { padding-right: 60px; }
 .kids-subject-icon {
-	width: 46px;
-	height: 46px;
+	width: 54px;
+	height: 54px;
 	flex: none;
 	display: grid;
 	place-items: center;
-	font-size: 1.6rem;
-	background: #fff;
-	border-radius: 14px;
-	box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1);
+	font-size: 1.85rem;
+	color: #fff;
+	background: linear-gradient(135deg, var(--kg-accent, #4f46e5), var(--kg-accent-soft, #818cf8));
+	border-radius: 18px;
+	box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
 }
-.kids-subject-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.kids-subject-copy strong { font-size: 1rem; color: #1e293b; }
-.kids-subject-copy small { font-size: 0.73rem; color: #64748b; line-height: 1.35; }
-.kids-subject-copy em {
+.kids-subject-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.kids-subject-copy strong { font-size: 1.06rem; color: #1e293b; }
+.kids-subject-copy small { font-size: 0.74rem; color: #64748b; line-height: 1.4; }
+.kids-subject-count {
 	font-style: normal;
-	font-size: 0.68rem;
-	font-weight: 700;
+	align-self: flex-start;
+	margin-top: 6px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	font-size: 0.66rem;
+	font-weight: 800;
+	letter-spacing: 0.02em;
 	color: var(--kg-accent, #4f46e5);
-	margin-top: 3px;
+	background: color-mix(in srgb, var(--kg-accent, #4f46e5) 10%, #fff);
 }
-.kids-subject-go { flex: none; font-size: 0.72rem; font-weight: 700; color: var(--kg-accent, #4f46e5); }
+/* Footer bar: full-width accent CTA strip along the card's bottom edge. */
+.kids-subject-go {
+	align-self: stretch;
+	margin: 10px -18px 0;
+	padding: 9px 18px;
+	text-align: right;
+	font-size: 0.74rem;
+	font-weight: 800;
+	letter-spacing: 0.02em;
+	color: #fff;
+	background: linear-gradient(90deg, var(--kg-accent, #4f46e5), var(--kg-accent-soft, #818cf8));
+	transition: filter 0.15s ease;
+}
+.kids-subject-card:hover .kids-subject-go { filter: brightness(1.08); }
 .kids-pick-placeholder { margin: 0 0 14px; font-size: 0.8rem; color: #64748b; }
 .kids-pick-subtitle { margin: 0 0 10px; font-size: 0.86rem; font-weight: 700; color: #334155; }
 

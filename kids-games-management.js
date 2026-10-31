@@ -276,7 +276,7 @@
 			'<div class="kids-card-more-actions">' +
 			'<button class="kids-mini-btn" title="Preview as a kid" onclick="previewKidsGame(\'' + esc(game.id) + '\')">Preview</button>' +
 			'<button class="kids-mini-btn" title="Play results" onclick="openKidsResultsModal(\'' + esc(game.id) + '\')">Results</button>' +
-			'<button class="kids-mini-btn danger" title="Archive game" onclick="archiveKidsGame(\'' + esc(game.id) + '\')">Archive</button>' +
+			'<button class="kids-mini-btn danger" title="Delete game" onclick="deleteKidsGame(\'' + esc(game.id) + '\')">Delete</button>' +
 			'</div>' +
 			'</div></div>';
 	}
@@ -787,7 +787,7 @@
 				'<span class="kids-subject-icon">' + esc(s.icon) + '</span>' +
 				'<span class="kids-subject-copy"><strong>' + esc(s.name) + '</strong>' +
 				'<small>' + esc(s.blurb || '') + '</small>' +
-				'<em>' + games.length + ' games · ' + questions + ' questions</em></span>' +
+				'<em class="kids-subject-count">' + games.length + ' games · ' + questions + ' questions</em></span>' +
 				'<span class="kids-subject-go">Open ›</span>';
 			card.addEventListener('click', function () { selectKidsSubject(s.id); });
 			grid.appendChild(card);
@@ -965,11 +965,15 @@
 		state.wizard.pickMode = state.wizard.questions.length ? 'custom' : null;
 	}
 
-	/* Built-in games → question bank. The catalog lives browser-side, so the
-	   studio hands it to POST /kids/bank-sync, which files every question in
-	   the signed-in teacher's own library under `subject › axis`. The server
-	   only creates what is missing, so a teacher's edits and hand-added
-	   questions are never rewritten and pressing twice is harmless. */
+	/* Built-in games → question bank, seeded automatically. The catalog lives
+	   browser-side, so the studio hands it to POST /kids/bank-sync once per
+	   account without any button: the server only creates what is missing, so
+	   a teacher's edits and hand-added questions are never rewritten and
+	   re-running is harmless. The localStorage marker keys on the catalog
+	   version + the account id, so a catalog update re-seeds (again only the
+	   new content) on the next sign-in. */
+	var KIDS_SEED_VERSION = 'v2';
+	var KIDS_SEED_KEY = 'kidsCatalogBankSeed';
 	function kidsCatalogBankPayload() {
 		var cat = kidsCatalog();
 		if (!cat || typeof cat.list !== 'function') return null;
@@ -993,30 +997,54 @@
 			if (window.console && console.warn) console.warn('[kids-games] re-bootstrap failed:', err);
 		});
 	}
-	function syncKidsCatalogToBank() {
+	function kidsSeedMarker() {
+		return KIDS_SEED_VERSION + ':' + String((currentUser() || {}).id || '');
+	}
+	function kidsSeedDone() {
+		try { return localStorage.getItem(KIDS_SEED_KEY) === kidsSeedMarker(); }
+		catch (_) { return false; }
+	}
+	function kidsSeedMarkDone() {
+		try { localStorage.setItem(KIDS_SEED_KEY, kidsSeedMarker()); }
+		catch (_) { /* private mode: the silent seed just retries next time */ }
+	}
+	function seedKidsCatalogToBankSilently() {
+		var user = currentUser();
+		var role = String(user && user.role || '').toLowerCase();
+		// /kids/bank-sync is teacher/admin-only (and the route itself is
+		// primaire-gated): students never seed anything.
+		if (!user || (role !== 'teacher' && role !== 'admin' && role !== 'super_admin')) return Promise.resolve();
+		if (kidsSeedDone()) return Promise.resolve();
 		var payload = kidsCatalogBankPayload();
-		if (!payload) { toast('Built-in games unavailable', 'error'); return Promise.resolve(); }
-		var total = payload.games.reduce(function (n, g) { return n + g.questions.length; }, 0);
-		var names = kidsSubjectList().map(function (s) { return s.name; }).join(' / ') || 'French / Arabic / Math';
-		if (!window.confirm('Add the ' + payload.games.length + ' built-in games (' + total + ' questions) to your question bank?\n\n'
-			+ 'They appear as ' + names + ' categories with one subcategory (axis) per game, ready to edit, extend or reuse in quizzes and exams.')) {
-			return Promise.resolve();
-		}
-		var btn = $('kidsBankSyncBtn');
-		if (btn) btn.disabled = true;
+		if (!payload) return Promise.resolve();
 		return kidsApi('POST', '/bank-sync', payload).then(function (summary) {
+			kidsSeedMarkDone();
 			var added = Number(summary && summary.added) || 0;
-			toast(added ? added + ' question(s) added to your bank ✓' : 'Your bank already has these questions ✓', 'success');
-			return rehydrateLocalCache();
-		}).then(function () {
-			if (typeof window.refreshQuestionsList === 'function') {
-				try { window.refreshQuestionsList(); } catch (_) { /* tab re-renders on open */ }
-			}
+			if (!added) return null;
+			return rehydrateLocalCache().then(function () {
+				if (typeof window.refreshQuestionsList === 'function') {
+					try { window.refreshQuestionsList(); } catch (_) { /* tabs re-render on open */ }
+				}
+			});
 		}).catch(function (err) {
-			toast('Could not update the question bank: ' + ((err && err.message) || 'unknown error'), 'error');
-		}).then(function () {
-			if (btn) btn.disabled = false;
+			// Silent by design — the marker stays unset, so the next sign-in
+			// retries (offline first launch, expired session, …).
+			if (window.console && console.warn) console.warn('[kids-games] catalog bank seed skipped:', err && err.message);
 		});
+	}
+	function scheduleKidsCatalogSeed() {
+		// Wait (quietly, on this page only) until the API client, the catalog
+		// and a signed-in teacher/admin are all here, then fire once.
+		var tries = 0;
+		var tick = function () {
+			tries += 1;
+			if (window.API && kidsCatalog() && currentUser()) {
+				seedKidsCatalogToBankSilently();
+				return;
+			}
+			if (tries < 60) setTimeout(tick, 2000);
+		};
+		setTimeout(tick, 1500);
 	}
 
 	/* Step 2 — theme */
@@ -1864,13 +1892,6 @@
 			notifyKidsCatalogChanged();
 		}).catch(function (err) { toast('Delete failed: ' + (err && err.message), 'error'); });
 	}
-	function archiveKidsGame(id) {
-		kidsApi('POST', '/' + encodeURIComponent(id) + '/archive').then(function () {
-			toast('Kids game archived', 'success');
-			renderKidsGameList();
-			notifyKidsCatalogChanged();
-		}).catch(function (err) { toast('Archive failed: ' + (err && err.message), 'error'); });
-	}
 
 	/* Results (plan §13) */
 	function openKidsResultsModal(id) {
@@ -2083,7 +2104,6 @@
 	window.applyKidsDefaultGame = applyKidsDefaultGame;
 	window.renderKidsDefaultGames = renderKidsDefaultGames;
 	window.resetKidsPickMode = resetKidsPickMode;
-	window.syncKidsCatalogToBank = syncKidsCatalogToBank;
 	window.updateKidsWizardPreview = updateKidsWizardPreview;
 	window.renderPublishChecklist = renderPublishChecklist;
 	window.renderPublishResult = renderPublishResult;
@@ -2098,7 +2118,6 @@
 	window.previewKidsGame = previewKidsGame;
 	window.editKidsGame = editKidsGame;
 	window.deleteKidsGame = deleteKidsGame;
-	window.archiveKidsGame = archiveKidsGame;
 	window.openKidsResultsModal = openKidsResultsModal;
 	window.KidsGames = {
 		renderList: renderKidsGameList,
@@ -2117,7 +2136,12 @@
 		bindStaticControls();
 		bindDelegatedFallback();
 		if (isKidsPaneActive()) renderKidsGameList();
+		scheduleKidsCatalogSeed();
 	});
+	// Signing in on an already-open page (SPA auth) must seed too.
+	if (typeof document.addEventListener === 'function') {
+		document.addEventListener('auth:changed', function () { scheduleKidsCatalogSeed(); });
+	}
 	// The admin shell swaps tabs without reload; bind eagerly too.
 	hookStudioTabs();
 	bindStaticControls();

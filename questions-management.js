@@ -189,6 +189,20 @@ function createQuestionRow(question, index) {
 		question.allowMultipleAnswers || false
 	);
 	row.setAttribute('data-category', categoryId);
+	// Human-readable category name (+ ancestor path) for the Questions text
+	// search: filterQuestions() matches these attributes, and the Category
+	// tab's name-click writes the category name into the search input, so
+	// typing "Math" finds rows filed in "Math › Counting" too.
+	row.setAttribute('data-category-name', (() => {
+		try { return String(getCategoryName(categoryId) || ''); } catch (_) { return ''; }
+	})());
+	row.setAttribute('data-category-path', (() => {
+		try {
+			return typeof getCategoryParentPath === 'function'
+				? String(getCategoryParentPath(categoryId) || '')
+				: '';
+		} catch (_) { return ''; }
+	})());
 	row.setAttribute('data-difficulty', question.difficulty || 'medium');
 	row.setAttribute('data-instruction', question.instruction || ''); // Add instruction attribute
 	row.setAttribute(
@@ -2169,6 +2183,9 @@ function editQuestionByRow(button) {
 		}
 
 		modal.style.display = 'flex';
+		// Lock the page behind the dialog (see openQuestionFormModal).
+		document.documentElement.classList.add('modal-open');
+		document.body.classList.add('modal-open');
 		// Add class in next frame for animation
 		requestAnimationFrame(() => {
 			modal.classList.add('active');
@@ -4595,6 +4612,10 @@ function openQuestionFormModal(questionToEdit = null) {
 	}
 
 	modal.style.display = 'flex';
+	// Lock the page behind the dialog so mobile gets a single scrollbar (the
+	// .modal-body only) instead of body + overlay + content stacked.
+	document.documentElement.classList.add('modal-open');
+	document.body.classList.add('modal-open');
 	// Small delay to allow display:flex to apply before adding active class for transition
 	requestAnimationFrame(() => {
 		modal.classList.add('active');
@@ -4611,6 +4632,8 @@ function closeQuestionFormModal() {
 		return;
 
 	modal.classList.remove('active');
+	document.documentElement.classList.remove('modal-open');
+	document.body.classList.remove('modal-open');
 
 	// Clear any existing timer to prevent double-execution
 	if (closeQuestionModalTimer) clearTimeout(closeQuestionModalTimer);

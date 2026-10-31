@@ -717,12 +717,23 @@ function filterQuestions(resetPage = true) {
 		const optionsText = cells[3] ? cells[3].textContent.toLowerCase() : '';
 		const answerText = cells[5] ? cells[5].textContent.toLowerCase() : '';
 		const questionType = row.getAttribute('data-type') || 'multiple-choice';
+		// Category name / ancestor path (see createQuestionRow): lets typing a
+		// category name in the search show its questions, including rows filed
+		// in subcategories of the typed name.
+		const categoryNameText = String(
+			row.getAttribute('data-category-name') || '',
+		).toLowerCase();
+		const categoryPathText = String(
+			row.getAttribute('data-category-path') || '',
+		).toLowerCase();
 
 		const matchesSearch =
 			!searchQuery ||
 			questionText.includes(searchQuery) ||
 			optionsText.includes(searchQuery) ||
-			answerText.includes(searchQuery);
+			answerText.includes(searchQuery) ||
+			categoryNameText.includes(searchQuery) ||
+			categoryPathText.includes(searchQuery);
 
 		const matchesType = selectedType === 'all' || questionType === selectedType;
 
@@ -749,6 +760,38 @@ function filterQuestions(resetPage = true) {
 
 	applyPagination();
 }
+
+// Category tab shortcut: clicking a category name opens the Questions tab
+// with that category written into the search input, so the list shows its
+// questions. filterQuestions() matches rows whose category name or ancestor
+// path contains the query, so a parent click ("Math") also shows the rows
+// filed under its subcategories.
+function questionsFilterByCategoryName(event, categoryName) {
+	if (event) {
+		// Keep the row tap handlers (mobile action sheet, tap-to-move) from
+		// firing on the name click.
+		event.stopPropagation();
+		event.preventDefault();
+	}
+	const name = String(categoryName || '').trim();
+	if (!name) return;
+	const navTab = document.querySelector('.nav-tab[data-tab="questions"]');
+	openTab({ currentTarget: navTab }, 'questions');
+	const searchInput = document.getElementById('searchQuestions');
+	if (searchInput) searchInput.value = name;
+	const runFilter = () => filterQuestions(true);
+	if (typeof updateQuestionList === 'function') {
+		try { updateQuestionList(); } catch (_) { /* mirror not ready yet */ }
+	}
+	// Rows may still be re-rendering after the bootstrap mirror refresh;
+	// re-apply the filter once more so the typed search is never lost.
+	setTimeout(runFilter, 300);
+	runFilter();
+	if (typeof showToast === 'function') {
+		showToast('Questions de « ' + name + ' »', 'info');
+	}
+}
+window.questionsFilterByCategoryName = questionsFilterByCategoryName;
 
 // Set type filter from badge
 window.setMainTypeFilter = function (type, element) {

@@ -44437,6 +44437,84 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 }
 
 /* ========================================================================
+   MOBILE QUESTION-EDITOR SINGLE SCROLL — same treatment as the add modals
+   above, applied to #questionFormModal. It opens via style.display:flex +
+   .active (never .is-open), so it fell through the rules above and stacked
+   FOUR scrollbars on phones: the page body, the overlay (.modal
+   overflow:auto), .modal-content (theme.css overflow-y:auto) and the
+   .modal-body. Fix: body scroll is locked with .modal-open (JS), the
+   overlay and content never scroll, ONLY .modal-body scrolls, and the
+   Cancel/Save bar stays pinned to the bottom with safe-area padding.
+   ======================================================================== */
+@media (max-width: 768px) {
+	/* 1. Overlay: fixed sheet host, never a scroller */
+	#questionFormModal,
+	#questionFormModal[style*='flex'],
+	#questionFormModal[style*='block'] {
+		overflow: hidden !important;
+		padding: 0 !important;
+		align-items: stretch !important;
+		justify-content: center !important;
+	}
+
+	/* 2. Content: full-screen flex sheet, never a scroller itself */
+	#questionFormModal .modal-content {
+		display: flex !important;
+		flex-direction: column !important;
+		width: 100% !important;
+		max-width: none !important;
+		height: 100dvh !important;
+		max-height: 100dvh !important;
+		margin: 0 !important;
+		border-radius: 0 !important;
+		overflow: hidden !important;
+		overflow-y: hidden !important;
+	}
+
+	/* 3. Header: fixed, never scrolls away */
+	#questionFormModal .modal-header {
+		position: sticky !important;
+		top: 0 !important;
+		z-index: 5 !important;
+		flex: 0 0 auto !important;
+	}
+
+	/* 4. Body: THE single scroll container */
+	#questionFormModal .modal-body {
+		flex: 1 1 auto !important;
+		min-height: 0 !important;
+		overflow-y: auto !important;
+		overflow-x: hidden !important;
+		overscroll-behavior: contain !important;
+		scrollbar-gutter: stable !important;
+		scroll-padding-bottom: 120px !important;
+		padding: 16px 14px 0 !important;
+	}
+
+	/* 5. Actions: sticky bottom bar with real breathing room + safe-area */
+	#questionFormModal .form-actions {
+		position: sticky !important;
+		bottom: 0 !important;
+		z-index: 6 !important;
+		margin: 20px -14px 0 !important;
+		padding: 14px 14px calc(20px + env(safe-area-inset-bottom)) !important;
+		background: linear-gradient(180deg, rgba(248, 250, 252, 0.92), #f8fafc 42%) !important;
+		backdrop-filter: blur(6px) !important;
+		border-top: 1px solid var(--border-color) !important;
+		gap: 10px !important;
+	}
+
+	#questionFormModal .form-actions .btn {
+		min-height: 44px !important;
+		flex: 1 1 0 !important;
+	}
+
+	html[data-theme='dark'] #questionFormModal .form-actions {
+		background: linear-gradient(180deg, rgba(16, 26, 44, 0.9), var(--bg-surface) 42%) !important;
+	}
+}
+
+/* ========================================================================
    ASSIGNMENT MODALS — shared is-open frame, exactly like edit exam/class.
    Assign Questions (category + exam), Assign to Classes, Assign Students and
    Assign Exams share one overlay / sheet / header / body / footer, so the
