@@ -5457,6 +5457,58 @@ html[data-theme='dark'] .kids-manual-launcher {
 	border-color: rgba(79, 70, 229, 0.35);
 }
 html[data-theme='dark'] .kids-manual-launcher .hint { color: var(--text-secondary); }
+/* Step 1 category cards / ready-made games. The light theme paints these with
+   a per-subject accent gradient (--kg-tint is always a pale colour), so dark
+   mode has to repaint the surfaces: accent tinted through color-mix, with the
+   plain surface colour kept as the fallback for engines without it. */
+html[data-theme='dark'] .kids-subject-card,
+html[data-theme='dark'] .kids-default-game-card,
+html[data-theme='dark'] .kids-pick-banner {
+	background: var(--bg-surface-alt);
+	background: linear-gradient(135deg, color-mix(in srgb, var(--kg-accent, #4f46e5) 18%, var(--bg-surface-alt)), var(--bg-surface-alt) 65%);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-subject-card:hover,
+html[data-theme='dark'] .kids-default-game-card:hover { border-color: var(--kg-accent-soft, #6366f1); }
+html[data-theme='dark'] .kids-subject-card.selected { outline-color: var(--kg-accent-soft, #818cf8); }
+html[data-theme='dark'] .kids-default-game-card.selected { box-shadow: 0 0 0 2px var(--kg-accent-soft, #818cf8) inset; }
+html[data-theme='dark'] .kids-subject-card-custom {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-subject-icon,
+html[data-theme='dark'] .kids-pick-banner-mascot,
+html[data-theme='dark'] .kids-pick-banner-icon {
+	background: rgba(99, 102, 241, 0.18);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .kids-subject-mascot { border-color: var(--bg-surface); }
+html[data-theme='dark'] .kids-subject-copy strong,
+html[data-theme='dark'] .kids-pick-banner-copy strong,
+html[data-theme='dark'] .kids-default-game-chips span,
+html[data-theme='dark'] .kids-default-game-name,
+html[data-theme='dark'] .kids-pick-subtitle { color: var(--text-primary); }
+html[data-theme='dark'] .kids-subject-copy small,
+html[data-theme='dark'] .kids-pick-banner-copy small,
+html[data-theme='dark'] .kids-pick-placeholder,
+html[data-theme='dark'] .kids-default-game-type,
+html[data-theme='dark'] .kids-default-game-desc,
+html[data-theme='dark'] .kids-default-game-meta,
+html[data-theme='dark'] .kids-default-games-hint { color: var(--text-secondary); }
+html[data-theme='dark'] .kids-default-game-chips span {
+	color: var(--kg-accent-soft, #a5b4fc);
+	background: rgba(99, 102, 241, 0.14);
+	border-color: rgba(129, 140, 248, 0.4);
+}
+html[data-theme='dark'] .kids-default-game-meta span { background: rgba(148, 163, 184, 0.18); }
+/* The pale accent itself is unreadable on a dark surface — the soft variant is. */
+html[data-theme='dark'] .kids-subject-copy em,
+html[data-theme='dark'] .kids-subject-go { color: var(--kg-accent-soft, #a5b4fc); }
+html[data-theme='dark'] .kids-default-game-card::after { opacity: 0.7; }
+html[data-theme='dark'] .kids-default-game-card.selected .kids-default-game-cta {
+	background: var(--bg-surface);
+	color: var(--text-primary);
+}
 html[data-theme='dark'] .kids-ai-model-row .form-group label { color: var(--text-secondary); }
 html[data-theme='dark'] .kids-wizard-preview {
 	background: var(--bg-surface-alt);

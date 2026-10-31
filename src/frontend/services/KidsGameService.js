@@ -152,6 +152,15 @@ function splitTokens(raw) {
   return String(raw ?? '').split(/[|,;]/).map(s => s.trim().toLowerCase()).filter(Boolean);
 }
 
+/** Key used to recognise an already-filed bank copy (case/space tolerant). */
+function normQuestionText(raw) {
+  return String(raw ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function hasBankTag(tags, tag) {
+  return String(tags || '').split(',').map(s => s.trim()).includes(tag);
+}
+
 const KIDS_CATEGORY_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#14b8a6'];
 
 /** Stable per-name color so auto categories render a visible badge. */
@@ -221,7 +230,9 @@ export function toBankQuestion(kidQ, { schoolId, teacherId, categoryId, gameId }
   };
 }
 
-function checkAnswer(question, given) {
+// Exported for tests: the built-in kids game catalog (kids-default-games.js)
+// validates every answer against the REAL server grading path.
+export function checkAnswer(question, given) {
   const type = KID_TYPE_ALIASES[question.type] || question.type;
   const answer = String(question.answer ?? '').trim();
 
@@ -468,63 +479,154 @@ export class KidsGameService {
     await this.#repo.delete('kidsGames', id);
   }
 
-  // ─── Bank sync: published games file their question copies under a
-  // subject category (`Kids · <subject>`, shared by all of a teacher's games
-  // in that subject), so games surface in the Category and Question tabs
-  // with teacher attribution (created_by). Copies carry a `kids:<gameId>`
-  // tag so each game's set stays individually replaceable/removable.
+  // ─── Bank sync helpers ───
 
   #bankTag(gameId) {
     return `kids:${gameId}`;
   }
 
-  #bankCategoryName(game) {
-    const subject = String(game.subject || '').trim() || 'General';
-    return `Kids · ${subject}`.slice(0, 100);
+  // ─── Bank sync ─────────────────────────────────────────────────────────
+  // Built-in catalog games (the Step 1 subject cards) also file their
+  // questions into the teacher's question bank under `subject › axis`, so the
+  // Category and Question tabs show them and the teacher can edit or extend
+  // the content like any other bank row. Custom games stay out of the bank:
+  // they are play-only, and pushing them used to pollute the teacher's real
+  // category list.
+  //
+  // Bank copies are write-once — a re-publish only adds what is missing, so
+  // the teacher's edits and hand-added questions always survive. Categories
+  // are ordinary teacher-owned nodes (never `Kids · …`, which the UI hides),
+  // and questions live on the axis leaf because a category that has
+  // subcategories cannot hold questions.
+
+  /** The built-in catalog marker a Step 1 game carries, or null (custom). */
+  #defaultGameMarker(game) {
+    const cfg = parseJson(game?.config_json, {});
+    const marker = cfg && typeof cfg === 'object' ? cfg.default_game : null;
+    if (!marker || typeof marker !== 'object') return null;
+    const subject = String(marker.subject || '').trim().slice(0, 100);
+    const axis = String(marker.axis || '').trim().slice(0, 100);
+    if (!subject || !axis) return null;
+    return { id: String(marker.id || '').trim(), subject, axis };
   }
 
-  async #ensureBankCategory(game, schoolId, teacherId) {
-    // A linked category is only reusable while it still matches the game's
-    // subject — categories are shared, so they are never renamed (a rename
-    // would relabel other games' questions too).
-    if (game.category_id) {
-      try {
-        const current = await this.#repo.getById('categories', game.category_id);
-        if (current && current.school_id === schoolId && current.name === this.#bankCategoryName(game)) {
-          if (!current.color) {
-            try { await this.#repo.update('categories', current.id, { color: kidsCategoryColor(current.name) }); } catch (_) { /* cosmetic */ }
-          }
-          return current.id;
-        }
-      } catch { /* gone or moved on — resolve below */ }
-    }
-    const base = this.#bankCategoryName(game);
+  /** Bank writes are author-scoped (teachers only see their own rows). */
+  #bankActor(game, currentUser) {
+    const schoolId = currentUser?.school_id || game?.school_id || null;
+    const teacherId = currentUser?.id || game?.teacher_id || null;
+    return schoolId && teacherId ? { schoolId, teacherId } : null;
+  }
+
+  /**
+   * Find-or-create one category node owned by `teacherId`. Names are unique
+   * per school (not per parent), so a name already claimed by somebody else —
+   * or used by this teacher as a different kind of node — gets a numbered
+   * variant rather than silently filing content where its author cannot see
+   * or edit it.
+   */
+  async #ensureCategoryNode(name, parentId, schoolId, teacherId, { allowChildren = false } = {}) {
     for (let i = 0; i < 25; i++) {
-      const candidate = (i === 0 ? base : `${base.slice(0, 94)} (${i + 1})`).slice(0, 100);
+      const candidate = (i === 0 ? name : `${name.slice(0, 94)} (${i + 1})`).slice(0, 100);
       const { data } = await this.#repo.getAll('categories', {
         filters: { school_id: schoolId, name: candidate },
-        limit: 1,
+        limit: 50,
       });
-      if (!data?.length) {
+      const rows = data || [];
+      const mine = rows.filter((c) => c.created_by === teacherId
+        && String(c.parent_id || '') === String(parentId || ''));
+      for (const node of mine) {
+        if (!allowChildren) {
+          const { total } = await this.#repo.getAll('categories', {
+            filters: { parent_id: node.id },
+            limit: 1,
+          });
+          if (total) continue; // a parent cannot hold questions — try the next variant
+        }
+        if (!node.color) {
+          try { await this.#repo.update('categories', node.id, { color: kidsCategoryColor(node.name) }); } catch (_) { /* cosmetic */ }
+        }
+        return { id: node.id, created: false };
+      }
+      if (!rows.length) {
         const created = await this.#repo.create('categories', {
           school_id: schoolId,
           name: candidate,
+          ...(parentId ? { parent_id: parentId } : {}),
           color: kidsCategoryColor(candidate),
           created_by: teacherId,
         });
-        return created.id;
+        return { id: created.id, created: true };
       }
-      // Same teacher's own subject bucket: reuse it — every game's copies
-      // are tagged per game, and pruning only ever removes empty buckets.
-      // Backfill a color on older colorless buckets so the bank badge renders.
-      if (data[0].created_by === teacherId) {
-        if (!data[0].color) {
-          try { await this.#repo.update('categories', data[0].id, { color: kidsCategoryColor(data[0].name) }); } catch (_) { /* cosmetic */ }
-        }
-        return data[0].id;
-      }
+      // Taken by another author: keep probing numbered variants.
     }
     throw new ConflictError('Could not allocate a bank category for this game');
+  }
+
+  /** `subject › axis` path of a built-in game; returns the leaf category. */
+  async #ensureAxisCategory(subject, axis, schoolId, teacherId) {
+    const parent = await this.#ensureCategoryNode(subject, null, schoolId, teacherId, { allowChildren: true });
+    const leaf = await this.#ensureCategoryNode(axis, parent.id, schoolId, teacherId);
+    return {
+      leafId: leaf.id,
+      parentId: parent.id,
+      created: parent.created || leaf.created,
+      nodesCreated: (parent.created ? 1 : 0) + (leaf.created ? 1 : 0),
+    };
+  }
+
+  /**
+   * File one set of kid questions under a leaf category, create-if-absent:
+   * a copy whose text is already in the category is left exactly as the
+   * teacher has it (they may have edited it). Insertions also stop once the
+   * game's own tagged set is complete, so re-publishing can never pile up
+   * duplicates of a question the teacher renamed.
+   */
+  async #fileQuestions(questions, { leafId, schoolId, teacherId, gameId }) {
+    const list = (Array.isArray(questions) ? questions : [])
+      .map((q) => normalizeKidQuestion(q))
+      .filter((q) => q.text && q.answer);
+    if (!list.length) return { added: 0, skipped: 0 };
+    const { data: rows } = await this.#repo.getAll('questions', {
+      filters: { category_id: leafId },
+      limit: 1000,
+    });
+    const present = rows || [];
+    const texts = new Set(present.map((r) => normQuestionText(r.text)));
+    const tag = this.#bankTag(gameId);
+    let tagged = present.filter((r) => hasBankTag(r.tags, tag)).length;
+    let added = 0;
+    let skipped = 0;
+    for (const q of list) {
+      const key = normQuestionText(q.text);
+      if (texts.has(key) || tagged >= list.length) { skipped++; continue; }
+      try {
+        await this.#repo.create('questions', toBankQuestion(q, { schoolId, teacherId, categoryId: leafId, gameId }));
+        texts.add(key);
+        tagged++;
+        added++;
+      } catch { skipped++; }
+    }
+    return { added, skipped };
+  }
+
+  /** Remove this game's tagged copies. Categories are kept: the teacher's
+     own content (and their other games' copies) may live in them. */
+  async #removeBankCopies(game, pruneCategory = false) {
+    if (!game.category_id) return;
+    const tag = this.#bankTag(game.id);
+    const { data: rows } = await this.#repo.getAll('questions', {
+      filters: { category_id: game.category_id },
+      limit: 1000,
+    });
+    for (const row of rows || []) {
+      if (hasBankTag(row.tags, tag)) {
+        try { await this.#repo.delete('questions', row.id); } catch (_) { /* already gone */ }
+      }
+    }
+    // Legacy `Kids · …` buckets are auto-created, so they are pruned once
+    // empty; subject/axis categories are real teacher content and stay.
+    if (!pruneCategory) return;
+    await this.#pruneCategoryIfEmpty(game.category_id);
   }
 
   /** Delete an auto (`Kids · …`) category, but only when fully empty. */
@@ -541,35 +643,67 @@ export class KidsGameService {
     } catch { /* in use or gone — leave it */ }
   }
 
-  async #removeBankCopies(game, pruneCategory = false) {
-    if (!game.category_id) return;
-    const tag = this.#bankTag(game.id);
-    const { data: rows } = await this.#repo.getAll('questions', {
-      filters: { category_id: game.category_id },
-      limit: 1000,
-    });
-    for (const row of rows || []) {
-      const tags = String(row.tags || '').split(',').map(s => s.trim());
-      if (tags.includes(tag)) {
-        try { await this.#repo.delete('questions', row.id); } catch (_) { /* already gone */ }
-      }
+  /**
+   * Publish-time bank sync for a built-in game (no-op for custom games).
+   * Best-effort by contract: callers wrap it, the PIN flow must never fail
+   * because the bank could not be written.
+   */
+  async #syncBank(game, currentUser) {
+    const marker = this.#defaultGameMarker(game);
+    if (!marker) return null;
+    const actor = this.#bankActor(game, currentUser);
+    if (!actor) return null;
+    const { leafId } = await this.#ensureAxisCategory(marker.subject, marker.axis, actor.schoolId, actor.teacherId);
+    // Re-picked onto another game/axis: drop the copies left in the old leaf.
+    // The old axis category itself stays — the teacher may have added their own
+    // questions there, and deleting content is never the sync's job.
+    if (game.category_id && String(game.category_id) !== String(leafId)) {
+      await this.#removeBankCopies({ id: game.id, category_id: game.category_id }, false);
     }
-    // Prune the old subject bucket only when the whole game is deleted
-    // (never during a re-sync — the fresh copies are inserted right after).
-    if (!pruneCategory) return;
-    await this.#pruneCategoryIfEmpty(game.category_id);
+    const questions = Array.isArray(game.questions_json)
+      ? game.questions_json
+      : parseJson(game.questions_json, []);
+    const stats = await this.#fileQuestions(questions, {
+      leafId, ...actor, gameId: game.id,
+    });
+    if (String(game.category_id || '') !== String(leafId)) {
+      try { await this.#repo.update('kidsGames', game.id, { category_id: leafId }); } catch (_) { /* link is cosmetic */ }
+    }
+    return { category_id: leafId, axis: marker.axis, subject: marker.subject, ...stats };
   }
 
-  // ─── Bank sync (disabled) ────────────────────────────────────────────────
-  // Publishing a kids game used to mirror its question copies into the shared
-  // Category/Question bank under a synthetic `Kids · <subject>` bucket. That
-  // polluted the teacher's real category list, so games now live in the Games
-  // area only: nothing is pushed into the bank and no bucket is ever created.
-  // Existing `Kids · …` buckets and their copies are intentionally left as-is
-  // ("hide but keep" — the UI filters them out); deleting a whole game still
-  // cleans its legacy copies via #removeBankCopies in delete().
-  async #syncBank() {
-    return;
+  /**
+   * Bulk version of the publish sync: file the whole built-in catalog the
+   * teacher sees in Step 1 into their bank, so "Math › Counting", "French ›
+   * Syllables"… exist without having to publish 15 games one by one. Same
+   * create-if-absent rules, so pressing it twice adds nothing the second
+   * time. The catalog itself lives in the browser (kids-default-games.js) and
+   * is handed over by the caller; the server never trusts its text beyond the
+   * question normalization every other entry point applies.
+   */
+  async syncCatalog(payload, currentUser) {
+    this.#requireTeacher(currentUser);
+    const actor = this.#bankActor(null, currentUser);
+    if (!actor) throw new ValidationError({ school_id: ['No school for this account'] });
+    const games = (Array.isArray(payload?.games) ? payload.games : []).filter((g) => g && typeof g === 'object');
+    let categories = 0;
+    let added = 0;
+    let skipped = 0;
+    const axes = new Set();
+    for (const game of games) {
+      const subject = String(game.subject || '').trim().slice(0, 100);
+      const axis = String(game.axis || '').trim().slice(0, 100);
+      if (!subject || !axis) continue;
+      const leaf = await this.#ensureAxisCategory(subject, axis, actor.schoolId, actor.teacherId);
+      categories += leaf.nodesCreated;
+      axes.add(`${subject} › ${axis}`);
+      const stats = await this.#fileQuestions(game.questions || [], {
+        leafId: leaf.leafId, ...actor, gameId: String(game.id || 'builtin').slice(0, 80),
+      });
+      added += stats.added;
+      skipped += stats.skipped;
+    }
+    return { categories_created: categories, axes: [...axes], added, skipped };
   }
 
   // ─── Publish / PIN ───

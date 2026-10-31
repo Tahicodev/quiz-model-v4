@@ -261,6 +261,11 @@ function createQuestionRow(question, index) {
 								)}
             </div>
             <div class="q-badges">${badgeOwnerHtml}</div>
+            ${question.explanation ? `
+            <div class="q-explanation">
+                <span class="q-explanation-label">Explanation</span>
+                <span class="q-explanation-text">${escapeHtml(question.explanation)}</span>
+            </div>` : ''}
             <button type="button" class="q-expand-btn" onclick="toggleQuestionExpand(this)" aria-expanded="false">
                 <span class="q-expand-label">Show details</span>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -2814,7 +2819,8 @@ function toggleBulkQuestionSelection(checkbox) {
 	}
 }
 // Mobile collapsible details: collapsed by default, toggle shows
-// options / image / answer cells to keep each card compact.
+// options / image / answer cells and the explanation to keep each card
+// compact. On desktop every column and the explanation are always visible.
 function toggleQuestionExpand(btn) {
 	const row = btn ? btn.closest('tr.question-table-row') : null;
 	if (!row) return;

@@ -43,7 +43,7 @@
 		filters: { game_type: '', grade: '', subject: '', status: '', teacher_id: '', search: '' },
 		wizardStep: 1,
 		editingId: null,
-		wizard: { game_type: null, theme: 'jungle', questions: [], mqLevels: [] },
+		wizard: { game_type: null, theme: 'jungle', questions: [], mqLevels: [], pickMode: null, defaultGameId: null },
 		bank: [],
 		bankTypeFilter: 'all',
 		aiResults: [],
@@ -308,7 +308,7 @@
 			state.editingId = editId || null;
 			state.wizardStep = 1;
 			state.maxWizardStep = 1;
-			state.wizard = { game_type: null, theme: 'jungle', questions: [], mqLevels: [] };
+			state.wizard = { game_type: null, theme: 'jungle', questions: [], mqLevels: [], pickMode: null, defaultGameId: null };
 			state.aiResults = [];
 			state.manualList = [];
 			state.publishedGame = null;
@@ -318,6 +318,7 @@
 			if (titleEl) titleEl.textContent = editId ? 'Edit Kids Game' : 'Create Kids Game';
 			buildGameTypeGrid();
 			buildThemeGrid();
+			buildSubjectGrid();
 			buildBankTypeFilters();
 			renderKidsManualQuestions();
 			if (editId) {
@@ -336,6 +337,7 @@
 					if (cfg.mascot_theme) setFormValue('kidsGameMascotTheme', cfg.mascot_theme);
 					setChecked('kidsGameAllowReplay', cfg.allow_replay !== false);
 					setChecked('kidsGameShowExplanations', cfg.show_explanations !== false);
+					resolveKidsPickMode(cfg);
 					syncWizardSelectionUI();
 					renderKidsWizardSelectedQuestions();
 					syncMqLevelsVisibility();
@@ -370,7 +372,7 @@
 	function closeKidsGameWizard() { setModal('kidsGameWizardModal', false); }
 
 	var KIDS_STEP_HINTS = {
-		1: 'Pick a game for the kids to play',
+		1: 'Pick a ready-made game or a custom game type',
 		2: 'Choose the world (background + mascot)',
 		3: 'Add at least one question',
 		4: 'Name the game and tune the rules',
@@ -378,7 +380,7 @@
 	};
 	/** Per-step gate used by Next and by clicking progress steps ahead. */
 	function validateWizardStep(n) {
-		if (n === 1 && !state.wizard.game_type) { toast('Pick a game type first', 'warning'); return false; }
+		if (n === 1 && !state.wizard.game_type) { toast('Choose a game first — a ready-made one or a custom game type', 'warning'); return false; }
 		if (n === 3 && !state.wizard.questions.length) { toast('Add at least one question', 'warning'); return false; }
 		if (n === 3 && incompatibleSelected().length) {
 			toast(incompatibleSelected().length + ' selected question(s) cannot be played in this game type — remove them first', 'warning');
@@ -465,8 +467,17 @@
 		});
 	}
 	function selectKidsGameType(id) {
+		// The custom grid is the only way here: leave the built-in game (and
+		// its questions) behind so the two never mix in one game.
+		if (state.wizard.defaultGameId) {
+			dropDefaultQuestions();
+			state.wizard.defaultGameId = null;
+			state.wizard.pickMode = 'custom';
+			renderKidsWizardSelectedQuestions();
+		}
 		state.wizard.game_type = id;
 		buildGameTypeGrid();
+		buildSubjectGrid();
 		loadKidsBank();
 		renderKidsWizardSelectedQuestions();
 		syncMqLevelsVisibility();
@@ -702,6 +713,16 @@
 			allow_replay: $('kidsGameAllowReplay').checked !== false,
 			show_explanations: $('kidsGameShowExplanations').checked !== false,
 		};
+		// Marker telling the server this game's questions come from the built-in
+		// catalog, so publishing can file them under `subject › axis` in the
+		// question bank (see KidsGameService.#syncBank).
+		if (state.wizard.defaultGameId) {
+			var cat = kidsCatalog();
+			var dg = cat ? cat.get(state.wizard.defaultGameId) : null;
+			if (dg) {
+				base.default_game = { id: dg.id, name: dg.name, subject: dg.subject, axis: dg.axis };
+			}
+		}
 		if (state.wizard.game_type !== 'math-quest') return base;
 		ensureMqLevels();
 		var offset = 0, levels = [];
@@ -720,6 +741,284 @@
 		return Object.assign(base, { levels: levels });
 	}
 
+	/* Step 1 — game picker: three subject cards (built-in games) + Custom.
+	   Built-in games are real games, not a separate engine: choosing one sets
+	   the game type and fills its 5 questions, then the regular wizard takes
+	   over (bank/AI/manual additions, config, publish, grading). */
+	function kidsCatalog() { return window.KidsDefaultGames || null; }
+	function kidsSubjectList() {
+		var cat = kidsCatalog();
+		return (cat && cat.subjects) || [];
+	}
+	function isDefaultQuestionId(id) { return /^kgd-.+-\d+-/i.test(String(id || '')); }
+	/** Which built-in game (if any) the current questions came from. */
+	function appliedDefaultGameId() {
+		for (var i = 0; i < state.wizard.questions.length; i++) {
+			var m = /^kgd-(.+?)-\d+-/i.exec(String(state.wizard.questions[i].id || ''));
+			if (m) return m[1];
+		}
+		return null;
+	}
+	function dropDefaultQuestions() {
+		var before = state.wizard.questions.length;
+		state.wizard.questions = state.wizard.questions.filter(function (q) {
+			return !isDefaultQuestionId(q.id);
+		});
+		return before - state.wizard.questions.length;
+	}
+	function subjectAccentStyle(s) {
+		if (!s) return '';
+		return '--kg-accent:' + esc(s.accent || '#4f46e5') + ';--kg-accent-soft:' +
+			esc(s.accentSoft || '#818cf8') + ';--kg-tint:' + esc(s.tint || '#eef2ff') + ';';
+	}
+	function buildSubjectGrid() {
+		var grid = $('kidsSubjectGrid');
+		if (!grid) return;
+		var cat = kidsCatalog();
+		grid.innerHTML = '';
+		kidsSubjectList().forEach(function (s) {
+			var games = cat ? cat.bySubject(s.id) : [];
+			var questions = games.reduce(function (n, g) { return n + (g.questions || []).length; }, 0);
+			var card = document.createElement('button');
+			card.type = 'button';
+			card.className = 'kids-subject-card' + (state.wizard.pickMode === s.id ? ' selected' : '');
+			card.setAttribute('style', subjectAccentStyle(s));
+			card.innerHTML = (s.mascot ? '<img class="kids-subject-mascot" src="' + esc(s.mascot) + '" alt="" />' : '') +
+				'<span class="kids-subject-icon">' + esc(s.icon) + '</span>' +
+				'<span class="kids-subject-copy"><strong>' + esc(s.name) + '</strong>' +
+				'<small>' + esc(s.blurb || '') + '</small>' +
+				'<em>' + games.length + ' games · ' + questions + ' questions</em></span>' +
+				'<span class="kids-subject-go">Open ›</span>';
+			card.addEventListener('click', function () { selectKidsSubject(s.id); });
+			grid.appendChild(card);
+		});
+		var custom = document.createElement('button');
+		custom.type = 'button';
+		custom.className = 'kids-subject-card kids-subject-card-custom' +
+			(state.wizard.pickMode === 'custom' ? ' selected' : '');
+		custom.innerHTML = '<span class="kids-subject-icon">🛠️</span>' +
+			'<span class="kids-subject-copy"><strong>Custom game</strong>' +
+			'<small>Pick a game type and bring your own questions</small></span>' +
+			'<span class="kids-subject-go">Open ›</span>';
+		custom.addEventListener('click', selectKidsCustomMode);
+		grid.appendChild(custom);
+		renderKidsDefaultGames();
+	}
+	function selectKidsSubject(subjectId) {
+		if (state.wizard.pickMode !== subjectId && state.wizard.defaultGameId) {
+			var dropped = dropDefaultQuestions();
+			state.wizard.defaultGameId = null;
+			state.wizard.game_type = null;
+			if (dropped) toast(dropped + ' built-in question(s) removed — pick a game', 'info');
+		}
+		state.wizard.pickMode = subjectId;
+		buildSubjectGrid();
+		buildGameTypeGrid();
+		renderKidsWizardSelectedQuestions();
+	}
+	function selectKidsCustomMode() {
+		if (state.wizard.defaultGameId) {
+			dropDefaultQuestions();
+			state.wizard.defaultGameId = null;
+			state.wizard.game_type = null;
+			renderKidsWizardSelectedQuestions();
+		}
+		state.wizard.pickMode = 'custom';
+		buildSubjectGrid();
+		buildGameTypeGrid();
+	}
+	/** Back to the four category cards (Step 1 first load state). */
+	function resetKidsPickMode() {
+		if (state.wizard.defaultGameId) {
+			dropDefaultQuestions();
+			state.wizard.defaultGameId = null;
+			state.wizard.game_type = null;
+			renderKidsWizardSelectedQuestions();
+		}
+		state.wizard.pickMode = null;
+		buildSubjectGrid();
+		buildGameTypeGrid();
+	}
+	function renderKidsDefaultGames() {
+		var wrap = $('kidsDefaultGamesWrap');
+		var customWrap = $('kidsCustomGamesWrap');
+		var grid = $('kidsDefaultGameGrid');
+		var banner = $('kidsDefaultGamesBanner');
+		var placeholder = $('kidsPickPlaceholder');
+		if (!wrap || !customWrap || !grid) return;
+		var subject = state.wizard.pickMode;
+		// First load shows ONLY the four category cards: the nine custom game
+		// types appear once the teacher opens the Custom card, and the
+		// ready-made games once they open a subject.
+		wrap.hidden = subject === 'custom' || !subject;
+		customWrap.hidden = subject !== 'custom';
+		if (placeholder) placeholder.hidden = !!subject;
+		if (wrap.hidden) return;
+		var cat = kidsCatalog();
+		var games = cat ? cat.bySubject(subject) : [];
+		var subj = cat ? cat.subject(subject) : null;
+		if (banner) {
+			banner.setAttribute('style', subjectAccentStyle(subj));
+			banner.innerHTML = (subj && subj.mascot
+				? '<img class="kids-pick-banner-mascot" src="' + esc(subj.mascot) + '" alt="" />'
+				: '<span class="kids-pick-banner-icon">' + esc((subj && subj.icon) || '🎮') + '</span>') +
+				'<span class="kids-pick-banner-copy"><strong>' + esc((subj && subj.name) || subject) +
+				' — ready-made games</strong><small>' + esc((subj && subj.blurb) || '') + '</small></span>' +
+				'<button type="button" class="btn btn-sm btn-secondary kids-pick-banner-back">‹ Other category</button>';
+			var backBtn = banner.querySelector('.kids-pick-banner-back');
+			if (backBtn) backBtn.addEventListener('click', resetKidsPickMode);
+		}
+		grid.innerHTML = '';
+		if (!games.length) {
+			grid.innerHTML = '<div class="empty-state-small">No built-in game in this subject yet.</div>';
+			return;
+		}
+		var types = kidsGameTypeMap();
+		games.forEach(function (g) {
+			var type = types[g.game_type] || { icon: '🎮', label: g.game_type };
+			var picked = state.wizard.defaultGameId === g.id;
+			var card = document.createElement('div');
+			card.className = 'kids-default-game-card' + (picked ? ' selected' : '');
+			card.setAttribute('style', subjectAccentStyle(subj));
+			var chips = (g.preview || []).filter(Boolean).slice(0, 3).map(function (p) {
+				return '<span>' + esc(p) + '</span>';
+			}).join('');
+			card.innerHTML = '<span class="kids-default-game-ribbon">' + (picked ? '✓ picked' : esc(g.tag || type.label)) + '</span>' +
+				'<div class="kids-default-game-head">' +
+				'<span class="kids-default-game-icon">' + esc(g.icon || type.icon) + '</span>' +
+				'<span class="kids-default-game-type">' + type.icon + ' ' + esc(type.label) + '</span></div>' +
+				'<div class="kids-default-game-name">' + esc(g.name) + '</div>' +
+				'<div class="kids-default-game-desc">' + esc(g.description || '') + '</div>' +
+				(chips ? '<div class="kids-default-game-chips">' + chips + '</div>' : '') +
+				'<div class="kids-default-game-meta">' +
+				'<span>🎓 ' + esc(String(g.grade || '').toUpperCase()) + '</span>' +
+				'<span>⭐ ' + esc(g.difficulty || 'easy') + '</span>' +
+				'<span>❓ ' + (g.questions || []).length + '</span></div>' +
+				'<button type="button" class="btn btn-sm kids-default-game-cta ' +
+				(picked ? 'btn-secondary' : 'btn-primary') + '">' +
+				(picked ? 'Selected ✓' : 'Play this game 🚀') + '</button>';
+			card.querySelector('.kids-default-game-cta').addEventListener('click', function () {
+				applyKidsDefaultGame(g.id);
+			});
+			grid.appendChild(card);
+		});
+	}
+	function kidsGameTypeMap() {
+		var map = {};
+		KIDS_GAME_TYPES.forEach(function (t) { map[t.id] = t; });
+		return map;
+	}
+	/** Fresh canonical copies (unique ids so two games never collide, and a
+	   rebuilt list never clashes with the previously applied one). */
+	function cloneDefaultQuestions(game) {
+		return (game.questions || []).map(function (raw, i) {
+			var q = normalizeKidQuestion(Object.assign({}, raw, {
+				id: 'kgd-' + game.id + '-' + i + '-' + Math.random().toString(36).slice(2, 8),
+			}));
+			q.difficulty = raw.difficulty || q.difficulty;
+			q.points = Number(raw.points) || q.points;
+			return q;
+		});
+	}
+	function applyKidsDefaultGame(gameId) {
+		var cat = kidsCatalog();
+		var game = cat ? cat.get(gameId) : null;
+		if (!game) { toast('Game not found in the catalog', 'error'); return; }
+		var dropped = dropDefaultQuestions();
+		var questions = cloneDefaultQuestions(game).filter(function (q) {
+			return isQuestionCompatible(game.game_type, q);
+		});
+		if (!questions.length) { toast('That game has no usable questions', 'error'); return; }
+		state.wizard.game_type = game.game_type;
+		state.wizard.defaultGameId = game.id;
+		state.wizard.questions = questions;
+		// Prefill Step 4 fields only when the teacher has not filled them.
+		var nameEl = $('kidsGameName');
+		if (nameEl && !String(nameEl.value || '').trim()) nameEl.value = game.name;
+		var subjEl = $('kidsGameSubject');
+		if (subjEl && !String(subjEl.value || '').trim()) subjEl.value = game.subject || '';
+		var gradeEl = $('kidsAIGrade');
+		if (gradeEl && game.grade) gradeEl.value = game.grade;
+		loadKidsBank();
+		renderKidsWizardSelectedQuestions();
+		renderKidsDefaultGames();
+		buildGameTypeGrid();
+		syncMqLevelsVisibility();
+		toast(game.name + ' — ' + questions.length + ' questions ready ✓', 'success');
+	}
+	/** Re-derive Step 1 selection when editing a game built from the catalog:
+	   the config marker is authoritative, the question ids are the fallback
+	   for games saved before the marker existed. */
+	function resolveKidsPickMode(cfg) {
+		var cat = kidsCatalog();
+		if (!cat) return;
+		var gameId = (cfg && cfg.default_game && cfg.default_game.id) || appliedDefaultGameId();
+		var game = gameId ? cat.get(gameId) : null;
+		if (game) {
+			state.wizard.pickMode = game.subject;
+			state.wizard.defaultGameId = game.id;
+			return;
+		}
+		state.wizard.defaultGameId = null;
+		// Questions of unknown origin: stay on the neutral first screen rather
+		// than pretending this is a custom game type the teacher picked.
+		state.wizard.pickMode = state.wizard.questions.length ? 'custom' : null;
+	}
+
+	/* Built-in games → question bank. The catalog lives browser-side, so the
+	   studio hands it to POST /kids/bank-sync, which files every question in
+	   the signed-in teacher's own library under `subject › axis`. The server
+	   only creates what is missing, so a teacher's edits and hand-added
+	   questions are never rewritten and pressing twice is harmless. */
+	function kidsCatalogBankPayload() {
+		var cat = kidsCatalog();
+		if (!cat || typeof cat.list !== 'function') return null;
+		var games = cat.list().filter(function (g) { return g && g.subject && g.axis; }).map(function (g) {
+			return {
+				id: g.id,
+				subject: g.subject,
+				axis: g.axis,
+				questions: (g.questions || []).map(function (q) { return Object.assign({}, q); }),
+			};
+		});
+		return games.length ? { games: games } : null;
+	}
+	/** Re-download the bootstrap cache: rows created on the server only reach
+	   the Category / Question tabs through it (they read a local mirror). */
+	function rehydrateLocalCache() {
+		var run = typeof window.__legacyBridgeBootstrap === 'function'
+			? window.__legacyBridgeBootstrap : null;
+		if (!run) return Promise.resolve();
+		return Promise.resolve(run()).catch(function (err) {
+			if (window.console && console.warn) console.warn('[kids-games] re-bootstrap failed:', err);
+		});
+	}
+	function syncKidsCatalogToBank() {
+		var payload = kidsCatalogBankPayload();
+		if (!payload) { toast('Built-in games unavailable', 'error'); return Promise.resolve(); }
+		var total = payload.games.reduce(function (n, g) { return n + g.questions.length; }, 0);
+		var names = kidsSubjectList().map(function (s) { return s.name; }).join(' / ') || 'French / Arabic / Math';
+		if (!window.confirm('Add the ' + payload.games.length + ' built-in games (' + total + ' questions) to your question bank?\n\n'
+			+ 'They appear as ' + names + ' categories with one subcategory (axis) per game, ready to edit, extend or reuse in quizzes and exams.')) {
+			return Promise.resolve();
+		}
+		var btn = $('kidsBankSyncBtn');
+		if (btn) btn.disabled = true;
+		return kidsApi('POST', '/bank-sync', payload).then(function (summary) {
+			var added = Number(summary && summary.added) || 0;
+			toast(added ? added + ' question(s) added to your bank ✓' : 'Your bank already has these questions ✓', 'success');
+			return rehydrateLocalCache();
+		}).then(function () {
+			if (typeof window.refreshQuestionsList === 'function') {
+				try { window.refreshQuestionsList(); } catch (_) { /* tab re-renders on open */ }
+			}
+		}).catch(function (err) {
+			toast('Could not update the question bank: ' + ((err && err.message) || 'unknown error'), 'error');
+		}).then(function () {
+			if (btn) btn.disabled = false;
+		});
+	}
+
 	/* Step 2 — theme */
 	function buildThemeGrid() {
 		var grid = $('kidsThemeGrid');
@@ -735,7 +1034,7 @@
 		});
 	}
 	function selectKidsTheme(id) { state.wizard.theme = id; buildThemeGrid(); }
-	function syncWizardSelectionUI() { buildGameTypeGrid(); buildThemeGrid(); }
+	function syncWizardSelectionUI() { buildGameTypeGrid(); buildThemeGrid(); buildSubjectGrid(); }
 
 	/* Step 3 — question sources */
 	function kidsWizardSwitchSource(src, btn) {
@@ -1779,6 +2078,12 @@
 	window.refreshKidsAIModels = refreshKidsAIModels;
 	window.openKidsManualEditor = openKidsManualEditor;
 	window.renderKidsManualQuestions = renderKidsManualQuestions;
+	window.selectKidsSubject = selectKidsSubject;
+	window.selectKidsCustomMode = selectKidsCustomMode;
+	window.applyKidsDefaultGame = applyKidsDefaultGame;
+	window.renderKidsDefaultGames = renderKidsDefaultGames;
+	window.resetKidsPickMode = resetKidsPickMode;
+	window.syncKidsCatalogToBank = syncKidsCatalogToBank;
 	window.updateKidsWizardPreview = updateKidsWizardPreview;
 	window.renderPublishChecklist = renderPublishChecklist;
 	window.renderPublishResult = renderPublishResult;
@@ -1800,6 +2105,11 @@
 		openWizard: openKidsGameWizard,
 		state: state,
 		normalize: normalizeKidQuestion,
+		defaultGames: function () {
+			var cat = kidsCatalog();
+			return cat ? cat.list() : [];
+		},
+		applyDefaultGame: applyKidsDefaultGame,
 	};
 
 	document.addEventListener('DOMContentLoaded', function () {

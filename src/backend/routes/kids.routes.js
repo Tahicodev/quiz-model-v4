@@ -23,6 +23,7 @@ import {
   KidsSessionCreateSchema,
   KidsSessionCompleteSchema,
   KidsAIGenerateSchema,
+  KidsBankSyncSchema,
   KidsBrowseSchema,
   KidsAuthedSessionSchema,
 } from '../../shared/schemas/kids-game.schema.js';
@@ -242,6 +243,21 @@ router.post('/', requireRole(KIDS_CRUD_ROLES), validate(KidsGameCreateSchema), a
     const game = await kidsGameSvc.create(req.body, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'kidsGame', entityId: game.id, action: 'create', ip: req.ip });
     res.status(201).json(game);
+  } catch (err) { next(err); }
+});
+
+/**
+ * POST /api/v1/kids/bank-sync — File the built-in catalog (Step 1 subject
+ * games) into the caller's own question bank under `subject › axis`, so the
+ * Category and Question tabs show that content and the teacher can edit or
+ * extend it. Create-if-absent, so re-running it is harmless.
+ */
+router.post('/bank-sync', requireRole(KIDS_CRUD_ROLES), validate(KidsBankSyncSchema), async (req, res, next) => {
+  try {
+    const { kidsGameSvc, auditSvc } = getContainer();
+    const summary = await kidsGameSvc.syncCatalog(req.body, req.user);
+    await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'kidsGame', entityId: 'builtin-catalog', action: 'bank-sync', ip: req.ip });
+    res.json(summary);
   } catch (err) { next(err); }
 });
 

@@ -43450,6 +43450,31 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	display: none;
 }
 
+/* Explanation panel — every question may carry one (the built-in French /
+   Arabic / Math games always do), shown read-only under the question text. */
+#question-list-table .q-explanation {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	margin-top: 8px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: var(--bg-surface-alt);
+	border-left: 3px solid var(--primary);
+}
+#question-list-table .q-explanation-label {
+	font-size: 0.6rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+}
+#question-list-table .q-explanation-text {
+	font-size: 0.78rem;
+	line-height: 1.45;
+	color: var(--text-secondary);
+}
+
 @media (max-width: 768px) {
 	/* ── Shared card language for every list table ── */
 	#categoryList tbody tr,
@@ -43806,7 +43831,8 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	/* Collapsed by default: hide heavy cells until toggled */
 	#question-list-table tbody tr.question-table-row:not(.is-expanded) > .options-cell,
 	#question-list-table tbody tr.question-table-row:not(.is-expanded) > .answer-cell,
-	#question-list-table tbody tr.question-table-row:not(.is-expanded) > .image-cell {
+	#question-list-table tbody tr.question-table-row:not(.is-expanded) > .image-cell,
+	#question-list-table tbody tr.question-table-row:not(.is-expanded) .q-explanation {
 		display: none !important;
 	}
 	#question-list-table tbody tr.question-table-row.is-expanded > .options-cell,

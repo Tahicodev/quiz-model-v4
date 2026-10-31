@@ -102,6 +102,21 @@ export const KidQuestLevelSchema = z.object({
 
 export const KidQuestLevelsSchema = z.array(KidQuestLevelSchema).min(1).max(12);
 
+// Bulk "add the built-in games to my question bank" (see KidsGameService
+// .syncCatalog). The catalog lives browser-side, so its content is handed over
+// here; the server re-normalizes every question and only ever creates what is
+// missing, so a bogus/oversized payload cannot rewrite the teacher's own bank.
+export const KidsBankSyncGameSchema = z.object({
+  id:        z.string().min(1).max(80),
+  subject:   z.string().min(1).max(100),
+  axis:      z.string().min(1).max(100),
+  questions: z.array(z.any()).max(60),
+});
+
+export const KidsBankSyncSchema = z.object({
+  games: z.array(KidsBankSyncGameSchema).min(1).max(60),
+});
+
 export const KidsBrowseSchema = z.object({
   search: z.string().optional(),
   limit:  z.coerce.number().int().min(1).max(100).default(20),

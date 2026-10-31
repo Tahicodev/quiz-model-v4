@@ -40,10 +40,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-10-30-examsheet1" />
-		<link rel="stylesheet" href="admin.css?v=2026-10-30-devcards1" />
+		<link rel="stylesheet" href="styles.css?v=2026-10-31-kidscat2" />
+		<link rel="stylesheet" href="admin.css?v=2026-10-31-kidscat2" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-10-23-pub2" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-10-31-kidscat2" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -148,7 +148,7 @@
 		<script src="bulk-selection.js?v=2026-10-23-mq12" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
 		<script src="category-management.js?v=2026-10-26-catgame1" defer></script>
-		<script src="questions-management.js?v=2026-10-26-catgame1" defer></script>
+		<script src="questions-management.js?v=2026-10-31-kidscat2" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
@@ -161,7 +161,8 @@
 		<script src="classroom-devices.js?v=2026-10-30-devcards1" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-10-26-catgame1" defer></script>
-		<script src="kids-games-management.js?v=2026-10-26-catgame1" defer></script>
+		<script src="kids-games-management.js?v=2026-10-31-kidscat1" defer></script>
+		<script src="kids-default-games.js?v=2026-10-31-kidscat1" defer></script>
 		<script src="/kids/games/math-quest-core.js?v=2026-10-23-mq12" defer></script>
 <script src="kids-championships-management.js?v=2026-10-23-pub1" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
@@ -3360,6 +3361,9 @@
 											<p>Create themed educational games for primary/preschool students. Kids play via PIN — no login required.</p>
 										</div>
 										<div class="panel-header-actions">
+											<button type="button" class="btn btn-secondary" id="kidsBankSyncBtn" onclick="syncKidsCatalogToBank()" title="File the French / Arabic / Math built-in questions in your question bank, under subject › axis, so you can edit or extend them">
+												<span aria-hidden="true">📚</span> Built-in games → my bank
+											</button>
 											<button type="button" class="btn btn-primary" id="addKidsGameBtn">
 												<span aria-hidden="true">＋</span> New Kids Game
 											</button>
@@ -3922,7 +3926,7 @@
 				<button type="button" class="arena-modal-close" id="closeKidsWizardBtn" aria-label="Close">×</button>
 			</div>
 			<ol class="kids-wizard-progress" id="kidsWizardProgress">
-				<li class="kw-step active" data-step="1" title="Choose a game type"><span class="kw-num">1</span><span class="kw-label">Game Type</span></li>
+				<li class="kw-step active" data-step="1" title="Pick a built-in game or a custom game type"><span class="kw-num">1</span><span class="kw-label">Game</span></li>
 				<li class="kw-step" data-step="2" title="Choose a visual theme"><span class="kw-num">2</span><span class="kw-label">Theme</span></li>
 				<li class="kw-step" data-step="3" title="Add questions"><span class="kw-num">3</span><span class="kw-label">Questions</span></li>
 				<li class="kw-step" data-step="4" title="Name, grade and rules"><span class="kw-num">4</span><span class="kw-label">Config</span></li>
@@ -3933,13 +3937,23 @@
 			<input type="hidden" id="kidsGameWizardId" value="" />
 			<input type="hidden" id="kidsGameWizardStep" value="1" />
 			<div class="kids-wizard-body">
-				<!-- Step 1: Game Type -->
+				<!-- Step 1: Game -->
 				<div class="kw-step-panel active" data-step="1">
 					<div class="kw-step-header">
 						<h3>What will the kids play?</h3>
-						<p>Each game wraps an existing question type in a kid-friendly world.</p>
+						<p>Pick a subject to see the ready-made games, or start from a custom game type and bring your own questions.</p>
 					</div>
-					<div class="kids-game-type-grid" id="kidsGameTypeGrid"></div>
+					<div class="kids-subject-grid" id="kidsSubjectGrid" role="tablist" aria-label="Game categories"></div>
+					<p class="hint kids-pick-placeholder" id="kidsPickPlaceholder">☝️ Open a subject for a ready-made game, or Custom game to build one from a game type.</p>
+					<div class="kids-default-games-wrap" id="kidsDefaultGamesWrap" hidden>
+						<div class="kids-pick-banner" id="kidsDefaultGamesBanner"></div>
+						<div class="kids-default-game-grid" id="kidsDefaultGameGrid"></div>
+						<p class="hint kids-default-games-hint">Each game brings 5 questions you can still edit or complete — on publish they are also saved in your question bank under <strong>subject › axis</strong>.</p>
+					</div>
+					<div class="kids-custom-games-wrap" id="kidsCustomGamesWrap" hidden>
+						<h4 class="kids-pick-subtitle">Custom game — pick a game type</h4>
+						<div class="kids-game-type-grid" id="kidsGameTypeGrid"></div>
+					</div>
 				</div>
 
 				<!-- Step 2: Theme -->
