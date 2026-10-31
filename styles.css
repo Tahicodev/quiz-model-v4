@@ -27761,6 +27761,111 @@ tr[data-id],
 	display: none;
 }
 
+/* ── "Used in" column ────────────────────────────────────────────────────
+   Compact colored pills: category, games, tournaments, training, exams.
+   Neutral by default with a per-kind accent; hover reveals the container
+   names via the native tooltip. Wraps gracefully in the 170px column. */
+#question-list-table .usage-cell {
+	vertical-align: middle;
+	text-align: left;
+	white-space: normal;
+}
+
+.usage-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	align-items: center;
+}
+
+.usage-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	max-width: 100%;
+	padding: 2px 8px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background: var(--bg-surface-alt, #f1f5f9);
+	color: var(--text-secondary, #475569);
+	font-size: 0.7rem;
+	font-weight: 600;
+	line-height: 1.3;
+	cursor: default;
+	transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.usage-chip:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+}
+
+.usage-chip .usage-ic {
+	font-size: 0.78rem;
+	line-height: 1;
+	flex: 0 0 auto;
+}
+
+.usage-chip .usage-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.usage-category {
+	background: rgba(37, 99, 235, 0.12);
+	border-color: rgba(37, 99, 235, 0.28);
+	color: #1d4ed8;
+}
+
+.usage-games {
+	background: rgba(16, 185, 129, 0.12);
+	border-color: rgba(16, 185, 129, 0.28);
+	color: #047857;
+}
+
+.usage-tournaments {
+	background: rgba(139, 92, 246, 0.12);
+	border-color: rgba(139, 92, 246, 0.28);
+	color: #6d28d9;
+}
+
+.usage-training {
+	background: rgba(249, 115, 22, 0.12);
+	border-color: rgba(249, 115, 22, 0.28);
+	color: #c2410c;
+}
+
+.usage-exams {
+	background: rgba(239, 68, 68, 0.12);
+	border-color: rgba(239, 68, 68, 0.28);
+	color: #b91c1c;
+}
+
+.usage-empty {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: transparent;
+	border: 1px dashed var(--border-color, #cbd5e1);
+	color: var(--text-muted, #94a3b8);
+	font-size: 0.68rem;
+	font-weight: 600;
+	font-style: italic;
+}
+
+html[data-theme='dark'] .usage-chip {
+	background: rgba(148, 163, 184, 0.14);
+	color: #cbd5e1;
+}
+
+html[data-theme='dark'] .usage-category { background: rgba(59, 130, 246, 0.18); border-color: rgba(59, 130, 246, 0.4); color: #93c5fd; }
+html[data-theme='dark'] .usage-games { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.4); color: #6ee7b7; }
+html[data-theme='dark'] .usage-tournaments { background: rgba(139, 92, 246, 0.18); border-color: rgba(139, 92, 246, 0.4); color: #c4b5fd; }
+html[data-theme='dark'] .usage-training { background: rgba(249, 115, 22, 0.18); border-color: rgba(249, 115, 22, 0.4); color: #fdba74; }
+html[data-theme='dark'] .usage-exams { background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; }
+
 @media (max-width: 768px) {
 	#questions .questions-type-filters {
 		gap: 6px !important;
@@ -27806,7 +27911,8 @@ tr[data-id],
 			'number number'
 			'options options'
 			'answer answer'
-			'image image';
+			'image image'
+			'usage usage';
 		gap: 8px 10px;
 		margin: 0 0 10px;
 		padding: 12px;
@@ -28014,6 +28120,25 @@ tr[data-id],
 	#question-list-table tbody tr.question-table-row > .image-cell {
 		grid-area: image;
 		text-align: left;
+	}
+
+	#question-list-table tbody tr.question-table-row > .usage-cell {
+		grid-area: usage;
+		display: block !important;
+		padding-top: 8px;
+		border-top: 1px solid #f1f5f9;
+	}
+
+	#question-list-table tbody tr.question-table-row > .usage-cell::before {
+		content: attr(data-label);
+		display: block;
+		margin-bottom: 4px;
+		color: #64748b;
+		font-size: 0.64rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		line-height: 1.1;
+		text-transform: uppercase;
 	}
 
 	#question-list-table .option-badge,
@@ -43826,6 +43951,25 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	#question-list-table .question-meta {
 		display: flex !important;
 		flex-wrap: wrap;
+	}
+
+	/* "Used in" chips: compact, always visible (never part of the collapsed
+	   details), so a teacher can see at a glance where each question lives. */
+	#question-list-table tbody tr.question-table-row > .usage-cell {
+		display: block !important;
+		margin-top: 10px;
+		padding-top: 10px;
+		border-top: 1px solid var(--border-color);
+	}
+	#question-list-table tbody tr.question-table-row > .usage-cell::before {
+		content: 'Used in';
+		display: block;
+		margin-bottom: 6px;
+		color: #64748b;
+		font-size: 0.64rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
 	}
 
 	/* Collapsed by default: hide heavy cells until toggled */

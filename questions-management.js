@@ -154,6 +154,102 @@ function getCategoryName(categoryId) {
 	return category ? category.name : 'Unknown';
 }
 
+// ── "Used in" column ──────────────────────────────────────────────────────
+// The Questions tab shows, per question, which containers reference it:
+// its category, games, tournaments, training activities and exams. Games /
+// tournaments / training / exams come from a single school-scoped aggregation
+// endpoint (GET /questions/usage) fetched lazily on the first list render and
+// cached for the page lifetime; the category chip is derived from the row's own
+// category so it shows instantly without waiting on the network. If the
+// request fails we simply fall back to the category-only view — never block or
+// break the list.
+let _questionUsageMap = null; // questionId -> { games, tournaments, training, exams }
+let _questionUsageLoading = false;
+
+function ensureQuestionUsage() {
+	if (_questionUsageMap !== null || _questionUsageLoading) return;
+	if (!window.API || typeof window.API.raw !== 'function') {
+		_questionUsageMap = {};
+		return;
+	}
+	_questionUsageLoading = true;
+	Promise.resolve(window.API.raw('GET', '/questions/usage'))
+		.then(function (data) {
+			_questionUsageMap = (data && data.usage) || {};
+		})
+		.catch(function () {
+			_questionUsageMap = _questionUsageMap || {};
+		})
+		.then(function () {
+			_questionUsageLoading = false;
+			// Fill the column in place — no full re-render, so scroll position,
+			// bulk-selection checkboxes and filters stay untouched.
+			paintQuestionUsage();
+		});
+}
+
+// Re-render only the usage cells of the rows already on screen, using the
+// row's cached category name so the paint matches freshly built rows.
+function paintQuestionUsage() {
+	const list = document.getElementById('question-list');
+	if (!list) return;
+	const rows = list.querySelectorAll('tr.question-table-row');
+	rows.forEach(function (row) {
+		const cell = row.querySelector('.usage-cell');
+		if (!cell) return;
+		cell.innerHTML = buildUsageChips(
+			row.getAttribute('data-id') || '',
+			row.getAttribute('data-category-name') || '',
+			row.classList.contains('categorized'),
+		);
+	});
+}
+
+// Build one tooltip-safe chip for a usage bucket (games/tournaments/...).
+function usageBucketChip(kind, icon, label, names) {
+	if (!names || !names.length) return '';
+	const MAX = 8;
+	const shown = names.slice(0, MAX);
+	const more = names.length - shown.length;
+	const tip = label + ' (' + names.length + '): ' + shown.join(', ') +
+		(more > 0 ? ', +' + more + ' more' : '');
+	const count = names.length > 1 ? ' ' + names.length : '';
+	return '<span class="usage-chip usage-' + kind + '" title="' +
+		escapeHtml(tip) + '"><span class="usage-ic">' + icon +
+		'</span><span class="usage-label">' + escapeHtml(label) + count +
+		'</span></span>';
+}
+
+function buildUsageChips(qid, catName, isCategorized) {
+	const usage = (qid && _questionUsageMap && _questionUsageMap[qid]) || {};
+	const chips = [];
+	if (isCategorized && catName && catName !== 'Uncategorized' && catName !== 'Unknown') {
+		chips.push('<span class="usage-chip usage-category" title="Category: ' +
+			escapeHtml(catName) + '"><span class="usage-ic">\uD83D\uDCC2</span>' +
+			'<span class="usage-label">' + escapeHtml(catName) + '</span></span>');
+	}
+	chips.push(usageBucketChip('games', '\uD83C\uDFAE', 'Games', usage.games));
+	chips.push(usageBucketChip('tournaments', '\uD83C\uDFC6', 'Tournaments', usage.tournaments));
+	chips.push(usageBucketChip('training', '\uD83C\uDFAF', 'Training', usage.training));
+	chips.push(usageBucketChip('exams', '\uD83D\uDCDD', 'Exams', usage.exams));
+	const filled = chips.filter(Boolean);
+	if (!filled.length) {
+		return '<span class="usage-empty" title="Not referenced by any category, game, tournament, training or exam">Not used yet</span>';
+	}
+	return '<div class="usage-chips">' + filled.join('') + '</div>';
+}
+
+function renderUsageCell(question) {
+	const categoryId = (question && question.category) || '';
+	let catName = '';
+	try { catName = String(getCategoryName(categoryId) || ''); } catch (_) { catName = ''; }
+	return buildUsageChips(
+		(question && question.id) || '',
+		catName,
+		Boolean(categoryId && categoryId !== 'uncategorized'),
+	);
+}
+
 // Define createQuestionRow function
 function createQuestionRow(question, index) {
 	const row = document.createElement('tr');
@@ -360,6 +456,7 @@ function createQuestionRow(question, index) {
         <td class="answer-cell" data-label="Answer">${formatCorrectAnswers(
 					question
 				)}</td>
+        <td class="usage-cell" data-label="Used in">${renderUsageCell(question)}</td>
         <td class="actions-cell" data-label="Actions">
             <div class="exam-actions">
                 <button class="exam-action-btn exam-edit-btn" onclick="editQuestion(${index})" title="Edit">
@@ -4101,6 +4198,10 @@ function updateQuestionList() {
 
 	questionList.innerHTML = '';
 
+	// Lazily load the "Used in" aggregation once per page; renders fill in
+	// in place when it arrives (see ensureQuestionUsage/paintQuestionUsage).
+	ensureQuestionUsage();
+
 	// Admin-only teacher scope (see teacher-filter.js). Teachers keep their
 	// role-scoped view; admins can narrow to one teacher's activities.
 	const questionTeacherScope = window.TeacherFilter
@@ -4149,7 +4250,7 @@ function updateQuestionList() {
 
 	if (visibleCount === 0) {
 		questionList.innerHTML =
-			'<tr><td colspan="8" class="text-center">No questions found.</td></tr>';
+			'<tr><td colspan="10" class="text-center">No questions found.</td></tr>';
 		return;
 	}
 

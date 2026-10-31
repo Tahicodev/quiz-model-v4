@@ -609,6 +609,53 @@
 				}
 			});
 		},
+		/** Subject theming (combined with the mascot theme world): recolour the
+		 *  player palette and drift subject-native glyphs behind the play area,
+		 *  so the built-in Math / French / Arabic games wear their subject
+		 *  instead of a generic Bubble Pop / Tower / Words skin. Each game keeps
+		 *  its own interaction shape (game type) while the subject sets colour,
+		 *  mascot and (for Arabic) right-to-left. Math Quest has its own rich art
+		 *  world and opts out. Presentation only — never touches scoring. */
+		applySubject: function () {
+			var body = document.body;
+			var old = document.getElementById('kidSubjectDecor');
+			if (old && old.parentNode) old.parentNode.removeChild(old);
+			['math', 'french', 'arabic'].forEach(function (k) { body.classList.remove('kid-subject-' + k); });
+			body.removeAttribute('data-kid-subject');
+			if (!this.game || this.game.game_type === 'math-quest') return;
+			var subj = String(this.game.subject || '');
+			var raw = subj.toLowerCase();
+			var key = '';
+			if (raw.indexOf('math') >= 0) key = 'math';
+			else if (raw.indexOf('ara') >= 0 || /[\u0600-\u06FF]/.test(subj)) key = 'arabic';
+			else if (raw.indexOf('fre') >= 0 || raw.indexOf('fran') >= 0) key = 'french';
+			if (!key) return;
+			body.classList.add('kid-subject-' + key);
+			body.setAttribute('data-kid-subject', key);
+			var glyphs = key === 'math'
+				? ['1', '2', '3', '+', '−', '×', '7', '9', '5', '8', '=', '4']
+				: key === 'french'
+					? ['A', 'B', 'C', 'é', 'à', 'ç', 'a', 'o', '?', 'ê', 'u', 'n']
+					: ['ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'س', 'ش', 'م', 'ن'];
+			var layer = document.createElement('div');
+			layer.id = 'kidSubjectDecor';
+			layer.className = 'kid-subject-decor';
+			layer.setAttribute('aria-hidden', 'true');
+			var html = '';
+			for (var i = 0; i < glyphs.length; i++) {
+				var size = 1.4 + Math.random() * 2.0;
+				var left = 2 + Math.random() * 94;
+				var dur = 14 + Math.random() * 16;
+				var delay = -Math.random() * dur;
+				html += '<span style="left:' + left.toFixed(1) + '%;font-size:' + size.toFixed(2) +
+					'rem;animation-duration:' + dur.toFixed(1) + 's;animation-delay:' + delay.toFixed(1) + 's">' +
+					glyphs[i] + '</span>';
+			}
+			layer.innerHTML = html;
+			var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+			if (reduce) layer.classList.add('kid-decor-still');
+			body.appendChild(layer);
+		},
 		load: function () {
 			var self = this;
 			fetch(API + '/play/' + encodeURIComponent(this.pin))
@@ -622,6 +669,7 @@
 					document.getElementById('kidGameName').textContent = game.name || 'Kids Game';
 					document.getElementById('kidGameSub').textContent = (game.grade ? String(game.grade).toUpperCase() + ' · ' : '') + (game.subject || 'Have fun! 🎉');
 					self.applyTheme();
+					self.applySubject();
 					MascotManager.set('idle');
 					// Feed the hub's "Play again" chips with the real name and
 					// icon — the hub can only know the PIN when the kid types it.
@@ -853,6 +901,18 @@
 			var qType = String(q.type || '');
 			if ((qType === 'matching' || qType === 'matching-pairs') && key !== 'pair-party' && key !== 'math-quest') {
 				key = 'pair-party';
+			}
+			// Built-in Math / French / Arabic multiple-choice games wear bespoke,
+			// intent-matched presentations (🐊 balance for comparisons, 🔢 count &
+			// tap for counting, 🎯 choice board otherwise) instead of the generic
+			// Bubble Pop. SubjectGames.js answers with the exact SAME option label,
+			// so grading/results are untouched. Only redirects 'bubble-pop', only
+			// when the bespoke renderer is actually loaded, so towers, magic-words,
+			// custom games and non-subject games keep their original behaviour.
+			if (key === 'bubble-pop' && this.game && this.game.game_type !== 'math-quest'
+				&& window.KidsPlayer.pickSubjectPresentation) {
+				var alt = window.KidsPlayer.pickSubjectPresentation(q, this.game);
+				if (alt && (window.KidsGameRenderers || {})[alt]) key = alt;
 			}
 			var Ctor = (window.KidsGameRenderers || {})[key];
 			if (!Ctor) {

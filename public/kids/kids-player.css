@@ -1691,3 +1691,233 @@ body.kid-theme-superhero::after {
 	.mq-rune-slot.mq-wrong { animation: none; }
 	.mq-rune-key, .mq-rune-key:hover:not(:disabled):not(.mq-used) { transition: none; transform: none; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   SUBJECT WORLDS — adorable, high-visibility identity per school subject.
+   kids-player.js adds body.kid-subject-<math|french|arabic> (and
+   [data-kid-subject]) alongside the mascot theme world (kid-theme-*), so the
+   theme paints the scenery while the SUBJECT paints the component palette,
+   the question panel, the option cards and a drift of subject-native glyphs.
+   That is why Bubble Pop / Build-a-Tower / Magic Words no longer look alike
+   across French, Math and Arabic — each keeps its interaction shape but
+   wears its subject. Appended last on purpose: equal specificity to the
+   theme palette rules, later wins. Math Quest opts out in JS. */
+
+/* Shared component palette, recolored per subject. */
+body.kid-subject-math   { --kid-primary:#2563eb; --kid-primary-2:#0ea5e9; --kid-tint:#dbeafe; --kid-accent:#f59e0b; --kid-glyph:#3b82f6; }
+body.kid-subject-french { --kid-primary:#db2777; --kid-primary-2:#7c3aed; --kid-tint:#fce7f3; --kid-accent:#f472b6; --kid-glyph:#ec4899; }
+body.kid-subject-arabic { --kid-primary:#0d9488; --kid-primary-2:#14b8a6; --kid-tint:#ccfbf1; --kid-accent:#d97706; --kid-glyph:#0f766e; }
+
+/* Header mascot chip: a subject emoji leads the subtitle line. */
+#kidGameSub { display:flex; align-items:center; gap:8px; }
+body.kid-subject-math   #kidGameSub::before { content:"🔢"; }
+body.kid-subject-french #kidGameSub::before { content:"🔤"; }
+body.kid-subject-arabic #kidGameSub::before { content:"🔡"; }
+body[data-kid-subject] #kidGameSub::before {
+	font-size:1.5rem; line-height:1; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35));
+	background:#fff; border-radius:14px; padding:2px 8px;
+}
+
+/* Arabic reads right-to-left and wants a naskh face + generous letter size. */
+body.kid-subject-arabic .kid-question,
+body.kid-subject-arabic .kid-bubble,
+body.kid-subject-arabic .kid-star,
+body.kid-subject-arabic .kid-tile,
+body.kid-subject-arabic .kid-word,
+body.kid-subject-arabic .kid-block .txt,
+body.kid-subject-arabic .kid-sentence,
+body.kid-subject-arabic .kid-blank,
+body.kid-subject-arabic .kid-pair-item,
+body.kid-subject-arabic .kid-speech {
+	direction: rtl;
+	font-family: "Noto Naskh Arabic","Traditional Arabic","Amiri","Segoe UI",var(--kid-font);
+	line-height: 1.7;
+}
+
+/* The card becomes a soft, subject-tinted playmat. */
+body[data-kid-subject] .kid-card {
+	background: linear-gradient(180deg, #ffffff 0%, var(--kid-tint) 130%);
+	border: 4px solid #fff;
+	box-shadow: 0 20px 50px rgba(15,23,42,.3);
+	padding: 30px 24px;
+}
+
+/* The question is the star: a big, ring-shaped prompt panel. */
+body[data-kid-subject] .kid-question {
+	position: relative; display:inline-block; text-align:center;
+	max-width: 780px; margin: 4px auto 24px;
+	padding: 16px 28px;
+	font-size: clamp(1.45rem, 5vw, 2.2rem);
+	font-weight: 900; line-height: 1.35; color:#0f172a;
+	background:#fff; border-radius: 24px;
+	box-shadow: 0 8px 0 rgba(0,0,0,.05), inset 0 0 0 4px var(--kid-primary);
+}
+
+/* Drifting subject glyphs behind the play area (numbers / letters). */
+#kidScreen { position:relative; z-index:1; }
+.kid-subject-decor { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+.kid-subject-decor span {
+	position:absolute; bottom:-14%; opacity:.15; font-weight:900;
+	color: var(--kid-glyph,#64748b); text-shadow:0 2px 6px rgba(0,0,0,.1);
+	animation-name: kid-decor-drift; animation-timing-function:linear;
+	animation-iteration-count:infinite; will-change:transform,opacity;
+}
+@keyframes kid-decor-drift {
+	0%   { transform: translateY(0) rotate(0deg);   opacity:.2; }
+	100% { transform: translateY(-128vh) rotate(45deg); opacity:0; }
+}
+.kid-subject-decor.kid-decor-still { display:none; }
+@media (prefers-reduced-motion: reduce) { .kid-subject-decor { display:none; } }
+
+/* ── Bubble Pop: chunky glossy subject bubbles, always legible ── */
+body[data-kid-subject] .kid-bubble {
+	border:5px solid #fff !important;
+	box-shadow: inset -6px -9px 0 rgba(255,255,255,.3), 0 12px 26px rgba(0,0,0,.32) !important;
+	font-size: clamp(1.05rem, 4.6vw, 1.6rem) !important;
+	font-weight:900; line-height:1.15; padding:12px;
+	text-shadow:0 2px 7px rgba(0,0,0,.55);
+	min-width:112px; min-height:112px;
+	transition: transform .16s ease, filter .2s ease;
+}
+body.kid-subject-math   .kid-bubble { filter: hue-rotate(195deg) saturate(1.15) brightness(1.03); }
+body.kid-subject-french .kid-bubble { filter: hue-rotate(305deg) saturate(1.12) brightness(1.03); }
+body.kid-subject-arabic .kid-bubble { filter: hue-rotate(120deg) saturate(1.12) brightness(1.03); }
+body[data-kid-subject] .kid-bubble:hover { transform: scale(1.08) translateY(-4px); }
+
+/* ── Star Collector: bigger, cleaner subject cards ── */
+body[data-kid-subject] .kid-star {
+	background:#fff; border:4px solid var(--kid-tint); border-radius:24px;
+	padding:22px 16px; min-width:150px; font-size:1.15rem; font-weight:900;
+	box-shadow:0 10px 22px rgba(0,0,0,.14); color:#0f172a;
+}
+body[data-kid-subject] .kid-star .star-ico { font-size:2.9rem; }
+body[data-kid-subject] .kid-star.selected { border-color:var(--kid-primary); background:var(--kid-tint); box-shadow:0 12px 28px rgba(0,0,0,.2); }
+
+/* ── Build-a-Tower: subject-coloured glossy blocks ── */
+body[data-kid-subject] .kid-block {
+	background: linear-gradient(135deg, var(--kid-primary), var(--kid-primary-2));
+	border:3px solid #fff; border-radius:18px; padding:16px 16px;
+	font-size:1.3rem; box-shadow:0 8px 18px rgba(0,0,0,.24);
+}
+body[data-kid-subject] .kid-block button { width:46px; height:46px; font-size:1.25rem; border-radius:12px; }
+
+/* ── Magic Words: plush subject word chips + bolder blanks ── */
+body[data-kid-subject] .kid-word {
+	padding:16px 26px; font-size:1.35rem; border:3px solid #fff;
+	box-shadow:0 8px 18px rgba(0,0,0,.28); transition: transform .15s ease;
+}
+body[data-kid-subject] .kid-word:hover { transform: translateY(-3px) scale(1.05); }
+body[data-kid-subject] .kid-sentence { font-size:1.7rem; font-weight:900; }
+body[data-kid-subject] .kid-blank {
+	min-width:130px; border-bottom-width:5px; border-radius:12px;
+	padding:6px 16px; font-weight:900; color:var(--kid-primary); background:var(--kid-tint);
+}
+
+/* ── Sort It Out / Pair Party: clearer, tappable subject tiles ── */
+body[data-kid-subject] .kid-tile { border:4px solid var(--kid-tint); border-radius:22px; padding:24px 12px; font-size:1.35rem; font-weight:900; color:#0f172a; }
+body[data-kid-subject] .kid-tile.selected { border-color:var(--kid-primary); background:var(--kid-tint); }
+body[data-kid-subject] .kid-pair-item { border:3px solid var(--kid-tint); border-radius:18px; padding:16px 10px; font-size:1.2rem; font-weight:900; color:#0f172a; }
+body[data-kid-subject] .kid-pair-item.picked { border-color:var(--kid-primary); background:var(--kid-tint); }
+
+/* ── Confirm buttons: chunkier + springier ── */
+body[data-kid-subject] .kid-btn { font-size:1.4rem; padding:16px 46px; letter-spacing:.3px; box-shadow:0 10px 26px rgba(0,0,0,.32); }
+body[data-kid-subject] .kid-btn:hover { transform: scale(1.06) translateY(-2px); }
+
+/* ── Leap Frog: subject-tinted pads ── */
+body[data-kid-subject] .kid-pad { border-width:5px; }
+body[data-kid-subject] .kid-pad.picked { outline:5px solid var(--kid-primary); }
+
+/* Keep it comfortable on phones. */
+@media (max-width: 640px) {
+	body[data-kid-subject] .kid-question { font-size: clamp(1.25rem, 6vw, 1.7rem); padding:14px 18px; }
+	body[data-kid-subject] .kid-card { padding:22px 16px; }
+	body[data-kid-subject] .kid-bubble { min-width:96px; min-height:96px; }
+	body[data-kid-subject] .kid-btn { font-size:1.2rem; padding:14px 34px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   SUBJECT PLAY PRESENTATIONS — bespoke layouts that replace Bubble Pop for
+   the built-in Math / French / Arabic games. Rendered by SubjectGames.js.
+   Everything inherits the live subject palette (--kid-primary, --kid-tint…)
+   set by the SUBJECT WORLDS block above, so each subject already looks
+   different, AND behaves differently: a real crocodile seesaw for
+   comparisons, tappable objects for counting, a bright grid for the rest.
+   The interaction is new; the answer each one submits is the same option
+   label, so grading never changed. */
+
+/* Shared chunky "pop" press for every bespoke choice. */
+@keyframes kid-press { 0%{transform:scale(1)} 45%{transform:scale(.9)} 100%{transform:scale(1)} }
+
+/* ── 🐊 Number Balance (comparison) ── */
+.kid-balance .hint { margin:0; }
+.kid-balance-card .hint { color:#475569; }
+.kid-balance { position:relative; display:flex; align-items:flex-end; justify-content:center; gap:0; margin:10px auto 18px; height:180px; max-width:520px; }
+.kid-balance::before { content:""; position:absolute; left:8%; right:8%; bottom:74px; height:14px; border-radius:999px; background:linear-gradient(180deg,var(--kid-primary),var(--kid-primary-2)); box-shadow:0 6px 14px rgba(0,0,0,.25); transition:transform .5s cubic-bezier(.34,1.56,.64,1); transform-origin:center; }
+.kid-balance.tip-left::before  { transform:rotate(9deg); }
+.kid-balance.tip-right::before { transform:rotate(-9deg); }
+.kid-balance.tip-even::before  { transform:rotate(0deg); }
+.kid-pan { position:relative; z-index:2; width:150px; display:flex; flex-direction:column; align-items:center; gap:4px; transition:transform .5s cubic-bezier(.34,1.56,.64,1); }
+.kid-pan-face { font-size:2.6rem; line-height:1; filter:drop-shadow(0 3px 4px rgba(0,0,0,.3)); }
+.kid-pan-num { display:flex; align-items:center; justify-content:center; min-width:96px; height:96px; border-radius:50%; font-size:3rem; font-weight:900; color:#fff; background:radial-gradient(circle at 34% 28%, #ffffff55, transparent 42%), linear-gradient(135deg,var(--kid-primary),var(--kid-primary-2)); border:5px solid #fff; box-shadow:0 12px 24px rgba(0,0,0,.3); }
+.kid-balance.tip-left  .kid-pan-left  { transform:translateY(26px); }
+.kid-balance.tip-left  .kid-pan-right { transform:translateY(-22px); }
+.kid-balance.tip-right .kid-pan-right { transform:translateY(26px); }
+.kid-balance.tip-right .kid-pan-left  { transform:translateY(-22px); }
+.kid-fulcrum { position:relative; z-index:3; width:96px; display:flex; flex-direction:column; align-items:center; margin-bottom:6px; }
+.kid-croc { font-size:3.4rem; line-height:1; filter:drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
+.kid-post { width:14px; height:74px; border-radius:8px; margin-top:2px; background:linear-gradient(180deg,var(--kid-accent),#b45309); box-shadow:0 6px 12px rgba(0,0,0,.25); }
+.kid-signs { display:flex; gap:16px; justify-content:center; margin-top:6px; }
+.kid-sign { width:104px; height:104px; border-radius:26px; border:5px solid #fff; background:linear-gradient(135deg,var(--kid-primary),var(--kid-primary-2)); color:#fff; font-family:var(--kid-font); cursor:pointer; box-shadow:0 10px 22px rgba(0,0,0,.28); transition:transform .14s ease, box-shadow .2s ease; }
+.kid-sign .kid-sign-glyph { font-size:3.6rem; font-weight:900; line-height:1; text-shadow:0 2px 6px rgba(0,0,0,.4); }
+.kid-sign:hover { transform:translateY(-4px) scale(1.06); }
+.kid-sign.chosen { animation:kid-press .26s ease; }
+.kid-sign.locked { pointer-events:none; }
+.kid-sign.correct { background:linear-gradient(135deg,#16a34a,#22c55e); box-shadow:0 0 0 6px rgba(34,197,94,.5), 0 12px 24px rgba(0,0,0,.3); transform:scale(1.08); }
+.kid-sign.wrong { background:linear-gradient(135deg,#b91c1c,#ef4444); opacity:.6; }
+
+/* ── 🔢 Count & Tap ── */
+.kid-count-card .hint { color:#475569; }
+.kid-meadow { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; align-items:center; min-height:120px; padding:18px; border-radius:26px; background:var(--kid-tint); border:4px dashed var(--kid-primary); margin:6px 0 16px; }
+.kid-cnt-obj { font-size:3rem; line-height:1; background:#fff; border:4px solid #fff; border-radius:22px; padding:10px 14px; cursor:pointer; box-shadow:0 8px 16px rgba(0,0,0,.14); transition:transform .16s ease; }
+.kid-cnt-obj:hover { transform:scale(1.12) rotate(-4deg); }
+.kid-cnt-obj.picked { background:#dcfce7; border-color:var(--kid-good); transform:scale(1.05); }
+.kid-cnt-nums { display:flex; flex-wrap:wrap; gap:14px; justify-content:center; }
+.kid-cnt-num { min-width:96px; height:96px; border-radius:50%; border:5px solid #fff; color:#fff; font-family:var(--kid-font); font-size:2.8rem; font-weight:900; cursor:pointer; text-shadow:0 2px 6px rgba(0,0,0,.4); box-shadow:0 10px 20px rgba(0,0,0,.26); transition:transform .14s ease; }
+.kid-cnt-num:hover { transform:translateY(-4px) scale(1.08); }
+.kid-cnt-num.chosen { animation:kid-press .2s ease; }
+.kid-cnt-num.locked { pointer-events:none; }
+.kid-cnt-num.correct { outline:6px solid var(--kid-good); box-shadow:0 0 0 8px rgba(34,197,94,.4), 0 12px 24px rgba(0,0,0,.3); transform:scale(1.12); }
+.kid-cnt-num.wrong { opacity:.4; filter:grayscale(.7); }
+
+/* ── 🎯 Choice Board ── */
+.kid-choice-board { background:linear-gradient(135deg,var(--kid-primary),var(--kid-primary-2)); border-radius:24px; padding:16px 20px; margin-bottom:16px; box-shadow:0 10px 24px rgba(0,0,0,.25); }
+.kid-choice-board .kid-question { color:#fff; margin:0; background:transparent; box-shadow:none; font-size:clamp(1.4rem,4.6vw,2rem); text-shadow:0 2px 8px rgba(0,0,0,.4); }
+.kid-choice-card .hint { color:#475569; }
+.kid-choice-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; }
+.kid-choice-card-btn { position:relative; border:5px solid #fff; border-radius:22px; color:#fff; font-family:var(--kid-font); font-size:1.6rem; font-weight:900; padding:26px 16px; cursor:pointer; text-shadow:0 2px 8px rgba(0,0,0,.45); box-shadow:0 10px 22px rgba(0,0,0,.26); transition:transform .15s ease, box-shadow .2s ease; word-break:break-word; }
+.kid-choice-card-btn:hover { transform:translateY(-4px) scale(1.04); }
+.kid-choice-card-btn .kid-choice-tick { position:absolute; top:8px; right:12px; font-size:1.6rem; opacity:0; transform:scale(.4); transition:all .2s ease; }
+.kid-choice-card-btn.chosen { animation:kid-press .22s ease; }
+.kid-choice-card-btn.locked { pointer-events:none; }
+.kid-choice-card-btn.correct { outline:6px solid var(--kid-good); box-shadow:0 0 0 8px rgba(34,197,94,.4), 0 14px 26px rgba(0,0,0,.3); transform:scale(1.05); }
+.kid-choice-card-btn.correct .kid-choice-tick { opacity:1; transform:scale(1); }
+.kid-choice-card-btn.wrong { opacity:.45; filter:grayscale(.7); }
+
+/* Balance/count/choice comfortable on phones. */
+@media (max-width: 640px) {
+	.kid-balance { height:150px; }
+	.kid-pan { width:116px; }
+	.kid-pan-num { min-width:76px; height:76px; font-size:2.3rem; }
+	.kid-croc { font-size:2.8rem; }
+	.kid-sign { width:80px; height:80px; }
+	.kid-sign .kid-sign-glyph { font-size:2.6rem; }
+	.kid-cnt-obj { font-size:2.4rem; }
+	.kid-cnt-num { min-width:76px; height:76px; font-size:2.2rem; }
+	.kid-choice-grid { grid-template-columns:1fr; }
+	.kid-choice-card-btn { font-size:1.35rem; padding:20px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.kid-balance::before, .kid-pan { transition:none; }
+	.kid-sign.chosen, .kid-cnt-num.chosen, .kid-choice-card-btn.chosen { animation:none; }
+}

@@ -52,6 +52,51 @@ router.get('/', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), va
   } catch (err) { next(err); }
 });
 
+// GET /api/v1/questions/usage
+// Aggregated "where is this question used" map for the Questions tab: every
+// game, tournament, training activity and exam that references each question.
+// Computed by backend aggregation (one call, school-scoped) instead of the
+// client pulling whole collections. Read-only. Category membership is
+// intentionally omitted — the question row already carries its category, so
+// the client renders that chip locally. Must be declared before '/:id'.
+router.get('/usage', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const schoolId = req.schoolId;
+    // Game/Tournament store question ids as a JSON string array; defensive parse.
+    const parseIds = (v) => {
+      if (Array.isArray(v)) return v.map(String).filter(Boolean);
+      try { const p = JSON.parse(v || '[]'); return Array.isArray(p) ? p.map(String).filter(Boolean) : []; }
+      catch (_) { return []; }
+    };
+    const [games, tournaments, exams, examLinks] = await Promise.all([
+      repo.modelFor('game').findMany({ where: { school_id: schoolId }, select: { name: true, question_ids: true } }),
+      repo.modelFor('tournament').findMany({ where: { school_id: schoolId }, select: { name: true, question_ids: true } }),
+      repo.modelFor('exam').findMany({ where: { school_id: schoolId }, select: { id: true, name: true, is_training: true } }),
+      // exam_questions has no school_id column; scope through the exam relation.
+      repo.modelFor('examQuestion').findMany({ where: { exam: { school_id: schoolId } }, select: { exam_id: true, question_id: true } }),
+    ]);
+    const examMeta = new Map(exams.map((e) => [e.id, { name: e.name, training: !!e.is_training }]));
+    const usage = Object.create(null);
+    const bucket = (qid) => usage[qid] || (usage[qid] = { games: [], tournaments: [], training: [], exams: [] });
+    const push = (qid, key, name) => { const u = bucket(qid); if (name && u[key].indexOf(name) === -1) u[key].push(name); };
+    for (const g of games) for (const qid of parseIds(g.question_ids)) push(qid, 'games', g.name);
+    for (const t of tournaments) for (const qid of parseIds(t.question_ids)) push(qid, 'tournaments', t.name);
+    for (const l of examLinks) {
+      const meta = examMeta.get(l.exam_id);
+      if (!meta) continue;
+      push(l.question_id, meta.training ? 'training' : 'exams', meta.name);
+    }
+    // Drop questions with no cross-container usage to keep the payload small.
+    const out = {};
+    for (const qid of Object.keys(usage)) {
+      const u = usage[qid];
+      if (u.games.length + u.tournaments.length + u.training.length + u.exams.length > 0) out[qid] = u;
+    }
+    res.json({ usage: out });
+  } catch (err) { next(err); }
+});
+
 // GET /api/v1/questions/:id
 router.get('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
   try {
