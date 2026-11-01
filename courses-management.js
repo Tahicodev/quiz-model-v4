@@ -20,6 +20,8 @@
 	let aiConfigsCache = null;
 	let courseBatchGenerating = false;
 	let publishAfterAssignCourseId = null;
+	let courseDetailMode = 'view';
+	let selectedCourseConfigId = '';
 	let collapsedCourseCategoryIds = new Set();
 
 	function esc(s) {
@@ -293,7 +295,13 @@
 	// The detail pane keeps its own copy of the picker id; expose the getter.
 	function selectedConfigId(container) {
 		const sel = (container || document).querySelector('#courseModelSelect');
-		return sel ? sel.value : '';
+		if (sel) {
+			selectedCourseConfigId = sel.value;
+			return sel.value;
+		}
+		return container === document.getElementById('courseDetailPane')
+			? selectedCourseConfigId
+			: '';
 	}
 
 	// ── List view ────────────────────────────────────────────────────────────
@@ -678,6 +686,7 @@
 		try {
 			currentCourse = await A.raw('GET', `/courses/${encodeURIComponent(courseId)}`);
 			loadCollapsedCourseCategories(currentCourse.id);
+			courseDetailMode = 'view';
 		} catch (err) {
 			toast('Could not open course: ' + (err?.message || 'error'), 'error');
 			return;
@@ -702,10 +711,93 @@
 	function lessonsByCategory() {
 		const map = new Map();
 		for (const lesson of currentCourse?.lessons || []) {
-			if (lesson.category_id) map.set(String(lesson.category_id), lesson);
+			if (!lesson.category_id) continue;
+			const key = String(lesson.category_id);
+			if (!map.has(key)) map.set(key, []);
+			map.get(key).push(lesson);
 		}
 		return map;
 	}
+
+	function courseDocumentLessonId(lesson) {
+		return `course-document-lesson-${String(lesson.id || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
+	}
+
+	function buildCourseDocumentTree(branchRows, lessonMap) {
+		const nodes = new Map();
+		for (const { category } of branchRows) {
+			nodes.set(String(category.id), { category, children: [], lessons: lessonMap.get(String(category.id)) || [] });
+		}
+		const roots = [];
+		for (const node of nodes.values()) {
+			const parentId = String(node.category.parent_id || '');
+			const parent = nodes.get(parentId);
+			if (parent) parent.children.push(node);
+			else roots.push(node);
+		}
+		return roots;
+	}
+
+	function renderCourseDocumentNode(node, depth = 0) {
+		const category = node.category;
+		const headingLevel = Math.min(depth + 2, 5);
+		const level = depth === 0 ? 'Main category' : node.children.length ? 'Subcategory' : 'Axis';
+		const lessons = node.lessons.map((lesson) =>
+			`<section class="course-document-lesson" id="${esc(courseDocumentLessonId(lesson))}">` +
+			`<h${Math.min(headingLevel + 1, 6)}>${esc(lesson.title)}</h${Math.min(headingLevel + 1, 6)}>` +
+			(lesson.summary ? `<p class="course-document-summary">${esc(lesson.summary)}</p>` : '') +
+			(String(lesson.content || '').trim()
+				? `<div class="course-md">${renderMarkdown(lesson.content)}</div>`
+				: '<p class="course-document-placeholder">Content has not been added yet.</p>') +
+			'</section>',
+		).join('');
+		return (
+			`<section class="course-document-category" style="--course-document-depth:${depth}">` +
+			`<div class="course-document-category-heading"><span>${level}</span><h${headingLevel}>${esc(category.name)}</h${headingLevel}></div>` +
+			lessons +
+			node.children.map((child) => renderCourseDocumentNode(child, depth + 1)).join('') +
+			'</section>'
+		);
+	}
+
+	function renderTeacherCourseDocument(course, branchRows) {
+		const lessons = course.lessons || [];
+		const tree = buildCourseDocumentTree(branchRows, lessonsByCategory());
+		const renderedTree = tree.map((node) => renderCourseDocumentNode(node)).join('');
+		const linkedIds = new Set(branchRows.flatMap(({ category }) =>
+			(lessonsByCategory().get(String(category.id)) || []).map((lesson) => String(lesson.id)),
+		));
+		const unlinked = lessons.filter((lesson) => !linkedIds.has(String(lesson.id)));
+		const unlinkedHtml = unlinked.length
+			? `<section class="course-document-category"><div class="course-document-category-heading"><span>Additional lessons</span><h2>Other lessons</h2></div>` +
+				unlinked.map((lesson) =>
+					`<section class="course-document-lesson" id="${esc(courseDocumentLessonId(lesson))}"><h3>${esc(lesson.title)}</h3>` +
+					(lesson.summary ? `<p class="course-document-summary">${esc(lesson.summary)}</p>` : '') +
+					(String(lesson.content || '').trim() ? `<div class="course-md">${renderMarkdown(lesson.content)}</div>` : '<p class="course-document-placeholder">Content has not been added yet.</p>') +
+					'</section>',
+				).join('') + '</section>'
+			: '';
+		const contents = lessons.map((lesson, index) =>
+			`<li><a href="#${esc(courseDocumentLessonId(lesson))}"><span>${index + 1}</span><strong>${esc(lesson.title)}</strong></a>` +
+			(lesson.summary ? `<p>${esc(lesson.summary)}</p>` : '') + '</li>',
+		).join('');
+		return (
+			`<article class="course-document-view">` +
+			`<header class="course-document-cover"><span>Course content</span><h1>${esc(course.name)}</h1>` +
+			(course.description ? `<p>${esc(course.description)}</p>` : '') +
+			`<div>${lessons.length} lesson${lessons.length === 1 ? '' : 's'}</div></header>` +
+			`<section class="course-document-toc"><h2>Summary and contents</h2>` +
+			(course.description ? `<p class="course-document-overview">${esc(course.description)}</p>` : '') +
+			(contents ? `<ol>${contents}</ol>` : '<p class="course-document-placeholder">This course has no lessons yet.</p>') +
+			`</section><div class="course-document-body">${renderedTree}${unlinkedHtml}</div></article>`
+		);
+	}
+
+	window.setCourseDetailMode = function (mode) {
+		if (!['view', 'edit'].includes(mode)) return;
+		courseDetailMode = mode;
+		window.renderCourseDetail();
+	};
 
 	window.renderCourseDetail = function () {
 		const pane = document.getElementById('courseDetailPane');
@@ -765,15 +857,21 @@
 			'<div class="course-detail-heading"><button type="button" class="btn" onclick="closeCourseDetail()">&larr; Courses</button>' +
 			'<div class="course-detail-title"><h2>' + esc(course.name) + '</h2>' +
 			`<span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span></div></div>` +
-			'<div class="course-detail-controls"><div class="course-model-control">' + modelSelectHtml(null, 'courseModelSelect') + '</div>' +
+			`<div class="course-detail-mode" role="group" aria-label="Course mode">` +
+			`<button type="button" class="btn ${courseDetailMode === 'view' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'view'}" onclick="setCourseDetailMode('view')">View course</button>` +
+			`<button type="button" class="btn ${courseDetailMode === 'edit' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'edit'}" onclick="setCourseDetailMode('edit')">Edit content</button></div>` +
+			'<div class="course-detail-controls">' +
+			(courseDetailMode === 'edit' ? '<div class="course-model-control">' + modelSelectHtml(selectedCourseConfigId, 'courseModelSelect') + '</div>' : '') +
 			'<div class="course-detail-actions">' +
 			'<button type="button" class="btn course-action-rename" onclick="renameCoursePrompt()">Rename</button>' +
 			`<button type="button" class="btn ${published ? 'course-action-unpublish' : 'course-action-publish'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? 'Unpublish' : 'Publish'}</button>` +
 			'<button type="button" class="btn course-action-assign" onclick="openAssignClassesModal()">Send to students</button>' +
-			'<button type="button" class="btn course-action-add" onclick="addLessonManual()">+ Add lesson</button>' +
+			(courseDetailMode === 'edit' ? '<button type="button" class="btn course-action-add" onclick="addLessonManual()">+ Add lesson</button>' : '') +
 			'<button type="button" class="btn course-action-document" onclick="createCourseDocument()">Create document</button>' +
 			'</div></div></div>' +
-			`<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No category branch')}</div>` +
+			(courseDetailMode === 'view'
+				? renderTeacherCourseDocument(course, branchRows)
+				: `<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No category branch')}</div>` +
 			'<section class="course-structure-panel"><div class="course-section-heading"><div><h3>Category structure</h3>' +
 			'<p>Lessons follow the categories and axes in this branch.</p></div>' +
 			`<div class="course-structure-tools"><span class="course-structure-count">${branchRows.length} level${branchRows.length === 1 ? '' : 's'}</span>` +
@@ -787,7 +885,14 @@
 			'</div></div>' +
 			`<div class="course-tree">${structureHtml}</div></section>` +
 			'<h3 style="margin:8px 0;">Lessons</h3>' +
-			`<div id="courseLessonsWrap">${lessonsHtml || '<div class="text-muted">No lessons yet.</div>'}</div>`;
+			`<div id="courseLessonsWrap">${lessonsHtml || '<div class="text-muted">No lessons yet.</div>'}</div>`);
+		const modelSelect = pane.querySelector('#courseModelSelect');
+		if (modelSelect) {
+			if (selectedCourseConfigId) modelSelect.value = selectedCourseConfigId;
+			modelSelect.addEventListener('change', () => {
+			selectedCourseConfigId = modelSelect.value;
+			});
+		}
 		updateCourseTreeVisibility();
 		pane.querySelectorAll('.course-tree-row[data-lesson-id]').forEach((row) => {
 			row.addEventListener('click', (event) => {

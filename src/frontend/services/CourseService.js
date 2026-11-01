@@ -253,6 +253,7 @@ export class CourseService {
         name: String(category.name || 'Unnamed'),
         children,
         lesson: null,
+        lessons: [],
       };
       categoryChildren.set(key, node);
       return node;
@@ -287,8 +288,10 @@ export class CourseService {
     const representedLessonIds = new Set();
     for (const lesson of lessonsWithCategoryLevels) {
       const categoryNode = categoryChildren.get(String(lesson.category_id || ''));
-      if (categoryNode && !categoryNode.lesson) {
-        categoryNode.lesson = { id: String(lesson.id), title: String(lesson.title || 'Lesson') };
+      if (categoryNode) {
+        const lessonSummary = { id: String(lesson.id), title: String(lesson.title || 'Lesson') };
+        categoryNode.lessons.push(lessonSummary);
+        if (!categoryNode.lesson) categoryNode.lesson = lessonSummary;
         representedLessonIds.add(String(lesson.id));
       }
     }

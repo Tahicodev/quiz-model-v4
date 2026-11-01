@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const js = readFileSync(new URL('../../courses-management.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+const studentJs = readFileSync(new URL('../../student-courses.js', import.meta.url), 'utf8');
 
 describe('course row actions', () => {
 	it('opens a course from its clickable title', () => {
@@ -72,5 +73,23 @@ describe('course row actions', () => {
 		expect(js).toContain('courseDocIncludeContents');
 		expect(js).toContain('window.copyAllCourseAIPrompt = async function');
 		expect(js).toContain('window.saveAllCourseAIResult = async function');
+	});
+
+	it('offers teacher view/edit modes and renders course view as a linked document', () => {
+		expect(js).toContain('window.setCourseDetailMode = function');
+		expect(js).toContain('View course');
+		expect(js).toContain('Edit content');
+		expect(js).toContain('function renderTeacherCourseDocument');
+		expect(js).toContain('class="course-document-toc"');
+		expect(js).toContain('href="#${esc(courseDocumentLessonId(lesson))}"');
+		expect(css).toContain('.course-document-view');
+	});
+
+	it('shows students one read-only document with linked contents and inline lesson content', () => {
+		expect(studentJs).toContain('student-course-document');
+		expect(studentJs).toContain('class="course-document-toc"');
+		expect(studentJs).toContain('renderCategoryStructure(currentCourse.category_structure)');
+		expect(studentJs).toContain('class="course-document-lesson"');
+		expect(studentJs).not.toContain('class="course-lesson-chip');
 	});
 });

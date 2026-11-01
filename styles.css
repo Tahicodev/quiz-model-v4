@@ -49198,6 +49198,192 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	color: var(--text-secondary, #94a3b8);
 }
 
+.course-detail-mode {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px;
+	border: 1px solid rgba(99, 102, 241, 0.18);
+	border-radius: 11px;
+	background: rgba(99, 102, 241, 0.06);
+}
+
+.course-detail-mode .btn {
+	border: 0;
+	background: transparent;
+	color: var(--text-secondary, #64748b);
+}
+
+.course-detail-mode .btn.active {
+	background: var(--primary-color, #6366f1);
+	color: #fff;
+	box-shadow: 0 2px 6px rgba(49, 46, 129, 0.18);
+}
+
+.course-document-view {
+	max-width: 1000px;
+	margin: 20px auto;
+	padding: clamp(18px, 4vw, 42px);
+	border: 1px solid rgba(15, 23, 42, 0.1);
+	border-radius: 16px;
+	background: var(--card-bg, #fff);
+	box-shadow: 0 12px 35px rgba(15, 23, 42, 0.07);
+	color: var(--text-primary, #1f2937);
+}
+
+.course-document-cover {
+	padding: clamp(22px, 5vw, 52px) 0 28px;
+	border-bottom: 2px solid rgba(99, 102, 241, 0.22);
+}
+
+.course-document-cover > span {
+	color: var(--primary-color, #4f46e5);
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+}
+
+.course-document-cover h1 {
+	margin: 10px 0;
+	font-size: clamp(1.8rem, 4vw, 2.7rem);
+	line-height: 1.15;
+}
+
+.course-document-cover > p,
+.course-document-overview {
+	max-width: 75ch;
+	color: var(--text-secondary, #64748b);
+	line-height: 1.7;
+}
+
+.course-document-cover > div {
+	margin-top: 16px;
+	color: var(--text-secondary, #64748b);
+	font-size: 0.9rem;
+}
+
+.course-document-toc {
+	margin: 24px 0 34px;
+	padding: clamp(16px, 3vw, 26px);
+	border-radius: 13px;
+	background: rgba(99, 102, 241, 0.055);
+}
+
+.course-document-toc h2 {
+	margin: 0 0 14px;
+}
+
+.course-document-toc ol {
+	display: grid;
+	gap: 8px;
+	margin: 18px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.course-document-toc li {
+	padding: 10px 12px;
+	border-radius: 9px;
+	background: rgba(255, 255, 255, 0.8);
+}
+
+.course-document-toc li > a {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	color: var(--primary-color, #4f46e5);
+	text-decoration: none;
+}
+
+.course-document-toc li > a:hover,
+.course-document-toc li > a:focus-visible,
+.course-document-lesson h3 a:hover,
+.course-document-lesson h3 a:focus-visible {
+	text-decoration: underline;
+}
+
+.course-document-toc li > a span {
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+.course-document-toc li > p,
+.course-document-toc-path {
+	margin: 5px 0 0 27px;
+	color: var(--text-secondary, #64748b);
+	font-size: 0.86rem;
+}
+
+.course-document-body {
+	display: grid;
+	gap: 18px;
+}
+
+.course-document-category {
+	margin-left: calc(var(--course-document-depth, 0) * 14px);
+	padding-left: clamp(12px, 2vw, 22px);
+	border-left: 2px solid rgba(99, 102, 241, 0.18);
+}
+
+.course-document-category-heading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 10px;
+	margin: 18px 0 10px;
+}
+
+.course-document-category-heading > span {
+	color: var(--text-secondary, #64748b);
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+
+.course-document-category-heading h2,
+.course-document-category-heading h3,
+.course-document-category-heading h4,
+.course-document-category-heading h5 {
+	margin: 0;
+}
+
+.course-document-lesson {
+	margin: 18px 0 26px;
+	padding: clamp(14px, 2.5vw, 24px);
+	border: 1px solid rgba(15, 23, 42, 0.09);
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.9);
+	scroll-margin-top: 24px;
+}
+
+.course-document-lesson h3,
+.course-document-lesson h4,
+.course-document-lesson h5 {
+	margin: 0 0 8px;
+}
+
+.course-document-lesson h3 a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.course-document-summary {
+	margin: 0 0 14px;
+	color: var(--text-secondary, #64748b);
+	font-style: italic;
+}
+
+.course-document-placeholder {
+	color: var(--text-secondary, #64748b);
+	font-style: italic;
+}
+
+.student-course-document .course-document-cover .workspace-btn {
+	margin-bottom: 18px;
+}
+
 .course-student-structure {
 	margin: 0 0 18px;
 	padding: 16px;
@@ -49289,6 +49475,20 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 }
 
 @media (max-width: 768px) {
+	.course-detail-mode {
+		width: 100%;
+	}
+
+	.course-detail-mode .btn {
+		flex: 1 1 0;
+	}
+
+	.course-document-view {
+		margin: 12px 0;
+		padding: 16px;
+		border-radius: 12px;
+	}
+
 	.course-lesson-actions .workspace-btn {
 		flex: 1 1 100%;
 	}
