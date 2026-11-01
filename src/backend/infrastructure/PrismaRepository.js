@@ -24,6 +24,9 @@ const MODEL_MAP = {
 	exams: 'exam',
 	exam_questions: 'examQuestion',
 	exam_classes: 'examClass',
+	courses: 'course',
+	lessons: 'lesson',
+	course_classes: 'courseClass',
 	results: 'result',
 	games: 'game',
 	game_sessions: 'gameSession',
@@ -64,6 +67,8 @@ const SEARCH_FIELDS = {
 	exam: ['name', 'description'],
 	class: ['name', 'description'],
 	category: ['name'],
+	course: ['name', 'description'],
+	lesson: ['title', 'summary'],
 	game: ['name'],
 	tournament: ['name', 'description'],
 	setting: ['key'],
@@ -79,6 +84,9 @@ const DEFAULT_ORDER_BY = {
 	exams: 'created_at',
 	exam_questions: 'order_index',
 	exam_classes: 'assigned_at',
+	courses: 'created_at',
+	lessons: 'order_index',
+	course_classes: 'assigned_at',
 	results: 'date_taken',
 	games: 'created_at',
 	game_sessions: 'joined_at',
@@ -343,6 +351,36 @@ export class PrismaRepository extends IStorageRepository {
 						school_id: user.school_id,
 						status: 'active',
 						examClasses: { some: { class_id: user.class_id } },
+					},
+				});
+			}
+
+			case 'course.withLessons': {
+				const course = await this.#prisma.course.findFirst({
+					where: { id: params.courseId, school_id: params.schoolId },
+					include: {
+						lessons: { orderBy: { order_index: 'asc' } },
+						courseClasses: true,
+					},
+				});
+				if (!course) return null;
+				return {
+					...course,
+					lessons: course.lessons,
+					class_ids: course.courseClasses.map((cc) => cc.class_id),
+				};
+			}
+
+			case 'course.availableForStudent': {
+				const user = await this.#prisma.user.findUnique({
+					where: { id: params.userId },
+				});
+				if (!user) return [];
+				return this.#prisma.course.findMany({
+					where: {
+						school_id: user.school_id,
+						status: 'published',
+						courseClasses: { some: { class_id: user.class_id } },
 					},
 				});
 			}

@@ -1718,12 +1718,22 @@
 			'overview',
 			'exams',
 			'training',
+			'courses',
 			'games',
 			'tournament',
 			'results',
 		]);
 		state.workspaceTab = allowedTabs.has(normalized) ? normalized : 'overview';
 		applyWorkspaceTabVisibility();
+		// Course content is server-served (it never rides the bootstrap
+		// payload), so the panel loads on demand when the tab is opened.
+		if (state.workspaceTab === 'courses' && window.StudentCourses) {
+			try {
+				window.StudentCourses.load();
+			} catch (err) {
+				console.warn('[student-courses] tab load failed:', err);
+			}
+		}
 		if (state.workspaceTab === 'games') {
 			const context = getStudentContext();
 			if (context) {
@@ -15528,16 +15538,32 @@
 	}
 
 	// ── Public API ──────────────────────────────────────────────────────────
-	window.openTrainingMode = function (examId) {
-		let questions =
-			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
-		let trainingExamName = 'Training Practice Test';
-		if (!examId) {
+	// `practice` (optional): { questions: [...], label: string } — serve an
+	// explicit question set instead of the local question bank. Used by the
+	// Courses tab, where lesson practice comes from the server (answers are
+	// never sent to the student device — grading stays server-side exactly
+	// like normal training).
+	window.openTrainingMode = function (examId, practice) {
+		const practiceSet =
+			practice && Array.isArray(practice.questions) && practice.questions.length
+				? practice
+				: null;
+		if (practice && !practiceSet) {
+			showToast('No practice questions in this lesson yet.', 'warning');
+			return;
+		}
+		let questions = practiceSet
+			? [...practiceSet.questions]
+			: window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		let trainingExamName = practiceSet
+			? practiceSet.label || 'Lesson Practice'
+			: 'Training Practice Test';
+		if (!examId && !practiceSet) {
 			// Free training serves the training-enabled categories only.
 			// (Exam-based training below keeps the exam's own question set.)
 			questions = filterStudentTrainingQuestions(questions);
 		}
-		if (examId) {
+		if (examId && !practiceSet) {
 			const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
 			const exam = exams.find((e) => e.id === examId);
 			if (exam) {
@@ -15549,9 +15575,11 @@
 		}
 		if (!questions.length) {
 			showToast(
-				!examId && getStudentTrainingMap()
-					? 'No training questions available — ask your teacher to enable a category for training.'
-					: 'No training questions available.',
+				practiceSet
+					? 'No practice questions in this lesson yet — ask your teacher to add questions to it.'
+					: !examId && getStudentTrainingMap()
+						? 'No training questions available — ask your teacher to enable a category for training.'
+						: 'No training questions available.',
 				'warning',
 			);
 			return;
@@ -16713,10 +16741,10 @@
 		if (!q) return;
 		const modalTitle = byId('trainingModalTitle');
 		if (modalTitle) {
-			modalTitle.textContent =
-				trainingState.mode === 'exam'
-					? trainingState.examName
-					: 'Training Practice Test';
+			// `examName` carries the label of whatever opened the runner: the
+			// exam's own name, "Lesson: …" for course practice, or the generic
+			// training heading for free practice.
+			modalTitle.textContent = trainingState.examName || 'Training Practice Test';
 		}
 
 		const total = trainingState.questions.length;

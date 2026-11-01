@@ -48166,3 +48166,349 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	display: flex;
 	gap: 6px;
 }
+
+/* ============================================
+   COURSES (admin Courses tab + student workspace)
+   Teacher-authored, AI-generated lesson content
+   built from a category branch.
+   ============================================ */
+
+/* Admin: category branch rows in the course detail view */
+.course-tree-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+
+.course-tree-row:hover {
+	background: var(--bg-surface-alt, rgba(99, 102, 241, 0.05));
+}
+
+/* Admin: lesson editor cards */
+.lesson-card {
+	transition: box-shadow 0.15s ease;
+}
+
+.lesson-card:hover {
+	box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+}
+
+.lesson-card textarea {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.88rem;
+	line-height: 1.5;
+	border-radius: 8px;
+	border: 1px solid rgba(0, 0, 0, 0.16);
+	padding: 10px;
+	resize: vertical;
+	background: var(--bg-surface, #fff);
+	color: var(--text-primary, #111827);
+}
+
+.lesson-card input[type="text"] {
+	border-radius: 8px;
+	border: 1px solid rgba(0, 0, 0, 0.16);
+	padding: 8px 10px;
+	background: var(--bg-surface, #fff);
+	color: var(--text-primary, #111827);
+}
+
+.exam-course-btn:hover {
+	color: #7c3aed;
+	border-color: rgba(124, 58, 237, 0.4);
+	background: rgba(124, 58, 237, 0.08);
+}
+
+/* Shared markdown typography (admin preview + student reader) */
+.course-md-preview,
+.course-md {
+	max-width: 78ch;
+	line-height: 1.65;
+	color: var(--text-primary, #1f2937);
+	word-wrap: break-word;
+}
+
+.course-md-preview h4,
+.course-md h4,
+.course-md-preview h5,
+.course-md h5,
+.course-md-preview h6,
+.course-md h6 {
+	margin: 18px 0 8px;
+	font-weight: 700;
+	color: var(--text-primary, #111827);
+}
+
+.course-md-preview p,
+.course-md p {
+	margin: 8px 0;
+}
+
+.course-md-preview ul,
+.course-md ul,
+.course-md-preview ol,
+.course-md ol {
+	margin: 8px 0 8px 22px;
+	padding-left: 6px;
+}
+
+.course-md-preview li,
+.course-md li {
+	margin: 4px 0;
+}
+
+.course-md-preview code,
+.course-md code {
+	background: rgba(15, 23, 42, 0.07);
+	border-radius: 5px;
+	padding: 1px 6px;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.86em;
+}
+
+/* Student: course cards */
+.course-student-card {
+	cursor: pointer;
+}
+
+.course-student-card:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+
+.course-student-desc {
+	margin: 6px 0 0;
+	color: var(--text-secondary, #64748b);
+	font-size: 0.92rem;
+}
+
+/* Meta + CTA sit on their own row, spaced apart and free to wrap. */
+.course-student-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 4px;
+}
+
+.course-student-meta {
+	color: var(--text-secondary, #64748b);
+	font-size: 0.85rem;
+}
+
+.course-student-empty {
+	padding: 22px 16px;
+	border-radius: 12px;
+	background: var(--bg-surface-alt, rgba(148, 163, 184, 0.12));
+	color: var(--text-secondary, #64748b);
+	text-align: center;
+	grid-column: 1 / -1;
+}
+
+/* Student: lesson reader */
+.course-reader-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 14px;
+}
+
+.course-reader-title {
+	margin: 0;
+	font-size: 1.25rem;
+	flex: 1 1 240px;
+}
+
+.course-lesson-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+
+.course-lesson-chip {
+	border: 1px solid rgba(99, 102, 241, 0.28);
+	background: rgba(99, 102, 241, 0.08);
+	color: var(--text-primary, #312e81);
+	border-radius: 999px;
+	padding: 6px 12px;
+	font-size: 0.84rem;
+	cursor: pointer;
+	transition:
+		background 0.15s ease,
+		color 0.15s ease;
+}
+
+.course-lesson-chip:hover {
+	background: rgba(99, 102, 241, 0.16);
+}
+
+.course-lesson-chip.active {
+	background: var(--primary-color, #6366f1);
+	border-color: var(--primary-color, #6366f1);
+	color: #fff;
+	font-weight: 600;
+}
+
+.course-lesson-body h3 {
+	margin: 4px 0 6px;
+}
+
+.course-lesson-summary {
+	color: var(--text-secondary, #64748b);
+	font-style: italic;
+	margin: 0 0 12px;
+}
+
+.course-lesson-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-top: 18px;
+	padding-top: 14px;
+	border-top: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+@media (max-width: 768px) {
+	.course-lesson-actions .workspace-btn {
+		flex: 1 1 100%;
+	}
+
+	/* Admin courses list: the global "hide columns 4-6" rule would silently drop
+	Status, Classes and Updated, so below the tablet breakpoint each row becomes a
+	labelled card (same pattern as #activityTable) and every column stays visible. */
+	#courseList,
+	#courseList tbody {
+		display: block;
+		width: 100%;
+	}
+
+	#courseList thead {
+		display: none;
+	}
+
+	#courseList tbody tr {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			'name status'
+			'branch branch'
+			'lessons updated'
+			'classes classes'
+			'actions actions';
+		gap: 8px 10px;
+		align-items: center;
+		margin-bottom: 10px;
+		padding: 12px;
+		border: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
+		border-radius: 10px;
+		background: var(--bg-surface, #fff);
+		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+	}
+
+	/* Single-cell placeholder row ("No courses yet") must not be gridded. */
+	#courseList tbody tr:has(.course-empty-cell) {
+		display: block;
+		padding: 0;
+		border: 0;
+		box-shadow: none;
+	}
+
+	#courseList tbody td {
+		display: block;
+		min-width: 0;
+		padding: 0 !important;
+		border: 0;
+		font-size: 0.82rem;
+		line-height: 1.35;
+		overflow-wrap: anywhere;
+	}
+
+	#courseList tbody td::before {
+		display: block;
+		margin-bottom: 3px;
+		color: #64748b;
+		font-size: 0.62rem;
+		font-weight: 800;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+	}
+
+	#courseList tbody td:nth-child(1) {
+		grid-area: name;
+		font-size: 0.95rem;
+	}
+
+	#courseList tbody td:nth-child(1)::before {
+		display: none;
+	}
+
+	#courseList tbody td:nth-child(2) {
+		grid-area: branch;
+		color: var(--text-secondary, #64748b);
+	}
+
+	#courseList tbody td:nth-child(2)::before {
+		content: 'Category branch';
+	}
+
+	#courseList tbody td:nth-child(3) {
+		grid-area: lessons;
+	}
+
+	#courseList tbody td:nth-child(3)::before {
+		content: 'Lessons';
+	}
+
+	#courseList tbody td:nth-child(4) {
+		display: block;
+		grid-area: status;
+		justify-self: end;
+		text-align: right;
+	}
+
+	#courseList tbody td:nth-child(4)::before {
+		display: none;
+	}
+
+	#courseList tbody td:nth-child(5) {
+		display: block;
+		grid-area: classes;
+	}
+
+	#courseList tbody td:nth-child(5)::before {
+		content: 'Classes';
+	}
+
+	#courseList tbody td:nth-child(6) {
+		display: block;
+		grid-area: updated;
+		justify-self: end;
+		text-align: right;
+		color: var(--text-secondary, #64748b);
+	}
+
+	#courseList tbody td:nth-child(6)::before {
+		content: 'Updated';
+	}
+
+	#courseList tbody td:nth-child(7) {
+		grid-area: actions;
+	}
+
+	#courseList tbody td:nth-child(7)::before {
+		display: none;
+	}
+
+	#courseList .exam-actions {
+		justify-content: flex-start;
+	}
+
+	#courseList .exam-action-btn {
+		min-height: 44px;
+		min-width: 44px;
+	}
+}

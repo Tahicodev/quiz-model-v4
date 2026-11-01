@@ -57,6 +57,7 @@ model School {
   kidsGames          KidsGame[]
   kidsChampionships  KidsChampionship[]
   devices            Device[]
+  courses            Course[]
 }
 
 // ─── School Year Archives ────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ model User {
   class                    Class?              @relation(fields: [class_id], references: [id], onDelete: SetNull)
   results                  Result[]
   createdExams             Exam[]              @relation("ExamCreator")
+  createdCourses           Course[]            @relation("CourseCreator")
   createdGames             Game[]              @relation("GameCreator")
   createdTournaments       Tournament[]        @relation("TournamentCreator")
   gameSessions             GameSession[]
@@ -158,6 +160,7 @@ model Class {
   school             School              @relation(fields: [school_id], references: [id], onDelete: Cascade)
   users              User[]
   examClasses        ExamClass[]
+  courseClasses      CourseClass[]
   accountRequests    AccountRequest[]
   teacherMessages    TeacherMessage[]
   teacherAssignments TeacherAssignment[]
@@ -185,6 +188,8 @@ model Category {
   children  Category[] @relation("CategoryTree")
   questions Question[]
   kidsGames KidsGame[]
+  courses   Course[]
+  lessons   Lesson[]
 
   @@unique([school_id, name])
   @@index([school_id])
@@ -289,6 +294,72 @@ model ExamClass {
 
   @@unique([exam_id, class_id])
   @@index([exam_id])
+  @@index([class_id])
+}
+
+// ─── Courses ─────────────────────────────────────────────────────────────────
+// AI-generated course content built from a teacher's category branch
+// (Category > Subcategory > … > Axe). Lessons keep a pointer to the
+// category/axe they were generated from so practice pulls that leaf's
+// live questions. Sharing mirrors exams: a published course is assigned
+// to classes through the course_classes junction (see ExamClass).
+model Course {
+  id          String   @id @default(uuid())
+  school_id   String
+  // Author (teacher/admin user id) — same strict scoping rule as Category.
+  created_by  String
+  name        String
+  description String?
+  // Root of the category branch the course was generated from. Nullable
+  // so the course survives a category delete.
+  category_id String?
+  status      String   @default("draft") // draft | published
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  school        School        @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  creator       User          @relation("CourseCreator", fields: [created_by], references: [id], onDelete: Cascade)
+  category      Category?     @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  lessons       Lesson[]
+  courseClasses CourseClass[]
+
+  @@index([school_id])
+  @@index([created_by])
+  @@index([status])
+}
+
+model Lesson {
+  id           String   @id @default(uuid())
+  course_id    String
+  // The category/axe this lesson was generated from (drives practice
+  // questions). Nullable for manually authored lessons.
+  category_id  String?
+  title        String
+  summary      String?
+  content      String? // markdown body (AI-generated or hand-written)
+  order_index  Int      @default(0)
+  ai_generated Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  course   Course    @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  @@index([course_id])
+  @@index([category_id])
+}
+
+model CourseClass {
+  id          String   @id @default(uuid())
+  course_id   String
+  class_id    String
+  assigned_at DateTime @default(now())
+
+  course Course @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  class  Class  @relation(fields: [class_id], references: [id], onDelete: Cascade)
+
+  @@unique([course_id, class_id])
+  @@index([course_id])
   @@index([class_id])
 }
 

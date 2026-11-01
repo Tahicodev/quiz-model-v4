@@ -3085,6 +3085,12 @@ function categoryActionsCellHtml(category, assignable) {
                         <span class="no-actions" title="System category">\u2014</span>
                     `
 												: `
+                        <button class="exam-action-btn exam-course-btn" onclick="openCourseFromCategory('${category.id}')" title="Create course content from this category">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+                            </svg>
+                        </button>
                         <button class="exam-action-btn exam-edit-btn" onclick="editCategory('${category.id}')" title="Edit">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -3297,6 +3303,11 @@ function updateCategoryList(categoriesList = categories) {
 									label: 'Move',
 									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"></path><path d="M9 5l3-3 3 3"></path><path d="M15 19l-3 3-3-3"></path><path d="M19 9l3 3-3 3"></path><path d="M2 12h20"></path><path d="M12 2v20"></path></svg>',
 									onClick: () => startCategoryMove(null, category.id),
+								},
+								{
+									label: 'Create Course',
+									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
+									onClick: () => openCourseFromCategory(category.id),
 								},
 								{
 									label: 'Edit Category',

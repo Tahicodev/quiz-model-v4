@@ -417,6 +417,122 @@ Example output (text options):
     return questions;
   }
 
+  /**
+   * Generate a course outline (lesson skeleton) from a teacher's category
+   * branch. `plan` is the server-derived list of leaf categories with
+   * questions: [{ categoryId, path, questionCount }]. One lesson per row,
+   * in the given order; the model only writes title + summary and must
+   * echo categoryId back.
+   */
+  async generateCourseOutline({ config, courseName, language = 'French', plan = [] }) {
+    if (!config?.model_id) throw new ValidationError({ model_id: ['No model selected'] });
+    if (!Array.isArray(plan) || plan.length === 0) {
+      throw new ValidationError({ categoryId: ['This branch has no lessons to build from — add subcategories/axes with questions first.'] });
+    }
+    const prompt = this.#buildCourseOutlinePrompt({ courseName, language, plan });
+    const raw = await this.#callProvider(config, prompt);
+    const rows = this.#parseJsonArray(raw);
+    // Trust the server-side plan for the category mapping: match by echoed
+    // categoryId first, then fall back to positional order. A hallucinated
+    // id must never point a lesson at a foreign category.
+    const byId = new Map(plan.map((p) => [String(p.categoryId), p]));
+    const lessons = [];
+    rows.slice(0, plan.length).forEach((row, idx) => {
+      const planned = byId.has(String(row.categoryId))
+        ? byId.get(String(row.categoryId))
+        : plan[idx];
+      const title = String(row.title || '').trim();
+      if (!title || !planned) return;
+      lessons.push({
+        title: title.slice(0, 300),
+        summary: String(row.summary || '').trim().slice(0, 2000) || null,
+        categoryId: String(planned.categoryId),
+        order_index: lessons.length,
+      });
+    });
+    if (!lessons.length) {
+      throw new ValidationError({ response: ['The model did not return a parseable course outline — try again or pick a stronger model.'] });
+    }
+    return lessons;
+  }
+
+  /**
+   * Generate the markdown body of one lesson from its category path and a
+   * digest of the questions already filed there, so the taught content
+   * matches what the student will be asked in practice.
+   */
+  async generateLessonContent({ config, language = 'French', lesson, categoryPath, questionDigest = [], includeQuestions = true }) {
+    if (!config?.model_id) throw new ValidationError({ model_id: ['No model selected'] });
+    const prompt = this.#buildLessonContentPrompt({ language, lesson, categoryPath, questionDigest, includeQuestions });
+    const raw = await this.#callProvider(config, prompt);
+    const content = String(raw || '').trim()
+      // Strip fences some models wrap markdown in despite instructions.
+      .replace(/^```(?:markdown|md)?\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    if (!content) {
+      throw new ValidationError({ response: ['The model returned no lesson content — try again.'] });
+    }
+    return content.slice(0, 50000);
+  }
+
+  #buildCourseOutlinePrompt({ courseName, language, plan }) {
+    const lines = plan.map((p, i) =>
+      `${i + 1}. categoryId: "${p.categoryId}" | path: "${p.path}" | existing questions: ${p.questionCount}`);
+    return `You are a course designer for a school platform. Build the lesson outline of the course "${courseName}" from its category plan below. Each plan row becomes EXACTLY ONE lesson, in the same order.
+
+CATEGORY PLAN (one row = one lesson):
+${lines.join('\n')}
+
+RULES:
+1. Respond with ONE valid JSON array and NOTHING else (no markdown fences, no commentary).
+2. Each object: { "categoryId": string (copied EXACTLY from the plan row), "title": string, "summary": string }.
+3. Titles are short lesson names; summaries are 1-3 sentences telling what the lesson covers.
+4. Language: ${language}.
+5. Array length must equal the plan length (${plan.length}).
+
+Example:
+[{ "categoryId": "abc", "title": "Introduction", "summary": "Ce cours presente..." }]`;
+  }
+
+  #buildLessonContentPrompt({ language, lesson, categoryPath, questionDigest, includeQuestions }) {
+    const digest = questionDigest.length
+      ? `QUESTIONS THE STUDENTS WILL PRACTICE AFTER THIS LESSON (your content must teach what these ask):
+${questionDigest.slice(0, 30).map((t) => `- ${t}`).join('\n')}`
+      : '';
+    return `You are a teacher writing one lesson of a course. Write the full lesson content for:
+
+LESSON TITLE: ${lesson.title}
+LESSON SUMMARY: ${lesson.summary || '(none)'}
+TOPIC PATH: ${categoryPath}
+${digest}
+
+RULES:
+1. Output ONLY clean markdown (no code fences, no HTML, no commentary).
+2. Structure: "## ${'Objectives'}", "## Key concepts", "## Explanation" (the main teaching body with subsections), "## Examples", "## Common mistakes", and — only if questions are listed above — a final "## Check yourself" line telling the student to practice with the attached questions.
+3. Level-appropriate, concrete, and directly aligned with the practice questions. Language: ${language}.
+4. Keep it focused: roughly 300-600 words.${includeQuestions ? '' : '\n5. Do NOT add the "Check yourself" section.'}`;
+  }
+
+  /** Repair-and-parse a JSON array of objects from raw model output. */
+  #parseJsonArray(raw) {
+    let text = String(raw || '').trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/i, '');
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (arrayMatch) text = arrayMatch[0];
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) return parsed.filter((o) => o && typeof o === 'object');
+      if (Array.isArray(parsed?.lessons)) return parsed.lessons;
+    } catch {
+      const blocks = text.match(/\{[^{}]*\}/g) || [];
+      const rows = blocks.map((b) => { try { return JSON.parse(b); } catch { return null; } }).filter(Boolean);
+      if (rows.length) return rows;
+    }
+    throw new ValidationError({ response: ['The model did not return parseable JSON — try again or pick a stronger model.'] });
+  }
+
   /** Server-side provider call with per-provider request shapes + timeout. */
   async #callProvider(config, prompt) {
     const { provider, model_id: model, base_url: baseUrl, api_key: apiKey } = config;

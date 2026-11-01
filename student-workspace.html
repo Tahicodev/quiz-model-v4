@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
-		<link rel="stylesheet" href="styles.css?v=2026-10-20-r3" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-01-courses3" />
 		<link
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -143,7 +143,11 @@
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="legacy-auth-bridge.js?v=2026-10-24-r3" defer></script>
 		<script
-			src="student-workspace.js?v=2026-10-24-r4"
+			src="student-workspace.js?v=2026-11-01-courses2"
+			defer
+		></script>
+		<script
+			src="student-courses.js?v=2026-11-01-courses2"
 			defer
 		></script>
 	</head>
@@ -308,6 +312,13 @@
 					<button
 						type="button"
 						class="workspace-tab-btn"
+						data-workspace-tab="courses"
+					>
+						Courses
+					</button>
+					<button
+						type="button"
+						class="workspace-tab-btn"
 						data-workspace-tab="games"
 					>
 						Games
@@ -451,6 +462,26 @@
 							</div>
 							<div id="studentTrainingRulesCard"></div>
 							<div class="exam-card-grid" id="studentTrainingGrid"></div>
+						</div>
+
+						<div class="workspace-panel" data-workspace-section="courses">
+							<div class="panel-header">
+								<div>
+									<h2>My Courses</h2>
+									<p>Lessons your teachers shared with your class — read them, then practice</p>
+								</div>
+								<div class="panel-filters">
+									<button
+											class="filter-chip"
+											type="button"
+											onclick="StudentCourses.load(true)"
+									>
+											Refresh
+									</button>
+								</div>
+							</div>
+							<div class="exam-card-grid" id="studentCourseGrid"></div>
+							<div id="studentCourseReader" style="display: none"></div>
 						</div>
 
 						<div class="workspace-panel" data-workspace-section="training">

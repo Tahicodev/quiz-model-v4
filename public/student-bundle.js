@@ -18503,6 +18503,63 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         });
       });
     }
+    function filenameFromDisposition(value) {
+      var raw = String(value || "");
+      var star = /filename\*=UTF-8''([^;]+)/i.exec(raw);
+      if (star) {
+        try {
+          return decodeURIComponent(star[1]);
+        } catch (_) {
+        }
+      }
+      var plain = /filename="?([^";]+)"?/i.exec(raw);
+      return plain ? plain[1].trim() : "";
+    }
+    function requestBlob(method, path, body, _retried) {
+      var url2 = getBaseUrl() + path;
+      var init = {
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...getToken() ? { Authorization: "Bearer " + getToken() } : {}
+        }
+      };
+      if (body !== void 0 && body !== null) {
+        init.body = JSON.stringify(body);
+      }
+      return fetch(url2, init).then(function(res) {
+        if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
+          return refreshAccessToken().then(function() {
+            return requestBlob(method, path, body, true);
+          });
+        }
+        if (!res.ok) {
+          return res.text().then(function(text) {
+            var err = new Error(parseError(res, text));
+            err.status = res.status;
+            try {
+              err.payload = JSON.parse(text);
+            } catch (_) {
+            }
+            throw err;
+          });
+        }
+        var warnings = [];
+        try {
+          var header = res.headers.get("X-Exam-Doc-Warnings");
+          if (header) warnings = JSON.parse(decodeURIComponent(header)) || [];
+        } catch (_) {
+        }
+        return res.blob().then(function(blob) {
+          return {
+            blob,
+            filename: filenameFromDisposition(res.headers.get("Content-Disposition")),
+            warnings
+          };
+        });
+      });
+    }
     var MAPPERS = {
       users: function(u) {
         var out = {
@@ -18863,7 +18920,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         return request("GET", "/bootstrap");
       },
       /** Expose a raw request for arbitrary paths (e.g. custom routes). */
-      raw: request
+      raw: request,
+      /** Fetch a binary response (PDF/DOCX) with the same auth + refresh flow. */
+      blob: requestBlob
     };
   })();
   (function() {
@@ -19516,7 +19575,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       // rev stamps the shape/semantics of these defaults. Bump it whenever
       // a default flips meaning (e.g. the Data tab growing a teacher-safe
       // view) so previously auto-saved maps cannot pin stale values.
-      rev: 2,
+      rev: 3,
       tabs: {
         overview: true,
         questions: true,
@@ -19539,7 +19598,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         // The Data tab carries a teacher-scoped "My Data" section; the
         // school-wide backup groups inside it stay markup-gated to admins.
         data: true,
-        realtime: false,
+        // Teachers can enable/disable their own realtime connection and
+        // refresh the games assigned to their students. Server host, users,
+        // and school-wide broadcast settings stay separately markup-gated.
+        realtime: true,
         "ai-generation": true,
         users: true
       }
@@ -19581,6 +19643,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       };
       if (stored.rev !== DEFAULT_TEACHER_ACCESS.rev && mergedSettingsTabs.data === false) {
         mergedSettingsTabs.data = DEFAULT_TEACHER_ACCESS.settingsTabs.data;
+      }
+      if (stored.rev !== DEFAULT_TEACHER_ACCESS.rev && mergedSettingsTabs.realtime === false) {
+        mergedSettingsTabs.realtime = DEFAULT_TEACHER_ACCESS.settingsTabs.realtime;
       }
       return {
         tabs: mergedTabs,
@@ -19802,7 +19867,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-tab-btn[data-settings-tab]").forEach((btn) => {
         const key = btn.dataset.settingsTab;
         if (!key) return;
-        if (key === "teacher-access" || key === "realtime" || key === "setup") {
+        if (key === "teacher-access" || key === "setup") {
           btn.classList.add("role-hidden");
           return;
         }
@@ -19815,7 +19880,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       document.querySelectorAll(".settings-section[data-settings-tab]").forEach((section) => {
         const key = section.dataset.settingsTab;
         if (!key) return;
-        if (key === "teacher-access" || key === "realtime" || key === "setup") {
+        if (key === "teacher-access" || key === "setup") {
           section.classList.add("role-hidden");
           return;
         }
@@ -29112,7 +29177,28 @@ They will be signed out immediately.`
           });
         }
       });
+      socket.on("admin:syncKidsGames", (payload = {}) => {
+        window.dispatchEvent(
+          new CustomEvent("quiz:kids-games-updated", { detail: payload })
+        );
+      });
+      socket.on("student:refreshBootstrap", (payload = {}) => {
+        const user = window.Auth?.getCurrentUser?.();
+        if (String(user?.role || "").toLowerCase() !== "student") return;
+        const scope = payload?.scope;
+        if (scope?.type === "teacher" && Array.isArray(scope.classIds) && scope.classIds.length) {
+          const classId = String(user?.class_id || user?.classId || "").trim();
+          if (classId && !scope.classIds.map(String).includes(classId)) return;
+        }
+        if (typeof window.__legacyBridgeBootstrap === "function") {
+          window.__legacyBridgeBootstrap();
+        }
+      });
       socket.on("admin:syncGames", (payload) => {
+        const activeUser = window.Auth?.getCurrentUser?.();
+        if (window.__DATABASE_GAMES_AUTHORITATIVE__ && String(activeUser?.role || "").toLowerCase() === "student") {
+          return;
+        }
         receivedInitialGamesSync = true;
         if (shouldSkipDuplicateSync(payload, "quizGames", "games")) {
           return;
@@ -30168,6 +30254,21 @@ They will be signed out immediately.`
         lastActivity: now.toISOString()
       };
     }
+    function returnToKidsAfterStudentLogin() {
+      try {
+        var next = new URLSearchParams(window.location.search).get("next");
+        if (!next) return false;
+        var destination = new URL(next, window.location.origin);
+        if (destination.origin !== window.location.origin) return false;
+        if (destination.pathname !== "/kids" && destination.pathname.indexOf("/kids/") !== 0) {
+          return false;
+        }
+        window.location.replace(destination.pathname + destination.search + destination.hash);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
     function persistSession(session, remember) {
       try {
         sessionStorage.setItem("quizSession", JSON.stringify(session));
@@ -30434,6 +30535,7 @@ They will be signed out immediately.`
               }
             }
             showMsg("Login successful", "success");
+            returnToKidsAfterStudentLogin();
           }).catch(function(err) {
             if (err && err.code === "SESSION_ACTIVE") {
               form.dataset.loggingIn = "";

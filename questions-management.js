@@ -6587,7 +6587,11 @@ function saveAISettings() {}
 
 
 // Open AI Generator Modal
-function openAIGeneratorModal() {
+// `prefill` (optional): { topic, categoryId | categoryName } — used by the
+// Courses tab "Generate questions from this lesson" shortcut so the teacher
+// lands on the lesson's own branch instead of picking it again by hand.
+function openAIGeneratorModal(prefill) {
+	const seed = prefill && typeof prefill === 'object' ? prefill : null;
 	const modal = document.getElementById('aiGeneratorModal');
 	if (!modal) return;
 	modal.inert = false;
@@ -6628,6 +6632,13 @@ function openAIGeneratorModal() {
 	
 	// Populate categories
 	populateAICategorySelect();
+	if (seed) {
+		try {
+			applyAIGeneratorPrefill(seed);
+		} catch (err) {
+			console.warn('[ai-generator] prefill failed:', err);
+		}
+	}
 
 	// Every modal open starts on the Text style (classic generation), so the
 	// two-picker confusion is avoided until the teacher explicitly asks for
@@ -6756,6 +6767,53 @@ function populateAICategorySelect() {
 
 		populateAISubcategorySelect(catId, subId);
 	});
+}
+
+// Prefill helper (see openAIGeneratorModal): writes the topic text and maps a
+// category id/name onto the two-level selects. `ai-category` only lists root
+// categories, so the leaf's root ancestor is selected first and the leaf
+// itself goes into `ai-subcategory` (which holds every descendant).
+function applyAIGeneratorPrefill(seed) {
+	if (seed.topic) {
+		const topicEl = document.getElementById('ai-topic');
+		if (topicEl) topicEl.value = String(seed.topic);
+	}
+	const catSelect = document.getElementById('ai-category');
+	const subSelect = document.getElementById('ai-subcategory');
+	if (!catSelect) return;
+
+	const rows = getAICategoryRows();
+	const keyOf = (row) => String(aiCategoryKey(row));
+	let leafId = seed.categoryId ? String(seed.categoryId) : '';
+	if (!leafId && seed.categoryName) {
+		const wanted = String(seed.categoryName).trim().toLowerCase();
+		const hit = rows.find((r) => String(r.name || '').trim().toLowerCase() === wanted);
+		if (hit) leafId = keyOf(hit);
+	}
+	if (!leafId || leafId === 'uncategorized') return;
+	if (!rows.some((r) => keyOf(r) === leafId)) return;
+
+	// Walk up to the root ancestor (cycle-guarded, like the tree helpers).
+	const parentOf = (id) => {
+		const row = rows.find((r) => keyOf(r) === String(id));
+		return row ? String(aiCategoryParentId(row) || '') : '';
+	};
+	let root = leafId;
+	const seen = new Set([leafId]);
+	while (true) {
+		const parent = parentOf(root);
+		if (!parent || seen.has(parent)) break;
+		seen.add(parent);
+		root = parent;
+	}
+	if (!Array.from(catSelect.options).some((o) => o.value === root)) return;
+	catSelect.value = root;
+	populateAISubcategorySelect('ai-category', 'ai-subcategory');
+	if (subSelect && !subSelect.disabled) {
+		subSelect.value = Array.from(subSelect.options).some((o) => o.value === leafId)
+			? leafId
+			: '';
+	}
 }
 
 // Fill the subcategory select with ALL descendants of the chosen category,
