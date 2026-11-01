@@ -31,6 +31,9 @@ export const CourseGenerateSchema = z.object({
   configId:    z.string().max(100).optional(),
   language:    z.string().max(40).default('French'),
   description: z.string().max(2000).optional(),
+  // The "create category structure" flow can generate lesson outlines before
+  // teachers have added practice questions to the new axes.
+  includeEmptyCategories: z.boolean().default(false),
   // Cap the number of lessons generated from the branch (guards against a
   // huge tree eating tokens; default keeps every leaf with questions).
   maxLessons:  z.coerce.number().int().min(1).max(50).optional(),

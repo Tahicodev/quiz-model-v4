@@ -183,10 +183,15 @@ router.post('/generate', requireRole(MANAGE_ROLES), async (req, res, next) => {
 
     const plan = await courseSvc.buildBranchPlan(req.schoolId, params.categoryId, {
       maxLessons: params.maxLessons || 30,
+      includeEmptyCategories: params.includeEmptyCategories,
     });
     if (!plan.length) {
       throw new ValidationError({
-        categoryId: ['No questions found in this category branch — create subcategories/axes and add questions first.'],
+        categoryId: [
+          params.includeEmptyCategories
+            ? 'No leaf categories found in this branch.'
+            : 'No questions found in this category branch — create subcategories/axes and add questions first.',
+        ],
       });
     }
 

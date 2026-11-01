@@ -18,6 +18,8 @@
 	let coursesCache = [];
 	let currentCourse = null; // full course with lessons (detail view)
 	let aiConfigsCache = null;
+	let courseBatchGenerating = false;
+	let collapsedCourseCategoryIds = new Set();
 
 	function esc(s) {
 		return String(s ?? '')
@@ -84,6 +86,76 @@
 		const cat = categoryList().find((c) => String(c.id) === String(id));
 		return cat ? String(cat.name || '') : '';
 	}
+
+	function courseCollapseStorageKey(courseId) {
+		return `quizCollapsedCourseCategories:${courseId}`;
+	}
+
+	function loadCollapsedCourseCategories(courseId) {
+		try {
+			const stored = JSON.parse(localStorage.getItem(courseCollapseStorageKey(courseId)) || '[]');
+			collapsedCourseCategoryIds = new Set(Array.isArray(stored) ? stored.map(String) : []);
+		} catch (_) {
+			collapsedCourseCategoryIds = new Set();
+		}
+	}
+
+	function persistCollapsedCourseCategories() {
+		if (!currentCourse?.id) return;
+		try {
+			localStorage.setItem(
+				courseCollapseStorageKey(currentCourse.id),
+				JSON.stringify([...collapsedCourseCategoryIds]),
+			);
+		} catch (_) {
+			/* Private browsing can disable storage; the tree still works until navigation. */
+		}
+	}
+
+	function updateCourseTreeVisibility() {
+		const rows = Array.from(document.querySelectorAll('#courseDetailPane .course-tree-row'));
+		const categories = new Map(categoryList().map((category) => [String(category.id), category]));
+		for (const row of rows) {
+			let parentId = String(categories.get(row.dataset.categoryId)?.parent_id || '');
+			let hidden = false;
+			const seen = new Set();
+			while (parentId && !seen.has(parentId)) {
+				if (collapsedCourseCategoryIds.has(parentId)) {
+					hidden = true;
+					break;
+				}
+				seen.add(parentId);
+				parentId = String(categories.get(parentId)?.parent_id || '');
+			}
+			row.hidden = hidden;
+		}
+		for (const button of document.querySelectorAll('#courseDetailPane [data-course-collapse]')) {
+			const collapsed = collapsedCourseCategoryIds.has(button.dataset.courseCollapse);
+			button.textContent = collapsed ? '+' : '−';
+			button.setAttribute('aria-expanded', String(!collapsed));
+			button.title = collapsed ? 'Show subcategories' : 'Hide subcategories';
+		}
+	}
+
+	window.toggleCourseCategory = function (categoryId) {
+		const key = String(categoryId);
+		if (collapsedCourseCategoryIds.has(key)) collapsedCourseCategoryIds.delete(key);
+		else collapsedCourseCategoryIds.add(key);
+		persistCollapsedCourseCategories();
+		updateCourseTreeVisibility();
+	};
+
+	window.setCourseCategoriesCollapsed = function (collapse) {
+		const panel = document.querySelector('#courseDetailPane .course-tree');
+		if (!panel) return;
+		for (const button of panel.querySelectorAll('[data-course-collapse]')) {
+			const key = button.dataset.courseCollapse;
+			if (collapse) collapsedCourseCategoryIds.add(key);
+			else collapsedCourseCategoryIds.delete(key);
+		}
+		persistCollapsedCourseCategories();
+		updateCourseTreeVisibility();
+	};
 
 	// ── Minimal safe markdown renderer (shared contract with the student
 	// workspace reader): everything is escaped first, then a small markdown
@@ -169,8 +241,9 @@
 		return aiConfigsCache;
 	}
 
-	function modelSelectHtml(selectedId) {
+	function modelSelectHtml(selectedId, selectId) {
 		const rows = aiConfigsCache || [];
+		const id = selectId || 'courseModelSelect';
 		const options = rows
 			.map(
 				(c) =>
@@ -182,8 +255,8 @@
 			return '<div class="form-group"><label>AI Model</label><div class="text-muted">No AI models configured yet — add one in Settings → AI Generation.</div></div>';
 		}
 		return (
-			'<div class="form-group"><label for="courseModelSelect">AI Model</label>' +
-			`<select id="courseModelSelect">${options}</select>` +
+			`<div class="form-group"><label for="${esc(id)}">AI Model</label>` +
+			`<select id="${esc(id)}">${options}</select>` +
 			'</div>'
 		);
 	}
@@ -243,7 +316,7 @@
 				const published = c.status === 'published';
 				return (
 					`<tr data-id="${esc(c.id)}">` +
-					`<td><strong>${esc(c.name)}</strong></td>` +
+					`<td><button type="button" class="course-name-link" onclick="openCourseDetail('${esc(c.id)}')" aria-label="Open course ${esc(c.name)}">${esc(c.name)}</button></td>` +
 					`<td>${esc(c.category_path || '—')}</td>` +
 					`<td>${Number(c.lesson_count) || 0}</td>` +
 					`<td><span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span></td>` +
@@ -260,6 +333,41 @@
 				);
 			})
 			.join('');
+
+		rows.forEach((course) => {
+			const row = Array.from(tbody.querySelectorAll('tr[data-id]')).find(
+				(item) => item.dataset.id === String(course.id),
+			);
+			if (!row) return;
+			row.addEventListener('click', (event) => {
+				if (window.innerWidth > 768 || event.target.closest('button, a')) return;
+				event.stopPropagation();
+				if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
+					openCourseDetail(course.id);
+					return;
+				}
+				const published = course.status === 'published';
+				window.MobileActionSheet.open(`Course: ${String(course.name || '')}`, [
+					{
+						label: 'Open course',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+						onClick: () => openCourseDetail(course.id),
+					},
+					{
+						label: published ? 'Unpublish course' : 'Publish course',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>',
+						onClick: () => toggleCoursePublish(course.id, published ? 'unpublish' : 'publish'),
+						variant: published ? 'default' : 'primary',
+					},
+					{
+						label: 'Delete course',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+						onClick: () => deleteCourseConfirm(course.id),
+						variant: 'danger',
+					},
+				]);
+			});
+		});
 	};
 
 	async function toggleCoursePublish(courseId, action) {
@@ -307,7 +415,7 @@
 
 	// ── New Course generator modal ───────────────────────────────────────────
 	// preselectId: category id to pre-pick (set from the Categories tab action).
-	window.openCourseGeneratorModal = async function (preselectId) {
+	window.openCourseGeneratorModal = async function (preselectId, defaults = {}) {
 		await ensureAiConfigs();
 		const list = categoryList().filter((c) => c && c.id && c.id !== 'uncategorized' && !c.isSystem);
 		const counts = questionCountByCategory();
@@ -321,29 +429,142 @@
 		for (const { category, depth } of ordered) {
 			const branchIds = [category.id, ...(tree ? tree.getDescendantIds(category.id, list) : [])];
 			const branchCount = branchIds.reduce((sum, id) => sum + (counts.get(String(id)) || 0), 0);
-			const hint = counts.size ? ` — ${branchCount} question${branchCount === 1 ? '' : 's'} in branch` : '';
+			const hint = ` · ${branchCount} question${branchCount === 1 ? '' : 's'} in branch`;
 			options.push(
 				`<option value="${esc(category.id)}" ${String(category.id) === String(preselectId || '') ? 'selected' : ''}>` +
-				`${'— '.repeat(depth)}${esc(category.name)}${hint}</option>`,
+				`${'&nbsp;&nbsp;'.repeat(depth)}${depth ? '└ ' : ''}${esc(category.name)}${hint}</option>`,
 			);
 		}
 
 		const body =
+			'<input id="courseIncludeEmptyCategories" type="hidden" value="' + (defaults.includeEmptyCategories ? 'true' : 'false') + '">' +
 			'<div class="form-group"><label for="newCourseName">Course name</label>' +
-			'<input type="text" id="newCourseName" placeholder="e.g. French — Unit 2 vocabulary course" style="width:100%;"></div>' +
+			`<input type="text" id="newCourseName" value="${esc(defaults.name || '')}" placeholder="e.g. French — Unit 2 vocabulary course" style="width:100%;"></div>` +
+			'<div class="course-generator-tabs" role="tablist" aria-label="Course category source">' +
+			'<button type="button" class="course-generator-tab active" role="tab" aria-selected="true" aria-controls="courseExistingPane" onclick="setCourseGeneratorMode(\'existing\')">Use existing categories</button>' +
+			'<button type="button" class="course-generator-tab" role="tab" aria-selected="false" aria-controls="courseNewStructurePane" onclick="setCourseGeneratorMode(\'new\')">Create a new structure</button>' +
+			'</div>' +
+			`<div id="courseExistingPane" class="course-generator-pane">` +
 			'<div class="form-group"><label for="newCourseBranch">Category branch</label>' +
 			(options.length
 				? `<select id="newCourseBranch" style="width:100%;">${options.join('')}</select>`
-				: '<div class="text-muted">No categories yet — create your category / subcategory / axe structure first (Categories tab).</div>') +
+				: '<div class="course-generator-hint">No categories yet. Choose “Create a new structure” to start one.</div>') +
 			'</div>' +
+			'<p class="course-generator-hint">Lessons are created for leaf categories that already contain questions.</p>' +
+			'</div>' +
+			'<div id="courseNewStructurePane" class="course-generator-pane hidden" hidden>' +
+			'<div class="form-group"><label for="newCourseRootCategory">Main category</label>' +
+			'<input type="text" id="newCourseRootCategory" maxlength="100" placeholder="e.g. French grammar" style="width:100%;"></div>' +
+			'<div class="course-generator-hint">Add subcategories and the axes beneath each one. A lesson outline will be generated for every axis; questions can be added later.</div>' +
+			'<div id="courseSubcategoryGroups"></div>' +
+			'<button type="button" class="btn btn-sm" onclick="addCourseSubcategoryGroup()">+ Add subcategory</button>' +
+			'</div>' +
+			'<div class="course-generator-settings">' +
 			'<div class="form-group"><label for="newCourseLanguage">Content language</label>' +
-			'<select id="newCourseLanguage"><option value="French" selected>French</option><option value="English">English</option><option value="Arabic">Arabic</option></select></div>' +
-			modelSelectHtml() +
-			'<p class="text-muted" style="font-size:12px;">One lesson is created per sub-level (axe) that already has questions; the lesson content later follows the same structure. You can edit everything afterwards.</p>';
+			`<select id="newCourseLanguage"><option value="French" ${!defaults.language || defaults.language === 'French' ? 'selected' : ''}>French</option><option value="English" ${defaults.language === 'English' ? 'selected' : ''}>English</option><option value="Arabic" ${defaults.language === 'Arabic' ? 'selected' : ''}>Arabic</option></select></div>` +
+			modelSelectHtml(defaults.configId, 'courseModelSelect') +
+			'</div>';
 		const footer =
 			'<button type="button" class="btn" onclick="closeCourseModal(\'courseGenModal\')">Cancel</button>' +
 			'<button type="button" class="btn btn-primary" id="courseGenGo" onclick="runCourseGeneration()">Generate course</button>';
 		openModal('courseGenModal', 'New Course from Categories', body, footer);
+		window.addCourseSubcategoryGroup();
+		if (defaults.includeEmptyCategories) window.setCourseGeneratorMode('existing');
+	};
+
+	window.setCourseGeneratorMode = function (mode) {
+		const isNew = mode === 'new';
+		const existing = document.getElementById('courseExistingPane');
+		const create = document.getElementById('courseNewStructurePane');
+		const modal = document.getElementById('courseGenModal');
+		const button = document.getElementById('courseGenGo');
+		if (existing) { existing.classList.toggle('hidden', isNew); existing.hidden = isNew; }
+		if (create) { create.classList.toggle('hidden', !isNew); create.hidden = !isNew; }
+		modal?.querySelectorAll('.course-generator-tab').forEach((tab, index) => {
+			const active = index === (isNew ? 1 : 0);
+			tab.classList.toggle('active', active);
+			tab.setAttribute('aria-selected', String(active));
+		});
+		if (button) {
+			button.textContent = isNew ? 'Create structure & continue' : 'Generate course';
+			button.onclick = isNew ? window.createCourseCategoryStructure : window.runCourseGeneration;
+		}
+	};
+
+	window.addCourseSubcategoryGroup = function () {
+		const container = document.getElementById('courseSubcategoryGroups');
+		if (!container) return;
+		const index = container.children.length + 1;
+		const group = document.createElement('div');
+		group.className = 'course-subcategory-group';
+		group.innerHTML =
+			`<div class="course-subcategory-heading"><strong>Subcategory ${index}</strong>` +
+			`<button type="button" class="btn btn-sm" aria-label="Remove subcategory ${index}" onclick="this.closest('.course-subcategory-group').remove()">Remove</button></div>` +
+			`<div class="form-group"><label>Subcategory name</label><input type="text" class="course-subcategory-name" maxlength="100" placeholder="e.g. Verb tenses" style="width:100%;"></div>` +
+			`<div class="form-group"><label>Axes <span class="text-muted">(one per line)</span></label><textarea class="course-subcategory-axes" rows="3" placeholder="Present tense&#10;Past tense" style="width:100%;"></textarea></div>`;
+		container.appendChild(group);
+	};
+
+	window.createCourseCategoryStructure = async function () {
+		const name = (document.getElementById('newCourseName')?.value || '').trim();
+		const rootName = (document.getElementById('newCourseRootCategory')?.value || '').trim();
+		const groups = Array.from(document.querySelectorAll('#courseSubcategoryGroups .course-subcategory-group')).map((group) => ({
+			name: group.querySelector('.course-subcategory-name')?.value.trim() || '',
+			axes: (group.querySelector('.course-subcategory-axes')?.value || '').split(/\r?\n/).map((axis) => axis.trim()).filter(Boolean),
+		}));
+		const language = document.getElementById('newCourseLanguage')?.value || 'French';
+		if (!name) return toast('Give the course a name first.', 'error');
+		if (!rootName) return toast('Enter a main category name.', 'error');
+		if (!groups.length || groups.some((group) => !group.name || !group.axes.length)) {
+			return toast('Each subcategory needs a name and at least one axis.', 'error');
+		}
+		const btn = document.getElementById('courseGenGo');
+		if (btn) { btn.disabled = true; btn.textContent = 'Creating categories…'; }
+		const A = api();
+		if (!A) {
+			if (btn) { btn.disabled = false; btn.textContent = 'Create structure & continue'; }
+			return;
+		}
+		let root = null;
+		const createdCategories = [];
+		try {
+			root = await A.raw('POST', '/categories', { name: rootName });
+			createdCategories.push(root);
+			categoryList().push(root);
+			for (const group of groups) {
+				const subcategory = await A.raw('POST', '/categories', { name: group.name, parent_id: root.id });
+				createdCategories.push(subcategory);
+				categoryList().push(subcategory);
+				for (const axisName of group.axes) {
+					const axis = await A.raw('POST', '/categories', { name: axisName, parent_id: subcategory.id });
+					createdCategories.push(axis);
+					categoryList().push(axis);
+				}
+			}
+		} catch (err) {
+			let rollbackMessage = '';
+			if (root?.id) {
+				try {
+					await A.raw('DELETE', `/categories/${encodeURIComponent(root.id)}`);
+					const createdIds = new Set(createdCategories.map((category) => category.id));
+					const categories = categoryList();
+					for (let i = categories.length - 1; i >= 0; i--) {
+						if (createdIds.has(categories[i]?.id)) categories.splice(i, 1);
+					}
+				} catch (rollbackErr) {
+					rollbackMessage = ` Cleanup also failed: ${rollbackErr?.message || 'error'}.`;
+				}
+			}
+			toast(`Could not create category structure: ${err?.message || 'error'}.${rollbackMessage}`, 'error');
+			if (btn) { btn.disabled = false; btn.textContent = 'Create structure & continue'; }
+			return;
+		}
+		await window.openCourseGeneratorModal(root.id, {
+			name,
+			language,
+			configId,
+			includeEmptyCategories: true,
+		});
 	};
 
 	window.runCourseGeneration = async function () {
@@ -351,6 +572,7 @@
 		const categoryId = document.getElementById('newCourseBranch')?.value || '';
 		const language = document.getElementById('newCourseLanguage')?.value || 'French';
 		const configId = selectedConfigId(document.getElementById('courseGenModal'));
+		const includeEmptyCategories = document.getElementById('courseIncludeEmptyCategories')?.value === 'true';
 		if (!name) return toast('Give the course a name first.', 'error');
 		if (!categoryId) return toast('Pick a category branch first.', 'error');
 		if (!configId) return toast('Pick an AI model (Settings → AI Generation if empty).', 'error');
@@ -359,7 +581,7 @@
 		const A = api();
 		if (!A) return;
 		try {
-			const course = await A.raw('POST', '/courses/generate', { name, categoryId, configId, language });
+			const course = await A.raw('POST', '/courses/generate', { name, categoryId, configId, language, includeEmptyCategories });
 			window.closeCourseModal('courseGenModal');
 			toast(`Course "${course?.name || name}" created with ${course?.lessons?.length || 0} lesson(s).`)
 			await loadCourses();
@@ -401,6 +623,7 @@
 		await ensureAiConfigs();
 		try {
 			currentCourse = await A.raw('GET', `/courses/${encodeURIComponent(courseId)}`);
+			loadCollapsedCourseCategories(currentCourse.id);
 		} catch (err) {
 			toast('Could not open course: ' + (err?.message || 'error'), 'error');
 			return;
@@ -440,8 +663,8 @@
 		const list = categoryList();
 		const tree = window.CategoryTree;
 
-		// Branch subtree (root = course.category_id), rendered with a
-		// "generate" button in front of every lesson-bearing axe.
+		// Branch subtree (root = course.category_id), with lessons linked to
+		// their axes and every ancestor visible for context.
 		let branchRows = [];
 		const rootCat = course.category_id
 			? list.find((c) => String(c.id) === String(course.category_id))
@@ -449,8 +672,7 @@
 		if (rootCat) {
 			const ids = new Set([String(rootCat.id), ...tree.getDescendantIds(rootCat.id, list).map(String)]);
 			branchRows = tree
-				.getOrderedTree(list.filter((c) => ids.has(String(c.id))))
-				.filter(({ category }) => tree.isLeaf(category.id, list));
+				.getOrderedTree(list.filter((c) => ids.has(String(c.id))));
 		}
 
 		const structureHtml = branchRows.length
@@ -458,43 +680,111 @@
 				.map(({ category, depth }) => {
 					const lesson = lessonByCat.get(String(category.id));
 					const qCount = counts.get(String(category.id)) || 0;
+					const hasChildren = branchRows.some((row) => String(row.category.parent_id) === String(category.id));
+					const level = depth === 0 ? 'Main category' : hasChildren ? 'Subcategory' : 'Axis';
+					const toggle = hasChildren
+						? `<button type="button" class="course-tree-toggle" data-course-collapse="${esc(category.id)}" onclick="toggleCourseCategory('${esc(category.id)}')" aria-label="Toggle ${esc(category.name)} subcategories" aria-expanded="${!collapsedCourseCategoryIds.has(String(category.id))}">${collapsedCourseCategoryIds.has(String(category.id)) ? '+' : '−'}</button>`
+						: '<span class="course-tree-toggle-spacer" aria-hidden="true"></span>';
 					const lessonLabel = lesson
-						? `<button type="button" class="btn btn-sm" onclick="focusLesson('${esc(lesson.id)}')" title="Open lesson">Lesson: ${esc(lesson.title)}</button>`
-						: '<span class="text-muted">no lesson</span>';
+						? `<button type="button" class="btn btn-sm course-tree-lesson-link" onclick="focusLesson('${esc(lesson.id)}')" title="Open lesson">Lesson: ${esc(lesson.title)}</button>`
+						: `<span class="course-tree-unassigned">${hasChildren ? 'Lessons are organized below' : 'No lesson linked'}</span>`;
 					const generateBtn = lesson
-						? `<button type="button" class="btn btn-ai-generate btn-sm" data-gen-lesson="${esc(lesson.id)}" onclick="generateLessonContent('${esc(lesson.id)}', this)">Generate course content via AI</button>`
+						? `<button type="button" class="btn btn-ai-generate btn-sm course-tree-generate" data-gen-lesson="${esc(lesson.id)}" onclick="generateLessonContent('${esc(lesson.id)}', this)">Generate course content via AI</button>`
 						: '';
 					return (
-						`<div class="course-tree-row" style="padding:8px 4px;border-bottom:1px solid rgba(0,0,0,0.06);margin-left:${depth * 14}px;">` +
-						`<span style="display:inline-block;min-width:180px;">${'— '.repeat(depth)}<strong>${esc(category.name)}</strong>${qCount ? ` <span class="text-muted">(${qCount} q.)</span>` : ''}</span> ` +
-						lessonLabel + ' ' + generateBtn +
+						`<div class="course-tree-row" data-category-id="${esc(category.id)}" style="--course-depth:${depth};">` +
+						`<div class="course-tree-category">${toggle}<span class="course-tree-level">${level}</span>` +
+						`<strong>${esc(category.name)}</strong><span class="course-tree-count">${qCount} question${qCount === 1 ? '' : 's'}</span></div>` +
+						`<div class="course-tree-actions">${lessonLabel}${generateBtn}</div>` +
 						'</div>'
 					);
 				})
 				.join('')
-			: '<div class="text-muted" style="padding:12px 0;">This course has no linked category branch (or the branch was deleted). Add lessons manually below.</div>';
+			: '<div class="course-generator-hint">This course has no linked category branch (or the branch was deleted). Add lessons manually below.</div>';
 
 		const lessonsHtml = (course.lessons || [])
 			.map((l, idx) => lessonCardHtml(l, idx))
 			.join('');
 
 		pane.innerHTML =
-			'<div class="toolbar" style="margin-bottom:12px;">' +
-			'<div class="toolbar-header-group"><h2 style="margin:0 12px 0 0;">' + esc(course.name) + '</h2>' +
-			`<span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span></div>` +
-			'<div class="toolbar-controls" style="flex-wrap:wrap;gap:8px;">' +
-			modelSelectHtml() +
-			'<button type="button" class="btn" onclick="closeCourseDetail()">&larr; Back</button>' +
-			'<button type="button" class="btn" onclick="renameCoursePrompt()">Rename</button>' +
-			`<button type="button" class="btn ${published ? '' : 'btn-primary'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? 'Unpublish' : 'Publish'}</button>` +
-			'<button type="button" class="btn btn-primary" onclick="openAssignClassesModal()">Send to students</button>' +
-			'<button type="button" class="btn" onclick="addLessonManual()">+ Add lesson</button>' +
+			'<div class="course-detail-toolbar">' +
+			'<div class="course-detail-heading"><button type="button" class="btn" onclick="closeCourseDetail()">&larr; Courses</button>' +
+			'<div class="course-detail-title"><h2>' + esc(course.name) + '</h2>' +
+			`<span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span></div></div>` +
+			'<div class="course-detail-controls"><div class="course-model-control">' + modelSelectHtml(null, 'courseModelSelect') + '</div>' +
+			'<div class="course-detail-actions">' +
+			'<button type="button" class="btn course-action-rename" onclick="renameCoursePrompt()">Rename</button>' +
+			`<button type="button" class="btn ${published ? 'course-action-unpublish' : 'course-action-publish'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? 'Unpublish' : 'Publish'}</button>` +
+			'<button type="button" class="btn course-action-assign" onclick="openAssignClassesModal()">Send to students</button>' +
+			'<button type="button" class="btn course-action-add" onclick="addLessonManual()">+ Add lesson</button>' +
+			'</div></div></div>' +
+			`<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No category branch')}</div>` +
+			'<section class="course-structure-panel"><div class="course-section-heading"><div><h3>Category structure</h3>' +
+			'<p>Lessons follow the categories and axes in this branch.</p></div>' +
+			`<div class="course-structure-tools"><span class="course-structure-count">${branchRows.length} level${branchRows.length === 1 ? '' : 's'}</span>` +
+			(branchRows.some((row) => branchRows.some((child) => String(child.category.parent_id) === String(row.category.id)))
+				? '<button type="button" class="course-tree-bulk-toggle" onclick="setCourseCategoriesCollapsed(true)">Collapse all</button><button type="button" class="course-tree-bulk-toggle" onclick="setCourseCategoriesCollapsed(false)">Expand all</button>'
+				: '') +
+			'<span id="courseBatchStatus" class="course-batch-status" aria-live="polite"></span>' +
+			(course.lessons?.length
+				? '<button type="button" class="btn btn-primary btn-sm" data-generate-all-levels onclick="confirmGenerateAllCourseLessons()">Generate all levels with AI</button>'
+				: '') +
 			'</div></div>' +
-		`<div class="course-branch-path text-muted" style="margin-bottom:10px;">Structure: ${esc(course.category_path || categoryPath(course.category_id) || '—')}</div>` +
-			'<div class="table-container" style="margin-bottom:16px;"><div style="padding:4px 12px;">' +
-			'<h3 style="margin:8px 0;">Category structure</h3>' + structureHtml + '</div></div>' +
+			`<div class="course-tree">${structureHtml}</div></section>` +
 			'<h3 style="margin:8px 0;">Lessons</h3>' +
 			`<div id="courseLessonsWrap">${lessonsHtml || '<div class="text-muted">No lessons yet.</div>'}</div>`;
+		updateCourseTreeVisibility();
+	};
+
+	window.confirmGenerateAllCourseLessons = function () {
+		if (!currentCourse?.lessons?.length) return toast('This course has no lessons to generate.', 'error');
+		const hasContent = currentCourse.lessons.some((lesson) => String(lesson.content || '').trim());
+		openModal(
+			'courseGenerateAllModal',
+			'Generate all lesson content',
+			`<p>Generate AI lesson content for all <strong>${currentCourse.lessons.length} levels</strong> under <strong>${esc(currentCourse.name)}</strong>? This runs one lesson at a time.</p>` +
+				(hasContent ? '<p class="course-generator-hint">Existing lesson content will be replaced.</p>' : ''),
+			`<button type="button" class="btn" onclick="closeCourseModal('courseGenerateAllModal')">Cancel</button>` +
+				'<button type="button" class="btn btn-primary" onclick="generateAllCourseLessons()">Generate all</button>',
+		);
+	};
+
+	window.generateAllCourseLessons = async function () {
+		const A = api();
+		if (!A || !currentCourse?.lessons?.length) return;
+		if (courseBatchGenerating) return;
+		const configId = selectedConfigId(document.getElementById('courseDetailPane'));
+		if (!configId) return toast('Pick an AI model first.', 'error');
+		window.closeCourseModal('courseGenerateAllModal');
+
+		courseBatchGenerating = true;
+		const courseId = currentCourse.id;
+		const lessons = [...currentCourse.lessons];
+		let completed = 0;
+		const button = document.querySelector('[data-generate-all-levels]');
+		if (button) {
+			button.disabled = true;
+			button.textContent = 'Generating levels…';
+		}
+		try {
+			for (const lesson of lessons) {
+				const updated = await A.raw(
+					'POST',
+					`/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lesson.id)}/generate-content`,
+					{ configId, language: 'French', includeQuestions: true },
+				);
+				if (updated) Object.assign(lesson, updated);
+				completed += 1;
+				const status = document.getElementById('courseBatchStatus');
+				if (status) status.textContent = `${completed} of ${lessons.length} complete`;
+			}
+			toast(`Generated AI content for all ${completed} course levels.`);
+		} catch (err) {
+			toast(`Generated ${completed} of ${lessons.length} levels. Stopped at "${lessons[completed]?.title || 'lesson'}": ${err?.message || 'error'}`, 'error');
+		} finally {
+			courseBatchGenerating = false;
+			if (String(currentCourse?.id) === String(courseId)) renderCourseDetail();
+		}
 	};
 
 	function lessonCardHtml(lesson, idx) {

@@ -327,6 +327,15 @@ describe('branch plan (course generation input)', () => {
 		// maxLessons caps the skeleton (token guard).
 		const capped = await courseSvc.buildBranchPlan(SCHOOL, mathId, { maxLessons: 1 });
 		expect(capped).toHaveLength(1);
+
+		// New course structures can generate lesson outlines before questions
+		// have been added to their axes.
+		const emptyByDefault = await courseSvc.buildBranchPlan(SCHOOL, geometryId);
+		expect(emptyByDefault).toHaveLength(0);
+		const includeEmpty = await courseSvc.buildBranchPlan(SCHOOL, geometryId, {
+			includeEmptyCategories: true,
+		});
+		expect(includeEmpty).toMatchObject([{ categoryId: String(geometryId), questionCount: 0, questionTexts: [] }]);
 	});
 
 	it('throws for a category outside the school', async () => {

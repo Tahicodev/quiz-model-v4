@@ -151,6 +151,24 @@ describe('POST /courses/generate', () => {
 		expect(String(res.body.error.fields.categoryId[0])).toMatch(/No questions found/i);
 	});
 
+	it('can generate an outline for a new empty category structure when explicitly requested', async () => {
+		stubProvider(JSON.stringify([
+			{ categoryId: emptyCategoryId, title: 'First lesson', summary: 'A new lesson outline.' },
+		]));
+		const res = await asTeacher()
+			.post(`${BASE}/generate`)
+			.send({
+				name: 'New structure course',
+				categoryId: emptyCategoryId,
+				configId,
+				includeEmptyCategories: true,
+			});
+		vi.unstubAllGlobals('fetch');
+		expect(res.status).toBe(201);
+		expect(res.body.lessons).toHaveLength(1);
+		expect(String(res.body.lessons[0].category_id)).toBe(String(emptyCategoryId));
+	});
+
 	it('surfaces a provider outage as 502 AI_PROVIDER_ERROR', async () => {
 		stubProviderFailure();
 		const res = await asTeacher()

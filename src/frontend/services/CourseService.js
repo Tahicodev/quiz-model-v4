@@ -233,12 +233,11 @@ export class CourseService {
   // ── Branch plan (course generation input) ──────────────────────────────────
 
   /**
-   * Build the lesson plan from a category branch: every LEAF category inside
-   * the subtree of `categoryId` (the category itself when it is a leaf) that
-   * actually holds questions, ordered by its full path. Each row carries the
-   * path label and the live question count for that leaf.
+   * Build the lesson plan from leaf categories inside a branch. By default
+   * leaves without questions are omitted; newly created course structures may
+   * opt in so lesson outlines can be generated before practice questions exist.
    */
-  async buildBranchPlan(schoolId, categoryId, { maxLessons = 30 } = {}) {
+  async buildBranchPlan(schoolId, categoryId, { maxLessons = 30, includeEmptyCategories = false } = {}) {
     const root = await this.#repo.getById('categories', categoryId);
     if (!root || String(root.school_id) !== String(schoolId)) throw new NotFoundError('Category');
 
@@ -271,12 +270,12 @@ export class CourseService {
       const children = (childrenOf.get(String(cat.id)) || []).filter((c) => !seen.has(String(c.id)));
       if (!children.length) {
         const entry = countByCategory.get(String(cat.id));
-        if (entry && entry.count > 0) {
+        if (includeEmptyCategories || (entry && entry.count > 0)) {
           plan.push({
             categoryId: String(cat.id),
             path: path.join(' > '),
-            questionCount: entry.count,
-            questionTexts: entry.texts,
+            questionCount: entry?.count || 0,
+            questionTexts: entry?.texts || [],
           });
         }
         return;
