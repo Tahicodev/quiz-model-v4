@@ -1726,10 +1726,11 @@
 		state.workspaceTab = allowedTabs.has(normalized) ? normalized : 'overview';
 		applyWorkspaceTabVisibility();
 		// Course content is server-served (it never rides the bootstrap
-		// payload), so the panel loads on demand when the tab is opened.
+		// payload), so refresh it whenever the student opens the tab; a teacher
+		// may have published and assigned a course since the previous visit.
 		if (state.workspaceTab === 'courses' && window.StudentCourses) {
 			try {
-				window.StudentCourses.load();
+				window.StudentCourses.load(true);
 			} catch (err) {
 				console.warn('[student-courses] tab load failed:', err);
 			}

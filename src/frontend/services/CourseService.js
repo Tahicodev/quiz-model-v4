@@ -220,7 +220,87 @@ export class CourseService {
     const { data: lessons } = await this.#repo.getAll('lessons', {
       filters: { course_id: courseId }, orderBy: 'order_index', direction: 'asc', limit: 1000,
     });
-    return { ...course, lessons };
+    const { data: categories } = course.category_id
+      ? await this.#repo.getAll('categories', { filters: { school_id: course.school_id }, limit: 100000 })
+      : { data: [] };
+    const categoryById = new Map((categories || []).map((category) => [String(category.id), category]));
+    const childrenByParent = new Map();
+    for (const category of categories || []) {
+      const parentId = String(category.parent_id || '');
+      if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+      childrenByParent.get(parentId).push(category);
+    }
+    for (const children of childrenByParent.values()) {
+      children.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    }
+
+    const categoryOrder = new Map();
+    const categoryChildren = new Map();
+    const visited = new Set();
+    const visit = (categoryId, seen = new Set()) => {
+      const key = String(categoryId);
+      if (seen.has(key) || visited.has(key)) return null;
+      seen.add(key);
+      visited.add(key);
+      categoryOrder.set(key, categoryOrder.size);
+      const category = categoryById.get(key);
+      if (!category) return null;
+      const children = (childrenByParent.get(key) || [])
+        .map((child) => visit(child.id, new Set(seen)))
+        .filter(Boolean);
+      const node = {
+        id: key,
+        name: String(category.name || 'Unnamed'),
+        children,
+        lesson: null,
+      };
+      categoryChildren.set(key, node);
+      return node;
+    };
+    const rootCategory = categoryById.has(String(course.category_id))
+      ? visit(course.category_id)
+      : null;
+
+    const orderedLessons = [...(lessons || [])].sort((a, b) => {
+      const aOrder = categoryOrder.get(String(a.category_id)) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = categoryOrder.get(String(b.category_id)) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder || (a.order_index || 0) - (b.order_index || 0);
+    });
+
+    const lessonsWithCategoryLevels = orderedLessons.map((lesson) => {
+      const levels = [];
+      let category = categoryById.get(String(lesson.category_id || ''));
+      const seen = new Set();
+      while (category && !seen.has(String(category.id))) {
+        seen.add(String(category.id));
+        levels.unshift({ id: String(category.id), name: String(category.name || 'Unnamed') });
+        if (String(category.id) === String(course.category_id)) break;
+        category = categoryById.get(String(category.parent_id || ''));
+      }
+      const rootIndex = levels.findIndex((level) => level.id === String(course.category_id));
+      return {
+        ...lesson,
+        category_levels: rootIndex >= 0 ? levels.slice(rootIndex) : [],
+      };
+    });
+    const lessonById = new Map(lessonsWithCategoryLevels.map((lesson) => [String(lesson.id), lesson]));
+    const representedLessonIds = new Set();
+    for (const lesson of lessonsWithCategoryLevels) {
+      const categoryNode = categoryChildren.get(String(lesson.category_id || ''));
+      if (categoryNode && !categoryNode.lesson) {
+        categoryNode.lesson = { id: String(lesson.id), title: String(lesson.title || 'Lesson') };
+        representedLessonIds.add(String(lesson.id));
+      }
+    }
+
+    return {
+      ...course,
+      category_structure: rootCategory,
+      lessons: lessonsWithCategoryLevels,
+      unlinked_lessons: lessonsWithCategoryLevels
+        .filter((lesson) => !representedLessonIds.has(String(lesson.id)))
+        .map(({ id, title }) => ({ id: String(id), title: String(title || 'Lesson') })),
+    };
   }
 
   async getLessonForStudent(lessonId, user) {

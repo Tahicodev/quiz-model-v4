@@ -20,8 +20,10 @@ import {
   CourseGenerateSchema, CourseAssignSchema, CourseReorderSchema,
   LessonContentGenerateSchema,
 } from '../../shared/schemas/course.schema.js';
+import { CourseDocumentSchema } from '../../shared/schemas/courseDocument.schema.js';
 import { getContainer } from '../container.js';
 import { toStudentPracticeView } from '../utils/studentQuestionView.js';
+import { renderCourseDocument } from '../services/courseDocumentRenderer.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -58,6 +60,20 @@ async function buildCategoryPath(categoryId) {
     current = current.parent_id ? await repo.getById('categories', current.parent_id) : null;
   }
   return names.join(' > ');
+}
+
+async function buildCourseCategoryLevels(categoryId, courseRootId) {
+  const { repo } = getContainer();
+  const levels = [];
+  let current = categoryId ? await repo.getById('categories', categoryId) : null;
+  const guard = new Set();
+  while (current && !guard.has(String(current.id))) {
+    guard.add(String(current.id));
+    levels.unshift({ id: String(current.id), name: String(current.name || 'Unnamed') });
+    current = current.parent_id ? await repo.getById('categories', current.parent_id) : null;
+  }
+  const rootIndex = levels.findIndex((level) => level.id === String(courseRootId || ''));
+  return rootIndex >= 0 ? levels.slice(rootIndex) : levels;
 }
 
 // ── Student surface (declared before /:id so the literal wins over param) ───
@@ -228,6 +244,35 @@ router.get('/:id', requireRole(MANAGE_ROLES), async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/:id/documents/export', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const parsed = CourseDocumentSchema.safeParse(req.body || {});
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const { courseSvc } = getContainer();
+    const course = await courseSvc.getById(req.params.id);
+    assertCourseOwnership(course, req.user);
+    const full = await courseSvc.getWithLessons(req.params.id, req.schoolId);
+    full.category_path = course.category_id ? await buildCategoryPath(course.category_id) : null;
+    full.lessons = await Promise.all((full.lessons || []).map(async (lesson) => ({
+      ...lesson,
+      category_levels: await buildCourseCategoryLevels(lesson.category_id, course.category_id),
+    })));
+    const rendered = await renderCourseDocument(full, parsed.data);
+    const safeName = String(full.name || 'course')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'course';
+    const filename = `${safeName}.${rendered.extension}`;
+    res.setHeader('Content-Type', rendered.mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Length', String(rendered.buffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(rendered.buffer);
+  } catch (err) { next(err); }
+});
+
 router.patch('/:id', requireRole(MANAGE_ROLES), async (req, res, next) => {
   try {
     const { courseSvc, auditSvc } = getContainer();
@@ -336,7 +381,6 @@ router.post('/:courseId/lessons/:lessonId/generate-content', requireRole(MANAGE_
     const lesson = await repo.getById('lessons', req.params.lessonId);
     if (!lesson || String(lesson.course_id) !== String(course.id)) throw new NotFoundError('Lesson');
 
-    const config = await resolveGenerationConfig(req, params);
     const categoryPath = lesson.category_id
       ? await buildCategoryPath(lesson.category_id)
       : course.name;
@@ -346,10 +390,23 @@ router.post('/:courseId/lessons/:lessonId/generate-content', requireRole(MANAGE_
       questionDigest = questions.map((q) => String(q.text || q.question || '').slice(0, 300)).filter(Boolean);
     }
 
+    if (params.promptOnly) {
+      return res.json({
+        prompt: aiSvc.buildLessonContentPrompt({
+          language: params.language,
+          lesson: { ...lesson, course_name: course.name },
+          categoryPath,
+          questionDigest,
+          includeQuestions: params.includeQuestions,
+        }),
+      });
+    }
+
+    const config = await resolveGenerationConfig(req, params);
     const content = await aiSvc.generateLessonContent({
       config,
       language: params.language,
-      lesson,
+      lesson: { ...lesson, course_name: course.name },
       categoryPath,
       questionDigest,
       includeQuestions: params.includeQuestions,

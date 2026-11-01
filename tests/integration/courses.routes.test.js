@@ -217,6 +217,44 @@ describe('course management endpoints', () => {
 		expect(row.class_names).toEqual([]);
 	});
 
+	it('exports a structured course document as PDF and DOCX using selected styles', async () => {
+		const payload = {
+			templateId: 'moderne',
+			headerLayout: 'split',
+			includeCover: true,
+			includeTableOfContents: true,
+			startEachLessonOnNewPage: false,
+			header: { schoolName: 'North School', teacherName: 'Teacher A', academicYear: '2025-2026' },
+		};
+		const pdf = await asTeacher()
+			.post(`${BASE}/${courseId}/documents/export`)
+			.send({ ...payload, format: 'pdf' });
+		expect(pdf.status).toBe(200);
+		expect(pdf.headers['content-type']).toContain('application/pdf');
+		expect(pdf.body.subarray(0, 4).toString()).toBe('%PDF');
+
+		const docx = await asTeacher()
+			.post(`${BASE}/${courseId}/documents/export`)
+			.buffer(true)
+			.parse((response, callback) => {
+				const chunks = [];
+				response.on('data', (chunk) => chunks.push(chunk));
+				response.on('end', () => callback(null, Buffer.concat(chunks)));
+			})
+			.send({ ...payload, format: 'docx' });
+		expect(docx.status).toBe(200);
+		expect(docx.headers['content-type']).toContain('wordprocessingml.document');
+		expect(docx.body.subarray(0, 2).toString()).toBe('PK');
+	});
+
+	it('validates document export options', async () => {
+		const res = await asTeacher()
+			.post(`${BASE}/${courseId}/documents/export`)
+			.send({ format: 'html', templateId: 'unknown' });
+		expect(res.status).toBe(422);
+		expect(res.body.error.code).toBe('VALIDATION_ERROR');
+	});
+
 	it('students cannot reach the management surface', async () => {
 		expect((await asStudent().get('/api/v1/courses')).status).toBe(403);
 		expect((await asStudent().post(`/api/v1/courses/${courseId}/publish`)).status).toBe(403);
@@ -233,6 +271,27 @@ describe('course management endpoints', () => {
 
 		const detail = await asTeacher().get(`/api/v1/courses/${courseId}`);
 		expect(detail.body.lessons[0].content).toContain('Check yourself');
+	});
+
+	it('returns the lesson-generation prompt for copying to another AI', async () => {
+		const res = await asTeacher()
+			.post(`/api/v1/courses/${courseId}/lessons/${lessonIds[0]}/generate-content`)
+			.send({ promptOnly: true, language: 'French', includeQuestions: true });
+		expect(res.status).toBe(200);
+		expect(res.body.prompt).toContain('COURSE: French — Unit 3');
+		expect(res.body.prompt).toContain('LESSON TITLE: Les pluriels irréguliers');
+		expect(res.body.prompt).toContain('QUIZ CATEGORY PATH: Unit 3 > Unit 3 — Axe 1');
+		expect(res.body.prompt).toContain('What is the plural of "cheval"?');
+		expect(res.body.prompt).toContain('## Objectives');
+		expect(res.body.prompt).toContain('## Check yourself');
+	});
+
+	it('uses the established lesson route for prompt-only mode without calling an AI provider', async () => {
+		const res = await asTeacher()
+			.post(`/api/v1/courses/${courseId}/lessons/${lessonIds[0]}/generate-content`)
+			.send({ promptOnly: true, language: 'French' });
+		expect(res.status).toBe(200);
+		expect(res.body.prompt).toContain('RULES:');
 	});
 
 	it('adds, edits and reorders lessons manually', async () => {
@@ -292,6 +351,14 @@ describe('student visibility over HTTP', () => {
 
 		const detail = await asStudent().get(`/api/v1/courses/student/${courseId}`);
 		expect(detail.body.lessons[0].content).toContain('## Objectives');
+		expect(detail.body.lessons[0].category_levels.map((level) => level.name)).toEqual([
+			'Unit 3',
+			'Unit 3 — Axe 1',
+		]);
+		expect(detail.body.category_structure).toMatchObject({
+			name: 'Unit 3',
+			children: [{ name: 'Unit 3 — Axe 1', lesson: { id: lessonIds[0] } }],
+		});
 
 		// A draft the student was never assigned to is simply not found.
 		const other = await prisma.course.create({

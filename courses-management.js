@@ -19,6 +19,7 @@
 	let currentCourse = null; // full course with lessons (detail view)
 	let aiConfigsCache = null;
 	let courseBatchGenerating = false;
+	let publishAfterAssignCourseId = null;
 	let collapsedCourseCategoryIds = new Set();
 
 	function esc(s) {
@@ -62,20 +63,48 @@
 		return [];
 	}
 
-	// Per-category question counts from the admin question mirror; used only
-	// for UI hints — the SERVER re-derives the plan and is authoritative.
+	// Per-category direct question counts from the shared admin repository.
+	// The course page is a separate classic script, so it cannot depend on the
+	// question editor's lexical `questions` binding being globally visible.
 	function questionCountByCategory() {
 		const counts = new Map();
+		let rows = null;
 		try {
-			if (typeof questions !== 'undefined' && Array.isArray(questions)) {
-				for (const q of questions) {
-					const cid = String(q?.category_id ?? q?.categoryId ?? '');
-					if (!cid) continue;
-					counts.set(cid, (counts.get(cid) || 0) + 1);
-				}
+			const repo = window.__DI_CONTAINER__?.repo;
+			const stored = repo?.getAll_sync?.('questions');
+			if (Array.isArray(stored)) rows = stored;
+		} catch (_) {
+			// Fall back to the legacy mirror if the repository is not ready.
+		}
+		if (!rows) {
+			try {
+				if (typeof questions !== 'undefined' && Array.isArray(questions)) rows = questions;
+			} catch (_) {
+				// The question mirror can be scoped to its own classic script.
 			}
-		} catch (_) { /* mirror unavailable */ }
+		}
+		if (!rows) return counts;
+
+		const byId = new Map(categoryList().map((category) => [String(category.id), category]));
+		const byName = new Map();
+		for (const category of categoryList()) {
+			if (category?.name && !byName.has(String(category.name))) {
+				byName.set(String(category.name), category);
+			}
+		}
+		for (const question of rows) {
+			const ref = question?.category ?? question?.categoryId ?? question?.category_id;
+			const category = byId.get(String(ref ?? '')) || byName.get(String(ref ?? ''));
+			if (!category) continue;
+			const id = String(category.id);
+			counts.set(id, (counts.get(id) || 0) + 1);
+		}
 		return counts;
+	}
+
+	function questionCountForCategoryBranch(categoryId, counts, categories, tree) {
+		const ids = [categoryId, ...(tree ? tree.getDescendantIds(categoryId, categories) : [])];
+		return ids.reduce((total, id) => total + (counts.get(String(id)) || 0), 0);
 	}
 
 	function categoryPath(id) {
@@ -221,6 +250,7 @@
 	function closeCourseModal(id) {
 		const el = document.getElementById(id);
 		if (el && typeof el.remove === 'function') el.remove();
+		if (id === 'courseAssignModal') publishAfterAssignCourseId = null;
 	}
 	window.closeCourseModal = closeCourseModal;
 
@@ -325,6 +355,8 @@
 					'<td><div class="exam-actions">' +
 					`<button class="exam-action-btn exam-edit-btn" title="Open course" onclick="openCourseDetail('${esc(c.id)}')">` +
 					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>' +
+					`<button class="exam-action-btn course-action-document" title="Create course document" onclick="createCourseDocument('${esc(c.id)}')">` +
+					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg></button>' +
 					`<button class="exam-action-btn" title="${published ? 'Unpublish' : 'Publish'}" onclick="toggleCoursePublish('${esc(c.id)}','${published ? 'unpublish' : 'publish'}')">` +
 					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg></button>' +
 					`<button class="exam-action-btn exam-delete-btn" title="Delete course" onclick="deleteCourseConfirm('${esc(c.id)}')">` +
@@ -354,6 +386,11 @@
 						onClick: () => openCourseDetail(course.id),
 					},
 					{
+						label: 'Create course document',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg>',
+						onClick: () => window.createCourseDocument(course.id),
+					},
+					{
 						label: published ? 'Unpublish course' : 'Publish course',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>',
 						onClick: () => toggleCoursePublish(course.id, published ? 'unpublish' : 'publish'),
@@ -370,11 +407,28 @@
 		});
 	};
 
-	async function toggleCoursePublish(courseId, action) {
+	async function toggleCoursePublish(courseId, action, recipientsChecked = false) {
 		const A = api();
 		if (!A) return;
+		if (action === 'publish' && !recipientsChecked) {
+			try {
+				const course = currentCourse && String(currentCourse.id) === String(courseId)
+					? currentCourse
+					: await A.raw('GET', `/courses/${encodeURIComponent(courseId)}`);
+				if (!(course.class_ids || []).length) {
+					currentCourse = course;
+					publishAfterAssignCourseId = String(courseId);
+					await window.openAssignClassesModal({ publishAfterAssign: true });
+					return;
+				}
+			} catch (err) {
+				toast('Could not check course recipients: ' + (err?.message || 'error'), 'error');
+				return;
+			}
+		}
 		try {
 			await A.raw('POST', `/courses/${encodeURIComponent(courseId)}/${action}`);
+			publishAfterAssignCourseId = null;
 			toast(action === 'publish' ? 'Course published — assigned classes can see it.' : 'Course moved back to draft.');
 			await loadCourses();
 			renderCourseList();
@@ -679,7 +733,7 @@
 			? branchRows
 				.map(({ category, depth }) => {
 					const lesson = lessonByCat.get(String(category.id));
-					const qCount = counts.get(String(category.id)) || 0;
+					const qCount = questionCountForCategoryBranch(category.id, counts, list, tree);
 					const hasChildren = branchRows.some((row) => String(row.category.parent_id) === String(category.id));
 					const level = depth === 0 ? 'Main category' : hasChildren ? 'Subcategory' : 'Axis';
 					const toggle = hasChildren
@@ -689,10 +743,10 @@
 						? `<button type="button" class="btn btn-sm course-tree-lesson-link" onclick="focusLesson('${esc(lesson.id)}')" title="Open lesson">Lesson: ${esc(lesson.title)}</button>`
 						: `<span class="course-tree-unassigned">${hasChildren ? 'Lessons are organized below' : 'No lesson linked'}</span>`;
 					const generateBtn = lesson
-						? `<button type="button" class="btn btn-ai-generate btn-sm course-tree-generate" data-gen-lesson="${esc(lesson.id)}" onclick="generateLessonContent('${esc(lesson.id)}', this)">Generate course content via AI</button>`
+						? `<button type="button" class="btn btn-ai-generate btn-sm course-tree-generate" data-gen-lesson="${esc(lesson.id)}" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate course content via AI</button>`
 						: '';
 					return (
-						`<div class="course-tree-row" data-category-id="${esc(category.id)}" style="--course-depth:${depth};">` +
+						`<div class="course-tree-row" data-category-id="${esc(category.id)}"${lesson ? ` data-lesson-id="${esc(lesson.id)}"` : ''} style="--course-depth:${depth};">` +
 						`<div class="course-tree-category">${toggle}<span class="course-tree-level">${level}</span>` +
 						`<strong>${esc(category.name)}</strong><span class="course-tree-count">${qCount} question${qCount === 1 ? '' : 's'}</span></div>` +
 						`<div class="course-tree-actions">${lessonLabel}${generateBtn}</div>` +
@@ -717,6 +771,7 @@
 			`<button type="button" class="btn ${published ? 'course-action-unpublish' : 'course-action-publish'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? 'Unpublish' : 'Publish'}</button>` +
 			'<button type="button" class="btn course-action-assign" onclick="openAssignClassesModal()">Send to students</button>' +
 			'<button type="button" class="btn course-action-add" onclick="addLessonManual()">+ Add lesson</button>' +
+			'<button type="button" class="btn course-action-document" onclick="createCourseDocument()">Create document</button>' +
 			'</div></div></div>' +
 			`<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No category branch')}</div>` +
 			'<section class="course-structure-panel"><div class="course-section-heading"><div><h3>Category structure</h3>' +
@@ -734,19 +789,145 @@
 			'<h3 style="margin:8px 0;">Lessons</h3>' +
 			`<div id="courseLessonsWrap">${lessonsHtml || '<div class="text-muted">No lessons yet.</div>'}</div>`;
 		updateCourseTreeVisibility();
+		pane.querySelectorAll('.course-tree-row[data-lesson-id]').forEach((row) => {
+			row.addEventListener('click', (event) => {
+				if (window.innerWidth > 768 || event.target.closest('button')) return;
+				event.stopPropagation();
+				openMobileLessonActions(row.dataset.lessonId);
+			});
+		});
 	};
 
 	window.confirmGenerateAllCourseLessons = function () {
 		if (!currentCourse?.lessons?.length) return toast('This course has no lessons to generate.', 'error');
-		const hasContent = currentCourse.lessons.some((lesson) => String(lesson.content || '').trim());
 		openModal(
 			'courseGenerateAllModal',
-			'Generate all lesson content',
-			`<p>Generate AI lesson content for all <strong>${currentCourse.lessons.length} levels</strong> under <strong>${esc(currentCourse.name)}</strong>? This runs one lesson at a time.</p>` +
-				(hasContent ? '<p class="course-generator-hint">Existing lesson content will be replaced.</p>' : ''),
+			'AI options · all course levels',
+			`<p>Choose how to create content for all <strong>${currentCourse.lessons.length} levels</strong> in <strong>${esc(currentCourse.name)}</strong>.</p>` +
+				'<p>You can generate directly, copy a structured prompt for another AI, or paste its completed course result.</p>' +
+				(currentCourse.lessons.some((lesson) => String(lesson.content || '').trim())
+					? '<p class="course-generator-hint">Existing lesson content will be replaced when you save new results.</p>'
+					: ''),
 			`<button type="button" class="btn" onclick="closeCourseModal('courseGenerateAllModal')">Cancel</button>` +
+				'<button type="button" class="btn course-action-copy" onclick="copyAllCourseAIPrompt()">Copy prompt</button>' +
+				'<button type="button" class="btn course-action-import" onclick="openAllCourseAIResult()">Load AI result</button>' +
 				'<button type="button" class="btn btn-primary" onclick="generateAllCourseLessons()">Generate all</button>',
 		);
+	};
+
+	window.copyAllCourseAIPrompt = async function () {
+		const A = api();
+		if (!A || !currentCourse?.lessons?.length) return;
+		try {
+			const course = currentCourse;
+			const prompts = [];
+			for (const lesson of course.lessons) {
+				const result = await A.raw(
+					'POST',
+					`/courses/${encodeURIComponent(course.id)}/lessons/${encodeURIComponent(lesson.id)}/generate-content`,
+					{ promptOnly: true, language: 'French', includeQuestions: true },
+				);
+				if (!result?.prompt) throw new Error(`No prompt was returned for "${lesson.title}".`);
+				prompts.push({ lessonId: lesson.id, title: lesson.title, prompt: result.prompt });
+			}
+			const prompt =
+				`Create complete course content for "${course.name}". Follow each lesson-specific instruction below and preserve the app's Markdown lesson structure. ` +
+				'Return ONLY valid JSON, with no Markdown fences, in exactly this shape: ' +
+				'{"lessons":[{"lessonId":"EXACT_ID","content":"## Objectives\\\\n..."}]}. ' +
+				'Include every requested lesson exactly once, preserve each lessonId exactly, and put each complete lesson in its content string. ' +
+				'Do not invent lesson IDs or include answer keys. Each lesson must include the sections requested by its prompt.\n\n' +
+				prompts.map((item, index) => `===== LESSON ${index + 1} · ${item.title} · lessonId=${item.lessonId} =====\n${item.prompt}`).join('\n\n');
+			let copied = false;
+			try {
+				if (navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(prompt);
+					copied = true;
+				}
+			} catch (_) {}
+			if (!copied) {
+				const helper = document.createElement('textarea');
+				helper.value = prompt;
+				helper.setAttribute('readonly', '');
+				helper.style.cssText = 'position:fixed;top:-9999px;opacity:0';
+				document.body.appendChild(helper);
+				helper.select();
+				try { copied = document.execCommand('copy'); } finally { helper.remove(); }
+			}
+			if (copied) {
+				window.closeCourseModal('courseGenerateAllModal');
+				toast('Course prompt copied. Paste it into ChatGPT, Claude, or another AI.', 'success');
+			} else {
+				openModal(
+					'courseAllPromptModal',
+					'Copy course prompt',
+					`<textarea id="courseAllPromptText" rows="18" readonly style="width:100%;">${esc(prompt)}</textarea>`,
+					'<button type="button" class="btn" onclick="closeCourseModal(\'courseAllPromptModal\')">Close</button>' +
+						'<button type="button" class="btn btn-primary" onclick="document.getElementById(\'courseAllPromptText\').select()">Select prompt</button>',
+				);
+			}
+		} catch (err) {
+			toast('Could not prepare the course prompt: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	window.openAllCourseAIResult = function () {
+		if (!currentCourse?.lessons?.length) return toast('This course has no lessons to update.', 'error');
+		const expected = currentCourse.lessons.map((lesson) => `<li><code>${esc(lesson.id)}</code> · ${esc(lesson.title)}</li>`).join('');
+		openModal(
+			'courseAllAIResultModal',
+			'Load course AI result',
+			'<p>Paste the JSON returned by ChatGPT, Claude, or another AI. Every lesson must appear exactly once with its original ID and Markdown content.</p>' +
+				'<div class="course-generator-hint">Expected lesson IDs:</div><ul class="course-ai-lesson-ids">' + expected + '</ul>' +
+				'<div class="form-group"><label for="courseAllAIResultText">AI-generated course JSON</label><textarea id="courseAllAIResultText" rows="16" placeholder=\'{"lessons":[{"lessonId":"...","content":"## Objectives\\\\n..."}]}\'></textarea></div>',
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseAllAIResultModal\')">Cancel</button>' +
+				'<button type="button" class="btn btn-primary" onclick="saveAllCourseAIResult()">Validate and save all</button>',
+		);
+	};
+
+	window.saveAllCourseAIResult = async function () {
+		const A = api();
+		if (!A || !currentCourse?.lessons?.length) return;
+		const source = document.getElementById('courseAllAIResultText')?.value || '';
+		let parsed;
+		try {
+			const cleaned = source.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+			parsed = JSON.parse(cleaned);
+		} catch (_) {
+			return toast('The AI result is not valid JSON. Copy the full JSON response and try again.', 'error');
+		}
+		const entries = Array.isArray(parsed) ? parsed : parsed?.lessons;
+		if (!Array.isArray(entries)) return toast('The result must contain a lessons array.', 'error');
+		const expected = new Map(currentCourse.lessons.map((lesson) => [String(lesson.id), lesson]));
+		const contentById = new Map();
+		for (const item of entries) {
+			const id = String(item?.lessonId ?? item?.id ?? '');
+			if (!expected.has(id)) return toast(`Unexpected lesson ID in AI result: ${id || '(empty)'}. Nothing was saved.`, 'error');
+			if (contentById.has(id)) return toast(`Lesson "${expected.get(id).title}" appears more than once. Nothing was saved.`, 'error');
+			if (typeof item.content !== 'string' || !item.content.trim()) return toast(`Lesson "${expected.get(id).title}" has no content. Nothing was saved.`, 'error');
+			if (item.content.length > 50000) return toast(`Lesson "${expected.get(id).title}" exceeds the 50,000-character limit. Nothing was saved.`, 'error');
+			contentById.set(id, item.content);
+		}
+		const missing = [...expected.keys()].filter((id) => !contentById.has(id));
+		if (missing.length) {
+			return toast(`Missing ${missing.length} lesson${missing.length === 1 ? '' : 's'}: ${missing.map((id) => expected.get(id).title).join(', ')}. Nothing was saved.`, 'error');
+		}
+		const courseId = currentCourse.id;
+		let saved = 0;
+		try {
+			for (const [id, lesson] of expected) {
+				const updated = await A.raw('PATCH', `/courses/lessons/${encodeURIComponent(id)}`, { content: contentById.get(id) });
+				Object.assign(lesson, updated);
+				saved += 1;
+				const saveButton = document.querySelector('#courseAllAIResultModal .btn-primary');
+				if (saveButton) saveButton.textContent = `Saving ${saved}/${expected.size}…`;
+			}
+			window.closeCourseModal('courseAllAIResultModal');
+			renderCourseDetail();
+			toast(`Saved AI content for all ${saved} course levels.`);
+		} catch (err) {
+			if (String(currentCourse?.id) === String(courseId)) renderCourseDetail();
+			toast(`Saved ${saved} of ${expected.size} lessons. The remaining lessons were not changed. Error: ${err?.message || 'unknown error'}`, 'error');
+		}
 	};
 
 	window.generateAllCourseLessons = async function () {
@@ -798,7 +979,7 @@
 			`</div>` +
 			`<textarea id="lessonContent-${esc(lesson.id)}" rows="8" style="width:100%;font-family:inherit;" placeholder="Lesson content (markdown). Use the AI button to fill it.">${esc(lesson.content || '')}</textarea>` +
 			'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;">' +
-			`<button type="button" class="btn btn-ai-generate btn-sm" onclick="generateLessonContent('${esc(lesson.id)}', this)">Generate content via AI</button>` +
+			`<button type="button" class="btn btn-ai-generate btn-sm" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate content via AI</button>` +
 			`<button type="button" class="btn btn-sm" onclick="generateQuestionsFromLesson('${esc(lesson.id)}')">Generate questions</button>` +
 			`<button type="button" class="btn btn-sm" onclick="previewLesson('${esc(lesson.id)}')">Preview</button>` +
 			`<button type="button" class="btn btn-primary btn-sm" onclick="saveLesson('${esc(lesson.id)}')">Save</button>` +
@@ -830,6 +1011,286 @@
 			box.style.display = 'block';
 		} else {
 			box.style.display = 'none';
+		}
+	};
+
+	window.openLessonAIActions = function (lessonId) {
+		const lesson = currentCourse?.lessons?.find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return toast('Lesson not found in this course.', 'error');
+		openModal(
+			'courseLessonAiActionsModal',
+			`AI options · ${lesson.title}`,
+			'<p>Choose how you want to use AI for this lesson.</p>',
+			`<button type="button" class="btn" onclick="closeCourseModal('courseLessonAiActionsModal')">Cancel</button>` +
+				`<button type="button" class="btn btn-primary" onclick="closeCourseModal('courseLessonAiActionsModal');generateLessonContent('${esc(lesson.id)}')">Generate course content</button>` +
+					`<button type="button" class="btn course-action-copy" onclick="copyLessonAIPrompt('${esc(lesson.id)}')">Copy prompt</button>` +
+					`<button type="button" class="btn course-action-import" onclick="openLessonAIResult('${esc(lesson.id)}')">Load AI result</button>`,
+		);
+	};
+
+	function openMobileLessonActions(lessonId) {
+		const lesson = currentCourse?.lessons?.find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return;
+		if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
+			window.openLessonAIActions(lessonId);
+			return;
+		}
+		window.MobileActionSheet.open(`Lesson: ${String(lesson.title || '')}`, [
+			{
+				label: 'Open lesson',
+				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>',
+				onClick: () => window.focusLesson(lessonId),
+			},
+			{
+				label: 'Generate lesson with AI',
+				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path><path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14z"></path></svg>',
+				onClick: () => window.generateLessonContent(lessonId),
+				variant: 'primary',
+			},
+			{
+				label: 'Copy AI prompt',
+				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>',
+				onClick: () => window.copyLessonAIPrompt(lessonId),
+			},
+			{
+				label: 'Load AI result',
+				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M20 16.5v2A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5v-2"></path></svg>',
+				onClick: () => window.openLessonAIResult(lessonId),
+			},
+		]);
+	}
+
+	window.copyLessonAIPrompt = async function (lessonId) {
+		const A = api();
+		if (!A || !currentCourse) return;
+		try {
+			const response = await A.raw(
+				'POST',
+				`/courses/${encodeURIComponent(currentCourse.id)}/lessons/${encodeURIComponent(lessonId)}/generate-content`,
+				{ promptOnly: true, language: 'French', includeQuestions: true },
+			);
+			const prompt = String(response?.prompt || '');
+			if (!prompt) throw new Error('The server returned an empty prompt.');
+			let copied = false;
+			try {
+				if (navigator.clipboard?.writeText) {
+					await navigator.clipboard.writeText(prompt);
+					copied = true;
+				}
+			} catch (_) {
+				// Clipboard API may be unavailable in non-secure or embedded contexts.
+			}
+			if (!copied) {
+				const helper = document.createElement('textarea');
+				helper.value = prompt;
+				helper.setAttribute('readonly', '');
+				helper.style.cssText = 'position:fixed;top:-9999px;opacity:0';
+				document.body.appendChild(helper);
+				helper.select();
+				try {
+					copied = document.execCommand('copy');
+				} finally {
+					helper.remove();
+				}
+			}
+			if (copied) {
+				toast('Lesson prompt copied. Paste it into ChatGPT, Claude, or another AI.', 'success');
+				return;
+			}
+			openModal(
+				'coursePromptModal',
+				'Copy lesson prompt',
+				`<textarea id="coursePromptText" rows="14" readonly style="width:100%;">${esc(prompt)}</textarea>`,
+				`<button type="button" class="btn" onclick="closeCourseModal('coursePromptModal')">Close</button>` +
+					`<button type="button" class="btn btn-primary" onclick="document.getElementById('coursePromptText').select()">Select prompt</button>`,
+			);
+			toast('Automatic copy was unavailable. Select and copy the prompt manually.', 'warning');
+		} catch (err) {
+			toast('Could not prepare the lesson prompt: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	window.openLessonAIResult = function (lessonId) {
+		const lesson = currentCourse?.lessons?.find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return toast('Lesson not found in this course.', 'error');
+		openModal(
+			'courseAIResultModal',
+			`Load AI result · ${lesson.title}`,
+			'<p>Paste the Markdown lesson content returned by ChatGPT, Claude, or another AI. It will be saved to this lesson and displayed using the course reader format.</p>' +
+				`<div class="form-group"><label for="courseAIResultText">AI-generated lesson content</label><textarea id="courseAIResultText" rows="16" maxlength="50000" placeholder="## Objectives&#10;&#10;..."></textarea><div class="course-generator-hint">Markdown only · up to 50,000 characters · no HTML or answer keys</div></div>`,
+			`<button type="button" class="btn" onclick="closeCourseModal('courseAIResultModal')">Cancel</button>` +
+				`<button type="button" class="btn btn-primary" onclick="saveLessonAIResult('${esc(lesson.id)}')">Save lesson content</button>`,
+		);
+	};
+
+	window.saveLessonAIResult = async function (lessonId) {
+		const A = api();
+		if (!A || !currentCourse) return;
+		const content = document.getElementById('courseAIResultText')?.value || '';
+		if (!content.trim()) return toast('Paste the AI-generated lesson content first.', 'error');
+		if (content.length > 50000) return toast('Lesson content must be 50,000 characters or fewer.', 'error');
+		try {
+			const updated = await A.raw('PATCH', `/courses/lessons/${encodeURIComponent(lessonId)}`, { content });
+			const lesson = currentCourse.lessons.find((item) => String(item.id) === String(lessonId));
+			if (lesson) Object.assign(lesson, updated);
+			window.closeCourseModal('courseAIResultModal');
+			renderCourseDetail();
+			toast('AI result saved to the lesson.');
+		} catch (err) {
+			toast('Could not save AI result: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	window.createCourseDocument = async function (courseId) {
+		const A = api();
+		if (!A) return;
+		let course = currentCourse && (!courseId || String(currentCourse.id) === String(courseId))
+			? currentCourse
+			: null;
+		try {
+			if (!course) course = await A.raw('GET', `/courses/${encodeURIComponent(courseId)}`);
+			const header = {
+				teacherName: window.currentUser?.name || '',
+				subject: course.name || '',
+				...(course.document_header || {}),
+			};
+			const templates = [
+				['classique', 'Classique', 'Balanced · serif'],
+				['moderne', 'Moderne', 'Contemporary · teal'],
+				['compact', 'Compact', 'Space-saving · amber'],
+				['ultra', 'Ultra', 'Dense · rose'],
+				['officiel', 'Officiel', 'Formal · framed'],
+				['college', 'Collège', 'Friendly · green'],
+			];
+			const templateCards = templates.map(([id, name, hint]) =>
+				`<button type="button" class="course-doc-template${id === 'classique' ? ' is-selected' : ''}" data-course-doc-template="${id}" aria-pressed="${id === 'classique'}">` +
+					`<span class="course-doc-template-swatch template-${id}"></span><strong>${name}</strong><small>${hint}</small></button>`,
+			).join('');
+			const headerLayouts = [
+				['bandeau', 'Institutional band', 'School details above the title'],
+				['classique', 'Classic', 'Editorial left-aligned header'],
+				['centre', 'Centered', 'Balanced, centred composition'],
+				['split', 'Split', 'Institution and metadata in two columns'],
+				['boxed', 'Framed', 'Formal outlined header'],
+				['banner', 'Title banner', 'Strong colour band'],
+				['minimal', 'Minimal', 'Small, discreet running header'],
+			];
+			const headerLayoutCards = headerLayouts.map(([id, name, hint]) =>
+				`<button type="button" class="course-doc-layout${id === 'bandeau' ? ' is-selected' : ''}" data-course-doc-layout="${id}" aria-pressed="${id === 'bandeau'}">` +
+					`<span class="course-doc-layout-icon layout-${id}" aria-hidden="true"><i></i><b></b><em></em></span><strong>${name}</strong><small>${hint}</small></button>`,
+			).join('');
+			const formField = (id, label, value, placeholder = '') =>
+				`<label class="course-doc-field"><span>${label}</span><input id="courseDoc${id}" maxlength="200" value="${esc(value || '')}" placeholder="${esc(placeholder)}"></label>`;
+			const modal = openModal(
+				'courseDocumentModal',
+				`Create document · ${esc(course.name)}`,
+				`<div class="course-doc-form" data-course-id="${esc(course.id)}">
+					<div class="course-doc-step-label"><span>01</span><div><strong>Document identity</strong><small>School, teacher and course details</small></div></div>
+					<section class="course-doc-section">
+						<div class="course-doc-fields">
+							${formField('School', 'School / institution', header.schoolName, 'School name')}
+							${formField('Ministry', 'Ministry', header.ministry)}
+							${formField('Academy', 'Academy / region', header.academy)}
+							${formField('Year', 'Academic year', header.academicYear, '2025–2026')}
+							${formField('Teacher', 'Teacher', header.teacherName)}
+							${formField('Subject', 'Subject', header.subject)}
+							${formField('Level', 'Level', header.level)}
+							${formField('Group', 'Class / group', header.group)}
+							${formField('Date', 'Date', header.date || new Date().toISOString().slice(0, 10))}
+						</div>
+					</section>
+					<div class="course-doc-step-label"><span>02</span><div><strong>Choose the visual style</strong><small>Pick a document theme and header arrangement</small></div></div>
+					<section class="course-doc-section"><h4>Document template</h4>
+						<div class="course-doc-templates">${templateCards}</div>
+					</section>
+					<section class="course-doc-section"><h4>Header arrangement</h4>
+						<div class="course-doc-layouts">${headerLayoutCards}</div>
+					</section>
+					<div class="course-doc-step-label"><span>03</span><div><strong>Organize the course</strong><small>Choose the opening pages and lesson pagination</small></div></div>
+					<section class="course-doc-section course-doc-options">
+						<label><input id="courseDocIncludeCover" type="checkbox" checked><span><strong>Cover page</strong><small>Course title, branch, school and course overview</small></span></label>
+						<label><input id="courseDocIncludeContents" type="checkbox" checked><span><strong>Table of contents</strong><small>Lesson list with its category path</small></span></label>
+						<label><input id="courseDocLessonPages" type="checkbox"><span><strong>Start every lesson on a new page</strong><small>Use for a workbook-style handout</small></span></label>
+					</section>
+					<p class="course-doc-status" id="courseDocStatus" role="status">${course.lessons?.length ? `${course.lessons.length} lessons will be included.` : 'No lessons yet; the document will contain the course header.'}</p>
+				</div>`,
+				`<button type="button" class="btn" onclick="closeCourseModal('courseDocumentModal')">Cancel</button>
+					<button type="button" class="btn course-doc-export course-doc-export-pdf" onclick="exportCourseDocument('pdf')">Export PDF</button>
+					<button type="button" class="btn course-doc-export course-doc-export-docx" onclick="exportCourseDocument('docx')">Export Word</button>`,
+				'course-document-modal',
+			);
+			modal.querySelectorAll('[data-course-doc-template]').forEach((button) => {
+				button.addEventListener('click', () => {
+					modal.querySelectorAll('[data-course-doc-template]').forEach((item) => {
+						const selected = item === button;
+						item.classList.toggle('is-selected', selected);
+						item.setAttribute('aria-pressed', String(selected));
+					});
+				});
+			});
+			modal.querySelectorAll('[data-course-doc-layout]').forEach((button) => {
+				button.addEventListener('click', () => {
+					modal.querySelectorAll('[data-course-doc-layout]').forEach((item) => {
+						const selected = item === button;
+						item.classList.toggle('is-selected', selected);
+						item.setAttribute('aria-pressed', String(selected));
+					});
+				});
+			});
+		} catch (err) {
+			toast('Could not prepare course document: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	window.exportCourseDocument = async function (format) {
+		const A = api();
+		const modal = document.getElementById('courseDocumentModal');
+		const form = modal?.querySelector('.course-doc-form');
+		if (!A || !form) return;
+		const courseId = form.dataset.courseId;
+		const templateId = form.querySelector('[data-course-doc-template].is-selected')?.dataset.courseDocTemplate || 'classique';
+		const headerLayout = form.querySelector('[data-course-doc-layout].is-selected')?.dataset.courseDocLayout || 'bandeau';
+		const value = (id) => document.getElementById(`courseDoc${id}`)?.value?.trim() || '';
+		const body = {
+			format,
+			templateId,
+			headerLayout,
+			includeCover: Boolean(document.getElementById('courseDocIncludeCover')?.checked),
+			includeTableOfContents: Boolean(document.getElementById('courseDocIncludeContents')?.checked),
+			startEachLessonOnNewPage: Boolean(document.getElementById('courseDocLessonPages')?.checked),
+			header: {
+				schoolName: value('School'),
+				ministry: value('Ministry'),
+				academy: value('Academy'),
+				academicYear: value('Year'),
+				teacherName: value('Teacher'),
+				subject: value('Subject'),
+				level: value('Level'),
+				group: value('Group'),
+				date: value('Date'),
+			},
+		};
+		const buttons = modal.querySelectorAll('.course-doc-export');
+		buttons.forEach((button) => { button.disabled = true; });
+		const status = document.getElementById('courseDocStatus');
+		if (status) status.textContent = `Preparing ${format.toUpperCase()}…`;
+		try {
+			const result = await A.blob('POST', `/courses/${encodeURIComponent(courseId)}/documents/export`, body);
+			const url = URL.createObjectURL(result.blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = result.filename || `course.${format}`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
+			if (status) status.textContent = `${format.toUpperCase()} document downloaded.`;
+			toast(`${format.toUpperCase()} course document downloaded.`);
+		} catch (err) {
+			if (status) status.textContent = `Could not export ${format.toUpperCase()}: ${err?.message || 'error'}`;
+			toast(`Could not export course document: ${err?.message || 'error'}`, 'error');
+		} finally {
+			buttons.forEach((button) => { button.disabled = false; });
 		}
 	};
 
@@ -981,7 +1442,7 @@
 	};
 
 	// ── Send to students (class assignment) ──────────────────────────────────
-	window.openAssignClassesModal = async function () {
+	window.openAssignClassesModal = async function (options = {}) {
 		const A = api();
 		if (!A || !currentCourse) return;
 		let classRows = [];
@@ -1001,11 +1462,15 @@
 			.join('');
 		openModal(
 			'courseAssignModal',
-			'Send course to students',
-			`<p class="text-muted" style="margin:0 0 8px;">Select the classes that receive <strong>${esc(currentCourse.name)}</strong> in their workspace (Courses tab). Remember to publish the course — students only ever see published courses.</p>` +
+			options.publishAfterAssign ? 'Choose classes & publish' : 'Send course to students',
+			`<p class="text-muted" style="margin:0 0 8px;">Select the classes that receive <strong>${esc(currentCourse.name)}</strong> in their workspace (Courses tab). ` +
+				(options.publishAfterAssign
+					? 'A course must be assigned to at least one class before students can see it. After you select classes, it will be published.'
+					: 'Students see courses that are published and assigned to their class.') +
+				'</p>' +
 			(items || '<div class="text-muted">No classes yet.</div>'),
 			'<button type="button" class="btn" onclick="closeCourseModal(\'courseAssignModal\')">Cancel</button>' +
-			'<button type="button" class="btn btn-primary" onclick="assignCourseClasses()">Send</button>',
+			`<button type="button" class="btn btn-primary" onclick="assignCourseClasses()">${options.publishAfterAssign ? 'Send & publish' : 'Send'}</button>`,
 		);
 	};
 
@@ -1013,6 +1478,11 @@
 		const A = api();
 		if (!A || !currentCourse) return;
 		const classIds = Array.from(document.querySelectorAll('.course-class-check:checked')).map((cb) => cb.value);
+		const publishAfterAssign = String(publishAfterAssignCourseId || '') === String(currentCourse.id);
+		if (publishAfterAssign && !classIds.length) {
+			toast('Select at least one class before publishing this course.', 'error');
+			return;
+		}
 		try {
 			const updated = await A.raw('POST', `/courses/${encodeURIComponent(currentCourse.id)}/assign`, { classIds });
 			currentCourse.class_ids = (updated && updated.class_ids) || classIds;
@@ -1020,6 +1490,10 @@
 			toast(`Course sent to ${classIds.length} class(es).`);
 			await loadCourses();
 			renderCourseList();
+			if (publishAfterAssign) {
+				publishAfterAssignCourseId = null;
+				await toggleCoursePublish(currentCourse.id, 'publish', true);
+			}
 		} catch (err) {
 			toast('Assignment failed: ' + (err?.message || 'error'), 'error');
 		}

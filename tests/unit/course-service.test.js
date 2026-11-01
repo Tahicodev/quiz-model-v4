@@ -255,6 +255,36 @@ describe('AIService course generation', () => {
 		vi.unstubAllGlobals('fetch');
 	});
 
+	it('keeps generated lessons in category-plan order when the model returns them out of order', async () => {
+		const modelRows = [
+			{ categoryId: String(unitsId), title: 'Units', summary: 'Units lesson' },
+			{ categoryId: String(tensId), title: 'Tens', summary: 'Tens lesson' },
+		];
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => ({
+				ok: true,
+				status: 200,
+				json: async () => ({
+					choices: [{ message: { content: JSON.stringify(modelRows) } }],
+				}),
+				text: async () => '',
+			})),
+		);
+		const ai = new AIService(repo, silentLogger);
+		const lessons = await ai.generateCourseOutline({
+			config: { provider: 'openai', model_id: 'gpt-test', api_key: 'k' },
+			courseName: 'Addition',
+			plan: [
+				{ categoryId: tensId, path: 'Math > Addition > Tens', questionCount: 1 },
+				{ categoryId: unitsId, path: 'Math > Addition > Units', questionCount: 2 },
+			],
+		});
+		expect(lessons.map((lesson) => lesson.title)).toEqual(['Tens', 'Units']);
+		expect(lessons.map((lesson) => lesson.order_index)).toEqual([0, 1]);
+		vi.unstubAllGlobals('fetch');
+	});
+
 	it('writes lesson markdown from the provider and refuses an empty answer', async () => {
 		vi.stubGlobal(
 			'fetch',
@@ -408,6 +438,51 @@ describe('student visibility', () => {
 		const opened = await courseSvc.getForStudent(live.id, student);
 		expect(opened.lessons.map((l) => l.title)).toEqual(['Tens lesson']);
 		expect(opened.lessons[0].content).toContain('## Objectives');
+	});
+
+	it('orders student lessons by the course category tree and exposes their category path', async () => {
+		const course = await makeCourse('Tree-ordered course');
+		await courseSvc.setStatus(course.id, 'published', teacherA);
+		await courseSvc.assignClasses(course.id, [String(classOne.id)], teacherA);
+		await courseSvc.addLesson(course.id, {
+			title: 'Units lesson',
+			category_id: unitsId,
+			order_index: 0,
+		}, teacherA);
+		await courseSvc.addLesson(course.id, {
+			title: 'Tens lesson',
+			category_id: tensId,
+			order_index: 1,
+		}, teacherA);
+		const studentUser = await prisma.user.create({
+			data: {
+				school_id: SCHOOL,
+				class_id: classOne.id,
+				username: 'student-course-tree-order',
+				name: 'Tree Order Student',
+				password_hash: 'x',
+				role: 'student',
+				status: 'active',
+			},
+		});
+		const student = { id: studentUser.id, role: 'student', school_id: SCHOOL };
+
+		const opened = await courseSvc.getForStudent(course.id, student);
+		expect(opened.lessons.map((lesson) => lesson.title)).toEqual(['Tens lesson', 'Units lesson']);
+		expect(opened.lessons[0].category_levels.map((level) => level.name)).toEqual([
+			'Math-Courses',
+			'Addition-Courses',
+			'Tens-Courses',
+		]);
+		expect(opened.category_structure.name).toBe('Math-Courses');
+		const additionNode = opened.category_structure.children.find((node) => node.name === 'Addition-Courses');
+		expect(additionNode.children.map((node) => node.name)).toEqual([
+			'Tens-Courses',
+			'Units-Courses',
+		]);
+		expect(additionNode.children[0].lesson.title).toBe('Tens lesson');
+		expect(additionNode.children[1].lesson.title).toBe('Units lesson');
+		expect(opened.category_structure.children.some((node) => node.name === 'Geometry-Courses')).toBe(true);
 	});
 
 	it('gates lesson practice on the same visibility rule', async () => {

@@ -436,20 +436,23 @@ Example output (text options):
     // categoryId first, then fall back to positional order. A hallucinated
     // id must never point a lesson at a foreign category.
     const byId = new Map(plan.map((p) => [String(p.categoryId), p]));
-    const lessons = [];
+    const lessonByCategory = new Map();
     rows.slice(0, plan.length).forEach((row, idx) => {
       const planned = byId.has(String(row.categoryId))
         ? byId.get(String(row.categoryId))
         : plan[idx];
       const title = String(row.title || '').trim();
-      if (!title || !planned) return;
-      lessons.push({
+      if (!title || !planned || lessonByCategory.has(String(planned.categoryId))) return;
+      lessonByCategory.set(String(planned.categoryId), {
         title: title.slice(0, 300),
         summary: String(row.summary || '').trim().slice(0, 2000) || null,
         categoryId: String(planned.categoryId),
-        order_index: lessons.length,
       });
     });
+    const lessons = plan
+      .map((planned) => lessonByCategory.get(String(planned.categoryId)))
+      .filter(Boolean)
+      .map((lesson, order_index) => ({ ...lesson, order_index }));
     if (!lessons.length) {
       throw new ValidationError({ response: ['The model did not return a parseable course outline — try again or pick a stronger model.'] });
     }
@@ -463,7 +466,7 @@ Example output (text options):
    */
   async generateLessonContent({ config, language = 'French', lesson, categoryPath, questionDigest = [], includeQuestions = true }) {
     if (!config?.model_id) throw new ValidationError({ model_id: ['No model selected'] });
-    const prompt = this.#buildLessonContentPrompt({ language, lesson, categoryPath, questionDigest, includeQuestions });
+    const prompt = this.buildLessonContentPrompt({ language, lesson, categoryPath, questionDigest, includeQuestions });
     const raw = await this.#callProvider(config, prompt);
     const content = String(raw || '').trim()
       // Strip fences some models wrap markdown in despite instructions.
@@ -495,23 +498,31 @@ Example:
 [{ "categoryId": "abc", "title": "Introduction", "summary": "Ce cours presente..." }]`;
   }
 
-  #buildLessonContentPrompt({ language, lesson, categoryPath, questionDigest, includeQuestions }) {
+  buildLessonContentPrompt({ language = 'French', lesson, categoryPath, questionDigest = [], includeQuestions = true }) {
     const digest = questionDigest.length
       ? `QUESTIONS THE STUDENTS WILL PRACTICE AFTER THIS LESSON (your content must teach what these ask):
 ${questionDigest.slice(0, 30).map((t) => `- ${t}`).join('\n')}`
       : '';
     return `You are a teacher writing one lesson of a course. Write the full lesson content for:
 
+COURSE: ${lesson.course_name || ''}
 LESSON TITLE: ${lesson.title}
 LESSON SUMMARY: ${lesson.summary || '(none)'}
-TOPIC PATH: ${categoryPath}
+QUIZ CATEGORY PATH: ${categoryPath}
 ${digest}
 
 RULES:
-1. Output ONLY clean markdown (no code fences, no HTML, no commentary).
-2. Structure: "## ${'Objectives'}", "## Key concepts", "## Explanation" (the main teaching body with subsections), "## Examples", "## Common mistakes", and — only if questions are listed above — a final "## Check yourself" line telling the student to practice with the attached questions.
-3. Level-appropriate, concrete, and directly aligned with the practice questions. Language: ${language}.
-4. Keep it focused: roughly 300-600 words.${includeQuestions ? '' : '\n5. Do NOT add the "Check yourself" section.'}`;
+1. Write lesson BODY CONTENT only. Do not invent a course, lesson, quiz, or question record.
+2. Output clean Markdown only: no HTML, code fences, JSON wrapper, or commentary.
+3. Use exactly these top-level sections, in this order:
+   ## Objectives
+   ## Key concepts
+   ## Explanation
+   ## Examples
+   ## Common mistakes${includeQuestions && questionDigest.length ? '\n   ## Check yourself' : ''}
+4. Put the actual teaching text under each heading. Use Markdown paragraphs, lists, and inline code; never include answer keys.
+5. Match the lesson title, summary, quiz category path, and the app's practice-question topic. Do not claim facts not supported by the topic.
+6. Language: ${language}. Keep it focused at roughly 300-600 words.${includeQuestions && questionDigest.length ? '\n7. Under "Check yourself", briefly invite the student to try the attached practice questions without revealing answers.' : '\n7. Do not add a "Check yourself" section because no practice questions are attached.'}`;
   }
 
   /** Repair-and-parse a JSON array of objects from raw model output. */

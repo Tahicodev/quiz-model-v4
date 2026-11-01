@@ -9,12 +9,13 @@ describe('course row actions', () => {
 		expect(js).toMatch(/class="course-name-link" onclick="openCourseDetail\('/);
 	});
 
-	it('provides open, publish and delete actions in the mobile sheet', () => {
+	it('provides open, document, publish and delete actions in the mobile sheet', () => {
 		const start = js.indexOf('MobileActionSheet.open(`Course:');
 		const end = js.indexOf('\n\t\t\t\t]);', start);
 		const actions = js.slice(start, end);
 		expect(start).toBeGreaterThan(-1);
 		expect(actions).toContain("label: 'Open course'");
+		expect(actions).toContain("label: 'Create course document'");
 		expect(actions).toContain("label: published ? 'Unpublish course' : 'Publish course'");
 		expect(actions).toContain("label: 'Delete course'");
 	});
@@ -37,9 +38,39 @@ describe('course row actions', () => {
 		expect(css).toContain('.course-tree-row[hidden]');
 	});
 
+	it('uses shared repository questions for category structure subtree counts', () => {
+		expect(js).toContain("repo?.getAll_sync?.('questions')");
+		expect(js).toContain('question?.category ?? question?.categoryId ?? question?.category_id');
+		expect(js).toContain('questionCountForCategoryBranch(category.id, counts, list, tree)');
+	});
+
 	it('styles toolbar actions with distinct purpose-based colors', () => {
 		expect(css).toContain('.course-detail-actions .course-action-publish');
 		expect(css).toContain('.course-detail-actions .course-action-assign');
 		expect(css).toContain('.course-detail-actions .course-action-add');
+	});
+
+	it('offers generate and copy-prompt actions for lessons on desktop and mobile', () => {
+		expect(js).toContain('window.openLessonAIActions = function');
+		expect(js).toContain("label: 'Generate lesson with AI'");
+		expect(js).toContain("label: 'Copy AI prompt'");
+		expect(js).toContain('promptOnly: true');
+		expect(js).toContain('window.openLessonAIResult = function');
+		expect(js).toContain('window.saveLessonAIResult = async function');
+		expect(css).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.course-tree-actions\s*\{\s*display:\s*none;/);
+	});
+
+	it('offers PDF and Word course documents with templates and header layouts', () => {
+		expect(js).toContain('course-action-document');
+		expect(js).toContain('window.createCourseDocument = async function');
+		expect(js).toContain('title="Create course document" onclick="createCourseDocument');
+		expect(js).toContain('window.exportCourseDocument = async function (format)');
+		expect(js).not.toContain("onclick=\"exportCourseDocument('html')\"");
+		expect(js).toContain("onclick=\"exportCourseDocument('pdf')\"");
+		expect(js).toContain("onclick=\"exportCourseDocument('docx')\"");
+		expect(js).toContain('data-course-doc-layout=');
+		expect(js).toContain('courseDocIncludeContents');
+		expect(js).toContain('window.copyAllCourseAIPrompt = async function');
+		expect(js).toContain('window.saveAllCourseAIResult = async function');
 	});
 });

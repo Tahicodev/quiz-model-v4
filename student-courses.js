@@ -106,6 +106,30 @@
 		return `<div class="course-student-empty">${esc(text)}</div>`;
 	}
 
+	function renderCategoryStructure(node, depth = 0) {
+		if (!node) return '';
+		const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+		const level = depth === 0 ? 'Category' : hasChildren ? 'Subcategory' : 'Axis';
+		const lesson = node.lesson
+			? `<button type="button" class="course-structure-lesson" onclick="StudentCourses.openLesson('${esc(node.lesson.id)}')">` +
+				`<span class="course-structure-lesson-number">${lessonNumber(node.lesson.id)}</span>` +
+				`<span>${esc(node.lesson.title)}</span><span aria-hidden="true">›</span></button>`
+			: '';
+		return (
+			`<li class="course-structure-node" style="--course-student-depth:${depth}">` +
+			`<div class="course-structure-category"><span class="course-structure-level">${level}</span>` +
+			`<strong>${esc(node.name)}</strong></div>${lesson}` +
+			(hasChildren
+				? `<ol>${node.children.map((child) => renderCategoryStructure(child, depth + 1)).join('')}</ol>`
+				: '') +
+			'</li>'
+		);
+	}
+
+	function lessonNumber(lessonId) {
+		return ((currentCourse?.lessons || []).findIndex((lesson) => String(lesson.id) === String(lessonId)) + 1) || '';
+	}
+
 	// ── Course list ──────────────────────────────────────────────────────────
 	async function load(force) {
 		const grid = document.getElementById('studentCourseGrid');
@@ -216,6 +240,13 @@
 		const body = lesson
 			? `<div class="course-lesson-body">` +
 				`<h3>${esc(lesson.title)}</h3>` +
+				(Array.isArray(lesson.category_levels) && lesson.category_levels.length
+					? `<nav class="course-lesson-category-path" aria-label="Category structure">` +
+						lesson.category_levels
+							.map((level) => `<span>${esc(level.name)}</span>`)
+							.join('<span class="course-lesson-category-separator" aria-hidden="true">›</span>') +
+						'</nav>'
+					: '') +
 				(lesson.summary ? `<p class="course-lesson-summary">${esc(lesson.summary)}</p>` : '') +
 				(lesson.content
 					? `<div class="course-md">${renderMarkdown(lesson.content)}</div>`
@@ -229,12 +260,18 @@
 				'</div></div>'
 			: panelNote('This course has no lessons yet.');
 
+		const categoryStructure = currentCourse.category_structure
+			? `<section class="course-student-structure" aria-label="Course category structure">` +
+				`<h4>Course structure</h4><ol>${renderCategoryStructure(currentCourse.category_structure)}</ol></section>`
+			: '';
+
 		reader.innerHTML =
 			`<div class="course-reader-head">` +
 			`<button type="button" class="workspace-btn" onclick="StudentCourses.backToList()">&larr; All courses</button>` +
 			`<h3 class="course-reader-title">${esc(currentCourse.name)}</h3>` +
 			(currentCourse.description ? `<p class="course-student-desc">${esc(currentCourse.description)}</p>` : '') +
 			'</div>' +
+			categoryStructure +
 			(chips ? `<div class="course-lesson-nav">${chips}</div>` : '') +
 			body;
 	}

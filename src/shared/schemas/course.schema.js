@@ -44,6 +44,7 @@ export const LessonContentGenerateSchema = z.object({
   configId:       z.string().max(100).optional(),
   language:       z.string().max(40).default('French'),
   includeQuestions: z.boolean().default(true),
+  promptOnly: z.boolean().default(false),
 });
 
 export const LessonCreateSchema = z.object({
