@@ -109,10 +109,31 @@
 		return `student-course-lesson-${String(lessonId || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
 	}
 
+	function studentCategoryAnchor(categoryId) {
+		return `student-course-category-${String(categoryId || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
+	}
+
+	function categoryLevelLabel(node, depth) {
+		if (depth === 0) return 'Main category';
+		return Array.isArray(node.children) && node.children.length ? 'Subcategory' : 'Axis';
+	}
+
+	function renderCategoryContents(node, depth = 0) {
+		if (!node) return '';
+		return (
+			`<li><a href="#${esc(studentCategoryAnchor(node.id))}">` +
+			`<span>${categoryLevelLabel(node, depth)}</span><strong>${esc(node.name)}</strong></a>` +
+			(Array.isArray(node.children) && node.children.length
+				? `<ol>${node.children.map((child) => renderCategoryContents(child, depth + 1)).join('')}</ol>`
+				: '') +
+			'</li>'
+		);
+	}
+
 	function renderCategoryStructure(node, depth = 0) {
 		if (!node) return '';
 		const hasChildren = Array.isArray(node.children) && node.children.length > 0;
-		const level = depth === 0 ? 'Category' : hasChildren ? 'Subcategory' : 'Axis';
+		const level = categoryLevelLabel(node, depth);
 		const lessons = Array.isArray(node.lessons)
 			? node.lessons
 			: node.lesson
@@ -124,27 +145,22 @@
 				if (!lesson) return '';
 				return (
 					`<section class="course-document-lesson" id="${esc(studentLessonAnchor(lesson.id))}">` +
-					`<h3><a href="#${esc(studentLessonAnchor(lesson.id))}">${esc(lesson.title)}</a></h3>` +
-					(Array.isArray(lesson.category_levels) && lesson.category_levels.length
-						? `<nav class="course-lesson-category-path" aria-label="Category structure">` +
-							lesson.category_levels
-								.map((item) => `<span>${esc(item.name)}</span>`)
-								.join('<span class="course-lesson-category-separator" aria-hidden="true">›</span>') +
-							'</nav>'
+					(hasChildren && lesson.title !== node.name
+						? `<h${Math.min(depth + 3, 6)}>${esc(lesson.title)}</h${Math.min(depth + 3, 6)}>`
 						: '') +
 					(lesson.summary ? `<p class="course-lesson-summary">${esc(lesson.summary)}</p>` : '') +
 					(lesson.content
 						? `<div class="course-md">${renderMarkdown(lesson.content)}</div>`
 						: '<p class="course-student-desc">The teacher has not written this lesson yet — check back soon.</p>') +
-					`<div class="course-lesson-actions"><button type="button" class="workspace-btn primary" onclick="StudentCourses.practice('${esc(lesson.id)}', this)">Practice this lesson</button></div>` +
+					`<div class="course-lesson-actions"><button type="button" class="workspace-btn primary" onclick="StudentCourses.practice('${esc(lesson.id)}', this)">Practice this section</button></div>` +
 					'</section>'
 				);
 			})
 			.join('');
 		return (
-			`<li class="course-structure-node" style="--course-student-depth:${depth}">` +
+			`<li class="course-structure-node" id="${esc(studentCategoryAnchor(node.id))}" style="--course-student-depth:${depth}">` +
 			`<div class="course-structure-category"><span class="course-structure-level">${level}</span>` +
-			`<strong>${esc(node.name)}</strong></div>${lessonSections}` +
+			`<h${Math.min(depth + 2, 6)}>${esc(node.name)}</h${Math.min(depth + 2, 6)}></div>${lessonSections}` +
 			(hasChildren
 				? `<ol>${node.children.map((child) => renderCategoryStructure(child, depth + 1)).join('')}</ol>`
 				: '') +
@@ -200,7 +216,7 @@
 					`onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();StudentCourses.openCourse('${esc(course.id)}')}">` +
 					`<h3>${esc(course.name)}</h3>` +
 					(course.description ? `<p class="course-student-desc">${esc(course.description)}</p>` : '') +
-					`<div class="course-student-footer"><span class="course-student-meta">${Number(course.lesson_count) || 0} lesson(s)</span>` +
+					`<div class="course-student-footer"><span class="course-student-meta">${Number(course.lesson_count) || 0} content section(s)</span>` +
 					`<span class="workspace-btn small">Open course</span></div>` +
 					'</div>',
 			)
@@ -245,14 +261,12 @@
 		const reader = document.getElementById('studentCourseReader');
 		if (!reader || !currentCourse) return;
 		const lessons = currentCourse.lessons || [];
-		const contents = lessons.map((lesson, index) =>
-			`<li><a href="#${esc(studentLessonAnchor(lesson.id))}"><span>${index + 1}</span><strong>${esc(lesson.title)}</strong></a>` +
-			(lesson.summary ? `<p>${esc(lesson.summary)}</p>` : '') +
-			(Array.isArray(lesson.category_levels) && lesson.category_levels.length
-				? `<div class="course-document-toc-path">${lesson.category_levels.map((level) => esc(level.name)).join(' › ')}</div>`
-				: '') +
-			'</li>',
-		).join('');
+		const hasCategoryStructure = Boolean(currentCourse.category_structure);
+		const contents = hasCategoryStructure
+			? renderCategoryContents(currentCourse.category_structure)
+			: lessons.map((lesson, index) =>
+				`<li><a href="#${esc(studentLessonAnchor(lesson.id))}"><span>Section ${index + 1}</span><strong>${esc(lesson.title)}</strong></a></li>`,
+			).join('');
 		const categoryStructure = currentCourse.category_structure
 			? `<div class="course-document-body"><ol>${renderCategoryStructure(currentCourse.category_structure)}</ol></div>`
 			: '';
@@ -265,18 +279,23 @@
 			`<section class="course-document-lesson" id="${esc(studentLessonAnchor(lesson.id))}"><h3><a href="#${esc(studentLessonAnchor(lesson.id))}">${esc(lesson.title)}</a></h3>` +
 			(lesson.summary ? `<p class="course-lesson-summary">${esc(lesson.summary)}</p>` : '') +
 			(lesson.content ? `<div class="course-md">${renderMarkdown(lesson.content)}</div>` : '<p class="course-student-desc">The teacher has not written this lesson yet — check back soon.</p>') +
-			`<div class="course-lesson-actions"><button type="button" class="workspace-btn primary" onclick="StudentCourses.practice('${esc(lesson.id)}', this)">Practice this lesson</button></div></section>`
+			`<div class="course-lesson-actions"><button type="button" class="workspace-btn primary" onclick="StudentCourses.practice('${esc(lesson.id)}', this)">Practice this section</button></div></section>`
 		)).join('');
+		const unlinkedContents = unlinkedLessons.map((lesson) =>
+			`<li><a href="#${esc(studentLessonAnchor(lesson.id))}"><span>Additional content</span><strong>${esc(lesson.title)}</strong></a></li>`,
+		).join('');
 
 		reader.innerHTML =
 			`<article class="course-document-view student-course-document"><header class="course-document-cover">` +
 			`<button type="button" class="workspace-btn" onclick="StudentCourses.backToList()">&larr; All courses</button>` +
 			`<span>Course content</span><h1>${esc(currentCourse.name)}</h1>` +
 			(currentCourse.description ? `<p>${esc(currentCourse.description)}</p>` : '') +
-			`<div>${lessons.length} lesson${lessons.length === 1 ? '' : 's'}</div></header>` +
+			`<div>${lessons.length} content section${lessons.length === 1 ? '' : 's'}</div></header>` +
 			`<nav class="course-document-toc"><h2>Summary and contents</h2>` +
 			(currentCourse.description ? `<p class="course-document-overview">${esc(currentCourse.description)}</p>` : '') +
-			(contents ? `<ol>${contents}</ol>` : '<p class="course-document-placeholder">This course has no lessons yet.</p>') +
+			(contents || unlinkedContents
+				? `<ol>${contents}${unlinkedContents}</ol>`
+				: '<p class="course-document-placeholder">This course has no content yet.</p>') +
 			`</nav>${categoryStructure}${unlinkedContent}</article>`;
 	}
 
@@ -312,12 +331,12 @@
 		} finally {
 			if (btn) {
 				btn.disabled = false;
-				btn.textContent = label || 'Practice this lesson';
+				btn.textContent = label || 'Practice this section';
 			}
 		}
 		const questions = res && Array.isArray(res.data) ? res.data : [];
 		if (!questions.length) {
-			toast('No questions in this lesson yet — your teacher can generate them.', 'warning');
+			toast('No questions in this section yet — your teacher can generate them.', 'warning');
 			return;
 		}
 		if (typeof window.openTrainingMode !== 'function') {
@@ -328,7 +347,9 @@
 		// questions instead of the local question bank.
 		window.openTrainingMode(null, {
 			questions,
-			label: `Lesson: ${lesson ? lesson.title : currentCourse.name}`,
+			label: `Section: ${
+				lesson?.category_levels?.[lesson.category_levels.length - 1]?.name || lesson?.title || currentCourse.name
+			}`,
 		});
 	}
 

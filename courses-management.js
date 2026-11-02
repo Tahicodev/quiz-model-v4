@@ -23,6 +23,7 @@
 	let courseDetailMode = 'view';
 	let selectedCourseConfigId = '';
 	let collapsedCourseCategoryIds = new Set();
+	let courseImportDraft = null;
 
 	function esc(s) {
 		return String(s ?? '')
@@ -476,6 +477,438 @@
 	};
 
 	// ── New Course generator modal ───────────────────────────────────────────
+	function courseImportHeadingRow(heading, index) {
+		const sourceText = String(heading.sourceText || '');
+		const title = String(heading.title || sourceText.replace(/^\s*#{1,6}\s*/, '').trim());
+		const levelOptions = Array.from({ length: 8 }, (_, optionIndex) => {
+			const level = optionIndex + 1;
+			const label = ['Main category', 'Subcategory', 'Axis'][level - 1] || `Nested level ${level}`;
+			return `<option value="${level}" ${Number(heading.level) === level ? 'selected' : ''}>${label}</option>`;
+		}).join('');
+		return (
+			`<div class="course-import-heading" data-import-heading="${index}">` +
+			`<div class="course-import-heading-fields">` +
+			`<label>Source line<input type="number" min="1" max="${courseImportDraft.lineCount}" value="${Number(heading.line) || 1}" data-import-line onchange="updateCourseImportSourceLine(this)"></label>` +
+			`<label>Hierarchy<select data-import-level>${levelOptions}</select></label>` +
+			`<label>Category / section title<input type="text" maxlength="100" value="${esc(title)}" data-import-title oninput="clearCourseImportHeadingError(this)"><small data-import-title-error hidden>Already exists in this school. Rename this title.</small><small>Up to 100 characters</small></label>` +
+			`<button type="button" class="btn btn-sm course-import-remove" onclick="removeCourseImportHeading(this)" aria-label="Remove heading"><span aria-hidden="true">&times;</span> Remove</button>` +
+			'</div>' +
+			`<p class="course-import-source-line" data-import-source>${esc(sourceText)}</p>` +
+			'</div>'
+		);
+	}
+
+	function renderCourseImportReview(draft) {
+		const rows = draft.headings.map((heading, index) => courseImportHeadingRow(heading, index)).join('');
+		const body =
+			'<div class="course-import-stepper" aria-label="Import steps"><span class="is-complete"><b>1</b> Upload</span><i></i><span class="is-current"><b>2</b> Organize</span><i></i><span><b>3</b> Create course</span></div>' +
+			'<div class="course-import-course-fields"><div class="form-group"><label for="courseImportName">Course name</label>' +
+			`<input type="text" id="courseImportName" maxlength="200" value="${esc(draft.title || '')}" style="width:100%;"></div>` +
+			'<div class="form-group"><label for="courseImportDescription">Course description</label>' +
+			`<textarea id="courseImportDescription" maxlength="2000" rows="2" style="width:100%;">${esc(draft.description || '')}</textarea></div></div>` +
+			'<div class="course-import-notice"><span aria-hidden="true">✓</span><p><strong>Private and offline</strong><br>No AI or internet connection is needed. Extracted text stays unchanged; lines you do not mark as headings remain section content.</p></div>' +
+			`<div class="course-import-section-heading"><div><span class="course-import-step-label">STEP 1 · ORGANIZE</span><h3>Choose document headings</h3><p>Search or browse the extracted text. Select each title, assign its level, and add it to the outline.</p></div><span class="course-import-auto-count">${draft.headings.length ? `${draft.headings.length} suggested` : 'Manual selection'}</span></div>` +
+			`<p class="course-generator-hint">${draft.detectionMethod === 'docx-styles-and-local-patterns' ? 'Outline detected locally from DOCX heading styles and title patterns.' : 'Outline detected locally from document title patterns.'} No AI model or internet connection is required. Review the source line and hierarchy for every heading; add, remove, or edit headings as needed. Text is preserved exactly and assigned to the section immediately above it. Text before the first heading becomes an Introduction.</p>` +
+			'<p class="course-generator-hint">Detection is best-effort: a document’s heading styles and numbering may not match its intended structure. Check every heading before creating the course. Images, diagrams, tables, and original page layout are not imported.</p>' +
+			'<div class="course-import-level-tools">' +
+			'<label>Make selected lines<select id="courseImportBulkLevel"><option value="1">Main category · Level 1</option><option value="2">Subcategory · Level 2</option><option value="3">Axis · Level 3</option><option value="4">Nested level 4</option><option value="5">Nested level 5</option><option value="6">Nested level 6</option><option value="7">Nested level 7</option><option value="8">Nested level 8</option></select></label>' +
+			'<span data-import-selection-count aria-live="polite">No lines selected</span>' +
+			'<button type="button" class="btn btn-primary btn-sm" data-import-add-source-lines onclick="addSelectedCourseImportSourceLines()" disabled>Add to outline <span aria-hidden="true">→</span></button>' +
+			'</div>' +
+			'<p class="course-import-instructions">Select the document lines that are titles, choose their level, then add them. Lines not added as headings remain content.</p>' +
+			'<div id="courseImportSourcePicker" class="course-import-source-picker"></div>' +
+			`<div class="course-import-section-heading"><div><span class="course-import-step-label">STEP 2 · REVIEW</span><h3>Your course outline</h3><p>Rename headings or fine-tune their levels before creating the course.</p></div><span class="course-import-outline-count" data-import-outline-count>${draft.headings.length} headings</span></div>` +
+			'<div class="course-import-conflict-notice" data-import-conflict-notice role="alert" hidden></div>' +
+			`<div id="courseImportHeadings">${rows}</div>` +
+			'<div class="course-import-empty-outline" data-import-outline-empty hidden>No headings yet. Select title lines above to build your course outline.</div>' +
+			'<button type="button" class="btn course-import-add-manual" onclick="addCourseImportHeading()">Add a heading manually</button>' +
+			`<details class="course-import-source"><summary>View extracted text (${draft.lineCount} lines)</summary><pre>${esc(draft.documentText)}</pre></details>` +
+			'<p class="course-import-footnote">Text before the first heading becomes an introduction. Images, tables, diagrams, and original page layout are not imported.</p>';
+		const footer =
+			'<button type="button" class="btn" onclick="openCourseDocumentImportModal()">Choose another file</button>' +
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseImportModal\')">Cancel</button>' +
+			'<button type="button" class="btn btn-primary" id="courseImportCreate" onclick="createCourseFromDocumentImport()">Create course <span aria-hidden="true">→</span></button>';
+		const modal = openModal('courseImportModal', 'Review imported course outline', body, footer, 'course-import-modal');
+		const content = modal.querySelector('.modal-content');
+		if (content) content.style.maxWidth = '960px';
+		window.renderCourseImportSourcePicker();
+		window.updateCourseImportOutlineCount();
+	}
+
+	window.openCourseDocumentImportModal = async function () {
+		courseImportDraft = null;
+		const body =
+			'<div class="course-import-stepper" aria-label="Import steps"><span class="is-current"><b>1</b> Upload</span><i></i><span><b>2</b> Organize</span><i></i><span><b>3</b> Create course</span></div>' +
+			'<label class="course-import-dropzone" for="courseImportFile" data-import-dropzone>' +
+			'<span class="course-import-upload-icon" aria-hidden="true">↑</span><strong>Choose a course document</strong>' +
+			'<span class="course-import-dropzone-help">Drag and drop your file here, or <u>browse files</u></span>' +
+			'<span class="course-import-file-types">DOCX or text-based PDF · Maximum 8 MB</span>' +
+			'<input id="courseImportFile" type="file" accept=".docx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="updateCourseImportFile(this)">' +
+			'</label><div class="course-import-file-selected" data-import-file-selected hidden></div>' +
+			'<div class="course-import-privacy-card"><span aria-hidden="true">✓</span><p><strong>Works offline</strong><br>Your file is processed by the app. No AI provider or internet connection is needed.</p></div>' +
+			'<p class="course-import-footnote">Scanned/image-only PDFs are not supported. Automatic detection is a starting point—you can select and organize the exact title lines yourself in the next step.</p>';
+		const footer =
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseImportModal\')">Cancel</button>' +
+			'<button type="button" class="btn btn-primary" id="courseImportAnalyze" onclick="analyzeCourseDocumentImport()" disabled>Continue to review <span aria-hidden="true">→</span></button>';
+		const modal = openModal('courseImportModal', 'Import a course document', body, footer, 'course-import-modal');
+		const input = modal.querySelector('#courseImportFile');
+		const dropzone = modal.querySelector('[data-import-dropzone]');
+		if (dropzone && input) {
+			dropzone.addEventListener('dragover', (event) => {
+				event.preventDefault();
+				dropzone.classList.add('is-dragging');
+			});
+			dropzone.addEventListener('dragleave', () => dropzone.classList.remove('is-dragging'));
+			dropzone.addEventListener('drop', (event) => {
+				event.preventDefault();
+				dropzone.classList.remove('is-dragging');
+				if (event.dataTransfer?.files?.length) {
+					input.files = event.dataTransfer.files;
+					window.updateCourseImportFile(input);
+				}
+			});
+		}
+	};
+
+	window.updateCourseImportFile = function (input) {
+		const file = input?.files?.[0];
+		const fileInfo = document.querySelector('[data-import-file-selected]');
+		const button = document.getElementById('courseImportAnalyze');
+		if (!file) {
+			if (fileInfo) fileInfo.hidden = true;
+			if (button) button.disabled = true;
+			return;
+		}
+		const validType = /\.(docx|pdf)$/i.test(file.name);
+		const validSize = file.size <= 8 * 1024 * 1024;
+		if (fileInfo) {
+			fileInfo.hidden = false;
+			fileInfo.classList.toggle('is-invalid', !validType || !validSize);
+			fileInfo.innerHTML = `<span class="course-import-file-badge">${validType && validSize ? '✓' : '!'}</span><span class="course-import-file-name">${esc(file.name)}<small>${validType && validSize ? `${(file.size / 1024 / 1024).toFixed(2)} MB · Ready to import` : !validType ? 'Choose a DOCX or PDF file.' : 'File must be smaller than 8 MB.'}</small></span><button type="button" class="course-import-clear-file" aria-label="Remove selected file" onclick="clearCourseImportFile()">×</button>`;
+		}
+		if (button) button.disabled = !validType || !validSize;
+	};
+
+	window.clearCourseImportFile = function () {
+		const input = document.getElementById('courseImportFile');
+		if (input) input.value = '';
+		window.updateCourseImportFile(input);
+	};
+
+	window.analyzeCourseDocumentImport = async function () {
+		const file = document.getElementById('courseImportFile')?.files?.[0];
+		if (!file) return toast('Choose a DOCX or PDF file first.', 'error');
+		if (!/\.(docx|pdf)$/i.test(file.name)) return toast('Choose a DOCX or PDF file.', 'error');
+		if (file.size > 8 * 1024 * 1024) return toast('Choose a file smaller than 8 MB.', 'error');
+
+		const button = document.getElementById('courseImportAnalyze');
+		if (button) { button.disabled = true; button.textContent = 'Extracting document…'; }
+		try {
+			const A = api();
+			if (!A) throw new Error('API client is not available.');
+			const bytes = new Uint8Array(await file.arrayBuffer());
+			let binary = '';
+			const chunkSize = 0x8000;
+			for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+				binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+			}
+			const result = await A.raw('POST', '/courses/import/preview', {
+				filename: file.name,
+				data: btoa(binary),
+			});
+			courseImportDraft = {
+				...result,
+				lineCount: String(result.documentText || '').split('\n').length,
+				sourcePickerPage: 0,
+				selectedSourceLines: new Set(),
+			};
+			renderCourseImportReview(courseImportDraft);
+		} catch (err) {
+			console.warn('[courses] document analysis failed:', err);
+			toast(`Could not analyze the document: ${err?.message || 'error'}`, 'error');
+			if (button) { button.disabled = false; button.textContent = 'Continue to review →'; }
+		}
+	};
+
+	window.updateCourseImportSourceLine = function (input) {
+		if (!courseImportDraft || !input) return;
+		const line = Number(input.value);
+		const lines = String(courseImportDraft.documentText || '').split('\n');
+		const source = input.closest('.course-import-heading')?.querySelector('[data-import-source]');
+		if (source) source.textContent = line >= 1 && line <= lines.length ? lines[line - 1] : 'No source line at this number.';
+		window.renderCourseImportSourcePicker();
+	};
+
+	window.renderCourseImportSourcePicker = function () {
+		if (!courseImportDraft) return;
+		const picker = document.getElementById('courseImportSourcePicker');
+		if (!picker) return;
+		const lines = String(courseImportDraft.documentText || '').split('\n');
+		const entries = lines
+			.map((text, index) => ({ line: index + 1, text: text.trim() }))
+			.filter((entry) => entry.text);
+		const search = String(courseImportDraft.sourceSearch || '').trim().toLocaleLowerCase();
+		const filteredEntries = search
+			? entries.filter((entry) => entry.text.toLocaleLowerCase().includes(search))
+			: entries;
+		const pageSize = 60;
+		const pageCount = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
+		courseImportDraft.sourcePickerPage = Math.max(0, Math.min(courseImportDraft.sourcePickerPage || 0, pageCount - 1));
+		const page = courseImportDraft.sourcePickerPage;
+		const headingRows = Array.from(document.querySelectorAll('#courseImportHeadings [data-import-heading]'));
+		const existingLines = new Set(headingRows.map((row) => Number(row.querySelector('[data-import-line]')?.value)));
+		const pageEntries = filteredEntries.slice(page * pageSize, (page + 1) * pageSize);
+		const rows = pageEntries.map((entry) => {
+			const alreadyAdded = existingLines.has(entry.line);
+			const selected = courseImportDraft.selectedSourceLines.has(entry.line);
+			return (
+				`<label class="course-import-source-option${alreadyAdded ? ' is-in-outline' : ''}">` +
+				`<input type="checkbox" data-import-source-line="${entry.line}" ${selected ? 'checked' : ''} ${alreadyAdded ? 'disabled' : ''} onchange="updateCourseImportSourceSelection(this)">` +
+				`<span class="course-import-source-number">Line ${entry.line}</span>` +
+				`<span class="course-import-source-text">${esc(entry.text)}</span>` +
+				(alreadyAdded ? '<span class="course-import-source-status">Already in outline</span>' : '') +
+				'</label>'
+			);
+		}).join('');
+		picker.innerHTML =
+			'<div class="course-import-source-picker-toolbar">' +
+			'<label class="course-import-search"><span aria-hidden="true">⌕</span><input type="search" aria-label="Search extracted document text" data-import-source-search placeholder="Find a title in the document…" value="' + esc(courseImportDraft.sourceSearch || '') + '" oninput="updateCourseImportSourceSearch(this)"></label>' +
+			`<span>${filteredEntries.length} matching lines · Page ${page + 1} of ${pageCount}</span>` +
+			'</div>' +
+			`<div class="course-import-source-options">${rows || '<p class="course-import-no-results">No matching lines. Try another search.</p>'}</div>` +
+			'<div class="course-import-source-picker-footer">' +
+			'<label class="course-import-select-page"><input type="checkbox" data-import-select-page onchange="toggleCourseImportSelectPage(this)"> Select this page</label>' +
+			`<button type="button" class="btn btn-sm" onclick="changeCourseImportSourcePage(-1)" ${page === 0 ? 'disabled' : ''}>Previous</button>` +
+			`<button type="button" class="btn btn-sm" onclick="changeCourseImportSourcePage(1)" ${page >= pageCount - 1 ? 'disabled' : ''}>Next</button>` +
+			`<span data-import-page-indicator>${page + 1} / ${pageCount}</span>` +
+			'</div>';
+		const pageSelect = picker.querySelector('[data-import-select-page]');
+		if (pageSelect) {
+			const available = Array.from(picker.querySelectorAll('[data-import-source-line]:not(:disabled)'));
+			pageSelect.checked = available.length > 0 && available.every((checkbox) => checkbox.checked);
+			pageSelect.indeterminate = available.some((checkbox) => checkbox.checked) && !pageSelect.checked;
+		}
+		const selectedCount = document.querySelector('[data-import-selection-count]');
+		if (selectedCount) {
+			const count = courseImportDraft.selectedSourceLines.size;
+			selectedCount.textContent = count ? `${count} line${count === 1 ? '' : 's'} selected` : 'No lines selected';
+		}
+		const addButton = document.querySelector('[data-import-add-source-lines]');
+		if (addButton) addButton.disabled = courseImportDraft.selectedSourceLines.size === 0;
+	};
+
+	window.updateCourseImportSourceSelection = function (input) {
+		if (!courseImportDraft || !input) return;
+		const line = Number(input.dataset.importSourceLine);
+		if (!Number.isInteger(line) || line < 1) return;
+		if (input.checked) courseImportDraft.selectedSourceLines.add(line);
+		else courseImportDraft.selectedSourceLines.delete(line);
+		const addButton = document.querySelector('[data-import-add-source-lines]');
+		if (addButton) addButton.disabled = courseImportDraft.selectedSourceLines.size === 0;
+		const count = document.querySelector('[data-import-selection-count]');
+		if (count) {
+			const size = courseImportDraft.selectedSourceLines.size;
+			count.textContent = size ? `${size} line${size === 1 ? '' : 's'} selected` : 'No lines selected';
+		}
+		const pageSelect = document.querySelector('[data-import-select-page]');
+		if (pageSelect) {
+			const available = Array.from(document.querySelectorAll('[data-import-source-line]:not(:disabled)'));
+			pageSelect.checked = available.length > 0 && available.every((checkbox) => checkbox.checked);
+			pageSelect.indeterminate = available.some((checkbox) => checkbox.checked) && !pageSelect.checked;
+		}
+	};
+
+	window.updateCourseImportSourceSearch = function (input) {
+		if (!courseImportDraft || !input) return;
+		courseImportDraft.sourceSearch = input.value;
+		courseImportDraft.sourcePickerPage = 0;
+		window.renderCourseImportSourcePicker();
+		const search = document.querySelector('[data-import-source-search]');
+		if (search) {
+			search.focus();
+			search.setSelectionRange(search.value.length, search.value.length);
+		}
+	};
+
+	window.toggleCourseImportSelectPage = function (input) {
+		if (!courseImportDraft) return;
+		for (const checkbox of document.querySelectorAll('[data-import-source-line]:not(:disabled)')) {
+			checkbox.checked = Boolean(input?.checked);
+			const line = Number(checkbox.dataset.importSourceLine);
+			if (checkbox.checked) courseImportDraft.selectedSourceLines.add(line);
+			else courseImportDraft.selectedSourceLines.delete(line);
+		}
+		const count = document.querySelector('[data-import-selection-count]');
+		if (count) {
+			const size = courseImportDraft.selectedSourceLines.size;
+			count.textContent = size ? `${size} line${size === 1 ? '' : 's'} selected` : 'No lines selected';
+		}
+		const addButton = document.querySelector('[data-import-add-source-lines]');
+		if (addButton) addButton.disabled = courseImportDraft.selectedSourceLines.size === 0;
+	};
+
+	window.changeCourseImportSourcePage = function (offset) {
+		if (!courseImportDraft) return;
+		courseImportDraft.sourcePickerPage = Math.max(0, (courseImportDraft.sourcePickerPage || 0) + Number(offset || 0));
+		window.renderCourseImportSourcePicker();
+	};
+
+	window.addSelectedCourseImportSourceLines = function () {
+		if (!courseImportDraft?.selectedSourceLines?.size) return;
+		const container = document.getElementById('courseImportHeadings');
+		const level = Number(document.getElementById('courseImportBulkLevel')?.value);
+		if (!container || !Number.isInteger(level) || level < 1 || level > 8) return;
+		const lines = String(courseImportDraft.documentText || '').split('\n');
+		const existingLines = new Set(Array.from(container.querySelectorAll('[data-import-line]'), (input) => Number(input.value)));
+		const selectedLines = [...courseImportDraft.selectedSourceLines].sort((a, b) => a - b);
+		for (const line of selectedLines) {
+			if (existingLines.has(line)) continue;
+			const sourceText = String(lines[line - 1] || '').trim();
+			if (!sourceText) continue;
+			const title = sourceText.replace(/^\s*#{1,6}\s*/, '').trim().slice(0, 100);
+			container.insertAdjacentHTML('beforeend', courseImportHeadingRow(
+				{ line, level, title, sourceText },
+				container.children.length,
+			));
+			existingLines.add(line);
+		}
+		courseImportDraft.selectedSourceLines.clear();
+		window.renderCourseImportSourcePicker();
+		const count = document.querySelector('[data-import-selection-count]');
+		if (count) count.textContent = 'No lines selected';
+		const addButton = document.querySelector('[data-import-add-source-lines]');
+		if (addButton) addButton.disabled = true;
+		window.updateCourseImportOutlineCount();
+	};
+
+	window.updateCourseImportOutlineCount = function () {
+		const container = document.getElementById('courseImportHeadings');
+		if (!container) return;
+		const count = container.querySelectorAll('[data-import-heading]').length;
+		const badge = document.querySelector('[data-import-outline-count]');
+		if (badge) badge.textContent = `${count} heading${count === 1 ? '' : 's'}`;
+		const emptyNotice = document.querySelector('[data-import-outline-empty]');
+		if (emptyNotice) emptyNotice.hidden = count > 0;
+	};
+
+	window.showCourseImportCategoryConflicts = function (error) {
+		const message = String(error?.message || '');
+		const marker = 'Rename these detected titles before importing:';
+		const markerIndex = message.indexOf(marker);
+		if (markerIndex < 0 || !courseImportDraft) return false;
+		const details = message.slice(markerIndex + marker.length);
+		const conflicts = [...details.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+		if (!conflicts.length) return false;
+		courseImportDraft.conflictingCategoryNames = new Set(conflicts);
+		window.updateCourseImportConflictUI();
+		const firstConflict = Array.from(document.querySelectorAll('#courseImportHeadings [data-import-heading]'))
+			.find((row) => courseImportDraft.conflictingCategoryNames.has(row.querySelector('[data-import-title]')?.value.trim()));
+		const input = firstConflict?.querySelector('[data-import-title]');
+		if (input) {
+			firstConflict.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			input.focus({ preventScroll: true });
+		}
+		return true;
+	};
+
+	window.updateCourseImportConflictUI = function () {
+		if (!courseImportDraft) return;
+		const conflicts = courseImportDraft.conflictingCategoryNames || new Set();
+		const rows = Array.from(document.querySelectorAll('#courseImportHeadings [data-import-heading]'));
+		const unresolved = new Set();
+		for (const row of rows) {
+			const input = row.querySelector('[data-import-title]');
+			const message = row.querySelector('[data-import-title-error]');
+			const isConflict = conflicts.has(input?.value.trim());
+			row.classList.toggle('has-category-conflict', isConflict);
+			if (message) message.hidden = !isConflict;
+			if (isConflict) unresolved.add(input.value.trim());
+		}
+		const notice = document.querySelector('[data-import-conflict-notice]');
+		if (notice) {
+			notice.hidden = unresolved.size === 0;
+			notice.innerHTML = unresolved.size
+				? `<strong>Some category names are already in use.</strong> Rename the highlighted titles, then select “Create course” again. Existing category names must be unique across your school.<span>${[...unresolved].map(esc).join(' · ')}</span>`
+				: '';
+		}
+	};
+
+	window.clearCourseImportHeadingError = function (input) {
+		if (!input || !courseImportDraft?.conflictingCategoryNames) return;
+		const row = input.closest('[data-import-heading]');
+		const isConflict = courseImportDraft.conflictingCategoryNames.has(input.value.trim());
+		row?.classList.toggle('has-category-conflict', isConflict);
+		const message = row?.querySelector('[data-import-title-error]');
+		if (message) message.hidden = !isConflict;
+		window.updateCourseImportConflictUI();
+	};
+
+	window.removeCourseImportHeading = function (button) {
+		button?.closest('.course-import-heading')?.remove();
+		window.updateCourseImportOutlineCount();
+		window.renderCourseImportSourcePicker();
+	};
+
+	window.addCourseImportHeading = function () {
+		if (!courseImportDraft) return;
+		const container = document.getElementById('courseImportHeadings');
+		if (!container) return;
+		const lines = String(courseImportDraft.documentText || '').split('\n');
+		const usedLines = new Set(Array.from(container.querySelectorAll('[data-import-line]'), (input) => Number(input.value)));
+		const availableIndex = lines.findIndex((source, index) => source.trim() && !usedLines.has(index + 1));
+		const line = availableIndex >= 0 ? availableIndex + 1 : 1;
+		const sourceText = lines[line - 1] || '';
+		const previousLevel = Number(container.lastElementChild?.querySelector('[data-import-level]')?.value) || 1;
+		container.insertAdjacentHTML('beforeend', courseImportHeadingRow(
+			{ line, level: previousLevel, sourceText },
+			container.children.length,
+		));
+		window.updateCourseImportOutlineCount();
+		window.renderCourseImportSourcePicker();
+	};
+
+	window.createCourseFromDocumentImport = async function () {
+		if (!courseImportDraft) return toast('Analyze a document before creating a course.', 'error');
+		const name = document.getElementById('courseImportName')?.value.trim() || '';
+		if (!name) return toast('Enter a course name.', 'error');
+		const headingRows = Array.from(document.querySelectorAll('#courseImportHeadings [data-import-heading]'));
+		if (!headingRows.length) return toast('Keep or add at least one category heading.', 'error');
+		const headings = headingRows.map((row) => ({
+			line: Number(row.querySelector('[data-import-line]')?.value),
+			level: Number(row.querySelector('[data-import-level]')?.value),
+			title: row.querySelector('[data-import-title]')?.value.trim() || '',
+		}));
+		const button = document.getElementById('courseImportCreate');
+		if (button) { button.disabled = true; button.textContent = 'Creating course…'; }
+		try {
+			const A = api();
+			if (!A) throw new Error('API client is not available.');
+			const course = await A.raw('POST', '/courses/import', {
+				name,
+				description: document.getElementById('courseImportDescription')?.value || '',
+				documentText: courseImportDraft.documentText,
+				headings,
+			});
+			const categories = categoryList();
+			const knownIds = new Set(categories.map((category) => String(category.id)));
+			for (const category of course.imported_categories || []) {
+				if (!knownIds.has(String(category.id))) categories.push(category);
+			}
+			closeCourseModal('courseImportModal');
+			courseImportDraft = null;
+			await loadCourses();
+			renderCourseList();
+			toast(`Imported "${course.name}" with ${course.lessons?.length || 0} course sections.`);
+			if (course.id) await openCourseDetail(course.id);
+		} catch (err) {
+			console.warn('[courses] document import failed:', err);
+			if (!window.showCourseImportCategoryConflicts(err)) {
+				toast(`Could not create the course: ${err?.message || 'error'}`, 'error');
+			}
+			if (button) { button.disabled = false; button.textContent = 'Create course'; }
+		}
+	};
+
 	// preselectId: category id to pre-pick (set from the Categories tab action).
 	window.openCourseGeneratorModal = async function (preselectId, defaults = {}) {
 		await ensureAiConfigs();
@@ -723,6 +1156,10 @@
 		return `course-document-lesson-${String(lesson.id || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
 	}
 
+	function courseDocumentCategoryId(category) {
+		return `course-document-category-${String(category.id || '').replace(/[^a-zA-Z0-9_-]/g, '')}`;
+	}
+
 	function buildCourseDocumentTree(branchRows, lessonMap) {
 		const nodes = new Map();
 		for (const { category } of branchRows) {
@@ -738,13 +1175,28 @@
 		return roots;
 	}
 
+	function renderCourseDocumentContentsNode(node, depth = 0) {
+		const category = node.category;
+		const level = depth === 0 ? 'Main category' : node.children.length ? 'Subcategory' : 'Axis';
+		return (
+			`<li><a href="#${esc(courseDocumentCategoryId(category))}">` +
+			`<span>${level}</span><strong>${esc(category.name)}</strong></a>` +
+			(node.children.length
+				? `<ol>${node.children.map((child) => renderCourseDocumentContentsNode(child, depth + 1)).join('')}</ol>`
+				: '') +
+			'</li>'
+		);
+	}
+
 	function renderCourseDocumentNode(node, depth = 0) {
 		const category = node.category;
 		const headingLevel = Math.min(depth + 2, 5);
 		const level = depth === 0 ? 'Main category' : node.children.length ? 'Subcategory' : 'Axis';
 		const lessons = node.lessons.map((lesson) =>
 			`<section class="course-document-lesson" id="${esc(courseDocumentLessonId(lesson))}">` +
-			`<h${Math.min(headingLevel + 1, 6)}>${esc(lesson.title)}</h${Math.min(headingLevel + 1, 6)}>` +
+			(node.children.length && lesson.title !== category.name
+				? `<h${Math.min(headingLevel + 1, 6)}>${esc(lesson.title)}</h${Math.min(headingLevel + 1, 6)}>`
+				: '') +
 			(lesson.summary ? `<p class="course-document-summary">${esc(lesson.summary)}</p>` : '') +
 			(String(lesson.content || '').trim()
 				? `<div class="course-md">${renderMarkdown(lesson.content)}</div>`
@@ -752,7 +1204,7 @@
 			'</section>',
 		).join('');
 		return (
-			`<section class="course-document-category" style="--course-document-depth:${depth}">` +
+			`<section class="course-document-category" id="${esc(courseDocumentCategoryId(category))}" style="--course-document-depth:${depth}">` +
 			`<div class="course-document-category-heading"><span>${level}</span><h${headingLevel}>${esc(category.name)}</h${headingLevel}></div>` +
 			lessons +
 			node.children.map((child) => renderCourseDocumentNode(child, depth + 1)).join('') +
@@ -777,9 +1229,9 @@
 					'</section>',
 				).join('') + '</section>'
 			: '';
-		const contents = lessons.map((lesson, index) =>
-			`<li><a href="#${esc(courseDocumentLessonId(lesson))}"><span>${index + 1}</span><strong>${esc(lesson.title)}</strong></a>` +
-			(lesson.summary ? `<p>${esc(lesson.summary)}</p>` : '') + '</li>',
+		const contents = tree.map((node) => renderCourseDocumentContentsNode(node)).join('');
+		const unlinkedContents = unlinked.map((lesson) =>
+			`<li><a href="#${esc(courseDocumentLessonId(lesson))}"><span>Additional content</span><strong>${esc(lesson.title)}</strong></a></li>`,
 		).join('');
 		return (
 			`<article class="course-document-view">` +
@@ -788,7 +1240,9 @@
 			`<div>${lessons.length} lesson${lessons.length === 1 ? '' : 's'}</div></header>` +
 			`<section class="course-document-toc"><h2>Summary and contents</h2>` +
 			(course.description ? `<p class="course-document-overview">${esc(course.description)}</p>` : '') +
-			(contents ? `<ol>${contents}</ol>` : '<p class="course-document-placeholder">This course has no lessons yet.</p>') +
+			(contents || unlinkedContents
+				? `<ol>${contents}${unlinkedContents}</ol>`
+				: '<p class="course-document-placeholder">This course has no lessons yet.</p>') +
 			`</section><div class="course-document-body">${renderedTree}${unlinkedHtml}</div></article>`
 		);
 	}

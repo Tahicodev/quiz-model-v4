@@ -21,9 +21,20 @@ import {
   LessonContentGenerateSchema,
 } from '../../shared/schemas/course.schema.js';
 import { CourseDocumentSchema } from '../../shared/schemas/courseDocument.schema.js';
+import {
+  CourseDocumentPreviewSchema,
+  CourseDocumentImportSchema,
+} from '../../shared/schemas/courseImport.schema.js';
 import { getContainer } from '../container.js';
 import { toStudentPracticeView } from '../utils/studentQuestionView.js';
 import { renderCourseDocument } from '../services/courseDocumentRenderer.js';
+import {
+  buildCourseImportSections,
+  detectCourseDocumentOutline,
+  extractCourseDocumentText,
+  MAX_COURSE_DOCUMENT_BYTES,
+} from '../services/courseDocumentImporter.js';
+import { logger } from '../logger.js';
 
 const router = Router();
 router.use(requireAuth, enforceTenant);
@@ -227,6 +238,160 @@ router.post('/generate', requireRole(MANAGE_ROLES), async (req, res, next) => {
     if (err instanceof AppError) return next(err);
     const detail = err && err.message ? String(err.message) : 'The AI provider call failed — check your connection, key and model, then try again.';
     next(new AppError('AI_PROVIDER_ERROR', detail, 502));
+  }
+});
+
+router.post('/import/preview', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const parsed = CourseDocumentPreviewSchema.safeParse(req.body || {});
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const { filename, data } = parsed.data;
+    const encoded = String(data).replace(/\s+/g, '');
+    if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) {
+      throw new ValidationError({ file: ['The uploaded file data is invalid. Please select the file again.'] });
+    }
+    const buffer = Buffer.from(encoded, 'base64');
+    if (!buffer.length || buffer.length > MAX_COURSE_DOCUMENT_BYTES) {
+      throw new ValidationError({ file: [`Choose a file smaller than ${MAX_COURSE_DOCUMENT_BYTES / 1048576} MB.`] });
+    }
+
+    const text = await extractCourseDocumentText(buffer, filename);
+    const outline = await detectCourseDocumentOutline(buffer, filename, text);
+    const sourceLines = text.split('\n');
+    res.json({
+      filename,
+      documentText: text,
+      title: filename.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim(),
+      description: '',
+      detectionMethod: outline.method,
+      headings: outline.headings.map((heading) => ({
+        ...heading,
+        sourceText: sourceLines[heading.line - 1] || '',
+      })),
+    });
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
+    const detail = err && err.message
+      ? String(err.message)
+      : 'The document text could not be extracted or its outline detected locally.';
+    next(new AppError('COURSE_DOCUMENT_ANALYSIS_FAILED', detail, 502));
+  }
+});
+
+router.post('/import', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  let categorySvc;
+  let courseSvc;
+  let auditSvc;
+  let repo;
+  let rootCategory = null;
+  let course = null;
+  const createdCategories = [];
+  try {
+    ({ categorySvc, courseSvc, auditSvc, repo } = getContainer());
+    const parsed = CourseDocumentImportSchema.safeParse(req.body || {});
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const params = parsed.data;
+    const { roots, introduction } = buildCourseImportSections(params.documentText, params.headings);
+    if (!roots.length) throw new ValidationError({ headings: ['The outline must include at least one main category.'] });
+    const { data: existingCategories } = await repo.getAll('categories', {
+      filters: { school_id: req.schoolId },
+      limit: 100000,
+    });
+    const categoryNames = new Set((existingCategories || []).map((category) => String(category.name || '')));
+    const conflicts = new Set();
+    const checkNames = (nodes) => {
+      for (const node of nodes) {
+        if (categoryNames.has(node.title)) conflicts.add(node.title);
+        categoryNames.add(node.title);
+        checkNames(node.children);
+      }
+    };
+    checkNames(roots);
+    if (conflicts.size) {
+      const names = [...conflicts].slice(0, 10).map((name) => `"${name}"`).join(', ');
+      const more = conflicts.size > 10 ? ` and ${conflicts.size - 10} more` : '';
+      throw new ValidationError({
+        headings: [`Category names must be unique across your school. Rename these detected titles before importing: ${names}${more}.`],
+      });
+    }
+
+    const createCategoryTree = async (nodes, parentId = null) => {
+      for (const node of nodes) {
+        const category = await categorySvc.create({ name: node.title, parent_id: parentId }, req.user);
+        createdCategories.push(category);
+        if (!rootCategory) rootCategory = category;
+        node.categoryId = category.id;
+        await createCategoryTree(node.children, category.id);
+      }
+    };
+    await createCategoryTree(roots);
+
+    course = await courseSvc.create({
+      name: params.name,
+      description: params.description || null,
+      category_id: rootCategory.id,
+    }, req.user);
+
+    let orderIndex = 0;
+    if (introduction) {
+      await courseSvc.addLesson(course.id, {
+        title: 'Introduction',
+        content: introduction,
+        order_index: orderIndex++,
+      }, req.user);
+    }
+    const createSectionLessons = async (nodes) => {
+      for (const node of nodes) {
+        await courseSvc.addLesson(course.id, {
+          title: node.title,
+          content: node.content,
+          category_id: node.categoryId,
+          order_index: orderIndex++,
+        }, req.user);
+        await createSectionLessons(node.children);
+      }
+    };
+    await createSectionLessons(roots);
+
+    for (const category of createdCategories) {
+      await auditSvc.log({
+        schoolId: req.schoolId, actorId: req.user.id, entityType: 'category',
+        entityId: category.id, action: 'create', ip: req.ip,
+      });
+    }
+    await auditSvc.log({
+      schoolId: req.schoolId, actorId: req.user.id, entityType: 'course',
+      entityId: course.id, action: 'create', ip: req.ip,
+    });
+    res.status(201).json({
+      ...(await courseSvc.getWithLessons(course.id, req.schoolId)),
+      imported_categories: createdCategories,
+    });
+  } catch (err) {
+    const cleanupErrors = [];
+    if (course) {
+      try {
+        await courseSvc.delete(course.id, req.user);
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+    if (rootCategory) {
+      try {
+        await categorySvc.delete(rootCategory.id, req.user);
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+    if (cleanupErrors.length) {
+      logger.error({ error: err, cleanupErrors }, 'Course document import rollback failed');
+      return next(new AppError(
+        'COURSE_IMPORT_ROLLBACK_FAILED',
+        'Course import failed and cleanup was incomplete. Refresh your categories and courses, then contact an administrator if any partial data remains.',
+        500,
+      ));
+    }
+    next(err);
   }
 });
 

@@ -14,6 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
+import { Document, HeadingLevel, Packer, Paragraph } from 'docx';
 import { setupTestDb, teardownTestDb } from './helpers/testDb.js';
 
 const SCHOOL = 'school-test';
@@ -320,6 +321,90 @@ describe('course management endpoints', () => {
 	it('renames the course through PATCH', async () => {
 		const res = await asTeacher().patch(`/api/v1/courses/${courseId}`).send({ name: 'French — Unit 3 (v2)' });
 		expect(res.body.name).toBe('French — Unit 3 (v2)');
+	});
+});
+
+describe('course document import', () => {
+	it('previews an editable outline and creates categories with unchanged source text', async () => {
+		const document = new Document({
+			sections: [{
+				children: [
+					new Paragraph({ text: 'Imported Module', heading: HeadingLevel.HEADING_1 }),
+					new Paragraph('Introductory paragraph.'),
+					new Paragraph({ text: 'Basics', heading: HeadingLevel.HEADING_2 }),
+					new Paragraph({ text: 'Information', heading: HeadingLevel.HEADING_3 }),
+					new Paragraph('This text must remain exactly as written.'),
+				],
+			}],
+		});
+		const file = await Packer.toBuffer(document);
+		const providerFetch = vi.fn();
+		vi.stubGlobal('fetch', providerFetch);
+		const preview = await asTeacher()
+			.post(`${BASE}/import/preview`)
+			.send({
+				filename: 'imported-course.docx',
+				data: file.toString('base64'),
+			});
+		expect(providerFetch).not.toHaveBeenCalled();
+		vi.unstubAllGlobals('fetch');
+
+		expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+		expect(preview.body.detectionMethod).toBe('docx-styles-and-local-patterns');
+		expect(preview.body.title).toBe('imported course');
+		expect(preview.body.description).toBe('');
+		expect(preview.body.documentText).toContain('This text must remain exactly as written.');
+		expect(preview.body.headings.map(({ line, level }) => ({ line, level }))).toEqual([
+			{ line: 1, level: 1 },
+			{ line: 5, level: 2 },
+			{ line: 7, level: 3 },
+		]);
+
+		const duplicateNames = await asTeacher()
+			.post(`${BASE}/import`)
+			.send({
+				name: 'Invalid imported course',
+				documentText: preview.body.documentText,
+				headings: preview.body.headings.map((heading) => ({
+					line: heading.line,
+					level: heading.level,
+					title: 'Repeated category',
+				})),
+			});
+		expect(duplicateNames.status).toBe(422);
+		expect(duplicateNames.body.error.fields.headings[0]).toContain('unique across your school');
+		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Repeated category' } })).toBe(0);
+
+		const existingCategoryName = await asTeacher()
+			.post(`${BASE}/import`)
+			.send({
+				name: 'Existing category title import',
+				documentText: 'Unit 3\nSome content',
+				headings: [{ line: 1, level: 1, title: 'Unit 3' }],
+			});
+		expect(existingCategoryName.status).toBe(422);
+		expect(existingCategoryName.body.error.fields.headings[0]).toContain('"Unit 3"');
+		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Unit 3' } })).toBe(1);
+
+		const created = await asTeacher()
+			.post(`${BASE}/import`)
+			.send({
+				name: 'Imported Module',
+				description: preview.body.description,
+				documentText: preview.body.documentText,
+				headings: preview.body.headings.map((heading) => ({
+					line: heading.line,
+					level: heading.level,
+					title: heading.sourceText,
+				})),
+			});
+		expect(created.status).toBe(201);
+		expect(created.body.lessons).toHaveLength(3);
+		expect(created.body.lessons[0].content).toContain('Introductory paragraph.');
+		expect(created.body.lessons[2].content).toContain('This text must remain exactly as written.');
+		expect(created.body.imported_categories).toHaveLength(3);
+		expect(created.body.category_id).toBe(created.body.imported_categories[0].id);
+		expect(created.body.imported_categories[2].parent_id).toBe(created.body.imported_categories[1].id);
 	});
 });
 

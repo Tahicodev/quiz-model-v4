@@ -40,7 +40,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-01-courses3" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-02-courseimport3" />
 		<link rel="stylesheet" href="admin.css?v=2026-10-31-kidscat2" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-10-31-kidscat2" />
@@ -150,7 +150,7 @@
 		<script src="category-management.js?v=2026-11-01-courses2" defer></script>
 		<script src="questions-management.js?v=2026-11-01-courses2" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
-		<script src="courses-management.js?v=2026-11-01-courses3" defer></script>
+		<script src="courses-management.js?v=2026-11-02-courseimport3" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
@@ -2221,6 +2221,13 @@
 											<path d="M2 12l10 5 10-5"></path>
 										</svg>
 										<span>New Course from Categories</span>
+									</button>
+									<button
+										id="import-course-document-btn"
+										class="btn"
+										onclick="openCourseDocumentImportModal()"
+									>
+										<span>Import DOCX / PDF</span>
 									</button>
 								</div>
 								<div class="toolbar-controls">

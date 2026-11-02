@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 const js = readFileSync(new URL('../../courses-management.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 const studentJs = readFileSync(new URL('../../student-courses.js', import.meta.url), 'utf8');
+const adminHtml = readFileSync(new URL('../../admin.html', import.meta.url), 'utf8');
 
 describe('course row actions', () => {
 	it('opens a course from its clickable title', () => {
@@ -75,13 +76,61 @@ describe('course row actions', () => {
 		expect(js).toContain('window.saveAllCourseAIResult = async function');
 	});
 
+	it('offers a reviewed DOCX/PDF course import flow', () => {
+		expect(adminHtml).toContain('id="import-course-document-btn"');
+		expect(js).toContain('window.openCourseDocumentImportModal = async function');
+		expect(js).toContain('/courses/import/preview');
+		expect(js).toContain('/courses/import');
+		expect(js).toContain('window.addCourseImportHeading = function');
+		expect(js).toContain('No AI provider or internet connection is needed.');
+		expect(js).toContain('data-import-dropzone');
+		expect(js).toContain('window.updateCourseImportFile = function');
+		expect(js).toContain('window.clearCourseImportFile = function');
+		expect(css).toContain('.course-import-dropzone');
+		expect(css).toContain('.course-import-heading-fields');
+	});
+
+	it('lets teachers assign selected document lines to a hierarchy level', () => {
+		expect(js).toContain('window.toggleCourseImportSelectPage = function');
+		expect(js).toContain('window.addSelectedCourseImportSourceLines = function');
+		expect(js).toContain('Make selected lines');
+		expect(js).toContain('Main category · Level 1');
+		expect(js).toContain('Subcategory · Level 2');
+		expect(js).toContain('Axis · Level 3');
+		expect(css).toContain('.course-import-level-tools');
+	});
+
+	it('lets teachers select exact source lines as headings while leaving other lines as content', () => {
+		expect(js).toContain('window.renderCourseImportSourcePicker = function');
+		expect(js).toContain('data-import-source-line="${entry.line}"');
+		expect(js).toContain('window.addSelectedCourseImportSourceLines = function');
+		expect(js).toContain('window.changeCourseImportSourcePage = function');
+		expect(js).toContain('Lines not added as headings remain content');
+		expect(js).toContain('updateCourseImportSourceSearch');
+		expect(js).toContain('Find a title in the document');
+		expect(css).toContain('.course-import-source-options');
+		expect(css).toContain('.course-import-search');
+	});
+
+	it('shows and clears inline errors for category names already used in the school', () => {
+		expect(js).toContain('window.showCourseImportCategoryConflicts = function');
+		expect(js).toContain('window.updateCourseImportConflictUI = function');
+		expect(js).toContain('window.clearCourseImportHeadingError = function');
+		expect(js).toContain('Rename the highlighted titles');
+		expect(css).toContain('.has-category-conflict');
+		expect(css).toContain('.course-import-conflict-notice');
+	});
+
 	it('offers teacher view/edit modes and renders course view as a linked document', () => {
 		expect(js).toContain('window.setCourseDetailMode = function');
 		expect(js).toContain('View course');
 		expect(js).toContain('Edit content');
 		expect(js).toContain('function renderTeacherCourseDocument');
+		expect(js).toContain('function renderCourseDocumentContentsNode');
+		expect(js).toContain('courseDocumentCategoryId(category)');
 		expect(js).toContain('class="course-document-toc"');
-		expect(js).toContain('href="#${esc(courseDocumentLessonId(lesson))}"');
+		expect(js).toContain('href="#${esc(courseDocumentCategoryId(category))}"');
+		expect(js).toContain('node.children.length && lesson.title !== category.name');
 		expect(css).toContain('.course-document-view');
 	});
 
