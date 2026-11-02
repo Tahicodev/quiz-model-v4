@@ -4,13 +4,15 @@
 
 	const state = {
 		filter: 'all',
-		trainingFilter: 'all',
 		gameFilter: 'all',
 		resultsFilter: 'all',
 		resultsStatusFilter: 'all',
 		resultsView: 'results',
 		accuracySource: 'all',
 		accuracyMastery: 'all',
+		accuracyShowAll: false,
+		trainingAccuracyCache: null,
+		trainingAccuracyRequest: null,
 		workspaceTab: 'overview',
 		activeGameId: null,
 		gameActionsBound: false,
@@ -1365,7 +1367,7 @@
 		`;
 	}
 
-	function getTrainingResults(identity) {
+	function getTrainingResults(identity, userId = '') {
 		let results = [];
 		try {
 			results = window.__DI_CONTAINER__.repo.getAll_sync('results');
@@ -1377,12 +1379,17 @@
 		const className = String(identity?.class || '')
 			.trim()
 			.toLowerCase();
+		const currentUserId = String(userId || identity?.id || '').trim();
 		return results
 			.filter((result) => {
 				if (!result || typeof result !== 'object') return false;
 				if (result.gameId) return false;
 				const mode = String(result.mode || '').toLowerCase();
 				if (mode && mode !== 'training') return false;
+				const resultUserId = String(
+					result.userId || result.user_id || '',
+				).trim();
+				if (resultUserId) return resultUserId === currentUserId;
 
 				const resultNumber = String(
 					result.numero || result.studentNumber || '',
@@ -1400,6 +1407,7 @@
 				);
 			})
 			.map((result, index) => {
+				const metadata = parseTrainingResultMetadata(result);
 				// DB rows store `score` as a percentage (0-100) plus
 				// earned/total point counts; freshly saved local rows keep
 				// the /20 grade on `grade20`. Derive the /20 grade from
@@ -1416,7 +1424,14 @@
 				const score = Number.isFinite(earned) ? earned : 0;
 				// Prefer an explicit /20 grade; fall back to counts, then
 				// to converting the stored percentage back to /20.
-				let grade = Number(result.grade20);
+				const explicitGrade = result.grade20;
+				let grade =
+					explicitGrade !== null &&
+					explicitGrade !== undefined &&
+					explicitGrade !== '' &&
+					Number.isFinite(Number(explicitGrade))
+						? Number(explicitGrade)
+						: NaN;
 				if (!Number.isFinite(grade)) {
 					if (totalQuestions > 0) {
 						grade = (score / totalQuestions) * 20;
@@ -1428,12 +1443,26 @@
 				grade = Math.max(0, Math.min(20, Math.round(grade * 100) / 100));
 				return {
 					id: result.id || `training-${index}`,
-					title: result.examTitle || 'Training Quiz',
+					title:
+						metadata.lessonTitle ||
+						result.examTitle ||
+						'Training Quiz',
+					courseTitle: metadata.courseTitle || '',
+					categoryId: metadata.categoryId || '',
+					categoryTitle: metadata.categoryTitle || '',
+					isCategoryTraining:
+						metadata.rankedCategoryQuiz === true ||
+						(Boolean(metadata.categoryId) &&
+							!metadata.courseTitle &&
+							!metadata.lessonTitle),
 					score: score, // raw correct-answer count (for x/y display)
 					grade,
-					passed: grade >= 10,
+					passed:
+						typeof result.passed === 'boolean'
+							? result.passed
+							: grade >= 10,
 					totalQuestions: Number.isFinite(totalQuestions) ? totalQuestions : 0,
-					date: result.date || result.dateTaken || '',
+					date: result.date || result.dateTaken || result.date_taken || '',
 					timeSpent: Math.max(
 						0,
 						Number(result.timeSpent ?? result.time_spent) || 0,
@@ -1442,6 +1471,20 @@
 				};
 			})
 			.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+	}
+
+	function parseTrainingResultMetadata(result) {
+		try {
+			const raw = result?.answersJson ?? result?.answers_json ?? null;
+			const parsed =
+				typeof raw === 'string' && raw.trim() ? JSON.parse(raw) : raw;
+			return parsed?.trainingContext &&
+				typeof parsed.trainingContext === 'object'
+				? parsed.trainingContext
+				: {};
+		} catch (_) {
+			return {};
+		}
 	}
 
 	// Category labels attached to a training result (Training Progress rows):
@@ -1506,107 +1549,193 @@
 		}));
 	}
 
-	function getTrainingAttemptSummary(result) {
-		const attempts = Array.isArray(result.attempts) ? result.attempts : [];
-		if (!attempts.length) return '';
-		const grades = attempts
-			.map((attempt) =>
-				Number.isFinite(Number(attempt.grade))
-					? Number(attempt.grade)
-					: grade20(
-							Number(attempt.score || 0),
-							Number(attempt.totalQuestions || 0),
-						),
-			)
-			.filter((value) => Number.isFinite(value));
-		if (!grades.length) return '';
-		const best = Math.max(...grades);
-		const latest = grades[0];
-		const count = attempts.length;
-		const trend =
-			count > 1 && latest > grades[1]
-				? 'improving'
-				: count > 1 && latest < grades[1]
-					? 'slipping'
-					: 'steady';
-		const trendLabels = {
-			improving: '↑ Improving',
-			slipping: '↓ Slipping',
-			steady: '→ Steady',
-		};
-		const parts = [
-			`<span class="training-attempt-count">${count} attempt${count === 1 ? '' : 's'}</span>`,
-			count > 1
-				? `<span class="training-best-score">Best ${best.toFixed(2).replace('.', ',')}/20</span>`
-				: '',
-			`<span class="training-trend training-trend--${trend}">${trendLabels[trend]}</span>`,
-		];
-		return parts.filter(Boolean).join('');
-	}
-
 	function renderTrainingCards(trainingResults) {
-		const grid = byId('studentTrainingGrid');
-		if (!grid) return;
 		renderTrainingRulesCard();
+		window.startCategoryTraining = function (categoryId) {
+			const category = getTrainingCategoryOptions().find(
+				(item) => item.id === String(categoryId),
+			);
+			if (!category) {
+				showToast('This category is not available for training.', 'warning');
+				return;
+			}
+			window.openTrainingMode(null, {
+				questions: category.questions,
+				label: `Category: ${category.name}`,
+				categoryId: category.id,
+				categoryTitle: category.name,
+				rankedCategoryQuiz: true,
+			});
+		};
+		renderTrainingCategoryCards(trainingResults);
 
-		const uniqueByExam = dedupeTrainingResultsByExam(trainingResults);
-		const filtered =
-			state.trainingFilter === 'recent'
-				? uniqueByExam.slice(0, 6)
-				: uniqueByExam;
-
-		if (!trainingResults.length) {
-			grid.innerHTML = `
-				<div class="empty-state">
-					No training attempts yet.
-					<div style="margin-top: 10px;">
-						<button class="workspace-btn small" onclick="openTrainingMode()">Start Training</button>
-					</div>
-				</div>
-			`;
-			return;
+		function getTrainingCategoryOptions() {
+			const repo = window.__DI_CONTAINER__?.repo;
+			const questions = repo?.getAll_sync('questions') || [];
+			const categories = getCategoriesStore();
+			const byId = new Map(
+				categories.map((category) => [String(category.id || '').trim(), category]),
+			);
+			const byName = new Map(
+				categories.map((category) => [
+					String(category.name || '').trim().toLowerCase(),
+					String(category.id || '').trim(),
+				]),
+			);
+			const grouped = new Map();
+			questions.forEach((question) => {
+				const raw = String(
+					question?.categoryId ?? question?.category_id ?? question?.category ?? '',
+				).trim();
+				const categoryId =
+					byId.has(raw) ? raw : byName.get(raw.toLowerCase()) || '';
+				const key = categoryId || 'uncategorized';
+				if (!isStudentTrainingCategory(key)) return;
+				if (!grouped.has(key)) grouped.set(key, []);
+				grouped.get(key).push(question);
+			});
+			return Array.from(grouped, ([id, categoryQuestions]) => {
+				const category = byId.get(id);
+				return {
+					id,
+					name: category?.name || 'Uncategorized',
+					questions: categoryQuestions,
+				};
+			}).sort((a, b) => a.name.localeCompare(b.name));
 		}
 
-		if (!filtered.length) {
-			grid.innerHTML =
-				'<div class="empty-state">No training attempts for this filter.</div>';
-			return;
-		}
-
-		grid.innerHTML = filtered
-			.map((result) => {
-				const total = Number(result.totalQuestions || 0);
-				const score = Number(result.score || 0);
-				const grade = Number.isFinite(Number(result.grade))
-					? Number(result.grade)
-					: grade20(score, total);
-				const percent = getScorePercent(score, total);
-				const passed = grade >= 10;
-				const title = result.title || 'Training Quiz';
-				const attemptSummary = getTrainingAttemptSummary(result);
-				const repeatClass =
-					result.attemptCount > 1 ? ' training-card--repeated' : '';
-				const statusClass = passed ? 'status-passed' : 'status-failed';
-				return `
-					<div class="exam-card status-completed training-card${repeatClass}">
-						<div class="exam-card-header">
-							<span class="exam-status ${statusClass}">${passed ? 'Passed' : 'Failed'}</span>
-							<span class="exam-tag">Training</span>
-						</div>
-						<h3>${escapeHtml(title)}</h3>
-						<p>${result.date ? new Date(result.date).toLocaleString() : 'No date'}</p>
-						${attemptSummary ? `<div class="training-attempt-meta">${attemptSummary}</div>` : ''}
-						<div class="exam-performance">
-							<div class="score-display">${formatGrade20(grade)}</div>
-							<div class="performance-bar">
-								<span style="width: ${percent}%"></span>
+		function renderTrainingCategoryCards(trainingResults = []) {
+			const container = byId('studentTrainingCategories');
+			if (!container) return;
+			const categories = getTrainingCategoryOptions();
+			if (!categories.length) {
+				container.innerHTML =
+					'<div class="empty-state">No categories are currently available for training.</div>';
+				return;
+			}
+			container.innerHTML = categories
+				.map((category) => {
+					const attempts = trainingResults.filter(
+						(result) => result.categoryId === category.id,
+					);
+					const grades = attempts.map((result) => Number(result.grade) || 0);
+					const best = grades.length ? Math.max(...grades) : null;
+					const latest = attempts[0];
+					const attemptLabel = `${attempts.length} ${attempts.length === 1 ? 'attempt' : 'attempts'}`;
+					return `
+						<article class="training-category-card" data-training-category-card="${escapeHtml(category.id)}">
+							<div class="training-category-card-top">
+								<span class="training-category-icon" aria-hidden="true">✦</span>
+								<span class="training-category-count">${category.questions.length} questions</span>
 							</div>
-						</div>
-						<button class="workspace-btn small" onclick="openTrainingMode()">Start Training</button>
-					</div>
-				`;
-			})
-			.join('');
+							<h4>${escapeHtml(category.name)}</h4>
+							<div class="training-category-progress">
+								<span>${attemptLabel}</span>
+								<span>${best === null ? 'No score yet' : `Best ${formatGrade20(best)}`}</span>
+							</div>
+							<div class="training-category-latest">${
+								latest
+									? `Latest ${formatGrade20(latest.grade)} · ${latest.date ? new Date(latest.date).toLocaleDateString() : 'date unavailable'}`
+									: 'Your attempts will appear here.'
+							}</div>
+							<button type="button" class="workspace-btn primary small" data-start-category-training="${escapeHtml(category.id)}">Start category quiz</button>
+							<div class="training-category-leaderboard" data-training-category-leaderboard="${escapeHtml(category.id)}">
+								<div class="training-category-leaderboard-title">Class top 10</div>
+								<div class="training-leaderboard-head"><span>#</span><span>Student</span><span>Score</span><span>Time</span></div>
+								<div class="training-category-leaderboard-body">Loading class results…</div>
+							</div>
+						</article>
+					`;
+				})
+				.join('');
+			if (!container.dataset.categoryTrainingBound) {
+				container.dataset.categoryTrainingBound = 'true';
+				container.addEventListener('click', (event) => {
+					const button = event.target.closest('[data-start-category-training]');
+					if (button) window.startCategoryTraining(button.dataset.startCategoryTraining);
+				});
+			}
+			loadTrainingCategoryStats(categories);
+		}
+
+		async function loadTrainingCategoryStats(categories) {
+			if (!window.API || typeof window.API.raw !== 'function') {
+				renderUnavailableTrainingLeaderboards(categories);
+				return;
+			}
+			const ids = categories.map((category) => category.id);
+			try {
+				const data = await window.API.raw(
+					'GET',
+					'/results/training/category-stats?categoryIds=' +
+						encodeURIComponent(ids.join(',')),
+				);
+				const stats = data?.categories || {};
+				categories.forEach((category) => {
+					const card = Array.from(
+						document.querySelectorAll('[data-training-category-leaderboard]'),
+					).find(
+						(element) =>
+							element.getAttribute('data-training-category-leaderboard') ===
+							category.id,
+					);
+					const target = card?.querySelector(
+						'.training-category-leaderboard-body',
+					);
+					if (!target) return;
+					const summary = stats[category.id];
+					if (!summary) {
+						target.textContent = 'No class results yet.';
+						return;
+					}
+					const myStats = summary.mine || {};
+					const mine = target.closest('.training-category-card')?.querySelector('.training-category-progress');
+					if (mine) {
+						const attemptCount = Number(myStats.attempts) || 0;
+						mine.innerHTML = `
+							<span>${attemptCount} ${attemptCount === 1 ? 'attempt' : 'attempts'}${Number.isFinite(Number(myStats.latestScore)) ? ` · Last ${formatGrade20(myStats.latestScore)}` : ''}</span>
+							<span>${Number.isFinite(Number(myStats.bestScore)) ? `Best ${formatGrade20(myStats.bestScore)}` : 'No score yet'}</span>
+						`;
+					}
+					const leaderboard = Array.isArray(summary.leaderboard) ? summary.leaderboard : [];
+					if (!leaderboard.length) {
+						target.textContent = 'No class results yet.';
+						return;
+					}
+					target.innerHTML = leaderboard
+						.slice(0, 10)
+						.map(
+							(entry) => `
+								<div class="training-leaderboard-row">
+									<span class="training-leaderboard-rank">${entry.rank}</span>
+									<span class="training-leaderboard-name">${escapeHtml(entry.name)}</span>
+									<strong>${formatGrade20(entry.score)}</strong>
+									<span>${entry.timeSpent > 0 ? formatDuration(entry.timeSpent * 1000) : '—'}</span>
+								</div>
+							`,
+						)
+						.join('');
+				});
+			} catch (error) {
+				console.warn('[training] Could not load category class results:', error);
+				renderUnavailableTrainingLeaderboards(categories);
+			}
+		}
+
+		function renderUnavailableTrainingLeaderboards(categories) {
+			categories.forEach((category) => {
+				const card = Array.from(
+					document.querySelectorAll('[data-training-category-leaderboard]'),
+				).find(
+					(element) =>
+						element.getAttribute('data-training-category-leaderboard') ===
+						category.id,
+				);
+				const target = card?.querySelector('.training-category-leaderboard-body');
+				if (target) target.textContent = 'Class ranking is unavailable while offline.';
+			});
+		}
+
 	}
 
 	function renderHeader(context) {
@@ -2871,9 +3000,29 @@
 	}
 
 	function buildStudentResults(context) {
-		const trainingResults = getTrainingResults(context.identity);
+		const trainingResults = getTrainingResults(context.identity, context.user?.id);
 		const examResults = collectExamResults(context.identity);
 		const gameResults = getGameResults(context);
+		const categoryAttemptCounts = new Map();
+		trainingResults.forEach((result) => {
+			if (!result.isCategoryTraining) return;
+			const key = String(
+				result.categoryId ||
+					result.categoryTitle ||
+					result.title ||
+					'category-training',
+			)
+				.trim()
+				.toLowerCase();
+			const count = categoryAttemptCounts.get(key) || {
+				attempts: 0,
+				passed: 0,
+			};
+			count.attempts += 1;
+			if (result.passed) count.passed += 1;
+			categoryAttemptCounts.set(key, count);
+			result.categoryAttemptKey = key;
+		});
 		const allResults = [
 			...trainingResults.map((r) => ({
 				type: r.title || 'Training',
@@ -2882,6 +3031,16 @@
 				passed: Number(r.grade) >= 10,
 				date: r.date,
 				kind: 'training',
+				courseTitle: r.courseTitle,
+				categoryTitle: r.categoryTitle,
+				isCategoryTraining: r.isCategoryTraining,
+				categoryAttemptCount: r.isCategoryTraining
+					? categoryAttemptCounts.get(r.categoryAttemptKey)?.attempts || 0
+					: 0,
+				categoryPassedAttemptCount: r.isCategoryTraining
+					? categoryAttemptCounts.get(r.categoryAttemptKey)?.passed || 0
+					: 0,
+				timeSpent: r.timeSpent,
 			})),
 			...examResults.map((r) => ({
 				type: r.examName || 'Exam',
@@ -2899,9 +3058,7 @@
 			const scoreText = String(result.score || '');
 			let scoreTone = 'neutral';
 			if (result.kind === 'training') {
-				// /20 grades: green above 10, red below
-				const grade = parseFloat(scoreText.replace(',', '.'));
-				scoreTone = Number.isFinite(grade) && grade >= 10 ? 'passed' : 'failed';
+				scoreTone = result.passed ? 'passed' : 'failed';
 			} else if (result.kind === 'exam') {
 				scoreTone = result.passed ? 'passed' : 'failed';
 			} else {
@@ -3006,16 +3163,45 @@
 		container.innerHTML = filtered
 			.map((result) => {
 				const kind = result.kind || 'training';
+				const details = [
+					result.courseTitle,
+					result.categoryTitle,
+					Number(result.timeSpent) > 0
+						? formatDuration(Number(result.timeSpent) * 1000)
+						: '',
+				]
+					.filter(Boolean)
+					.map((value) => `<span>${escapeHtml(value)}</span>`)
+					.join('');
+				const categoryAttempts = result.isCategoryTraining
+					? Number(result.categoryAttemptCount) || 0
+					: 0;
+				const categoryPassed = result.isCategoryTraining
+					? Number(result.categoryPassedAttemptCount) || 0
+					: 0;
+				const categoryProgress = result.isCategoryTraining
+					? `<span class="result-category-progress" role="group" aria-label="${categoryAttempts} category attempt${categoryAttempts === 1 ? '' : 's'}, ${categoryPassed} passed">
+							<span class="result-category-attempts">
+								<span class="result-category-count">${categoryAttempts}</span>
+								<span class="result-category-label">category attempt${categoryAttempts === 1 ? '' : 's'}</span>
+							</span>
+							<span class="result-category-passed ${categoryPassed > 0 ? 'has-passes' : 'no-passes'}">
+								<span class="result-category-status-dot" aria-hidden="true"></span>
+								${categoryPassed} passed
+							</span>
+						</span>`
+					: '';
 				return `
 					<div class="result-row">
 						<div class="result-main">
 							<div class="result-title-row">
 								<span class="result-kind result-kind--${kind}">${kindLabels[kind] || kind}</span>
-								<div class="result-title">${escapeHtml(result.type)}</div>
+								<div class="result-title">${escapeHtml(result.courseTitle ? `${result.courseTitle} — ${result.type}` : result.type)}</div>
 							</div>
 							<div class="result-subtitle">${
 								result.date ? new Date(result.date).toLocaleString() : ''
 							}</div>
+							${details || categoryProgress ? `<div class="result-details">${details}${categoryProgress}</div>` : ''}
 						</div>
 						<div class="result-score ${result.scoreTone}">${escapeHtml(result.score)}</div>
 					</div>
@@ -3051,7 +3237,7 @@
 			// per-question accuracy — but keep them in the pipeline so the
 			// Games source filter works as soon as game answers exist.
 			const rowUserId = String(row.userId || row.user_id || '').trim();
-			if (userId && rowUserId && rowUserId === userId) return true;
+			if (rowUserId) return Boolean(userId) && rowUserId === userId;
 			const rowNumero = String(row.numero || row.studentNumber || '').trim();
 			if (!rowNumero || rowNumero !== numero) return false;
 			const rowClassId = String(row.classId || '').trim();
@@ -3079,17 +3265,18 @@
 		return 'exam';
 	}
 
-	function collectQuestionAccuracy(context) {
+	function collectQuestionAccuracy(context, trainingAccuracy = null) {
 		if (!context) return [];
 		const rows = getStudentRawResultRows(context);
-		if (!rows.length) return [];
+		const usableRows = rows.filter((row) => resultRowSource(row) !== 'training');
+		if (!usableRows.length && !Object.keys(trainingAccuracy || {}).length) return [];
 		const questionBank =
 			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
 		const byId = new Map(
 			questionBank.map((question) => [String(question?.id ?? '').trim(), question]),
 		);
 		const stats = new Map();
-		rows.forEach((row) => {
+		usableRows.forEach((row) => {
 			let answers = row.answersJson ?? row.answers_json ?? null;
 			if (typeof answers === 'string') {
 				try {
@@ -3100,6 +3287,13 @@
 			}
 			if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
 				return;
+			}
+			if (
+				answers.userAnswers &&
+				typeof answers.userAnswers === 'object' &&
+				!Array.isArray(answers.userAnswers)
+			) {
+				answers = answers.userAnswers;
 			}
 			const source = resultRowSource(row);
 			Object.keys(answers).forEach((questionId) => {
@@ -3135,9 +3329,91 @@
 				stats.set(key, entry);
 			});
 		});
+		Object.entries(trainingAccuracy || {}).forEach(([questionId, result]) => {
+			const key = String(questionId || '').trim();
+			if (!key) return;
+			const bankQuestion = byId.get(key);
+			const question = bankQuestion || {
+				id: key,
+				text: result?.question || 'Question',
+				type: result?.type || 'multiple-choice',
+			};
+			const entry = stats.get(key) || {
+				question,
+				qType: result?.type || normalizeTrainingQuestionType(question),
+				bySource: {
+					exam: { attempts: 0, correct: 0 },
+					training: { attempts: 0, correct: 0 },
+					game: { attempts: 0, correct: 0 },
+				},
+				attempts: 0,
+				correct: 0,
+			};
+			const training = entry.bySource.training;
+			training.attempts = Math.max(0, Number(result?.attempts) || 0);
+			training.correct = Math.max(
+				0,
+				Math.min(training.attempts, Number(result?.correct) || 0),
+			);
+			entry.attempts += training.attempts;
+			entry.correct += training.correct;
+			stats.set(key, entry);
+		});
 		return Array.from(stats.values()).sort(
 			(a, b) => b.attempts - a.attempts || a.correct - b.correct,
 		);
+	}
+
+	function loadTrainingAccuracy(context) {
+		const userId = String(context?.user?.id || '').trim();
+		if (!userId || !window.API || typeof window.API.raw !== 'function') {
+			return Promise.resolve(null);
+		}
+		if (state.trainingAccuracyCache?.userId === userId) {
+			return Promise.resolve(state.trainingAccuracyCache.questions);
+		}
+		if (state.trainingAccuracyRequest?.userId === userId) {
+			return state.trainingAccuracyRequest.promise;
+		}
+		const requestState = { userId, promise: null };
+		const request = window.API.raw('GET', '/results/training/accuracy')
+			.then((response) => {
+				const questions =
+					response?.questions &&
+					typeof response.questions === 'object' &&
+					!Array.isArray(response.questions)
+						? response.questions
+						: {};
+				if (
+					state.trainingAccuracyRequest === requestState &&
+					String(getStudentContext()?.user?.id || '') === userId
+				) {
+					state.trainingAccuracyCache = { userId, questions };
+				}
+				return questions;
+			})
+			.finally(() => {
+				if (state.trainingAccuracyRequest === requestState) {
+					state.trainingAccuracyRequest = null;
+				}
+			});
+		requestState.promise = request;
+		state.trainingAccuracyRequest = requestState;
+		return request;
+	}
+
+	function refreshTrainingAccuracy(context) {
+		state.trainingAccuracyCache = null;
+		state.trainingAccuracyRequest = null;
+		return loadTrainingAccuracy(context).then((questions) => {
+			if (questions && String(getStudentContext()?.user?.id || '') === String(context?.user?.id || '')) {
+				renderQuestionAccuracy(context, questions);
+			}
+			return questions;
+		}).catch((error) => {
+			console.warn('[results] Could not refresh training accuracy:', error);
+			return null;
+		});
 	}
 
 	function accuracyStatsForSource(entry, source) {
@@ -3200,12 +3476,39 @@
 		});
 	}
 
-	function renderQuestionAccuracy(context) {
+	function renderQuestionAccuracy(context, suppliedTrainingAccuracy) {
 		const container = byId('studentQuestionAccuracy');
 		const badge = byId('studentAccuracyBadge');
 		const filterBar = byId('studentAccuracyFilters');
 		if (!container) return;
-		const entries = collectQuestionAccuracy(context);
+		const userId = String(context?.user?.id || '').trim();
+		const trainingAccuracy =
+			suppliedTrainingAccuracy ||
+			(state.trainingAccuracyCache?.userId === userId
+				? state.trainingAccuracyCache.questions
+				: null);
+		const entries = collectQuestionAccuracy(context, trainingAccuracy);
+		if (context && !trainingAccuracy) {
+			loadTrainingAccuracy(context)
+				.then((questions) => {
+					if (
+						questions &&
+						String(getStudentContext()?.user?.id || '') === userId
+					) {
+						renderQuestionAccuracy(context, questions);
+					}
+				})
+				.catch((error) => {
+					console.warn('[results] Could not load training accuracy:', error);
+					if (
+						!entries.length &&
+						String(getStudentContext()?.user?.id || '') === userId
+					) {
+						container.innerHTML =
+							'<div class="empty-state">Training accuracy could not be refreshed. Reconnect and open this tab again.</div>';
+					}
+				});
+		}
 		if (!entries.length) {
 			if (badge) badge.textContent = '';
 			if (filterBar) filterBar.hidden = true;
@@ -3272,7 +3575,7 @@
 		}
 
 		const rows = filtered
-			.slice(0, 8)
+			.slice(0, state.accuracyShowAll ? filtered.length : 8)
 			.map((row, index) => {
 				const tone = accuracyTone(row.accuracy);
 				const questionText =
@@ -3309,7 +3612,18 @@
 
 		const more =
 			filtered.length > 8
-				? `<div class="accuracy-more">Showing the 8 lowest-accuracy questions of ${filtered.length}.</div>`
+				? `<div class="accuracy-more">
+						<span>
+							${
+								state.accuracyShowAll
+									? `Showing all ${filtered.length} ${mastery === 'practice' ? 'questions needing practice' : mastery === 'good' ? 'questions with good accuracy' : 'tracked questions'}`
+									: `Showing 8 of ${filtered.length} ${mastery === 'practice' ? 'questions needing practice' : mastery === 'good' ? 'questions with good accuracy' : 'tracked questions'}${mastery === 'all' ? ` · ${practiceCount} need practice` : ''}`
+							}
+						</span>
+						<button type="button" class="accuracy-show-toggle" data-accuracy-show-all="${state.accuracyShowAll ? 'false' : 'true'}">
+							${state.accuracyShowAll ? 'Show fewer' : `Show all ${filtered.length}`}
+						</button>
+					</div>`
 				: '';
 
 		container.innerHTML = summary + rows + more;
@@ -11791,7 +12105,7 @@
 		const exams = getAssignedExams(context.classRecord);
 		const examResults = collectExamResults(context.identity);
 		const resultsMap = buildResultsMap(examResults);
-		const trainingResults = getTrainingResults(context.identity);
+		const trainingResults = getTrainingResults(context.identity, context.user?.id);
 
 		renderHeroStats(exams, resultsMap);
 		renderExamCards(exams, resultsMap);
@@ -13741,6 +14055,52 @@
 		});
 	}
 
+	function bindTrainingTabs() {
+		const container = byId('studentTrainingPanel');
+		if (!container) return;
+		const tabs = Array.from(container.querySelectorAll('[data-training-tab]'));
+		const panels = Array.from(container.querySelectorAll('[data-training-panel]'));
+		if (!tabs.length || !panels.length) return;
+
+		const activateTab = (tabKey, focusTab = false) => {
+			const activeTab = tabs.find((tab) => tab.dataset.trainingTab === tabKey);
+			if (!activeTab) return;
+			tabs.forEach((tab) => {
+				const isActive = tab === activeTab;
+				tab.classList.toggle('active', isActive);
+				tab.setAttribute('aria-selected', String(isActive));
+				tab.tabIndex = isActive ? 0 : -1;
+			});
+			panels.forEach((panel) => {
+				panel.hidden = panel.dataset.trainingPanel !== tabKey;
+			});
+			if (focusTab) activeTab.focus();
+		};
+
+		tabs.forEach((tab) => {
+			tab.addEventListener('click', () => {
+				activateTab(tab.dataset.trainingTab || '');
+			});
+			tab.addEventListener('keydown', (event) => {
+				const currentIndex = tabs.indexOf(tab);
+				let nextIndex = currentIndex;
+				if (event.key === 'ArrowRight') {
+					nextIndex = (currentIndex + 1) % tabs.length;
+				} else if (event.key === 'ArrowLeft') {
+					nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+				} else if (event.key === 'Home') {
+					nextIndex = 0;
+				} else if (event.key === 'End') {
+					nextIndex = tabs.length - 1;
+				} else {
+					return;
+				}
+				event.preventDefault();
+				activateTab(tabs[nextIndex].dataset.trainingTab || '', true);
+			});
+		});
+	}
+
 	function attachFilters() {
 		document.querySelectorAll('.filter-chip[data-filter]').forEach((chip) => {
 			chip.addEventListener('click', () => {
@@ -13781,22 +14141,43 @@
 		});
 	}
 
-	function attachTrainingFilters() {
-		document
-			.querySelectorAll('.filter-chip[data-training-filter]')
-			.forEach((chip) => {
-				chip.addEventListener('click', () => {
-					document
-						.querySelectorAll('.filter-chip[data-training-filter]')
-						.forEach((el) => el.classList.remove('active'));
-					chip.classList.add('active');
-					state.trainingFilter = chip.dataset.trainingFilter || 'all';
-					const context = getStudentContext();
-					if (!context) return;
-					const trainingResults = getTrainingResults(context.identity);
-					renderTrainingCards(trainingResults);
-				});
-			});
+	function attachLegacyTrainingCleanup() {
+		const button = byId('clearLegacyTrainingAttempts');
+		if (!button || button.dataset.bound === 'true') return;
+		button.dataset.bound = 'true';
+		button.addEventListener('click', async () => {
+			if (!window.API || typeof window.API.raw !== 'function') {
+				showToast('Cannot clear training attempts while offline.', 'error');
+				return;
+			}
+			const confirmed = window.confirm(
+				'Delete your old general-training attempts? Category quizzes and course practice results will be kept.',
+			);
+			if (!confirmed) return;
+			button.disabled = true;
+			try {
+				const response = await window.API.raw('DELETE', '/results/training/legacy');
+				const deleted = Number(response?.deleted) || 0;
+				showToast(
+					deleted
+						? `Removed ${deleted} old general-training attempt${deleted === 1 ? '' : 's'}.`
+						: 'No old general-training attempts to remove.',
+					'success',
+				);
+				if (typeof window.__legacyBridgeBootstrap === 'function') {
+					await window.__legacyBridgeBootstrap();
+				}
+				renderWorkspace();
+			} catch (error) {
+				console.error('[training] Could not clear old attempts:', error);
+				showToast(
+					error?.message || 'Could not clear old training attempts. Please try again.',
+					'error',
+				);
+			} finally {
+				button.disabled = false;
+			}
+		});
 	}
 
 	// ── Results subtabs (My Results / Question Accuracy) ────────────────────
@@ -13894,24 +14275,39 @@
 
 	function attachAccuracyFilters() {
 		const bar = byId('studentAccuracyFilters');
-		if (!bar || bar.dataset.bound === 'true') return;
-		bar.dataset.bound = 'true';
-		bar.addEventListener('click', (event) => {
+		if (bar && bar.dataset.bound !== 'true') {
+			bar.dataset.bound = 'true';
+			bar.addEventListener('click', (event) => {
+				const target = event.target;
+				if (!target || !target.closest) return;
+				const sourceChip = target.closest('[data-accuracy-source]');
+				if (sourceChip) {
+					state.accuracySource = sourceChip.dataset.accuracySource || 'all';
+					state.accuracyShowAll = false;
+					const context = getStudentContext();
+					if (context) renderQuestionAccuracy(context);
+					return;
+				}
+				const masteryChip = target.closest('[data-accuracy-mastery]');
+				if (masteryChip) {
+					state.accuracyMastery = masteryChip.dataset.accuracyMastery || 'all';
+					state.accuracyShowAll = false;
+					const context = getStudentContext();
+					if (context) renderQuestionAccuracy(context);
+				}
+			});
+		}
+
+		const container = byId('studentQuestionAccuracy');
+		if (!container || container.dataset.bound === 'true') return;
+		container.dataset.bound = 'true';
+		container.addEventListener('click', (event) => {
 			const target = event.target;
-			if (!target || !target.closest) return;
-			const sourceChip = target.closest('[data-accuracy-source]');
-			if (sourceChip) {
-				state.accuracySource = sourceChip.dataset.accuracySource || 'all';
-				const context = getStudentContext();
-				if (context) renderQuestionAccuracy(context);
-				return;
-			}
-			const masteryChip = target.closest('[data-accuracy-mastery]');
-			if (masteryChip) {
-				state.accuracyMastery = masteryChip.dataset.accuracyMastery || 'all';
-				const context = getStudentContext();
-				if (context) renderQuestionAccuracy(context);
-			}
+			const toggle = target?.closest?.('[data-accuracy-show-all]');
+			if (!toggle || !container.contains(toggle)) return;
+			state.accuracyShowAll = toggle.dataset.accuracyShowAll === 'true';
+			const context = getStudentContext();
+			if (context) renderQuestionAccuracy(context);
 		});
 	}
 
@@ -15602,6 +15998,15 @@
 			mode: 'training',
 			examId: examId || null,
 			examName: trainingExamName,
+			practiceContext: practiceSet
+				? {
+						categoryId: String(practiceSet.categoryId || ''),
+						categoryTitle: String(practiceSet.categoryTitle || ''),
+						courseTitle: String(practiceSet.courseTitle || ''),
+						lessonTitle: String(practiceSet.lessonTitle || ''),
+						rankedCategoryQuiz: practiceSet.rankedCategoryQuiz === true,
+					}
+				: {},
 			allowCorrections: rules.showExplanations,
 			penalty: rules.penalty,
 			passingScore: rules.passingScore,
@@ -15653,6 +16058,7 @@
 		// Every training launch is a fresh attempt: no session resume.
 		// Closing the modal or finishing the test ends the attempt (already
 		// counted as a try), and the next start reshuffles question order.
+		if (trainingState.mode === 'training') state.trainingAccuracyCache = null;
 		clearTrainingStorage();
 
 		const modal = byId('studentTrainingModal');
@@ -17142,21 +17548,35 @@
 			passed: passed,
 			timeSpent: timeSpent,
 			time_spent: timeSpent,
-			answers_json: JSON.stringify(answersJsonMap),
+			answers_json: JSON.stringify({
+				userAnswers: answersJsonMap,
+				trainingContext: {
+					...trainingState.practiceContext,
+					questionIds: trainingState.practiceContext?.rankedCategoryQuiz
+						? trainingState.questions
+								.map((question) => String(question?.id || '').trim())
+								.filter(Boolean)
+						: undefined,
+				},
+			}),
 			completedAt: new Date().toISOString(),
 			date: new Date().toISOString(),
 		};
 
-		// Persist to localStorage + backend. The legacy bridge's
-		// `create_sync` POSTs to /api/v1/results (the new endpoint added
-		// in this round) and triggers an automatic bulk sync on the next
-		// bootstrap. The explicit `window.API.create` below is a real-time
-		// fire-and-forget that hits the same endpoint so the result shows
-		// up immediately across devices. Failure on either path is logged
-		// but never blocks the UX.
+		// Store locally immediately and await the single server write before
+		// server grading updates the same result.
 		try {
 			const repo = window.__DI_CONTAINER__?.repo;
-			if (repo && typeof repo.create_sync === 'function') {
+			if (
+				trainingState.mode === 'training' &&
+				repo &&
+				typeof repo.create_sync_async === 'function'
+			) {
+				trainingState.resultPersistencePromise = repo.create_sync_async(
+					'results',
+					newResult,
+				);
+			} else if (repo && typeof repo.create_sync === 'function') {
 				repo.create_sync('results', newResult);
 			} else if (repo && typeof repo.create === 'function') {
 				repo.create('results', newResult);
@@ -17169,50 +17589,6 @@
 			);
 		}
 
-		// Training keeps its legacy fallback writes. Exams use the repository's
-		// single create path so one completed attempt cannot become duplicates.
-		if (
-			trainingState.mode === 'training' &&
-			window.API &&
-			typeof window.API.create === 'function'
-		) {
-			try {
-				Promise.resolve(window.API.create('results', newResult))
-					.then(() => {
-						if (typeof console !== 'undefined' && console.debug) {
-							console.debug(
-								`[training] Persisted result ${newResult.id} to DB`,
-							);
-						}
-					})
-					.catch((apiErr) => {
-						console.warn(
-							'[training] DB persist failed for',
-							newResult.id,
-							apiErr && apiErr.message ? apiErr.message : apiErr,
-						);
-					});
-			} catch (_) {}
-		}
-
-		// Belt-and-suspenders: also write to the bulk endpoint so the
-		// result lands in the DB even if the single-record endpoint is
-		// unavailable. The bulk route accepts the same row shape via
-		// STUDENT_BULK_TABLES.
-		if (
-			trainingState.mode === 'training' &&
-			window.API &&
-			typeof window.API.raw === 'function'
-		) {
-			try {
-				Promise.resolve(
-					window.API.raw('POST', '/bulk/results', { items: [newResult] }),
-				).catch(() => {
-					/* already synced via create_sync; ignore */
-				});
-			} catch (_) {}
-		}
-
 		clearTrainingStorage();
 		if (context) renderWorkspace();
 		renderTrainingQuestion();
@@ -17223,12 +17599,21 @@
 		// server response replaces it (and the corrections view) on arrival.
 		trainingState.resultId = newResult.id;
 		trainingState.resultPayload = newResult;
-		ensureServerGrading().then(refreshGradingViews);
+		ensureServerGrading().then(() => {
+			refreshGradingViews();
+			if (context) {
+				const results = getTrainingResults(context.identity, context.user?.id);
+				renderTrainingCards(results);
+				renderTrainingPerformanceList(results);
+				renderResultsList(context);
+				refreshTrainingAccuracy(context);
+			}
+		});
 	}
 
 	// Fetch the server-graded breakdown for the finished attempt. The write
-	// is awaited first (upsert by attempt id — idempotent with the
-	// fire-and-forget bridge sync) so the corrections read never races it.
+	// is awaited first (upsert by attempt id) so the corrections read never
+	// races a stale, duplicate write.
 	// Resolves to the grading object, or null when unavailable (guest /
 	// offline / server error) — callers keep the local fallback then.
 	async function ensureServerGrading() {
@@ -17241,7 +17626,11 @@
 			return null;
 		}
 		try {
-			await window.API.raw('POST', '/results', payload);
+			if (trainingState.resultPersistencePromise) {
+				await trainingState.resultPersistencePromise;
+			} else {
+				await window.API.raw('POST', '/results', payload);
+			}
 			const passingScore = Math.round(Number(trainingState.passingScore) || 50);
 			const data = await window.API.raw(
 				'GET',
@@ -17265,41 +17654,55 @@
 				);
 				// Write the authoritative score back onto the same attempt row
 				// so teacher dashboards stop showing 0 for student training.
-				persistCorrectedScore(payload, data);
+				await persistCorrectedScore(payload, data);
 				return data;
 			}
-		} catch (_) {
-			/* keep the local fallback */
+		} catch (error) {
+			console.warn('[training] Server grading failed; keeping the local score:', error);
 		}
 		trainingState.serverGradingFailed = true;
 		return null;
 	}
 
-	// Best-effort: re-persist the attempt with the server-computed score.
-	// Same row id (upsert), same per-question answers map — only the totals
-	// change. Failures are silent; the local row already exists.
-	function persistCorrectedScore(payload, grading) {
+	// Re-persist the attempt with the server-computed score. Unanswered
+	// questions remain in the denominator even though corrections only
+	// contain questions the student answered.
+	async function persistCorrectedScore(payload, grading) {
+		if (!window.API || typeof window.API.raw !== 'function') return;
+		const total =
+			trainingState.questions.length || Number(grading.total) || 0;
+		const rawScore = Number(grading.score) || 0;
+		// The persisted grade is penalty-adjusted: earned points minus the
+		// preset penalty per wrong graded answer, floored at zero.
+		const finalEarned = applyAttemptPenalty(rawScore, total);
+		const grade =
+			total > 0 ? Math.round(((finalEarned / total) * 20) * 100) / 100 : 0;
+		const graded = {
+			...payload,
+			score: grade,
+			earned_points: finalEarned,
+			earnedPoints: finalEarned,
+			total_points: total,
+			totalPoints: total,
+			grade20: grade,
+			passed: isAttemptPassed(grade),
+			passing_score: Math.round(Number(trainingState.passingScore) || 50),
+		};
+		Object.assign(payload, graded);
+		trainingState.resultPayload = graded;
 		try {
-			if (!window.API || typeof window.API.raw !== 'function') return;
-			const total = Number(grading.total) || 0;
-			const rawScore = Number(grading.score) || 0;
-			// The persisted grade is penalty-adjusted: earned points minus the
-			// preset penalty per wrong graded answer, floored at zero.
-			const finalEarned = applyAttemptPenalty(rawScore, total);
-			const grade = total > 0 ? Math.round(((finalEarned / total) * 20) * 100) / 100 : 0;
-			const graded = {
-				...payload,
-				score: grade,
-				earned_points: finalEarned,
-				earnedPoints: finalEarned,
-				total_points: total,
-				totalPoints: total,
-				grade20: grade,
-				passed: isAttemptPassed(grade),
-				passing_score: Math.round(Number(trainingState.passingScore) || 50),
-			};
-			Promise.resolve(window.API.raw('POST', '/results', graded)).catch(() => {});
-		} catch (_) {}
+			const repo = window.__DI_CONTAINER__?.repo;
+			if (typeof repo?.update_local_sync === 'function') {
+				repo.update_local_sync('results', graded.id, graded);
+			}
+		} catch (error) {
+			console.warn('[training] Could not update the local graded result:', error);
+		}
+		try {
+			await window.API.raw('POST', '/results', graded);
+		} catch (error) {
+			console.warn('[training] Could not sync the graded result:', error);
+		}
 	}
 
 	// Re-render grading-dependent views after the server response lands.
@@ -17843,10 +18246,11 @@
 
 	document.addEventListener('DOMContentLoaded', () => {
 		bindWorkspaceTabs();
+		bindTrainingTabs();
 		attachFilters();
 		attachGameFilters();
 		attachGameRefreshControl();
-		attachTrainingFilters();
+		attachLegacyTrainingCleanup();
 		attachResultsFilters();
 		attachResultsSubtabs();
 		attachAccuracyFilters();

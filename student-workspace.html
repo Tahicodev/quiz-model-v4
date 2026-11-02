@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
-		<link rel="stylesheet" href="styles.css?v=2026-11-01-courses3" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-02-accuracy-course-reader" />
 		<link
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -41,7 +41,7 @@
 			})();
 		</script>
 		<link rel="stylesheet" href="theme.css?v=2026-09-22-r13" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-09-22-r4" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-02-dark-surfaces" />
 		<script src="theme-toggle.js?v=2026-09-22-r4" defer></script>
 		<!-- Socket auth keeper — heals sockets whose token expired or was
 				     replaced by another tab's login (shared localStorage). Load
@@ -143,11 +143,11 @@
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="legacy-auth-bridge.js?v=2026-10-24-r3" defer></script>
 		<script
-			src="student-workspace.js?v=2026-11-01-courses2"
+			src="student-workspace.js?v=2026-11-02-accuracy-course-reader"
 			defer
 		></script>
 		<script
-			src="student-courses.js?v=2026-11-01-courses2"
+			src="student-courses.js?v=2026-11-02-accuracy-course-reader"
 			defer
 		></script>
 	</head>
@@ -445,23 +445,82 @@
 							</div>
 						</div>
 
-						<div class="workspace-panel" data-workspace-section="training">
+						<div class="workspace-panel" id="studentTrainingPanel" data-workspace-section="training">
 							<div class="panel-header">
 								<div>
 									<h2>My Training</h2>
 									<p>Review your practice sessions and keep improving</p>
 								</div>
 								<div class="panel-filters">
-									<button class="filter-chip active" data-training-filter="all">
-										All Attempts
-									</button>
-									<button class="filter-chip" data-training-filter="recent">
-										Recent
+									<button
+										id="clearLegacyTrainingAttempts"
+										class="workspace-btn"
+										type="button"
+									>
+										Clear old general-training attempts
 									</button>
 								</div>
 							</div>
-							<div id="studentTrainingRulesCard"></div>
-							<div class="exam-card-grid" id="studentTrainingGrid"></div>
+							<div class="training-subtabs" role="tablist" aria-label="Training sections">
+								<button
+									type="button"
+									id="studentTrainingCategoriesTab"
+									class="training-subtab active"
+									role="tab"
+									aria-selected="true"
+									aria-controls="studentTrainingCategoriesPanel"
+									tabindex="0"
+									data-training-tab="categories"
+								>
+									Practice by category
+								</button>
+								<button
+									type="button"
+									id="studentTrainingProgressTab"
+									class="training-subtab"
+									role="tab"
+									aria-selected="false"
+									aria-controls="studentTrainingProgressPanel"
+									tabindex="-1"
+									data-training-tab="progress"
+								>
+									Training Progress
+								</button>
+							</div>
+							<section
+								id="studentTrainingCategoriesPanel"
+								class="training-subtab-panel"
+								role="tabpanel"
+								aria-labelledby="studentTrainingCategoriesTab"
+								tabindex="0"
+								data-training-panel="categories"
+							>
+								<div id="studentTrainingRulesCard"></div>
+								<div class="training-category-section">
+									<div class="training-category-heading">
+										<p>Choose a category enabled by your teacher and compare progress with your class.</p>
+									</div>
+									<div id="studentTrainingCategories" class="training-category-grid"></div>
+								</div>
+							</section>
+							<section
+								id="studentTrainingProgressPanel"
+								class="training-subtab-panel"
+								role="tabpanel"
+								aria-labelledby="studentTrainingProgressTab"
+								tabindex="0"
+								data-training-panel="progress"
+								hidden
+							>
+								<div>
+									<h3>Training Progress</h3>
+									<p>Track categories, duration and trends across your training attempts</p>
+								</div>
+								<div
+									id="studentTrainingPerformanceList"
+									class="performance-list"
+								></div>
+							</section>
 						</div>
 
 						<div class="workspace-panel" data-workspace-section="courses">
@@ -480,21 +539,8 @@
 									</button>
 								</div>
 							</div>
-							<div class="exam-card-grid" id="studentCourseGrid"></div>
+							<div class="exam-card-grid course-student-grid" id="studentCourseGrid"></div>
 							<div id="studentCourseReader" style="display: none"></div>
-						</div>
-
-						<div class="workspace-panel" data-workspace-section="training">
-							<div class="panel-header">
-								<div>
-									<h2>Training Progress</h2>
-									<p>Track categories, duration and trends across your training attempts</p>
-								</div>
-							</div>
-							<div
-								id="studentTrainingPerformanceList"
-								class="performance-list"
-							></div>
 						</div>
 					</div>
 				</section>
@@ -665,6 +711,12 @@
 					<div class="workspace-column">
 						<aside class="workspace-sidebar">
 							<div class="workspace-panel" data-workspace-section="results">
+								<div class="panel-header results-panel-header">
+									<div>
+										<h2>Results</h2>
+										<p>Explore your scores and question-level accuracy</p>
+									</div>
+								</div>
 								<div
 									class="results-subtabs"
 									id="studentResultsSubtabs"
@@ -707,7 +759,6 @@
 								>
 									<div class="panel-header">
 										<div>
-											<h2>My Results</h2>
 											<p>Filter your scores and see what to review next</p>
 										</div>
 									</div>
@@ -751,7 +802,6 @@
 								>
 									<div class="panel-header">
 										<div>
-											<h2>Question Accuracy</h2>
 											<p>Questions you find hardest, ranked by accuracy</p>
 										</div>
 										<span

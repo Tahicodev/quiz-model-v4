@@ -849,6 +849,20 @@
         return record;
       },
 
+      create_sync_async: function (table, data) {
+        var record = createRecord(table, data);
+        cache[table] = readAll(table);
+        return syncToApi(table, record, 'create').then(function () {
+          return record;
+        });
+      },
+
+      update_local_sync: function (table, id, patch) {
+        var updated = updateRecord(table, id, patch);
+        if (updated) cache[table] = readAll(table);
+        return updated;
+      },
+
       update_sync: function (table, id, patch) {
         var updated = updateRecord(table, id, patch);
         if (updated) {

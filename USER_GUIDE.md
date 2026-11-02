@@ -106,6 +106,19 @@ Tools in the top bar:
 
 ## 6. Student guide
 
+### Training and results
+
+The **Training** tab offers a separate quiz for each category enabled by the
+teacher. Each category card shows your attempt count, latest and best score,
+and the class top 10 ranked by score and then completion time. Category quizzes
+can be completed offline; class rankings refresh when the app is connected.
+Course practice attempts also appear in **Results** with the course/section
+title, score, duration, and completion date. Each category-training result
+shows the student's total attempts and how many were passed in that category.
+Use **Clear old general-training
+attempts** in the Training tab to remove your legacy general-training history;
+category quiz and course practice results are kept.
+
 ### Joining a game
 
 1. The teacher gives you an **entry code** — 6 letters/numbers, e.g. `AB3K9Z`.

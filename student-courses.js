@@ -130,6 +130,63 @@
 		);
 	}
 
+	function buildFallbackCourseStructure(course, lessons) {
+		const rootLevel = lessons
+			.flatMap((lesson) => Array.isArray(lesson.category_levels) ? lesson.category_levels : [])
+			.find((level) => String(level?.id || '').trim() && String(level?.name || '').trim());
+		const rootId = course.category_id || rootLevel?.id;
+		const root = {
+			id: rootId || `course-${course.id || 'content'}`,
+			name:
+				rootLevel && String(rootLevel.id) === String(rootId)
+					? String(rootLevel.name)
+					: course.name || 'Course',
+			children: [],
+			lessons: [],
+			lesson: null,
+		};
+
+		lessons.forEach((lesson) => {
+			let node = root;
+			const levels = Array.isArray(lesson.category_levels)
+				? lesson.category_levels
+				: [];
+			if (!levels.length) {
+				node = {
+					id: `course-lesson-${lesson.id}`,
+					name: String(lesson.title || 'Lesson'),
+					children: [],
+					lessons: [],
+					lesson: null,
+				};
+				root.children.push(node);
+			}
+			levels.forEach((level) => {
+				const id = String(level?.id || '').trim();
+				const name = String(level?.name || '').trim();
+				if (!id || !name) return;
+				if (id === String(root.id)) {
+					root.name = name;
+					return;
+				}
+				let child = node.children.find((item) => item.id === id);
+				if (!child) {
+					child = { id, name, children: [], lessons: [], lesson: null };
+					node.children.push(child);
+				}
+				node = child;
+			});
+			const summary = {
+				id: String(lesson.id),
+				title: String(lesson.title || 'Lesson'),
+			};
+			node.lessons.push(summary);
+			if (!node.lesson) node.lesson = summary;
+		});
+
+		return root;
+	}
+
 	function renderCategoryStructure(node, depth = 0) {
 		if (!node) return '';
 		const hasChildren = Array.isArray(node.children) && node.children.length > 0;
@@ -210,14 +267,16 @@
 		}
 		grid.innerHTML = coursesCache
 			.map(
-				(course) =>
+				(course, index) =>
 					`<div class="exam-card course-student-card" data-course-id="${esc(course.id)}" role="button" tabindex="0" ` +
+					`data-course-tone="${index % 4}" aria-label="Open course: ${esc(course.name)}" ` +
 					`onclick="StudentCourses.openCourse('${esc(course.id)}')" ` +
 					`onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();StudentCourses.openCourse('${esc(course.id)}')}">` +
-					`<h3>${esc(course.name)}</h3>` +
+					`<div class="course-student-card-top"><span class="course-student-icon" aria-hidden="true">✦</span><span class="course-student-kicker">Learning path</span></div>` +
+					`<div class="course-student-copy"><h3>${esc(course.name)}</h3>` +
 					(course.description ? `<p class="course-student-desc">${esc(course.description)}</p>` : '') +
-					`<div class="course-student-footer"><span class="course-student-meta">${Number(course.lesson_count) || 0} content section(s)</span>` +
-					`<span class="workspace-btn small">Open course</span></div>` +
+					`</div><div class="course-student-footer"><span class="course-student-meta"><span class="course-student-meta-icon" aria-hidden="true">▤</span>${Number(course.lesson_count) || 0} ${(Number(course.lesson_count) || 0) === 1 ? 'section' : 'sections'}</span>` +
+					`<span class="course-student-action">Open course <span aria-hidden="true">→</span></span></div>` +
 					'</div>',
 			)
 			.join('');
@@ -262,16 +321,17 @@
 		if (!reader || !currentCourse) return;
 		const lessons = currentCourse.lessons || [];
 		const hasCategoryStructure = Boolean(currentCourse.category_structure);
-		const contents = hasCategoryStructure
-			? renderCategoryContents(currentCourse.category_structure)
-			: lessons.map((lesson, index) =>
-				`<li><a href="#${esc(studentLessonAnchor(lesson.id))}"><span>Section ${index + 1}</span><strong>${esc(lesson.title)}</strong></a></li>`,
-			).join('');
-		const categoryStructure = currentCourse.category_structure
-			? `<div class="course-document-body"><ol>${renderCategoryStructure(currentCourse.category_structure)}</ol></div>`
+		const categoryTree =
+			currentCourse.category_structure ||
+			(lessons.length ? buildFallbackCourseStructure(currentCourse, lessons) : null);
+		const contents = categoryTree
+			? renderCategoryContents(categoryTree)
+			: '';
+		const categoryStructure = categoryTree
+			? `<div class="course-document-body"><ol>${renderCategoryStructure(categoryTree)}</ol></div>`
 			: '';
 		const unlinkedIds = new Set(
-			(currentCourse.unlinked_lessons || (currentCourse.category_structure ? [] : lessons))
+			(hasCategoryStructure ? currentCourse.unlinked_lessons || [] : [])
 				.map((lesson) => String(lesson.id)),
 		);
 		const unlinkedLessons = lessons.filter((lesson) => unlinkedIds.has(String(lesson.id)));
@@ -284,16 +344,22 @@
 		const unlinkedContents = unlinkedLessons.map((lesson) =>
 			`<li><a href="#${esc(studentLessonAnchor(lesson.id))}"><span>Additional content</span><strong>${esc(lesson.title)}</strong></a></li>`,
 		).join('');
+		const summary =
+			String(currentCourse.description || '').trim() ||
+			lessons
+				.map((lesson) => String(lesson.summary || '').trim())
+				.filter(Boolean)
+				.join('\n\n') ||
+			'Your teacher has not added a course summary yet.';
 
 		reader.innerHTML =
 			`<article class="course-document-view student-course-document"><header class="course-document-cover">` +
-			`<button type="button" class="workspace-btn" onclick="StudentCourses.backToList()">&larr; All courses</button>` +
-			`<span>Course content</span><h1>${esc(currentCourse.name)}</h1>` +
-			(currentCourse.description ? `<p>${esc(currentCourse.description)}</p>` : '') +
-			`<div>${lessons.length} content section${lessons.length === 1 ? '' : 's'}</div></header>` +
+			`<div class="course-document-cover-top"><button type="button" class="course-document-back" onclick="StudentCourses.backToList()"><span aria-hidden="true">&larr;</span> All courses</button>` +
+			`<span class="course-document-cover-label">Course content</span></div><h1>${esc(currentCourse.name)}</h1>` +
+			`<div class="course-document-section-count">${lessons.length} content section${lessons.length === 1 ? '' : 's'}</div></header>` +
 			`<nav class="course-document-toc"><h2>Summary and contents</h2>` +
-			(currentCourse.description ? `<p class="course-document-overview">${esc(currentCourse.description)}</p>` : '') +
-			(contents || unlinkedContents
+			`<p class="course-document-overview">${esc(summary)}</p>` +
+			(contents
 				? `<ol>${contents}${unlinkedContents}</ol>`
 				: '<p class="course-document-placeholder">This course has no content yet.</p>') +
 			`</nav>${categoryStructure}${unlinkedContent}</article>`;
@@ -350,6 +416,13 @@
 			label: `Section: ${
 				lesson?.category_levels?.[lesson.category_levels.length - 1]?.name || lesson?.title || currentCourse.name
 			}`,
+			courseTitle: currentCourse.name,
+			lessonTitle:
+				lesson?.category_levels?.[lesson.category_levels.length - 1]?.name ||
+				lesson?.title ||
+				'Course practice',
+			categoryId: res?.category?.id || lesson?.category_id || '',
+			categoryTitle: res?.category?.name || '',
 		});
 	}
 

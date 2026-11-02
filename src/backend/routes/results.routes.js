@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
+import { requireRole } from '../middleware/role.js';
 import { ROLES } from '../../shared/constants.js';
 import { ForbiddenError, NotFoundError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
@@ -35,6 +36,327 @@ router.get('/', async (req, res, next) => {
       ? await resultSvc.getByExam(examId, { limit, offset, schoolId: req.schoolId })
       : await resultSvc.getByUser(userId || req.user.id, { limit, offset, schoolId: req.schoolId });
     res.json(result);
+  } catch (err) { next(err); }
+});
+
+router.get('/training/category-stats', requireRole([ROLES.STUDENT]), async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const categoryIds = Array.from(new Set(
+      String(req.query.categoryIds || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean),
+    )).slice(0, 100);
+    if (!categoryIds.length) return res.json({ categories: {} });
+
+    const student = await repo.modelFor('users').findFirst({
+      where: { id: String(req.user.id), school_id: req.schoolId, role: ROLES.STUDENT },
+      select: { id: true, class_id: true },
+    });
+    if (!student) throw new ForbiddenError('Student account required');
+    if (!student.class_id) return res.json({ categories: {} });
+
+    const categoryModel = repo.modelFor('categories');
+    const categories = await categoryModel.findMany({
+      where: { id: { in: categoryIds }, school_id: req.schoolId },
+      select: { id: true, parent_id: true },
+    });
+    const settings = await repo.modelFor('settings').findFirst({
+      where: { school_id: req.schoolId, key: 'categoryTrainingMap' },
+      select: { value: true },
+    });
+    let trainingMap = null;
+    if (settings?.value) {
+      try {
+        const parsed = JSON.parse(settings.value);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          trainingMap = parsed;
+        }
+      } catch (_) {
+        trainingMap = {};
+      }
+    }
+
+    let categoryTree = categories;
+    if (trainingMap) {
+      categoryTree = await categoryModel.findMany({
+        where: { school_id: req.schoolId },
+        select: { id: true, parent_id: true },
+      });
+    }
+    const parentById = new Map(
+      categoryTree.map((category) => [String(category.id), String(category.parent_id || '')]),
+    );
+    const allowedCategoryIds = categories
+      .filter((category) => {
+        if (!trainingMap) return true;
+        let currentId = String(category.id);
+        const visited = new Set();
+        while (currentId && !visited.has(currentId)) {
+          visited.add(currentId);
+          if (Object.prototype.hasOwnProperty.call(trainingMap, currentId)) {
+            return trainingMap[currentId] === true;
+          }
+          currentId = parentById.get(currentId) || '';
+        }
+        return false;
+      })
+      .map((category) => category.id);
+    if (
+      categoryIds.includes('uncategorized') &&
+      (!trainingMap || trainingMap.uncategorized !== false)
+    ) {
+      allowedCategoryIds.push('uncategorized');
+    }
+    if (!allowedCategoryIds.length) return res.json({ categories: {} });
+
+    const categoryQuestionConditions = allowedCategoryIds
+      .filter((categoryId) => categoryId !== 'uncategorized')
+      .map((categoryId) => ({ category_id: categoryId }));
+    if (allowedCategoryIds.includes('uncategorized')) {
+      categoryQuestionConditions.push({ category_id: null });
+    }
+    const categoryQuestions = categoryQuestionConditions.length
+      ? await repo.modelFor('questions').findMany({
+          where: { school_id: req.schoolId, OR: categoryQuestionConditions },
+          select: { id: true, category_id: true },
+        })
+      : [];
+    const questionIdsByCategory = new Map(
+      allowedCategoryIds.map((categoryId) => [categoryId, new Set()]),
+    );
+    categoryQuestions.forEach((question) => {
+      const categoryId = String(question.category_id || '') || 'uncategorized';
+      questionIdsByCategory.get(categoryId)?.add(String(question.id));
+    });
+
+    const users = await repo.modelFor('users').findMany({
+      where: {
+        school_id: req.schoolId,
+        class_id: student.class_id,
+        role: ROLES.STUDENT,
+        OR: [{ status: 'active' }, { id: student.id }],
+      },
+      select: { id: true, name: true },
+    });
+    const classUserIds = users.map((user) => user.id);
+    if (!classUserIds.includes(student.id)) classUserIds.push(student.id);
+    const results = await repo.modelFor('results').findMany({
+      where: {
+        school_id: req.schoolId,
+        user_id: { in: classUserIds },
+        mode: 'training',
+      },
+      select: {
+        user_id: true,
+        score: true,
+        total_points: true,
+        earned_points: true,
+        time_spent: true,
+        date_taken: true,
+        answers_json: true,
+      },
+    });
+
+    const candidates = [];
+    for (const result of results) {
+      const meta = parseJsonObject(result.answers_json);
+      const context = meta?.trainingContext;
+      const categoryId = String(context?.categoryId || '');
+      const attemptQuestionIds = Array.isArray(context?.questionIds)
+        ? Array.from(new Set(context.questionIds.map((id) => String(id))))
+        : [];
+      const expectedQuestionIds = questionIdsByCategory.get(categoryId);
+      if (
+        context?.rankedCategoryQuiz !== true ||
+        !allowedCategoryIds.includes(categoryId) ||
+        !expectedQuestionIds?.size ||
+        attemptQuestionIds.length !== expectedQuestionIds.size ||
+        attemptQuestionIds.some((id) => !expectedQuestionIds.has(id))
+      ) continue;
+      candidates.push({
+        result,
+        userId: String(result.user_id || ''),
+        categoryId,
+        questionIds: attemptQuestionIds,
+        answers: extractAttemptAnswers(result.answers_json),
+      });
+    }
+
+    const questionIds = Array.from(new Set(candidates.flatMap((item) => item.questionIds)));
+    const questions = questionIds.length
+      ? await repo.modelFor('questions').findMany({
+          where: { id: { in: questionIds }, school_id: req.schoolId },
+        })
+      : [];
+    const questionById = new Map(questions.map((question) => [String(question.id), question]));
+    const userById = new Map(users.map((user) => [String(user.id), user]));
+    const attemptsByCategory = new Map();
+    candidates.forEach((candidate) => {
+      const questionRows = candidate.questionIds.map((id) => questionById.get(id));
+      if (
+        !questionRows.length ||
+        questionRows.some(
+          (question) =>
+            !question ||
+            (String(question.category_id || '') || 'uncategorized') !==
+              candidate.categoryId,
+        )
+      ) return;
+      const graded = gradeAttempt(
+        questionRows.filter((question) =>
+          Object.prototype.hasOwnProperty.call(candidate.answers, String(question.id)),
+        ),
+        candidate.answers,
+      );
+      const questionCount = candidate.questionIds.length;
+      const grade = grade20(graded.score, questionCount);
+      const attempt = {
+        userId: candidate.userId,
+        name: userById.get(candidate.userId)?.name || 'Student',
+        score: grade,
+        timeSpent: Math.max(0, Number(candidate.result.time_spent) || 0),
+        date: candidate.result.date_taken,
+      };
+      if (!attemptsByCategory.has(candidate.categoryId)) {
+        attemptsByCategory.set(candidate.categoryId, []);
+      }
+      attemptsByCategory.get(candidate.categoryId).push(attempt);
+    });
+
+    const response = {};
+    for (const categoryId of allowedCategoryIds) {
+      const attempts = attemptsByCategory.get(categoryId) || [];
+      const mine = attempts
+        .filter((attempt) => attempt.userId === student.id)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const bestMine = [...mine].sort(
+        (a, b) => b.score - a.score || a.timeSpent - b.timeSpent,
+      )[0];
+      const bestByStudent = new Map();
+      attempts.forEach((attempt) => {
+        const current = bestByStudent.get(attempt.userId);
+        if (
+          !current ||
+          attempt.score > current.score ||
+          (attempt.score === current.score && attempt.timeSpent < current.timeSpent)
+        ) {
+          bestByStudent.set(attempt.userId, attempt);
+        }
+      });
+      const leaderboard = Array.from(bestByStudent.values())
+        .sort(
+          (a, b) =>
+            b.score - a.score ||
+            a.timeSpent - b.timeSpent ||
+            a.name.localeCompare(b.name),
+        )
+        .slice(0, 10)
+        .map((attempt, index) => ({
+          rank: index + 1,
+          name: attempt.name,
+          score: attempt.score,
+          timeSpent: attempt.timeSpent,
+        }));
+      response[categoryId] = {
+        mine: {
+          attempts: mine.length,
+          latestScore: mine[0]?.score ?? null,
+          bestScore: bestMine?.score ?? null,
+        },
+        leaderboard,
+      };
+    }
+    res.json({ categories: response });
+  } catch (err) { next(err); }
+});
+
+router.get('/training/accuracy', requireRole([ROLES.STUDENT]), async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const attempts = await repo.modelFor('results').findMany({
+      where: {
+        school_id: req.schoolId,
+        user_id: String(req.user.id),
+        mode: 'training',
+      },
+      select: { answers_json: true },
+    });
+    const answerMaps = attempts
+      .map((attempt) => extractAttemptAnswers(attempt.answers_json))
+      .filter((answers) => Object.keys(answers).length);
+    const questionIds = Array.from(
+      new Set(answerMaps.flatMap((answers) => Object.keys(answers))),
+    ).slice(0, 10000);
+    if (!questionIds.length) return res.json({ questions: {} });
+
+    const questions = await repo.modelFor('questions').findMany({
+      where: { id: { in: questionIds }, school_id: req.schoolId },
+      select: { id: true, text: true, type: true, answer: true },
+    });
+    const questionById = new Map(questions.map((question) => [String(question.id), question]));
+    const accuracy = {};
+    for (const answers of answerMaps) {
+      const questionRows = Object.keys(answers)
+        .map((questionId) => questionById.get(questionId))
+        .filter(Boolean);
+      const { items } = gradeAttempt(questionRows, answers);
+      for (const item of items) {
+        const question = questionById.get(String(item.questionId));
+        if (!question) continue;
+        const stats = accuracy[item.questionId] || {
+          question: question.text || '',
+          type: item.type,
+          attempts: 0,
+          correct: 0,
+        };
+        stats.attempts += 1;
+        if (item.correct) stats.correct += 1;
+        accuracy[item.questionId] = stats;
+      }
+    }
+    res.json({ questions: accuracy });
+  } catch (err) { next(err); }
+});
+
+router.delete('/training/legacy', requireRole([ROLES.STUDENT]), async (req, res, next) => {
+  try {
+    const { repo } = getContainer();
+    const results = await repo.modelFor('results').findMany({
+      where: {
+        school_id: req.schoolId,
+        user_id: String(req.user.id),
+        mode: 'training',
+      },
+      select: { id: true, answers_json: true },
+    });
+    const legacyIds = results
+      .filter((result) => {
+        const metadata = parseJsonObject(result.answers_json) || {};
+        const context = metadata.trainingContext || {};
+        const title = String(metadata.examTitle || metadata.examName || '').trim();
+        const isCategoryAttempt =
+          context.rankedCategoryQuiz === true ||
+          Boolean(context.categoryId || metadata.categoryId) ||
+          /^category\s*:/i.test(title);
+        const isCourseAttempt =
+          Boolean(context.courseId || context.courseTitle || context.lessonTitle) ||
+          /^section\s*:/i.test(title);
+        return !isCategoryAttempt && !isCourseAttempt;
+      })
+      .map((result) => result.id);
+    if (!legacyIds.length) return res.json({ deleted: 0 });
+
+    const deleted = await repo.modelFor('results').deleteMany({
+      where: {
+        id: { in: legacyIds },
+        school_id: req.schoolId,
+        user_id: String(req.user.id),
+        mode: 'training',
+      },
+    });
+    res.json({ deleted: deleted.count });
   } catch (err) { next(err); }
 });
 
@@ -356,4 +678,3 @@ router.post('/', async (req, res, next) => {
 });
 
 export default router;
-
