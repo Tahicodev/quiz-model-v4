@@ -15594,6 +15594,8 @@
 		questionOptions: [],
 		timerHandle: null,
 		timeLimitSec: 0,
+		overallTimeWarning: false,
+		questionTimeWarning: false,
 	};
 
 	// ── 20-point grading scale ─────────────────────────────────────────────
@@ -15780,24 +15782,44 @@
 	}
 
 	// ── Timer ───────────────────────────────────────────────────────────────
+	function syncTrainingModalTimeWarning() {
+		const modalContent = document.querySelector(
+			'#studentTrainingModal .training-modal-content',
+		);
+		if (!modalContent) return;
+		modalContent.classList.toggle(
+			'time-warning',
+			Boolean(
+				trainingState.overallTimeWarning ||
+					trainingState.questionTimeWarning,
+			),
+		);
+	}
+
 	function updateTrainingStripTimeDisplay() {
 		const textEl = byId('trainingStripTimerText');
-		if (!textEl) return;
 		const startedAt = trainingState.startTime || Date.now();
 		if (trainingState.timeLimitSec > 0) {
 			const elapsed = Math.floor((Date.now() - startedAt) / 1000);
 			const remaining = Math.max(0, trainingState.timeLimitSec - elapsed);
 			const m = Math.floor(remaining / 60);
 			const s = remaining % 60;
-			textEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+			if (textEl) {
+				textEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+			}
 			const badge = byId('trainingStripTimer');
 			if (badge) badge.classList.toggle('warning', remaining < 30);
+			trainingState.overallTimeWarning = remaining < 30;
 		} else {
 			const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
 			const m = Math.floor(elapsed / 60);
 			const s = elapsed % 60;
-			textEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+			if (textEl) {
+				textEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+			}
+			trainingState.overallTimeWarning = false;
 		}
+		syncTrainingModalTimeWarning();
 	}
 
 	function stopTrainingTimer() {
@@ -15810,6 +15832,10 @@
 			el.hidden = true;
 			el.textContent = '';
 		}
+		trainingState.overallTimeWarning = false;
+		const stripTimer = byId('trainingStripTimer');
+		if (stripTimer) stripTimer.classList.remove('warning');
+		syncTrainingModalTimeWarning();
 	}
 
 	function startTrainingTimer(limitSec) {
@@ -16027,6 +16053,8 @@
 			questionOptions: ordered.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
 			timeLimitSec: 0,
+			overallTimeWarning: false,
+			questionTimeWarning: false,
 		};
 
 		// Time limit precedence: per-question budgets → preset time limit →
@@ -16131,6 +16159,8 @@
 			perQuestion: [],
 			questionOptions: ordered.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
+			overallTimeWarning: false,
+			questionTimeWarning: false,
 			// `timeLimit` is stored in seconds; `duration` is in minutes.
 			// Personalized-time presets override both with the sum of the
 			// assigned questions' own time budgets; a fixed preset time limit
@@ -16680,7 +16710,12 @@
 			perQuestionTimerHandle = null;
 		}
 		const el = byId('trainingPerQuestionTimer');
-		if (el) el.hidden = true;
+		if (el) {
+			el.hidden = true;
+			el.classList.remove('warning');
+		}
+		trainingState.questionTimeWarning = false;
+		syncTrainingModalTimeWarning();
 	}
 	function startPerQuestionTimer(limitSec) {
 		stopPerQuestionTimer();
@@ -16699,6 +16734,8 @@
 			const s = remaining % 60;
 			el.textContent = `⏱ ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 			el.classList.toggle('warning', remaining < 5);
+			trainingState.questionTimeWarning = remaining < 5;
+			syncTrainingModalTimeWarning();
 			if (remaining <= 0) {
 				stopPerQuestionTimer();
 				// Auto-advance: record current state and move on.
@@ -17447,6 +17484,7 @@
 	// ── Finish + results view ───────────────────────────────────────────────
 	function finishTrainingTest() {
 		stopTrainingTimer();
+		stopPerQuestionTimer();
 		trainingState.endTime = Date.now();
 		trainingState.completed = true;
 

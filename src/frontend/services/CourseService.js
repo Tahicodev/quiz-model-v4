@@ -122,6 +122,9 @@ export class CourseService {
     this.#assertOwnership(course, currentUser);
     const parsed = LessonCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    if (parsed.data.parent_lesson_id) {
+      await this.#assertLessonParent(null, courseId, parsed.data.parent_lesson_id);
+    }
     const { data: lessons } = await this.#repo.getAll('lessons', { filters: { course_id: courseId }, limit: 100000 });
     const orderIndex = lessons.length ? Math.max(...lessons.map((l) => l.order_index || 0)) + 1 : 0;
     return this.#repo.create('lessons', {
@@ -140,11 +143,56 @@ export class CourseService {
     return lesson;
   }
 
+  async #assertLessonParent(lessonId, courseId, parentLessonId) {
+    if (!parentLessonId) return;
+    const { data: lessons } = await this.#repo.getAll('lessons', {
+      filters: { course_id: courseId },
+      limit: 100000,
+    });
+    const byId = new Map(lessons.map((lesson) => [String(lesson.id), lesson]));
+    let parent = byId.get(String(parentLessonId));
+    if (!parent) {
+      throw new ValidationError({
+        parent_lesson_id: ['Parent lesson must belong to this course'],
+      });
+    }
+    if (lessonId && String(parent.id) === String(lessonId)) {
+      throw new ValidationError({
+        parent_lesson_id: ['A lesson cannot be nested under itself'],
+      });
+    }
+    const visited = new Set();
+    while (parent) {
+      const currentId = String(parent.id);
+      if (lessonId && currentId === String(lessonId)) {
+        throw new ValidationError({
+          parent_lesson_id: ['This parent would create a lesson nesting loop'],
+        });
+      }
+      if (visited.has(currentId)) {
+        throw new ValidationError({
+          parent_lesson_id: ['The existing lesson outline contains a nesting loop'],
+        });
+      }
+      visited.add(currentId);
+      parent = parent.parent_lesson_id
+        ? byId.get(String(parent.parent_lesson_id))
+        : null;
+    }
+  }
+
   async updateLesson(lessonId, data, currentUser) {
     this.#requireManager(currentUser);
-    await this.#getLessonOwned(lessonId, currentUser);
+    const lesson = await this.#getLessonOwned(lessonId, currentUser);
     const parsed = LessonUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    if (Object.hasOwn(parsed.data, 'parent_lesson_id')) {
+      await this.#assertLessonParent(
+        lessonId,
+        lesson.course_id,
+        parsed.data.parent_lesson_id,
+      );
+    }
     return this.#repo.update('lessons', lessonId, parsed.data);
   }
 

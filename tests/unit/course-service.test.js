@@ -165,6 +165,61 @@ describe('teacher scoping', () => {
 		).rejects.toBeInstanceOf(ForbiddenError);
 		await expect(courseSvc.deleteLesson(lesson.id, teacherB)).rejects.toBeInstanceOf(ForbiddenError);
 	});
+
+	it('allows teachers to assign or clear a lesson category level', async () => {
+		const course = await makeCourse('Lesson level course');
+		const lesson = await courseSvc.addLesson(
+			course.id,
+			{ title: 'Lesson without a level' },
+			teacherA,
+		);
+
+		const assigned = await courseSvc.updateLesson(
+			lesson.id,
+			{ category_id: tensId },
+			teacherA,
+		);
+		expect(String(assigned.category_id)).toBe(String(tensId));
+
+		const cleared = await courseSvc.updateLesson(
+			lesson.id,
+			{ category_id: null },
+			teacherA,
+		);
+		expect(cleared.category_id).toBeNull();
+	});
+
+	it('nests lessons only under other lessons in the same course and prevents loops', async () => {
+		const course = await makeCourse('Nested lesson course');
+		const parent = await courseSvc.addLesson(
+			course.id,
+			{ title: 'Main title' },
+			teacherA,
+		);
+		const child = await courseSvc.addLesson(
+			course.id,
+			{ title: 'Nested title', parent_lesson_id: parent.id },
+			teacherA,
+		);
+		expect(String(child.parent_lesson_id)).toBe(String(parent.id));
+
+		await expect(
+			courseSvc.updateLesson(parent.id, { parent_lesson_id: child.id }, teacherA),
+		).rejects.toBeInstanceOf(ValidationError);
+		await expect(
+			courseSvc.updateLesson(parent.id, { parent_lesson_id: parent.id }, teacherA),
+		).rejects.toBeInstanceOf(ValidationError);
+
+		const otherCourse = await makeCourse('Other nested lesson course');
+		const outsideLesson = await courseSvc.addLesson(
+			otherCourse.id,
+			{ title: 'Outside lesson' },
+			teacherA,
+		);
+		await expect(
+			courseSvc.updateLesson(child.id, { parent_lesson_id: outsideLesson.id }, teacherA),
+		).rejects.toBeInstanceOf(ValidationError);
+	});
 });
 
 describe('generated course persistence', () => {

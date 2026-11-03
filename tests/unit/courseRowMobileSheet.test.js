@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const js = readFileSync(new URL('../../courses-management.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+const darkCss = readFileSync(new URL('../../theme-dark.css', import.meta.url), 'utf8');
 const studentJs = readFileSync(new URL('../../student-courses.js', import.meta.url), 'utf8');
 const adminHtml = readFileSync(new URL('../../admin.html', import.meta.url), 'utf8');
 
@@ -134,11 +135,43 @@ describe('course row actions', () => {
 		expect(css).toContain('.course-document-view');
 	});
 
+	it('lets teachers review and change a lesson course level', () => {
+		expect(js).toContain('id="lessonCategory-${esc(lesson.id)}"');
+		expect(js).toContain('updateLessonLevelSelection');
+		expect(js).toContain('category_id: categoryId');
+		expect(js).toContain('<span>Practice category</span>');
+		expect(js).toContain('id="lessonParent-${esc(lesson.id)}"');
+		expect(js).toContain('parent_lesson_id: parentLessonId');
+		expect(js).toContain('Top-level · Heading 1');
+		expect(js).toContain('Choose a parent title to nest this section, like Word heading levels.');
+		expect(js).toContain('data-heading-level="${headingLevel}"');
+		expect(js).toContain("'Main category'");
+		expect(js).toContain("'Axis'");
+		expect(js).toContain("'Subcategory'");
+		expect(js).toContain("Sub-${'sub-'.repeat(depth - 2)}subcategory");
+		expect(js).toContain('${categoryType} · ${esc(path)}');
+		expect(js).not.toContain('>Level ${depth + 1} ·');
+		expect(js).toContain('function buildLessonOutline(lessons)');
+		expect(js).toContain('function renderTeacherLessonContentsNode(node, depth = 0)');
+		expect(css).toContain('.lesson-level-field');
+		expect(css).toContain('.lesson-parent-field');
+	});
+
+	it('styles teacher course documents, lesson cards, and toolbar for dark mode', () => {
+		expect(darkCss).toContain("html[data-theme='dark'] .course-document-view");
+		expect(darkCss).toContain("html[data-theme='dark'] .lesson-card");
+		expect(darkCss).toContain("html[data-theme='dark'] .course-detail-toolbar");
+		expect(darkCss).toContain("html[data-theme='dark'] .course-detail-mode .btn.active");
+	});
+
 	it('shows students one read-only document with linked contents and inline lesson content', () => {
 		expect(studentJs).toContain('student-course-document');
 		expect(studentJs).toContain('class="course-document-toc"');
-		expect(studentJs).toContain('renderCategoryStructure(currentCourse.category_structure)');
+		expect(studentJs).toContain('renderCategoryStructure(categoryTree)');
 		expect(studentJs).toContain('class="course-document-lesson"');
 		expect(studentJs).not.toContain('class="course-lesson-chip');
+		expect(studentJs).toContain('buildLessonOutline(lessons)');
+		expect(studentJs).toContain('renderLessonOutlineNode(node, depth = 0)');
+		expect(studentJs).toContain('lesson.parent_lesson_id');
 	});
 });

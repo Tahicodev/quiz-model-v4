@@ -49,6 +49,7 @@ export const LessonContentGenerateSchema = z.object({
 
 export const LessonCreateSchema = z.object({
   title:       z.string().min(1).max(300),
+  parent_lesson_id: z.string().uuid().optional().nullable(),
   summary:     z.string().max(2000).optional().nullable(),
   content:     z.string().max(50000).optional().nullable(),
   category_id: z.string().uuid().optional().nullable(),

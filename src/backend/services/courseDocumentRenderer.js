@@ -27,10 +27,97 @@ const ptToTwips = (value) => Math.round(value * 20);
 const noHash = (value) => value.replace('#', '').toUpperCase();
 
 function sortedLessons(course) {
-	return [...(course.lessons || [])].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+	const lessons = [...(course.lessons || [])].sort(
+		(a, b) => (a.order_index || 0) - (b.order_index || 0),
+	);
+	if (!lessons.some((lesson) => lesson.parent_lesson_id)) return lessons;
+	const byId = new Map(lessons.map((lesson) => [String(lesson.id), lesson]));
+	const children = new Map();
+	const roots = [];
+	for (const lesson of lessons) {
+		const parentId = String(lesson.parent_lesson_id || '');
+		if (!byId.has(parentId) || parentId === String(lesson.id)) {
+			roots.push(lesson);
+			continue;
+		}
+		if (!children.has(parentId)) children.set(parentId, []);
+		children.get(parentId).push(lesson);
+	}
+	const ordered = [];
+	const visited = new Set();
+	const visit = (lesson) => {
+		const id = String(lesson.id);
+		if (visited.has(id)) return;
+		visited.add(id);
+		ordered.push(lesson);
+		for (const child of children.get(id) || []) visit(child);
+	};
+	roots.forEach(visit);
+	lessons.forEach(visit);
+	return ordered;
+}
+
+function buildLessonOutline(course) {
+	const lessons = [...(course.lessons || [])].sort(
+		(a, b) => (a.order_index || 0) - (b.order_index || 0),
+	);
+	const nodes = new Map(
+		lessons.map((lesson) => [
+			String(lesson.id),
+			{ key: String(lesson.id), lesson, name: '', children: [], lessons: [lesson], depth: 0, outlineLesson: true },
+		]),
+	);
+	for (const node of nodes.values()) {
+		const parent = nodes.get(String(node.lesson.parent_lesson_id || ''));
+		if (parent && parent !== node) node.parent = parent;
+	}
+	for (const node of nodes.values()) {
+		const path = new Set([node.key]);
+		let ancestor = node.parent;
+		while (ancestor) {
+			if (path.has(ancestor.key)) {
+				node.parent = null;
+				break;
+			}
+			path.add(ancestor.key);
+			ancestor = ancestor.parent;
+		}
+	}
+	const roots = [];
+	for (const node of nodes.values()) {
+		if (node.parent) node.parent.children.push(node);
+		else roots.push(node);
+	}
+	const sort = (siblings, depth = 0) => {
+		siblings.sort(
+			(a, b) =>
+				(a.lesson.order_index || 0) - (b.lesson.order_index || 0),
+		);
+		siblings.forEach((node) => {
+			node.depth = depth;
+			sort(node.children, depth + 1);
+		});
+	};
+	sort(roots);
+	return roots;
+}
+
+function lessonOutlineDepths(course) {
+	const depths = new Map();
+	const visit = (nodes) => {
+		for (const node of nodes) {
+			depths.set(String(node.lesson.id), node.depth);
+			visit(node.children);
+		}
+	};
+	if ((course.lessons || []).some((lesson) => lesson.parent_lesson_id)) {
+		visit(buildLessonOutline(course));
+	}
+	return depths;
 }
 
 function lessonLevels(lesson, course) {
+	if ((course.lessons || []).some((item) => item.parent_lesson_id)) return [];
 	const levels = Array.isArray(lesson.category_levels)
 		? lesson.category_levels.filter((level) => level && level.name)
 		: [];
@@ -43,6 +130,9 @@ function lessonLevels(lesson, course) {
 }
 
 function buildDocumentSections(course) {
+	if ((course.lessons || []).some((lesson) => lesson.parent_lesson_id)) {
+		return buildLessonOutline(course);
+	}
 	const roots = [];
 	const nodes = new Map();
 	for (const lesson of sortedLessons(course)) {
@@ -225,10 +315,10 @@ function drawPdfFooter(doc, course, pageRange) {
 	}
 }
 
-function addPdfLesson(doc, lesson, index, theme, sectionDepth, options, forceNewPage = false) {
+function addPdfLesson(doc, lesson, index, theme, sectionDepth, options, forceNewPage = false, outline = false) {
 	if (forceNewPage) doc.addPage();
 	const depth = Math.max(0, Number(sectionDepth) || 0);
-	const label = sectionLabel(depth);
+	const label = outline ? `HEADING ${depth + 1}` : sectionLabel(depth);
 	const title = `${String(index + 1).padStart(2, '0')}  ${lesson.title || 'Untitled lesson'}`;
 	doc.save().roundedRect(doc.page.margins.left, doc.y, doc.page.width - doc.page.margins.left - doc.page.margins.right, 20, 3)
 		.fill(theme.soft).restore();
@@ -236,7 +326,7 @@ function addPdfLesson(doc, lesson, index, theme, sectionDepth, options, forceNew
 		.text(`${label}  ·  LESSON ${String(index + 1).padStart(2, '0')}`, doc.page.margins.left + 9, doc.y + 6, { characterSpacing: 1 });
 	doc.moveDown(1.4);
 	doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(theme.section + 1)
-		.text(title, { lineGap: 3 });
+		.text(title, { lineGap: 3, indent: outline ? depth * 14 : 0 });
 	if (lesson.summary) {
 		doc.moveDown(0.35);
 		doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(theme.body)
@@ -271,6 +361,7 @@ function pdfBuffer(course, options) {
 		doc.on('end', () => resolve(Buffer.concat(chunks)));
 		const sections = buildDocumentSections(course);
 		const lessons = sortedLessons(course);
+		const outlineDepths = lessonOutlineDepths(course);
 		if (options.includeCover !== false) {
 			pdfCover(doc, course, options, theme, sections);
 		}
@@ -281,11 +372,12 @@ function pdfBuffer(course, options) {
 			lessons.forEach((lesson, index) => {
 				const levels = lessonLevels(lesson, course);
 				const category = levels.map((level) => level.name).join('  /  ');
+				const indent = (outlineDepths.get(String(lesson.id)) || 0) * 14 + 2;
 				doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(theme.body)
-					.text(`${String(index + 1).padStart(2, '0')}  ${lesson.title}`, { indent: 2 });
+					.text(`${String(index + 1).padStart(2, '0')}  ${lesson.title}`, { indent });
 				if (category) {
 					doc.fillColor('#64748b').font('Helvetica').fontSize(theme.body - 1)
-						.text(category, { indent: 21, paragraphGap: 5 });
+						.text(category, { indent: indent + 19, paragraphGap: 5 });
 				}
 			});
 		}
@@ -309,7 +401,16 @@ function pdfBuffer(course, options) {
 					const lesson = node.lessons[localIndex];
 					const newPage = options.startEachLessonOnNewPage && (lessonIndex > 0 || localIndex > 0) &&
 						!(localIndex === 0 && node.name && containsLessons(node) && lessonIndex > 0);
-					addPdfLesson(doc, lesson, lessonIndex, theme, node.depth, options, newPage);
+					addPdfLesson(
+						doc,
+						lesson,
+						lessonIndex,
+						theme,
+						node.depth,
+						options,
+						newPage,
+						node.outlineLesson === true,
+					);
 					lessonIndex += 1;
 				}
 				visit(node.children);
@@ -422,6 +523,7 @@ function docxFooter() {
 function docxParagraphs(course, options, theme) {
 	const accent = noHash(theme.accent);
 	const lessons = sortedLessons(course);
+	const outlineDepths = lessonOutlineDepths(course);
 	const paragraphs = [];
 	if (options.includeCover !== false) {
 		const school = options.header?.schoolName;
@@ -475,12 +577,17 @@ function docxParagraphs(course, options, theme) {
 		}));
 		lessons.forEach((lesson, index) => {
 			const path = lessonLevels(lesson, course).map((level) => level.name).join('  /  ');
+			const indent = Math.min(
+				(outlineDepths.get(String(lesson.id)) || 0) * 360,
+				1800,
+			);
 			paragraphs.push(new Paragraph({
 				children: [
 					makeRun(`${String(index + 1).padStart(2, '0')}  `, { bold: true, color: accent, size: 21 }),
 					makeRun(lesson.title || 'Untitled lesson', { bold: true, size: 21 }),
 				],
 				keepNext: Boolean(path),
+				indent: indent ? { left: indent } : undefined,
 				spacing: { before: 120, after: path ? 20 : 100 },
 				border: { bottom: { style: BorderStyle.DOTTED, size: 4, color: 'CBD5E1', space: 4 } },
 			}));
@@ -497,9 +604,33 @@ function docxParagraphs(course, options, theme) {
 
 	const sections = buildDocumentSections(course);
 	let lessonIndex = 0;
+	const headingLevels = [
+		HeadingLevel.HEADING_1,
+		HeadingLevel.HEADING_2,
+		HeadingLevel.HEADING_3,
+		HeadingLevel.HEADING_4,
+		HeadingLevel.HEADING_5,
+		HeadingLevel.HEADING_6,
+	];
 	const visit = (nodes) => {
 		for (const node of nodes) {
-			if (node.name) {
+			if (node.outlineLesson) {
+				const lesson = node.lesson;
+				paragraphs.push(new Paragraph({
+					children: [
+						makeRun(lesson.title || 'Untitled lesson', {
+							bold: true,
+							size: Math.max(22, (theme.section - node.depth) * 2),
+							color: accent,
+						}),
+					],
+					heading: headingLevels[Math.min(node.depth, headingLevels.length - 1)],
+					pageBreakBefore: lessonIndex > 0 && options.startEachLessonOnNewPage,
+					indent: node.depth ? { left: Math.min(node.depth * 360, 1800) } : undefined,
+					keepNext: Boolean(lesson.summary),
+					spacing: { before: 260, after: 110 },
+				}));
+			} else if (node.name) {
 				paragraphs.push(new Paragraph({
 					children: [
 						makeRun(`${sectionLabel(node.depth)}  `, { bold: true, size: 17, color: accent }),
@@ -512,7 +643,7 @@ function docxParagraphs(course, options, theme) {
 				}));
 			}
 			for (const lesson of node.lessons) {
-				paragraphs.push(new Paragraph({
+				if (!node.outlineLesson) paragraphs.push(new Paragraph({
 					children: [
 						makeRun(`LESSON ${String(lessonIndex + 1).padStart(2, '0')}  `, { bold: true, size: 18, color: accent }),
 						makeRun(lesson.title || 'Untitled lesson', { bold: true, size: theme.section * 2, color: accent }),

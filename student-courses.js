@@ -225,6 +225,76 @@
 		);
 	}
 
+	function buildLessonOutline(lessons) {
+		const nodes = new Map(
+			lessons.map((lesson) => [
+				String(lesson.id),
+				{ lesson, parent: null, children: [] },
+			]),
+		);
+		for (const node of nodes.values()) {
+			const parent = nodes.get(String(node.lesson.parent_lesson_id || ''));
+			if (parent && parent !== node) node.parent = parent;
+		}
+		for (const node of nodes.values()) {
+			const path = new Set([String(node.lesson.id)]);
+			let ancestor = node.parent;
+			while (ancestor) {
+				const id = String(ancestor.lesson.id);
+				if (path.has(id)) {
+					node.parent = null;
+					break;
+				}
+				path.add(id);
+				ancestor = ancestor.parent;
+			}
+		}
+		const roots = [];
+		for (const node of nodes.values()) {
+			if (node.parent) node.parent.children.push(node);
+			else roots.push(node);
+		}
+		const sort = (siblings) => {
+			siblings.sort(
+				(a, b) =>
+					(Number(a.lesson.order_index) || 0) -
+					(Number(b.lesson.order_index) || 0),
+			);
+			siblings.forEach((node) => sort(node.children));
+		};
+		sort(roots);
+		return roots;
+	}
+
+	function renderLessonOutlineContents(node, depth = 0) {
+		const lesson = node.lesson;
+		return (
+			`<li><a href="#${esc(studentLessonAnchor(lesson.id))}">` +
+			`<span>Heading ${depth + 1}</span><strong>${esc(lesson.title || 'Lesson')}</strong></a>` +
+			(node.children.length
+				? `<ol>${node.children.map((child) => renderLessonOutlineContents(child, depth + 1)).join('')}</ol>`
+				: '') +
+			'</li>'
+		);
+	}
+
+	function renderLessonOutlineNode(node, depth = 0) {
+		const lesson = node.lesson;
+		const headingLevel = Math.min(depth + 2, 6);
+		return (
+			`<li class="course-structure-node" id="${esc(studentLessonAnchor(lesson.id))}" style="--course-student-depth:${depth}">` +
+			`<div class="course-structure-category"><span class="course-structure-level">Heading ${depth + 1}</span>` +
+			`<h${headingLevel}>${esc(lesson.title || 'Lesson')}</h${headingLevel}></div>` +
+			`<section class="course-document-lesson">` +
+			(lesson.summary ? `<p class="course-lesson-summary">${esc(lesson.summary)}</p>` : '') +
+			(lesson.content
+				? `<div class="course-md">${renderMarkdown(lesson.content)}</div>`
+				: '<p class="course-student-desc">The teacher has not written this lesson yet — check back soon.</p>') +
+			`<div class="course-lesson-actions"><button type="button" class="workspace-btn primary" onclick="StudentCourses.practice('${esc(lesson.id)}', this)">Practice this section</button></div>` +
+			`</section>${node.children.length ? `<ol>${node.children.map((child) => renderLessonOutlineNode(child, depth + 1)).join('')}</ol>` : ''}</li>`
+		);
+	}
+
 	// ── Course list ──────────────────────────────────────────────────────────
 	async function load(force) {
 		const grid = document.getElementById('studentCourseGrid');
@@ -320,18 +390,24 @@
 		const reader = document.getElementById('studentCourseReader');
 		if (!reader || !currentCourse) return;
 		const lessons = currentCourse.lessons || [];
+		const hasLessonOutline = lessons.some((lesson) => lesson.parent_lesson_id);
+		const lessonOutline = hasLessonOutline ? buildLessonOutline(lessons) : [];
 		const hasCategoryStructure = Boolean(currentCourse.category_structure);
 		const categoryTree =
 			currentCourse.category_structure ||
 			(lessons.length ? buildFallbackCourseStructure(currentCourse, lessons) : null);
-		const contents = categoryTree
+		const contents = hasLessonOutline
+			? lessonOutline.map((node) => renderLessonOutlineContents(node)).join('')
+			: categoryTree
 			? renderCategoryContents(categoryTree)
 			: '';
-		const categoryStructure = categoryTree
+		const categoryStructure = hasLessonOutline
+			? `<div class="course-document-body"><ol>${lessonOutline.map((node) => renderLessonOutlineNode(node)).join('')}</ol></div>`
+			: categoryTree
 			? `<div class="course-document-body"><ol>${renderCategoryStructure(categoryTree)}</ol></div>`
 			: '';
 		const unlinkedIds = new Set(
-			(hasCategoryStructure ? currentCourse.unlinked_lessons || [] : [])
+			(!hasLessonOutline && hasCategoryStructure ? currentCourse.unlinked_lessons || [] : [])
 				.map((lesson) => String(lesson.id)),
 		);
 		const unlinkedLessons = lessons.filter((lesson) => unlinkedIds.has(String(lesson.id)));

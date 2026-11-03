@@ -1212,14 +1212,91 @@
 		);
 	}
 
+	function buildLessonOutline(lessons) {
+		const nodes = new Map(
+			lessons.map((lesson) => [
+				String(lesson.id),
+				{ lesson, parent: null, children: [] },
+			]),
+		);
+		for (const node of nodes.values()) {
+			const parentId = String(node.lesson.parent_lesson_id || '');
+			const parent = nodes.get(parentId);
+			if (parent && parent !== node) node.parent = parent;
+		}
+		for (const node of nodes.values()) {
+			const path = new Set([String(node.lesson.id)]);
+			let ancestor = node.parent;
+			while (ancestor) {
+				const ancestorId = String(ancestor.lesson.id);
+				if (path.has(ancestorId)) {
+					node.parent = null;
+					break;
+				}
+				path.add(ancestorId);
+				ancestor = ancestor.parent;
+			}
+		}
+		const roots = [];
+		for (const node of nodes.values()) {
+			if (node.parent) node.parent.children.push(node);
+			else roots.push(node);
+		}
+		const byOrder = (a, b) =>
+			(Number(a.lesson.order_index) || 0) -
+			(Number(b.lesson.order_index) || 0);
+		const sort = (siblings) => {
+			siblings.sort(byOrder);
+			siblings.forEach((node) => sort(node.children));
+		};
+		sort(roots);
+		return roots;
+	}
+
+	function renderTeacherLessonContentsNode(node, depth = 0) {
+		const lesson = node.lesson;
+		return (
+			`<li><a href="#${esc(courseDocumentLessonId(lesson))}">` +
+			`<span>Heading ${depth + 1}</span><strong>${esc(lesson.title)}</strong></a>` +
+			(node.children.length
+				? `<ol>${node.children.map((child) => renderTeacherLessonContentsNode(child, depth + 1)).join('')}</ol>`
+				: '') +
+			'</li>'
+		);
+	}
+
+	function renderTeacherLessonNode(node, depth = 0) {
+		const lesson = node.lesson;
+		const headingLevel = Math.min(depth + 2, 6);
+		return (
+			`<section class="course-document-category course-outline-node" style="--course-document-depth:${depth}">` +
+			`<div class="course-document-category-heading"><span>Heading ${depth + 1}</span>` +
+			`<h${headingLevel} id="${esc(courseDocumentLessonId(lesson))}">${esc(lesson.title)}</h${headingLevel}></div>` +
+			`<section class="course-document-lesson">` +
+			(lesson.summary ? `<p class="course-document-summary">${esc(lesson.summary)}</p>` : '') +
+			(String(lesson.content || '').trim()
+				? `<div class="course-md">${renderMarkdown(lesson.content)}</div>`
+				: '<p class="course-document-placeholder">Content has not been added yet.</p>') +
+			`</section>${node.children.map((child) => renderTeacherLessonNode(child, depth + 1)).join('')}</section>`
+		);
+	}
+
 	function renderTeacherCourseDocument(course, branchRows) {
 		const lessons = course.lessons || [];
-		const tree = buildCourseDocumentTree(branchRows, lessonsByCategory());
-		const renderedTree = tree.map((node) => renderCourseDocumentNode(node)).join('');
+		const hasLessonOutline = lessons.some((lesson) => lesson.parent_lesson_id);
+		const lessonOutline = hasLessonOutline ? buildLessonOutline(lessons) : [];
+		const tree = hasLessonOutline
+			? []
+			: buildCourseDocumentTree(branchRows, lessonsByCategory());
+		const renderedTree = hasLessonOutline
+			? lessonOutline.map((node) => renderTeacherLessonNode(node)).join('')
+			: tree.map((node) => renderCourseDocumentNode(node)).join('');
 		const linkedIds = new Set(branchRows.flatMap(({ category }) =>
 			(lessonsByCategory().get(String(category.id)) || []).map((lesson) => String(lesson.id)),
 		));
-		const unlinked = lessons.filter((lesson) => !linkedIds.has(String(lesson.id)));
+		const unlinked = hasLessonOutline
+			? []
+			: lessons.filter((lesson) => !linkedIds.has(String(lesson.id)));
 		const unlinkedHtml = unlinked.length
 			? `<section class="course-document-category"><div class="course-document-category-heading"><span>Additional lessons</span><h2>Other lessons</h2></div>` +
 				unlinked.map((lesson) =>
@@ -1229,7 +1306,9 @@
 					'</section>',
 				).join('') + '</section>'
 			: '';
-		const contents = tree.map((node) => renderCourseDocumentContentsNode(node)).join('');
+		const contents = hasLessonOutline
+			? lessonOutline.map((node) => renderTeacherLessonContentsNode(node)).join('')
+			: tree.map((node) => renderCourseDocumentContentsNode(node)).join('');
 		const unlinkedContents = unlinked.map((lesson) =>
 			`<li><a href="#${esc(courseDocumentLessonId(lesson))}"><span>Additional content</span><strong>${esc(lesson.title)}</strong></a></li>`,
 		).join('');
@@ -1529,28 +1608,188 @@
 
 	function lessonCardHtml(lesson, idx) {
 		const total = (currentCourse?.lessons || []).length;
+		const categories = categoryList();
+		const categoryById = new Map(
+			categories.map((category) => [String(category.id), category]),
+		);
+		const getCategoryDepth = (category) => {
+			let depth = 0;
+			let parentId = category.parent_id;
+			const seen = new Set([String(category.id)]);
+			while (parentId && !seen.has(String(parentId))) {
+				seen.add(String(parentId));
+				const parent = categoryById.get(String(parentId));
+				if (!parent) break;
+				depth += 1;
+				parentId = parent.parent_id;
+			}
+			return depth;
+		};
+		const categoryRows = window.CategoryTree?.getOrderedTree?.(categories) ||
+			categories.map((category) => ({
+				category,
+				depth: getCategoryDepth(category),
+			}));
+		const categoriesWithChildren = new Set(
+			categoryRows
+				.filter(({ category }) =>
+					categoryRows.some(
+						(row) =>
+							String(row.category.parent_id || '') === String(category.id),
+					),
+				)
+				.map(({ category }) => String(category.id)),
+		);
+		const categoryId = String(lesson.category_id || '');
+		const currentCategory = categoryById.get(categoryId);
+		const hasValidCategory = Boolean(currentCategory);
+		const options = categoryRows
+			.map(({ category, depth }) => {
+				const path = categoryPath(category.id) || category.name;
+				const categoryType =
+					depth === 0
+						? 'Main category'
+						: !categoriesWithChildren.has(String(category.id))
+							? 'Axis'
+							: depth === 1
+								? 'Subcategory'
+								: `Sub-${'sub-'.repeat(depth - 2)}subcategory`;
+				return `<option value="${esc(category.id)}" ${categoryId === String(category.id) ? 'selected' : ''}>${categoryType} · ${esc(path)}</option>`;
+			})
+			.join('');
+		const unavailableOption =
+			categoryId && !currentCategory
+				? `<option value="${esc(categoryId)}" selected>Stored category is unavailable · choose a replacement</option>`
+				: '';
+		const categoryStatus = hasValidCategory
+			? `Practice questions: ${esc(categoryPath(categoryId) || currentCategory.name)}`
+			: categoryId
+				? 'Stored category is unavailable. Choose a practice category.'
+				: 'Optional: link practice questions to a category.';
+		const categoryClass =
+			categoryId && !hasValidCategory ? ' is-warning' : '';
+		const lessons = [...(currentCourse?.lessons || [])];
+		const lessonById = new Map(lessons.map((item) => [String(item.id), item]));
+		const excludedParentIds = new Set([String(lesson.id)]);
+		const childrenByParent = new Map();
+		for (const item of lessons) {
+			const parentId = String(item.parent_lesson_id || '');
+			if (!parentId) continue;
+			if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
+			childrenByParent.get(parentId).push(String(item.id));
+		}
+		const pending = [String(lesson.id)];
+		while (pending.length) {
+			const parentId = pending.pop();
+			for (const childId of childrenByParent.get(parentId) || []) {
+				if (excludedParentIds.has(childId)) continue;
+				excludedParentIds.add(childId);
+				pending.push(childId);
+			}
+		}
+		const parentLessonId = String(lesson.parent_lesson_id || '');
+		const parentLesson = lessonById.get(parentLessonId);
+		const validParent = Boolean(parentLesson) && !excludedParentIds.has(parentLessonId);
+		const getLessonDepth = (candidate) => {
+			let depth = 0;
+			let parentId = String(candidate.parent_lesson_id || '');
+			const seen = new Set([String(candidate.id)]);
+			while (parentId && !seen.has(parentId)) {
+				seen.add(parentId);
+				const parent = lessonById.get(parentId);
+				if (!parent) break;
+				depth += 1;
+				parentId = String(parent.parent_lesson_id || '');
+			}
+			return depth;
+		};
+		const parentOptions = lessons
+			.filter((candidate) => !excludedParentIds.has(String(candidate.id)))
+			.sort(
+				(a, b) =>
+					(Number(a.order_index) || 0) - (Number(b.order_index) || 0),
+			)
+			.map((candidate) => {
+				const headingLevel = getLessonDepth(candidate) + 1;
+				const indent = '\u00a0'.repeat(getLessonDepth(candidate) * 3);
+				return `<option value="${esc(candidate.id)}" data-heading-level="${headingLevel}" ${parentLessonId === String(candidate.id) ? 'selected' : ''}>Heading ${headingLevel} · ${indent}${esc(candidate.title || 'Untitled lesson')}</option>`;
+			})
+			.join('');
+		const missingParentOption =
+			parentLessonId && !parentLesson
+				? `<option value="${esc(parentLessonId)}" selected>Saved parent is unavailable</option>`
+				: '';
+		const parentStatus = validParent
+			? `Heading ${getLessonDepth(parentLesson) + 2} · Nested under “${esc(parentLesson.title)}”.`
+			: parentLessonId
+				? 'The saved parent is unavailable. Choose a different lesson or make this a top-level section.'
+				: 'Heading 1 · Top-level. Choose a parent title to nest this section, like Word heading levels.';
 		return (
-			`<div class="lesson-card" data-lesson-id="${esc(lesson.id)}" style="border:1px solid rgba(0,0,0,0.12);border-radius:10px;padding:12px;margin-bottom:12px;background:var(--card-bg,#fff);">` +
-			`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">` +
-			`<strong>${idx + 1}.</strong>` +
-			`<input type="text" id="lessonTitle-${esc(lesson.id)}" value="${esc(lesson.title)}" style="flex:2;min-width:180px;" placeholder="Lesson title" />` +
-			`<input type="text" id="lessonSummary-${esc(lesson.id)}" value="${esc(lesson.summary || '')}" style="flex:3;min-width:200px;" placeholder="One-line summary" />` +
+			`<article class="lesson-card${categoryClass}" data-lesson-id="${esc(lesson.id)}">` +
+			`<div class="lesson-card-header"><span class="lesson-card-number">${idx + 1}</span>` +
+			`<input type="text" id="lessonTitle-${esc(lesson.id)}" value="${esc(lesson.title)}" class="lesson-card-title" aria-label="Lesson title" placeholder="Lesson title" />` +
+			`<input type="text" id="lessonSummary-${esc(lesson.id)}" value="${esc(lesson.summary || '')}" class="lesson-card-summary" aria-label="Lesson summary" placeholder="One-line summary" />` +
 			`</div>` +
-			`<textarea id="lessonContent-${esc(lesson.id)}" rows="8" style="width:100%;font-family:inherit;" placeholder="Lesson content (markdown). Use the AI button to fill it.">${esc(lesson.content || '')}</textarea>` +
-			'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;">' +
+			`<label class="lesson-level-field" for="lessonCategory-${esc(lesson.id)}"><span>Practice category</span>` +
+			`<select id="lessonCategory-${esc(lesson.id)}" aria-describedby="lessonLevelStatus-${esc(lesson.id)}" onchange="updateLessonLevelSelection('${esc(lesson.id)}')">` +
+			`<option value="" ${categoryId ? '' : 'selected'}>No practice category</option>${unavailableOption}${options}</select>` +
+			`<small id="lessonLevelStatus-${esc(lesson.id)}" class="lesson-level-status${categoryClass}" aria-live="polite">${categoryStatus}</small></label>` +
+			`<label class="lesson-parent-field" for="lessonParent-${esc(lesson.id)}"><span>Outline placement</span>` +
+			`<select id="lessonParent-${esc(lesson.id)}" aria-describedby="lessonParentStatus-${esc(lesson.id)}" onchange="updateLessonParentSelection('${esc(lesson.id)}')">` +
+			`<option value="" ${parentLessonId ? '' : 'selected'}>Top-level · Heading 1</option>${missingParentOption}${parentOptions}</select>` +
+			`<small id="lessonParentStatus-${esc(lesson.id)}" class="lesson-parent-status${parentLessonId && !validParent ? ' is-warning' : ''}" aria-live="polite">${parentStatus}</small></label>` +
+			`<textarea id="lessonContent-${esc(lesson.id)}" class="lesson-card-content" rows="8" aria-label="Lesson content" placeholder="Lesson content (markdown). Use the AI button to fill it.">${esc(lesson.content || '')}</textarea>` +
+			'<div class="lesson-card-actions">' +
 			`<button type="button" class="btn btn-ai-generate btn-sm" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate content via AI</button>` +
 			`<button type="button" class="btn btn-sm" onclick="generateQuestionsFromLesson('${esc(lesson.id)}')">Generate questions</button>` +
 			`<button type="button" class="btn btn-sm" onclick="previewLesson('${esc(lesson.id)}')">Preview</button>` +
 			`<button type="button" class="btn btn-primary btn-sm" onclick="saveLesson('${esc(lesson.id)}')">Save</button>` +
-			`<span style="flex:1;"></span>` +
-			`<button type="button" class="btn btn-sm" title="Move up" ${idx === 0 ? 'disabled' : ''} onclick="moveLesson('${esc(lesson.id)}',-1)">&uarr;</button>` +
-			`<button type="button" class="btn btn-sm" title="Move down" ${idx >= total - 1 ? 'disabled' : ''} onclick="moveLesson('${esc(lesson.id)}',1)">&darr;</button>` +
+			`<span class="lesson-card-action-spacer"></span>` +
+			`<div class="lesson-card-reorder" aria-label="Reorder lesson">` +
+			`<button type="button" class="btn btn-sm" title="Move up" aria-label="Move lesson up" ${idx === 0 ? 'disabled' : ''} onclick="moveLesson('${esc(lesson.id)}',-1)">&uarr;</button>` +
+			`<button type="button" class="btn btn-sm" title="Move down" aria-label="Move lesson down" ${idx >= total - 1 ? 'disabled' : ''} onclick="moveLesson('${esc(lesson.id)}',1)">&darr;</button></div>` +
 			`<button type="button" class="btn btn-danger-soft btn-sm" onclick="deleteLessonConfirm('${esc(lesson.id)}')">Delete</button>` +
 			`</div>` +
-			`<div id="lessonPreview-${esc(lesson.id)}" class="course-md-preview" style="display:none;margin-top:10px;border-top:1px dashed rgba(0,0,0,0.15);padding-top:8px;"></div>` +
-			'</div>'
+			`<div id="lessonPreview-${esc(lesson.id)}" class="course-md-preview lesson-card-preview" hidden></div>` +
+			'</article>'
 		);
 	}
+
+	window.updateLessonLevelSelection = function (lessonId) {
+		const select = document.getElementById(`lessonCategory-${lessonId}`);
+		const status = document.getElementById(`lessonLevelStatus-${lessonId}`);
+		const card = document.querySelector(
+			`.lesson-card[data-lesson-id="${lessonId}"]`,
+		);
+		if (!select || !status) return;
+		if (select.value) {
+			const selectedCategory =
+				select.options[select.selectedIndex]?.textContent?.trim() || 'Selected category';
+			status.textContent = `${selectedCategory}. Save lesson to apply.`;
+			status.classList.remove('is-warning');
+			card?.classList.remove('is-warning');
+		} else {
+			status.textContent =
+				'No practice category selected. Course content still works; category-specific practice will be unavailable.';
+			status.classList.remove('is-warning');
+			card?.classList.remove('is-warning');
+		}
+	};
+
+	window.updateLessonParentSelection = function (lessonId) {
+		const select = document.getElementById(`lessonParent-${lessonId}`);
+		const status = document.getElementById(`lessonParentStatus-${lessonId}`);
+		if (!select || !status) return;
+		const parentTitle =
+			select.options[select.selectedIndex]?.textContent?.trim() || '';
+		const parentHeadingLevel = Number(
+			select.options[select.selectedIndex]?.dataset.headingLevel,
+		);
+		status.textContent = select.value
+			? `Will be Heading ${parentHeadingLevel + 1}, nested under “${parentTitle}”. Save to apply.`
+			: 'Will be a top-level Heading 1. Save to apply.';
+		status.classList.remove('is-warning');
+	};
 
 	window.focusLesson = function (lessonId) {
 		const card = document.querySelector(`.lesson-card[data-lesson-id="${lessonId}"]`);
@@ -1565,10 +1804,12 @@
 		const box = document.getElementById(`lessonPreview-${lessonId}`);
 		const ta = document.getElementById(`lessonContent-${lessonId}`);
 		if (!box || !ta) return;
-		if (box.style.display === 'none') {
+		if (box.hidden || box.style.display === 'none') {
 			box.innerHTML = renderMarkdown(ta.value) || '<em>Nothing to preview yet.</em>';
+			box.hidden = false;
 			box.style.display = 'block';
 		} else {
+			box.hidden = true;
 			box.style.display = 'none';
 		}
 	};
@@ -1883,11 +2124,27 @@
 		const title = document.getElementById(`lessonTitle-${lessonId}`)?.value?.trim();
 		const summary = document.getElementById(`lessonSummary-${lessonId}`)?.value?.trim();
 		const content = document.getElementById(`lessonContent-${lessonId}`)?.value;
+		const categoryId =
+			document.getElementById(`lessonCategory-${lessonId}`)?.value || null;
+		const parentLessonId =
+			document.getElementById(`lessonParent-${lessonId}`)?.value || null;
 		if (!title) return toast('Lesson title is required.', 'error');
 		try {
-			const updated = await A.raw('PATCH', `/courses/lessons/${encodeURIComponent(lessonId)}`, { title, summary, content });
+			const updated = await A.raw('PATCH', `/courses/lessons/${encodeURIComponent(lessonId)}`, {
+				title,
+				summary,
+				content,
+				category_id: categoryId,
+				parent_lesson_id: parentLessonId,
+			});
 			const lesson = (currentCourse.lessons || []).find((l) => String(l.id) === String(lessonId));
+			const categoryChanged =
+				lesson && String(lesson.category_id || '') !== String(categoryId || '');
+			const parentChanged =
+				lesson &&
+				String(lesson.parent_lesson_id || '') !== String(parentLessonId || '');
 			if (lesson) Object.assign(lesson, updated);
+			if (categoryChanged || parentChanged) renderCourseDetail();
 			toast('Lesson saved.');
 		} catch (err) {
 			toast('Save failed: ' + (err?.message || 'error'), 'error');

@@ -331,6 +331,7 @@ model Course {
 model Lesson {
   id           String   @id @default(uuid())
   course_id    String
+  parent_lesson_id String?
   // The category/axe this lesson was generated from (drives practice
   // questions). Nullable for manually authored lessons.
   category_id  String?
@@ -344,9 +345,12 @@ model Lesson {
 
   course   Course    @relation(fields: [course_id], references: [id], onDelete: Cascade)
   category Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  parent   Lesson?   @relation("LessonNesting", fields: [parent_lesson_id], references: [id], onDelete: SetNull)
+  children Lesson[]  @relation("LessonNesting")
 
   @@index([course_id])
   @@index([category_id])
+  @@index([parent_lesson_id])
 }
 
 model CourseClass {
