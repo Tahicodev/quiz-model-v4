@@ -280,45 +280,63 @@ router.post('/import/preview', requireRole(MANAGE_ROLES), async (req, res, next)
 
 router.post('/import', requireRole(MANAGE_ROLES), async (req, res, next) => {
   let categorySvc;
+  let subjectSvc;
   let courseSvc;
   let auditSvc;
   let repo;
   let rootCategory = null;
   let course = null;
   const createdCategories = [];
+  const importedCategories = [];
   try {
-    ({ categorySvc, courseSvc, auditSvc, repo } = getContainer());
+    ({ categorySvc, subjectSvc, courseSvc, auditSvc, repo } = getContainer());
     const parsed = CourseDocumentImportSchema.safeParse(req.body || {});
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const params = parsed.data;
+    await subjectSvc.assertCanUse(params.subject_id, req.user, req.schoolId);
     const { roots, introduction } = buildCourseImportSections(params.documentText, params.headings);
     if (!roots.length) throw new ValidationError({ headings: ['The outline must include at least one main category.'] });
     const { data: existingCategories } = await repo.getAll('categories', {
-      filters: { school_id: req.schoolId },
+      filters: { school_id: req.schoolId, subject_id: params.subject_id },
       limit: 100000,
     });
-    const categoryNames = new Set((existingCategories || []).map((category) => String(category.name || '')));
     const conflicts = new Set();
-    const checkNames = (nodes) => {
+    const checkSiblingNames = (nodes) => {
+      const siblingNames = new Set();
       for (const node of nodes) {
-        if (categoryNames.has(node.title)) conflicts.add(node.title);
-        categoryNames.add(node.title);
-        checkNames(node.children);
+        const key = node.title.toLocaleLowerCase();
+        if (siblingNames.has(key)) conflicts.add(node.title);
+        siblingNames.add(key);
+        checkSiblingNames(node.children);
       }
     };
-    checkNames(roots);
+    checkSiblingNames(roots);
     if (conflicts.size) {
       const names = [...conflicts].slice(0, 10).map((name) => `"${name}"`).join(', ');
       const more = conflicts.size > 10 ? ` and ${conflicts.size - 10} more` : '';
       throw new ValidationError({
-        headings: [`Category names must be unique across your school. Rename these detected titles before importing: ${names}${more}.`],
+        headings: [`Category names cannot repeat under the same parent. Rename these detected titles before importing: ${names}${more}.`],
       });
     }
 
+    const categoriesByPath = new Map((existingCategories || []).map((category) => [
+      `${String(category.parent_id || '')}\u0000${String(category.name || '').toLocaleLowerCase()}`,
+      category,
+    ]));
     const createCategoryTree = async (nodes, parentId = null) => {
       for (const node of nodes) {
-        const category = await categorySvc.create({ name: node.title, parent_id: parentId }, req.user);
-        createdCategories.push(category);
+        const pathKey = `${String(parentId || '')}\u0000${node.title.toLocaleLowerCase()}`;
+        let category = categoriesByPath.get(pathKey);
+        if (!category) {
+          category = await categorySvc.create({
+            name: node.title,
+            parent_id: parentId,
+            subject_id: params.subject_id,
+          }, req.user);
+          createdCategories.push(category);
+          categoriesByPath.set(pathKey, category);
+        }
+        importedCategories.push(category);
         if (!rootCategory) rootCategory = category;
         node.categoryId = category.id;
         await createCategoryTree(node.children, category.id);
@@ -330,6 +348,7 @@ router.post('/import', requireRole(MANAGE_ROLES), async (req, res, next) => {
       name: params.name,
       description: params.description || null,
       category_id: rootCategory.id,
+      subject_id: params.subject_id,
     }, req.user);
 
     let orderIndex = 0;
@@ -365,7 +384,7 @@ router.post('/import', requireRole(MANAGE_ROLES), async (req, res, next) => {
     });
     res.status(201).json({
       ...(await courseSvc.getWithLessons(course.id, req.schoolId)),
-      imported_categories: createdCategories,
+      imported_categories: importedCategories,
     });
   } catch (err) {
     const cleanupErrors = [];
@@ -376,9 +395,9 @@ router.post('/import', requireRole(MANAGE_ROLES), async (req, res, next) => {
         cleanupErrors.push(cleanupError);
       }
     }
-    if (rootCategory) {
+    for (const category of createdCategories.slice().reverse()) {
       try {
-        await categorySvc.delete(rootCategory.id, req.user);
+        await repo.delete('categories', category.id);
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }

@@ -7,6 +7,8 @@
 
 // Category Management State
 let categories = [];
+let categorySubjects = [];
+let activeCategorySubjectId = '';
 let currentCategoryId = null;
 let categorySortDirection = 'asc';
 let selectedQuestionsForCategory = [];
@@ -38,6 +40,9 @@ function readCategoryTrainingMapFromRepo() {
 			const raw = repo.getValue_sync('settings', {});
 			rows = raw?.settings || [];
 		}
+		if (saved && Object.prototype.hasOwnProperty.call(saved, 'subject_id')) {
+			categoryData.subject_id = saved.subject_id;
+		}
 		const row = (Array.isArray(rows) ? rows : []).find(
 			(s) => s && s.key === CATEGORY_TRAINING_KEY,
 		);
@@ -51,6 +56,71 @@ function readCategoryTrainingMapFromRepo() {
 		/* ignore */
 	}
 	return null;
+}
+
+function loadCategorySubjects() {
+	const repo = window.__DI_CONTAINER__?.repo;
+	const rows = repo?.getAll_sync?.('subjects');
+	categorySubjects = Array.isArray(rows) ? rows : [];
+	const filter = document.getElementById('categorySubjectFilter');
+	if (filter) {
+		filter.innerHTML = '';
+		for (const subject of categorySubjects) {
+			const option = document.createElement('option');
+			option.value = String(subject.id);
+			option.textContent = subject.name;
+			filter.appendChild(option);
+		}
+		const legacyOption = document.createElement('option');
+		legacyOption.value = '__unassigned__';
+		legacyOption.textContent = 'Unassigned / legacy categories';
+		filter.appendChild(legacyOption);
+		activeCategorySubjectId = categorySubjects.some((subject) => String(subject.id) === activeCategorySubjectId)
+			? activeCategorySubjectId
+			: String(categorySubjects[0]?.id || '__unassigned__');
+		filter.value = activeCategorySubjectId;
+	}
+	renderCategorySubjectOptions();
+}
+window.refreshCategorySubjects = loadCategorySubjects;
+
+function renderCategorySubjectOptions(selectedId = '') {
+	const select = document.getElementById('categorySubject');
+	if (!select) return;
+	select.innerHTML = '';
+	for (const subject of categorySubjects) {
+		const option = document.createElement('option');
+		option.value = String(subject.id);
+		option.textContent = subject.name;
+		select.appendChild(option);
+	}
+	const legacyOption = document.createElement('option');
+	legacyOption.value = '__unassigned__';
+	legacyOption.textContent = 'No subject (legacy)';
+	select.appendChild(legacyOption);
+	select.value = selectedId || activeCategorySubjectId || '__unassigned__';
+}
+
+function selectCategorySubject(subjectId) {
+	activeCategorySubjectId = String(subjectId || '__unassigned__');
+	updateCategoryList();
+}
+
+async function createCategorySubject() {
+	const name = window.prompt('Name this subject (for example: Mathematics):')?.trim();
+	if (!name) return;
+	try {
+		if (!window.API || typeof window.API.create !== 'function') throw new Error('API client is not available.');
+		const subject = await window.API.create('subjects', { name });
+		categorySubjects.push(subject);
+		window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', categorySubjects);
+		activeCategorySubjectId = String(subject.id);
+		loadCategorySubjects();
+		selectCategorySubject(activeCategorySubjectId);
+		showToast(`Subject "${subject.name}" created.`);
+	} catch (err) {
+		showToast(`Could not create subject: ${err?.message || 'request failed'}`, 'error');
+	}
 }
 
 function getCategoryTrainingMap() {
@@ -202,6 +272,19 @@ function addNewCategoryInline() {
 // Quick Category Modal Functions
 function openQuickCategoryModal() {
 	const modal = document.getElementById('quickCategoryModal');
+	const subjectSelect = document.getElementById('quickCategorySubject');
+	if (subjectSelect) {
+		subjectSelect.innerHTML = '';
+		for (const subject of categorySubjects) {
+			const option = document.createElement('option');
+			option.value = String(subject.id);
+			option.textContent = subject.name;
+			subjectSelect.appendChild(option);
+		}
+		subjectSelect.value = activeCategorySubjectId && activeCategorySubjectId !== '__unassigned__'
+			? activeCategorySubjectId
+			: String(categorySubjects[0]?.id || '');
+	}
 	if (modal) {
 		modal.style.display = 'block';
 		// Focus on the name input
@@ -482,6 +565,8 @@ function canDropCategoryOn(draggedId, targetId) {
 	if (to === 'uncategorized') return true;
 	const target = getCategoryById(to);
 	if (!target || target.isSystem) return false;
+	const dragged = getCategoryById(from);
+	if (String(dragged?.subject_id || '') !== String(target.subject_id || '')) return false;
 	const forbidden = new Set([from]);
 	for (const id of getCategoryDescendantIds(from)) {
 		forbidden.add(String(id));
@@ -863,6 +948,10 @@ async function moveCategoryToParent(categoryId, newParentId) {
 			showToast('Cannot nest inside that category', 'error');
 			return false;
 		}
+		if (String(target.subject_id || '') !== String(category.subject_id || '')) {
+			showToast('Categories can only be nested inside the same subject.', 'error');
+			return false;
+		}
 		const forbidden = new Set([String(categoryId)]);
 		for (const id of getCategoryDescendantIds(categoryId)) {
 			forbidden.add(String(id));
@@ -952,6 +1041,7 @@ function populateCategoryParentPicker(excludeId) {
 			category.id &&
 			!category.isSystem &&
 			category.id !== 'uncategorized' &&
+			String(category.subject_id || '') === String(document.getElementById('categorySubject')?.value === '__unassigned__' ? '' : document.getElementById('categorySubject')?.value || '') &&
 			!excluded.has(String(category.id)) &&
 			(!window.Auth?.canAccessItem ||
 				window.Auth.canAccessItem('category', category)),
@@ -996,9 +1086,15 @@ async function saveQuickCategoryForm() {
 	}
 
 	// Check if category already exists
-	const existingCategory = categories.find(
-		(cat) =>
-			String(cat.name || '').toLowerCase() === categoryName.toLowerCase(),
+	const subjectId = document.getElementById('quickCategorySubject')?.value || '';
+	if (!subjectId) {
+		showToast('Create or select a subject before adding categories.', 'error');
+		return;
+	}
+	const existingCategory = categories.find((cat) =>
+		String(cat.name || '').toLowerCase() === categoryName.toLowerCase() &&
+		String(cat.subject_id || '') === subjectId &&
+		!getCategoryParentId(cat),
 	);
 	if (existingCategory) {
 		showToast('Category with this name already exists', 'error');
@@ -1016,6 +1112,7 @@ async function saveQuickCategoryForm() {
 		dateCreated: new Date().toISOString(),
 		ownerId: authorId,
 		created_by: authorId,
+		subject_id: subjectId,
 	};
 
 	// Persist to the backend so the server stamps the same author
@@ -1023,7 +1120,7 @@ async function saveQuickCategoryForm() {
 	// adopt them so the local mirror never disagrees with the DB.
 	if (window.API && typeof window.API.create === 'function') {
 		try {
-			const payload = { name: newCategory.name };
+			const payload = { name: newCategory.name, subject_id: subjectId };
 			if (newCategory.color) payload.color = newCategory.color;
 			const saved = await window.API.create('categories', payload);
 			if (saved && saved.id) {
@@ -1086,6 +1183,7 @@ const DEFAULT_CATEGORY_COLORS = [
 // Initialize category management
 function initCategoryManagement() {
 	loadCategories();
+	loadCategorySubjects();
 	// Recalculate question counts based on actual questions in localStorage
 	updateQuestionCategoryCounts();
 	updateCategoryList();
@@ -1300,6 +1398,10 @@ function populateCategoryFilter() {
 }
 
 function createNewCategory() {
+	if (!activeCategorySubjectId || activeCategorySubjectId === '__unassigned__') {
+		showToast('Create or select a subject before adding categories.', 'error');
+		return;
+	}
 	currentCategoryId = null;
 	document.getElementById('categoryModalTitle').textContent =
 		'Create New Category';
@@ -1307,6 +1409,8 @@ function createNewCategory() {
 	document.getElementById('categoryColor').value = getRandomCategoryColor();
 	// New categories are excluded from training until explicitly enabled.
 	document.getElementById('categoryTraining').checked = false;
+	renderCategorySubjectOptions(activeCategorySubjectId);
+	document.getElementById('categorySubject').disabled = false;
 	populateCategoryParentPicker(null);
 
 	// The create/edit form no longer embeds the question picker — questions
@@ -1330,7 +1434,12 @@ function editCategory(categoryId) {
 	document.getElementById('categoryColor').value = category.color || '#3b82f6';
 	document.getElementById('categoryTraining').checked =
 		isTrainingCategory(categoryId);
+	renderCategorySubjectOptions(category.subject_id || '__unassigned__');
 	populateCategoryParentPicker(categoryId);
+	const subjectSelect = document.getElementById('categorySubject');
+	if (subjectSelect) {
+		subjectSelect.disabled = Boolean(category.parent_id);
+	}
 	const parentSelect = document.getElementById('categoryParent');
 	if (parentSelect) {
 		parentSelect.value = getCategoryParentId(category);
@@ -1454,6 +1563,10 @@ async function saveCategoryForm() {
 		.getElementById('categoryDescription')
 		.value.trim();
 	const color = document.getElementById('categoryColor').value;
+	const selectedSubject = document.getElementById('categorySubject')?.value || '__unassigned__';
+	const subjectId = selectedSubject === '__unassigned__' ? null : selectedSubject;
+	const parentSelect = document.getElementById('categoryParent');
+	const parentVal = parentSelect ? String(parentSelect.value || '') : '';
 
 	if (!name) {
 		showToast('Please enter a category name', 'error');
@@ -1464,6 +1577,8 @@ async function saveCategoryForm() {
 	const existingCategory = categories.find(
 		(c) =>
 			String(c.name || '').toLowerCase() === name.toLowerCase() &&
+			String(c.subject_id || '') === String(subjectId || '') &&
+			getCategoryParentId(c) === parentVal &&
 			c.id !== currentCategoryId,
 	);
 
@@ -1484,8 +1599,6 @@ async function saveCategoryForm() {
 	// Parent nesting (Math → Addition). The picker already excludes the
 	// edited category and its subtree; this is the backstop (plus the
 	// server's own cycle guard).
-	const parentSelect = document.getElementById('categoryParent');
-	const parentVal = parentSelect ? String(parentSelect.value || '') : '';
 	const prevParent = existing ? getCategoryParentId(existing) : '';
 	if (parentVal && currentCategoryId) {
 		const forbidden = new Set([String(currentCategoryId)]);
@@ -1529,6 +1642,7 @@ async function saveCategoryForm() {
 		created_by: authorId,
 		parent_id: parentVal || null,
 		parentId: parentVal || null,
+		subject_id: subjectId,
 	};
 
 	// ── Persist to the backend FIRST ─────────────────────────────────────────
@@ -1539,6 +1653,7 @@ async function saveCategoryForm() {
 		try {
 			const payload = { name: categoryData.name };
 			if (categoryData.color) payload.color = categoryData.color;
+			payload.subject_id = categoryData.subject_id;
 			if (categoryData.icon) payload.icon = categoryData.icon;
 			// Nesting: set the parent, or explicitly clear it when an edited
 			// category moves back to top-level (the API mapper forwards an
@@ -1589,6 +1704,12 @@ async function saveCategoryForm() {
 	}
 
 	if (currentCategoryId) {
+		if (existing && String(existing.subject_id || '') !== String(subjectId || '')) {
+			const descendants = new Set(getCategoryDescendantIds(currentCategoryId).map(String));
+			for (const category of categories) {
+				if (descendants.has(String(category.id))) category.subject_id = subjectId;
+			}
+		}
 		const index = categories.findIndex((c) => c.id === currentCategoryId);
 		if (index !== -1) {
 			categories[index] = categoryData;
@@ -3134,6 +3255,7 @@ function updateCategoryList(categoriesList = categories) {
 		: '';
 
 	const visibleCategories = categoriesList.filter((category) => {
+		if (String(category.subject_id || '') !== (activeCategorySubjectId === '__unassigned__' ? '' : activeCategorySubjectId)) return false;
 		if (typeof isAutoGameCategory === 'function' && isAutoGameCategory(category)) {
 			return false;
 		}
@@ -3433,7 +3555,10 @@ function filterCategories() {
 	// Coerce to string defensively: categories merged from the API or imported
 	// JSON may lack `description` (and even `name`), which used to crash the
 	// filter with "Cannot read properties of undefined (reading 'toLowerCase')".
-	const filteredCategories = categories.filter(
+	const scopedCategories = categories.filter((category) =>
+		String(category.subject_id || '') === (activeCategorySubjectId === '__unassigned__' ? '' : activeCategorySubjectId),
+	);
+	const filteredCategories = scopedCategories.filter(
 		(category) =>
 			String(category.name || '')
 				.toLowerCase()
@@ -3446,14 +3571,14 @@ function filterCategories() {
 	// renders in place) and its whole subtree (so "math" shows Addition…).
 	const keep = new Set(filteredCategories.map((c) => String(c.id)));
 	for (const category of filteredCategories) {
-		for (const id of getCategoryAncestorIds(category.id, categories)) {
+		for (const id of getCategoryAncestorIds(category.id, scopedCategories)) {
 			keep.add(String(id));
 		}
-		for (const id of getCategoryDescendantIds(category.id, categories)) {
+		for (const id of getCategoryDescendantIds(category.id, scopedCategories)) {
 			keep.add(String(id));
 		}
 	}
-	updateCategoryList(categories.filter((c) => c && keep.has(String(c.id))));
+	updateCategoryList(scopedCategories.filter((c) => c && keep.has(String(c.id))));
 }
 
 function sortCategories() {

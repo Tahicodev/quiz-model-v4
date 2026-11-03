@@ -38,6 +38,7 @@ import { ExamService } from '../frontend/services/ExamService.js';
 import { ResultService } from '../frontend/services/ResultService.js';
 import { ClassService } from '../frontend/services/ClassService.js';
 import { CategoryService } from '../frontend/services/CategoryService.js';
+import { SubjectService } from '../frontend/services/SubjectService.js';
 import { CourseService } from '../frontend/services/CourseService.js';
 import { GameService } from '../frontend/services/GameService.js';
 import { TournamentService } from '../frontend/services/TournamentService.js';
@@ -75,6 +76,7 @@ export function createContainer() {
     resultSvc: new ResultService(repo),
     classSvc: new ClassService(repo),
     categorySvc: new CategoryService(repo),
+    subjectSvc: new SubjectService(repo),
     courseSvc: new CourseService(repo),
     gameSvc,
     tournamentSvc,

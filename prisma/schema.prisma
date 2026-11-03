@@ -35,6 +35,7 @@ model School {
   archives           SchoolArchive[]
   classes            Class[]
   categories         Category[]
+  subjects           Subject[]
   questions          Question[]
   exams              Exam[]
   results            Result[]
@@ -107,6 +108,7 @@ model User {
   results                  Result[]
   createdExams             Exam[]              @relation("ExamCreator")
   createdCourses           Course[]            @relation("CourseCreator")
+  createdSubjects          Subject[]           @relation("SubjectCreator")
   createdGames             Game[]              @relation("GameCreator")
   createdTournaments       Tournament[]        @relation("TournamentCreator")
   gameSessions             GameSession[]
@@ -173,6 +175,7 @@ model Class {
 model Category {
   id         String   @id @default(uuid())
   school_id  String
+  subject_id String?
   name       String
   parent_id  String?
   icon       String?
@@ -184,6 +187,7 @@ model Category {
   updated_at DateTime @updatedAt
 
   school    School     @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  subject   Subject?   @relation(fields: [subject_id], references: [id], onDelete: SetNull)
   parent    Category?  @relation("CategoryTree", fields: [parent_id], references: [id], onDelete: SetNull)
   children  Category[] @relation("CategoryTree")
   questions Question[]
@@ -191,9 +195,28 @@ model Category {
   courses   Course[]
   lessons   Lesson[]
 
-  @@unique([school_id, name])
+  @@unique([school_id, subject_id, parent_id, name])
   @@index([school_id])
+  @@index([subject_id])
   @@index([parent_id])
+  @@index([created_by])
+}
+
+model Subject {
+  id         String   @id @default(uuid())
+  school_id  String
+  created_by String
+  name       String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  school    School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  creator   User      @relation("SubjectCreator", fields: [created_by], references: [id], onDelete: Cascade)
+  categories Category[]
+  courses    Course[]
+
+  @@unique([school_id, created_by, name])
+  @@index([school_id])
   @@index([created_by])
 }
 
@@ -310,6 +333,7 @@ model Course {
   created_by  String
   name        String
   description String?
+  subject_id  String?
   // Root of the category branch the course was generated from. Nullable
   // so the course survives a category delete.
   category_id String?
@@ -320,11 +344,13 @@ model Course {
   school        School        @relation(fields: [school_id], references: [id], onDelete: Cascade)
   creator       User          @relation("CourseCreator", fields: [created_by], references: [id], onDelete: Cascade)
   category      Category?     @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  subject       Subject?      @relation(fields: [subject_id], references: [id], onDelete: SetNull)
   lessons       Lesson[]
   courseClasses CourseClass[]
 
   @@index([school_id])
   @@index([created_by])
+  @@index([subject_id])
   @@index([status])
 }
 

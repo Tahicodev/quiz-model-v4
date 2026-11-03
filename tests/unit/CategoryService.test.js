@@ -43,6 +43,21 @@ describe('CategoryService', () => {
       await expect(service.create({ name: 'Child', parent_id: 'missing' }, ADMIN))
         .rejects.toBeInstanceOf(ValidationError);
     });
+
+    it('does not allow a category to inherit a parent from another subject', async () => {
+      repo.getById.mockResolvedValue({
+        id: 'parent',
+        school_id: ADMIN.school_id,
+        subject_id: 'subject-b',
+        created_by: ADMIN.id,
+      });
+      await expect(service.create({
+        name: 'Child',
+        subject_id: 'subject-a',
+        parent_id: 'parent',
+      }, ADMIN)).rejects.toBeInstanceOf(ValidationError);
+      expect(repo.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('getTree()', () => {

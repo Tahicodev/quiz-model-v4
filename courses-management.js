@@ -66,6 +66,15 @@
 		return [];
 	}
 
+	function subjectList() {
+		try {
+			const rows = window.__DI_CONTAINER__?.repo?.getAll_sync?.('subjects');
+			return Array.isArray(rows) ? rows : [];
+		} catch (_) {
+			return [];
+		}
+	}
+
 	// Per-category direct question counts from the shared admin repository.
 	// The course page is a separate classic script, so it cannot depend on the
 	// question editor's lexical `questions` binding being globally visible.
@@ -480,9 +489,9 @@
 	function courseImportHeadingRow(heading, index) {
 		const sourceText = String(heading.sourceText || '');
 		const title = String(heading.title || sourceText.replace(/^\s*#{1,6}\s*/, '').trim());
-		const levelOptions = Array.from({ length: 8 }, (_, optionIndex) => {
+		const levelOptions = Array.from({ length: 4 }, (_, optionIndex) => {
 			const level = optionIndex + 1;
-			const label = ['Main category', 'Subcategory', 'Axis'][level - 1] || `Nested level ${level}`;
+			const label = ['Main category', 'Subcategory', 'Sub-subcategory', 'Axis · content section'][level - 1];
 			return `<option value="${level}" ${Number(heading.level) === level ? 'selected' : ''}>${label}</option>`;
 		}).join('');
 		return (
@@ -490,7 +499,7 @@
 			`<div class="course-import-heading-fields">` +
 			`<label>Source line<input type="number" min="1" max="${courseImportDraft.lineCount}" value="${Number(heading.line) || 1}" data-import-line onchange="updateCourseImportSourceLine(this)"></label>` +
 			`<label>Hierarchy<select data-import-level>${levelOptions}</select></label>` +
-			`<label>Category / section title<input type="text" maxlength="100" value="${esc(title)}" data-import-title oninput="clearCourseImportHeadingError(this)"><small data-import-title-error hidden>Already exists in this school. Rename this title.</small><small>Up to 100 characters</small></label>` +
+			`<label>Heading title<input type="text" maxlength="100" value="${esc(title)}" data-import-title oninput="clearCourseImportHeadingError(this)"><small data-import-title-error hidden>Already exists in this subject. Rename this title.</small><small>Up to 100 characters</small></label>` +
 			`<button type="button" class="btn btn-sm course-import-remove" onclick="removeCourseImportHeading(this)" aria-label="Remove heading"><span aria-hidden="true">&times;</span> Remove</button>` +
 			'</div>' +
 			`<p class="course-import-source-line" data-import-source>${esc(sourceText)}</p>` +
@@ -502,7 +511,7 @@
 		const rows = draft.headings.map((heading, index) => courseImportHeadingRow(heading, index)).join('');
 		const body =
 			'<div class="course-import-stepper" aria-label="Import steps"><span class="is-complete"><b>1</b> Upload</span><i></i><span class="is-current"><b>2</b> Organize</span><i></i><span><b>3</b> Create course</span></div>' +
-			'<div class="course-import-course-fields"><div class="form-group"><label for="courseImportName">Course name</label>' +
+			`<div class="course-import-course-fields"><div class="form-group"><label for="courseImportSubject">Subject</label><div class="course-import-subject-picker"><select id="courseImportSubject" required>${subjectList().map((subject) => `<option value="${esc(subject.id)}">${esc(subject.name)}</option>`).join('')}</select><button type="button" class="btn btn-sm" onclick="createCourseImportSubject()">New subject</button></div><small>Imported categories are saved inside this subject.</small></div><div class="form-group"><label for="courseImportName">Course name</label>` +
 			`<input type="text" id="courseImportName" maxlength="200" value="${esc(draft.title || '')}" style="width:100%;"></div>` +
 			'<div class="form-group"><label for="courseImportDescription">Course description</label>' +
 			`<textarea id="courseImportDescription" maxlength="2000" rows="2" style="width:100%;">${esc(draft.description || '')}</textarea></div></div>` +
@@ -511,11 +520,11 @@
 			`<p class="course-generator-hint">${draft.detectionMethod === 'docx-styles-and-local-patterns' ? 'Outline detected locally from DOCX heading styles and title patterns.' : 'Outline detected locally from document title patterns.'} No AI model or internet connection is required. Review the source line and hierarchy for every heading; add, remove, or edit headings as needed. Text is preserved exactly and assigned to the section immediately above it. Text before the first heading becomes an Introduction.</p>` +
 			'<p class="course-generator-hint">Detection is best-effort: a document’s heading styles and numbering may not match its intended structure. Check every heading before creating the course. Images, diagrams, tables, and original page layout are not imported.</p>' +
 			'<div class="course-import-level-tools">' +
-			'<label>Make selected lines<select id="courseImportBulkLevel"><option value="1">Main category · Level 1</option><option value="2">Subcategory · Level 2</option><option value="3">Axis · Level 3</option><option value="4">Nested level 4</option><option value="5">Nested level 5</option><option value="6">Nested level 6</option><option value="7">Nested level 7</option><option value="8">Nested level 8</option></select></label>' +
+			'<label>Make selected lines<select id="courseImportBulkLevel"><option value="1">Main category · Heading 1</option><option value="2">Subcategory · Heading 2</option><option value="3">Sub-subcategory · Heading 3</option><option value="4">Axis · content section · Heading 4</option></select></label>' +
 			'<span data-import-selection-count aria-live="polite">No lines selected</span>' +
 			'<button type="button" class="btn btn-primary btn-sm" data-import-add-source-lines onclick="addSelectedCourseImportSourceLines()" disabled>Add to outline <span aria-hidden="true">→</span></button>' +
 			'</div>' +
-			'<p class="course-import-instructions">Select the document lines that are titles, choose their level, then add them. Lines not added as headings remain content.</p>' +
+			'<p class="course-import-instructions">Use Heading 1 for the main category, Heading 2 for a subcategory, Heading 3 for an optional sub-subcategory, and Heading 4 for an axis. Text after each heading is saved as that section’s lesson content.</p>' +
 			'<div id="courseImportSourcePicker" class="course-import-source-picker"></div>' +
 			`<div class="course-import-section-heading"><div><span class="course-import-step-label">STEP 2 · REVIEW</span><h3>Your course outline</h3><p>Rename headings or fine-tune their levels before creating the course.</p></div><span class="course-import-outline-count" data-import-outline-count>${draft.headings.length} headings</span></div>` +
 			'<div class="course-import-conflict-notice" data-import-conflict-notice role="alert" hidden></div>' +
@@ -534,6 +543,31 @@
 		window.renderCourseImportSourcePicker();
 		window.updateCourseImportOutlineCount();
 	}
+
+	window.createCourseImportSubject = async function () {
+		const name = window.prompt('Name this subject (for example: Mathematics):')?.trim();
+		if (!name) return;
+		try {
+			const A = api();
+			if (!A) return;
+			const subject = await A.create('subjects', { name });
+			const rows = subjectList();
+			rows.push(subject);
+			window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', rows);
+			window.refreshCategorySubjects?.();
+			const select = document.getElementById('courseImportSubject');
+			if (select) {
+				const option = document.createElement('option');
+				option.value = String(subject.id);
+				option.textContent = subject.name;
+				select.appendChild(option);
+				select.value = String(subject.id);
+			}
+			toast(`Subject "${subject.name}" created.`);
+		} catch (err) {
+			toast(`Could not create subject: ${err?.message || 'request failed'}`, 'error');
+		}
+	};
 
 	window.openCourseDocumentImportModal = async function () {
 		courseImportDraft = null;
@@ -757,7 +791,7 @@
 		if (!courseImportDraft?.selectedSourceLines?.size) return;
 		const container = document.getElementById('courseImportHeadings');
 		const level = Number(document.getElementById('courseImportBulkLevel')?.value);
-		if (!container || !Number.isInteger(level) || level < 1 || level > 8) return;
+		if (!container || !Number.isInteger(level) || level < 1 || level > 4) return;
 		const lines = String(courseImportDraft.documentText || '').split('\n');
 		const existingLines = new Set(Array.from(container.querySelectorAll('[data-import-line]'), (input) => Number(input.value)));
 		const selectedLines = [...courseImportDraft.selectedSourceLines].sort((a, b) => a - b);
@@ -828,7 +862,7 @@
 		if (notice) {
 			notice.hidden = unresolved.size === 0;
 			notice.innerHTML = unresolved.size
-				? `<strong>Some category names are already in use.</strong> Rename the highlighted titles, then select “Create course” again. Existing category names must be unique across your school.<span>${[...unresolved].map(esc).join(' · ')}</span>`
+				? `<strong>Some category names are already in use in this subject.</strong> Rename the highlighted titles, then select “Create course” again.<span>${[...unresolved].map(esc).join(' · ')}</span>`
 				: '';
 		}
 	};
@@ -871,6 +905,8 @@
 		if (!courseImportDraft) return toast('Analyze a document before creating a course.', 'error');
 		const name = document.getElementById('courseImportName')?.value.trim() || '';
 		if (!name) return toast('Enter a course name.', 'error');
+		const subjectId = document.getElementById('courseImportSubject')?.value || '';
+		if (!subjectId) return toast('Create or select a subject before importing this course.', 'error');
 		const headingRows = Array.from(document.querySelectorAll('#courseImportHeadings [data-import-heading]'));
 		if (!headingRows.length) return toast('Keep or add at least one category heading.', 'error');
 		const headings = headingRows.map((row) => ({
@@ -885,6 +921,7 @@
 			if (!A) throw new Error('API client is not available.');
 			const course = await A.raw('POST', '/courses/import', {
 				name,
+				subject_id: subjectId,
 				description: document.getElementById('courseImportDescription')?.value || '',
 				documentText: courseImportDraft.documentText,
 				headings,
@@ -1630,16 +1667,6 @@
 				category,
 				depth: getCategoryDepth(category),
 			}));
-		const categoriesWithChildren = new Set(
-			categoryRows
-				.filter(({ category }) =>
-					categoryRows.some(
-						(row) =>
-							String(row.category.parent_id || '') === String(category.id),
-					),
-				)
-				.map(({ category }) => String(category.id)),
-		);
 		const categoryId = String(lesson.category_id || '');
 		const currentCategory = categoryById.get(categoryId);
 		const hasValidCategory = Boolean(currentCategory);
@@ -1647,13 +1674,8 @@
 			.map(({ category, depth }) => {
 				const path = categoryPath(category.id) || category.name;
 				const categoryType =
-					depth === 0
-						? 'Main category'
-						: !categoriesWithChildren.has(String(category.id))
-							? 'Axis'
-							: depth === 1
-								? 'Subcategory'
-								: `Sub-${'sub-'.repeat(depth - 2)}subcategory`;
+					['Main category', 'Subcategory', 'Sub-subcategory', 'Axis'][depth] ||
+					`Level ${depth + 1}`;
 				return `<option value="${esc(category.id)}" ${categoryId === String(category.id) ? 'selected' : ''}>${categoryType} · ${esc(path)}</option>`;
 			})
 			.join('');

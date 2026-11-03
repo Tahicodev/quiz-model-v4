@@ -25,6 +25,7 @@ const PRELOAD_TABLES = [
   'schools',
   'classes',
   'categories',
+  'subjects',
   'users',
   'questions',
   'exams',
@@ -50,6 +51,7 @@ const PRELOAD_TABLES = [
 const DIRECT_SCHOOL_TABLES = new Set([
   'classes',
   'categories',
+  'subjects',
   'users',
   'questions',
   'exams',
@@ -493,7 +495,7 @@ router.get('/', async (req, res, next) => {
     const isAdmin = [ROLES.ADMIN, ROLES.SUPER_ADMIN].includes(req.user?.role);
     const isStudent = req.user?.role === ROLES.STUDENT;
     // Students must never receive the admin-only queues.
-    const SKIP_FOR_STUDENT = new Set(['account_requests', 'notifications']);
+    const SKIP_FOR_STUDENT = new Set(['account_requests', 'notifications', 'subjects']);
     const data = {};
     for (const table of PRELOAD_TABLES) {
       if (isStudent && SKIP_FOR_STUDENT.has(table)) { data[table] = []; continue; }
@@ -529,7 +531,7 @@ router.get('/', async (req, res, next) => {
         }
         // Teachers receive only their own bank rows. Legacy unattributed
         // rows (created_by NULL) stay admin-only. Admins see all.
-        if (req.user?.role === ROLES.TEACHER && (table === 'questions' || table === 'categories')) {
+        if (req.user?.role === ROLES.TEACHER && (table === 'questions' || table === 'categories' || table === 'subjects')) {
           query.or = [{ created_by: req.user.id }];
         }
         // Teachers operate strictly inside their own library: only rows

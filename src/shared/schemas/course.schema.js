@@ -6,6 +6,7 @@ export const CourseCreateSchema = z.object({
   name:        z.string().min(1).max(200),
   description: z.string().max(2000).optional().nullable(),
   category_id: z.string().uuid().optional().nullable(),
+  subject_id: z.string().uuid().optional().nullable(),
 });
 
 export const CourseUpdateSchema = CourseCreateSchema.partial();

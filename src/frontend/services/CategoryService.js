@@ -74,10 +74,27 @@ export class CategoryService {
     this.#requireAdmin(currentUser);
     const parsed = CategoryCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-    
+
+    await this.#validateSubject(parsed.data.subject_id, currentUser);
+    const { data: siblings } = await this.#repo.getAll('categories', {
+      filters: {
+        school_id: currentUser.school_id,
+        subject_id: parsed.data.subject_id ?? null,
+        parent_id: parsed.data.parent_id ?? null,
+      },
+      limit: 100000,
+    });
+    if (siblings.some((category) => category.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) {
+      throw new ValidationError({ name: ['A category with this name already exists under this parent in this subject.'] });
+    }
     if (parsed.data.parent_id) {
       const parent = await this.#repo.getById('categories', parsed.data.parent_id);
       if (!parent) throw new ValidationError({ parent_id: ['Parent category not found'] });
+      this.#assertCategoryAccess(parent, currentUser);
+      if (String(parent.school_id) !== String(currentUser.school_id) ||
+          String(parent.subject_id || '') !== String(parsed.data.subject_id || '')) {
+        throw new ValidationError({ parent_id: ['Parent and child categories must belong to the same subject.'] });
+      }
     }
 
     return this.#repo.create('categories', {
@@ -96,10 +113,68 @@ export class CategoryService {
     const parsed = CategoryUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
-    if (parsed.data.parent_id) {
-      if (parsed.data.parent_id === id) throw new ValidationError({ parent_id: ['Cannot set category as its own parent'] });
-      const parent = await this.#repo.getById('categories', parsed.data.parent_id);
+    this.#assertCategoryAccess(existing, currentUser);
+    const subjectId = parsed.data.subject_id === undefined ? existing.subject_id : parsed.data.subject_id;
+    await this.#validateSubject(subjectId, currentUser);
+    const parentId = parsed.data.parent_id === undefined ? existing.parent_id : parsed.data.parent_id;
+    const categoryName = parsed.data.name === undefined ? existing.name : parsed.data.name;
+    if (parsed.data.name !== undefined ||
+        String(parentId || '') !== String(existing.parent_id || '') ||
+        String(subjectId || '') !== String(existing.subject_id || '')) {
+      const { data: siblings } = await this.#repo.getAll('categories', {
+        filters: {
+          school_id: existing.school_id,
+          subject_id: subjectId ?? null,
+          parent_id: parentId ?? null,
+        },
+        limit: 100000,
+      });
+      if (siblings.some((category) =>
+        String(category.id) !== String(id) &&
+        category.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase(),
+      )) {
+        throw new ValidationError({ name: ['A category with this name already exists under this parent in this subject.'] });
+      }
+    }
+
+    let subjectMoveIds = [];
+    if (parsed.data.subject_id !== undefined && String(parsed.data.subject_id || '') !== String(existing.subject_id || '')) {
+      if (existing.parent_id) {
+        throw new ValidationError({ subject_id: ['Change the subject from the top-level category.'] });
+      }
+      subjectMoveIds = await this.#getSubtreeIds(id);
+      const { data: targetCategories } = await this.#repo.getAll('categories', {
+        filters: { school_id: existing.school_id, subject_id: subjectId ?? null },
+        limit: 100000,
+      });
+      const movingIds = new Set(subjectMoveIds.map(String));
+      const movingCategories = [];
+      for (const movingId of subjectMoveIds) {
+        const category = await this.#repo.getById('categories', movingId);
+        if (category) {
+          this.#assertCategoryAccess(category, currentUser);
+          movingCategories.push(category);
+        }
+      }
+      const targetNames = new Set(targetCategories
+        .filter((category) => !movingIds.has(String(category.id)))
+        .map((category) => `${String(category.parent_id || '')}\u0000${category.name.toLocaleLowerCase()}`));
+      if (movingCategories.some((category) =>
+        targetNames.has(`${String(category.parent_id || '')}\u0000${category.name.toLocaleLowerCase()}`),
+      )) {
+        throw new ValidationError({ subject_id: ['A category in this branch already exists in the selected subject. Rename the conflicting category first.'] });
+      }
+    }
+
+    if (parentId) {
+      if (String(parentId) === String(id)) throw new ValidationError({ parent_id: ['Cannot set category as its own parent'] });
+      const parent = await this.#repo.getById('categories', parentId);
       if (!parent) throw new ValidationError({ parent_id: ['Parent category not found'] });
+      this.#assertCategoryAccess(parent, currentUser);
+      if (String(parent.school_id) !== String(existing.school_id) ||
+          String(parent.subject_id || '') !== String(subjectId || '')) {
+        throw new ValidationError({ parent_id: ['Parent and child categories must belong to the same subject.'] });
+      }
       // Cycle guard: walk the new parent's ancestor chain — if it leads back
       // to this category the tree would loop (and getTree would drop the
       // whole cycle from the roots).
@@ -115,7 +190,64 @@ export class CategoryService {
       }
     }
 
-    return this.#repo.update('categories', id, parsed.data);
+    const updated = await this.#repo.update('categories', id, parsed.data);
+    for (const childId of subjectMoveIds.filter((categoryId) => String(categoryId) !== String(id))) {
+      await this.#repo.update('categories', childId, { subject_id: subjectId || null });
+    }
+    if (subjectMoveIds.length) {
+      const movingIds = new Set(subjectMoveIds.map(String));
+      const { data: courses } = await this.#repo.getAll('courses', { limit: 100000 });
+      for (const course of courses || []) {
+        if (course.category_id && movingIds.has(String(course.category_id))) {
+          await this.#repo.update('courses', course.id, { subject_id: subjectId || null });
+        }
+      }
+    }
+    return updated;
+  }
+
+  async #getSubtreeIds(rootId) {
+    const ids = [String(rootId)];
+    let frontier = [String(rootId)];
+    while (frontier.length) {
+      const next = [];
+      for (const parentId of frontier) {
+        const { data: children } = await this.#repo.getAll('categories', {
+          filters: { parent_id: parentId },
+          limit: 100000,
+        });
+        for (const child of children || []) {
+          const childId = String(child.id);
+          if (!ids.includes(childId)) {
+            ids.push(childId);
+            next.push(childId);
+          }
+        }
+      }
+      frontier = next;
+    }
+    return ids;
+  }
+
+  async #validateSubject(subjectId, user) {
+    if (!subjectId) return;
+    const subject = await this.#repo.getById('subjects', subjectId);
+    if (!subject || String(subject.school_id) !== String(user.school_id)) {
+      throw new ValidationError({ subject_id: ['Subject not found in this school.'] });
+    }
+    if (user.role === ROLES.TEACHER && String(subject.created_by) !== String(user.id)) {
+      throw new ForbiddenError('Not your subject');
+    }
+  }
+
+  #assertCategoryAccess(category, user) {
+    if (category.school_id != null && user.school_id != null &&
+        String(category.school_id) !== String(user.school_id)) {
+      throw new ValidationError({ parent_id: ['Category does not belong to this school.'] });
+    }
+    if (user.role === ROLES.TEACHER && String(category.created_by) !== String(user.id)) {
+      throw new ForbiddenError('Not your category');
+    }
   }
 
   /**

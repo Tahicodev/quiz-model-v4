@@ -25,6 +25,7 @@ let app;
 let teacherToken;
 let studentToken;
 let teacher;
+let subjectId;
 let classOne;
 let branchRootId;
 let lessonCategoryId;
@@ -72,6 +73,10 @@ beforeAll(async () => {
 			role: 'teacher', status: 'active',
 		},
 	});
+	const subject = await prisma.subject.create({
+		data: { school_id: SCHOOL, created_by: teacher.id, name: 'French' },
+	});
+	subjectId = subject.id;
 	await prisma.user.create({
 		data: {
 			school_id: SCHOOL, class_id: classOne.id, username: 'rt-student', name: 'Student',
@@ -80,15 +85,15 @@ beforeAll(async () => {
 	});
 
 	const branch = await prisma.category.create({
-		data: { school_id: SCHOOL, name: 'Unit 3', created_by: teacher.id },
+		data: { school_id: SCHOOL, subject_id: subjectId, name: 'Unit 3', created_by: teacher.id },
 	});
 	branchRootId = branch.id;
 	const axe = await prisma.category.create({
-		data: { school_id: SCHOOL, name: 'Unit 3 — Axe 1', parent_id: branch.id, created_by: teacher.id },
+		data: { school_id: SCHOOL, subject_id: subjectId, name: 'Unit 3 — Axe 1', parent_id: branch.id, created_by: teacher.id },
 	});
 	lessonCategoryId = axe.id;
 	const emptyBranch = await prisma.category.create({
-		data: { school_id: SCHOOL, name: 'Unit 9', created_by: teacher.id },
+		data: { school_id: SCHOOL, subject_id: subjectId, name: 'Unit 9', created_by: teacher.id },
 	});
 	emptyCategoryId = emptyBranch.id;
 
@@ -364,32 +369,34 @@ describe('course document import', () => {
 			.post(`${BASE}/import`)
 			.send({
 				name: 'Invalid imported course',
+				subject_id: subjectId,
 				documentText: preview.body.documentText,
-				headings: preview.body.headings.map((heading) => ({
-					line: heading.line,
-					level: heading.level,
-					title: 'Repeated category',
-				})),
+				headings: [
+					{ line: 1, level: 1, title: 'Repeated category' },
+					{ line: 5, level: 1, title: 'Repeated category' },
+				],
 			});
 		expect(duplicateNames.status).toBe(422);
-		expect(duplicateNames.body.error.fields.headings[0]).toContain('unique across your school');
+		expect(duplicateNames.body.error.fields.headings[0]).toContain('cannot repeat under the same parent');
 		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Repeated category' } })).toBe(0);
 
 		const existingCategoryName = await asTeacher()
 			.post(`${BASE}/import`)
 			.send({
 				name: 'Existing category title import',
+				subject_id: subjectId,
 				documentText: 'Unit 3\nSome content',
 				headings: [{ line: 1, level: 1, title: 'Unit 3' }],
 			});
-		expect(existingCategoryName.status).toBe(422);
-		expect(existingCategoryName.body.error.fields.headings[0]).toContain('"Unit 3"');
+		expect(existingCategoryName.status).toBe(201);
+		expect(existingCategoryName.body.imported_categories[0].id).toBe(branchRootId);
 		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Unit 3' } })).toBe(1);
 
 		const created = await asTeacher()
 			.post(`${BASE}/import`)
 			.send({
 				name: 'Imported Module',
+				subject_id: subjectId,
 				description: preview.body.description,
 				documentText: preview.body.documentText,
 				headings: preview.body.headings.map((heading) => ({
@@ -405,6 +412,24 @@ describe('course document import', () => {
 		expect(created.body.imported_categories).toHaveLength(3);
 		expect(created.body.category_id).toBe(created.body.imported_categories[0].id);
 		expect(created.body.imported_categories[2].parent_id).toBe(created.body.imported_categories[1].id);
+		expect(created.body.subject_id).toBe(subjectId);
+		expect(created.body.imported_categories.every((category) => category.subject_id === subjectId)).toBe(true);
+
+		const repeatedImport = await asTeacher()
+			.post(`${BASE}/import`)
+			.send({
+				name: 'Repeated Imported Module',
+				subject_id: subjectId,
+				documentText: preview.body.documentText,
+				headings: preview.body.headings.map((heading) => ({
+					line: heading.line,
+					level: heading.level,
+					title: heading.sourceText,
+				})),
+			});
+		expect(repeatedImport.status).toBe(201);
+		expect(repeatedImport.body.imported_categories.map((category) => category.id))
+			.toEqual(created.body.imported_categories.map((category) => category.id));
 	});
 });
 

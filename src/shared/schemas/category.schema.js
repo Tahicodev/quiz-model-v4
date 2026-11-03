@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
 export const CategoryCreateSchema = z.object({
-  name:      z.string().min(1).max(100),
+  name:      z.string().trim().min(1).max(100),
   parent_id: z.string().uuid().optional().nullable(),
+  subject_id: z.string().uuid().optional().nullable(),
   icon:      z.string().max(50).optional().nullable(),
   color:     z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Must be a hex color').optional().nullable(),
 });

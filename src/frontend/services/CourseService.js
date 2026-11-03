@@ -63,8 +63,32 @@ export class CourseService {
     this.#requireManager(currentUser);
     const parsed = CourseCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    let subjectId = parsed.data.subject_id || null;
+    if (subjectId) {
+      const subject = await this.#repo.getById('subjects', subjectId);
+      if (!subject || String(subject.school_id) !== String(currentUser.school_id)) {
+        throw new ValidationError({ subject_id: ['Subject not found in this school.'] });
+      }
+      if (currentUser.role === ROLES.TEACHER && String(subject.created_by) !== String(currentUser.id)) {
+        throw new ForbiddenError('Not your subject');
+      }
+    }
+    if (parsed.data.category_id) {
+      const category = await this.#repo.getById('categories', parsed.data.category_id);
+      if (!category || String(category.school_id) !== String(currentUser.school_id)) {
+        throw new ValidationError({ category_id: ['Category not found in this school.'] });
+      }
+      if (currentUser.role === ROLES.TEACHER && String(category.created_by) !== String(currentUser.id)) {
+        throw new ForbiddenError('Not your category');
+      }
+      if (subjectId && String(category.subject_id || '') !== subjectId) {
+        throw new ValidationError({ subject_id: ['Course and category must belong to the same subject.'] });
+      }
+      subjectId = subjectId || category.subject_id || null;
+    }
     return this.#repo.create('courses', {
       ...parsed.data,
+      subject_id: subjectId,
       school_id: currentUser?.school_id,
       created_by: currentUser?.id,
     });
@@ -93,6 +117,33 @@ export class CourseService {
     this.#assertOwnership(existing, currentUser);
     const parsed = CourseUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const subjectId = parsed.data.subject_id === undefined
+      ? existing.subject_id
+      : parsed.data.subject_id;
+    if (subjectId) {
+      const subject = await this.#repo.getById('subjects', subjectId);
+      if (!subject || String(subject.school_id) !== String(currentUser.school_id)) {
+        throw new ValidationError({ subject_id: ['Subject not found in this school.'] });
+      }
+      if (currentUser.role === ROLES.TEACHER && String(subject.created_by) !== String(currentUser.id)) {
+        throw new ForbiddenError('Not your subject');
+      }
+    }
+    const categoryId = parsed.data.category_id === undefined
+      ? existing.category_id
+      : parsed.data.category_id;
+    if (categoryId) {
+      const category = await this.#repo.getById('categories', categoryId);
+      if (!category || String(category.school_id) !== String(currentUser.school_id)) {
+        throw new ValidationError({ category_id: ['Category not found in this school.'] });
+      }
+      if (currentUser.role === ROLES.TEACHER && String(category.created_by) !== String(currentUser.id)) {
+        throw new ForbiddenError('Not your category');
+      }
+      if (String(category.subject_id || '') !== String(subjectId || '')) {
+        throw new ValidationError({ subject_id: ['Course and category must belong to the same subject.'] });
+      }
+    }
     return this.#repo.update('courses', id, parsed.data);
   }
 

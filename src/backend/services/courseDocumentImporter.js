@@ -6,7 +6,7 @@ import { ValidationError } from '../../shared/errors.js';
 export const MAX_COURSE_DOCUMENT_BYTES = 8 * 1024 * 1024;
 export const MAX_COURSE_DOCUMENT_TEXT = 120000;
 export const MAX_COURSE_DOCUMENT_HEADINGS = 200;
-export const MAX_COURSE_DOCUMENT_DEPTH = 8;
+export const MAX_COURSE_DOCUMENT_DEPTH = 4;
 export const MAX_IMPORTED_SECTION_LENGTH = 50000;
 
 function normalizedHeadingText(value) {
@@ -179,6 +179,7 @@ export function buildCourseImportSections(documentText, headings) {
 		}))
 		.sort((a, b) => a.line - b.line);
 	const seenLines = new Set();
+	let previousLevel = 0;
 	for (const heading of ordered) {
 		if (!Number.isInteger(heading.line) || heading.line < 1 || heading.line > lines.length) {
 			throw new ValidationError({ headings: [`Heading line must be between 1 and ${lines.length}.`] });
@@ -190,12 +191,16 @@ export function buildCourseImportSections(documentText, headings) {
 		if (!Number.isInteger(heading.level) || heading.level < 1 || heading.level > MAX_COURSE_DOCUMENT_DEPTH) {
 			throw new ValidationError({ headings: [`Heading depth must be between 1 and ${MAX_COURSE_DOCUMENT_DEPTH}.`] });
 		}
+		if (heading.level > previousLevel + 1) {
+			throw new ValidationError({ headings: ['Use Heading 1 for main categories and add each intermediate heading level before nesting deeper.'] });
+		}
 		if (!heading.title || heading.title.length > 100) {
 			throw new ValidationError({ headings: ['Each category title must contain 1–100 characters.'] });
 		}
 		if (!String(lines[heading.line - 1] || '').trim()) {
 			throw new ValidationError({ headings: [`Source line ${heading.line} is blank; choose a line containing the heading.`] });
 		}
+		previousLevel = heading.level;
 	}
 
 	const roots = [];

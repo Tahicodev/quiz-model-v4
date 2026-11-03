@@ -200,6 +200,9 @@ const SANITIZERS = {
       name: String(row.name ?? '').trim() || 'Untitled',
       ...(row.parent_id && { parent_id: String(row.parent_id) }),
       ...(row.parentId && { parent_id: String(row.parentId) }),
+      ...(Object.prototype.hasOwnProperty.call(row, 'subject_id') && {
+        subject_id: row.subject_id == null ? null : pickUuid(row.subject_id) || null,
+      }),
       ...(row.icon != null && { icon: pickStr(row.icon) }),
       ...(row.color != null && { color: pickStr(row.color) }),
       ...(authorId && { created_by: authorId }),

@@ -22,6 +22,8 @@ let mathId;
 let additionId;
 let subtractionId;
 let equationsId;
+let mathSubjectId;
+let languageSubjectId;
 
 beforeAll(async () => {
   const db = await setupTestDb();
@@ -67,6 +69,48 @@ async function createCategory(token, payload, expectedStatus = 201) {
 }
 
 describe('nested categories', () => {
+  it('scopes matching category names to separate teacher subjects', async () => {
+    const mathSubject = await request(app)
+      .post('/api/v1/subjects')
+      .set('Authorization', 'Bearer ' + teacherToken)
+      .send({ name: 'Mathematics' });
+    const languageSubject = await request(app)
+      .post('/api/v1/subjects')
+      .set('Authorization', 'Bearer ' + teacherToken)
+      .send({ name: 'Languages' });
+    expect(mathSubject.status).toBe(201);
+    expect(languageSubject.status).toBe(201);
+    mathSubjectId = mathSubject.body.id;
+    languageSubjectId = languageSubject.body.id;
+
+    const first = await createCategory(teacherToken, {
+      name: 'Introduction',
+      subject_id: mathSubjectId,
+    });
+    const second = await createCategory(teacherToken, {
+      name: 'Introduction',
+      subject_id: languageSubjectId,
+    });
+    const sameNameUnderAnotherParent = await createCategory(teacherToken, {
+      name: 'Introduction',
+      subject_id: mathSubjectId,
+      parent_id: first.body.id,
+    });
+    expect(first.body.subject_id).toBe(mathSubjectId);
+    expect(second.body.subject_id).toBe(languageSubjectId);
+    expect(sameNameUnderAnotherParent.body.parent_id).toBe(first.body.id);
+
+    await createCategory(teacherToken, {
+      name: 'Cross-subject child',
+      subject_id: mathSubjectId,
+      parent_id: second.body.id,
+    }, 422);
+    await createCategory(teacherToken, {
+      name: 'Introduction',
+      subject_id: mathSubjectId,
+    }, 422);
+  });
+
   it('teacher creates Math with Addition/Subtraction underneath', async () => {
     const math = await createCategory(teacherToken, {
       name: 'Math',

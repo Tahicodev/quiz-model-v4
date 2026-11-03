@@ -2110,6 +2110,10 @@
 								</button>
 							</div>
 							<div class="toolbar-controls">
+								<div class="sort-wrapper">
+									<select id="categorySubjectFilter" aria-label="Subject" onchange="selectCategorySubject(this.value)"></select>
+								</div>
+								<button type="button" class="btn" onclick="createCategorySubject()">New Subject</button>
 								<button
 									type="button"
 									class="mobile-filters-toggle"
@@ -5054,6 +5058,11 @@
 							<input type="text" id="categoryName" required />
 						</div>
 						<div class="form-group">
+							<label for="categorySubject">Subject</label>
+							<select id="categorySubject" class="form-control" onchange="populateCategoryParentPicker(currentCategoryId)"></select>
+							<small class="text-muted">Categories are organized separately inside each subject.</small>
+						</div>
+						<div class="form-group">
 							<label for="categoryDescription">Description</label>
 							<textarea id="categoryDescription" rows="2"></textarea>
 						</div>
@@ -5141,6 +5150,10 @@
 						<div class="form-group">
 							<label for="quickCategoryName">Name</label>
 							<input type="text" id="quickCategoryName" required />
+						</div>
+						<div class="form-group">
+							<label for="quickCategorySubject">Subject</label>
+							<select id="quickCategorySubject" class="form-control"></select>
 						</div>
 						<div class="form-group">
 							<label for="quickCategoryColor">Color</label>

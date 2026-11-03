@@ -388,6 +388,7 @@
       var out = {
         name: c.name,
       };
+      if (Object.prototype.hasOwnProperty.call(c, 'subject_id')) out.subject_id = c.subject_id || null;
       if (c.icon != null) out.icon = String(c.icon);
       if (c.color != null) out.color = String(c.color);
       var parent = c.parent_id || c.parentId;
@@ -402,6 +403,10 @@
         out.parent_id = null;
       }
       return out;
+    },
+
+    subjects: function (s) {
+      return { name: s.name };
     },
 
     questions: function (q) {

@@ -28,6 +28,7 @@
     users:              'quizUsers',
     classes:            'quizClasses',
     categories:         'quizCategories',
+    subjects:           'quizSubjects',
     questions:          'quizQuestions',
     exams:              'quizExams',
     results:            'quizResults',
@@ -815,6 +816,13 @@
       },
 
       setAll_sync: function (table, data) {
+        // Subjects are persisted only through their ownership-checked CRUD
+        // endpoints; they are not a bulk-write resource.
+        if (table === 'subjects') {
+          cache[table] = data;
+          writeAll(table, data);
+          return;
+        }
         if (SNAPSHOT_TABLES[table] && Array.isArray(data)) {
           var previous = readAll(table);
           var nextIds = new Set(data.map(function (row) { return row && row.id != null ? String(row.id) : ''; }));

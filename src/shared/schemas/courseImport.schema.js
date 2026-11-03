@@ -10,11 +10,12 @@ export const CourseDocumentPreviewSchema = z.object({
 
 export const CourseDocumentImportSchema = z.object({
 	name: z.string().min(1).max(200),
+	subject_id: z.string().uuid(),
 	description: z.string().max(2000).optional().nullable(),
 	documentText: z.string().min(1).max(MAX_COURSE_DOCUMENT_TEXT),
 	headings: z.array(z.object({
 		line: z.number().int().min(1).max(MAX_COURSE_DOCUMENT_TEXT + 1),
-		level: z.number().int().min(1).max(8),
+		level: z.number().int().min(1).max(4),
 		title: z.string().trim().min(1).max(100),
 	})).min(1).max(MAX_COURSE_DOCUMENT_HEADINGS),
 });

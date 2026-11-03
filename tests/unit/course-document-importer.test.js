@@ -143,6 +143,32 @@ describe('local course outline detection', () => {
 		]);
 	});
 
+	it('preserves Heading 4 as an axis under the three category levels', () => {
+		const result = buildCourseImportSections('Main\nSub\nDetail\nAxis\nAxis content', [
+			{ line: 1, level: 1, title: 'Main' },
+			{ line: 2, level: 2, title: 'Sub' },
+			{ line: 3, level: 3, title: 'Detail' },
+			{ line: 4, level: 4, title: 'Axis' },
+		]);
+		expect(result.roots[0].children[0].children[0].children[0]).toMatchObject({
+			title: 'Axis',
+			content: 'Axis content',
+		});
+	});
+
+	it('rejects skipped levels so imported category trees remain unambiguous', () => {
+		let error;
+		try {
+			buildCourseImportSections('Main\nAxis', [
+			{ line: 1, level: 1, title: 'Main' },
+			{ line: 2, level: 4, title: 'Axis' },
+			]);
+		} catch (caught) {
+			error = caught;
+		}
+		expect(error?.fields?.headings?.[0]).toContain('intermediate heading level');
+	});
+
 	it('uses DOCX heading styles and keeps source line references', async () => {
 		const document = new Document({
 			sections: [{
