@@ -26,11 +26,11 @@ const DEFAULT_SETTINGS = {
 	// Teacher access controls (rev stamps the defaults revision — see auth.js
 	// getTeacherAccessSettings; bumped whenever a default flips meaning).
 	teacherAccess: {
-		rev: 3,
+		rev: 4,
 		tabs: {
 			overview: true,
 			questions: true,
-			categories: true,
+			subjects: true,
 			exams: true,
 			classes: true,
 			games: true,
@@ -586,7 +586,7 @@ function populateTeacherAccessForm() {
 	const tabMap = {
 		overview: 'teacher-access-overview',
 		questions: 'teacher-access-questions',
-		categories: 'teacher-access-categories',
+		subjects: 'teacher-access-subjects',
 		exams: 'teacher-access-exams',
 		classes: 'teacher-access-classes',
 		games: 'teacher-access-games',
@@ -636,7 +636,7 @@ function readTeacherAccessForm() {
 	const tabMap = {
 		overview: 'teacher-access-overview',
 		questions: 'teacher-access-questions',
-		categories: 'teacher-access-categories',
+		subjects: 'teacher-access-subjects',
 		exams: 'teacher-access-exams',
 		classes: 'teacher-access-classes',
 		games: 'teacher-access-games',
@@ -655,11 +655,14 @@ function readTeacherAccessForm() {
 	};
 
 	const nextAccess = {
-		rev: 3,
+		rev: 4,
 		tabs: { ...access.tabs },
 		settings: access.settings,
 		settingsTabs: { ...access.settingsTabs },
 	};
+	// The Categories tab became Subjects: drop the retired key so a stale
+	// `categories: false` can never gate the new section (see auth.js).
+	delete nextAccess.tabs.categories;
 
 	Object.entries(tabMap).forEach(([key, id]) => {
 		const el = document.getElementById(id);

@@ -230,6 +230,14 @@
 	}
 
 	// Default table configs (ids must match admin.html).
+	register('subjects', {
+		checkboxClass: 'subject-checkbox',
+		selectAllId: 'selectAllSubjects',
+		barId: 'bulk-actions-subjects',
+		countId: 'selected-count-subjects',
+		addBtnId: null,
+		rowSelectedClass: 'question-row-selected',
+	});
 	register('categories', {
 		checkboxClass: 'category-checkbox',
 		selectAllId: 'selectAllCategories',

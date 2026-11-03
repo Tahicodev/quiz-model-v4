@@ -475,7 +475,7 @@
    SCOPED LIST / TABLE POLISH — Categories / Exams / Classes list areas only.
    Each rule is prefixed by the tab section id so other tabs are unaffected.
    ------------------------------------------------------------------------- */
-#categories .table-container,
+#subjects .table-container,
 #exams .table-container,
 #classes .table-container {
 	background: var(--qx-glass-strong);
@@ -484,7 +484,7 @@
 	box-shadow: var(--qx-sh-2);
 	overflow: hidden;
 }
-#categories .table-container table thead th,
+#subjects .table-container table thead th,
 #exams .table-container table thead th,
 #classes .table-container table thead th {
 	background: linear-gradient(180deg, #f8fafc, #f1f5f9);
@@ -496,19 +496,19 @@
 	border-bottom: 1px solid var(--qx-glass-brd);
 	padding: 12px 16px;
 }
-#categories .table-container tbody tr,
+#subjects .table-container tbody tr,
 #exams .table-container tbody tr,
 #classes .table-container tbody tr {
 	transition: background var(--qx-fast), transform var(--qx-fast);
 }
-#categories .table-container tbody tr:hover,
+#subjects .table-container tbody tr:hover,
 #exams .table-container tbody tr:hover,
 #classes .table-container tbody tr:hover {
 	background: var(--primary-light);
 }
 
 /* Toolbar polish (scoped) */
-#categories .toolbar h2,
+#subjects .toolbar h2,
 #exams .toolbar h2,
 #classes .toolbar h2 {
 	font-family: 'Space Grotesk', var(--font-sans);
@@ -516,7 +516,7 @@
 	letter-spacing: -0.02em;
 	color: var(--text-main);
 }
-#categories .search-wrapper input,
+#subjects .search-wrapper input,
 #exams .search-wrapper input,
 #classes .search-wrapper input {
 	border: 1.5px solid var(--border-color);
@@ -526,14 +526,14 @@
 	transition: border-color var(--qx-fast), box-shadow var(--qx-fast);
 	box-shadow: var(--qx-sh-1);
 }
-#categories .search-wrapper input:focus,
+#subjects .search-wrapper input:focus,
 #exams .search-wrapper input:focus,
 #classes .search-wrapper input:focus {
 	outline: none;
 	border-color: var(--primary);
 	box-shadow: var(--qx-ring);
 }
-#categories .sort-wrapper select,
+#subjects .sort-wrapper select,
 #exams .sort-wrapper select,
 #classes .sort-wrapper select {
 	border: 1.5px solid var(--border-color);
@@ -544,7 +544,7 @@
 	font-weight: 500;
 	transition: var(--qx-fast);
 }
-#categories .sort-wrapper select:focus,
+#subjects .sort-wrapper select:focus,
 #exams .sort-wrapper select:focus,
 #classes .sort-wrapper select:focus {
 	outline: none;

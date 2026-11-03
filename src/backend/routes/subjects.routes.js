@@ -77,4 +77,24 @@ router.patch('/:id', requireRole(MANAGE_ROLES), validate(SubjectUpdateSchema), a
   } catch (err) { next(err); }
 });
 
+// Cascade delete: the subject's category forest goes with it (questions
+// detach to Uncategorized) and every course generated from those branches
+// is removed — answers { categoriesRemoved, coursesRemoved } for the UI.
+router.delete('/:id', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const { subjectSvc, auditSvc } = getContainer();
+    const existing = await subjectSvc.getById(req.params.id);
+    if (String(existing.school_id) !== String(req.schoolId)) {
+      throw new ForbiddenError('Not your subject');
+    }
+    assertOwnership(existing, req.user);
+    const outcome = await subjectSvc.delete(req.params.id, req.user);
+    await auditSvc.log({
+      schoolId: req.schoolId, actorId: req.user.id, entityType: 'subject',
+      entityId: req.params.id, action: 'delete', ip: req.ip,
+    });
+    res.json(outcome);
+  } catch (err) { next(err); }
+});
+
 export default router;

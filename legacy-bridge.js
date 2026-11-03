@@ -816,9 +816,12 @@
       },
 
       setAll_sync: function (table, data) {
-        // Subjects are persisted only through their ownership-checked CRUD
-        // endpoints; they are not a bulk-write resource.
-        if (table === 'subjects') {
+        // Subjects and courses are persisted only through their own ownership-
+        // checked CRUD endpoints; neither is a bulk-write resource. Mirroring
+        // them here is a local cache prune (e.g. dropping the courses whose
+        // category branch was just deleted), and a bulk POST would either be
+        // rejected or upsert stale rows over newer server content.
+        if (table === 'subjects' || table === 'courses') {
           cache[table] = data;
           writeAll(table, data);
           return;

@@ -50,3 +50,7 @@ vendor/mkcert/
 
 # Demo exam PDFs — regenerate with: node scripts/generate-demo-exam-pdf.mjs
 demo-pdf/
+
+# Agent scratch — throwaway verification drivers, headless-Chrome profiles,
+screenshots and test logs. Never part of the app.
+.zcode/

@@ -328,7 +328,7 @@
 		renderCourseList();
 	}
 
-	async function loadCourses() {
+	async function loadCourses(quiet) {
 		const A = api();
 		if (!A) return;
 		try {
@@ -336,7 +336,11 @@
 			coursesCache = res && Array.isArray(res.data) ? res.data : [];
 		} catch (err) {
 			console.warn('[courses] load failed:', err);
-			toast('Could not load courses: ' + (err?.message || 'network error'), 'error');
+			// Quiet mode is used by other tabs (the Subjects manager only needs
+			// the counts), where a course-listing failure is not worth a toast.
+			if (quiet !== true) {
+				toast('Could not load courses: ' + (err?.message || 'network error'), 'error');
+			}
 			coursesCache = [];
 		}
 	}
@@ -344,6 +348,7 @@
 	window.renderCourseList = function () {
 		const tbody = document.querySelector('#courseList tbody');
 		if (!tbody) return;
+		renderOrphanBanner();
 		const search = (document.getElementById('courseSearch')?.value || '').trim().toLowerCase();
 		const status = document.getElementById('courseStatusFilter')?.value || '';
 		const rows = coursesCache.filter((c) => {
@@ -483,6 +488,81 @@
 		} catch (err) {
 			toast('Delete failed: ' + (err?.message || 'error'), 'error');
 		}
+	};
+
+	// ── Orphan sweep ─────────────────────────────────────────────────────────
+	// Category/course FKs are SetNull by design, so courses generated from a
+	// category that was deleted before the cascade existed survive with a
+	// dangling (or null) category reference. We surface them instead of
+	// deleting silently on load; the admin decides.
+	function orphanedCourses() {
+		return coursesCache.filter((c) => c && c.id && (!c.category_id || !c.category_path));
+	}
+
+	function renderOrphanBanner() {
+		const banner = document.getElementById('courseOrphanBanner');
+		if (!banner) return;
+		const count = orphanedCourses().length;
+		banner.classList.toggle('hidden', !count);
+		const label = document.getElementById('courseOrphanCount');
+		if (label) label.textContent = String(count);
+	}
+
+	window.cleanupOrphanCourses = function () {
+		const orphans = orphanedCourses();
+		if (!orphans.length) return;
+		const list = orphans
+			.slice(0, 12)
+			.map((c) => `<li>${esc(c.name || 'Untitled course')}</li>`)
+			.join('');
+		const more = orphans.length > 12 ? `<li>…and ${orphans.length - 12} more</li>` : '';
+		openModal(
+			'courseOrphanModal',
+			'Clean up orphaned courses',
+			`<p>${orphans.length} course${orphans.length === 1 ? '' : 's'} point at categories that no longer exist. Deleting them removes the course and its lessons; the question bank is not affected.</p><ul class="course-orphan-list">${list}${more}</ul>`,
+			`<button type="button" class="btn" onclick="closeCourseModal('courseOrphanModal')">Cancel</button>` +
+			'<button type="button" class="btn btn-danger" onclick="deleteOrphanCourses()">Delete them</button>',
+		);
+	};
+
+	window.deleteOrphanCourses = async function () {
+		const A = api();
+		if (!A) return;
+		const orphans = orphanedCourses();
+		if (!orphans.length) {
+			// The button lives in a modal, so this normally cannot happen — but
+			// it is a window global, and "Removed 0 orphaned courses" is a lie.
+			window.closeCourseModal('courseOrphanModal');
+			return;
+		}
+		const ids = orphans.map((c) => String(c.id));
+		let removed = 0;
+		let failed = 0;
+		for (const id of ids) {
+			try {
+				await A.raw('DELETE', `/courses/${encodeURIComponent(id)}`);
+				removed++;
+			} catch (err) {
+				if (err?.status === 404 || err?.statusCode === 404) removed++;
+				else failed++;
+			}
+		}
+		// Keep the shared local mirror in step with the server so subject/course
+		// counters elsewhere in the admin don't keep showing the deleted rows.
+		try {
+			const repo = window.__DI_CONTAINER__?.repo;
+			const mirrored = repo?.getAll_sync?.('courses');
+			if (repo?.setAll_sync && Array.isArray(mirrored)) {
+				repo.setAll_sync('courses', mirrored.filter((c) => !ids.includes(String(c?.id))));
+			}
+		} catch (_) { /* mirror is a best-effort cache */ }
+		window.closeCourseModal('courseOrphanModal');
+		if (failed) toast(`${removed} deleted, ${failed} could not be removed.`, 'error');
+		else toast(`Removed ${removed} orphaned course${removed === 1 ? '' : 's'}.`);
+		await refresh();
+		// Subject rows in the manager modal show course counts, so refresh those
+		// numbers too when the modal is open.
+		try { window.renderSubjectManagerTable?.(); } catch (_) { /* not loaded yet */ }
 	};
 
 	// ── New Course generator modal ───────────────────────────────────────────
@@ -1125,14 +1205,14 @@
 		}
 	};
 
-	// Entry point for the Categories tab action button / long-press sheet:
+	// Entry point for the Subjects tab action button / long-press sheet:
 	// jump to Courses, refresh the list and open the generator with this branch
 	// already selected. Generation itself stays server-side (it validates that
 	// the branch actually holds questions).
 	window.openCourseFromCategory = async function (categoryId) {
 		const cat = categoryList().find((c) => String(c.id) === String(categoryId));
 		if (!cat) {
-			toast('Category not found — refresh the Categories tab first.', 'error');
+			toast('Category not found — refresh the Subjects tab first.', 'error');
 			return;
 		}
 		try {
@@ -2363,6 +2443,12 @@
 		renderCourseList,
 		openCourseDetail,
 		renderMarkdown,
+		// Read-only view of the list for other tabs (Subjects manager shows a
+		// per-subject course count; courses are server-backed and deliberately
+		// not part of the localStorage mirror). ensureLoaded() fetches once.
+		getCourses: () => coursesCache,
+		ensureLoaded: () =>
+			coursesCache.length ? Promise.resolve(coursesCache) : loadCourses(true).then(() => coursesCache),
 		// Cache-busting hook used by the realtime bridge after server edits.
 		invalidate: function () { aiConfigsCache = null; },
 	};

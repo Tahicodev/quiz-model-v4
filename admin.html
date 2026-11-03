@@ -40,10 +40,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-02-lesson-outline" />
-		<link rel="stylesheet" href="admin.css?v=2026-10-31-kidscat2" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-03-subjects1" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-03-subjects6" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-02-lesson-outline" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-03-subjects6" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -78,7 +78,7 @@
 			</script>
 
 			<!-- Legacy Bridge — MUST load synchronously before all management scripts -->
-			<script src="legacy-bridge.js?v=2026-09-13-r8"></script>
+			<script src="legacy-bridge.js?v=2026-11-03-subjects5"></script>
 
 			<!-- Socket auth keeper — heals sockets whose token expired or was
 			     replaced by another tab's login (shared localStorage), e.g. a
@@ -134,9 +134,9 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js?v=2026-10-26-catgame1" defer></script>
 		<script src="api-client.js?v=2026-10-26-examdoc1" defer></script>
-		<script src="auth.js?v=2026-10-24-r8" defer></script>
+		<script src="auth.js?v=2026-11-03-subjects1" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-10-14-r1" defer></script>
+		<script src="settings.js?v=2026-11-03-subjects1" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -145,18 +145,18 @@
 		<script src="realtime-admin.js?v=2026-10-14-r2" defer></script>
 
 		<!-- Admin page scripts -->
-		<script src="bulk-selection.js?v=2026-10-23-mq12" defer></script>
+		<script src="bulk-selection.js?v=2026-11-03-subjects1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-11-01-courses2" defer></script>
+		<script src="category-management.js?v=2026-11-03-subjects8" defer></script>
 		<script src="questions-management.js?v=2026-11-01-courses2" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
-		<script src="courses-management.js?v=2026-11-02-lesson-outline" defer></script>
+		<script src="courses-management.js?v=2026-11-03-subjects7" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="exam-documents.js?v=2026-10-29-ultra1" defer></script>
-		<script src="overview-dashboard.js?v=2026-10-26-catgame1" defer></script>
-		<script src="global-search.js" defer></script>
+		<script src="overview-dashboard.js?v=2026-11-03-subjects7" defer></script>
+		<script src="global-search.js?v=2026-11-03-subjects1" defer></script>
 		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="classroom-devices.js?v=2026-10-30-devcards1" defer></script>
@@ -442,7 +442,7 @@
 							</svg>
 							Questions
 						</button>
-						<button class="nav-tab" data-tab="categories" data-roles="admin,teacher" onclick="openTab(event, 'categories')">
+						<button class="nav-tab" data-tab="subjects" data-roles="admin,teacher" onclick="openTab(event, 'subjects'); if(window.SubjectsManagement) window.SubjectsManagement.refresh()">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								width="16"
@@ -457,7 +457,7 @@
 								></path>
 								<line x1="7" y1="7" x2="7.01" y2="7"></line>
 							</svg>
-							Categories
+							Subjects
 						</button>
 						<button class="nav-tab" data-tab="courses" data-roles="admin,teacher" onclick="openTab(event, 'courses'); if(window.CoursesManagement) window.CoursesManagement.refresh()">
 							<svg
@@ -2053,46 +2053,42 @@
 					</div>
 				</section>
 
-				<!-- Categories Tab -->
-				<section id="categories" class="tab-content" data-roles="admin,teacher">
+				<!-- Subjects Tab (category management nested per subject) -->
+				<section id="subjects" class="tab-content" data-roles="admin,teacher">
 					<div class="category-management-container">
 						<div class="toolbar">
 							<div class="toolbar-header-group">
-								<h2>Category Management</h2>
-								<div
-									id="bulk-actions-categories"
-									class="bulk-actions-container hidden"
-								>
-									<span class="selection-info">
-										<span id="selected-count-categories">0</span> selected
-									</span>
-									<button
-										type="button"
-										class="btn btn-danger-soft"
-										onclick="deleteSelectedCategories()"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<polyline points="3 6 5 6 21 6"></polyline>
-											<path
-												d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-											></path>
-										</svg>
-										<span>Delete Selected</span>
-									</button>
-									<div class="divider-vertical"></div>
-								</div>
+								<h2>Subject Management</h2>
 								<button
-									id="add-category-btn"
+									id="manage-subjects-btn"
+									class="btn"
+									onclick="openSubjectManagerModal()"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<line x1="4" y1="21" x2="4" y2="14"></line>
+										<line x1="4" y1="10" x2="4" y2="3"></line>
+										<line x1="12" y1="21" x2="12" y2="12"></line>
+										<line x1="12" y1="8" x2="12" y2="3"></line>
+										<line x1="20" y1="21" x2="20" y2="16"></line>
+										<line x1="20" y1="12" x2="20" y2="3"></line>
+										<line x1="1" y1="14" x2="7" y2="14"></line>
+										<line x1="9" y1="8" x2="15" y2="8"></line>
+										<line x1="17" y1="16" x2="23" y2="16"></line>
+									</svg>
+									<span>Manage Subjects</span>
+								</button>
+								<button
+									id="add-subject-btn"
 									class="btn btn-primary"
-									onclick="createNewCategory()"
+									onclick="createNewSubjectFlow()"
 								>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -2106,69 +2102,124 @@
 										<line x1="12" y1="5" x2="12" y2="19"></line>
 										<line x1="5" y1="12" x2="19" y2="12"></line>
 									</svg>
-									<span>New Category</span>
+									<span>New Subject</span>
 								</button>
 							</div>
-							<div class="toolbar-controls">
-								<div class="sort-wrapper">
-									<select id="categorySubjectFilter" aria-label="Subject" onchange="selectCategorySubject(this.value)"></select>
+						</div>
+						<div class="category-band">
+							<!-- One pill per subject (segmented control, same as the
+							     games studio tabs) + legacy bucket + new-subject pill. -->
+							<div class="games-studio-tabs subject-strip" id="subjectTabBar" role="tablist" aria-label="Subjects"></div>
+							<div class="toolbar category-toolbar">
+								<div class="toolbar-header-group">
+									<h3 class="category-toolbar-title" id="categoryBandTitle">Categories</h3>
+									<div
+										id="bulk-actions-categories"
+										class="bulk-actions-container hidden"
+									>
+										<span class="selection-info">
+											<span id="selected-count-categories">0</span> selected
+										</span>
+										<button
+											type="button"
+											class="btn btn-danger-soft"
+											onclick="deleteSelectedCategories()"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<polyline points="3 6 5 6 21 6"></polyline>
+												<path
+													d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+												></path>
+											</svg>
+											<span>Delete Selected</span>
+										</button>
+										<div class="divider-vertical"></div>
+									</div>
+									<button
+										id="add-category-btn"
+										class="btn btn-primary"
+										onclick="createNewCategory()"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<line x1="12" y1="5" x2="12" y2="19"></line>
+											<line x1="5" y1="12" x2="19" y2="12"></line>
+										</svg>
+										<span>New Category</span>
+									</button>
 								</div>
-								<button type="button" class="btn" onclick="createCategorySubject()">New Subject</button>
-								<button
-									type="button"
-									class="mobile-filters-toggle"
-									data-filter-target="#categoryTeacherFilterWrap, #categories .sort-wrapper"
-									onclick="toggleMobileFilters(this)"
-									aria-expanded="false"
-								>
+								<div class="toolbar-controls">
+									<button
+										type="button"
+										class="mobile-filters-toggle"
+										data-filter-target="#categoryTeacherFilterWrap, #subjects .category-toolbar .sort-wrapper"
+										onclick="toggleMobileFilters(this)"
+										aria-expanded="false"
+									>
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
 									<span class="mobile-filters-toggle-label">Filters</span>
 									<span class="mobile-filters-count hidden">0</span>
 									<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 								</button>
-								<div class="search-wrapper">
-									<input
-										type="text"
-										id="categorySearch"
-										placeholder="Search categories..."
-										onkeyup="filterCategories()"
-									/>
+									<div class="search-wrapper">
+										<input
+											type="text"
+											id="categorySearch"
+											placeholder="Search categories..."
+											onkeyup="filterCategories()"
+										/>
+									</div>
+									<div class="sort-wrapper collapsible-filter-controls" id="categoryTeacherFilterWrap">
+										<select
+											id="categoryTeacherFilter"
+											title="Filter by teacher"
+											onchange="filterCategories()"
+										>
+											<option value="">All Teachers</option>
+										</select>
+									</div>
+									<div class="sort-wrapper collapsible-filter-controls">
+										<select id="categorySortBy" onchange="sortCategories()">
+											<option value="name">Name</option>
+											<option value="date">Date Created</option>
+											<option value="questions">Question Count</option>
+										</select>
+										<button
+											id="sortCategoryDirection"
+											class="btn-icon desc"
+											onclick="toggleCategorySortDirection()"
+											title="Toggle Sort Direction"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path d="M12 5v14M19 12l-7 7-7-7" />
+											</svg>
+										</button>
+									</div>
 								</div>
-								<div class="sort-wrapper collapsible-filter-controls" id="categoryTeacherFilterWrap">
-									<select
-										id="categoryTeacherFilter"
-										title="Filter by teacher"
-										onchange="filterCategories()"
-									>
-										<option value="">All Teachers</option>
-									</select>
-								</div>
-								<div class="sort-wrapper collapsible-filter-controls">
-									<select id="categorySortBy" onchange="sortCategories()">
-										<option value="name">Name</option>
-										<option value="date">Date Created</option>
-										<option value="questions">Question Count</option>
-									</select>
-<button
-									id="sortCategoryDirection"
-									class="btn-icon desc"
-									onclick="toggleCategorySortDirection()"
-									title="Toggle Sort Direction"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M12 5v14M19 12l-7 7-7-7" />
-									</svg>
-								</button>
 							</div>
-						</div>
 						</div>
 
 						<div class="table-container">
@@ -2251,6 +2302,25 @@
 										</select>
 									</div>
 								</div>
+							</div>
+							<!-- Orphan sweep: courses left behind by earlier category deletes -->
+							<div
+								id="courseOrphanBanner"
+								class="course-orphan-banner hidden"
+								role="status"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+								<p class="course-orphan-text">
+									<strong id="courseOrphanCount">0</strong>
+									course(s) reference categories that were deleted.
+								</p>
+								<button
+									type="button"
+									class="btn btn-sm btn-danger"
+									onclick="cleanupOrphanCourses()"
+								>
+									Clean up
+								</button>
 							</div>
 							<div class="table-container">
 								<table id="courseList">
@@ -5248,6 +5318,96 @@
 			</div>
 		</div>
 
+		<!-- Subject Manager Modal (CRUD + bulk selection for subjects) -->
+		<div id="subjectManagerModal" class="modal">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h2>Manage Subjects</h2>
+					<span class="close" onclick="closeSubjectManagerModal()">&times;</span>
+				</div>
+				<div class="modal-body">
+					<div id="bulk-actions-subjects" class="bulk-actions-container hidden">
+						<span class="selection-info">
+							<span id="selected-count-subjects">0</span> selected
+						</span>
+						<button
+							type="button"
+							class="btn btn-danger-soft"
+							onclick="deleteSelectedSubjects()"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<polyline points="3 6 5 6 21 6"></polyline>
+								<path
+									d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+								></path>
+							</svg>
+							<span>Delete Selected</span>
+						</button>
+						<div class="divider-vertical"></div>
+					</div>
+					<div class="table-container">
+						<table id="subjectManagerList">
+							<thead>
+								<tr>
+									<th style="width: 40px">
+										<input
+											type="checkbox"
+											id="selectAllSubjects"
+											onchange="toggleBulkSelectAllGeneric(this, 'subjects')"
+										/>
+									</th>
+									<th>Name</th>
+									<th>Categories</th>
+									<th>Courses</th>
+									<th class="owner-col">By</th>
+									<th>Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								<!-- Subjects will be populated here -->
+							</tbody>
+						</table>
+					</div>
+					<p class="text-muted subject-manager-note">
+						Deleting a subject removes its categories (their questions become
+						Uncategorized) and the courses generated from them.
+					</p>
+					<div class="form-actions subject-create-row">
+						<input
+							type="text"
+							id="newSubjectName"
+							class="subject-create-input"
+							placeholder="New subject name (for example: Mathematics)"
+							aria-label="New subject name"
+							onkeydown="if (event.key === 'Enter') { event.preventDefault(); createSubjectViaModal(); }"
+						/>
+						<button
+							type="button"
+							class="btn btn-primary"
+							onclick="createSubjectViaModal()"
+						>
+							Add Subject
+						</button>
+						<button
+							type="button"
+							class="btn btn-secondary"
+							onclick="closeSubjectManagerModal()"
+						>
+							Close
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Settings Modal -->
 		<div id="settingsModal" class="modal">
 			<div class="modal-content">
@@ -6801,9 +6961,9 @@
 									</div>
 								</label>
 								<label class="switch-label">
-									<span class="switch-text">Categories</span>
+									<span class="switch-text">Subjects</span>
 									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-categories" class="switch-checkbox" />
+										<input type="checkbox" id="teacher-access-subjects" class="switch-checkbox" />
 										<span class="switch-slider"></span>
 									</div>
 								</label>

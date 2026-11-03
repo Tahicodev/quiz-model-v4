@@ -28386,7 +28386,7 @@ html[data-theme='dark'] .usage-exams { background: rgba(239, 68, 68, 0.18); bord
    select checkbox pinned top-right, like the question cards.
    ============================================================ */
 @media (max-width: 768px) {
-	#categories .table-container,
+	#subjects .table-container,
 	#exams .table-container,
 	#classes .table-container,
 	#results .table-container {
@@ -42899,14 +42899,14 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	}
 
 	/* ---- Categories / Exams / Classes ---- */
-	#categories .toolbar,
+	#subjects .toolbar,
 	#exams .toolbar,
 	#classes .toolbar {
 		flex-wrap: nowrap;
 		gap: 10px;
 	}
 
-	#categories .toolbar-header-group,
+	#subjects .toolbar-header-group,
 	#exams .toolbar-header-group,
 	#classes .toolbar-header-group {
 		flex: 1 1 auto;
@@ -42917,14 +42917,14 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		padding-right: 0;
 	}
 
-	#categories .toolbar-header-group h2,
+	#subjects .toolbar-header-group h2,
 	#exams .toolbar-header-group h2,
 	#classes .toolbar-header-group h2 {
 		font-size: 1rem;
 		white-space: nowrap;
 	}
 
-	#categories .toolbar-controls,
+	#subjects .toolbar-controls,
 	#exams .toolbar-controls,
 	#classes .toolbar-controls {
 		flex: 0 0 auto;
@@ -42933,13 +42933,13 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		width: auto;
 	}
 
-	#categories .search-wrapper,
+	#subjects .search-wrapper,
 	#exams .search-wrapper,
 	#classes .search-wrapper {
 		flex: 0 1 auto;
 	}
 
-	#categories .search-wrapper input,
+	#subjects .search-wrapper input,
 	#exams .search-wrapper input,
 	#classes .search-wrapper input {
 		height: 38px;
@@ -42947,13 +42947,13 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		font-size: 0.82rem;
 	}
 
-	#categories .sort-wrapper,
+	#subjects .sort-wrapper,
 	#exams .sort-wrapper,
 	#classes .sort-wrapper {
 		flex: 0 0 auto;
 	}
 
-	#categories .sort-wrapper select,
+	#subjects .sort-wrapper select,
 	#exams .sort-wrapper select,
 	#classes .sort-wrapper select {
 		height: 38px;
@@ -42962,7 +42962,7 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		font-size: 0.8rem;
 	}
 
-	#categories .toolbar-header-group .btn,
+	#subjects .toolbar-header-group .btn,
 	#exams .toolbar-header-group .btn,
 	#classes .toolbar-header-group .btn {
 		padding: 8px 12px;
@@ -42971,14 +42971,14 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		white-space: nowrap;
 	}
 
-	#categories .toolbar-header-group .btn svg,
+	#subjects .toolbar-header-group .btn svg,
 	#exams .toolbar-header-group .btn svg,
 	#classes .toolbar-header-group .btn svg {
 		width: 14px;
 		height: 14px;
 	}
 
-	#categories .bulk-actions-container,
+	#subjects .bulk-actions-container,
 	#exams .bulk-actions-container,
 	#classes .bulk-actions-container {
 		flex-wrap: nowrap;

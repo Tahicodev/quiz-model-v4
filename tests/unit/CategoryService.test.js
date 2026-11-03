@@ -147,24 +147,72 @@ describe('CategoryService', () => {
           if (parentId === CHILD) return { data: [{ id: GRAND, parent_id: CHILD }], total: 1 };
           return { data: [], total: 0 };
         }
-        return {
-          data: [
-            { id: 'q-parent', category_id: PARENT },
-            { id: 'q-grand', category_id: GRAND },
-            { id: 'q-other', category_id: 'c-other' },
-          ],
-          total: 3,
-        };
+        if (table === 'questions') {
+          return {
+            data: [
+              { id: 'q-parent', category_id: PARENT },
+              { id: 'q-grand', category_id: GRAND },
+              { id: 'q-other', category_id: 'c-other' },
+            ],
+            total: 3,
+          };
+        }
+        if (table === 'courses') {
+          return {
+            data: [
+              { id: 'course-parent', category_id: PARENT },
+              { id: 'course-grand', category_id: GRAND },
+              { id: 'course-other', category_id: 'c-other' },
+              { id: 'course-manual', category_id: null },
+            ],
+            total: 4,
+          };
+        }
+        return { data: [], total: 0 };
       });
 
-      await service.delete(PARENT, ADMIN);
+      const outcome = await service.delete(PARENT, ADMIN);
 
       // Every question under the subtree went to uncategorized.
       expect(repo.update).toHaveBeenCalledWith('questions', 'q-parent', { category_id: null });
       expect(repo.update).toHaveBeenCalledWith('questions', 'q-grand', { category_id: null });
       expect(repo.update).not.toHaveBeenCalledWith('questions', 'q-other', { category_id: null });
       // Children first, then the root.
-      expect(repo.delete.mock.calls.map((c) => c[1])).toEqual([GRAND, CHILD, PARENT]);
+      expect(repo.delete.mock.calls.filter((c) => c[0] === 'categories').map((c) => c[1])).toEqual([GRAND, CHILD, PARENT]);
+      expect(outcome).toEqual({ coursesRemoved: 2 });
+    });
+
+    it('deletes the courses generated from the branch and leaves the rest alone', async () => {
+      const PARENT = 'c-parent';
+      const CHILD = 'c-child';
+      repo.getById.mockResolvedValue({ id: PARENT, name: 'Parent' });
+      repo.getAll.mockImplementation(async (table, opts) => {
+        if (table === 'categories') {
+          return String(opts?.filters?.parent_id || '') === PARENT
+            ? { data: [{ id: CHILD, parent_id: PARENT }], total: 1 }
+            : { data: [], total: 0 };
+        }
+        if (table === 'courses') {
+          return {
+            data: [
+              { id: 'course-parent', category_id: PARENT },
+              { id: 'course-child', category_id: CHILD },
+              { id: 'course-other', category_id: 'c-unrelated' },
+              { id: 'course-detached', category_id: null },
+            ],
+            total: 4,
+          };
+        }
+        return { data: [], total: 0 };
+      });
+
+      const { coursesRemoved } = await service.delete(PARENT, ADMIN);
+
+      const deletedCourses = repo.delete.mock.calls.filter((c) => c[0] === 'courses').map((c) => c[1]);
+      expect(deletedCourses).toEqual(['course-parent', 'course-child']);
+      expect(deletedCourses).not.toContain('course-other');
+      expect(deletedCourses).not.toContain('course-detached');
+      expect(coursesRemoved).toBe(2);
     });
 
     it('deletes a category with children', async () => {

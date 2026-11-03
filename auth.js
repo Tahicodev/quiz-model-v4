@@ -840,11 +840,11 @@
 		// rev stamps the shape/semantics of these defaults. Bump it whenever
 		// a default flips meaning (e.g. the Data tab growing a teacher-safe
 		// view) so previously auto-saved maps cannot pin stale values.
-		rev: 3,
+		rev: 4,
 		tabs: {
 			overview: true,
 			questions: true,
-			categories: true,
+			subjects: true,
 			exams: true,
 			classes: true,
 			games: true,
@@ -1047,6 +1047,11 @@
 				return access.settings !== false;
 			}
 			if (access.tabs && access.tabs[tabName] === false) {
+				return false;
+			}
+			// The Categories tab became the Subjects tab: a stored revoke of
+			// the old key still gates the new section until it is re-saved.
+			if (tabName === 'subjects' && access.tabs && access.tabs.categories === false) {
 				return false;
 			}
 		}

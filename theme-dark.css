@@ -865,6 +865,42 @@ html[data-theme='dark'] .games-studio-tab-btn:hover {
 	border-color: rgb(32, 103, 182);
 	color: rgb(142, 167, 235);
 }
+/* Subject pills (Subjects tab). The generic rule above flattens every pill
+   onto the surface colour, which erases the selection the light theme paints
+   with admin.css's indigo, so the active/dashed/legacy variants are re-painted
+   here on the same indigo accent. */
+html[data-theme='dark'] .games-studio-tab-btn.subject-pill.active {
+	/* Starts on the light theme's selected indigo (#4f46e5): white pill text
+	   needs 4.5:1 everywhere, and the brighter #6366f1 stop only gave 4.47:1
+	   in the top-left corner of the gradient. */
+	background: linear-gradient(135deg, rgb(79, 70, 229), rgb(67, 56, 202));
+	border-color: rgb(129, 140, 248);
+	color: #fff;
+	box-shadow: 0 8px 16px rgba(79, 70, 229, 0.4);
+}
+html[data-theme='dark'] .games-studio-tab-btn.subject-pill.active:hover {
+	color: #fff;
+}
+html[data-theme='dark'] #subjects .subject-pill-new:not(.active) {
+	background: transparent;
+	/* The strip background is a saturated blue, so the mid indigo border of the
+	   light theme nearly disappears here - use the light indigo tint instead. */
+	border-color: rgb(129, 140, 248);
+	color: rgb(199, 210, 254);
+}
+html[data-theme='dark'] #subjects .subject-pill-new:not(.active):hover {
+	background: rgb(38, 35, 89);
+	border-color: rgb(129, 140, 248);
+	color: rgb(199, 210, 254);
+}
+html[data-theme='dark'] #subjects .subject-pill-legacy:not(.active) {
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #subjects .category-toolbar {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
 html[data-theme='dark'] .tournament-studio-tabs {
 	border: 1px solid rgb(69, 105, 145);
 	background: var(--bg-surface-alt);

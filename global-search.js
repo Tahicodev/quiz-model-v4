@@ -436,7 +436,17 @@ function handleSearchResultClick(type, id, index) {
 			}, 300);
 			break;
 		case 'category':
-			tabToOpen = 'categories';
+			tabToOpen = 'subjects';
+			// The category lives inside its subject tab: switch to that
+			// subject first (empty subject_id = the legacy bucket) so the
+			// row is rendered before we highlight it.
+			try {
+				const cat = (window.__DI_CONTAINER__?.repo?.getAll_sync?.('categories') || [])
+					.find((c) => String(c.id) === String(id));
+				if (typeof window.selectCategorySubject === 'function') {
+					window.selectCategorySubject(cat?.subject_id || '__unassigned__');
+				}
+			} catch (_) { /* best-effort subject switch */ }
 			setTimeout(() => {
 				highlightSearchResult('category', id);
 			}, 300);
@@ -463,9 +473,11 @@ function handleSearchResultClick(type, id, index) {
 
 	// Open the tab
 	if (tabToOpen) {
-		const tabButton = document.querySelector(
-			`button[onclick="openTab(event, '${tabToOpen}')"]`
-		);
+		const tabButton =
+			document.querySelector(`.nav-tab[data-tab="${tabToOpen}"]`) ||
+			document.querySelector(
+				`button[onclick="openTab(event, '${tabToOpen}')"]`
+			);
 		if (tabButton) {
 			const event = new Event('click', { bubbles: true });
 			tabButton.dispatchEvent(event);

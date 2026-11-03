@@ -85,9 +85,11 @@ router.delete('/:id', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER
   try {
     const { categorySvc, auditSvc } = getContainer();
     assertOwnership(await categorySvc.getById(req.params.id), req.user);
-    await categorySvc.delete(req.params.id, req.user);
+    const outcome = await categorySvc.delete(req.params.id, req.user);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'category', entityId: req.params.id, action: 'delete', ip: req.ip });
-    res.status(204).send();
+    // The cascade removed courses too; the UI quotes that number back to the
+    // user, so an empty 204 would hide what actually happened.
+    res.json(outcome);
   } catch (err) { next(err); }
 });
 

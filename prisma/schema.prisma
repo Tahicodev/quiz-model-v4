@@ -334,8 +334,11 @@ model Course {
   name        String
   description String?
   subject_id  String?
-  // Root of the category branch the course was generated from. Nullable
-  // so the course survives a category delete.
+  // Root of the category branch the course was generated from. The FK itself
+  // is SetNull (so an unrelated delete never breaks the row), but
+  // CategoryService.delete / SubjectService.delete explicitly remove the
+  // courses generated from a deleted branch — a course without its category
+  // structure is dead content.
   category_id String?
   status      String   @default("draft") // draft | published
   created_at  DateTime @default(now())

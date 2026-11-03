@@ -2796,9 +2796,13 @@ function renderActivityTable(activities) {
 		if (item.action !== 'deleted' && (item.type === 'question' || item.type === 'exam' || item.type === 'class' || item.type === 'category')) {
 			const tabName = item.type === 'question' ? 'questions' : 
 						  item.type === 'exam' ? 'exams' : 
-						  item.type === 'class' ? 'classes' : 'categories';
+						  item.type === 'class' ? 'classes' : 'subjects';
 			const entityId = item.id || item.meta?.id || '';
-			if (entityId) {
+			if (entityId && item.type === 'category') {
+				// The tree lives behind a per-subject pill: the pill has to be
+				// switched before the row exists, so it needs its own entry point.
+				actionLink = `onclick="revealCategoryFromActivity(event, '${entityId}')" style="cursor: pointer;"`;
+			} else if (entityId) {
 				actionLink = `onclick="openTabAndHighlight(event, '${tabName}', '${entityId}')" style="cursor: pointer;"`;
 			} else {
 				actionLink = `onclick="openTab(event, '${tabName}')" style="cursor: pointer;"`;

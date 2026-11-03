@@ -40,9 +40,6 @@ function readCategoryTrainingMapFromRepo() {
 			const raw = repo.getValue_sync('settings', {});
 			rows = raw?.settings || [];
 		}
-		if (saved && Object.prototype.hasOwnProperty.call(saved, 'subject_id')) {
-			categoryData.subject_id = saved.subject_id;
-		}
 		const row = (Array.isArray(rows) ? rows : []).find(
 			(s) => s && s.key === CATEGORY_TRAINING_KEY,
 		);
@@ -58,31 +55,107 @@ function readCategoryTrainingMapFromRepo() {
 	return null;
 }
 
+// The mirror paints instantly, but the server owns the subject list: without
+// this reconciliation a subject deleted by another tab, device or admin would
+// survive forever as a stale pill (the mirror is only refilled when empty).
+let subjectsReconciling = false;
+
+function reconcileSubjectsFromServer() {
+	if (!window.API?.list || subjectsReconciling) return;
+	subjectsReconciling = true;
+	window.API.list('subjects')
+		.then((res) => {
+			const fetched = Array.isArray(res?.data) ? res.data : null;
+			if (!fetched) return;
+			const unchanged =
+				fetched.length === categorySubjects.length &&
+				fetched.every(
+					(row, index) =>
+						String(row?.id) === String(categorySubjects[index]?.id) &&
+						String(row?.name || '') === String(categorySubjects[index]?.name || ''),
+				);
+			if (unchanged) return;
+			categorySubjects = fetched;
+			window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', categorySubjects);
+			selectFirstKnownSubject();
+			renderSubjectTabBar();
+			syncCategoryBandTitle();
+			renderCategorySubjectOptions();
+			updateCategoryList();
+			if (document.getElementById('subjectManagerModal')?.style.display === 'flex') {
+				renderSubjectManagerTable();
+			}
+		})
+		.catch(() => { /* offline: the local mirror stays authoritative */ })
+		.finally(() => {
+			subjectsReconciling = false;
+		});
+}
+
+// The legacy bucket is a real selection, so it survives a refresh; anything
+// else that vanished falls back to the first remaining subject.
+function selectFirstKnownSubject() {
+	if (
+		activeCategorySubjectId === '__unassigned__' ||
+		categorySubjects.some((subject) => String(subject.id) === activeCategorySubjectId)
+	) {
+		return false;
+	}
+	activeCategorySubjectId = categorySubjects.length
+		? String(categorySubjects[0].id)
+		: '__unassigned__';
+	return true;
+}
+
 function loadCategorySubjects() {
 	const repo = window.__DI_CONTAINER__?.repo;
 	const rows = repo?.getAll_sync?.('subjects');
 	categorySubjects = Array.isArray(rows) ? rows : [];
-	const filter = document.getElementById('categorySubjectFilter');
-	if (filter) {
-		filter.innerHTML = '';
-		for (const subject of categorySubjects) {
-			const option = document.createElement('option');
-			option.value = String(subject.id);
-			option.textContent = subject.name;
-			filter.appendChild(option);
-		}
-		const legacyOption = document.createElement('option');
-		legacyOption.value = '__unassigned__';
-		legacyOption.textContent = 'Unassigned / legacy categories';
-		filter.appendChild(legacyOption);
-		activeCategorySubjectId = categorySubjects.some((subject) => String(subject.id) === activeCategorySubjectId)
-			? activeCategorySubjectId
-			: String(categorySubjects[0]?.id || '__unassigned__');
-		filter.value = activeCategorySubjectId;
-	}
+	reconcileSubjectsFromServer();
+	// Resetting the selection has to repaint the tree as well, otherwise the
+	// band title and the table disagree.
+	if (selectFirstKnownSubject()) updateCategoryList();
+	renderSubjectTabBar();
+	syncCategoryBandTitle();
 	renderCategorySubjectOptions();
 }
 window.refreshCategorySubjects = loadCategorySubjects;
+
+// ── Subject pill bar (segmented control, same design as the games studio
+//    tabs). One pill per subject + the legacy bucket + a dashed “new” pill.
+function getSubjectDisplayName(subjectId) {
+	if (String(subjectId) === '__unassigned__') {
+		return 'Unassigned (legacy)';
+	}
+	const subject = categorySubjects.find((s) => String(s.id) === String(subjectId));
+	return subject ? String(subject.name || '') : '';
+}
+
+function renderSubjectTabBar() {
+	const bar = document.getElementById('subjectTabBar');
+	if (!bar) return;
+	const plusIcon =
+		'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+	const pills = categorySubjects.map((subject) => {
+		const active = String(subject.id) === String(activeCategorySubjectId);
+		return `<button type="button" role="tab" aria-selected="${active}" class="games-studio-tab-btn subject-pill${active ? ' active' : ''}" data-subject-id="${escapeHtml(String(subject.id))}" onclick="selectCategorySubject('${escapeHtml(String(subject.id))}')">${escapeHtml(String(subject.name || ''))}</button>`;
+	});
+	const legacyActive = String(activeCategorySubjectId) === '__unassigned__';
+	pills.push(
+		`<button type="button" role="tab" aria-selected="${legacyActive}" class="games-studio-tab-btn subject-pill subject-pill-legacy${legacyActive ? ' active' : ''}" data-subject-id="__unassigned__" onclick="selectCategorySubject('__unassigned__')" title="Categories created before subjects stayed here">Unassigned (legacy)</button>`,
+	);
+	pills.push(
+		`<button type="button" class="games-studio-tab-btn subject-pill subject-pill-new" onclick="createNewSubjectFlow()" title="New subject">${plusIcon}<span>New</span></button>`,
+	);
+	bar.innerHTML = pills.join('');
+}
+
+function syncCategoryBandTitle() {
+	const title = document.getElementById('categoryBandTitle');
+	if (!title) return;
+	const name = getSubjectDisplayName(activeCategorySubjectId);
+	title.textContent = name ? `${name} · Categories` : 'Categories';
+}
 
 function renderCategorySubjectOptions(selectedId = '') {
 	const select = document.getElementById('categorySubject');
@@ -103,23 +176,429 @@ function renderCategorySubjectOptions(selectedId = '') {
 
 function selectCategorySubject(subjectId) {
 	activeCategorySubjectId = String(subjectId || '__unassigned__');
+	renderSubjectTabBar();
+	syncCategoryBandTitle();
 	updateCategoryList();
 }
 
-async function createCategorySubject() {
-	const name = window.prompt('Name this subject (for example: Mathematics):')?.trim();
-	if (!name) return;
+// The Overview activity feed links a "category changed" entry back to the tree.
+// A row only exists while its subject pill is active, so the pill has to be
+// switched before the shared highlight helper can scroll to it.
+function revealCategoryFromActivity(event, categoryId) {
+	let subjectId = '';
 	try {
-		if (!window.API || typeof window.API.create !== 'function') throw new Error('API client is not available.');
-		const subject = await window.API.create('subjects', { name });
+		const mirror =
+			window.__DI_CONTAINER__?.repo?.getAll_sync?.('categories') || [];
+		const row =
+			(categories || []).find((c) => String(c?.id) === String(categoryId)) ||
+			mirror.find((c) => String(c?.id) === String(categoryId));
+		subjectId = String(row?.subject_id ?? row?.subjectId ?? '');
+	} catch (_) {
+		/* unreadable mirror: the legacy bucket is the honest fallback */
+	}
+	if (!categorySubjects.length) loadCategorySubjects();
+	const known =
+		subjectId &&
+		(subjectId === '__unassigned__' ||
+			categorySubjects.some((subject) => String(subject.id) === subjectId));
+	selectCategorySubject(known ? subjectId : '__unassigned__');
+	if (typeof window.openTabAndHighlight === 'function') {
+		window.openTabAndHighlight(event, 'subjects', categoryId);
+	} else {
+		window.openTab?.(event, 'subjects');
+	}
+}
+
+// ── Subject CRUD (the manager modal owns create / rename / delete; deleting
+//    cascades: its categories detach their questions, its courses are removed)
+function createNewSubjectFlow() {
+	// "+ New" (pill and toolbar button) lands in the manager modal with the
+	// name field focused, so naming always happens in a real input.
+	openSubjectManagerModal({ focusNew: true });
+	return null;
+}
+
+function focusNewSubjectInput() {
+	const input = document.getElementById('newSubjectName');
+	if (!input) return;
+	try {
+		input.focus();
+	} catch (_) {
+		/* element not attached yet */
+	}
+}
+
+function openSubjectManagerModal(options) {
+	loadCategorySubjects();
+	renderSubjectManagerTable();
+	const modal = document.getElementById('subjectManagerModal');
+	if (modal) modal.style.display = 'flex';
+	// Course counts live behind the Courses tab cache, which a fresh page has
+	// not fetched yet — pull it in the background and repaint the counts.
+	const loaded = window.CoursesManagement?.ensureLoaded?.();
+	if (loaded && typeof loaded.then === 'function') {
+		loaded.then(() => renderSubjectManagerTable()).catch(() => {});
+	}
+	if (options && options.focusNew) focusNewSubjectInput();
+}
+
+function closeSubjectManagerModal() {
+	const modal = document.getElementById('subjectManagerModal');
+	if (modal) modal.style.display = 'none';
+	if (window.BulkSelect) window.BulkSelect.clear('subjects');
+}
+
+function getLocalCourses() {
+	const rows = window.__DI_CONTAINER__?.repo?.getAll_sync?.('courses');
+	return Array.isArray(rows) ? rows : [];
+}
+
+// Courses are server-backed and are not part of the localStorage mirror, so
+// the visible count comes from the Courses tab cache when it has been read.
+// (The mirror is kept as a fallback for embeds without that module.)
+function countableCourses() {
+	const cached = window.CoursesManagement?.getCourses?.();
+	if (Array.isArray(cached) && cached.length) return cached;
+	return getLocalCourses();
+}
+
+function countCoursesForSubject(subjectId) {
+	const subjectIdSet = new Set(
+		categories
+			.filter((category) => String(category?.subject_id || '') === String(subjectId))
+			.map((category) => String(category.id)),
+	);
+	return countableCourses().filter(
+		(course) =>
+			String(course?.subject_id || '') === String(subjectId) ||
+			(course?.category_id && subjectIdSet.has(String(course.category_id))),
+	).length;
+}
+
+function countCoursesForSubtree(subtreeIds) {
+	const ids =
+		subtreeIds instanceof Set ? subtreeIds : new Set(Array.from(subtreeIds || []).map(String));
+	return countableCourses().filter(
+		(course) => course?.category_id && ids.has(String(course.category_id)),
+	).length;
+}
+
+// Deletion confirmations quote real numbers, and those numbers live behind the
+// Courses tab cache. Reading it first costs one request (cached afterwards);
+// quoting "0 courses" because nothing had been fetched yet would be a lie.
+async function ensureCourseCountsKnown() {
+	try {
+		const loaded = window.CoursesManagement?.ensureLoaded?.();
+		if (loaded && typeof loaded.then === 'function') await loaded;
+	} catch (_) {
+		/* counts stay best-effort when the server is unreachable */
+	}
+}
+
+function pluralCount(count, singular, plural) {
+	return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function renderSubjectManagerTable() {
+	const tbody = document.querySelector('#subjectManagerList tbody');
+	if (!tbody) return;
+	const admin = window.TeacherFilter
+		? window.TeacherFilter.isAdminSession()
+		: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+	if (!categorySubjects.length) {
+		tbody.innerHTML =
+			'<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">No subjects yet — create one to start organizing categories.</td></tr>';
+	} else {
+		tbody.innerHTML = categorySubjects
+			.map((subject) => {
+				const categoryCount = categories.filter(
+					(category) => String(category?.subject_id || '') === String(subject.id),
+				).length;
+				const courseCount = countCoursesForSubject(subject.id);
+				const owner =
+					typeof getOwnerLabel === 'function' && admin
+						? getOwnerLabel(subject.created_by)
+						: '';
+				return (
+					`<tr data-id="${escapeHtml(String(subject.id))}">` +
+					`<td class="checkbox-cell" data-label="Select"><input type="checkbox" class="subject-checkbox" data-id="${escapeHtml(String(subject.id))}" onchange="toggleBulkRowSelection(this,'subjects')"></td>` +
+					`<td class="subject-name-cell" data-label="Name"><input type="text" class="subject-name-input" value="${escapeHtml(String(subject.name || ''))}" aria-label="Subject name"/></td>` +
+					`<td data-label="Categories">${categoryCount}</td>` +
+					`<td data-label="Courses">${courseCount}</td>` +
+					`<td class="owner-col" data-label="By">${owner ? `<span class="q-owner-badge">${escapeHtml(owner)}</span>` : '—'}</td>` +
+					`<td class="actions-cell" data-label="Actions"><div class="exam-actions">` +
+					`<button type="button" class="exam-action-btn exam-edit-btn" aria-label="Rename subject" title="Rename" onclick="renameSubjectViaModal('${escapeHtml(String(subject.id))}', this)">` +
+					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>' +
+					'</button>' +
+					`<button type="button" class="exam-action-btn exam-delete-btn" aria-label="Delete subject" title="Delete" onclick="deleteSubject('${escapeHtml(String(subject.id))}')">` +
+					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>' +
+					'</button>' +
+					'</div></td></tr>'
+				);
+			})
+			.join('');
+	}
+	const table = document.getElementById('subjectManagerList');
+	if (table) table.classList.toggle('hide-owner-col', !admin);
+	if (window.BulkSelect) window.BulkSelect.restore('subjects');
+}
+
+async function createSubjectViaModal() {
+	const input = document.getElementById('newSubjectName');
+	const name = String(input?.value || '').trim();
+	if (!name) {
+		showToast('Type a subject name first.', 'error');
+		focusNewSubjectInput();
+		return null;
+	}
+	if (
+		categorySubjects.some(
+			(s) => String(s.name || '').trim().toLowerCase() === name.toLowerCase(),
+		)
+	) {
+		showToast(`Subject "${name}" already exists.`, 'error');
+		focusNewSubjectInput();
+		return null;
+	}
+	if (!window.API || typeof window.API.create !== 'function') {
+		showToast('API client is not available.', 'error');
+		return null;
+	}
+	try {
+		const created = await window.API.create('subjects', { name });
+		const subject = {
+			...(created || {}),
+			id: created?.id || `local-${Date.now()}`,
+			name: created?.name || name,
+		};
 		categorySubjects.push(subject);
 		window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', categorySubjects);
+		if (input) input.value = '';
+		// The new row is already in the mirror, so the refresh keeps the
+		// selection on it instead of falling back to the first subject.
 		activeCategorySubjectId = String(subject.id);
 		loadCategorySubjects();
-		selectCategorySubject(activeCategorySubjectId);
+		syncCategoryBandTitle();
+		renderCategorySubjectOptions();
+		updateCategoryList();
+		renderSubjectManagerTable();
 		showToast(`Subject "${subject.name}" created.`);
+		if (typeof logActivity === 'function') {
+			logActivity('category', subject.name, 'created', { kind: 'subject' });
+		}
+		return subject;
 	} catch (err) {
-		showToast(`Could not create subject: ${err?.message || 'request failed'}`, 'error');
+		showToast(`Could not create subject: ${err?.message || 'server error'}`, 'error');
+		return null;
+	}
+}
+
+async function renameSubjectViaModal(subjectId, inputEl) {
+	const subject = categorySubjects.find((s) => String(s.id) === String(subjectId));
+	if (!subject) return;
+	const input =
+		inputEl && inputEl.tagName === 'INPUT'
+			? inputEl
+			: document.querySelector(`#subjectManagerList tr[data-id="${subjectId}"] .subject-name-input`);
+	const name = String(input?.value || subject.name || '').trim();
+	if (!name || name === subject.name) return;
+	if (!window.API?.update) {
+		showToast('API client is not available.', 'error');
+		return;
+	}
+	try {
+		const updated = await window.API.update('subjects', subjectId, { name });
+		const idx = categorySubjects.findIndex((s) => String(s.id) === String(subjectId));
+		const next = { ...(idx >= 0 ? categorySubjects[idx] : subject), ...(updated || {}), name };
+		if (idx >= 0) categorySubjects[idx] = next;
+		else categorySubjects.push(next);
+		window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', categorySubjects);
+		renderSubjectTabBar();
+		syncCategoryBandTitle();
+		renderSubjectManagerTable();
+		renderCategorySubjectOptions();
+		showToast('Subject renamed.');
+	} catch (err) {
+		showToast(`Could not rename subject: ${err?.message || 'server error'}`, 'error');
+	}
+}
+
+// Local mirror of the server cascade (SubjectService.delete): drop the
+// subject, its whole category forest and the courses generated from it;
+// questions detach to Uncategorized exactly like the server does.
+// `options.skipConfirm` is used by the bulk path, which asks once for the
+// whole selection instead of once per subject.
+async function deleteSubject(subjectId, options = {}) {
+	const skipConfirm = options.skipConfirm === true;
+	const subject = categorySubjects.find((s) => String(s.id) === String(subjectId));
+	if (!subject) {
+		showToast('Subject not found', 'error');
+		return false;
+	}
+	const categoryCount = categories.filter(
+		(category) => String(category?.subject_id || '') === String(subjectId),
+	).length;
+	if (!skipConfirm) await ensureCourseCountsKnown();
+	const courseCount = countCoursesForSubject(subjectId);
+	if (
+		!skipConfirm &&
+		!confirm(
+			`Delete "${subject.name}"?\n\nThis removes ${pluralCount(categoryCount, 'category', 'categories')} (their questions become Uncategorized) and ${pluralCount(courseCount, 'course', 'courses')} generated from them. This cannot be undone.`,
+		)
+	) {
+		return false;
+	}
+	let outcome = null;
+	if (window.API && typeof window.API.remove === 'function') {
+		try {
+			outcome = await window.API.remove('subjects', subjectId);
+		} catch (apiErr) {
+			if (apiErr?.status !== 404) {
+				showToast(
+					`Failed to delete subject on server: ${apiErr?.message || 'network error'}`,
+					'error',
+				);
+				return false;
+			}
+		}
+	}
+
+	const removing = new Set(
+		categories
+			.filter((category) => String(category?.subject_id || '') === String(subjectId))
+			.map((category) => String(category.id)),
+	);
+	let frontier = Array.from(removing);
+	let guard = 0;
+	while (frontier.length && guard++ < 100) {
+		const parentIdSet = new Set(frontier);
+		const next = [];
+		for (const category of categories) {
+			const parentId = String(category?.parent_id || '');
+			if (parentId && parentIdSet.has(parentId) && !removing.has(String(category.id))) {
+				removing.add(String(category.id));
+				next.push(String(category.id));
+			}
+		}
+		frontier = next;
+	}
+
+	const savedQuestions = window.__DI_CONTAINER__?.repo?.getAll_sync?.('questions') || [];
+	if (removing.size) {
+		detachCategorySubtreeQuestions(removing, [], savedQuestions);
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
+	}
+	categories = categories.filter(
+		(category) => !removing.has(String(category.id)),
+	);
+	saveCategories();
+	for (const categoryId of removing) {
+		await removeCategoryTraining(String(categoryId));
+	}
+
+	const savedCourses = getLocalCourses();
+	const keptCourses = savedCourses.filter((course) => {
+		if (!course) return false;
+		if (String(course.subject_id || '') === String(subjectId)) return false;
+		return !(course.category_id && removing.has(String(course.category_id)));
+	});
+	if (keptCourses.length !== savedCourses.length) {
+		window.__DI_CONTAINER__?.repo?.setAll_sync?.('courses', keptCourses);
+	}
+
+	categorySubjects = categorySubjects.filter(
+		(s) => String(s.id) !== String(subjectId),
+	);
+	window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', categorySubjects);
+	selectFirstKnownSubject();
+	window.BulkSelect?.removeIds?.('subjects', [String(subjectId)]);
+	renderSubjectTabBar();
+	syncCategoryBandTitle();
+	renderCategorySubjectOptions();
+	updateCategoryList();
+	loadCategoriesIntoFilters?.();
+	if (document.getElementById('subjectManagerModal')?.style.display === 'flex') {
+		renderSubjectManagerTable();
+	}
+	refreshCoursesAfterCategoryDelete();
+	if (typeof logActivity === 'function') {
+		logActivity('category', subject.name, 'deleted', { kind: 'subject' });
+	}
+	if (!skipConfirm) {
+		// Same rule as the category toast: the server knows what its cascade
+		// actually removed, the pre-count is only the fallback when the reply
+		// carried no body (404 / older server).
+		const removedCategories = Number.isFinite(outcome?.categoriesRemoved)
+			? outcome.categoriesRemoved
+			: categoryCount;
+		const removedCourses = Number.isFinite(outcome?.coursesRemoved)
+			? outcome.coursesRemoved
+			: courseCount;
+		const details = [];
+		if (removedCategories) details.push(pluralCount(removedCategories, 'category', 'categories'));
+		if (removedCourses) {
+			details.push(`${pluralCount(removedCourses, 'course', 'courses')} generated from them`);
+		}
+		showToast(
+			details.length
+				? `Subject "${subject.name}" deleted — ${details.join(' and ')} removed.`
+				: `Subject "${subject.name}" deleted.`,
+		);
+	}
+	return {
+		categoriesRemoved: Number.isFinite(outcome?.categoriesRemoved)
+			? outcome.categoriesRemoved
+			: categoryCount,
+		coursesRemoved: Number.isFinite(outcome?.coursesRemoved)
+			? outcome.coursesRemoved
+			: courseCount,
+	};
+}
+
+async function deleteSelectedSubjects() {
+	const ids = (window.BulkSelect?.getSelectedIds('subjects') || []).filter(
+		(id) => id && id !== '__unassigned__',
+	);
+	if (!ids.length) {
+		showToast('No subjects selected', 'error');
+		return;
+	}
+	let totalCategories = 0;
+	let totalCourses = 0;
+	await ensureCourseCountsKnown();
+	for (const id of ids) {
+		totalCategories += categories.filter(
+			(category) => String(category?.subject_id || '') === String(id),
+		).length;
+		totalCourses += countCoursesForSubject(id);
+	}
+	if (
+		!confirm(
+			`Delete ${pluralCount(ids.length, 'subject', 'subjects')}?\n\nThis removes ${pluralCount(totalCategories, 'category', 'categories')} (their questions become Uncategorized) and ${pluralCount(totalCourses, 'course', 'courses')} generated from them. This cannot be undone.`,
+		)
+	) {
+		return;
+	}
+	let deleted = 0;
+	let removedCourses = 0;
+	for (const id of ids) {
+		// One confirmation for the whole selection: the per-subject path is
+		// called with skipConfirm so the user is not asked N+1 times.
+		// eslint-disable-next-line no-await-in-loop
+		const result = await deleteSubject(id, { skipConfirm: true });
+		if (result) {
+			deleted++;
+			removedCourses += Number(result.coursesRemoved) || 0;
+		}
+	}
+	window.BulkSelect?.clear?.('subjects');
+	if (deleted) {
+		showToast(
+			`Deleted ${pluralCount(deleted, 'subject', 'subjects')}` +
+				(removedCourses
+					? ` and ${pluralCount(removedCourses, 'course', 'courses')} generated from them.`
+					: '.'),
+		);
 	}
 }
 
@@ -1398,9 +1877,19 @@ function populateCategoryFilter() {
 }
 
 function createNewCategory() {
-	if (!activeCategorySubjectId || activeCategorySubjectId === '__unassigned__') {
-		showToast('Create or select a subject before adding categories.', 'error');
+	if (!categorySubjects.length) loadCategorySubjects();
+	if (!categorySubjects.length) {
+		// A category always belongs to a subject, so this entry point (the
+		// quick-start wizard calls it directly) hands over to the subject
+		// creator instead of dead-ending on a toast.
+		showToast('Add a subject first — categories live inside one.', 'error');
+		createNewSubjectFlow();
 		return;
+	}
+	if (!activeCategorySubjectId || activeCategorySubjectId === '__unassigned__') {
+		// Legacy bucket (or nothing) selected: a brand-new category belongs in a
+		// real subject, so switch the pill to the first one.
+		selectCategorySubject(String(categorySubjects[0].id));
 	}
 	currentCategoryId = null;
 	document.getElementById('categoryModalTitle').textContent =
@@ -1471,7 +1960,7 @@ function getCategorySubtree(categoryId) {
 // Local pass: every question filed under ANY member of the subtree
 // (this category or one of its subcategories, by id or legacy name) is
 // sent to Uncategorized (category_id NULL).
-function detachCategorySubtreeQuestions(subtreeIds, subtreeNames, questions) {
+function detachCategorySubtreeQuestions(subtreeIds, subtreeNames = [], questions) {
 	const ids = new Set(subtreeIds || []);
 	const names = subtreeNames || [];
 	(questions || []).forEach((question) => {
@@ -1492,9 +1981,34 @@ function detachCategorySubtreeQuestions(subtreeIds, subtreeNames, questions) {
 	});
 }
 
+// Local mirror of the server cascade (CategoryService.delete): courses
+// generated from the deleted branch disappear with it, so the Courses tab
+// never keeps a course whose category structure is gone.
+function removeSubtreeCoursesLocally(subtreeIds) {
+	const coursesTable = window.__DI_CONTAINER__?.repo?.getAll_sync?.('courses');
+	if (!Array.isArray(coursesTable) || !coursesTable.length) return 0;
+	const kept = coursesTable.filter(
+		(course) => !(course?.category_id && subtreeIds.has(String(course.category_id))),
+	);
+	if (kept.length !== coursesTable.length) {
+		window.__DI_CONTAINER__.repo.setAll_sync('courses', kept);
+	}
+	return coursesTable.length - kept.length;
+}
+
+function refreshCoursesAfterCategoryDelete() {
+	if (window.CoursesManagement?.refresh) {
+		try {
+			const res = window.CoursesManagement.refresh();
+			if (res && typeof res.catch === 'function') res.catch(() => { /* tab not mounted */ });
+		} catch (_) { /* tab not mounted */ }
+	}
+}
+
 // The server no longer requires pre-detached questions: DELETE
 // /categories/:id cascades (subtree deleted, their questions go to
-// Uncategorized), so a single DELETE per category is enough.
+// Uncategorized, courses generated from the branch are removed), so a
+// single DELETE per category is enough.
 async function deleteCategory(categoryId) {
 	const category = categories.find((c) => c.id === categoryId);
 
@@ -1508,16 +2022,27 @@ async function deleteCategory(categoryId) {
 		return;
 	}
 
+	// The subtree is walked before asking, so the confirmation can quote the
+	// exact number of courses the cascade is about to remove.
+	const subtree = getCategorySubtree(categoryId);
+	const subtreeIds = new Set(subtree.ids);
+	await ensureCourseCountsKnown();
+	const courseCount = countCoursesForSubtree(subtreeIds);
+	const courseClause = courseCount
+		? ` and ${pluralCount(courseCount, 'course', 'courses')} generated from this branch will be removed`
+		: ' and any course generated from this branch is removed';
+
 	if (
 		confirm(
-			`Are you sure you want to delete "${category.name}"? Its subcategories (if any) are deleted too, and all their questions become uncategorized.`,
+			`Are you sure you want to delete "${category.name}"? Its subcategories (if any) are deleted too, their questions become uncategorized${courseClause}. This cannot be undone.`,
 		)
 	) {
 		// Server-first. A 404 means the row is already gone server-side, so
 		// we still finish the local pass.
+		let outcome = null;
 		if (window.API && typeof window.API.remove === 'function') {
 			try {
-				await window.API.remove('categories', categoryId);
+				outcome = await window.API.remove('categories', categoryId);
 			} catch (apiErr) {
 				if (apiErr?.status !== 404) {
 					console.warn('[categories] API delete failed:', apiErr);
@@ -1533,7 +2058,6 @@ async function deleteCategory(categoryId) {
 
 		// Local: detach the whole subtree (ids or legacy names), then remove
 		// every subtree row.
-		const subtree = getCategorySubtree(categoryId);
 		const savedQuestions =
 			window.__DI_CONTAINER__.repo.getAll_sync('questions');
 		detachCategorySubtreeQuestions(
@@ -1543,17 +2067,27 @@ async function deleteCategory(categoryId) {
 		);
 		window.__DI_CONTAINER__.repo.setAll_sync('questions', savedQuestions);
 
-		const subtreeIds = new Set(subtree.ids);
 		categories = categories.filter(
 			(c) => !subtreeIds.has(String(c.id)),
 		);
+		removeSubtreeCoursesLocally(subtreeIds);
 		for (const id of subtree.ids) {
 			await removeCategoryTraining(id);
 		}
 		saveCategories();
 		updateCategoryList();
 		loadCategoriesIntoFilters();
-		showToast('Category deleted successfully!');
+		refreshCoursesAfterCategoryDelete();
+		// The server reports the truth about its own cascade; fall back to the
+		// count the confirmation promised when the response carried no body.
+		const removedCourses = Number.isFinite(outcome?.coursesRemoved)
+			? outcome.coursesRemoved
+			: courseCount;
+		showToast(
+			removedCourses
+				? `Category deleted \u2014 ${pluralCount(removedCourses, 'course', 'courses')} generated from it removed.`
+				: 'Category deleted successfully!',
+		);
 	}
 }
 
@@ -3275,11 +3809,18 @@ function updateCategoryList(categoriesList = categories) {
 		return true;
 	});
 
-	// Add "Uncategorized" category if it doesn't exist
+	// Add "Uncategorized" category if it doesn't exist. Only shown outside a
+	// concrete subject (the legacy bucket, or before any subject is picked):
+	// an unfiled question has no subject, so repeating the same global count
+	// under every subject pill is just noise.
 	let uncategorizedExists = visibleCategories.some(
 		(cat) => String(cat.name || '').toLowerCase() === 'uncategorized',
 	);
-	if (!uncategorizedExists) {
+	const subjectContext = String(activeCategorySubjectId || '');
+	if (
+		!uncategorizedExists &&
+		(!subjectContext || subjectContext === '__unassigned__')
+	) {
 		visibleCategories.unshift({
 			id: 'uncategorized',
 			name: 'Uncategorized',
@@ -3366,6 +3907,13 @@ function updateCategoryList(categoriesList = categories) {
 	];
 
 	tbody.innerHTML = ''; // Clear existing rows
+
+	if (!renderEntries.length) {
+		// A subject with no branch yet would otherwise render an empty table.
+		tbody.innerHTML =
+			'<tr><td colspan="8" class="text-muted" style="text-align:center;padding:20px;">No categories in this subject yet — add one with "New Category", or move a branch here from another subject.</td></tr>';
+		return;
+	}
 
 	// Collapse: rows below a collapsed ancestor are hidden (but still
 	// rendered, so counts/filters stay consistent).
@@ -5570,9 +6118,20 @@ async function deleteSelectedCategories() {
 		showToast('No deletable categories selected', 'error');
 		return;
 	}
+	// Union of every selected branch, so the confirmation quotes the courses the
+	// cascade will really remove instead of a generic promise.
+	await ensureCourseCountsKnown();
+	const subtreeUnion = new Set();
+	for (const id of deletable) {
+		for (const subId of getCategorySubtree(id).ids) subtreeUnion.add(String(subId));
+	}
+	const courseCount = countCoursesForSubtree(subtreeUnion);
+	const courseClause = courseCount
+		? ` and ${pluralCount(courseCount, 'course', 'courses')} generated from these branches will be removed`
+		: ' and any course generated from these branches is removed';
 	if (
 		!confirm(
-			`Are you sure you want to delete ${deletable.length} categor${deletable.length === 1 ? 'y' : 'ies'}? All questions in them will become uncategorized.`,
+			`Are you sure you want to delete ${pluralCount(deletable.length, 'category', 'categories')}? All questions in them will become uncategorized${courseClause}. This cannot be undone.`,
 		)
 	) {
 		return;
@@ -5629,12 +6188,14 @@ async function deleteSelectedCategories() {
 		categories = categories.filter(
 			(c) => !subtreeIds.has(String(c.id)),
 		);
+		removeSubtreeCoursesLocally(subtreeIds);
 		for (const id of subtreeIds) {
 			await removeCategoryTraining(String(id));
 		}
 		saveCategories();
 		updateCategoryList();
 		loadCategoriesIntoFilters();
+		refreshCoursesAfterCategoryDelete();
 		if (window.BulkSelect) window.BulkSelect.clear('categories');
 		if (typeof logActivity === 'function') {
 			logActivity('category', `${deleted.length} Categories`, 'deleted', {
@@ -5651,7 +6212,11 @@ async function deleteSelectedCategories() {
 			'error',
 		);
 	} else {
-		showToast(`Deleted ${okCount} categor${okCount === 1 ? 'y' : 'ies'}!`);
+		showToast(
+			courseCount
+				? `Deleted ${pluralCount(okCount, 'category', 'categories')} and ${pluralCount(courseCount, 'course', 'courses')} generated from them.`
+				: `Deleted ${pluralCount(okCount, 'category', 'categories')}!`,
+		);
 	}
 }
 
@@ -5659,3 +6224,19 @@ async function deleteSelectedCategories() {
 window.toggleInlineCategoryInput = toggleInlineCategoryInput;
 window.saveInlineCategory = saveInlineCategory;
 window.deleteSelectedCategories = deleteSelectedCategories;
+window.selectCategorySubject = selectCategorySubject;
+window.revealCategoryFromActivity = revealCategoryFromActivity;
+window.createNewSubjectFlow = createNewSubjectFlow;
+window.openSubjectManagerModal = openSubjectManagerModal;
+window.closeSubjectManagerModal = closeSubjectManagerModal;
+window.createSubjectViaModal = createSubjectViaModal;
+window.renameSubjectViaModal = renameSubjectViaModal;
+window.deleteSubject = deleteSubject;
+window.deleteSelectedSubjects = deleteSelectedSubjects;
+window.renderSubjectManagerTable = renderSubjectManagerTable;
+
+window.SubjectsManagement = {
+	refresh: loadCategorySubjects,
+	openModal: openSubjectManagerModal,
+	renderPills: renderSubjectTabBar,
+};

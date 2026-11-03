@@ -263,7 +263,9 @@ describe('nested categories', () => {
     const res = await request(app)
       .delete(`/api/v1/categories/${physicsId}`)
       .set('Authorization', `Bearer ${adminToken}`);
-    expect(res.status).toBe(204);
+    // 200 + the cascade outcome (no course was generated from this branch).
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ coursesRemoved: 0 });
 
     // The whole subtree is gone.
     for (const id of [physicsId, mechanicsId, kinematicsId]) {

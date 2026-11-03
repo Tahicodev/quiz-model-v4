@@ -252,10 +252,13 @@ export class CategoryService {
 
   /**
    * Deleting a category deletes the WHOLE subtree (subcategories,
-   * sub-subcategories…) and every question filed under it — this category
+   * sub-subcategories…), every question filed under it — this category
    * or any of its subcategories — becomes uncategorized (category_id NULL,
-   * the UI's "Uncategorized" pseudo-category). Deep joins stay reachable:
-   * no more "cannot delete: has subcategories / contains questions".
+   * the UI's "Uncategorized" pseudo-category), and every course generated
+   * from the branch is removed (lessons/course classes cascade with it):
+   * a course without its category branch is dead content. Deep joins stay
+   * reachable: no more "cannot delete: has subcategories / contains
+   * questions".
    */
   async delete(id, currentUser) {
     this.#requireAdmin(currentUser);
@@ -294,7 +297,19 @@ export class CategoryService {
       }
     }
 
-    // 3. Delete the whole subtree deepest-first (reverse BFS), the root
+    // 3. Remove every course generated from the branch. Lessons and class
+    //    assignments cascade with the course row (schema onDelete: Cascade);
+    //    questions already detached above stay in the bank.
+    const { data: courses } = await this.#repo.getAll('courses', { limit: 100000 });
+    let coursesRemoved = 0;
+    for (const course of courses || []) {
+      if (course?.id && course.category_id && subtree.has(String(course.category_id))) {
+        await this.#repo.delete('courses', course.id);
+        coursesRemoved++;
+      }
+    }
+
+    // 4. Delete the whole subtree deepest-first (reverse BFS), the root
     //    last. The DB FK is ON DELETE SET NULL, but explicit child deletes
     //    keep the branch fully removed instead of orphaning it top-level.
     for (const cid of subtreeIds.slice().reverse()) {
@@ -302,6 +317,8 @@ export class CategoryService {
       await this.#repo.delete('categories', cid);
     }
     await this.#repo.delete('categories', id);
+
+    return { coursesRemoved };
   }
 
   async moveQuestion(questionId, newCategoryId, currentUser) {
