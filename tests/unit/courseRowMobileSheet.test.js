@@ -8,8 +8,9 @@ const studentJs = readFileSync(new URL('../../student-courses.js', import.meta.u
 const adminHtml = readFileSync(new URL('../../admin.html', import.meta.url), 'utf8');
 
 describe('course row actions', () => {
-	it('opens a course from its clickable title', () => {
-		expect(js).toMatch(/class="course-name-link" onclick="openCourseDetail\('/);
+	it('opens a course structure from its clickable title', () => {
+		expect(js).toMatch(/class="course-name-link" onclick="\$\{openStructure\}"/);
+		expect(js).toContain("openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})");
 	});
 
 	it('provides open, document, publish and delete actions in the mobile sheet', () => {
@@ -78,7 +79,9 @@ describe('course row actions', () => {
 	});
 
 	it('offers a reviewed DOCX/PDF course import flow', () => {
-		expect(adminHtml).toContain('id="import-course-document-btn"');
+		// The Courses toolbar button was removed; the flow stays reachable from
+		// the row actions and the quick-import link in the New Course modal.
+		expect(adminHtml).not.toContain('id="import-course-document-btn"');
 		expect(js).toContain('window.openCourseDocumentImportModal = async function');
 		expect(js).toContain('/courses/import/preview');
 		expect(js).toContain('/courses/import');

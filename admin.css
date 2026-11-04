@@ -1001,7 +1001,21 @@
 /* ── Subjects tab: subject strip pills + nested category band ──────────────
    The pills reuse .games-studio-tabs / .games-studio-tab-btn from the games
    studio (selection colour and hover come from there unchanged), so only
-   layout and the two extra pill variants live here. */
+   layout and the extra pill variants live here. */
+#subjects .subject-tab-bar-wrap {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 0.65rem;
+	width: 100%;
+}
+#subjects .subject-tab-bar-label {
+	margin: 0;
+	font-size: 1.2rem;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	color: var(--text-main, #1f2937);
+}
 #subjects .subject-strip {
 	display: flex;
 	flex-wrap: wrap;
@@ -5388,3 +5402,990 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 }
 .kids-mq-chip-empty { background: #f8fafc; border-color: #e2e8f0; color: #94a3b8; }
 .kids-mq-levels-hint, .kids-wizard-step-hint { color: #64748b; }
+
+
+/* ── Curriculum & Course Studio Enhancements ───────────────────────────────── */
+.curriculum-starter-card {
+	padding: 36px 28px;
+	border: 1px dashed #c7d2fe;
+	border-radius: 16px;
+	background: linear-gradient(135deg, #ffffff 0%, #f8faff 100%);
+	text-align: center;
+	margin: 20px auto;
+	max-width: 760px;
+	box-shadow: 0 4px 20px rgba(79, 70, 229, 0.05);
+}
+.curriculum-starter-icon {
+	font-size: 2.8rem;
+	margin-bottom: 12px;
+}
+.curriculum-starter-card h3 {
+	font-size: 1.35rem;
+	font-weight: 700;
+	color: #1e293b;
+	margin: 0 0 8px;
+}
+.curriculum-starter-subtitle {
+	color: #64748b;
+	font-size: 0.95rem;
+	max-width: 580px;
+	margin: 0 auto 24px;
+	line-height: 1.5;
+}
+.curriculum-steps-guide {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	margin: 0 auto 28px;
+	flex-wrap: wrap;
+}
+.curriculum-step-item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 14px 18px;
+	background: #ffffff;
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	min-width: 170px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.curriculum-step-item .step-num {
+	width: 26px;
+	height: 26px;
+	background: #4f46e5;
+	color: #ffffff;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.8rem;
+	font-weight: 700;
+	margin-bottom: 8px;
+}
+.curriculum-step-item strong {
+	font-size: 0.88rem;
+	color: #1e293b;
+	margin-bottom: 2px;
+}
+.curriculum-step-item small {
+	font-size: 0.75rem;
+	color: #64748b;
+	text-align: center;
+}
+.curriculum-step-arrow {
+	font-size: 1.2rem;
+	color: #94a3b8;
+	font-weight: 700;
+}
+.curriculum-starter-actions {
+	display: flex;
+	gap: 12px;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+
+/* ── Course Detail Command Launchpad (Dual Actions) ────────────────────────── */
+.course-command-launchpad {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	margin-bottom: 20px;
+}
+@media (max-width: 768px) {
+	.course-command-launchpad {
+		grid-template-columns: 1fr;
+	}
+}
+.launchpad-card {
+	padding: 16px 20px;
+	border-radius: 14px;
+	border: 1px solid;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 12px;
+}
+.launchpad-lessons {
+	background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+	border-color: #86efac;
+}
+.launchpad-questions {
+	background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+	border-color: #c4b5fd;
+}
+.launchpad-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.launchpad-icon {
+	font-size: 1.8rem;
+}
+.launchpad-header h4 {
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 700;
+	color: #1e293b;
+}
+.launchpad-header small {
+	color: #64748b;
+	font-size: 0.8rem;
+}
+.launchpad-actions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.launchpad-actions .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+}
+
+/* ── Course Guidance & Subject Badges ───────────────────────────────────────── */
+.course-modal-subject-banner {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	border-radius: 20px;
+	background: #eef2ff;
+	border: 1px solid #c7d2fe;
+	margin-bottom: 14px;
+}
+.subject-badge-pill {
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: #4338ca;
+	background: #e0e7ff;
+	padding: 2px 8px;
+	border-radius: 10px;
+}
+.course-modal-subject-banner strong {
+	color: #1e1b4b;
+	font-size: 0.88rem;
+}
+.course-guidance-card {
+	display: flex;
+	gap: 12px;
+	padding: 12px 16px;
+	border-radius: 10px;
+	background: #eff6ff;
+	border: 1px solid #bfdbfe;
+	margin-bottom: 16px;
+	font-size: 0.85rem;
+	color: #1e3a8a;
+}
+.course-guidance-card .guidance-icon {
+	font-size: 1.4rem;
+	flex-shrink: 0;
+}
+.course-guidance-card p {
+	margin: 4px 0 0;
+	line-height: 1.4;
+	color: #1e40af;
+}
+.course-generator-quick-import {
+	margin: 6px 0 14px;
+	text-align: right;
+}
+.course-generator-quick-import .btn {
+	font-size: 0.8rem;
+	color: #4f46e5;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	text-decoration: underline;
+}
+
+/* ── Launchpad Modal Grid (The 3 Question Pathways) ─────────────────────────── */
+.launchpad-modal-grid {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 14px;
+	margin-top: 10px;
+}
+@media (max-width: 640px) {
+	.launchpad-modal-grid {
+		grid-template-columns: 1fr;
+	}
+}
+.launchpad-modal-option {
+	padding: 18px 14px;
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	background: #ffffff;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-between;
+	cursor: pointer;
+	transition: all 180ms ease;
+}
+.launchpad-modal-option:hover {
+	border-color: #4f46e5;
+	box-shadow: 0 6px 20px rgba(79, 70, 229, 0.12);
+	transform: translateY(-2px);
+}
+.launchpad-modal-option .option-icon {
+	font-size: 2rem;
+	margin-bottom: 8px;
+}
+.launchpad-modal-option strong {
+	font-size: 0.95rem;
+	color: #1e293b;
+	margin-bottom: 6px;
+}
+.launchpad-modal-option p {
+	font-size: 0.78rem;
+	color: #64748b;
+	line-height: 1.4;
+	margin: 0 0 12px;
+}
+.launchpad-modal-option .btn {
+	margin-top: auto;
+	width: 100%;
+}
+.course-tree-q-btn {
+	background: #f5f3ff;
+	border-color: #ddd6fe;
+	color: #6d28d9;
+	font-weight: 600;
+	font-size: 0.75rem;
+}
+.course-tree-q-btn:hover {
+	background: #ede9fe;
+	border-color: #c4b5fd;
+	color: #5b21b6;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   COURSE STUDIO POLISH — Subject strip · New Course modal · Import modal
+   (appended last in admin.css: this file loads after styles.css, so these
+   rules win ties; dark-theme overrides live in theme-dark.css, which loads
+   after this file)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Subject Management: label + subject tabs ─────────────────────────── */
+#subjects .subject-tab-bar-wrap {
+	padding: 1rem 1.1rem;
+	border: 1px solid var(--border-color, #dbe4ee);
+	border-radius: 16px;
+	background:
+		linear-gradient(140deg, rgba(99, 102, 241, 0.05), transparent 58%),
+		var(--bg-surface, #fff);
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+#subjects .subject-tab-bar-label {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	margin: 0;
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	color: var(--text-secondary, #64748b);
+}
+#subjects .subject-tab-bar-label::before {
+	content: '';
+	flex: 0 0 9px;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+/* The pills sit in .games-studio-tabs; flatten its card so the strip lives
+   directly on the Management card above. */
+#subjects .subject-strip {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	margin-bottom: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+#subjects .subject-pill {
+	max-width: 220px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding: 8px 15px;
+	border-radius: 10px;
+	font-size: 0.84rem;
+}
+#subjects .subject-pill-new:not(.active) {
+	border-style: dashed;
+	border-color: #6366f1;
+	background: transparent;
+	color: #4f46e5;
+	font-weight: 700;
+}
+
+/* ── New Course & Curriculum Outline modal ─────────────────────────────── */
+.course-gen-modal .modal-content {
+	width: min(94%, 700px) !important;
+	max-width: 700px !important;
+	border-radius: 18px;
+	overflow: hidden;
+	box-shadow: 0 26px 70px rgba(15, 23, 42, 0.28);
+}
+.course-gen-modal .modal-header {
+	padding: 16px 20px;
+	background:
+		radial-gradient(circle at 95% 0%, rgba(99, 102, 241, 0.13), transparent 40%),
+		var(--bg-surface, #fff);
+}
+.course-gen-modal .modal-header h3 {
+	margin: 0;
+	font-size: 1.1rem;
+	font-weight: 750;
+	letter-spacing: -0.02em;
+	color: var(--text-main, #0f172a);
+}
+.course-gen-modal .modal-body {
+	padding: 18px 20px;
+}
+/* Same flex-column squash guard as the import modal: children keep their
+   natural size, the body scrolls. */
+.course-gen-modal .modal-body > * {
+	flex-shrink: 0;
+}
+.course-gen-modal .modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 14px 20px;
+	border-top: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+	background: var(--bg-surface, #fff);
+}
+.course-gen-modal .modal-footer .btn {
+	min-height: 42px;
+	border-radius: 10px;
+	font-weight: 650;
+	transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease,
+		border-color 140ms ease, color 140ms ease;
+}
+/* Ghost Cancel action */
+.course-gen-modal .modal-footer .btn:not(.btn-primary) {
+	background: transparent;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.4));
+	color: var(--text-main, #334155);
+}
+.course-gen-modal .modal-footer .btn:not(.btn-primary):hover {
+	color: #4f46e5;
+	border-color: rgba(99, 102, 241, 0.45);
+	background: rgba(99, 102, 241, 0.06);
+}
+/* Primary action: indigo gradient (mirrors the Games studio active pill) */
+.course-gen-modal .modal-footer .btn-primary {
+	border: 1px solid transparent;
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28);
+}
+.course-gen-modal .modal-footer .btn-primary:not(:disabled):hover {
+	transform: translateY(-1px);
+	box-shadow: 0 9px 20px rgba(79, 70, 229, 0.34);
+}
+.course-gen-modal .modal-footer .btn:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+.course-gen-modal .modal-close {
+	border-radius: 9px;
+	transition: background 120ms ease, color 120ms ease;
+}
+.course-gen-modal .modal-close:hover {
+	background: rgba(100, 116, 139, 0.1);
+	color: var(--text-main, #0f172a);
+}
+
+/* Subject banner chip */
+.course-gen-modal .course-modal-subject-banner {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px;
+	border-radius: 12px;
+	background: rgba(99, 102, 241, 0.07);
+	border: 1px solid rgba(99, 102, 241, 0.2);
+	margin-bottom: 14px;
+}
+.course-gen-modal .subject-badge-pill {
+	font-size: 0.66rem;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	color: #4f46e5;
+	background: rgba(99, 102, 241, 0.13);
+	padding: 3px 9px;
+	border-radius: 99px;
+}
+.course-gen-modal .course-modal-subject-banner strong {
+	color: var(--text-main, #312e81);
+	font-size: 0.86rem;
+	font-weight: 700;
+}
+
+/* Build / Use-existing segmented control */
+.course-gen-modal .course-generator-tabs {
+	gap: 5px;
+	margin: 0 0 14px;
+	padding: 5px;
+	border-radius: 12px;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.28));
+	background: var(--bg-surface-alt, rgba(148, 163, 184, 0.14));
+}
+.course-gen-modal .course-generator-tab {
+	border-radius: 9px;
+	padding: 9px 12px;
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: var(--text-secondary, #64748b);
+	transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.course-gen-modal .course-generator-tab:hover:not(.active) {
+	color: #4f46e5;
+	background: rgba(99, 102, 241, 0.07);
+}
+.course-gen-modal .course-generator-tab.active {
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	box-shadow: 0 5px 12px rgba(79, 70, 229, 0.26);
+}
+.course-gen-modal .course-generator-quick-import {
+	margin: 0 0 14px;
+	text-align: center;
+}
+.course-gen-modal .course-generator-quick-import .btn {
+	font-size: 0.8rem;
+	border-radius: 10px;
+	color: #4f46e5;
+	background: transparent;
+	border: 1px dashed rgba(99, 102, 241, 0.35);
+}
+.course-gen-modal .course-generator-quick-import .btn:hover {
+	background: rgba(99, 102, 241, 0.07);
+	border-style: solid;
+}
+
+/* Naming card */
+.course-gen-modal #newCourseName,
+.course-gen-modal .course-subcategory-name {
+	border-radius: 10px;
+}
+
+/* Topic / Section group cards */
+.course-gen-modal .course-subcategory-group {
+	position: relative;
+	margin: 12px 0;
+	padding: 14px 14px 14px 16px;
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
+	border-radius: 13px;
+	background: var(--bg-surface, #fff);
+	box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+	overflow: hidden;
+}
+.course-gen-modal .course-subcategory-group::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 3px;
+	background: linear-gradient(180deg, #6366f1, #818cf8);
+}
+.course-gen-modal .course-subcategory-heading {
+	gap: 12px;
+	margin-bottom: 10px;
+}
+.course-gen-modal .course-subcategory-heading strong {
+	font-size: 0.86rem;
+	font-weight: 800;
+	letter-spacing: 0.03em;
+	color: var(--text-main, #1e1b4b);
+}
+.course-gen-modal .course-subcategory-heading .btn {
+	min-height: 30px;
+	padding: 4px 10px;
+	border-radius: 8px;
+	border-color: transparent !important;
+	background: transparent !important;
+	color: #b91c1c !important;
+	font-weight: 700;
+}
+.course-gen-modal .course-subcategory-heading .btn:hover {
+	border-color: rgba(239, 68, 68, 0.2) !important;
+	background: rgba(239, 68, 68, 0.07) !important;
+}
+
+/* ── Learning-objectives (axes) editor: option-input pattern ───────────── */
+.course-axes-add-row {
+	gap: 8px;
+	margin-bottom: 10px;
+}
+.course-axes-add-row .course-axes-input {
+	min-height: 42px;
+	padding: 10px 14px;
+	border-radius: 10px;
+}
+.course-axes-add-row .add-option-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 42px;
+	padding: 10px 18px;
+	border-radius: 10px;
+	border: 1px solid transparent;
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	font-weight: 700;
+	white-space: nowrap;
+	box-shadow: 0 4px 10px rgba(79, 70, 229, 0.24);
+	transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+.course-axes-add-row .add-option-btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 7px 14px rgba(79, 70, 229, 0.3);
+}
+.course-axes-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+.course-axes-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	max-width: 100%;
+	padding: 5px 6px 5px 11px;
+	border: 1px solid rgba(99, 102, 241, 0.24);
+	border-radius: 999px;
+	background: rgba(99, 102, 241, 0.07);
+	color: var(--text-main, #312e81);
+	font-size: 0.82rem;
+	font-weight: 600;
+}
+.course-axes-chip-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.course-axes-chip-remove {
+	display: grid;
+	flex: 0 0 19px;
+	width: 19px;
+	height: 19px;
+	place-items: center;
+	border: 0;
+	border-radius: 50%;
+	background: rgba(99, 102, 241, 0.14);
+	color: #4f46e5;
+	font-size: 0.82rem;
+	line-height: 1;
+	cursor: pointer;
+}
+.course-axes-chip-remove:hover {
+	background: rgba(239, 68, 68, 0.12);
+	color: #b91c1c;
+}
+.course-axes-empty {
+	margin: 2px 0 6px;
+	color: var(--text-muted, #94a3b8);
+	font-size: 0.78rem;
+	font-style: italic;
+}
+
+/* ── Import a course document: step tabs (STEP 1 · ORGANIZE / STEP 2 ·
+   REVIEW) ─────────────────────────────────────────────────────────────── */
+/* The .modal-body is a flex column, so the dropzone (overflow hidden)
+   flex-shrinks and clips "Choose a course document". Children must keep
+   their natural size; the body scrolls instead. */
+.course-import-modal .modal-body {
+	flex-direction: column;
+}
+.course-import-modal .modal-body > * {
+	flex-shrink: 0;
+}
+.course-import-review-tabs {
+	position: sticky;
+	top: 0;
+	z-index: 3;
+	display: flex;
+	gap: 6px;
+	margin: 0 0 16px;
+	padding: 5px;
+	border-radius: 12px;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.28));
+	background: var(--bg-surface, #fff);
+	box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+.course-import-review-tab {
+	flex: 1 1 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 40px;
+	padding: 8px 10px;
+	border: 0;
+	border-radius: 9px;
+	background: transparent;
+	color: var(--text-secondary, #64748b);
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 800;
+	letter-spacing: 0.05em;
+	cursor: pointer;
+	transition: background 140ms ease, color 140ms ease;
+}
+.course-import-review-tab:hover:not(.active) {
+	color: #4f46e5;
+	background: rgba(99, 102, 241, 0.07);
+}
+.course-import-review-tab.active {
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	box-shadow: 0 5px 12px rgba(79, 70, 229, 0.26);
+}
+.course-import-review-tab-count {
+	padding: 2px 8px;
+	border-radius: 99px;
+	background: rgba(99, 102, 241, 0.12);
+	color: #4f46e5;
+	font-size: 0.68rem;
+	letter-spacing: 0;
+	white-space: nowrap;
+}
+.course-import-review-tab.active .course-import-review-tab-count {
+	background: rgba(255, 255, 255, 0.2);
+	color: #fff;
+}
+.course-import-review-pane[hidden] {
+	display: none;
+}
+.course-import-review-cta {
+	display: flex;
+	justify-content: center;
+	margin: 18px 0 4px;
+}
+.course-import-review-cta .btn {
+	min-width: 200px;
+	min-height: 42px;
+	border-radius: 10px;
+	border: 1px solid transparent;
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	font-weight: 700;
+	box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28);
+}
+.course-import-review-cta .btn:not(:disabled):hover {
+	transform: translateY(-1px);
+	box-shadow: 0 9px 20px rgba(79, 70, 229, 0.34);
+}
+.course-import-review-cta .btn:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
+/* "Choose another file" / "Cancel" ghost + "Create course" gradient */
+.course-import-modal .modal-footer .btn:not(.btn-primary) {
+	background: var(--bg-surface, #fff);
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.4));
+	color: var(--text-main, #334155);
+}
+.course-import-modal .modal-footer .btn:not(.btn-primary):hover {
+	border-color: rgba(99, 102, 241, 0.45);
+	color: #4f46e5;
+	background: rgba(99, 102, 241, 0.06);
+}
+.course-import-modal .modal-footer .btn-primary {
+	border: 1px solid transparent;
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28);
+}
+.course-import-modal .modal-footer .btn-primary:not(:disabled):hover {
+	transform: translateY(-1px);
+	box-shadow: 0 9px 20px rgba(79, 70, 229, 0.34);
+}
+
+/* Heading rows: after dropping the extra helper text under the title, the
+   identical label stacks let Source line · Hierarchy · Heading title sit on
+   one baseline; make the Remove button share the input height. */
+.course-import-remove {
+	min-height: 40px;
+	align-self: end;
+	border-radius: 9px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TABLE ROW ACTIONS — alignment + colors for the variants that had none
+   Scopes to `td .exam-actions` so the course-detail view's
+   `.course-detail-actions .course-action-*` buttons keep their own styles.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Action buttons align vertically with the rest of the row content.
+   Root cause: styles.css:15547 sets `.actions-cell { display: flex }` on the
+   <td> itself — a flex cell no longer stretches to the row height, so the
+   table can't lay the column out and the buttons cluster near the top of
+   tall rows (the same bug that was patched ad-hoc for #subjectManagerList
+   above). Every tab's rows are real <table> rows on desktop, so restore the
+   cell and center its content. The mobile card/bottom-bar overrides
+   (styles.css:44233/46242 `!important`, etc.) still win at ≤768px. */
+td.actions-cell,
+th.actions-cell {
+	display: table-cell;
+	vertical-align: middle;
+}
+
+/* Purpose colors (same tinted-gradient family as .exam-edit-btn etc.) */
+td .exam-actions .exam-action-btn.course-action-create {
+	background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15));
+	color: #10b981;
+}
+td .exam-actions .exam-action-btn.course-action-create:hover {
+	background: linear-gradient(135deg, #10b981, #059669);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+td .exam-actions .exam-action-btn.course-action-structure {
+	background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(124, 58, 237, 0.15));
+	color: #8b5cf6;
+}
+td .exam-actions .exam-action-btn.course-action-structure:hover {
+	background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+td .exam-actions .exam-action-btn.course-action-generate {
+	background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(147, 51, 234, 0.15));
+	color: #a855f7;
+}
+td .exam-actions .exam-action-btn.course-action-generate:hover {
+	background: linear-gradient(135deg, #a855f7, #9333ea);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+}
+
+td .exam-actions .exam-action-btn.course-action-document {
+	background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.15));
+	color: #f59e0b;
+}
+td .exam-actions .exam-action-btn.course-action-document:hover {
+	background: linear-gradient(135deg, #f59e0b, #d97706);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+td .exam-actions .exam-action-btn.course-action-link {
+	background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(8, 145, 178, 0.15));
+	color: #06b6d4;
+}
+td .exam-actions .exam-action-btn.course-action-link:hover {
+	background: linear-gradient(135deg, #06b6d4, #0891b2);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
+}
+
+/* Publish / unpublish toggle in the courses overview rows. */
+td .exam-actions .exam-action-btn.course-action-publish {
+	background: linear-gradient(135deg, rgba(20, 184, 166, 0.15), rgba(13, 148, 136, 0.15));
+	color: #14b8a6;
+}
+td .exam-actions .exam-action-btn.course-action-publish:hover {
+	background: linear-gradient(135deg, #14b8a6, #0d9488);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(20, 184, 166, 0.4);
+}
+
+/* Category rows: "open course content" + "move" icon buttons. */
+td .exam-actions .exam-action-btn.exam-course-btn {
+	background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(79, 70, 229, 0.15));
+	color: #6366f1;
+}
+td .exam-actions .exam-action-btn.exam-course-btn:hover {
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+td .exam-actions .exam-action-btn.exam-move-btn {
+	background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(2, 132, 199, 0.15));
+	color: #0ea5e9;
+}
+td .exam-actions .exam-action-btn.exam-move-btn:hover {
+	background: linear-gradient(135deg, #0ea5e9, #0284c7);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   IMPORT MODAL · STEP 1 ORGANIZE — course-fields card refactor
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Subject row: the select and the "New subject" chip share one line. */
+.course-import-modal .course-import-subject-picker {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	margin-top: 2px;
+}
+
+.course-import-modal .course-import-subject-picker select {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: auto;
+}
+
+.course-import-subject-new-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+	min-height: 40px;
+	padding: 8px 14px;
+	border: 1px solid rgb(129, 140, 248);
+	border-radius: 9px;
+	background: linear-gradient(135deg, rgb(99, 102, 241), rgb(79, 70, 229));
+	color: #fff !important;
+	font-size: 0.82rem;
+	font-weight: 700;
+	white-space: nowrap;
+	cursor: pointer;
+	box-shadow: 0 3px 9px rgba(79, 70, 229, 0.22);
+	transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.course-import-subject-new-btn:hover {
+	background: linear-gradient(135deg, rgb(91, 82, 244), rgb(79, 70, 229));
+	transform: translateY(-1px);
+	box-shadow: 0 7px 16px rgba(79, 70, 229, 0.26);
+}
+
+.course-import-subject-new-btn:active {
+	transform: translateY(0);
+}
+
+/* Description gets the full width of the card instead of half a column. */
+.course-import-course-fields .course-import-desc {
+	grid-column: 1 / -1;
+}
+
+.course-import-course-fields .course-import-desc textarea {
+	min-height: 64px;
+	resize: vertical;
+	line-height: 1.55;
+}
+
+/* "No lines selected" lines up with #courseImportBulkLevel (bottom edge of
+   the select row), instead of floating mid-gap in the toolbar. */
+@media (min-width: 769px) {
+	.course-import-modal .course-import-level-tools {
+		align-items: end;
+	}
+
+	.course-import-modal .course-import-level-tools [data-import-selection-count] {
+		align-self: end;
+		padding-bottom: 10px;
+	}
+}
+
+/* Phones: the fields card stacks into one column — restore breathing room
+   between the stacked groups (styles.css sets gap: 0 there). */
+@media (max-width: 768px) {
+	.course-import-course-fields {
+		gap: 14px;
+	}
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   AI MODEL DROPDOWNS · typography polish (all instances)
+   Targets: #courseModelSelect (course studio), #kidsAIModel (Kid Games),
+   #ai-shared-model-select / #ai-generator-model-select /
+   #ai-image-model-select (questions + settings AI panels).
+   The settings/questions ones carry inline `style="padding: 10px;"`,
+   so the spacing rules below need !important to win.
+   ══════════════════════════════════════════════════════════════════════ */
+#courseModelSelect,
+#kidsAIModel,
+#ai-shared-model-select,
+#ai-generator-model-select,
+#ai-image-model-select {
+	appearance: none;
+	-webkit-appearance: none;
+	font-family: inherit;
+	font-size: 0.93rem;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+	color: var(--text-main, #0f172a);
+	background-color: #fff;
+	background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 12px center;
+	padding: 10px 38px 10px 14px !important;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 12px;
+	cursor: pointer;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
+#courseModelSelect:hover,
+#kidsAIModel:hover,
+#ai-shared-model-select:hover,
+#ai-generator-model-select:hover,
+#ai-image-model-select:hover {
+	border-color: #a5b4fc;
+	box-shadow: 0 2px 8px rgba(99, 102, 241, 0.12);
+}
+
+#courseModelSelect:focus,
+#kidsAIModel:focus,
+#ai-shared-model-select:focus,
+#ai-generator-model-select:focus,
+#ai-image-model-select:focus {
+	outline: none;
+	border-color: #6366f1;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+/* Dropdown list items: slightly smaller and regular weight so the selected
+   value (600) reads as bolder than the options. */
+#courseModelSelect option,
+#kidsAIModel option,
+#ai-shared-model-select option,
+#ai-generator-model-select option,
+#ai-image-model-select option {
+	font-family: inherit;
+	font-size: 0.9rem;
+	font-weight: 400;
+	letter-spacing: 0.01em;
+	color: #1e293b;
+	background: #fff;
+	padding: 8px 10px;
+}

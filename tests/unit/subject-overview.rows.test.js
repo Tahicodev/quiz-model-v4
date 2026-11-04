@@ -50,6 +50,7 @@ const CATEGORY_FIXTURES = [
 	// Legacy rows with no subject belong to the "Unassigned" pill.
 	{ id: 'cat-legacy-root', name: 'Ancienne structure', subject_id: null },
 	{ id: 'cat-legacy-free', name: 'Orpheline', subject_id: null },
+	{ id: 'cat-kids-bb', name: 'Kids · BB', subject_id: null },
 ];
 
 const COURSE_FIXTURES = [
@@ -143,6 +144,7 @@ beforeAll(() => {
 		innerWidth: 1400,
 		addEventListener() {},
 		showToast() {},
+		isAutoGameCategory: (c) => String((c && c.name) || '').startsWith('Kids · '),
 		// The shared category mirror (category-management.js owns this global).
 		categories: state.categoryRows,
 		API: {
@@ -244,6 +246,7 @@ describe('merged courses + structures rows', () => {
 		expect(rowCount(legacy, 'structure')).toBe(1);
 		expect(legacy).toContain('data-row-key="branch:cat-legacy-free"');
 		expect(legacy).not.toContain('branch:cat-math-root');
+		expect(legacy).not.toContain('Kids · BB');
 	});
 
 	it('keeps search and the status filter working over the merged rows', async () => {
@@ -279,7 +282,7 @@ describe('merged courses + structures rows', () => {
 		expect(byId.courseOrphanCount.textContent).toBe('2');
 	});
 
-	it('shows one pane at a time through the workspace toggle', async () => {
+	it('opens a course outline in the structure pane and returns to the list', async () => {
 		state.scopeCalls.length = 0;
 		state.activeSubject = MATH;
 		await paint();
@@ -288,18 +291,15 @@ describe('merged courses + structures rows', () => {
 		expect(byId.courseListPane.classList.contains('hidden')).toBe(false);
 		expect(byId.structurePane.classList.contains('hidden')).toBe(true);
 		expect(byId.courseDetailPane.classList.contains('hidden')).toBe(true);
-		expect(viewButtons[0].classList.contains('is-active')).toBe(true);
-		expect(viewButtons[1].classList.contains('is-active')).toBe(false);
-		expect(byId.subjectViewToggle.classList.contains('hidden')).toBe(false);
 
-		vm.runInContext('window.setSubjectsWorkspaceView(\'categories\');', ctx);
+		vm.runInContext("window.openStructureBranch('cat-math-root', { courseId: 'course-math' });", ctx);
 		expect(byId.courseListPane.classList.contains('hidden')).toBe(true);
 		expect(byId.structurePane.classList.contains('hidden')).toBe(false);
-		expect(viewButtons[0].classList.contains('is-active')).toBe(false);
-		expect(viewButtons[1].classList.contains('is-active')).toBe(true);
+		expect(state.scopeCalls).toContain('branch:cat-math-root');
 
-		// The pill reset the structure pane to its subject scope, never a branch.
+		vm.runInContext('window.closeStructureBranch();', ctx);
+		expect(byId.courseListPane.classList.contains('hidden')).toBe(false);
+		expect(byId.structurePane.classList.contains('hidden')).toBe(true);
 		expect(state.scopeCalls).toContain('subject');
-		expect(state.scopeCalls.some((call) => String(call).startsWith('branch:'))).toBe(false);
 	});
 });

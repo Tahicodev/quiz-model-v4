@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
@@ -40,10 +40,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-03-unified1" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-03-unified1" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-04-round3" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-04-round3" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-03-unified1" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-04-round3" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -136,7 +136,7 @@
 		<script src="api-client.js?v=2026-10-26-examdoc1" defer></script>
 		<script src="auth.js?v=2026-11-03-subjects1" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-11-03-unified1" defer></script>
+		<script src="settings.js?v=2026-11-04-round3" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -147,16 +147,16 @@
 		<!-- Admin page scripts -->
 		<script src="bulk-selection.js?v=2026-11-03-subjects1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-11-03-unified1" defer></script>
+		<script src="category-management.js?v=2026-11-04-round3" defer></script>
 		<script src="questions-management.js?v=2026-11-01-courses2" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
-		<script src="courses-management.js?v=2026-11-03-unified1" defer></script>
+		<script src="courses-management.js?v=2026-11-04-round3" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="exam-documents.js?v=2026-10-29-ultra1" defer></script>
 		<script src="overview-dashboard.js?v=2026-11-03-subjects7" defer></script>
-		<script src="global-search.js?v=2026-11-03-unified1" defer></script>
+		<script src="global-search.js?v=2026-11-04-round3" defer></script>
 		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="classroom-devices.js?v=2026-10-30-devcards1" defer></script>
@@ -185,7 +185,7 @@
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="vendor/jszip.min.js"></script> -->
 		<script src="ai-question-generator.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="prompt-builder.js?v=2026-11-03-unified1" defer></script>
+		<script src="prompt-builder.js?v=2026-11-04-round3" defer></script>
 		<script src="rag.js?v=2026-09-22-r1" defer></script>
 
 		<!-- Syntax Highlighting -->
@@ -2041,90 +2041,18 @@
 				<!-- Subjects Tab (category management nested per subject) -->
 				<section id="subjects" class="tab-content" data-roles="admin,teacher">
 					<div class="category-management-container">
-						<div class="toolbar">
-							<div class="toolbar-header-group">
-								<h2>Subject Management</h2>
-								<button
-									id="manage-subjects-btn"
-									class="btn"
-									onclick="openSubjectManagerModal()"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<line x1="4" y1="21" x2="4" y2="14"></line>
-										<line x1="4" y1="10" x2="4" y2="3"></line>
-										<line x1="12" y1="21" x2="12" y2="12"></line>
-										<line x1="12" y1="8" x2="12" y2="3"></line>
-										<line x1="20" y1="21" x2="20" y2="16"></line>
-										<line x1="20" y1="12" x2="20" y2="3"></line>
-										<line x1="1" y1="14" x2="7" y2="14"></line>
-										<line x1="9" y1="8" x2="15" y2="8"></line>
-										<line x1="17" y1="16" x2="23" y2="16"></line>
-									</svg>
-									<span>Manage Subjects</span>
-								</button>
-								<button
-									id="add-subject-btn"
-									class="btn btn-primary"
-									onclick="createNewSubjectFlow()"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<line x1="12" y1="5" x2="12" y2="19"></line>
-										<line x1="5" y1="12" x2="19" y2="12"></line>
-									</svg>
-									<span>New Subject</span>
-								</button>
-							</div>
-						</div>
 						<div class="category-band">
-							<!-- One pill per subject (segmented control, same as the
-							     games studio tabs) + legacy bucket + new-subject pill. -->
-							<div class="games-studio-tabs subject-strip" id="subjectTabBar" role="tablist" aria-label="Subjects"></div>
-							<!-- One tab owns the whole authoring chain: the subject's courses and
-							     their structures, or (advanced) the flat category table. -->
-							<div
-								class="subject-view-toggle"
-								id="subjectViewToggle"
-								role="group"
-								aria-label="Subjects workspace view"
-							>
-								<button
-									type="button"
-									class="subject-view-btn is-active"
-									data-view="courses"
-									onclick="setSubjectsWorkspaceView('courses')"
-								>
-									Courses and structures
-								</button>
-								<button
-									type="button"
-									class="subject-view-btn"
-									data-view="categories"
-									onclick="setSubjectsWorkspaceView('categories')"
-								>
-									All categories
-								</button>
+							<!-- Subject Management: one pill per real subject, leftover
+							     unassigned courses as extra pills, and the dashed + New pill. -->
+							<div class="subject-tab-bar-wrap">
+								<h2 class="subject-tab-bar-label" id="subjectTabBarLabel">Subject Management</h2>
+								<div class="games-studio-tabs subject-strip" id="subjectTabBar" role="tablist" aria-labelledby="subjectTabBarLabel"></div>
 							</div>
 							<div id="subjectOverviewPane">
 								<div id="courseListPane">
 									<div class="toolbar">
 										<div class="toolbar-header-group">
-											<h2 id="coursePaneTitle">Courses and structures</h2>
+											<h2 id="coursePaneTitle">Courses & Curriculum Outlines</h2>
 											<button
 												id="add-course-btn"
 												class="btn btn-primary"
@@ -2144,13 +2072,6 @@
 													<path d="M2 12l10 5 10-5"></path>
 												</svg>
 												<span>New Course</span>
-											</button>
-											<button
-												id="import-course-document-btn"
-												class="btn"
-												onclick="openCourseDocumentImportModal()"
-											>
-												<span>Import DOCX / PDF</span>
 											</button>
 										</div>
 										<div class="toolbar-controls">
@@ -2194,8 +2115,8 @@
 										<table id="courseList">
 											<thead>
 												<tr>
-													<th>Name</th>
-													<th>Category Branch</th>
+													<th>Course Name</th>
+													<th>Curriculum Outline (Syllabus)</th>
 													<th>Lessons</th>
 													<th>Status</th>
 													<th>Classes</th>
@@ -2221,7 +2142,7 @@
 											onclick="closeStructureBranch()"
 											hidden
 										>
-											<span>Back to course</span>
+											<span>Back to courses</span>
 										</button>
 									</div>
 								<div class="toolbar category-toolbar">
@@ -4643,6 +4564,8 @@
 									<button
 										type="button"
 										class="btn btn-primary add-option-btn"
+										title="Add option"
+										aria-label="Add option"
 										onclick="addOption(event)"
 									>
 										<svg
@@ -4657,7 +4580,6 @@
 											<line x1="12" y1="5" x2="12" y2="19"></line>
 											<line x1="5" y1="12" x2="19" y2="12"></line>
 										</svg>
-										Add
 									</button>
 								</div>
 								<!-- Hidden textarea for storing options -->
@@ -4931,7 +4853,7 @@
 						<div class="form-row">
 							<div class="form-group half">
 								<div class="label-with-action">
-									<label for="category">Category</label>
+									<label for="category">Curriculum Objective / Category</label>
 									<button
 										type="button"
 										class="btn-text-action"
@@ -4950,14 +4872,14 @@
 											<line x1="12" y1="5" x2="12" y2="19"></line>
 											<line x1="5" y1="12" x2="19" y2="12"></line>
 										</svg>
-										New Category
+										+ New Category / Axis
 									</button>
 								</div>
 
 								<!-- Select Mode -->
 								<div id="category-select-container">
 									<select id="category" class="form-control">
-										<option value="">Uncategorized</option>
+										<option value="">Uncategorized (General Pool)</option>
 									</select>
 								</div>
 
@@ -5146,22 +5068,22 @@
 				<div class="modal-body">
 					<form id="categoryForm" class="modal-form-layout">
 						<div class="form-group">
-							<label for="categoryName">Category Name</label>
-							<input type="text" id="categoryName" required />
+							<label for="categoryName">Category / Outline Node Name</label>
+							<input type="text" id="categoryName" placeholder="e.g. Chapter 1: Fractions / Module 1: Grammar / Axis: Addition" required />
 						</div>
 						<div class="form-group">
-							<label for="categorySubject">Subject</label>
+							<label for="categorySubject">Subject / Discipline</label>
 							<select id="categorySubject" class="form-control" onchange="populateCategoryParentPicker(currentCategoryId)"></select>
-							<small class="text-muted">Categories are organized separately inside each subject.</small>
+							<small class="text-muted">Categories and course structures are organized inside each subject.</small>
 						</div>
 						<div class="form-group">
-							<label for="categoryDescription">Description</label>
-							<textarea id="categoryDescription" rows="2"></textarea>
+							<label for="categoryDescription">Description / Pedagogical Notes</label>
+							<textarea id="categoryDescription" rows="2" placeholder="Optional learning objectives or summary for this outline node"></textarea>
 						</div>
 						<div class="form-group">
-							<label for="categoryParent">Parent category</label>
+							<label for="categoryParent">Parent Chapter or Topic</label>
 							<select id="categoryParent" class="form-control"></select>
-							<small class="text-muted" style="display: block; margin-top: 4px;">Optional — nest this inside another category (e.g. Addition inside Math). Questions can only be filed in categories without subcategories.</small>
+							<small class="text-muted" style="display: block; margin-top: 4px;">Optional — nest this inside a parent chapter or topic (e.g. Addition inside Math). Leave blank to create a top-level Chapter / Module. Questions attach to leaf topics and axes.</small>
 						</div>
 						<div class="form-group">
 							<label>Color</label>
@@ -5240,11 +5162,11 @@
 				<div class="modal-body">
 					<form id="quickCategoryForm">
 						<div class="form-group">
-							<label for="quickCategoryName">Name</label>
-							<input type="text" id="quickCategoryName" required />
+							<label for="quickCategoryName">Category / Topic Name</label>
+							<input type="text" id="quickCategoryName" placeholder="e.g. Chapter 1: Fractions / Module 1: Grammar" required />
 						</div>
 						<div class="form-group">
-							<label for="quickCategorySubject">Subject</label>
+							<label for="quickCategorySubject">Subject / Discipline</label>
 							<select id="quickCategorySubject" class="form-control"></select>
 						</div>
 						<div class="form-group">

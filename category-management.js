@@ -92,19 +92,37 @@ function reconcileSubjectsFromServer() {
 		});
 }
 
-// The legacy bucket is a real selection, so it survives a refresh; anything
-// else that vanished falls back to the first remaining subject.
+// A real subject, or a leftover unassigned course/structure tab, survives a
+// refresh. Anything else falls back to the first remaining subject (or the
+// first leftover course if no subjects are left).
 function selectFirstKnownSubject() {
+	if (categorySubjects.some((subject) => String(subject.id) === activeCategorySubjectId)) {
+		if (!activeLegacyWorkspaceKey) return false;
+		activeLegacyWorkspaceKey = '';
+		return true;
+	}
+	const leftover = listUnassignedWorkspaceItems();
 	if (
-		activeCategorySubjectId === '__unassigned__' ||
-		categorySubjects.some((subject) => String(subject.id) === activeCategorySubjectId)
+		activeCategorySubjectId === '__unassigned__' &&
+		activeLegacyWorkspaceKey &&
+		leftover.some((item) => item.key === activeLegacyWorkspaceKey)
 	) {
 		return false;
 	}
-	activeCategorySubjectId = categorySubjects.length
-		? String(categorySubjects[0].id)
-		: '__unassigned__';
-	return true;
+	if (categorySubjects.length) {
+		activeCategorySubjectId = String(categorySubjects[0].id);
+		activeLegacyWorkspaceKey = '';
+		return true;
+	}
+	if (leftover.length) {
+		activeCategorySubjectId = '__unassigned__';
+		activeLegacyWorkspaceKey = leftover[0].key;
+		return true;
+	}
+	const changed = Boolean(activeCategorySubjectId || activeLegacyWorkspaceKey);
+	activeCategorySubjectId = '';
+	activeLegacyWorkspaceKey = '';
+	return changed;
 }
 
 function loadCategorySubjects() {
@@ -113,20 +131,82 @@ function loadCategorySubjects() {
 	categorySubjects = Array.isArray(rows) ? rows : [];
 	reconcileSubjectsFromServer();
 	// Resetting the selection has to repaint the tree as well, otherwise the
-	// band title and the table disagree.
-	if (selectFirstKnownSubject()) updateCategoryList();
+	// band title and the table disagree. Leftover course tabs re-open their
+	// own outline instead of the old unassigned dump.
+	const moved = selectFirstKnownSubject();
+	if (moved && !activeLegacyWorkspaceKey) updateCategoryList();
 	renderSubjectTabBar();
+	if (activeLegacyWorkspaceKey) {
+		selectLegacyWorkspaceItem(activeLegacyWorkspaceKey);
+	}
 	syncCategoryBandTitle();
 	renderCategorySubjectOptions();
 }
 window.refreshCategorySubjects = loadCategorySubjects;
 
 // ── Subject pill bar (segmented control, same design as the games studio
-//    tabs). One pill per subject + the legacy bucket + a dashed “new” pill.
-function getSubjectDisplayName(subjectId) {
-	if (String(subjectId) === '__unassigned__') {
-		return 'Unassigned (legacy)';
+//    tabs). One pill per real subject, leftover unassigned courses as extra
+//    pills, and a dashed “new” pill. Game-generated `Kids · …` buckets are
+//    not subjects and stay out of this bar.
+let activeLegacyWorkspaceKey = '';
+
+function isHiddenAutoCategory(category) {
+	return typeof isAutoGameCategory === 'function' && isAutoGameCategory(category);
+}
+
+function isRealWorkspaceCategory(category) {
+	if (!category || !category.id || category.id === 'uncategorized' || category.isSystem) {
+		return false;
 	}
+	return !isHiddenAutoCategory(category);
+}
+
+function listUnassignedWorkspaceItems() {
+	const cats = typeof categories !== 'undefined' && Array.isArray(categories) ? categories : [];
+	const courses =
+		typeof window.CoursesManagement?.getCourses === 'function'
+			? window.CoursesManagement.getCourses() || []
+			: [];
+	const items = [];
+	const claimedRoots = new Set();
+	for (const course of courses) {
+		if (String(course.subject_id || '')) continue;
+		const root = cats.find((row) => String(row.id) === String(course.category_id || ''));
+		if (root && !isRealWorkspaceCategory(root)) continue;
+		if (isHiddenAutoCategory({ name: course.name })) continue;
+		items.push({
+			key: `course:${course.id}`,
+			kind: 'course',
+			id: String(course.id),
+			name: String(course.name || 'Untitled course'),
+			rootId: course.category_id ? String(course.category_id) : '',
+		});
+		if (course.category_id) claimedRoots.add(String(course.category_id));
+	}
+	for (const cat of cats) {
+		if (cat.parent_id) continue;
+		if (String(cat.subject_id || '')) continue;
+		if (!isRealWorkspaceCategory(cat)) continue;
+		if (claimedRoots.has(String(cat.id))) continue;
+		items.push({
+			key: `branch:${cat.id}`,
+			kind: 'branch',
+			id: String(cat.id),
+			name: String(cat.name || 'Untitled'),
+			rootId: String(cat.id),
+		});
+	}
+	return items.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+function getSubjectDisplayName(subjectId) {
+	if (activeLegacyWorkspaceKey) {
+		const leftover = listUnassignedWorkspaceItems().find(
+			(item) => item.key === activeLegacyWorkspaceKey,
+		);
+		if (leftover) return leftover.name;
+	}
+	if (String(subjectId) === '__unassigned__') return '';
 	const subject = categorySubjects.find((s) => String(s.id) === String(subjectId));
 	return subject ? String(subject.name || '') : '';
 }
@@ -137,13 +217,15 @@ function renderSubjectTabBar() {
 	const plusIcon =
 		'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
 	const pills = categorySubjects.map((subject) => {
-		const active = String(subject.id) === String(activeCategorySubjectId);
+		const active = !activeLegacyWorkspaceKey && String(subject.id) === String(activeCategorySubjectId);
 		return `<button type="button" role="tab" aria-selected="${active}" class="games-studio-tab-btn subject-pill${active ? ' active' : ''}" data-subject-id="${escapeHtml(String(subject.id))}" onclick="selectCategorySubject('${escapeHtml(String(subject.id))}')">${escapeHtml(String(subject.name || ''))}</button>`;
 	});
-	const legacyActive = String(activeCategorySubjectId) === '__unassigned__';
-	pills.push(
-		`<button type="button" role="tab" aria-selected="${legacyActive}" class="games-studio-tab-btn subject-pill subject-pill-legacy${legacyActive ? ' active' : ''}" data-subject-id="__unassigned__" onclick="selectCategorySubject('__unassigned__')" title="Categories created before subjects stayed here">Unassigned (legacy)</button>`,
-	);
+	for (const item of listUnassignedWorkspaceItems()) {
+		const active = activeLegacyWorkspaceKey === item.key;
+		pills.push(
+			`<button type="button" role="tab" aria-selected="${active}" class="games-studio-tab-btn subject-pill${active ? ' active' : ''}" data-legacy-key="${escapeHtml(item.key)}" onclick="selectLegacyWorkspaceItem('${escapeHtml(item.key)}')">${escapeHtml(item.name)}</button>`,
+		);
+	}
 	pills.push(
 		`<button type="button" class="games-studio-tab-btn subject-pill subject-pill-new" onclick="createNewSubjectFlow()" title="New subject">${plusIcon}<span>New</span></button>`,
 	);
@@ -307,7 +389,10 @@ function renderCategorySubjectOptions(selectedId = '') {
 }
 
 function selectCategorySubject(subjectId) {
-	activeCategorySubjectId = String(subjectId || '__unassigned__');
+	activeLegacyWorkspaceKey = '';
+	activeCategorySubjectId = String(
+		subjectId || (categorySubjects[0] ? categorySubjects[0].id : ''),
+	);
 	// A pill switch always leaves branch scope: courses, structures and the
 	// category table are re-filtered for the new subject.
 	categoryScope = { mode: 'subject', rootId: null, courseId: null, courseName: '', rootName: '' };
@@ -322,6 +407,49 @@ function selectCategorySubject(subjectId) {
 	syncCategoryBandTitle();
 	updateCategoryList();
 	if (courses?.refresh) {
+		try {
+			const res = courses.refresh(activeCategorySubjectId);
+			if (res && typeof res.catch === 'function') res.catch(() => { /* list not mounted */ });
+		} catch (_) { /* tab not mounted */ }
+	} else {
+		try { window.renderCourseList?.(); } catch (_) { /* not mounted */ }
+	}
+}
+
+function selectLegacyWorkspaceItem(key) {
+	const item = listUnassignedWorkspaceItems().find((row) => row.key === String(key));
+	if (!item) return;
+	activeCategorySubjectId = '__unassigned__';
+	activeLegacyWorkspaceKey = item.key;
+	renderSubjectTabBar();
+	syncCategoryBandTitle();
+	if (item.rootId) {
+		if (typeof window.openStructureBranch === 'function') {
+			window.openStructureBranch(item.rootId, {
+				courseId: item.kind === 'course' ? item.id : null,
+				courseName: item.kind === 'course' ? item.name : '',
+				rootName: item.name,
+			});
+		} else {
+			setCategoryScope('branch', item.rootId, {
+				courseId: item.kind === 'course' ? item.id : null,
+				courseName: item.kind === 'course' ? item.name : '',
+				rootName: item.name,
+			});
+		}
+		return;
+	}
+	categoryScope = { mode: 'subject', rootId: null, courseId: null, courseName: '', rootName: '' };
+	updateCategoryList();
+	const courses = window.CoursesManagement;
+	if (courses?.setView) {
+		try {
+			courses.setView('courses');
+		} catch (_) { /* list not mounted */ }
+	}
+	if (item.kind === 'course') {
+		try { window.openCourseDetail?.(item.id); } catch (_) { /* detail not mounted */ }
+	} else if (courses?.refresh) {
 		try {
 			const res = courses.refresh(activeCategorySubjectId);
 			if (res && typeof res.catch === 'function') res.catch(() => { /* list not mounted */ });
@@ -347,11 +475,23 @@ function revealCategoryFromActivity(event, categoryId) {
 		/* unreadable mirror: the legacy bucket is the honest fallback */
 	}
 	if (!categorySubjects.length) loadCategorySubjects();
-	const known =
-		subjectId &&
-		(subjectId === '__unassigned__' ||
-			categorySubjects.some((subject) => String(subject.id) === subjectId));
-	selectCategorySubject(known ? subjectId : '__unassigned__');
+	const knownSubject =
+		subjectId && categorySubjects.some((subject) => String(subject.id) === subjectId);
+	if (knownSubject) {
+		selectCategorySubject(subjectId);
+	} else {
+		const rootId = branchRootOf(categoryId) || String(categoryId || '');
+		const leftover = listUnassignedWorkspaceItems().find(
+			(item) => item.rootId === String(rootId) || item.id === String(categoryId),
+		);
+		if (leftover) {
+			selectLegacyWorkspaceItem(leftover.key);
+		} else if (categorySubjects.length) {
+			selectCategorySubject(String(categorySubjects[0].id));
+		} else {
+			selectCategorySubject('');
+		}
+	}
 	// Reveal the owning branch (a course's structure) instead of only moving
 	// the pill, so the highlighted row is actually on screen.
 	revealCategoryPane(categoryId);
@@ -401,8 +541,8 @@ function branchRootOf(categoryId) {
 // ── Subject CRUD (the manager modal owns create / rename / delete; deleting
 //    cascades: its categories detach their questions, its courses are removed)
 function createNewSubjectFlow() {
-	// "+ New" (pill and toolbar button) lands in the manager modal with the
-	// name field focused, so naming always happens in a real input.
+	// "+ New" pill lands in the manager modal with the name field focused,
+	// so naming always happens in a real input.
 	openSubjectManagerModal({ focusNew: true });
 	return null;
 }
@@ -6475,6 +6615,10 @@ window.toggleInlineCategoryInput = toggleInlineCategoryInput;
 window.saveInlineCategory = saveInlineCategory;
 window.deleteSelectedCategories = deleteSelectedCategories;
 window.selectCategorySubject = selectCategorySubject;
+window.selectLegacyWorkspaceItem = selectLegacyWorkspaceItem;
+window.listUnassignedWorkspaceItems = listUnassignedWorkspaceItems;
+window.getActiveLegacyWorkspaceKey = () => activeLegacyWorkspaceKey;
+window.renderSubjectTabBar = renderSubjectTabBar;
 window.revealCategoryFromActivity = revealCategoryFromActivity;
 window.createNewSubjectFlow = createNewSubjectFlow;
 window.openSubjectManagerModal = openSubjectManagerModal;

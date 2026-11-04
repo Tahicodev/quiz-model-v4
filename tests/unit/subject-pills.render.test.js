@@ -2,11 +2,11 @@
  * tests/unit/subject-pills.render.test.js
  *
  * Rendering contract of the Subjects tab:
- *  - the pill bar is the segmented control (one pill per subject + the legacy
- *    bucket + the dashed "New" pill) and only one pill carries .active;
+ *  - the pill bar is the segmented control (one pill per subject + leftover
+ *    unassigned courses + the dashed "New" pill) and only one pill carries .active;
+ *  - game-generated `Kids · …` buckets are not pills;
  *  - the category tree is scoped to the selected subject;
- *  - the synthetic "Uncategorized" row only belongs to the legacy bucket, so
- *    the same global count is not repeated under every subject;
+ *  - the synthetic "Uncategorized" row is not repeated under every subject;
  *  - a subject without a branch yet renders an empty state instead of a
  *    blank table;
  *  - the Manage Subjects table reports per-subject category/course counts.
@@ -120,6 +120,7 @@ beforeAll(() => {
     console,
     confirm: () => true,
     prompt: () => null,
+    isAutoGameCategory: (c) => String((c && c.name) || '').startsWith('Kids · '),
     window: {
       addEventListener() {},
       Auth: {
@@ -154,7 +155,10 @@ beforeAll(() => {
           getValue_sync: () => ({}),
         },
       },
-      CoursesManagement: { refresh: () => Promise.resolve() },
+      CoursesManagement: {
+        refresh: () => Promise.resolve(),
+        getCourses: () => state.courses,
+      },
       BulkSelect: {
         getSelectedIds: () => [],
         clear() {},
@@ -246,6 +250,17 @@ beforeAll(() => {
       ownerId: 't1',
       parent_id: null,
     },
+    {
+      id: 'kids-bb',
+      name: 'Kids · BB',
+      color: '#ec4899',
+      questionCount: 0,
+      dateCreated: '2026-01-05',
+      isSystem: false,
+      created_by: 't1',
+      ownerId: 't1',
+      parent_id: null,
+    },
   ];
   state.questions = [
     { id: 'q-1', question: '2+2?', category: ALGEBRA, category_id: ALGEBRA },
@@ -255,7 +270,7 @@ beforeAll(() => {
   state.courses = [
     { id: 'course-1', category_id: ALGEBRA, subject_id: SUBJECT_MATH },
     { id: 'course-2', category_id: PHYSICS, subject_id: SUBJECT_SCIENCE },
-    { id: 'course-3', category_id: LEGACY, subject_id: null },
+    { id: 'course-3', name: 'Old course', category_id: LEGACY, subject_id: null },
   ];
   vm.runInContext(
     `categories = ${JSON.stringify(state.categories)};
@@ -282,13 +297,21 @@ function selectSubject(id) {
   vm.runInContext(`selectCategorySubject('${id}');`, ctx);
 }
 
+function selectLeftover(key) {
+  vm.runInContext(`selectLegacyWorkspaceItem('${key}');`, ctx);
+}
+
+const LEFTOVER_COURSE = 'course:course-3';
+
 describe('subject pill bar', () => {
-  it('renders one pill per subject plus the legacy bucket and the new pill', () => {
+  it('renders one pill per subject plus leftover unassigned courses and the new pill', () => {
     const html = pillBar.innerHTML;
     expect(html).toContain('>Mathematics</button>');
     expect(html).toContain('>Science</button>');
     expect(html).toContain('>Geography</button>');
-    expect(html).toContain('subject-pill-legacy');
+    expect(html).toContain('>Old course</button>');
+    expect(html).not.toContain('Unassigned (legacy)');
+    expect(html).not.toContain('Kids · BB');
     expect(html).toContain('subject-pill-new');
     expect((html.match(/class="games-studio-tab-btn/g) || []).length).toBe(5);
   });
@@ -304,10 +327,11 @@ describe('subject pill bar', () => {
     expect(bandTitle.textContent).toBe('Mathematics · All categories');
   });
 
-  it('the legacy pill is the active one for the unassigned bucket', () => {
-    selectSubject('__unassigned__');
-    expect(pillBar.innerHTML).toContain('subject-pill-legacy active');
-    expect(bandTitle.textContent).toBe('Unassigned (legacy) · All categories');
+  it('the leftover unassigned course pill is active when selected', () => {
+    selectLeftover(LEFTOVER_COURSE);
+    expect(pillBar.innerHTML).toContain('data-legacy-key="course:course-3"');
+    expect(pillBar.innerHTML).toMatch(/data-legacy-key="course:course-3"[^>]*aria-selected="true"/);
+    expect(bandTitle.textContent).toBe('Old course · Structure of Old course');
     selectSubject(SUBJECT_MATH);
   });
 });
@@ -329,15 +353,13 @@ describe('category tree scoped by subject', () => {
     expect(rowsHtml().some((r) => r.includes('>Uncategorized<'))).toBe(false);
   });
 
-  it('keeps Uncategorized in the legacy bucket, where unfiled questions count', () => {
-    selectSubject('__unassigned__');
-    const unc = rowsHtml().find((r) => r.includes('>Uncategorized<'));
-    expect(unc).toBeDefined();
-    // q-2 carries no category at all, so the global "loose questions" bucket
-    // only ever shows here (the unfiled count lives on the system row).
-    expect(unc).toMatch(/<td>1<\/td>/);
+  it('opens a leftover unassigned course onto its own structure, not a dump tab', () => {
+    selectLeftover(LEFTOVER_COURSE);
     expect(rowsHtml().some((r) => r.includes('>Old branch<'))).toBe(true);
+    expect(rowsHtml().some((r) => r.includes('>Kids · BB<'))).toBe(false);
+    expect(rowsHtml().some((r) => r.includes('>Uncategorized<'))).toBe(false);
     selectSubject(SUBJECT_MATH);
+    expect(rowsHtml().some((r) => r.includes('>Uncategorized<'))).toBe(false);
   });
 
   it('rolls the subtree count up to the branch root', () => {
@@ -490,28 +512,30 @@ describe('creating a subject from the manager modal', () => {
   });
 });
 
-// Refreshing the tab must not silently move the selection: the legacy bucket
-// is a real place (every pre-subject category lives there), and losing it
-// would show one subject's tree under a band titled another.
+// Refreshing the tab must not silently move the selection: a leftover course
+// tab is a real place, and losing it would show one subject's tree under a
+// band titled another.
 describe('selection survives a refresh', () => {
   afterEach(() => {
     selectSubject(SUBJECT_MATH);
   });
 
-  it('keeps the legacy bucket selected and its tree visible', () => {
-    selectSubject('__unassigned__');
+  it('keeps the leftover course tab selected and its tree visible', () => {
+    selectLeftover(LEFTOVER_COURSE);
     vm.runInContext('window.SubjectsManagement.refresh();', ctx);
 
     expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('__unassigned__');
-    expect(pillBar.innerHTML).toContain('subject-pill-legacy active');
-    expect(bandTitle.textContent).toBe('Unassigned (legacy) · All categories');
+    expect(vm.runInContext('activeLegacyWorkspaceKey', ctx)).toBe(LEFTOVER_COURSE);
+    expect(pillBar.innerHTML).toMatch(/data-legacy-key="course:course-3"[^>]*aria-selected="true"/);
+    expect(bandTitle.textContent).toBe('Old course · Structure of Old course');
     expect(rowsHtml().some((r) => r.includes('>Old branch<'))).toBe(true);
   });
 
   it('falls back to the first remaining subject when the selection is gone', () => {
-    selectSubject('__unassigned__');
+    selectLeftover(LEFTOVER_COURSE);
     const treeBefore = rowsHtml().join('|');
     vm.runInContext("activeCategorySubjectId = 'subject-deleted';", ctx);
+    vm.runInContext("activeLegacyWorkspaceKey = '';", ctx);
     vm.runInContext('window.SubjectsManagement.refresh();', ctx);
 
     expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe(SUBJECT_MATH);
@@ -523,16 +547,16 @@ describe('selection survives a refresh', () => {
     expect(bandTitle.textContent).toBe('Mathematics · All categories');
   });
 
-  it('falls back to the legacy bucket when the last subject is deleted', () => {
+  it('falls back to leftover unassigned courses when the last subject is deleted', () => {
     const saved = state.subjects;
     try {
       state.subjects = [];
       vm.runInContext('window.SubjectsManagement.refresh();', ctx);
 
       expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('__unassigned__');
-      expect(pillBar.innerHTML).toContain('subject-pill-legacy active');
-      expect(bandTitle.textContent).toBe('Unassigned (legacy) · All categories');
-      // With no subject left the legacy forest is still reachable.
+      expect(vm.runInContext('activeLegacyWorkspaceKey', ctx)).toBe(LEFTOVER_COURSE);
+      expect(pillBar.innerHTML).toContain('>Old course</button>');
+      expect(pillBar.innerHTML).not.toContain('Unassigned (legacy)');
       expect(rowsHtml().some((r) => r.includes('>Old branch<'))).toBe(true);
     } finally {
       state.subjects = saved;
@@ -619,21 +643,21 @@ describe('cross-tab jumps into the Subjects tab', () => {
     selectSubject(SUBJECT_MATH);
   });
 
-  it('sends a subject-less category to the legacy bucket', () => {
+  it('sends a subject-less category to its leftover course tab', () => {
     jumps.length = 0;
     vm.runInContext(`revealCategoryFromActivity({}, '${LEGACY}')`, ctx);
 
-    expect(pillBar.innerHTML).toContain('subject-pill-legacy active');
+    expect(vm.runInContext('activeLegacyWorkspaceKey', ctx)).toBe(LEFTOVER_COURSE);
     expect(rowsHtml().some((r) => r.includes('>Old branch<'))).toBe(true);
     expect(jumps).toEqual([['subjects', LEGACY]]);
     selectSubject(SUBJECT_MATH);
   });
 
-  it('falls back to the legacy bucket for a category it cannot resolve', () => {
+  it('falls back to the first subject for a category it cannot resolve', () => {
     jumps.length = 0;
     vm.runInContext(`revealCategoryFromActivity({}, 'gone-branch')`, ctx);
 
-    expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('__unassigned__');
+    expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe(SUBJECT_MATH);
     // The jump still happens — the row simply is not there to be flashed.
     expect(jumps).toEqual([['subjects', 'gone-branch']]);
     selectSubject(SUBJECT_MATH);

@@ -327,10 +327,8 @@
 	}
 
 	// ── Subjects workspace: pane and view model ──────────────────────────────
-	// The merged Subjects tab owns the whole authoring chain: the active pill
-	// lists the subject's courses and structures, opening a course reveals its
-	// lessons, and the flat category table survives as an advanced view of the
-	// very same section (never a second structure editor).
+	// The active subject pill lists that subject's courses. Clicking a course
+	// opens its outline/structure (the old category tree) for that branch.
 	let workspaceView = 'courses'; // 'courses' | 'categories' | 'branch' | 'detail'
 	let workspaceBranchCourseId = null;
 
@@ -365,7 +363,8 @@
 			(cat) => cat && cat.id && cat.id !== 'uncategorized' && !cat.isSystem
 				&& !cat.parent_id
 				&& String(cat.subject_id || '') === wanted
-				&& !claimed.has(String(cat.id)),
+				&& !claimed.has(String(cat.id))
+				&& !(typeof isAutoGameCategory === 'function' && isAutoGameCategory(cat)),
 		);
 	}
 
@@ -380,24 +379,30 @@
 		for (const root of rootBranches(subjectId)) {
 			rows.push({ kind: 'structure', course: null, root, label: String(root.name || '') });
 		}
-		return rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+		const leftoverKey =
+			typeof window.getActiveLegacyWorkspaceKey === 'function'
+				? String(window.getActiveLegacyWorkspaceKey() || '')
+				: '';
+		const filtered =
+			subjectId === '__unassigned__' && leftoverKey
+				? rows.filter((row) => {
+					if (leftoverKey.startsWith('course:') && row.course) {
+						return `course:${row.course.id}` === leftoverKey;
+					}
+					if (leftoverKey.startsWith('branch:') && row.root) {
+						return `branch:${row.root.id}` === leftoverKey;
+					}
+					return false;
+				})
+				: rows;
+		return filtered.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
 	}
 
 	function renderWorkspacePanes() {
 		const listPane = document.getElementById('courseListPane');
 		const structurePane = document.getElementById('structurePane');
 		const detailPane = document.getElementById('courseDetailPane');
-		const toggle = document.getElementById('subjectViewToggle');
 		const detailOpen = workspaceView === 'detail';
-		if (toggle) toggle.classList.toggle('hidden', detailOpen || workspaceView === 'branch');
-		// The segmented control mirrors the live pane, including the branch scope
-		// reached from a course row (hidden there, but still the "categories" side).
-		for (const btn of document.querySelectorAll('#subjectViewToggle .subject-view-btn')) {
-			const listSide = workspaceView === 'courses' || workspaceView === 'detail';
-			const active = btn.dataset.view === (listSide ? 'courses' : 'categories');
-			btn.classList.toggle('is-active', active);
-			btn.setAttribute('aria-pressed', String(active));
-		}
 		if (listPane) listPane.classList.toggle('hidden', detailOpen || workspaceView !== 'courses');
 		if (structurePane) structurePane.classList.toggle('hidden', detailOpen || workspaceView === 'courses');
 		if (detailPane) {
@@ -443,8 +448,8 @@
 	window.closeStructureBranch = function () {
 		window.SubjectsManagement?.setView?.('subject');
 		workspaceBranchCourseId = null;
-		if (workspaceView === 'branch') workspaceView = 'courses';
-		if (workspaceView !== 'branch' && currentCourse) workspaceView = 'detail';
+		currentCourse = null;
+		workspaceView = 'courses';
 		renderCourseList();
 		renderWorkspacePanes();
 	};
@@ -480,7 +485,7 @@
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></button>' +
 			`<button class="exam-action-btn course-action-document" aria-label="Create course document" title="Create course document" onclick="createCourseDocument('${id}')">` +
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg></button>' +
-			`<button class="exam-action-btn" title="${published ? 'Unpublish' : 'Publish'}" aria-label="${published ? 'Unpublish' : 'Publish'}" onclick="toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')">` +
+			`<button class="exam-action-btn course-action-publish" title="${published ? 'Unpublish' : 'Publish'}" aria-label="${published ? 'Unpublish' : 'Publish'}" onclick="toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')">` +
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg></button>' +
 			`<button class="exam-action-btn exam-delete-btn" title="Delete course" aria-label="Delete course" onclick="deleteCourseConfirm('${id}')">` +
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>' +
@@ -518,8 +523,11 @@
 		}
 		const course = row.course;
 		const published = course.status === 'published';
+		const openStructure = row.kind !== 'unlinked' && course.category_id
+			? `openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})`
+			: `openCourseDetail('${esc(course.id)}')`;
 		const nameCell =
-			`<td><button type="button" class="course-name-link" onclick="openCourseDetail('${esc(course.id)}')" aria-label="Open course ${esc(course.name)}">${esc(course.name)}</button>` +
+			`<td><button type="button" class="course-name-link" onclick="${openStructure}" aria-label="Open structure of ${esc(course.name)}">${esc(course.name)}</button>` +
 			kindChip(row.kind) + '</td>';
 		return (
 			`<tr data-row-key="${esc(course.id)}" data-id="${esc(course.id)}" data-kind="${row.kind}">` +
@@ -549,8 +557,35 @@
 			);
 		});
 		if (!rows.length) {
+			const activeSub = activeSubjectId();
+			const hasSubjects = subjectList().length > 0;
+			const subjectName = activeSub && activeSub !== '__unassigned__'
+				? (subjectList().find((s) => String(s.id) === String(activeSub))?.name || 'this subject')
+				: 'Unassigned';
 			tbody.innerHTML =
-				'<tr><td colspan="7" class="text-muted course-empty-cell" style="text-align:center;padding:24px;">No course or structure here yet — click "New Course" to create one.</td></tr>';
+				'<tr><td colspan="7" class="text-muted course-empty-cell">' +
+				'<div class="curriculum-starter-card">' +
+				'<div class="curriculum-starter-icon">📚</div>' +
+				'<h3>Welcome to your Teaching & Quiz Studio</h3>' +
+				(hasSubjects
+					? `<p class="curriculum-starter-subtitle">No courses or outlines defined for <strong>${esc(subjectName)}</strong> yet. Create your first course outline to start generating lessons and quiz questions.</p>`
+					: '<p class="curriculum-starter-subtitle">Start by creating your first subject (e.g. Mathematics, French, Science), then define courses and outlines.</p>') +
+				'<div class="curriculum-steps-guide">' +
+				'<div class="curriculum-step-item"><span class="step-num">1</span><strong>1. Subject</strong><small>Broad curriculum domain</small></div>' +
+				'<div class="curriculum-step-arrow" aria-hidden="true">→</div>' +
+				'<div class="curriculum-step-item"><span class="step-num">2</span><strong>2. Course Outline</strong><small>Chapters, topics & axes</small></div>' +
+				'<div class="curriculum-step-arrow" aria-hidden="true">→</div>' +
+				'<div class="curriculum-step-item"><span class="step-num">3</span><strong>3. Dual Action</strong><small>Lessons & quiz generation</small></div>' +
+				'</div>' +
+				'<div class="curriculum-starter-actions">' +
+				(hasSubjects
+					? '<button type="button" class="btn btn-primary" onclick="openCourseGeneratorModal()">+ New Course</button>' +
+					  '<button type="button" class="btn" onclick="openCourseDocumentImportModal()">📂 Import Syllabus (DOCX / PDF)</button>'
+					: '<button type="button" class="btn btn-primary" onclick="createNewSubjectFlow()">+ Create My First Subject</button>' +
+					  '<button type="button" class="btn" onclick="openCourseDocumentImportModal()">📂 Import Syllabus (DOCX / PDF)</button>') +
+				'</div>' +
+				'<p class="course-generator-hint" style="margin-top:14px;font-size:0.82rem;">No course or structure here yet — click "New Course" to create one.</p>' +
+				'</div></td></tr>';
 			return;
 		}
 		tbody.innerHTML = rows.map(overviewRowHtml).join('');
@@ -569,33 +604,84 @@
 				event.stopPropagation();
 				if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
 					if (row.kind === 'structure') openStructureBranch(row.root.id);
-					else openCourseDetail(row.course.id);
+					else if (row.kind !== 'unlinked' && row.course?.category_id) {
+						openStructureBranch(row.course.category_id, { courseId: row.course.id });
+					} else openCourseDetail(row.course.id);
 					return;
 				}
 				if (row.kind === 'structure') {
 					window.MobileActionSheet.open(`Structure: ${String(row.root.name || '')}`, [
-						{ label: 'Create a course here', icon: '', onClick: () => window.createCourseOnBranch(row.root.id) },
-						{ label: 'Edit structure', icon: '', onClick: () => openStructureBranch(row.root.id) },
-						{ label: 'Generate outline with AI', icon: '', onClick: () => window.openCourseFromCategory(row.root.id) },
+						{
+							label: 'Create a course here',
+							icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
+							onClick: () => window.createCourseOnBranch(row.root.id),
+						},
+						{
+							label: 'Edit structure',
+							icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+							onClick: () => openStructureBranch(row.root.id),
+						},
+						{
+							label: 'Generate outline with AI',
+							icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path><path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14z"></path></svg>',
+							onClick: () => window.openCourseFromCategory(row.root.id),
+						},
 					]);
 					return;
 				}
 				const course = row.course;
 				if (row.kind === 'unlinked') {
 					window.MobileActionSheet.open(`Course: ${String(course.name || '')}`, [
-						{ label: 'Link a structure', icon: '', onClick: () => window.linkStructure(course.id) },
-						{ label: 'Open course', icon: '', onClick: () => openCourseDetail(course.id) },
-						{ label: 'Delete course', icon: '', onClick: () => deleteCourseConfirm(course.id), variant: 'danger' },
+						{
+							label: 'Link a structure',
+							icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>',
+							onClick: () => window.linkStructure(course.id),
+						},
+						{
+							label: 'Open course',
+							icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+							onClick: () => openCourseDetail(course.id),
+						},
+						{
+							label: 'Delete course',
+							icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+							onClick: () => deleteCourseConfirm(course.id),
+							variant: 'danger',
+						},
 					]);
 					return;
 				}
 				const published = course.status === 'published';
 				const actions = [
-					{ label: 'Open course', icon: '', onClick: () => openCourseDetail(course.id) },
-					{ label: 'Edit structure', icon: '', onClick: () => openStructureBranch(course.category_id, { courseId: course.id }) },
-					{ label: 'Create course document', icon: '', onClick: () => window.createCourseDocument(course.id) },
-					{ label: published ? 'Unpublish course' : 'Publish course', icon: '', onClick: () => toggleCoursePublish(course.id, published ? 'unpublish' : 'publish'), variant: published ? 'default' : 'primary' },
-					{ label: 'Delete course', icon: '', onClick: () => deleteCourseConfirm(course.id), variant: 'danger' },
+					{
+						label: 'Open course',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+						onClick: () => openCourseDetail(course.id),
+					},
+					{
+						label: 'Edit structure',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+						onClick: () => openStructureBranch(course.category_id, { courseId: course.id }),
+					},
+					{
+						label: 'Create course document',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="13" y2="17"></line></svg>',
+						onClick: () => window.createCourseDocument(course.id),
+					},
+					{
+						label: published ? 'Unpublish course' : 'Publish course',
+						icon: published
+							? '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>'
+							: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
+						onClick: () => toggleCoursePublish(course.id, published ? 'unpublish' : 'publish'),
+						variant: published ? 'default' : 'primary',
+					},
+					{
+						label: 'Delete course',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+						onClick: () => deleteCourseConfirm(course.id),
+						variant: 'danger',
+					},
 				];
 				window.MobileActionSheet.open(`Course: ${String(course.name || '')}`, actions);
 			});
@@ -617,6 +703,7 @@
 			}
 			coursesCache = [];
 		}
+		try { window.renderSubjectTabBar?.(); } catch (_) { /* pills not mounted */ }
 	}
 
 
@@ -769,7 +856,7 @@
 			`<div class="course-import-heading-fields">` +
 			`<label>Source line<input type="number" min="1" max="${courseImportDraft.lineCount}" value="${Number(heading.line) || 1}" data-import-line onchange="updateCourseImportSourceLine(this)"></label>` +
 			`<label>Hierarchy<select data-import-level>${levelOptions}</select></label>` +
-			`<label>Heading title<input type="text" maxlength="100" value="${esc(title)}" data-import-title oninput="clearCourseImportHeadingError(this)"><small data-import-title-error hidden>Already exists in this subject. Rename this title.</small><small>Up to 100 characters</small></label>` +
+			`<label>Heading title<input type="text" maxlength="100" value="${esc(title)}" data-import-title oninput="clearCourseImportHeadingError(this)"><small data-import-title-error hidden>Already exists in this subject. Rename this title.</small></label>` +
 			`<button type="button" class="btn btn-sm course-import-remove" onclick="removeCourseImportHeading(this)" aria-label="Remove heading"><span aria-hidden="true">&times;</span> Remove</button>` +
 			'</div>' +
 			`<p class="course-import-source-line" data-import-source>${esc(sourceText)}</p>` +
@@ -781,27 +868,39 @@
 		const rows = draft.headings.map((heading, index) => courseImportHeadingRow(heading, index)).join('');
 		const body =
 			'<div class="course-import-stepper" aria-label="Import steps"><span class="is-complete"><b>1</b> Upload</span><i></i><span class="is-current"><b>2</b> Organize</span><i></i><span><b>3</b> Create course</span></div>' +
-			`<div class="course-import-course-fields"><div class="form-group"><label for="courseImportSubject">Subject</label><div class="course-import-subject-picker"><select id="courseImportSubject" required>${subjectList().map((subject) => `<option value="${esc(subject.id)}">${esc(subject.name)}</option>`).join('')}</select><button type="button" class="btn btn-sm" onclick="createCourseImportSubject()">New subject</button></div><small>Imported categories are saved inside this subject.</small></div><div class="form-group"><label for="courseImportName">Course name</label>` +
+			`<div class="course-import-course-fields"><div class="form-group"><label for="courseImportSubject">Subject</label><div class="course-import-subject-picker"><select id="courseImportSubject" required>${subjectList().map((subject) => `<option value="${esc(subject.id)}">${esc(subject.name)}</option>`).join('')}</select><button type="button" class="btn btn-sm course-import-subject-new-btn" onclick="createCourseImportSubject()"><span aria-hidden="true">＋</span> New subject</button></div><small>Imported categories are saved inside this subject.</small></div><div class="form-group"><label for="courseImportName">Course name</label>` +
 			`<input type="text" id="courseImportName" maxlength="200" value="${esc(draft.title || '')}" style="width:100%;"></div>` +
-			'<div class="form-group"><label for="courseImportDescription">Course description</label>' +
+			'<div class="form-group course-import-desc"><label for="courseImportDescription">Course description</label>' +
 			`<textarea id="courseImportDescription" maxlength="2000" rows="2" style="width:100%;">${esc(draft.description || '')}</textarea></div></div>` +
 			'<div class="course-import-notice"><span aria-hidden="true">✓</span><p><strong>Private and offline</strong><br>No AI or internet connection is needed. Extracted text stays unchanged; lines you do not mark as headings remain section content.</p></div>' +
-			`<div class="course-import-section-heading"><div><span class="course-import-step-label">STEP 1 · ORGANIZE</span><h3>Choose document headings</h3><p>Search or browse the extracted text. Select each title, assign its level, and add it to the outline.</p></div><span class="course-import-auto-count">${draft.headings.length ? `${draft.headings.length} suggested` : 'Manual selection'}</span></div>` +
+			// STEP tabs: the two sections of the review stay side by side as tab
+			// panes so each step keeps its own focused workspace.
+			`<div class="course-import-review-tabs" role="tablist" aria-label="Review steps">` +
+			'<button type="button" class="course-import-review-tab active" role="tab" aria-selected="true" aria-controls="courseImportOrganizePane" onclick="setCourseImportReviewTab(\'organize\')">STEP 1 · ORGANIZE</button>' +
+			`<button type="button" class="course-import-review-tab" role="tab" aria-selected="false" aria-controls="courseImportReviewPane" onclick="setCourseImportReviewTab('review')">STEP 2 · REVIEW <span class="course-import-review-tab-count" data-import-outline-count>${draft.headings.length} heading${draft.headings.length === 1 ? '' : 's'}</span></button>` +
+			'</div>' +
+			'<div id="courseImportOrganizePane" class="course-import-review-pane course-import-review-pane-organize">' +
+			'<div class="course-import-section-heading"><div><h3>Choose document headings</h3><p>Search or browse the extracted text. Select each title, assign its level, and add it to the outline.</p></div>' +
+			`<span class="course-import-auto-count">${draft.headings.length ? `${draft.headings.length} suggested` : 'Manual selection'}</span></div>` +
 			`<p class="course-generator-hint">${draft.detectionMethod === 'docx-styles-and-local-patterns' ? 'Outline detected locally from DOCX heading styles and title patterns.' : 'Outline detected locally from document title patterns.'} No AI model or internet connection is required. Review the source line and hierarchy for every heading; add, remove, or edit headings as needed. Text is preserved exactly and assigned to the section immediately above it. Text before the first heading becomes an Introduction.</p>` +
 			'<p class="course-generator-hint">Detection is best-effort: a document’s heading styles and numbering may not match its intended structure. Check every heading before creating the course. Images, diagrams, tables, and original page layout are not imported.</p>' +
 			'<div class="course-import-level-tools">' +
-			'<label>Make selected lines<select id="courseImportBulkLevel"><option value="1">Main category · Heading 1</option><option value="2">Subcategory · Heading 2</option><option value="3">Sub-subcategory · Heading 3</option><option value="4">Axis · content section · Heading 4</option></select></label>' +
+			'<label>Make selected lines<select id="courseImportBulkLevel"><option value="1">Main category · Level 1</option><option value="2">Subcategory · Level 2</option><option value="3">Axis · Level 3</option><option value="4">Axis · content section · Heading 4</option></select></label>' +
 			'<span data-import-selection-count aria-live="polite">No lines selected</span>' +
 			'<button type="button" class="btn btn-primary btn-sm" data-import-add-source-lines onclick="addSelectedCourseImportSourceLines()" disabled>Add to outline <span aria-hidden="true">→</span></button>' +
 			'</div>' +
-			'<p class="course-import-instructions">Use Heading 1 for the main category, Heading 2 for a subcategory, Heading 3 for an optional sub-subcategory, and Heading 4 for an axis. Text after each heading is saved as that section’s lesson content.</p>' +
+			'<p class="course-import-instructions">Use Heading 1 for the main category, Heading 2 for a subcategory, Heading 3 for an optional sub-subcategory, and Heading 4 for an axis. Lines not added as headings remain content. Text after each heading is saved as that section’s lesson content.</p>' +
 			'<div id="courseImportSourcePicker" class="course-import-source-picker"></div>' +
-			`<div class="course-import-section-heading"><div><span class="course-import-step-label">STEP 2 · REVIEW</span><h3>Your course outline</h3><p>Rename headings or fine-tune their levels before creating the course.</p></div><span class="course-import-outline-count" data-import-outline-count>${draft.headings.length} headings</span></div>` +
+			`<details class="course-import-source"><summary>View extracted text (${draft.lineCount} lines)</summary><pre>${esc(draft.documentText)}</pre></details>` +
+			'</div>' +
+			'<div id="courseImportReviewPane" class="course-import-review-pane" hidden>' +
+			'<div class="course-import-section-heading"><div><h3>Your course outline</h3><p>Rename headings or fine-tune their levels before creating the course.</p></div></div>' +
 			'<div class="course-import-conflict-notice" data-import-conflict-notice role="alert" hidden></div>' +
 			`<div id="courseImportHeadings">${rows}</div>` +
 			'<div class="course-import-empty-outline" data-import-outline-empty hidden>No headings yet. Select title lines above to build your course outline.</div>' +
 			'<button type="button" class="btn course-import-add-manual" onclick="addCourseImportHeading()">Add a heading manually</button>' +
-			`<details class="course-import-source"><summary>View extracted text (${draft.lineCount} lines)</summary><pre>${esc(draft.documentText)}</pre></details>` +
+			'</div>' +
+			'<div class="course-import-review-cta"><button type="button" class="btn btn-primary" id="courseImportGoReview" onclick="setCourseImportReviewTab(\'review\')" disabled>Review outline <span aria-hidden="true">→</span></button></div>' +
 			'<p class="course-import-footnote">Text before the first heading becomes an introduction. Images, tables, diagrams, and original page layout are not imported.</p>';
 		const footer =
 			'<button type="button" class="btn" onclick="openCourseDocumentImportModal()">Choose another file</button>' +
@@ -813,6 +912,23 @@
 		window.renderCourseImportSourcePicker();
 		window.updateCourseImportOutlineCount();
 	}
+
+	// The two STEP panels toggle as tabs (STEP 1 · ORGANIZE / STEP 2 ·
+	// REVIEW): nothing is re-rendered, only pane visibility and tab state.
+	window.setCourseImportReviewTab = function (tab) {
+		const root = document.getElementById('courseImportModal');
+		if (!root) return;
+		const reviewTab = tab === 'review';
+		root.querySelectorAll('.course-import-review-tab').forEach((button) => {
+			const active = button.getAttribute('aria-controls') === (reviewTab ? 'courseImportReviewPane' : 'courseImportOrganizePane');
+			button.classList.toggle('active', active);
+			button.setAttribute('aria-selected', String(active));
+		});
+		const organize = document.getElementById('courseImportOrganizePane');
+		const review = document.getElementById('courseImportReviewPane');
+		if (organize) organize.hidden = reviewTab;
+		if (review) review.hidden = !reviewTab;
+	};
 
 	window.createCourseImportSubject = async function () {
 		const name = window.prompt('Name this subject (for example: Mathematics):')?.trim();
@@ -1093,6 +1209,8 @@
 		if (badge) badge.textContent = `${count} heading${count === 1 ? '' : 's'}`;
 		const emptyNotice = document.querySelector('[data-import-outline-empty]');
 		if (emptyNotice) emptyNotice.hidden = count > 0;
+		const goReview = document.getElementById('courseImportGoReview');
+		if (goReview) goReview.disabled = count === 0;
 	};
 
 	window.showCourseImportCategoryConflicts = function (error) {
@@ -1108,6 +1226,10 @@
 		const firstConflict = Array.from(document.querySelectorAll('#courseImportHeadings [data-import-heading]'))
 			.find((row) => courseImportDraft.conflictingCategoryNames.has(row.querySelector('[data-import-title]')?.value.trim()));
 		const input = firstConflict?.querySelector('[data-import-title]');
+		if (firstConflict) {
+			// Conflicts are fixed in STEP 2, so the review tab must surface them.
+			window.setCourseImportReviewTab?.('review');
+		}
 		if (input) {
 			firstConflict.scrollIntoView({ behavior: 'smooth', block: 'center' });
 			input.focus({ preventScroll: true });
@@ -1238,28 +1360,32 @@
 			);
 		}
 
+		const activeSubName = subjectList().find((s) => String(s.id) === String(activeSubjectId()))?.name || 'Current Subject';
 		const body =
+			`<div class="course-modal-subject-banner"><span class="subject-badge-pill">Subject / Discipline</span><strong>${esc(activeSubName)}</strong></div>` +
 			'<input id="courseIncludeEmptyCategories" type="hidden" value="' + (defaults.includeEmptyCategories ? 'true' : 'false') + '">' +
-			'<div class="form-group"><label for="newCourseName">Course name</label>' +
-			`<input type="text" id="newCourseName" value="${esc(defaults.name || '')}" placeholder="e.g. French — Unit 2 vocabulary course" style="width:100%;"></div>` +
+			'<div class="form-group"><label for="newCourseName">Course Title</label>' +
+			`<input type="text" id="newCourseName" value="${esc(defaults.name || '')}" placeholder="e.g. Mathematics — Fractions & Decimals (Grade 5)" style="width:100%;"></div>` +
 			'<div class="course-generator-tabs" role="tablist" aria-label="Course category source">' +
-			'<button type="button" class="course-generator-tab active" role="tab" aria-selected="true" aria-controls="courseExistingPane" onclick="setCourseGeneratorMode(\'existing\')">Use existing categories</button>' +
-			'<button type="button" class="course-generator-tab" role="tab" aria-selected="false" aria-controls="courseNewStructurePane" onclick="setCourseGeneratorMode(\'new\')">Create a new structure</button>' +
+			'<button type="button" class="course-generator-tab" role="tab" aria-selected="false" aria-controls="courseNewStructurePane" onclick="setCourseGeneratorMode(\'new\')">Build New Outline</button>' +
+			'<button type="button" class="course-generator-tab active" role="tab" aria-selected="true" aria-controls="courseExistingPane" onclick="setCourseGeneratorMode(\'existing\')">Use existing outlines</button>' +
 			'</div>' +
+			'<div class="course-generator-quick-import"><button type="button" class="btn btn-sm" onclick="closeCourseModal(\'courseGenModal\');openCourseDocumentImportModal();">📄 Or extract syllabus from Word / PDF document →</button></div>' +
 			`<div id="courseExistingPane" class="course-generator-pane">` +
 			'<div class="form-group"><label for="newCourseBranch">Category branch</label>' +
 			(options.length
 				? `<select id="newCourseBranch" style="width:100%;">${options.join('')}</select>`
-				: '<div class="course-generator-hint">No categories yet. Choose “Create a new structure” to start one.</div>') +
+				: '<div class="course-generator-hint">No categories yet. Choose “Build New Outline” to start one.</div>') +
 			'</div>' +
 			'<p class="course-generator-hint">Lessons are created for leaf categories that already contain questions.</p>' +
 			'</div>' +
 			'<div id="courseNewStructurePane" class="course-generator-pane hidden" hidden>' +
-			'<div class="form-group"><label for="newCourseRootCategory">Main category</label>' +
-			'<input type="text" id="newCourseRootCategory" maxlength="100" placeholder="e.g. French grammar" style="width:100%;"></div>' +
-			'<div class="course-generator-hint">Add subcategories and the axes beneath each one. A lesson outline will be generated for every axis; questions can be added later.</div>' +
+			'<div class="course-guidance-card"><span class="guidance-icon">💡</span><div><strong>How Course Structure Works</strong><p>A course outline is organized into <strong>Chapters (Module)</strong>, <strong>Topics (Sections)</strong>, and <strong>Learning Objectives (Axes)</strong>. Each objective will have its own <strong>interactive lesson</strong> and will be the target for <strong>evaluations, quizzes, and games</strong>.</p></div></div>' +
+			'<div class="form-group"><label for="newCourseRootCategory">Chapter / Module Name (Main category)</label>' +
+			'<input type="text" id="newCourseRootCategory" maxlength="100" placeholder="e.g. Chapter 1: Verbes du 1er groupe / Fractions de base" style="width:100%;"></div>' +
+			'<div class="course-generator-hint">Add topics and the learning objectives beneath each one. A lesson outline will be generated for every axis; questions can be added later.</div>' +
 			'<div id="courseSubcategoryGroups"></div>' +
-			'<button type="button" class="btn btn-sm" onclick="addCourseSubcategoryGroup()">+ Add subcategory</button>' +
+			'<button type="button" class="btn btn-sm btn-secondary" onclick="addCourseSubcategoryGroup()">+ Add Topic / Section</button>' +
 			'</div>' +
 			'<div class="course-generator-settings">' +
 			'<div class="form-group"><label for="newCourseLanguage">Content language</label>' +
@@ -1269,9 +1395,10 @@
 		const footer =
 			'<button type="button" class="btn" onclick="closeCourseModal(\'courseGenModal\')">Cancel</button>' +
 			'<button type="button" class="btn btn-primary" id="courseGenGo" onclick="runCourseGeneration()">Generate course</button>';
-		openModal('courseGenModal', 'New Course', body, footer);
+		openModal('courseGenModal', 'New Course & Curriculum Outline', body, footer, 'course-gen-modal');
 		window.addCourseSubcategoryGroup();
 		if (defaults.includeEmptyCategories) window.setCourseGeneratorMode('existing');
+		else window.setCourseGeneratorMode('new');
 	};
 
 	window.setCourseGeneratorMode = function (mode) {
@@ -1283,12 +1410,12 @@
 		if (existing) { existing.classList.toggle('hidden', isNew); existing.hidden = isNew; }
 		if (create) { create.classList.toggle('hidden', !isNew); create.hidden = !isNew; }
 		modal?.querySelectorAll('.course-generator-tab').forEach((tab, index) => {
-			const active = index === (isNew ? 1 : 0);
+			const active = index === (isNew ? 0 : 1);
 			tab.classList.toggle('active', active);
 			tab.setAttribute('aria-selected', String(active));
 		});
 		if (button) {
-			button.textContent = isNew ? 'Create course' : 'Generate course';
+			button.textContent = isNew ? 'Create course & outline' : 'Generate course';
 			button.onclick = isNew ? window.submitCourseWithStructure : window.runCourseGeneration;
 		}
 	};
@@ -1300,11 +1427,86 @@
 		const group = document.createElement('div');
 		group.className = 'course-subcategory-group';
 		group.innerHTML =
-			`<div class="course-subcategory-heading"><strong>Subcategory ${index}</strong>` +
+			`<div class="course-subcategory-heading"><strong>Topic / Section ${index} (Subcategory ${index})</strong>` +
 			`<button type="button" class="btn btn-sm" aria-label="Remove subcategory ${index}" onclick="this.closest('.course-subcategory-group').remove()">Remove</button></div>` +
-			`<div class="form-group"><label>Subcategory name</label><input type="text" class="course-subcategory-name" maxlength="100" placeholder="e.g. Verb tenses" style="width:100%;"></div>` +
-			`<div class="form-group"><label>Axes <span class="text-muted">(one per line)</span></label><textarea class="course-subcategory-axes" rows="3" placeholder="Present tense&#10;Past tense" style="width:100%;"></textarea></div>`;
+			`<div class="form-group"><label>Topic / Section Name</label><input type="text" class="course-subcategory-name" maxlength="100" placeholder="e.g. Présent de l'indicatif / Simplification" style="width:100%;"></div>` +
+			// Axes editor: an option-input-style row (same pattern as the
+			// Add-question modal) plus a polished Add button; every axis lands
+			// on its own line in the hidden textarea below, which is what the
+			// submit pipeline reads.
+			'<div class="form-group course-axes-editor"><label>Learning Objectives / Axes <span class="text-muted">(one per line — each becomes a lesson and quiz target)</span></label>' +
+			'<div class="option-add-row course-axes-add-row">' +
+			'<input type="text" class="option-text-input course-axes-input" placeholder="Enter an axis, e.g. Radical et terminaison…" aria-label="New learning objective axis" onkeydown="courseAxesInputKeydown(event, this)">' +
+			'<button type="button" class="btn btn-primary add-option-btn course-axes-add-btn" title="Add axis" aria-label="Add learning objective axis" onclick="addCourseAxisToGroup(this)">' +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
+			'</button></div>' +
+			`<textarea class="course-subcategory-axes" rows="3" style="display:none;" aria-hidden="true" tabindex="-1"></textarea>` +
+			'<p class="course-axes-empty" hidden>No axes yet — add the first learning objective above.</p>' +
+			'<div class="course-axes-chips" role="list" aria-label="Learning objectives in this section"></div></div>';
 		container.appendChild(group);
+		renderCourseSubcategoryAxes(group, []);
+	};
+
+	// Every axis is kept as one textarea line so `submitCourseWithStructure`
+	// (which reads the textarea content) needs no change.
+	function readCourseSubcategoryAxes(group) {
+		return (group.querySelector('.course-subcategory-axes')?.value || '')
+			.split(/\r?\n/)
+			.map((axis) => axis.trim())
+			.filter(Boolean);
+	}
+
+	function renderCourseSubcategoryAxes(group, axes) {
+		const textarea = group.querySelector('.course-subcategory-axes');
+		if (textarea) textarea.value = axes.join('\n');
+		const chips = group.querySelector('.course-axes-chips');
+		if (chips) {
+			chips.innerHTML = axes
+				.map(
+					(axis, axisIndex) =>
+						'<span class="course-axes-chip" role="listitem">' +
+						`<span class="course-axes-chip-label">${esc(axis)}</span>` +
+						`<button type="button" class="course-axes-chip-remove" aria-label="Remove axis: ${esc(axis)}" data-axis-index="${axisIndex}" onclick="removeCourseAxisFromGroup(this)">&times;</button>` +
+						'</span>',
+				)
+				.join('');
+		}
+		const empty = group.querySelector('.course-axes-empty');
+		if (empty) empty.hidden = axes.length > 0;
+	}
+
+	window.addCourseAxisToGroup = function (button) {
+		const group = button?.closest?.('.course-subcategory-group');
+		if (!group) return;
+		const input = group.querySelector('.course-axes-input');
+		const value = String(input?.value || '').trim();
+		if (!value) {
+			input?.focus();
+			return;
+		}
+		renderCourseSubcategoryAxes(group, readCourseSubcategoryAxes(group).concat(value));
+		if (input) {
+			input.value = '';
+			input.focus();
+		}
+	};
+
+	window.removeCourseAxisFromGroup = function (button) {
+		const group = button?.closest?.('.course-subcategory-group');
+		if (!group) return;
+		const axes = readCourseSubcategoryAxes(group);
+		axes.splice(Number(button.dataset.axisIndex) || 0, 1);
+		renderCourseSubcategoryAxes(group, axes);
+		group.querySelector('.course-axes-input')?.focus();
+	};
+
+	window.courseAxesInputKeydown = function (event, input) {
+		if (event?.key === 'Enter') {
+			event.preventDefault();
+			window.addCourseAxisToGroup(
+				input?.closest?.('.course-axes-add-row')?.querySelector('.course-axes-add-btn'),
+			);
+		}
 	};
 
 	// One subject-bound pipeline: the root, its subcategories and their axes are
@@ -1737,11 +1939,14 @@
 					const generateBtn = lesson
 						? `<button type="button" class="btn btn-ai-generate btn-sm course-tree-generate" data-gen-lesson="${esc(lesson.id)}" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate course content via AI</button>`
 						: '';
+					const generateQuestionsBtn = !hasChildren
+						? `<button type="button" class="btn btn-sm course-tree-q-btn" onclick="openCategoryQuestionGeneration('${esc(category.id)}')">Generate questions</button>`
+						: '';
 					return (
 						`<div class="course-tree-row" data-category-id="${esc(category.id)}"${lesson ? ` data-lesson-id="${esc(lesson.id)}"` : ''} style="--course-depth:${depth};">` +
 						`<div class="course-tree-category">${toggle}<span class="course-tree-level">${level}</span>` +
 						`<strong>${esc(category.name)}</strong><span class="course-tree-count">${qCount} question${qCount === 1 ? '' : 's'}</span></div>` +
-						`<div class="course-tree-actions">${lessonLabel}${generateBtn}</div>` +
+						`<div class="course-tree-actions">${lessonLabel}${generateBtn}${generateQuestionsBtn}</div>` +
 						'</div>'
 					);
 				})
@@ -1775,7 +1980,25 @@
 			'</div></div></div>' +
 			(courseDetailMode === 'view'
 				? renderTeacherCourseDocument(course, branchRows)
-				: `<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No category branch')}</div>` +
+				: `<div class="course-command-launchpad">` +
+					`<div class="launchpad-card launchpad-lessons">` +
+						`<div class="launchpad-header"><span class="launchpad-icon">📖</span><div><h4>Course Material & Lessons</h4><small>${(course.lessons || []).length} lesson unit(s) · Interactive student reader & exports</small></div></div>` +
+						`<div class="launchpad-actions">` +
+							(course.lessons?.length ? `<button type="button" class="btn btn-sm btn-primary" onclick="confirmGenerateAllCourseLessons()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path></svg> Generate All Lessons (AI)</button>` : '') +
+							`<button type="button" class="btn btn-sm" onclick="createCourseDocument()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg> Export PDF / Word</button>` +
+							`<button type="button" class="btn btn-sm" onclick="openAssignClassesModal()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg> Send to Students</button>` +
+						`</div>` +
+					`</div>` +
+					`<div class="launchpad-card launchpad-questions">` +
+						`<div class="launchpad-header"><span class="launchpad-icon">🎯</span><div><h4>Assessments & Question Bank</h4><small>3 ways: In-App AI, Prompt Studio, or Manual</small></div></div>` +
+						`<div class="launchpad-actions">` +
+							`<button type="button" class="btn btn-sm btn-ai-generate" onclick="openCourseQuestionLaunchpad()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg> Generate Questions (AI)</button>` +
+							`<button type="button" class="btn btn-sm" onclick="openPromptStudioForCourse()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6M9 13h6M9 17h4"></path></svg> AI Prompt Studio</button>` +
+							`<button type="button" class="btn btn-sm" onclick="openManualQuestionForCourse()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> + Add Manually</button>` +
+						`</div>` +
+					`</div>` +
+				`</div>` +
+				`<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No category branch')}</div>` +
 			'<section class="course-structure-panel"><div class="course-section-heading"><div><h3>Category structure</h3>' +
 			'<p>Lessons follow the categories and axes in this branch.</p></div>' +
 			`<div class="course-structure-tools"><span class="course-structure-count">${branchRows.length} level${branchRows.length === 1 ? '' : 's'}</span>` +
@@ -2008,8 +2231,13 @@
 			.map(({ category, depth }) => {
 				const path = categoryPath(category.id) || category.name;
 				const categoryType =
-					['Main category', 'Subcategory', 'Sub-subcategory', 'Axis'][depth] ||
-					`Level ${depth + 1}`;
+					depth === 0
+						? 'Main category'
+						: depth === 1
+							? 'Subcategory'
+							: depth >= categoryRows.length - 1
+								? 'Axis'
+								: `Sub-${'sub-'.repeat(depth - 2)}subcategory`;
 				return `<option value="${esc(category.id)}" ${categoryId === String(category.id) ? 'selected' : ''}>${categoryType} · ${esc(path)}</option>`;
 			})
 			.join('');
@@ -2691,6 +2919,93 @@
 		});
 	};
 
+	// ── Dual Action 2: Question Generation Launchpad (3 Pathways) ─────────────
+	window.openCourseQuestionLaunchpad = function () {
+		if (!currentCourse) return;
+		const course = currentCourse;
+		openModal(
+			'courseQuestionLaunchpadModal',
+			`Generate Questions · ${esc(course.name)}`,
+			'<p class="course-generator-hint" style="margin-bottom:14px;">Choose how you want to build questions and assessments for this course outline:</p>' +
+			'<div class="launchpad-modal-grid">' +
+			'<div class="launchpad-modal-option" onclick="closeCourseModal(\'courseQuestionLaunchpadModal\');openCourseAIGenerator()">' +
+			'<div class="option-icon">⚡</div>' +
+			'<strong>1. Direct In-App AI</strong>' +
+			'<p>Generate questions directly using your configured AI model (Claude, GPT, Gemini, etc.) and save them to the question bank.</p>' +
+			'<button type="button" class="btn btn-sm btn-primary">Use In-App AI →</button>' +
+			'</div>' +
+			'<div class="launchpad-modal-option" onclick="closeCourseModal(\'courseQuestionLaunchpadModal\');openPromptStudioForCourse()">' +
+			'<div class="option-icon">📋</div>' +
+			'<strong>2. AI Prompt Studio</strong>' +
+			'<p>Build an expertly structured prompt for ChatGPT or Claude, copy it with 1 click, and paste the JSON response back.</p>' +
+			'<button type="button" class="btn btn-sm">Open Prompt Studio →</button>' +
+			'</div>' +
+			'<div class="launchpad-modal-option" onclick="closeCourseModal(\'courseQuestionLaunchpadModal\');openManualQuestionForCourse()">' +
+			'<div class="option-icon">✍️</div>' +
+			'<strong>3. Manual Authoring</strong>' +
+			'<p>Author custom questions with exact wording, images, explanations, and difficulty ratings.</p>' +
+			'<button type="button" class="btn btn-sm">Add Manually →</button>' +
+			'</div>' +
+			'</div>',
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseQuestionLaunchpadModal\')">Cancel</button>',
+			'course-question-launchpad-modal'
+		);
+	};
+
+	window.openCourseAIGenerator = function () {
+		if (!currentCourse) return;
+		const path = currentCourse.category_path || categoryPath(currentCourse.category_id) || currentCourse.name;
+		if (typeof window.openAIGeneratorModal !== 'function') {
+			return toast('AI generator unavailable — reload the page.', 'error');
+		}
+		window.openAIGeneratorModal({
+			topic: path || currentCourse.name,
+			categoryId: currentCourse.category_id ? String(currentCourse.category_id) : '',
+			categoryName: currentCourse.name,
+		});
+	};
+
+	window.openPromptStudioForCourse = function () {
+		if (!currentCourse) return;
+		if (typeof window.setPromptBuilderAttach === 'function') {
+			window.setPromptBuilderAttach({
+				enabled: true,
+				subjectId: String(currentCourse.subject_id || ''),
+				courseName: String(currentCourse.name || ''),
+			});
+		}
+		if (typeof window.openPromptBuilderModal === 'function') {
+			window.openPromptBuilderModal();
+		} else {
+			toast('Prompt Builder unavailable — reload the page.', 'error');
+		}
+	};
+
+	window.openManualQuestionForCourse = function () {
+		if (!currentCourse) return;
+		const categoryId = currentCourse.category_id ? String(currentCourse.category_id) : '';
+		if (typeof window.openQuestionFormModal === 'function') {
+			window.openQuestionFormModal();
+			const select = document.getElementById('question-category');
+			if (select && categoryId) select.value = categoryId;
+		} else {
+			toast('Question editor unavailable — reload the page.', 'error');
+		}
+	};
+
+	window.openCategoryQuestionGeneration = function (categoryId) {
+		const cat = categoryList().find((c) => String(c.id) === String(categoryId));
+		const path = cat ? (categoryPath(cat.id) || cat.name) : '';
+		if (typeof window.openAIGeneratorModal !== 'function') {
+			return toast('AI generator unavailable — reload the page.', 'error');
+		}
+		window.openAIGeneratorModal({
+			topic: path || (cat ? cat.name : ''),
+			categoryId: String(categoryId),
+			categoryName: cat ? cat.name : '',
+		});
+	};
+
 	window.CoursesManagement = {
 		refresh,
 		loadCourses,
@@ -2713,4 +3028,29 @@
 		// Cache-busting hook used by the realtime bridge after server edits.
 		invalidate: function () { aiConfigsCache = null; },
 	};
+
+	// ── Boot render ──────────────────────────────────────────────────────────
+	// Nothing used to call refresh() at page load: only subject-pill clicks,
+	// the category-delete flow and Settings did — so after a refresh the
+	// courses list stayed empty until the user toggled subjects. Render it on
+	// the same lifecycle events the other managers listen to, guarded so a
+	// logged-out visitor (or one without the API client) never triggers a
+	// failed fetch/toast.
+	let lastBootRefresh = 0;
+	function bootRefreshCourses() {
+		if (!document.getElementById('courseList')) return;
+		const role = String(window.currentUser?.role || '').toLowerCase();
+		if (role !== 'admin' && role !== 'super_admin' && role !== 'teacher') return;
+		if (!window.API || typeof window.API.raw !== 'function') return;
+		const now = Date.now();
+		if (now - lastBootRefresh < 4000) return; // dedupe the 3 events
+		lastBootRefresh = now;
+		refresh().catch(() => { /* list not mounted / tab torn down */ });
+	}
+	window.addEventListener('quiz:bootstrap-ready', bootRefreshCourses);
+	window.addEventListener('auth:changed', bootRefreshCourses);
+	// Fallback for slow environments where bootstrap may already have fired.
+	document.addEventListener('DOMContentLoaded', function () {
+		setTimeout(bootRefreshCourses, 120);
+	});
 })();

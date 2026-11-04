@@ -322,8 +322,8 @@
     if (el) {
       el.textContent =
         state.categories.length === 0
-          ? 'Aucune structure — ajoutez une catégorie.'
-          : `${state.categories.length} catégorie(s) • ${axes.length} axe(s) • ${total} question(s) au total`;
+          ? 'No curriculum structure yet — add a chapter / module.'
+          : `${state.categories.length} chapter(s) / module(s) • ${axes.length} learning objective(s) • ${total} total questions`;
     }
   };
 
@@ -340,22 +340,22 @@
 
     const typeSum = QUESTION_TYPES.reduce((n, t) => n + (Number((axe.types || {})[t.id]) || 0), 0);
     const warn = typeSum !== Number(axe.count)
-      ? `<span style="color:#b45309;font-size:0.75rem;">⚠ types (${typeSum}) ≠ nombre (${axe.count}) — le modèle suivra les types si &gt; 0, sinon il répartit.</span>`
+      ? `<span style="color:#b45309;font-size:0.75rem;">⚠ types (${typeSum}) ≠ total count (${axe.count}) — the model follows specified types, or distributes evenly if 0.</span>`
       : `<span style="color:#059669;font-size:0.75rem;">✓ ${typeSum} / ${axe.count}</span>`;
 
     return `<div style="border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:8px;padding:10px;background:#fff;margin-top:8px;">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span style="font-size:0.75rem;font-weight:700;color:#7c3aed;">🎯 AXE</span>
+        <span style="font-size:0.75rem;font-weight:700;color:#7c3aed;">🎯 LEARNING OBJECTIVE (Axis)</span>
         <span style="font-size:0.72rem;color:#64748b;">${esc(pathLabel)}</span>
         <div style="flex:1;"></div>
         <button type="button" class="btn btn-sm btn-secondary" onclick="deleteAxeNode('${catId}','${subId || ''}','${ssId || ''}','${axe.id}')">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:2fr 70px 80px 110px 70px;gap:6px;margin-top:8px;">
-        <input type="text" placeholder="Titre de l'axe — ex : Le système binaire" value="${esc(axe.title)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
+        <input type="text" placeholder="Objective / Axis title — e.g. Fractions / Basic Vocabulary" value="${esc(axe.title)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
           data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="title" oninput="pbSync(this)" />
-        <input type="number" min="1" max="50" value="${Number(axe.count) || 1}" title="Nombre de questions" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;"
+        <input type="number" min="1" max="50" value="${Number(axe.count) || 1}" title="Number of questions" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;"
           data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="count" oninput="pbSync(this)" />
-        <input type="number" min="0" max="3600" value="${Number(axe.timeSeconds) || 0}" title="Secondes / question (0 = sans limite)" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;"
+        <input type="number" min="0" max="3600" value="${Number(axe.timeSeconds) || 0}" title="Seconds / question (0 = no limit)" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;"
           data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="timeSeconds" oninput="pbSync(this)" />
         <select data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="difficulty" onchange="pbSync(this)" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;">
           ${['easy', 'medium', 'hard', 'mixed'].map((d) => `<option value="${d}" ${axe.difficulty === d ? 'selected' : ''}>${d}</option>`).join('')}
@@ -363,7 +363,7 @@
         <input type="number" min="1" max="100" value="${Number(axe.points) || 1}" title="Points / question" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;"
           data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="points" oninput="pbSync(this)" />
       </div>
-      <div style="display:flex;gap:6px;font-size:0.7rem;color:#64748b;margin-top:4px;"><span>Titre</span><span style="margin-left:52%;">Nb Q</span><span>Temps(s)</span><span>Difficulté</span><span>Pts</span></div>
+      <div style="display:flex;gap:6px;font-size:0.7rem;color:#64748b;margin-top:4px;"><span>Objective Title</span><span style="margin-left:52%;">Questions</span><span>Time(s)</span><span>Difficulty</span><span>Pts</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${typeInputs}</div>
       <div style="margin-top:6px;">${warn}</div>
     </div>`;
@@ -375,10 +375,10 @@
     if (!state.categories.length) {
       tree.innerHTML = `<div class="prompt-builder-empty" style="text-align:center;padding:48px 20px;background:#f8fafc;border:2px dashed #cbd5e1;border-radius:12px;">
         <div style="font-size:2.2rem;margin-bottom:8px;">🧱</div>
-        <h3 style="margin:0 0 8px;color:#334155;font-weight:700;">No course structure yet</h3>
-        <p style="margin:0 0 16px;font-size:0.9rem;color:#64748b;">Start building your quiz hierarchy by adding categories or loading a sample curriculum.</p>
+        <h3 style="margin:0 0 8px;color:#334155;font-weight:700;">No curriculum structure yet</h3>
+        <p style="margin:0 0 16px;font-size:0.9rem;color:#64748b;">Start building your quiz hierarchy by adding chapters or loading an example curriculum template.</p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-          <button type="button" class="btn btn-primary" onclick="addCategoryNode()" style="background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);border:none;font-weight:600;padding:8px 18px;border-radius:8px;color:#fff;cursor:pointer;">＋ Add Category</button>
+          <button type="button" class="btn btn-primary" onclick="addCategoryNode()" style="background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);border:none;font-weight:600;padding:8px 18px;border-radius:8px;color:#fff;cursor:pointer;">＋ Add Chapter / Module</button>
           <button type="button" class="btn btn-secondary" onclick="loadPromptBuilderTemplate()" style="padding:8px 18px;border-radius:8px;cursor:pointer;">Load Example Template</button>
         </div>
       </div>`;
@@ -388,30 +388,30 @@
     tree.innerHTML = state.categories.map((c, ci) => {
       const subs = (c.subs || []).map((s) => {
         const directAxes = (s.axes || []).map((a) =>
-          axeCard(c.id, s.id, '', a, `${c.name || 'Catégorie'} › ${s.name || 'Sous-catégorie'}`),
+          axeCard(c.id, s.id, '', a, `${c.name || 'Chapter'} › ${s.name || 'Topic'}`),
         ).join('');
         const subsubs = (s.subsubs || []).map((ss) => {
           const axes = (ss.axes || []).map((a) =>
-            axeCard(c.id, s.id, ss.id, a, `${c.name || '?'} › ${s.name || '?'} › ${ss.name || '?'}`),
+            axeCard(c.id, s.id, ss.id, a, `${c.name || 'Chapter'} › ${s.name || 'Topic'} › ${ss.name || 'Sub-topic'}`),
           ).join('');
           return `<div style="border:1px dashed #c4b5fd;border-radius:8px;padding:10px;margin-top:8px;background:#faf5ff;">
             <div style="display:flex;gap:8px;align-items:center;">
-              <span style="font-size:0.75rem;font-weight:700;color:#6d28d9;">🏷️ SOUS-SOUS-CATÉGORIE</span>
-              <input type="text" placeholder="ex : Systèmes de numération / Codage" value="${esc(ss.name)}" style="flex:1;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
+              <span style="font-size:0.75rem;font-weight:700;color:#6d28d9;">🏷️ SUB-TOPIC / SUB-SECTION (Level 3)</span>
+              <input type="text" placeholder="e.g. Number Systems / Text Encoding" value="${esc(ss.name)}" style="flex:1;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
                 data-pb-kind="ss" data-cat="${c.id}" data-sub="${s.id}" data-ss="${ss.id}" data-field="name" oninput="pbSync(this)" />
-              <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','${ss.id}')">+ Axe</button>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','${ss.id}')">+ Learning Objective</button>
               <button type="button" class="btn btn-sm btn-secondary" onclick="deleteSubSubcategoryNode('${c.id}','${s.id}','${ss.id}')">✕</button>
             </div>
-            ${axes || '<div style="font-size:0.78rem;color:#94a3b8;margin-top:6px;">Ajoutez un axe (titre + nombre + temps + difficulté + types).</div>'}
+            ${axes || '<div style="font-size:0.78rem;color:#94a3b8;margin-top:6px;">Add a learning objective (axis) with target questions, time & difficulty.</div>'}
           </div>`;
         }).join('');
         return `<div style="border:1px solid #bae6fd;border-radius:8px;padding:10px;margin-top:8px;background:#f0f9ff;">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <span style="font-size:0.75rem;font-weight:700;color:#0369a1;">📁 SOUS-CATÉGORIE</span>
-            <input type="text" placeholder="ex : Vocabulaire de base" value="${esc(s.name)}" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
+            <span style="font-size:0.75rem;font-weight:700;color:#0369a1;">📁 TOPIC / SECTION (Level 2)</span>
+            <input type="text" placeholder="e.g. Basic Concepts / Grammar Essentials" value="${esc(s.name)}" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
               data-pb-kind="sub" data-cat="${c.id}" data-sub="${s.id}" data-field="name" oninput="pbSync(this)" />
-            <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','')">+ Axe</button>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="addSubSubcategoryNode('${c.id}','${s.id}')">+ Sous-sous-cat.</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','')">+ Learning Objective</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addSubSubcategoryNode('${c.id}','${s.id}')">+ Sub-Topic</button>
             <button type="button" class="btn btn-sm btn-secondary" onclick="deleteSubcategoryNode('${c.id}','${s.id}')">✕</button>
           </div>
           ${directAxes}
@@ -420,13 +420,13 @@
       }).join('');
       return `<div style="border:2px solid #10b981;border-radius:10px;padding:12px;margin-bottom:12px;background:#ecfdf5;">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span style="font-size:0.8rem;font-weight:800;color:#065f46;">📂 CATÉGORIE (Module) ${ci + 1}</span>
-          <input type="text" placeholder="ex : Module 1 : Généralités sur les systèmes informatiques" value="${esc(c.name)}" style="flex:1;min-width:200px;padding:8px;border:1px solid #6ee7b7;border-radius:6px;font-weight:600;"
+          <span style="font-size:0.8rem;font-weight:800;color:#065f46;">📂 CHAPTER / MODULE ${ci + 1}</span>
+          <input type="text" placeholder="e.g. Chapter 1: Introduction to Computer Systems" value="${esc(c.name)}" style="flex:1;min-width:200px;padding:8px;border:1px solid #6ee7b7;border-radius:6px;font-weight:600;"
             data-pb-kind="cat" data-cat="${c.id}" data-field="name" oninput="pbSync(this)" />
-          <button type="button" class="btn btn-sm btn-secondary" onclick="addSubcategoryNode('${c.id}')">+ Sous-catégorie</button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="addSubcategoryNode('${c.id}')">+ Topic / Section</button>
           <button type="button" class="btn btn-sm btn-secondary" onclick="deleteCategoryNode('${c.id}')">✕</button>
         </div>
-        ${subs || '<div style="font-size:0.85rem;color:#047857;margin-top:8px;">Ajoutez une sous-catégorie pour commencer.</div>'}
+        ${subs || '<div style="font-size:0.85rem;color:#047857;margin-top:8px;">Add a topic / section to begin structuring this chapter.</div>'}
       </div>`;
     }).join('');
     window.updatePromptBuilderStats();

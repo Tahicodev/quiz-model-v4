@@ -50397,7 +50397,7 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	display: grid;
 	justify-items: center;
 	gap: 9px;
-	margin: 10px 0 16px;
+	margin: 10px 0 28px;
 	padding: clamp(24px, 5vw, 42px) 18px;
 	overflow: hidden;
 	border: 2px dashed rgba(99, 102, 241, 0.38);
@@ -50424,6 +50424,8 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 .course-import-dropzone > strong {
 	color: var(--text-main, #0f172a);
 	font-size: 1.04rem;
+	line-height: 1.4;
+	letter-spacing: -0.01em;
 }
 
 .course-import-upload-icon {
