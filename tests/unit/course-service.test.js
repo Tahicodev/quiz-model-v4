@@ -117,15 +117,109 @@ afterAll(async () => {
 	await teardownTestDb();
 });
 
-/** Fresh course authored by teacherA. */
-async function makeCourse(name, categoryId = mathId, teacher = teacherA) {
-	return courseSvc.create({ name, description: null, category_id: categoryId }, teacher);
+let branchSeq = 0;
+
+/** A top-level branch no course owns yet. */
+async function makeBranch(teacher = teacherA, parentId = null) {
+	branchSeq += 1;
+	return prisma.category.create({
+		data: { school_id: SCHOOL, name: `Branch ${branchSeq}`, parent_id: parentId, created_by: teacher.id },
+	});
 }
+
+/**
+ * Fresh course on a branch of its own. The 1:1 rule means a course claims a
+ * whole category branch, so every spec needs a branch nobody has taken: pass
+ * `categoryId` only when the branch under test is the point of the spec.
+ */
+async function makeCourse(name, categoryId = null, teacher = teacherA) {
+	const branch = categoryId ? { id: categoryId } : await makeBranch(teacher);
+	return courseSvc.create({ name, description: null, category_id: branch.id }, teacher);
+}
+
+describe('one course per category branch (1:1 rule)', () => {
+	it('refuses a course with no category structure of its own', async () => {
+		const missing = await courseSvc.create({ name: 'Branch-less course' }, teacherA).catch((err) => err);
+		expect(missing).toBeInstanceOf(ValidationError);
+		expect(missing.fields.category_id[0]).toMatch(/needs its own category structure/i);
+		const empty = await courseSvc.create({ name: 'Empty branch course', category_id: '' }, teacherA)
+			.catch((err) => err);
+		expect(empty).toBeInstanceOf(ValidationError);
+		expect(await prisma.course.count({ where: { school_id: SCHOOL, name: 'Branch-less course' } })).toBe(0);
+	});
+
+	it('names the course that already owns the branch', async () => {
+		const branch = await makeBranch();
+		const first = await makeCourse('First on the branch', branch.id);
+		const err = await courseSvc.create({ name: 'Second on the branch', category_id: branch.id }, teacherA)
+			.catch((error) => error);
+		expect(err).toBeInstanceOf(ValidationError);
+		expect(err.fields.category_id[0]).toContain(first.name);
+		expect(await prisma.course.count({ where: { school_id: SCHOOL, name: 'Second on the branch' } })).toBe(0);
+	});
+
+	it('refuses a sub-branch that sits inside another course', async () => {
+		const root = await makeBranch();
+		const child = await makeBranch(teacherA, root.id);
+		const owner = await makeCourse('Whole-tree course', root.id);
+		const err = await courseSvc.create({ name: 'Nested course', category_id: child.id }, teacherA)
+			.catch((error) => error);
+		expect(err).toBeInstanceOf(ValidationError);
+		expect(err.fields.category_id[0]).toContain(owner.name);
+		expect(err.fields.category_id[0]).toMatch(/sits inside the course/);
+	});
+
+	it('refuses a root whose subtree already holds another course', async () => {
+		const root = await makeBranch();
+		const child = await makeBranch(teacherA, root.id);
+		const owner = await makeCourse('Leaf-level course', child.id);
+		const err = await courseSvc.create({ name: 'Wrapping course', category_id: root.id }, teacherA)
+			.catch((error) => error);
+		expect(err).toBeInstanceOf(ValidationError);
+		expect(err.fields.category_id[0]).toContain(owner.name);
+		expect(err.fields.category_id[0]).toMatch(/already contains the course/);
+	});
+
+	it('links a branch-less course to a free branch and refuses a taken one', async () => {
+		const course = await makeCourse('Course to relink');
+		const free = await makeBranch();
+		const taken = await makeBranch();
+		const blocker = await makeCourse('Blocks the branch', taken.id);
+
+		const linked = await courseSvc.update(course.id, { category_id: free.id }, teacherA);
+		expect(String(linked.category_id)).toBe(String(free.id));
+		// Re-asserting the link it already holds must not collide with itself.
+		await expect(courseSvc.update(course.id, { category_id: free.id }, teacherA)).resolves.toBeTruthy();
+
+		const shared = await courseSvc.update(course.id, { category_id: taken.id }, teacherA).catch((err) => err);
+		expect(shared).toBeInstanceOf(ValidationError);
+		expect(shared.fields.category_id[0]).toContain(blocker.name);
+		await expect(courseSvc.update(course.id, { category_id: null }, teacherA)).rejects.toBeInstanceOf(ValidationError);
+		const after = await courseSvc.getById(course.id);
+		expect(String(after.category_id)).toBe(String(free.id));
+	});
+
+	it('leaves the branch (and its lessons\' categories) behind when a course is deleted', async () => {
+		const branch = await makeBranch();
+		const axe = await makeBranch(teacherA, branch.id);
+		const course = await makeCourse('Doomed course', branch.id);
+		await courseSvc.addLesson(course.id, { title: 'Lesson to cascade', category_id: axe.id }, teacherA);
+
+		await courseSvc.delete(course.id, teacherA);
+		expect(await prisma.category.count({ where: { id: { in: [branch.id, axe.id] } } })).toBe(2);
+		expect(await prisma.lesson.count({ where: { course_id: course.id } })).toBe(0);
+		expect(await prisma.question.count({ where: { category_id: axe.id } })).toBe(0);
+
+		// The freed branch is claimable again: it now shows as a structure row.
+		const revived = await makeCourse('New owner of the branch', branch.id);
+		expect(String(revived.category_id)).toBe(String(branch.id));
+	});
+});
 
 describe('teacher scoping', () => {
 	it('lists only the teacher\'s own courses for that teacher', async () => {
 		const mine = await makeCourse('Own course A');
-		const theirs = await makeCourse('Foreign course B', mathId, teacherB);
+		const theirs = await makeCourse('Foreign course B', null, teacherB);
 
 		const asAuthor = await courseSvc.list(
 			{ school_id: SCHOOL, created_by: teacherA.id },
@@ -143,7 +237,7 @@ describe('teacher scoping', () => {
 	});
 
 	it('refuses updates, status changes and deletes on another teacher\'s course', async () => {
-		const theirs = await makeCourse('Not yours', mathId, teacherB);
+		const theirs = await makeCourse('Not yours', null, teacherB);
 		await expect(courseSvc.update(theirs.id, { name: 'Hijacked' }, teacherA))
 			.rejects.toBeInstanceOf(ForbiddenError);
 		await expect(courseSvc.setStatus(theirs.id, 'published', teacherA))
@@ -229,8 +323,9 @@ describe('generated course persistence', () => {
 			{ title: 'Units', summary: 'Adding units', categoryId: unitsId, order_index: 1 },
 			{ title: 'Wrapped up', summary: null, categoryId: tensId, order_index: 2 },
 		];
+		const branch = await makeBranch();
 		const created = await courseSvc.createWithLessons(
-			{ name: 'Addition course', description: null, categoryId: mathId, lessons },
+			{ name: 'Addition course', description: null, categoryId: branch.id, lessons },
 			teacherA,
 		);
 		const full = await courseSvc.getWithLessons(created.id, SCHOOL);
@@ -250,7 +345,7 @@ describe('generated course persistence', () => {
 		const created = await courseSvc.createWithLessons(
 			{
 				name: 'Reorder course',
-				categoryId: mathId,
+				categoryId: (await makeBranch()).id,
 				lessons: [
 					{ title: 'One', categoryId: tensId },
 					{ title: 'Two', categoryId: unitsId },
@@ -496,7 +591,8 @@ describe('student visibility', () => {
 	});
 
 	it('orders student lessons by the course category tree and exposes their category path', async () => {
-		const course = await makeCourse('Tree-ordered course');
+		// Math is this course's own branch: the student view is built from it.
+		const course = await makeCourse('Tree-ordered course', mathId);
 		await courseSvc.setStatus(course.id, 'published', teacherA);
 		await courseSvc.assignClasses(course.id, [String(classOne.id)], teacherA);
 		await courseSvc.addLesson(course.id, {

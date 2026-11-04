@@ -446,6 +446,12 @@ function handleSearchResultClick(type, id, index) {
 				if (typeof window.selectCategorySubject === 'function') {
 					window.selectCategorySubject(cat?.subject_id || '__unassigned__');
 				}
+				// A category row is only on screen in the "All categories" view or
+				// inside the branch of its course: reveal that pane before the
+				// highlight runs, otherwise the row stays hidden.
+				if (typeof window.revealCategoryPane === 'function') {
+					window.revealCategoryPane(id);
+				}
 			} catch (_) { /* best-effort subject switch */ }
 			setTimeout(() => {
 				highlightSearchResult('category', id);

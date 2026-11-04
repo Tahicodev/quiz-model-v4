@@ -151,10 +151,142 @@ function renderSubjectTabBar() {
 }
 
 function syncCategoryBandTitle() {
+	syncStructureBreadcrumb();
 	const title = document.getElementById('categoryBandTitle');
 	if (!title) return;
 	const name = getSubjectDisplayName(activeCategorySubjectId);
-	title.textContent = name ? `${name} · Categories` : 'Categories';
+	if (categoryScope.mode === 'branch') {
+		const label = categoryScope.courseName || categoryScope.rootName || 'course';
+		title.textContent = `${name || 'Subjects'} · Structure of ${label}`;
+		return;
+	}
+	title.textContent = name ? `${name} · All categories` : 'All categories';
+}
+
+// ── Structure pane scope ─────────────────────────────────────────────────────
+// The merged Subjects tab shows the category table either for the whole
+// subject (the advanced "All categories" view) or for the single branch of the
+// course that was opened. It is the one and only structure editor, so exactly
+// one scope is live at a time.
+let categoryScope = { mode: 'subject', rootId: null, courseId: null, courseName: '', rootName: '' };
+
+function getActiveCategorySubject() {
+	return activeCategorySubjectId;
+}
+
+function branchIds(rootId) {
+	const ids = new Set([String(rootId)]);
+	const rows = typeof categories !== 'undefined' && Array.isArray(categories) ? categories : [];
+	const byParent = new Map();
+	for (const row of rows) {
+		const parentId = String(row?.parent_id || '');
+		if (!byParent.has(parentId)) byParent.set(parentId, []);
+		byParent.get(parentId).push(row);
+	}
+	const queue = [String(rootId)];
+	const seen = new Set(queue);
+	while (queue.length) {
+		const currentId = queue.shift();
+		for (const child of byParent.get(currentId) || []) {
+			const key = String(child.id);
+			if (seen.has(key)) continue;
+			seen.add(key);
+			ids.add(key);
+			queue.push(key);
+		}
+	}
+	return ids;
+}
+
+function syncStructureBreadcrumb() {
+	const text = document.getElementById('structureBreadcrumbText');
+	const back = document.getElementById('structureBackBtn');
+	const subject = getSubjectDisplayName(activeCategorySubjectId);
+	if (text) {
+		if (categoryScope.mode === 'branch') {
+			// Subject › Course › Structure. A branch opened from a structure row has
+			// no course yet, so that segment is dropped instead of printing a
+			// placeholder.
+			text.textContent = [subject || 'Subjects', categoryScope.courseName, categoryScope.rootName]
+				.filter(Boolean)
+				.join(' › ');
+		} else {
+			text.textContent = `${subject || 'Subjects'} › All categories`;
+		}
+	}
+	if (back) back.hidden = categoryScope.mode !== 'branch';
+}
+
+function setCategoryScope(scope, rootId = null, options = {}) {
+	if (scope === 'branch' && rootId) {
+		const root = (typeof categories !== 'undefined' && Array.isArray(categories)
+			? categories
+			: []).find((row) => String(row?.id) === String(rootId));
+		categoryScope = {
+			mode: 'branch',
+			rootId: String(rootId),
+			courseId: options.courseId ? String(options.courseId) : null,
+			courseName: String(options.courseName || ''),
+			rootName: String(options.rootName || root?.name || ''),
+		};
+		if (root?.subject_id && String(activeCategorySubjectId) !== String(root.subject_id)) {
+			activeCategorySubjectId = String(root.subject_id);
+			renderSubjectTabBar();
+		}
+	} else {
+		categoryScope = { mode: 'subject', rootId: null, courseId: null, courseName: '', rootName: '' };
+	}
+	updateCategoryList();
+	syncCategoryBandTitle();
+}
+
+/** Open one course's branch: the root is locked, children stay editable. */
+function openCategoryBranch(rootId, options = {}) {
+	setCategoryScope('branch', rootId, options);
+}
+
+function isBranchRoot(categoryId) {
+	return (
+		categoryScope.mode === 'branch' &&
+		String(categoryScope.rootId || '') === String(categoryId || '')
+	);
+}
+
+// In branch scope the structure already knows its subject: the select is hidden
+// and its value inherited (a disabled select still reports its value, which is
+// how saveCategoryForm reads it) instead of offering a move to another subject
+// by accident. Callers own the `disabled` flag because the edit form also
+// disables it for child categories.
+function setCategorySubjectFieldVisibility(visible) {
+	const select = document.getElementById('categorySubject');
+	if (!select) return;
+	const group =
+		typeof select.closest === 'function'
+			? select.closest('.form-group')
+			: select.parentElement;
+	if (group) {
+		group.hidden = !visible;
+		if (group.style) group.style.display = visible ? '' : 'none';
+	}
+}
+
+function setCategoryModalBranchNotice(message) {
+	const form = document.getElementById('categoryForm');
+	if (!form) return;
+	const notice = document.getElementById('categoryBranchNotice');
+	if (!message) {
+		if (notice) notice.remove();
+		return;
+	}
+	if (notice) {
+		notice.textContent = message;
+		return;
+	}
+	const created = document.createElement('p');
+	created.id = 'categoryBranchNotice';
+	created.className = 'structure-branch-note text-muted';
+	created.textContent = message;
+	form.appendChild(created);
 }
 
 function renderCategorySubjectOptions(selectedId = '') {
@@ -176,9 +308,27 @@ function renderCategorySubjectOptions(selectedId = '') {
 
 function selectCategorySubject(subjectId) {
 	activeCategorySubjectId = String(subjectId || '__unassigned__');
+	// A pill switch always leaves branch scope: courses, structures and the
+	// category table are re-filtered for the new subject.
+	categoryScope = { mode: 'subject', rootId: null, courseId: null, courseName: '', rootName: '' };
 	renderSubjectTabBar();
+	const courses = window.CoursesManagement;
+	if (courses?.setView) {
+		// Back to "Courses and structures" for the new subject.
+		try {
+			courses.setView('courses');
+		} catch (_) { /* list not mounted */ }
+	}
 	syncCategoryBandTitle();
 	updateCategoryList();
+	if (courses?.refresh) {
+		try {
+			const res = courses.refresh(activeCategorySubjectId);
+			if (res && typeof res.catch === 'function') res.catch(() => { /* list not mounted */ });
+		} catch (_) { /* tab not mounted */ }
+	} else {
+		try { window.renderCourseList?.(); } catch (_) { /* not mounted */ }
+	}
 }
 
 // The Overview activity feed links a "category changed" entry back to the tree.
@@ -202,11 +352,50 @@ function revealCategoryFromActivity(event, categoryId) {
 		(subjectId === '__unassigned__' ||
 			categorySubjects.some((subject) => String(subject.id) === subjectId));
 	selectCategorySubject(known ? subjectId : '__unassigned__');
+	// Reveal the owning branch (a course's structure) instead of only moving
+	// the pill, so the highlighted row is actually on screen.
+	revealCategoryPane(categoryId);
 	if (typeof window.openTabAndHighlight === 'function') {
 		window.openTabAndHighlight(event, 'subjects', categoryId);
 	} else {
 		window.openTab?.(event, 'subjects');
 	}
+}
+
+/**
+ * Put a category on screen: a category row only exists in the "All categories"
+ * view or inside the branch of the course that owns it, so the pane has to be
+ * switched before anything can be highlighted. Shared by the activity feed and
+ * the global search.
+ */
+function revealCategoryPane(categoryId) {
+	const rootId = branchRootOf(categoryId);
+	if (rootId) {
+		const root = (categories || []).find((c) => String(c?.id) === String(rootId));
+		const course = (window.CoursesManagement?.getCourses?.() || []).find(
+			(c) => String(c?.category_id || '') === String(rootId),
+		);
+		window.openStructureBranch?.(rootId, {
+			courseId: course?.id || null,
+			courseName: course?.name || '',
+			rootName: String(root?.name || ''),
+		});
+		return;
+	}
+	window.setSubjectsWorkspaceView?.('categories');
+}
+
+/** Root of the branch a category belongs to ("" when it is already a root). */
+function branchRootOf(categoryId) {
+	const rows = (typeof categories !== 'undefined' && Array.isArray(categories) ? categories : []);
+	const byId = new Map(rows.map((row) => [String(row?.id), row]));
+	let node = byId.get(String(categoryId));
+	const seen = new Set();
+	while (node && node.parent_id && byId.has(String(node.parent_id)) && !seen.has(String(node.id))) {
+		seen.add(String(node.id));
+		node = byId.get(String(node.parent_id));
+	}
+	return node && !seen.has(String(node.id)) ? String(node.id) : '';
 }
 
 // ── Subject CRUD (the manager modal owns create / rename / delete; deleting
@@ -1514,12 +1703,14 @@ function populateCategoryParentPicker(excludeId) {
 			excluded.add(String(id));
 		}
 	}
+	const branchScope = categoryScope.mode === 'branch' ? branchIds(categoryScope.rootId) : null;
 	const visible = categories.filter(
 		(category) =>
 			category &&
 			category.id &&
 			!category.isSystem &&
 			category.id !== 'uncategorized' &&
+			(!branchScope || branchScope.has(String(category.id))) &&
 			String(category.subject_id || '') === String(document.getElementById('categorySubject')?.value === '__unassigned__' ? '' : document.getElementById('categorySubject')?.value || '') &&
 			!excluded.has(String(category.id)) &&
 			(!window.Auth?.canAccessItem ||
@@ -1877,6 +2068,13 @@ function populateCategoryFilter() {
 }
 
 function createNewCategory() {
+	// Branch scope is the structure of one course: the root is fixed, so "+
+	// Category" always adds a child inside it. Creating a new top-level
+	// structure belongs to the New Course dialog instead.
+	if (categoryScope.mode === 'branch') {
+		createCategoryInsideBranch();
+		return;
+	}
 	if (!categorySubjects.length) loadCategorySubjects();
 	if (!categorySubjects.length) {
 		// A category always belongs to a subject, so this entry point (the
@@ -1900,10 +2098,44 @@ function createNewCategory() {
 	document.getElementById('categoryTraining').checked = false;
 	renderCategorySubjectOptions(activeCategorySubjectId);
 	document.getElementById('categorySubject').disabled = false;
+	setCategorySubjectFieldVisibility(true);
+	setCategoryModalBranchNotice('');
+	const parentSelect = document.getElementById('categoryParent');
+	if (parentSelect) parentSelect.disabled = false;
 	populateCategoryParentPicker(null);
 
 	// The create/edit form no longer embeds the question picker — questions
 	// are assigned from the dedicated Assign Questions modal (table action).
+	openCategoryModal();
+}
+
+function createCategoryInsideBranch() {
+	const root = (categories || []).find((c) => String(c.id) === String(categoryScope.rootId));
+	if (!root) {
+		showToast('This structure is not loaded yet — open it again.', 'error');
+		return;
+	}
+	if (!document.getElementById('categoryModalTitle')) {
+		showToast('Category form not available.', 'error');
+		return;
+	}
+	currentCategoryId = null;
+	document.getElementById('categoryModalTitle').textContent = `New category in ${String(root.name || 'structure')}`;
+	document.getElementById('categoryForm').reset();
+	document.getElementById('categoryColor').value = getRandomCategoryColor();
+	document.getElementById('categoryTraining').checked = false;
+	// Subject is inherited from the opened branch and stays out of the way.
+	renderCategorySubjectOptions(String(root.subject_id || '__unassigned__'));
+	setCategorySubjectFieldVisibility(false);
+	const subjectSelect = document.getElementById('categorySubject');
+	if (subjectSelect) subjectSelect.disabled = true;
+	populateCategoryParentPicker(null);
+	const parentSelect = document.getElementById('categoryParent');
+	if (parentSelect) {
+		parentSelect.disabled = false;
+		parentSelect.value = String(root.id);
+	}
+	setCategoryModalBranchNotice('The new category is placed inside this course’s structure.');
 	openCategoryModal();
 }
 
@@ -1926,12 +2158,21 @@ function editCategory(categoryId) {
 	renderCategorySubjectOptions(category.subject_id || '__unassigned__');
 	populateCategoryParentPicker(categoryId);
 	const subjectSelect = document.getElementById('categorySubject');
-	if (subjectSelect) {
-		subjectSelect.disabled = Boolean(category.parent_id);
-	}
 	const parentSelect = document.getElementById('categoryParent');
+	if (subjectSelect) {
+		subjectSelect.disabled = Boolean(category.parent_id) || categoryScope.mode === 'branch';
+	}
+	setCategorySubjectFieldVisibility(categoryScope.mode !== 'branch');
+	setCategoryModalBranchNotice('');
 	if (parentSelect) {
 		parentSelect.value = getCategoryParentId(category);
+		// The branch root holds the course: re-parenting it would detach the
+		// course from its own structure, so it stays top-level here.
+		parentSelect.disabled = isBranchRoot(categoryId);
+	}
+	if (isBranchRoot(categoryId)) {
+		document.getElementById('categoryModalTitle').textContent = 'Edit structure root';
+		setCategoryModalBranchNotice('This category is the structure of the course, so it stays at the top level.');
 	}
 
 	// Questions are no longer part of the edit form; they are managed via the
@@ -3708,7 +3949,7 @@ function categoryActionsCellHtml(category, assignable) {
             </td>`;
 	}
 	const moveButtonHtml =
-		!category.isSystem && category.id !== 'uncategorized'
+		!category.isSystem && category.id !== 'uncategorized' && !isBranchRoot(category.id)
 			? `<button class="exam-action-btn exam-move-btn" onclick="startCategoryMove(event,'${category.id}')" title="Move into another category">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 9l-3 3 3 3"></path>
@@ -3788,8 +4029,16 @@ function updateCategoryList(categoriesList = categories) {
 		? window.TeacherFilter.getSelectedTeacher('categoryTeacherFilter')
 		: '';
 
+	// Two scopes: "subject" is the advanced All categories view, "branch" is the
+	// structure of the opened course (root + descendants, subject filter bypassed
+	// because the branch already pins its subject).
+	const branchScope = categoryScope.mode === 'branch' ? branchIds(categoryScope.rootId) : null;
 	const visibleCategories = categoriesList.filter((category) => {
-		if (String(category.subject_id || '') !== (activeCategorySubjectId === '__unassigned__' ? '' : activeCategorySubjectId)) return false;
+		if (branchScope) {
+			if (!branchScope.has(String(category.id))) return false;
+		} else if (String(category.subject_id || '') !== (activeCategorySubjectId === '__unassigned__' ? '' : activeCategorySubjectId)) {
+			return false;
+		}
 		if (typeof isAutoGameCategory === 'function' && isAutoGameCategory(category)) {
 			return false;
 		}
@@ -3819,6 +4068,7 @@ function updateCategoryList(categoriesList = categories) {
 	const subjectContext = String(activeCategorySubjectId || '');
 	if (
 		!uncategorizedExists &&
+		!branchScope &&
 		(!subjectContext || subjectContext === '__unassigned__')
 	) {
 		visibleCategories.unshift({
@@ -6238,5 +6488,10 @@ window.renderSubjectManagerTable = renderSubjectManagerTable;
 window.SubjectsManagement = {
 	refresh: loadCategorySubjects,
 	openModal: openSubjectManagerModal,
-	renderPills: renderSubjectTabBar,
+	openBranch: openCategoryBranch,
+	setView: (scope) => setCategoryScope(scope === 'branch' ? 'branch' : 'subject'),
 };
+window.getActiveCategorySubject = getActiveCategorySubject;
+window.revealCategoryPane = revealCategoryPane;
+window.setCategoryScope = setCategoryScope;
+window.openCategoryBranch = openCategoryBranch;

@@ -662,8 +662,92 @@ Generate now.`;
     if (lang) lang.value = state.language || 'fr';
     const extra = document.getElementById('pbExtra');
     if (extra) extra.value = state.extraInstruction || '';
+    window.renderPromptBuilderAttach();
   }
   window.syncPromptBuilderInputs = syncBuilderInputs;
+
+  // ---------- attach-to-course (one-step binding) ----------
+  // The builder describes a structure. Turning that structure into a course is
+  // a single decision, so the target (subject + course name) is saved with the
+  // tree in quizPromptBuilderV1 and consumed by the JSON import. The emitted
+  // prompt itself is unchanged: it still only describes categories and axes.
+  function attachState() {
+    const raw = state.attachTo && typeof state.attachTo === 'object' ? state.attachTo : {};
+    return {
+      enabled: raw.enabled === true,
+      subjectId: String(raw.subjectId || ''),
+      courseName: String(raw.courseName || ''),
+    };
+  }
+
+  function attachSubjectRows() {
+    try {
+      const rows = window.__DI_CONTAINER__?.repo?.getAll_sync?.('subjects');
+      return Array.isArray(rows) ? rows.filter((s) => s && s.id) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  window.getPromptBuilderAttach = function () {
+    return attachState();
+  };
+
+  window.setPromptBuilderAttach = function (patch) {
+    state.attachTo = { ...attachState(), ...(patch || {}) };
+    saveState();
+    window.renderPromptBuilderAttach();
+  };
+
+  window.renderPromptBuilderAttach = function () {
+    const host = document.getElementById('promptBuilderAttach');
+    if (!host) return;
+    const current = attachState();
+    const subjects = attachSubjectRows();
+    const options = subjects
+      .map(
+        (s) =>
+          `<option value="${esc(s.id)}" ${String(s.id) === current.subjectId ? 'selected' : ''}>${esc(s.name || '')}</option>`,
+      )
+      .join('');
+    host.innerHTML =
+      '<label class="prompt-builder-attach-toggle">' +
+      `<input type="checkbox" id="pbAttachEnabled" ${current.enabled ? 'checked' : ''} />` +
+      '<span>Attach to a course</span></label>' +
+      `<div class="prompt-builder-attach-fields"${current.enabled ? '' : ' hidden'}>` +
+      '<label class="prompt-builder-attach-subject">Subject' +
+      `<select id="pbAttachSubject">${options || '<option value="">No subject yet</option>'}</select></label>` +
+      '<label class="prompt-builder-attach-name">Course name' +
+      `<input id="pbAttachCourseName" type="text" placeholder="e.g. Module 1 course" value="${esc(current.courseName)}" />` +
+      '</label></div>' +
+      '<p class="prompt-builder-attach-hint text-muted">' +
+      (current.enabled
+        ? 'On import, the top category of this structure becomes the course’s own structure.'
+        : 'Off — the import only fills the question bank.') +
+      '</p>';
+    const enabled = document.getElementById('pbAttachEnabled');
+    if (enabled) {
+      enabled.addEventListener('change', () => {
+        state.attachTo = { ...attachState(), enabled: enabled.checked };
+        saveState();
+        window.renderPromptBuilderAttach();
+      });
+    }
+    const subject = document.getElementById('pbAttachSubject');
+    if (subject) {
+      subject.addEventListener('change', () => {
+        state.attachTo = { ...attachState(), subjectId: subject.value };
+        saveState();
+      });
+    }
+    const name = document.getElementById('pbAttachCourseName');
+    if (name) {
+      name.addEventListener('input', () => {
+        state.attachTo = { ...attachState(), courseName: name.value };
+        saveState();
+      });
+    }
+  };
 
   window.openPromptBuilderModal = function () {
     if (!ensureGeneratorOpen()) {
@@ -748,6 +832,7 @@ Generate now.`;
       extra.value = state.extraInstruction || '';
       extra.addEventListener('input', () => { state.extraInstruction = extra.value; saveState(); });
     }
+    window.renderPromptBuilderAttach();
     try { console.log('[prompt-builder] loaded ✓'); } catch (_) {}
   }
   if (document.readyState === 'loading') {

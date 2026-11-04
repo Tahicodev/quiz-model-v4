@@ -315,18 +315,292 @@
 	}
 
 	// ── List view ────────────────────────────────────────────────────────────
-	async function refresh() {
-		const listPane = document.getElementById('courseListPane');
-		const detailPane = document.getElementById('courseDetailPane');
-		if (listPane) listPane.classList.remove('hidden');
-		if (detailPane) {
-			detailPane.classList.add('hidden');
-			detailPane.innerHTML = '';
+	async function refresh(subjectId) {
+		void subjectId; // the pill owns the subject; the mirror is already scoped
+		if (currentCourse) {
+			currentCourse = null;
+			workspaceView = 'courses';
 		}
-		currentCourse = null;
 		await loadCourses();
 		renderCourseList();
+		renderWorkspacePanes();
 	}
+
+	// ── Subjects workspace: pane and view model ──────────────────────────────
+	// The merged Subjects tab owns the whole authoring chain: the active pill
+	// lists the subject's courses and structures, opening a course reveals its
+	// lessons, and the flat category table survives as an advanced view of the
+	// very same section (never a second structure editor).
+	let workspaceView = 'courses'; // 'courses' | 'categories' | 'branch' | 'detail'
+	let workspaceBranchCourseId = null;
+
+	function activeSubjectId() {
+		if (typeof window.getActiveCategorySubject === 'function') {
+			return String(window.getActiveCategorySubject() || '__unassigned__');
+		}
+		return '__unassigned__';
+	}
+
+	function subjectCourses(subjectId) {
+		const wanted = subjectId === '__unassigned__' ? '' : String(subjectId);
+		return coursesCache.filter((c) => String(c.subject_id || '') === wanted);
+	}
+
+	function courseRowKind(course) {
+		if (!course.category_id) return 'unlinked';
+		// The list endpoint resolves the branch path for every course it returns,
+		// so it is authoritative. The local mirror can lag behind (a Prompt
+		// Builder import writes categories straight to the server), and trusting
+		// it alone would mislabel a perfectly linked course as "No structure".
+		if (course.category_path) return 'course';
+		const root = categoryList().find((c) => String(c.id) === String(course.category_id));
+		return root ? 'course' : 'unlinked';
+	}
+
+	/** Root categories of the active subject that no course owns yet. */
+	function rootBranches(subjectId) {
+		const wanted = subjectId === '__unassigned__' ? '' : String(subjectId);
+		const claimed = new Set(coursesCache.map((c) => String(c.category_id || '')));
+		return categoryList().filter(
+			(cat) => cat && cat.id && cat.id !== 'uncategorized' && !cat.isSystem
+				&& !cat.parent_id
+				&& String(cat.subject_id || '') === wanted
+				&& !claimed.has(String(cat.id)),
+		);
+	}
+
+	/** Merged rows: courses, structures without a course, courses without one. */
+	function overviewRows(subjectId) {
+		const rows = subjectCourses(subjectId).map((course) => ({
+			kind: courseRowKind(course),
+			course,
+			root: null,
+			label: String(course.name || ''),
+		}));
+		for (const root of rootBranches(subjectId)) {
+			rows.push({ kind: 'structure', course: null, root, label: String(root.name || '') });
+		}
+		return rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+	}
+
+	function renderWorkspacePanes() {
+		const listPane = document.getElementById('courseListPane');
+		const structurePane = document.getElementById('structurePane');
+		const detailPane = document.getElementById('courseDetailPane');
+		const toggle = document.getElementById('subjectViewToggle');
+		const detailOpen = workspaceView === 'detail';
+		if (toggle) toggle.classList.toggle('hidden', detailOpen || workspaceView === 'branch');
+		// The segmented control mirrors the live pane, including the branch scope
+		// reached from a course row (hidden there, but still the "categories" side).
+		for (const btn of document.querySelectorAll('#subjectViewToggle .subject-view-btn')) {
+			const listSide = workspaceView === 'courses' || workspaceView === 'detail';
+			const active = btn.dataset.view === (listSide ? 'courses' : 'categories');
+			btn.classList.toggle('is-active', active);
+			btn.setAttribute('aria-pressed', String(active));
+		}
+		if (listPane) listPane.classList.toggle('hidden', detailOpen || workspaceView !== 'courses');
+		if (structurePane) structurePane.classList.toggle('hidden', detailOpen || workspaceView === 'courses');
+		if (detailPane) {
+			detailPane.classList.toggle('hidden', !detailOpen);
+			if (!detailOpen) detailPane.innerHTML = '';
+		}
+	}
+
+	window.setSubjectsWorkspaceView = function (mode) {
+		if (mode !== 'courses' && mode !== 'categories') return;
+		workspaceView = mode;
+		workspaceBranchCourseId = null;
+		currentCourse = null;
+		// The category table always falls back to the whole subject here, so the
+		// "All categories" view keeps search, teacher filter, sort and bulk delete.
+		window.SubjectsManagement?.setView?.('subject');
+		renderCourseList();
+		renderWorkspacePanes();
+	};
+
+	/** Open a branch inside the structure pane (the one and only structure editor). */
+	window.openStructureBranch = function (rootId, options = {}) {
+		const branchRootId = String(rootId || '');
+		if (!branchRootId) return;
+		const courseId = options.courseId ? String(options.courseId) : null;
+		// The breadcrumb spells the chain out (Subject › Course › Structure) and
+		// only this module holds the course rows, so the name is resolved here —
+		// the caller passes the id it has.
+		const course = courseId
+			? coursesCache.find((c) => String(c.id) === courseId)
+				|| (String(currentCourse?.id || '') === courseId ? currentCourse : null)
+			: null;
+		workspaceBranchCourseId = courseId;
+		workspaceView = 'branch';
+		window.SubjectsManagement?.openBranch?.(branchRootId, {
+			...options,
+			courseId,
+			courseName: String(options.courseName || course?.name || ''),
+		});
+		renderWorkspacePanes();
+	};
+
+	window.closeStructureBranch = function () {
+		window.SubjectsManagement?.setView?.('subject');
+		workspaceBranchCourseId = null;
+		if (workspaceView === 'branch') workspaceView = 'courses';
+		if (workspaceView !== 'branch' && currentCourse) workspaceView = 'detail';
+		renderCourseList();
+		renderWorkspacePanes();
+	};
+
+	function kindChip(kind) {
+		if (kind === 'structure') return '<span class="course-kind-chip is-structure">No course yet</span>';
+		if (kind === 'unlinked') return '<span class="course-kind-chip is-unlinked">No structure</span>';
+		return '';
+	}
+
+	function structureRowActions(root) {
+		const id = esc(root.id);
+		return (
+			'<div class="exam-actions">' +
+			`<button class="exam-action-btn course-action-create" title="Create a course on this structure" aria-label="Create a course on this structure" onclick="createCourseOnBranch('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>' +
+			`<button class="exam-action-btn course-action-structure" title="Edit structure" aria-label="Edit structure" onclick="openStructureBranch('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></button>' +
+			`<button class="exam-action-btn course-action-generate" title="Generate outline with AI" aria-label="Generate outline with AI" onclick="openCourseFromCategory('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"></path></svg></button>' +
+			'</div>'
+		);
+	}
+
+	function courseRowActions(course) {
+		const id = esc(course.id);
+		const published = course.status === 'published';
+		return (
+			'<div class="exam-actions">' +
+			`<button class="exam-action-btn exam-edit-btn" title="Open course" aria-label="Open course" onclick="openCourseDetail('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>' +
+			`<button class="exam-action-btn course-action-structure" title="Edit structure" aria-label="Edit structure" onclick="openStructureBranch('${esc(course.category_id)}', {courseId:'${id}'})">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></button>' +
+			`<button class="exam-action-btn course-action-document" aria-label="Create course document" title="Create course document" onclick="createCourseDocument('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg></button>' +
+			`<button class="exam-action-btn" title="${published ? 'Unpublish' : 'Publish'}" aria-label="${published ? 'Unpublish' : 'Publish'}" onclick="toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg></button>' +
+			`<button class="exam-action-btn exam-delete-btn" title="Delete course" aria-label="Delete course" onclick="deleteCourseConfirm('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>' +
+			'</div>'
+		);
+	}
+
+	function unlinkedRowActions(course) {
+		const id = esc(course.id);
+		return (
+			'<div class="exam-actions">' +
+			`<button class="exam-action-btn course-action-link" title="Link a structure" aria-label="Link a structure" onclick="linkStructure('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></button>' +
+			`<button class="exam-action-btn exam-edit-btn" title="Open course" aria-label="Open course" onclick="openCourseDetail('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>' +
+			`<button class="exam-action-btn exam-delete-btn" title="Delete course" aria-label="Delete course" onclick="deleteCourseConfirm('${id}')">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>' +
+			'</div>'
+		);
+	}
+
+	function overviewRowHtml(row) {
+		if (row.kind === 'structure') {
+			const root = row.root;
+			return (
+				`<tr data-row-key="branch:${esc(root.id)}" data-kind="structure">` +
+				`<td><button type="button" class="course-name-link" onclick="openStructureBranch('${esc(root.id)}')">${esc(root.name)}</button>${kindChip('structure')}</td>` +
+				`<td>${esc(categoryPath(root.id) || root.name || '—')}</td>` +
+				'<td>—</td>' +
+				'<td><span class="status-badge status-muted">Structure</span></td>' +
+				'<td>—</td>' +
+				`<td>${fmtDate(root.dateCreated || root.created_at)}</td>` +
+				`<td>${structureRowActions(root)}</td></tr>`
+			);
+		}
+		const course = row.course;
+		const published = course.status === 'published';
+		const nameCell =
+			`<td><button type="button" class="course-name-link" onclick="openCourseDetail('${esc(course.id)}')" aria-label="Open course ${esc(course.name)}">${esc(course.name)}</button>` +
+			kindChip(row.kind) + '</td>';
+		return (
+			`<tr data-row-key="${esc(course.id)}" data-id="${esc(course.id)}" data-kind="${row.kind}">` +
+			nameCell +
+			`<td>${esc(course.category_path || categoryPath(course.category_id) || '—')}</td>` +
+			`<td>${Number(course.lesson_count) || 0}</td>` +
+			`<td><span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span></td>` +
+			`<td>${(course.class_names || []).map(esc).join(', ') || '—'}</td>` +
+			`<td>${fmtDate(course.updated_at)}</td>` +
+			`<td>${row.kind === 'unlinked' ? unlinkedRowActions(course) : courseRowActions(course)}</td></tr>`
+		);
+	}
+
+	window.renderCourseList = function () {
+		const tbody = document.querySelector('#courseList tbody');
+		if (!tbody) return;
+		renderOrphanBanner();
+		const search = (document.getElementById('courseSearch')?.value || '').trim().toLowerCase();
+		const status = document.getElementById('courseStatusFilter')?.value || '';
+		const rows = overviewRows(activeSubjectId()).filter((row) => {
+			if (status && row.kind !== 'course') return false;
+			if (status && row.course?.status !== status) return false;
+			if (!search) return true;
+			return (
+				String(row.label || '').toLowerCase().includes(search) ||
+				String(row.course?.category_path || '').toLowerCase().includes(search)
+			);
+		});
+		if (!rows.length) {
+			tbody.innerHTML =
+				'<tr><td colspan="7" class="text-muted course-empty-cell" style="text-align:center;padding:24px;">No course or structure here yet — click "New Course" to create one.</td></tr>';
+			return;
+		}
+		tbody.innerHTML = rows.map(overviewRowHtml).join('');
+
+		for (const row of rows) {
+			const rowKey = String(row.kind === 'structure' ? `branch:${row.root.id}` : row.course.id);
+			// Compared through the dataset: an attribute selector would need
+			// CSS.escape, which the harness DOM does not provide.
+			const el = Array.from(tbody.children).find(
+				(tr) => tr && tr.dataset && String(tr.dataset.rowKey || '') === rowKey,
+			);
+			if (!el || typeof el.addEventListener !== 'function') continue;
+			el.addEventListener('click', (event) => {
+				const target = event?.target;
+				if (window.innerWidth > 768 || (target && typeof target.closest === 'function' && target.closest('button, a'))) return;
+				event.stopPropagation();
+				if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
+					if (row.kind === 'structure') openStructureBranch(row.root.id);
+					else openCourseDetail(row.course.id);
+					return;
+				}
+				if (row.kind === 'structure') {
+					window.MobileActionSheet.open(`Structure: ${String(row.root.name || '')}`, [
+						{ label: 'Create a course here', icon: '', onClick: () => window.createCourseOnBranch(row.root.id) },
+						{ label: 'Edit structure', icon: '', onClick: () => openStructureBranch(row.root.id) },
+						{ label: 'Generate outline with AI', icon: '', onClick: () => window.openCourseFromCategory(row.root.id) },
+					]);
+					return;
+				}
+				const course = row.course;
+				if (row.kind === 'unlinked') {
+					window.MobileActionSheet.open(`Course: ${String(course.name || '')}`, [
+						{ label: 'Link a structure', icon: '', onClick: () => window.linkStructure(course.id) },
+						{ label: 'Open course', icon: '', onClick: () => openCourseDetail(course.id) },
+						{ label: 'Delete course', icon: '', onClick: () => deleteCourseConfirm(course.id), variant: 'danger' },
+					]);
+					return;
+				}
+				const published = course.status === 'published';
+				const actions = [
+					{ label: 'Open course', icon: '', onClick: () => openCourseDetail(course.id) },
+					{ label: 'Edit structure', icon: '', onClick: () => openStructureBranch(course.category_id, { courseId: course.id }) },
+					{ label: 'Create course document', icon: '', onClick: () => window.createCourseDocument(course.id) },
+					{ label: published ? 'Unpublish course' : 'Publish course', icon: '', onClick: () => toggleCoursePublish(course.id, published ? 'unpublish' : 'publish'), variant: published ? 'default' : 'primary' },
+					{ label: 'Delete course', icon: '', onClick: () => deleteCourseConfirm(course.id), variant: 'danger' },
+				];
+				window.MobileActionSheet.open(`Course: ${String(course.name || '')}`, actions);
+			});
+		}
+	};
 
 	async function loadCourses(quiet) {
 		const A = api();
@@ -345,90 +619,6 @@
 		}
 	}
 
-	window.renderCourseList = function () {
-		const tbody = document.querySelector('#courseList tbody');
-		if (!tbody) return;
-		renderOrphanBanner();
-		const search = (document.getElementById('courseSearch')?.value || '').trim().toLowerCase();
-		const status = document.getElementById('courseStatusFilter')?.value || '';
-		const rows = coursesCache.filter((c) => {
-			if (status && c.status !== status) return false;
-			if (!search) return true;
-			return (
-				String(c.name || '').toLowerCase().includes(search) ||
-				String(c.category_path || '').toLowerCase().includes(search)
-			);
-		});
-		if (!rows.length) {
-			tbody.innerHTML =
-				'<tr><td colspan="7" class="text-muted course-empty-cell" style="text-align:center;padding:24px;">No courses yet — click "New Course from Categories" to generate one with AI.</td></tr>';
-			return;
-		}
-		tbody.innerHTML = rows
-			.map((c) => {
-				const published = c.status === 'published';
-				return (
-					`<tr data-id="${esc(c.id)}">` +
-					`<td><button type="button" class="course-name-link" onclick="openCourseDetail('${esc(c.id)}')" aria-label="Open course ${esc(c.name)}">${esc(c.name)}</button></td>` +
-					`<td>${esc(c.category_path || '—')}</td>` +
-					`<td>${Number(c.lesson_count) || 0}</td>` +
-					`<td><span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span></td>` +
-					`<td>${(c.class_names || []).map(esc).join(', ') || '—'}</td>` +
-					`<td>${fmtDate(c.updated_at)}</td>` +
-					'<td><div class="exam-actions">' +
-					`<button class="exam-action-btn exam-edit-btn" title="Open course" onclick="openCourseDetail('${esc(c.id)}')">` +
-					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>' +
-					`<button class="exam-action-btn course-action-document" title="Create course document" onclick="createCourseDocument('${esc(c.id)}')">` +
-					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg></button>' +
-					`<button class="exam-action-btn" title="${published ? 'Unpublish' : 'Publish'}" onclick="toggleCoursePublish('${esc(c.id)}','${published ? 'unpublish' : 'publish'}')">` +
-					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg></button>' +
-					`<button class="exam-action-btn exam-delete-btn" title="Delete course" onclick="deleteCourseConfirm('${esc(c.id)}')">` +
-					'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>' +
-					'</div></td></tr>'
-				);
-			})
-			.join('');
-
-		rows.forEach((course) => {
-			const row = Array.from(tbody.querySelectorAll('tr[data-id]')).find(
-				(item) => item.dataset.id === String(course.id),
-			);
-			if (!row) return;
-			row.addEventListener('click', (event) => {
-				if (window.innerWidth > 768 || event.target.closest('button, a')) return;
-				event.stopPropagation();
-				if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
-					openCourseDetail(course.id);
-					return;
-				}
-				const published = course.status === 'published';
-				window.MobileActionSheet.open(`Course: ${String(course.name || '')}`, [
-					{
-						label: 'Open course',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
-						onClick: () => openCourseDetail(course.id),
-					},
-					{
-						label: 'Create course document',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg>',
-						onClick: () => window.createCourseDocument(course.id),
-					},
-					{
-						label: published ? 'Unpublish course' : 'Publish course',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>',
-						onClick: () => toggleCoursePublish(course.id, published ? 'unpublish' : 'publish'),
-						variant: published ? 'default' : 'primary',
-					},
-					{
-						label: 'Delete course',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-						onClick: () => deleteCourseConfirm(course.id),
-						variant: 'danger',
-					},
-				]);
-			});
-		});
-	};
 
 	async function toggleCoursePublish(courseId, action, recipientsChecked = false) {
 		const A = api();
@@ -1079,7 +1269,7 @@
 		const footer =
 			'<button type="button" class="btn" onclick="closeCourseModal(\'courseGenModal\')">Cancel</button>' +
 			'<button type="button" class="btn btn-primary" id="courseGenGo" onclick="runCourseGeneration()">Generate course</button>';
-		openModal('courseGenModal', 'New Course from Categories', body, footer);
+		openModal('courseGenModal', 'New Course', body, footer);
 		window.addCourseSubcategoryGroup();
 		if (defaults.includeEmptyCategories) window.setCourseGeneratorMode('existing');
 	};
@@ -1098,8 +1288,8 @@
 			tab.setAttribute('aria-selected', String(active));
 		});
 		if (button) {
-			button.textContent = isNew ? 'Create structure & continue' : 'Generate course';
-			button.onclick = isNew ? window.createCourseCategoryStructure : window.runCourseGeneration;
+			button.textContent = isNew ? 'Create course' : 'Generate course';
+			button.onclick = isNew ? window.submitCourseWithStructure : window.runCourseGeneration;
 		}
 	};
 
@@ -1117,7 +1307,11 @@
 		container.appendChild(group);
 	};
 
-	window.createCourseCategoryStructure = async function () {
+	// One subject-bound pipeline: the root, its subcategories and their axes are
+	// created server-side together with the course (POST /courses/with-structure),
+	// so a half-written course never leaves orphan categories behind and every
+	// node carries its subject.
+	window.submitCourseWithStructure = async function () {
 		const name = (document.getElementById('newCourseName')?.value || '').trim();
 		const rootName = (document.getElementById('newCourseRootCategory')?.value || '').trim();
 		const groups = Array.from(document.querySelectorAll('#courseSubcategoryGroups .course-subcategory-group')).map((group) => ({
@@ -1125,58 +1319,47 @@
 			axes: (group.querySelector('.course-subcategory-axes')?.value || '').split(/\r?\n/).map((axis) => axis.trim()).filter(Boolean),
 		}));
 		const language = document.getElementById('newCourseLanguage')?.value || 'French';
+		const configId = selectedConfigId(document.getElementById('courseGenModal'));
+		const subjectId = activeSubjectId();
+		if (subjectId === '__unassigned__') return toast('Pick a subject first — a course lives inside one.', 'error');
 		if (!name) return toast('Give the course a name first.', 'error');
 		if (!rootName) return toast('Enter a main category name.', 'error');
 		if (!groups.length || groups.some((group) => !group.name || !group.axes.length)) {
 			return toast('Each subcategory needs a name and at least one axis.', 'error');
 		}
 		const btn = document.getElementById('courseGenGo');
-		if (btn) { btn.disabled = true; btn.textContent = 'Creating categories…'; }
+		if (btn) { btn.disabled = true; btn.textContent = 'Creating course…'; }
 		const A = api();
 		if (!A) {
-			if (btn) { btn.disabled = false; btn.textContent = 'Create structure & continue'; }
+			if (btn) { btn.disabled = false; btn.textContent = 'Create course'; }
 			return;
 		}
-		let root = null;
-		const createdCategories = [];
 		try {
-			root = await A.raw('POST', '/categories', { name: rootName });
-			createdCategories.push(root);
-			categoryList().push(root);
-			for (const group of groups) {
-				const subcategory = await A.raw('POST', '/categories', { name: group.name, parent_id: root.id });
-				createdCategories.push(subcategory);
-				categoryList().push(subcategory);
-				for (const axisName of group.axes) {
-					const axis = await A.raw('POST', '/categories', { name: axisName, parent_id: subcategory.id });
-					createdCategories.push(axis);
-					categoryList().push(axis);
-				}
+			const course = await A.raw('POST', '/courses/with-structure', {
+				name,
+				subjectId,
+				rootName,
+				groups,
+				language,
+				...(configId ? { configId } : {}),
+				includeEmptyCategories: true,
+			});
+			const list = categoryList();
+			const known = new Set(list.map((c) => String(c.id)));
+			for (const category of course.created_categories || []) {
+				if (!known.has(String(category.id))) list.push(category);
 			}
+			window.closeCourseModal('courseGenModal');
+			await loadCourses();
+			renderCourseList();
+			renderWorkspacePanes();
+			toast(`Course "${course?.name || name}" created with ${course?.lessons?.length || 0} lesson(s).`);
+			if (course?.id) await openCourseDetail(course.id);
 		} catch (err) {
-			let rollbackMessage = '';
-			if (root?.id) {
-				try {
-					await A.raw('DELETE', `/categories/${encodeURIComponent(root.id)}`);
-					const createdIds = new Set(createdCategories.map((category) => category.id));
-					const categories = categoryList();
-					for (let i = categories.length - 1; i >= 0; i--) {
-						if (createdIds.has(categories[i]?.id)) categories.splice(i, 1);
-					}
-				} catch (rollbackErr) {
-					rollbackMessage = ` Cleanup also failed: ${rollbackErr?.message || 'error'}.`;
-				}
-			}
-			toast(`Could not create category structure: ${err?.message || 'error'}.${rollbackMessage}`, 'error');
-			if (btn) { btn.disabled = false; btn.textContent = 'Create structure & continue'; }
-			return;
+			console.warn('[courses] with-structure failed:', err);
+			if (btn) { btn.disabled = false; btn.textContent = 'Create course'; }
+			toast('Could not create the course: ' + (err?.message || 'error'), 'error');
 		}
-		await window.openCourseGeneratorModal(root.id, {
-			name,
-			language,
-			configId,
-			includeEmptyCategories: true,
-		});
 	};
 
 	window.runCourseGeneration = async function () {
@@ -1205,10 +1388,9 @@
 		}
 	};
 
-	// Entry point for the Subjects tab action button / long-press sheet:
-	// jump to Courses, refresh the list and open the generator with this branch
-	// already selected. Generation itself stays server-side (it validates that
-	// the branch actually holds questions).
+	// Entry point for the structure-row action: stay inside the Subjects tab,
+	// refresh the list and open the generator with this branch already picked.
+	// Generation itself stays server-side (it validates the 1:1 branch rule).
 	window.openCourseFromCategory = async function (categoryId) {
 		const cat = categoryList().find((c) => String(c.id) === String(categoryId));
 		if (!cat) {
@@ -1216,11 +1398,7 @@
 			return;
 		}
 		try {
-			if (typeof window.openTab === 'function') {
-				window.openTab(null, 'courses');
-				const tabBtn = document.querySelector('.nav-tab[data-tab="courses"]');
-				if (tabBtn) tabBtn.classList.add('active');
-			}
+			if (typeof window.openTab === 'function') window.openTab(null, 'subjects');
 		} catch (_) {
 			/* tab switching is cosmetic — the modal still opens */
 		}
@@ -1243,19 +1421,91 @@
 		}
 		const listPane = document.getElementById('courseListPane');
 		const detailPane = document.getElementById('courseDetailPane');
-		if (listPane) listPane.classList.add('hidden');
-		if (detailPane) {
-			detailPane.classList.remove('hidden');
-			renderCourseDetail();
-		}
+		void listPane;
+		if (detailPane) renderCourseDetail();
+		workspaceView = 'detail';
+		renderWorkspacePanes();
 	};
 	window.closeCourseDetail = function () {
-		const listPane = document.getElementById('courseListPane');
-		const detailPane = document.getElementById('courseDetailPane');
-		if (detailPane) { detailPane.classList.add('hidden'); detailPane.innerHTML = ''; }
-		if (listPane) listPane.classList.remove('hidden');
 		currentCourse = null;
+		workspaceView = 'courses';
+		window.SubjectsManagement?.setView?.('subject');
 		renderCourseList();
+		renderWorkspacePanes();
+	};
+
+	// ── Branch ↔ course linking (the two buckets the workspace surfaces) ─────
+	function freeBranchOptions(subjectId) {
+		return rootBranches(subjectId)
+			.map((root) => `<option value="${esc(root.id)}">${esc(categoryPath(root.id) || root.name)}</option>`)
+			.join('');
+	}
+
+	/** "Create course here": a course on an existing, still-free structure. */
+	window.createCourseOnBranch = function (rootId) {
+		const root = categoryList().find((c) => String(c.id) === String(rootId));
+		if (!root) return toast('Structure not found — refresh the list.', 'error');
+		const body =
+			`<p class="course-generator-hint">Course name for the structure <strong>${esc(root.name)}</strong>. It becomes the course's own branch, so no other course can claim it.</p>` +
+			'<div class="form-group"><label for="branchCourseName">Course name</label>' +
+			`<input type="text" id="branchCourseName" maxlength="200" value="${esc(root.name)}" style="width:100%;"></div>`;
+		const footer =
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseBranchModal\')">Cancel</button>' +
+			`<button type="button" class="btn btn-primary" onclick="submitCourseOnBranch('${esc(root.id)}')">Create course</button>`;
+		openModal('courseBranchModal', 'New Course on this Structure', body, footer);
+	};
+
+	window.submitCourseOnBranch = async function (rootId) {
+		const name = (document.getElementById('branchCourseName')?.value || '').trim();
+		if (!name) return toast('Give the course a name first.', 'error');
+		const A = api();
+		if (!A) return;
+		try {
+			const course = await A.raw('POST', '/courses', { name, category_id: rootId });
+			closeCourseModal('courseBranchModal');
+			await loadCourses();
+			renderCourseList();
+			renderWorkspacePanes();
+			toast(`Course "${course?.name || name}" created.`);
+			if (window.SubjectsManagement?.refresh) await window.SubjectsManagement.refresh();
+			if (course?.id) await openCourseDetail(course.id);
+		} catch (err) {
+			toast('Could not create the course: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	/** "Link a structure": attach an unlinked course to a free branch. */
+	window.linkStructure = function (courseId) {
+		const course = coursesCache.find((c) => String(c.id) === String(courseId));
+		if (!course) return toast('Course not found — refresh the list.', 'error');
+		const options = freeBranchOptions(activeSubjectId());
+		const body = options
+			? `<p class="course-generator-hint">Pick the structure that belongs to <strong>${esc(course.name || '')}</strong>. Structures that already have a course are not listed.</p>` +
+				`<div class="form-group"><label for="linkStructureSelect">Free structure</label><select id="linkStructureSelect" style="width:100%;">${options}</select></div>`
+			: '<div class="course-generator-hint">No free structure in this subject yet — create one with “New Course” first.</div>';
+		const footer =
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseLinkModal\')">Cancel</button>' +
+			(options
+				? `<button type="button" class="btn btn-primary" onclick="submitLinkedStructure('${esc(course.id)}')">Link structure</button>`
+				: '');
+		openModal('courseLinkModal', 'Link a Structure', body, footer);
+	};
+
+	window.submitLinkedStructure = async function (courseId) {
+		const categoryId = document.getElementById('linkStructureSelect')?.value || '';
+		if (!categoryId) return toast('Pick a structure first.', 'error');
+		const A = api();
+		if (!A) return;
+		try {
+			await A.raw('PATCH', `/courses/${encodeURIComponent(courseId)}`, { category_id: categoryId });
+			closeCourseModal('courseLinkModal');
+			await loadCourses();
+			renderCourseList();
+			renderWorkspacePanes();
+			toast('Structure linked to the course.');
+		} catch (err) {
+			toast('Could not link the structure: ' + (err?.message || 'error'), 'error');
+		}
 	};
 
 	function lessonsByCategory() {
@@ -1505,14 +1755,18 @@
 		pane.innerHTML =
 			'<div class="course-detail-toolbar">' +
 			'<div class="course-detail-heading"><button type="button" class="btn" onclick="closeCourseDetail()">&larr; Courses</button>' +
-			'<div class="course-detail-title"><h2>' + esc(course.name) + '</h2>' +
-			`<span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span></div></div>` +
+				`<div class="course-detail-title"><h2>${esc(course.name)}</h2>` +
+				`<span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span>` +
+				(!course.category_id ? '<span class="course-kind-chip is-unlinked">No structure</span>' : '') + '</div></div>' +
 			`<div class="course-detail-mode" role="group" aria-label="Course mode">` +
 			`<button type="button" class="btn ${courseDetailMode === 'view' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'view'}" onclick="setCourseDetailMode('view')">View course</button>` +
 			`<button type="button" class="btn ${courseDetailMode === 'edit' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'edit'}" onclick="setCourseDetailMode('edit')">Edit content</button></div>` +
 			'<div class="course-detail-controls">' +
 			(courseDetailMode === 'edit' ? '<div class="course-model-control">' + modelSelectHtml(selectedCourseConfigId, 'courseModelSelect') + '</div>' : '') +
 			'<div class="course-detail-actions">' +
+			(course.category_id
+				? `<button type="button" class="btn course-action-structure" onclick="openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})">Edit structure</button>`
+				: `<button type="button" class="btn course-action-link" onclick="linkStructure('${esc(course.id)}')">Link a structure</button>`) +
 			'<button type="button" class="btn course-action-rename" onclick="renameCoursePrompt()">Rename</button>' +
 			`<button type="button" class="btn ${published ? 'course-action-unpublish' : 'course-action-publish'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? 'Unpublish' : 'Publish'}</button>` +
 			'<button type="button" class="btn course-action-assign" onclick="openAssignClassesModal()">Send to students</button>' +
@@ -2443,6 +2697,13 @@
 		renderCourseList,
 		openCourseDetail,
 		renderMarkdown,
+		// Workspace surface: the merged Subjects tab switches panes through these
+		// instead of a second nav entry.
+		setView: (mode) => window.setSubjectsWorkspaceView(mode),
+		openCourse: (...args) => window.openCourseDetail(...args),
+		linkStructure: (...args) => window.linkStructure(...args),
+		createCourseOnBranch: (...args) => window.createCourseOnBranch(...args),
+		currentView: () => workspaceView,
 		// Read-only view of the list for other tabs (Subjects manager shows a
 		// per-subject course count; courses are server-backed and deliberately
 		// not part of the localStorage mirror). ensureLoaded() fetches once.

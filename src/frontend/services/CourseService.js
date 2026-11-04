@@ -61,6 +61,9 @@ export class CourseService {
 
   async create(data, currentUser) {
     this.#requireManager(currentUser);
+    if (!data || !data.category_id) {
+      throw new ValidationError({ category_id: ['A course needs its own category structure.'] });
+    }
     const parsed = CourseCreateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     let subjectId = parsed.data.subject_id || null;
@@ -73,19 +76,18 @@ export class CourseService {
         throw new ForbiddenError('Not your subject');
       }
     }
-    if (parsed.data.category_id) {
-      const category = await this.#repo.getById('categories', parsed.data.category_id);
-      if (!category || String(category.school_id) !== String(currentUser.school_id)) {
-        throw new ValidationError({ category_id: ['Category not found in this school.'] });
-      }
-      if (currentUser.role === ROLES.TEACHER && String(category.created_by) !== String(currentUser.id)) {
-        throw new ForbiddenError('Not your category');
-      }
-      if (subjectId && String(category.subject_id || '') !== subjectId) {
-        throw new ValidationError({ subject_id: ['Course and category must belong to the same subject.'] });
-      }
-      subjectId = subjectId || category.subject_id || null;
+    const category = await this.#repo.getById('categories', parsed.data.category_id);
+    if (!category || String(category.school_id) !== String(currentUser.school_id)) {
+      throw new ValidationError({ category_id: ['Category not found in this school.'] });
     }
+    if (currentUser.role === ROLES.TEACHER && String(category.created_by) !== String(currentUser.id)) {
+      throw new ForbiddenError('Not your category');
+    }
+    if (subjectId && category.subject_id && String(category.subject_id) !== subjectId) {
+      throw new ValidationError({ subject_id: ['Course and category must belong to the same subject.'] });
+    }
+    subjectId = subjectId || category.subject_id || null;
+    await this.#assertBranchFree(currentUser.school_id, category.id);
     return this.#repo.create('courses', {
       ...parsed.data,
       subject_id: subjectId,
@@ -132,19 +134,36 @@ export class CourseService {
     const categoryId = parsed.data.category_id === undefined
       ? existing.category_id
       : parsed.data.category_id;
-    if (categoryId) {
-      const category = await this.#repo.getById('categories', categoryId);
+    let patch = { ...parsed.data };
+    if (Object.hasOwn(parsed.data, 'category_id')) {
+      // Manual link path ("Link a structure"): a course always owns its branch.
+      if (!parsed.data.category_id) {
+        throw new ValidationError({ category_id: ['A course needs its own category structure.'] });
+      }
+      const category = await this.#repo.getById('categories', parsed.data.category_id);
       if (!category || String(category.school_id) !== String(currentUser.school_id)) {
         throw new ValidationError({ category_id: ['Category not found in this school.'] });
       }
       if (currentUser.role === ROLES.TEACHER && String(category.created_by) !== String(currentUser.id)) {
         throw new ForbiddenError('Not your category');
       }
-      if (String(category.subject_id || '') !== String(subjectId || '')) {
+      if (subjectId && category.subject_id && String(category.subject_id) !== String(subjectId)) {
+        throw new ValidationError({ subject_id: ['Course and category must belong to the same subject.'] });
+      }
+      // A legacy course without a subject takes it over from the branch it is
+      // linked to, so it lands under the right subject pill.
+      if (!subjectId && category.subject_id) patch.subject_id = category.subject_id;
+      await this.#assertBranchFree(currentUser.school_id, category.id, id);
+    } else if (categoryId) {
+      const category = await this.#repo.getById('categories', categoryId);
+      if (!category || String(category.school_id) !== String(currentUser.school_id)) {
+        throw new ValidationError({ category_id: ['Category not found in this school.'] });
+      }
+      if (subjectId && category.subject_id && String(category.subject_id) !== String(subjectId)) {
         throw new ValidationError({ subject_id: ['Course and category must belong to the same subject.'] });
       }
     }
-    return this.#repo.update('courses', id, parsed.data);
+    return this.#repo.update('courses', id, patch);
   }
 
   async setStatus(id, status, currentUser) {
@@ -162,7 +181,73 @@ export class CourseService {
     const existing = await this.getById(id);
     this.#assertOwnership(existing, currentUser);
     // Lessons and course_classes cascade with the course (FK onDelete: Cascade).
+    // The category branch survives on purpose: it reappears as a structure row
+    // so the teacher's authored outline (and its questions) is never lost.
     await this.#repo.delete('courses', id);
+  }
+
+  // ── 1:1 branch ownership ───────────────────────────────────────────────────
+
+  /**
+   * A course and a category branch are the same object: no branch may be
+   * claimed twice, and a branch may never nest inside (or wrap) another
+   * course's branch. Read-only legacy violations stay listed untouched — this
+   * gate only applies to writes. The error names the blocking course and its
+   * path so the teacher knows exactly where to look.
+   */
+  async #assertBranchFree(schoolId, categoryId, excludeCourseId = null) {
+    const targetId = String(categoryId);
+    const [{ data: courses }, { data: categories }] = await Promise.all([
+      this.#repo.getAll('courses', { filters: { school_id: schoolId }, limit: 100000 }),
+      this.#repo.getAll('categories', { filters: { school_id: schoolId }, limit: 100000 }),
+    ]);
+    const taken = (courses || []).filter(
+      (course) => course.category_id && String(course.id) !== String(excludeCourseId),
+    );
+    if (!taken.length) return;
+
+    const byId = new Map((categories || []).map((category) => [String(category.id), category]));
+    const chainOf = (id) => {
+      const ids = [];
+      const seen = new Set();
+      let node = byId.get(String(id));
+      while (node && !seen.has(String(node.id))) {
+        seen.add(String(node.id));
+        ids.push(String(node.id));
+        node = node.parent_id ? byId.get(String(node.parent_id)) : null;
+      }
+      return ids;
+    };
+    const pathOf = (id) => chainOf(id)
+      .reverse()
+      .map((nodeId) => String(byId.get(nodeId)?.name || 'Unnamed'))
+      .join(' > ');
+    const targetChain = chainOf(targetId);
+
+    for (const course of taken) {
+      const rootId = String(course.category_id);
+      if (rootId === targetId) {
+        throw new ValidationError({
+          category_id: [`This structure already belongs to the course "${course.name}". Each course owns exactly one structure.`],
+        });
+      }
+      if (targetChain.includes(rootId)) {
+        throw new ValidationError({
+          category_id: [
+            `"${pathOf(targetId)}" sits inside the course "${course.name}" (${pathOf(rootId)}). `
+            + 'Pick a branch that is not part of another course.',
+          ],
+        });
+      }
+      if (chainOf(rootId).includes(targetId)) {
+        throw new ValidationError({
+          category_id: [
+            `"${pathOf(targetId)}" already contains the course "${course.name}" (${pathOf(rootId)}). `
+            + 'Pick a branch that does not hold another course.',
+          ],
+        });
+      }
+    }
   }
 
   // ── Lessons ────────────────────────────────────────────────────────────────

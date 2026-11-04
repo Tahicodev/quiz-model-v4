@@ -6228,3 +6228,85 @@ html[data-theme='dark'] #studentProfileModal .sa-btn-ghost { background: #0f172a
 html[data-theme='dark'] #studentProfileModal .sa-back-btn { background: rgba(99,102,241,0.2) !important; color: #c7d2fe !important; border-color: rgba(99,102,241,0.45) !important; }
 html[data-theme='dark'] #studentProfileModal .sa-pw-toggle { background: rgba(99,102,241,0.2); color: #c7d2fe; }
 html[data-theme='dark'] #studentProfileModal .profile-request-status:not(:empty) { background: #0f172a !important; border-color: rgba(148,163,184,0.28) !important; color: #cbd5e1 !important; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   UNIFIED SUBJECTS WORKSPACE — dark parity (view toggle, merged rows,
+   structure pane breadcrumb, Prompt Builder attach-to block).
+   ══════════════════════════════════════════════════════════════════════ */
+html[data-theme='dark'] .subject-view-toggle {
+	background: #0f172a;
+	border-color: rgba(148, 163, 184, 0.28);
+}
+
+html[data-theme='dark'] .subject-view-btn {
+	color: #94a3b8;
+}
+
+html[data-theme='dark'] .subject-view-btn:hover:not(.is-active) {
+	background: rgba(99, 102, 241, 0.16);
+	color: #e2e8f0;
+}
+
+html[data-theme='dark'] .subject-view-btn.is-active {
+	background: #4f46e5;
+	color: #fff;
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+html[data-theme='dark'] .course-kind-chip.is-structure {
+	background: rgba(56, 189, 248, 0.18);
+	color: #7dd3fc;
+}
+
+html[data-theme='dark'] .course-kind-chip.is-unlinked {
+	background: rgba(251, 191, 36, 0.18);
+	color: #fcd34d;
+}
+
+html[data-theme='dark'] #courseList tbody tr[data-kind='structure'] {
+	background: rgba(56, 189, 248, 0.06);
+}
+
+html[data-theme='dark'] #courseList tbody tr[data-kind='unlinked'] {
+	background: rgba(251, 191, 36, 0.06);
+}
+
+html[data-theme='dark'] .structure-breadcrumb {
+	background: #0f172a;
+	border-color: rgba(148, 163, 184, 0.28);
+	color: #cbd5e1;
+}
+
+html[data-theme='dark'] .structure-branch-note {
+	color: #94a3b8;
+}
+
+html[data-theme='dark'] #structureBackBtn {
+	background: #0f172a !important;
+	color: #cbd5e1 !important;
+	border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+html[data-theme='dark'] .prompt-builder-attach {
+	background: #0f172a;
+	border-color: rgba(148, 163, 184, 0.28);
+}
+
+html[data-theme='dark'] .prompt-builder-attach-toggle {
+	color: #e2e8f0;
+}
+
+html[data-theme='dark'] .prompt-builder-attach-fields label {
+	color: #94a3b8;
+}
+
+html[data-theme='dark'] .prompt-builder-attach-fields select,
+html[data-theme='dark'] .prompt-builder-attach-fields input {
+	background: #111827;
+	border-color: rgba(148, 163, 184, 0.3);
+	color: #e2e8f0;
+}
+
+html[data-theme='dark'] .prompt-builder-attach-hint {
+	color: #94a3b8;
+}

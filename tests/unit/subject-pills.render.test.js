@@ -299,15 +299,15 @@ describe('subject pill bar', () => {
     expect((html.match(/ active/g) || []).length).toBe(1);
     expect(html).toContain('aria-selected="true"');
     expect(html).toContain('subject-pill active');
-    expect(bandTitle.textContent).toBe('Science · Categories');
+    expect(bandTitle.textContent).toBe('Science · All categories');
     selectSubject(SUBJECT_MATH);
-    expect(bandTitle.textContent).toBe('Mathematics · Categories');
+    expect(bandTitle.textContent).toBe('Mathematics · All categories');
   });
 
   it('the legacy pill is the active one for the unassigned bucket', () => {
     selectSubject('__unassigned__');
     expect(pillBar.innerHTML).toContain('subject-pill-legacy active');
-    expect(bandTitle.textContent).toBe('Unassigned (legacy) · Categories');
+    expect(bandTitle.textContent).toBe('Unassigned (legacy) · All categories');
     selectSubject(SUBJECT_MATH);
   });
 });
@@ -439,7 +439,7 @@ describe('creating a subject from the manager modal', () => {
     expect(els.newSubjectName.value).toBe('');
     expect(pillBar.innerHTML).toContain('>History</button>');
     expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('subject-created');
-    expect(bandTitle.textContent).toBe('History · Categories');
+    expect(bandTitle.textContent).toBe('History · All categories');
     expect(managerBody.innerHTML).toContain('value="History"');
 
     // Leave the fixture untouched for anything running after this spec.
@@ -504,7 +504,7 @@ describe('selection survives a refresh', () => {
 
     expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('__unassigned__');
     expect(pillBar.innerHTML).toContain('subject-pill-legacy active');
-    expect(bandTitle.textContent).toBe('Unassigned (legacy) · Categories');
+    expect(bandTitle.textContent).toBe('Unassigned (legacy) · All categories');
     expect(rowsHtml().some((r) => r.includes('>Old branch<'))).toBe(true);
   });
 
@@ -520,7 +520,7 @@ describe('selection survives a refresh', () => {
     // tree of another is the exact desync the browser audit caught.
     expect(rowsHtml().join('|')).not.toBe(treeBefore);
     expect(rowsHtml().some((r) => r.includes('>Algebra<'))).toBe(true);
-    expect(bandTitle.textContent).toBe('Mathematics · Categories');
+    expect(bandTitle.textContent).toBe('Mathematics · All categories');
   });
 
   it('falls back to the legacy bucket when the last subject is deleted', () => {
@@ -531,7 +531,7 @@ describe('selection survives a refresh', () => {
 
       expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('__unassigned__');
       expect(pillBar.innerHTML).toContain('subject-pill-legacy active');
-      expect(bandTitle.textContent).toBe('Unassigned (legacy) · Categories');
+      expect(bandTitle.textContent).toBe('Unassigned (legacy) · All categories');
       // With no subject left the legacy forest is still reachable.
       expect(rowsHtml().some((r) => r.includes('>Old branch<'))).toBe(true);
     } finally {
@@ -560,7 +560,7 @@ describe('reconciling the pill bar with the server', () => {
       expect(pillBar.innerHTML).not.toContain('>Geography</button>');
       // Geography vanished, so the selection moved to a subject that exists.
       expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe(SUBJECT_MATH);
-      expect(bandTitle.textContent).toBe('Mathematics · Categories');
+      expect(bandTitle.textContent).toBe('Mathematics · All categories');
     } finally {
       delete ctx.window.API.list;
       state.subjects = [
@@ -612,7 +612,7 @@ describe('cross-tab jumps into the Subjects tab', () => {
     vm.runInContext(`revealCategoryFromActivity({}, '${PHYSICS}')`, ctx);
 
     expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe(SUBJECT_SCIENCE);
-    expect(bandTitle.textContent).toBe('Science · Categories');
+    expect(bandTitle.textContent).toBe('Science · All categories');
     expect(rowsHtml().some((r) => r.includes('>Physics<'))).toBe(true);
     expect(rowsHtml().some((r) => r.includes('>Algebra<'))).toBe(false);
     expect(jumps).toEqual([['subjects', PHYSICS]]);

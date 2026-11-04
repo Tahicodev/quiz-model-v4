@@ -388,9 +388,15 @@ describe('course document import', () => {
 				documentText: 'Unit 3\nSome content',
 				headings: [{ line: 1, level: 1, title: 'Unit 3' }],
 			});
-		expect(existingCategoryName.status).toBe(201);
-		expect(existingCategoryName.body.imported_categories[0].id).toBe(branchRootId);
+		// One course owns one branch: "Unit 3" is already the structure of the
+		// generated course, so a second course on it is refused (422) instead of
+		// silently sharing the branch. The heading still resolves to the existing
+		// row, so no duplicate category is authored by the failed import.
+		expect(existingCategoryName.status, JSON.stringify(existingCategoryName.body)).toBe(422);
+		expect(String(existingCategoryName.body.error.fields.category_id[0]))
+			.toContain('This structure already belongs to the course "French — Unit 3 (v2)"');
 		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Unit 3' } })).toBe(1);
+		expect(await prisma.course.count({ where: { school_id: SCHOOL, name: 'Existing category title import' } })).toBe(0);
 
 		const created = await asTeacher()
 			.post(`${BASE}/import`)
@@ -427,9 +433,168 @@ describe('course document import', () => {
 					title: heading.sourceText,
 				})),
 			});
-		expect(repeatedImport.status).toBe(201);
-		expect(repeatedImport.body.imported_categories.map((category) => category.id))
-			.toEqual(created.body.imported_categories.map((category) => category.id));
+		// The identical outline resolves to the categories the first import just
+		// authored — and those belong to "Imported Module", so the second course
+		// is refused. The rollback only removes rows this request created, so the
+		// first import's branch survives untouched.
+		expect(repeatedImport.status, JSON.stringify(repeatedImport.body)).toBe(422);
+		expect(String(repeatedImport.body.error.fields.category_id[0]))
+			.toContain('This structure already belongs to the course "Imported Module"');
+		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Imported Module' } })).toBe(1);
+		expect(await prisma.course.count({ where: { school_id: SCHOOL, name: 'Repeated Imported Module' } })).toBe(0);
+	});
+});
+
+describe('POST /courses and POST /courses/with-structure (the merged pipeline)', () => {
+	it('creates the subject-bound structure and its course in one call', async () => {
+		const res = await asTeacher()
+			.post(`${BASE}/with-structure`)
+			.send({
+				name: 'Addition workspace',
+				subjectId,
+				rootName: 'Addition',
+				groups: [
+					{ name: 'Tens', axes: ['Carrying', 'Without carrying'] },
+					{ name: 'Units', axes: ['Make ten'] },
+				],
+			});
+		expect(res.status, JSON.stringify(res.body)).toBe(201);
+		// root + 2 subcategories + 3 axes, every row stamped with the subject.
+		expect(res.body.created_categories).toHaveLength(6);
+		expect(res.body.created_categories.every((c) => String(c.subject_id) === String(subjectId))).toBe(true);
+		const [root] = res.body.created_categories;
+		expect(root.parent_id).toBeNull();
+		expect(String(res.body.category_id)).toBe(String(root.id));
+		expect(String(res.body.subject_id)).toBe(String(subjectId));
+		expect(res.body.status).toBe('draft');
+		expect(Array.isArray(res.body.lessons)).toBe(true);
+		const subs = await prisma.category.findMany({ where: { parent_id: root.id } });
+		expect(subs.map((c) => c.name).sort()).toEqual(['Tens', 'Units']);
+		const axes = await prisma.category.count({
+			where: { parent_id: { in: subs.map((c) => c.id) } },
+		});
+		expect(axes).toBe(3);
+		const logs = await prisma.auditLog.findMany({ where: { entity_id: root.id, action: 'create' } });
+		expect(logs.length).toBeGreaterThan(0);
+	});
+
+	it('rejects an incomplete scaffold before touching the database', async () => {
+		const categoriesBefore = await prisma.category.count({ where: { school_id: SCHOOL } });
+		const res = await asTeacher().post(`${BASE}/with-structure`).send({});
+		expect(res.status).toBe(422);
+		expect(res.body.error.fields.name).toBeTruthy();
+		expect(res.body.error.fields.subjectId).toBeTruthy();
+		expect(res.body.error.fields.rootName).toBeTruthy();
+		expect(res.body.error.fields.groups).toBeTruthy();
+		expect(await prisma.category.count({ where: { school_id: SCHOOL } })).toBe(categoriesBefore);
+	});
+
+	it('removes the categories it created when the AI outline call fails', async () => {
+		stubProviderFailure();
+		const res = await asTeacher()
+			.post(`${BASE}/with-structure`)
+			.send({
+				name: 'Failed outline course',
+				subjectId,
+				rootName: 'Rollback Root',
+				groups: [{ name: 'Rollback Sub', axes: ['Rollback Axe'] }],
+				configId,
+			});
+		vi.unstubAllGlobals('fetch');
+		expect(res.status, JSON.stringify(res.body)).toBe(502);
+		expect(res.body.error.code).toBe('AI_PROVIDER_ERROR');
+		expect(await prisma.category.count({
+			where: { school_id: SCHOOL, name: { in: ['Rollback Root', 'Rollback Sub', 'Rollback Axe'] } },
+		})).toBe(0);
+		expect(await prisma.course.count({ where: { school_id: SCHOOL, name: 'Failed outline course' } })).toBe(0);
+	});
+
+	it('refuses to create the course twice on the same branch', async () => {
+		const res = await asTeacher()
+			.post(BASE)
+			.send({ name: 'Second Unit 3 course', category_id: branchRootId, subject_id: subjectId });
+		expect(res.status, JSON.stringify(res.body)).toBe(422);
+		expect(String(res.body.error.fields.category_id[0])).toMatch(/already belongs to the course/i);
+		expect(await prisma.course.count({ where: { school_id: SCHOOL, name: 'Second Unit 3 course' } })).toBe(0);
+	});
+
+	it('refuses a course without a category structure', async () => {
+		const res = await asTeacher().post(BASE).send({ name: 'Branch-less course' });
+		expect(res.status).toBe(422);
+		expect(res.body.error.fields.category_id[0]).toMatch(/needs its own category structure/i);
+	});
+
+	it('creates a course on a still-free branch, deriving its subject from it', async () => {
+		const spare = await prisma.category.create({
+			data: { school_id: SCHOOL, subject_id: subjectId, name: 'Unit 7', created_by: teacher.id },
+		});
+		const res = await asTeacher().post(BASE).send({ name: 'Manual course', category_id: spare.id });
+		expect(res.status, JSON.stringify(res.body)).toBe(201);
+		expect(String(res.body.category_id)).toBe(String(spare.id));
+		expect(String(res.body.subject_id)).toBe(String(subjectId));
+		expect(res.body.lessons).toEqual([]);
+	});
+
+	it('refuses a teacher using another teacher\'s branch or subject', async () => {
+		const hash = await bcrypt.hash('pass1234', 4);
+		const peer = await prisma.user.create({
+			data: {
+				school_id: SCHOOL, username: 'rt-peer', name: 'Peer teacher', password_hash: hash,
+				role: 'teacher', status: 'active',
+			},
+		});
+		const peerSubject = await prisma.subject.create({
+			data: { school_id: SCHOOL, created_by: peer.id, name: 'Peer French' },
+		});
+		const login = await request(app).post('/api/v1/auth/login')
+			.send({ username: 'rt-peer', password: 'pass1234' });
+		expect(login.status).toBe(200);
+		const asPeer = () => authed(login.body.accessToken);
+
+		// The branch belongs to somebody else…
+		const onBranch = await asPeer().post(BASE).send({ name: 'Stolen branch course', category_id: branchRootId });
+		expect(onBranch.status).toBe(403);
+		// …and so does the subject the structure would be created under.
+		const onSubject = await asPeer().post(`${BASE}/with-structure`).send({
+			name: 'Stolen subject course', subjectId, rootName: 'Stolen root', groups: [{ name: 'Sub', axes: [] }],
+		});
+		expect(onSubject.status).toBe(403);
+		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Stolen root' } })).toBe(0);
+		// The peer can scaffold their own subject, so the refusals above are about
+		// ownership and not about the role.
+		const own = await asPeer().post(`${BASE}/with-structure`).send({
+			name: 'Peer workspace', subjectId: peerSubject.id, rootName: 'Peer unit',
+			groups: [{ name: 'Peer sub', axes: ['Peer axe'] }],
+		});
+		expect(own.status, JSON.stringify(own.body)).toBe(201);
+		expect(String(own.body.subject_id)).toBe(String(peerSubject.id));
+	});
+
+	it('keeps other tenants out of both routes', async () => {
+		const other = await prisma.school.create({ data: { name: 'Other School', slug: 'other-tenant' } });
+		const otherSubject = await prisma.subject.create({
+			data: { school_id: other.id, created_by: teacher.id, name: 'Foreign subject' },
+		});
+		const otherBranch = await prisma.category.create({
+			data: { school_id: other.id, name: 'Foreign branch', created_by: teacher.id },
+		});
+
+		const crossBranch = await asTeacher().post(BASE).send({ name: 'Cross tenant course', category_id: otherBranch.id });
+		expect(crossBranch.status).toBe(422);
+		expect(String(crossBranch.body.error.fields.category_id[0])).toMatch(/not found in this school/i);
+
+		const crossSubject = await asTeacher().post(`${BASE}/with-structure`).send({
+			name: 'Cross tenant structure', subjectId: otherSubject.id, rootName: 'Cross root',
+			groups: [{ name: 'Sub', axes: [] }],
+		});
+		expect(crossSubject.status).toBe(422);
+		expect(String(crossSubject.body.error.fields.subject_id[0])).toMatch(/does not belong to this school/i);
+		expect(await prisma.category.count({ where: { school_id: SCHOOL, name: 'Cross root' } })).toBe(0);
+
+		expect((await asStudent().post(BASE).send({ name: 'Student course', category_id: branchRootId })).status).toBe(403);
+		expect((await asStudent().post(`${BASE}/with-structure`).send({
+			name: 'Student structure', subjectId, rootName: 'Student root', groups: [{ name: 'Sub', axes: [] }],
+		})).status).toBe(403);
 	});
 });
 

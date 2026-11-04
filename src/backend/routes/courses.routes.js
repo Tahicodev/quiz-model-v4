@@ -18,7 +18,7 @@ import { ROLES } from '../../shared/constants.js';
 import { AppError, ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors.js';
 import {
   CourseGenerateSchema, CourseAssignSchema, CourseReorderSchema,
-  LessonContentGenerateSchema,
+  LessonContentGenerateSchema, CourseWithStructureSchema,
 } from '../../shared/schemas/course.schema.js';
 import { CourseDocumentSchema } from '../../shared/schemas/courseDocument.schema.js';
 import {
@@ -191,6 +191,140 @@ router.get('/', requireRole(MANAGE_ROLES), async (req, res, next) => {
     }
     res.json({ data: enriched, total });
   } catch (err) { next(err); }
+});
+
+/**
+ * POST / — create a course on an existing, still-free category branch (the
+ * "Create course here" action of the Subjects workspace, and the Prompt
+ * Builder import binding). The 1:1 rule lives in CourseService.create, which
+ * refuses a branch already owned (or crossed) by another course.
+ */
+router.post('/', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const { courseSvc, auditSvc } = getContainer();
+    const course = await courseSvc.create(req.body || {}, req.user);
+    await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'course', entityId: course.id, action: 'create', ip: req.ip });
+    res.status(201).json(await courseSvc.getWithLessons(course.id, req.schoolId));
+  } catch (err) { next(err); }
+});
+
+/**
+ * POST /with-structure — the single subject-bound structure pipeline: the
+ * root, its subcategories and their axes are created server-side (always with
+ * `subject_id`), then the course — optionally with an AI outline on top of the
+ * fresh branch. Anything created before a failure is rolled back, so a
+ * half-written course never leaves orphan categories behind.
+ */
+router.post('/with-structure', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  const createdCategories = [];
+  // The rollback runs in the catch block, so the handles it needs are declared
+  // outside the try (a block-scoped destructure would be unreachable there).
+  let course = null;
+  let courseSvc = null;
+  let repo = null;
+  try {
+    const parsed = CourseWithStructureSchema.safeParse(req.body || {});
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const params = parsed.data;
+    const container = getContainer();
+    ({ courseSvc, repo } = container);
+    const { categorySvc, subjectSvc, auditSvc, aiSvc } = container;
+    await subjectSvc.assertCanUse(params.subjectId, req.user, req.schoolId);
+
+    const root = await categorySvc.create({
+      name: params.rootName, parent_id: null, subject_id: params.subjectId,
+    }, req.user);
+    createdCategories.push(root);
+    for (const group of params.groups) {
+      const sub = await categorySvc.create({
+        name: group.name, parent_id: root.id, subject_id: params.subjectId,
+      }, req.user);
+      createdCategories.push(sub);
+      for (const axe of group.axes) {
+        const axis = await categorySvc.create({
+          name: axe, parent_id: sub.id, subject_id: params.subjectId,
+        }, req.user);
+        createdCategories.push(axis);
+      }
+    }
+
+    if (params.configId) {
+      const config = await resolveGenerationConfig(req, params);
+      const plan = await courseSvc.buildBranchPlan(req.schoolId, root.id, {
+        maxLessons: params.maxLessons || 30,
+        // A brand-new branch has no questions yet, so the outline is built
+        // from its axes rather than from practice content.
+        includeEmptyCategories: params.includeEmptyCategories,
+      });
+      if (!plan.length) {
+        throw new ValidationError({ groups: ['The new structure has no subcategory to outline.'] });
+      }
+      const lessons = await aiSvc.generateCourseOutline({
+        config,
+        courseName: params.name,
+        language: params.language,
+        plan,
+      });
+      course = await courseSvc.createWithLessons(
+        { name: params.name, description: params.description || null, categoryId: root.id, lessons },
+        req.user,
+      );
+    } else {
+      course = await courseSvc.create({
+        name: params.name,
+        description: params.description || null,
+        category_id: root.id,
+        subject_id: params.subjectId,
+      }, req.user);
+    }
+
+    for (const category of createdCategories) {
+      await auditSvc.log({
+        schoolId: req.schoolId, actorId: req.user.id, entityType: 'category',
+        entityId: category.id, action: 'create', ip: req.ip,
+      });
+    }
+    await auditSvc.log({
+      schoolId: req.schoolId, actorId: req.user.id, entityType: 'course',
+      entityId: course.id, action: 'create', ip: req.ip,
+    });
+    res.status(201).json({
+      ...(await courseSvc.getWithLessons(course.id, req.schoolId)),
+      created_categories: createdCategories,
+    });
+  } catch (err) {
+    const cleanupErrors = [];
+    if (course) {
+      try {
+        await courseSvc.delete(course.id, req.user);
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+        logger.warn({ error: cleanupError.message, courseId: course.id }, 'course-with-structure rollback (course) failed');
+      }
+    }
+    for (const category of createdCategories.slice().reverse()) {
+      try {
+        await repo.delete('categories', category.id);
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+        logger.warn(
+          { error: cleanupError.message, code: cleanupError.code, categoryId: category.id },
+          'course-with-structure rollback (category) failed',
+        );
+      }
+    }
+    if (cleanupErrors.length) {
+      logger.error({ error: err, cleanupErrors }, 'course-with-structure rollback incomplete');
+      return next(new AppError(
+        'COURSE_WITH_STRUCTURE_ROLLBACK_FAILED',
+        'The course could not be created and cleanup was incomplete. Refresh your categories and courses, then contact an administrator if any partial data remains.',
+        500,
+      ));
+    }
+    if (err instanceof AppError) return next(err);
+    const detail = err && err.message ? String(err.message) : 'The AI provider call failed — check your connection, key and model, then try again.';
+    next(new AppError('AI_PROVIDER_ERROR', detail, 502));
+  }
 });
 
 /**

@@ -51692,3 +51692,247 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		color: var(--primary-color, #6366f1);
 	}
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   UNIFIED SUBJECTS WORKSPACE (appended for the ?v= cache-buster bump)
+   The Subjects tab owns the whole authoring chain: the segmented view
+   toggle, the merged course/structure rows, the structure pane with its
+   breadcrumb, and the Prompt Builder "Attach to a course" block.
+   ══════════════════════════════════════════════════════════════════════ */
+.subject-view-toggle {
+	display: inline-flex;
+	gap: 4px;
+	margin: 2px 0 16px;
+	padding: 4px;
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
+	border-radius: 11px;
+	background: var(--bg-surface-alt, #f8fafc);
+}
+
+.subject-view-btn {
+	min-height: 34px;
+	padding: 6px 14px;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	color: var(--text-secondary, #475569);
+	font: inherit;
+	font-size: 0.86rem;
+	font-weight: 700;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.subject-view-btn:hover:not(.is-active) {
+	background: rgba(99, 102, 241, 0.08);
+	color: var(--text-primary, #1f2937);
+}
+
+.subject-view-btn.is-active {
+	background: var(--primary-color, #4f46e5);
+	color: #fff;
+	box-shadow: 0 3px 9px rgba(49, 46, 129, 0.22);
+}
+
+.subject-view-btn:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+
+/* ── Merged rows: a structure without a course, a course without one ───── */
+.course-kind-chip {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 0.68rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+
+.course-kind-chip.is-structure {
+	background: rgba(14, 165, 233, 0.14);
+	color: #0369a1;
+}
+
+.course-kind-chip.is-unlinked {
+	background: rgba(245, 158, 11, 0.16);
+	color: #92400e;
+}
+
+#courseList tbody tr[data-kind="structure"] {
+	background: rgba(14, 165, 233, 0.04);
+}
+
+#courseList tbody tr[data-kind="unlinked"] {
+	background: rgba(245, 158, 11, 0.05);
+}
+
+/* ── Structure pane (the one and only structure editor) ───────────────── */
+.structure-pane-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-bottom: 12px;
+}
+
+.structure-breadcrumb {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	max-width: 100%;
+	padding: 6px 12px;
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.12));
+	border-radius: 999px;
+	background: var(--bg-surface-alt, #f8fafc);
+	color: var(--text-secondary, #475569);
+	font-size: 0.82rem;
+	font-weight: 700;
+}
+
+.structure-breadcrumb #structureBreadcrumbText {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+#structureBackBtn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 34px;
+	padding: 6px 12px;
+}
+
+.structure-branch-note {
+	margin: 10px 0 0;
+	font-size: 0.8rem;
+	line-height: 1.4;
+}
+
+#courseDetailPane .course-kind-chip {
+	margin-left: 10px;
+}
+
+/* ── Prompt Builder: attach the imported structure to a course ────────── */
+.prompt-builder-attach {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-bottom: 14px;
+	padding: 10px 12px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 8px;
+	background: var(--bg-surface-alt, #f8fafc);
+}
+
+.prompt-builder-attach-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 0.85rem;
+	font-weight: 700;
+	color: var(--text-primary, #334155);
+	cursor: pointer;
+}
+
+.prompt-builder-attach-fields {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.prompt-builder-attach-fields label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 0.76rem;
+	font-weight: 700;
+	color: var(--text-secondary, #475569);
+}
+
+.prompt-builder-attach-subject {
+	min-width: 190px;
+}
+
+.prompt-builder-attach-name {
+	flex: 1 1 240px;
+}
+
+.prompt-builder-attach-fields select,
+.prompt-builder-attach-fields input {
+	padding: 6px 8px;
+	border: 1px solid var(--border-color, #cbd5e1);
+	border-radius: 6px;
+	background: var(--bg-surface, #fff);
+	color: var(--text-primary, #1f2937);
+	font: inherit;
+	font-size: 0.85rem;
+}
+
+.prompt-builder-attach-hint {
+	margin: 0;
+	font-size: 0.78rem;
+}
+
+/* ── Mobile: the toggle, breadcrumb and rows stay thumb-friendly ──────── */
+@media (max-width: 768px) {
+	.subject-view-toggle {
+		display: flex;
+		width: 100%;
+		margin-bottom: 12px;
+	}
+
+	.subject-view-btn {
+		flex: 1 1 50%;
+		min-height: 40px;
+		padding: 8px 10px;
+		text-align: center;
+		white-space: normal;
+	}
+
+	.structure-pane-header {
+		align-items: stretch;
+	}
+
+	.structure-breadcrumb {
+		flex: 1 1 100%;
+		border-radius: 10px;
+		font-size: 0.78rem;
+	}
+
+	#structureBackBtn {
+		min-height: 40px;
+	}
+
+	.course-kind-chip {
+		display: block;
+		margin: 6px 0 0;
+		align-self: flex-start;
+		width: max-content;
+	}
+
+	.prompt-builder-attach-fields {
+		flex-direction: column;
+	}
+
+	.prompt-builder-attach-subject,
+	.prompt-builder-attach-name {
+		min-width: 0;
+		width: 100%;
+	}
+
+	.prompt-builder-attach-fields select,
+	.prompt-builder-attach-fields input {
+		min-height: 40px;
+		font-size: 0.95rem;
+	}
+}

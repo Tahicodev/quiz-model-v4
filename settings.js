@@ -2655,7 +2655,8 @@ function findCategoryByNameParent(list, name, parentId) {
 	});
 }
 
-async function ensureCategoryPath(pathString, cache) {
+async function ensureCategoryPath(pathString, cache, options = {}) {
+	const subjectId = String(options?.subjectId || '');
 	const parts = String(pathString || '')
 		.split('>')
 		.map((s) => s.trim())
@@ -2678,6 +2679,9 @@ async function ensureCategoryPath(pathString, cache) {
 			try {
 				const payload = { name: part };
 				if (parentId) payload.parent_id = parentId;
+				// Structure created through the Prompt Builder binding is always
+				// subject-bound, so it lands in the subject the course belongs to.
+				if (subjectId) payload.subject_id = subjectId;
 				const saved = await window.API.create('categories', payload);
 				const newRow = {
 					id: saved?.id || `tmp-${Date.now()}-${Math.random()}`,
@@ -2710,9 +2714,10 @@ async function ensureCategoryPath(pathString, cache) {
 	return parentId || '';
 }
 
-async function ensureFlatCategories(categoryDefs, cache) {
+async function ensureFlatCategories(categoryDefs, cache, options = {}) {
 	// categoryDefs: [{name, parent}] where parent is a NAME or null.
 	// Create parents first (multi-pass).
+	const subjectId = String(options?.subjectId || '');
 	const pending = (categoryDefs || [])
 		.map((c) => ({
 			name: String(c?.name ?? '').trim(),
@@ -2739,6 +2744,7 @@ async function ensureFlatCategories(categoryDefs, cache) {
 		try {
 			const payload = { name: def.name };
 			if (parentId) payload.parent_id = parentId;
+			if (subjectId) payload.subject_id = subjectId;
 			const saved = await window.API.create('categories', payload);
 			const newRow = { id: saved?.id, name: def.name, parent_id: parentId, parentId };
 			const updated = [...getLocalCategories(), ...(newRow.id ? [newRow] : [])];
@@ -2798,26 +2804,101 @@ function importAIQuestions(inputElement) {
 
 window.importAIQuestions = importAIQuestions;
 
+// ── Prompt Builder one-step binding ────────────────────────────────────────
+// The imported payload describes a structure; "Attach to a course" also gives it
+// an owner. Roots are resolved by walking every imported leaf up to its top-level
+// ancestor, so the course is created on the branch the import actually produced.
+function importedRootCategories(leafIds, categoryDefs) {
+	const list = getLocalCategories();
+	const byId = new Map(list.map((c) => [String(c?.id), c]));
+	const rootOf = (id) => {
+		let node = byId.get(String(id || ''));
+		const seen = new Set();
+		while (node && node.parent_id && byId.has(String(node.parent_id)) && !seen.has(String(node.id))) {
+			seen.add(String(node.id));
+			node = byId.get(String(node.parent_id));
+		}
+		return node && !seen.has(String(node.id)) && !node.parent_id ? node : null;
+	};
+	const roots = new Map();
+	for (const leaf of leafIds || []) {
+		if (!leaf) continue;
+		const root = rootOf(leaf);
+		if (root) roots.set(String(root.id), root);
+	}
+	// A categories block can name top-level entries that received no question.
+	for (const def of categoryDefs || []) {
+		if (!def || def.parent) continue;
+		const row = findCategoryByNameParent(list, def.name, null);
+		if (row) roots.set(String(row.id), row);
+	}
+	return [...roots.values()];
+}
+
+async function attachImportedRootToCourse(attach, leafIds, categoryDefs) {
+	const roots = importedRootCategories(leafIds, categoryDefs);
+	const main = roots[0];
+	if (!main) {
+		showToast('Questions were imported, but no top-level structure was found to attach a course to.', 'error');
+		return null;
+	}
+	const name = String(attach.courseName || '').trim() || String(main.name || '').trim();
+	if (!name) {
+		showToast('Enter a course name in the Prompt Builder, or clear its field.', 'error');
+		return null;
+	}
+	const payload = { name, category_id: String(main.id) };
+	if (attach.subjectId) payload.subject_id = String(attach.subjectId);
+	try {
+		const course = await window.API.raw('POST', '/courses', payload);
+		const extra = roots.length > 1
+			? ` ${roots.length - 1} other top-level structure(s) stayed course-free.`
+			: '';
+		showToast(`Course “${course?.name || name}” created on ${main.name || 'the imported structure'}.${extra}`);
+		try {
+			const res = window.CoursesManagement?.refresh?.(attach.subjectId);
+			if (res && typeof res.catch === 'function') res.catch(() => {});
+		} catch (_) { /* Subjects tab not mounted */ }
+		return course;
+	} catch (err) {
+		// Never swallow: the service message names the course that already owns
+		// this branch, which is exactly what the teacher needs to fix.
+		showToast(`Questions were imported, but the course was not created: ${err?.message || 'error'}`, 'error');
+		return null;
+	}
+}
+
 // Shared import engine (file import + Prompt Builder paste zone).
 // Creates missing categories/subcategories, files each question in its leaf
 // category with difficulty/points/time_limit preserved.
 async function importParsedAIQuestions(categories, questions) {
 	const cache = new Map();
+	// Prompt Builder binding: when “Attach to a course” is on, the imported
+	// structure also gets its course. Subjects of created categories come from
+	// that binding, so the whole chain stays subject-bound.
+	const attach = typeof window.getPromptBuilderAttach === 'function'
+		? window.getPromptBuilderAttach()
+		: { enabled: false, subjectId: '', courseName: '' };
+	const attachSubjectId = attach.enabled ? String(attach.subjectId || '') : '';
+	if (attach.enabled && !attachSubjectId) {
+		showToast('Pick the subject for the course, or turn “Attach to a course” off.', 'error');
+	}
+	const scopeOptions = { subjectId: attachSubjectId };
 	// 1. Explicit categories block first (Prompt Builder format)
-	if (categories?.length) await ensureFlatCategories(categories, cache);
+	if (categories?.length) await ensureFlatCategories(categories, cache, scopeOptions);
 	// 2. Per-question paths (covers axes even without a categories block)
 	const withCategory = [];
 	for (const q of questions) {
 		const path = resolveQuestionCategoryPath(q);
 		let leafId = '';
 		if (path) {
-			leafId = await ensureCategoryPath(path, cache);
+			leafId = await ensureCategoryPath(path, cache, scopeOptions);
 		} else {
 			const single = q.categoryId || q.category_id || q.category || q.categoryName || '';
 			if (single && /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(String(single))) {
 				leafId = String(single);
 			} else if (single) {
-				leafId = await ensureCategoryPath(String(single), cache);
+				leafId = await ensureCategoryPath(String(single), cache, scopeOptions);
 			}
 		}
 		withCategory.push({ raw: q, leafId });
@@ -2847,9 +2928,25 @@ async function importParsedAIQuestions(categories, questions) {
 		`Imported ${imported}/${questions.length} questions${categories?.length ? ' + categories' : ''}.`,
 		imported ? 'success' : 'error',
 	);
+	if (attach.enabled && attachSubjectId) {
+		await attachImportedRootToCourse(attach, withCategory.map((row) => row.leafId), categories);
+	}
 	if (window.refreshQuestionsList) window.refreshQuestionsList();
+	// The import wrote categories straight to the server and into the bridge
+	// cache; the category module keeps its own working copy, so re-read it here.
+	// Without this the Subjects tab renders the new course as "No structure"
+	// until the next reload.
+	if (typeof window.loadCategories === "function") {
+		try { window.loadCategories(); } catch (_) {}
+	}
 	if (typeof updateCategoryList === 'function') {
 		try { updateCategoryList(); } catch (_) {}
+	}
+	if (window.CoursesManagement && typeof window.CoursesManagement.refresh === 'function') {
+		try {
+			const refreshed = window.CoursesManagement.refresh();
+			if (refreshed && typeof refreshed.catch === 'function') refreshed.catch(() => {});
+		} catch (_) { /* Subjects tab not mounted */ }
 	}
 	if (typeof loadCategoriesIntoSelect === 'function') {
 		try { loadCategoriesIntoSelect(); } catch (_) {}

@@ -40,10 +40,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-03-subjects1" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-03-subjects6" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-03-unified1" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-03-unified1" />
 		<link rel="stylesheet" href="theme.css?v=2026-10-23-mq14" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-03-subjects6" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-03-unified1" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -136,7 +136,7 @@
 		<script src="api-client.js?v=2026-10-26-examdoc1" defer></script>
 		<script src="auth.js?v=2026-11-03-subjects1" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-11-03-subjects1" defer></script>
+		<script src="settings.js?v=2026-11-03-unified1" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -147,16 +147,16 @@
 		<!-- Admin page scripts -->
 		<script src="bulk-selection.js?v=2026-11-03-subjects1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-11-03-subjects8" defer></script>
+		<script src="category-management.js?v=2026-11-03-unified1" defer></script>
 		<script src="questions-management.js?v=2026-11-01-courses2" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
-		<script src="courses-management.js?v=2026-11-03-subjects7" defer></script>
+		<script src="courses-management.js?v=2026-11-03-unified1" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="exam-documents.js?v=2026-10-29-ultra1" defer></script>
 		<script src="overview-dashboard.js?v=2026-11-03-subjects7" defer></script>
-		<script src="global-search.js?v=2026-11-03-subjects1" defer></script>
+		<script src="global-search.js?v=2026-11-03-unified1" defer></script>
 		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="classroom-devices.js?v=2026-10-30-devcards1" defer></script>
@@ -185,7 +185,7 @@
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="vendor/jszip.min.js"></script> -->
 		<script src="ai-question-generator.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="prompt-builder.js?v=2026-10-16-r3" defer></script>
+		<script src="prompt-builder.js?v=2026-11-03-unified1" defer></script>
 		<script src="rag.js?v=2026-09-22-r1" defer></script>
 
 		<!-- Syntax Highlighting -->
@@ -458,21 +458,6 @@
 								<line x1="7" y1="7" x2="7.01" y2="7"></line>
 							</svg>
 							Subjects
-						</button>
-						<button class="nav-tab" data-tab="courses" data-roles="admin,teacher" onclick="openTab(event, 'courses'); if(window.CoursesManagement) window.CoursesManagement.refresh()">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-								<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
-							</svg>
-							Courses
 						</button>
 						<button class="nav-tab" data-tab="exams" data-roles="admin,teacher" onclick="openTab(event, 'exams')">
 							<svg
@@ -2110,7 +2095,136 @@
 							<!-- One pill per subject (segmented control, same as the
 							     games studio tabs) + legacy bucket + new-subject pill. -->
 							<div class="games-studio-tabs subject-strip" id="subjectTabBar" role="tablist" aria-label="Subjects"></div>
-							<div class="toolbar category-toolbar">
+							<!-- One tab owns the whole authoring chain: the subject's courses and
+							     their structures, or (advanced) the flat category table. -->
+							<div
+								class="subject-view-toggle"
+								id="subjectViewToggle"
+								role="group"
+								aria-label="Subjects workspace view"
+							>
+								<button
+									type="button"
+									class="subject-view-btn is-active"
+									data-view="courses"
+									onclick="setSubjectsWorkspaceView('courses')"
+								>
+									Courses and structures
+								</button>
+								<button
+									type="button"
+									class="subject-view-btn"
+									data-view="categories"
+									onclick="setSubjectsWorkspaceView('categories')"
+								>
+									All categories
+								</button>
+							</div>
+							<div id="subjectOverviewPane">
+								<div id="courseListPane">
+									<div class="toolbar">
+										<div class="toolbar-header-group">
+											<h2 id="coursePaneTitle">Courses and structures</h2>
+											<button
+												id="add-course-btn"
+												class="btn btn-primary"
+												onclick="openCourseGeneratorModal()"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+												>
+													<path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+													<path d="M2 17l10 5 10-5"></path>
+													<path d="M2 12l10 5 10-5"></path>
+												</svg>
+												<span>New Course</span>
+											</button>
+											<button
+												id="import-course-document-btn"
+												class="btn"
+												onclick="openCourseDocumentImportModal()"
+											>
+												<span>Import DOCX / PDF</span>
+											</button>
+										</div>
+										<div class="toolbar-controls">
+											<div class="search-wrapper">
+												<input
+													type="text"
+													id="courseSearch"
+													placeholder="Search courses..."
+													onkeyup="renderCourseList()"
+												/>
+											</div>
+											<div class="sort-wrapper">
+												<select id="courseStatusFilter" onchange="renderCourseList()">
+													<option value="">All statuses</option>
+													<option value="draft">Draft</option>
+													<option value="published">Published</option>
+												</select>
+											</div>
+										</div>
+									</div>
+									<!-- Orphan sweep: courses left behind by earlier category deletes -->
+									<div
+										id="courseOrphanBanner"
+										class="course-orphan-banner hidden"
+										role="status"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+										<p class="course-orphan-text">
+											<strong id="courseOrphanCount">0</strong>
+											course(s) reference categories that were deleted.
+										</p>
+										<button
+											type="button"
+											class="btn btn-sm btn-danger"
+											onclick="cleanupOrphanCourses()"
+										>
+											Clean up
+										</button>
+									</div>
+									<div class="table-container">
+										<table id="courseList">
+											<thead>
+												<tr>
+													<th>Name</th>
+													<th>Category Branch</th>
+													<th>Lessons</th>
+													<th>Status</th>
+													<th>Classes</th>
+													<th>Updated</th>
+													<th>Actions</th>
+												</tr>
+											</thead>
+											<tbody>
+												<!-- Courses, structures and unlinked rows are rendered here -->
+											</tbody>
+										</table>
+									</div>
+								</div>
+								<div id="structurePane" class="hidden">
+									<div class="structure-pane-header">
+										<nav class="structure-breadcrumb" id="structureBreadcrumb" aria-label="Structure location">
+											<span id="structureBreadcrumbText">All categories</span>
+										</nav>
+										<button
+											type="button"
+											id="structureBackBtn"
+											class="btn btn-sm"
+											onclick="closeStructureBranch()"
+											hidden
+										>
+											<span>Back to course</span>
+										</button>
+									</div>
+								<div class="toolbar category-toolbar">
 								<div class="toolbar-header-group">
 									<h3 class="category-toolbar-title" id="categoryBandTitle">Categories</h3>
 									<div
@@ -2220,10 +2334,9 @@
 									</div>
 								</div>
 							</div>
-						</div>
 
-						<div class="table-container">
-							<table id="categoryList">
+							<div class="table-container">
+								<table id="categoryList">
 								<thead>
 									<tr>
 										<th style="width: 40px">
@@ -2246,103 +2359,12 @@
 									<!-- Categories will be populated here -->
 								</tbody>
 							</table>
-						</div>
-					</div>
-				</section>
-
-				<!-- Courses Tab -->
-				<section id="courses" class="tab-content" data-roles="admin,teacher">
-					<div class="course-management-container">
-						<div id="courseListPane">
-							<div class="toolbar">
-								<div class="toolbar-header-group">
-									<h2>Courses</h2>
-									<button
-										id="add-course-btn"
-										class="btn btn-primary"
-										onclick="openCourseGeneratorModal()"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-											<path d="M2 17l10 5 10-5"></path>
-											<path d="M2 12l10 5 10-5"></path>
-										</svg>
-										<span>New Course from Categories</span>
-									</button>
-									<button
-										id="import-course-document-btn"
-										class="btn"
-										onclick="openCourseDocumentImportModal()"
-									>
-										<span>Import DOCX / PDF</span>
-									</button>
-								</div>
-								<div class="toolbar-controls">
-									<div class="search-wrapper">
-										<input
-											type="text"
-											id="courseSearch"
-											placeholder="Search courses..."
-											onkeyup="renderCourseList()"
-										/>
-									</div>
-									<div class="sort-wrapper">
-										<select id="courseStatusFilter" onchange="renderCourseList()">
-											<option value="">All statuses</option>
-											<option value="draft">Draft</option>
-											<option value="published">Published</option>
-										</select>
-									</div>
+							</div>
 								</div>
 							</div>
-							<!-- Orphan sweep: courses left behind by earlier category deletes -->
-							<div
-								id="courseOrphanBanner"
-								class="course-orphan-banner hidden"
-								role="status"
-							>
-								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-								<p class="course-orphan-text">
-									<strong id="courseOrphanCount">0</strong>
-									course(s) reference categories that were deleted.
-								</p>
-								<button
-									type="button"
-									class="btn btn-sm btn-danger"
-									onclick="cleanupOrphanCourses()"
-								>
-									Clean up
-								</button>
-							</div>
-							<div class="table-container">
-								<table id="courseList">
-									<thead>
-										<tr>
-											<th>Name</th>
-											<th>Category Branch</th>
-											<th>Lessons</th>
-											<th>Status</th>
-											<th>Classes</th>
-											<th>Updated</th>
-											<th>Actions</th>
-										</tr>
-									</thead>
-									<tbody>
-										<!-- Courses will be populated here -->
-									</tbody>
-								</table>
-							</div>
-						</div>
 						<div id="courseDetailPane" class="hidden">
 							<!-- Course detail (structure tree + lesson editor) rendered by courses-management.js -->
+						</div>
 						</div>
 					</div>
 				</section>
@@ -9149,6 +9171,7 @@
 									<input id="pbExtra" type="text" placeholder="ex : niveau collège, français académique…" style="flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
 								</label>
 							</div>
+							<div id="promptBuilderAttach" class="prompt-builder-attach"></div>
 							<div id="promptBuilderTree" class="prompt-builder-tree">
 								<div style="text-align: center; padding: 40px 20px; color: #94a3b8;">Chargement du Prompt Builder…<br /><small>Si ce message persiste, rechargez la page (Ctrl+F5).</small></div>
 							</div>

@@ -5,7 +5,9 @@ export const COURSE_STATUS = ['draft', 'published'];
 export const CourseCreateSchema = z.object({
   name:        z.string().min(1).max(200),
   description: z.string().max(2000).optional().nullable(),
-  category_id: z.string().uuid().optional().nullable(),
+  // 1:1 rule: a course is always the owner of one category branch, so the
+  // branch root is mandatory (service layer also refuses a taken branch).
+  category_id: z.string().uuid(),
   subject_id: z.string().uuid().optional().nullable(),
 });
 
@@ -38,6 +40,36 @@ export const CourseGenerateSchema = z.object({
   // Cap the number of lessons generated from the branch (guards against a
   // huge tree eating tokens; default keeps every leaf with questions).
   maxLessons:  z.coerce.number().int().min(1).max(50).optional(),
+});
+
+// POST /courses/with-structure — the single subject-bound structure pipeline:
+// create root + subcategories + axes, then (optionally) the AI outline on top.
+export const CourseWithStructureGroupSchema = z.object({
+  name: z.string().min(1).max(100),
+  axes: z.array(z.string().min(1).max(100)).default([]).transform((axes) => [...new Set(axes.map((a) => a.trim()).filter(Boolean))]),
+});
+
+export const CourseWithStructureSchema = z.object({
+  name:        z.string().min(1).max(200),
+  subjectId:   z.string().uuid(),
+  rootName:    z.string().min(1).max(100),
+  groups:      z.array(CourseWithStructureGroupSchema).min(1).max(40),
+  description: z.string().max(2000).optional(),
+  configId:    z.string().max(100).optional(),
+  language:    z.string().max(40).default('French'),
+  // A brand-new branch has no questions yet, so the outline is built from its
+  // axes unless the caller explicitly asks for question-backed leaves only.
+  includeEmptyCategories: z.boolean().default(true),
+  maxLessons:  z.coerce.number().int().min(1).max(50).optional(),
+}).superRefine((value, ctx) => {
+  const rows = value.groups.length + value.groups.reduce((sum, group) => sum + group.axes.length, 0);
+  if (rows > 200) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['groups'],
+      message: 'A structure can hold at most 200 subcategories and axes at once.',
+    });
+  }
 });
 
 // POST /courses/:id/lessons/:lessonId/generate-content
