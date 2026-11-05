@@ -2056,31 +2056,40 @@ body.student-workspace .workspace-tab-btn:focus-visible,
 }
 
 .exam-card {
-	border-radius: 18px;
+	border-radius: 16px;
 	padding: 16px;
-	background: linear-gradient(160deg, #f9fcff, #ffffff);
-	border: 1px solid #dce6f2;
+	background: var(--bg-surface, #ffffff);
+	border: 1px solid var(--border-color, #dce6f2);
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
 	transition:
 		transform 0.2s ease,
+		border-color 0.2s ease,
 		box-shadow 0.2s ease;
 }
 
 .exam-card:hover {
-	transform: translateY(-4px);
-	box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+	transform: translateY(-2px);
+	border-color: var(--primary, #3b82f6);
+	box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
+}
+
+.exam-card h3 {
+	font-size: 1rem;
+	line-height: 1.3;
+	margin: 0;
 }
 
 .exam-card-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+	gap: 8px;
 }
 
 .exam-status {
-	font-size: 0.75rem;
+	font-size: 0.7rem;
 	font-weight: 600;
 	padding: 4px 10px;
 	border-radius: 999px;
@@ -2099,8 +2108,9 @@ body.student-workspace .workspace-tab-btn:focus-visible,
 }
 
 .exam-tag {
-	font-size: 0.75rem;
+	font-size: 0.7rem;
 	color: #64748b;
+	min-width: 0;
 }
 
 .exam-performance {
@@ -19655,26 +19665,27 @@ body.mobile-action-sheet-open {
 }
 
 .exam-card {
-	padding: var(--space-lg);
+	padding: 16px;
 	border: 1px solid var(--border-color);
-	border-radius: var(--radius-lg);
+	border-radius: 16px !important;
 	cursor: pointer;
 	transition: all var(--transition-normal);
 	box-shadow: var(--shadow-sm);
 	background-color: var(--bg-surface);
+	/* Compact card: description text tightens slightly too. */
+	font-size: 0.85rem;
 }
 
 .exam-card:hover {
-	background: var(--primary);
-	color: white;
-	transform: translateY(-3px);
-	box-shadow: var(--shadow-lg);
+	transform: translateY(-2px);
+	box-shadow: var(--shadow-md);
 	border-color: var(--primary);
 }
 
 .exam-card p {
 	margin: 0;
-	font-size: var(--text-sm);
+	font-size: 0.85rem;
+	line-height: 1.4;
 }
 
 /* =========================================
@@ -36755,14 +36766,9 @@ body.arena-modal-open {
 	max-width: 100%;
 }
 
-/* Training tab: every panel keeps a comfortable centered reading width
-   with equal side gutters instead of content stretched edge to edge. */
-body.student-workspace .workspace-panel[data-workspace-section="training"] {
-	width: min(100%, 1040px);
-	margin-inline: auto;
-	align-self: center;
-	box-sizing: border-box;
-}
+/* Training tab: the panel spans the full column width exactly like the
+   Exams/Performance/Badges panels (the old centered 1040px cap read as a
+   narrower box in the single-tab layout). */
 
 body.student-workspace .workspace-panel[data-workspace-section="training"] > * {
 	width: 100%;
@@ -43806,6 +43812,71 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	text-overflow: ellipsis;
 }
 
+/* Results "By" cell: initials avatar + wrapped name chips (max 2, then +N).
+   Scoped to the results table — question-list owner badges keep the single
+   .q-owner-badge pill above. */
+#results-table .owner-col {
+	min-width: 170px;
+}
+
+#results-table th.owner-col {
+	white-space: nowrap;
+}
+
+#results-table .by-teachers {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	max-width: 100%;
+}
+
+#results-table .by-teacher {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	max-width: 100%;
+	padding: 3px 9px 3px 3px;
+	border-radius: 999px;
+	background: rgba(59, 130, 246, 0.1);
+	border: 1px solid rgba(59, 130, 246, 0.25);
+	color: var(--primary);
+}
+
+#results-table .by-teachers .by-avatar {
+	display: inline-grid;
+	width: 20px;
+	height: 20px;
+	flex: 0 0 auto;
+	place-items: center;
+	border-radius: 50%;
+	background: linear-gradient(135deg, #6366f1, #2563eb);
+	color: #fff;
+	font-size: 0.6rem;
+	font-weight: 800;
+	line-height: 1;
+	letter-spacing: 0.02em;
+}
+
+#results-table .by-teachers .by-name {
+	overflow-wrap: anywhere;
+	white-space: normal;
+	line-height: 1.2;
+	font-size: var(--text-xs, 0.75rem);
+	font-weight: 600;
+}
+
+#results-table .by-teachers .by-more {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 8px;
+	border-radius: 999px;
+	background: var(--bg-surface-alt, #f1f5f9);
+	border: 1px solid var(--border-color, #dbe4f0);
+	color: var(--text-secondary, #475569);
+	font-size: 0.66rem;
+	font-weight: 700;
+}
+
 #results-table .exam-action-btn.exam-view-btn {
 	background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(37, 99, 235, 0.14));
 	color: var(--primary);
@@ -44297,6 +44368,18 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	#results-table tbody tr td.owner-col {
 		padding-top: 6px !important;
 		border-top: 1px solid var(--border-color) !important;
+	}
+	/* Teacher chips read slightly smaller inside the stacked cards */
+	#results-table .by-teachers {
+		font-size: 0.68rem;
+	}
+	#results-table .by-teachers .by-name {
+		font-size: 0.68rem;
+	}
+	#results-table .by-teachers .by-avatar {
+		width: 18px;
+		height: 18px;
+		font-size: 0.55rem;
 	}
 
 	/* Activity cards match the same language */
@@ -49751,19 +49834,19 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 
 /* Student: course cards */
 .student-workspace .course-student-grid {
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-	gap: 18px;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+	gap: 14px;
 }
 
 .course-student-card {
 	position: relative;
 	isolation: isolate;
 	overflow: hidden;
-	min-height: 238px;
+	min-height: 200px;
 	justify-content: space-between;
-	padding: 20px;
+	padding: 16px;
 	border: 1px solid var(--course-card-border, #c7d2fe);
-	border-radius: 20px;
+	border-radius: 16px;
 	background: linear-gradient(145deg, #ffffff 0%, var(--course-card-tint, #eef2ff) 100%);
 	box-shadow: 0 12px 24px rgba(49, 46, 129, 0.09);
 	cursor: pointer;
@@ -49826,16 +49909,16 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 
 .course-student-icon {
 	display: grid;
-	width: 44px;
-	height: 44px;
+	width: 38px;
+	height: 38px;
 	flex: 0 0 auto;
 	place-items: center;
 	border: 1px solid rgba(255, 255, 255, 0.72);
-	border-radius: 14px;
+	border-radius: 12px;
 	background: linear-gradient(145deg, #818cf8, #6366f1);
 	box-shadow: 0 8px 16px rgba(99, 102, 241, 0.23);
 	color: #fff;
-	font-size: 1.3rem;
+	font-size: 1.15rem;
 }
 
 .course-student-card[data-course-tone='1'] .course-student-icon {
@@ -49863,13 +49946,13 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 
 .course-student-copy {
 	flex: 1 1 auto;
-	padding: 8px 0 14px;
+	padding: 6px 0 10px;
 }
 
 .course-student-copy h3 {
 	margin: 0;
 	color: #172554;
-	font-size: 1.15rem;
+	font-size: 1.05rem;
 	line-height: 1.35;
 	overflow-wrap: anywhere;
 }
@@ -49877,8 +49960,8 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 .course-student-desc {
 	margin: 8px 0 0;
 	color: #475569;
-	font-size: 0.87rem;
-	line-height: 1.6;
+	font-size: 0.84rem;
+	line-height: 1.45;
 	overflow-wrap: anywhere;
 }
 
@@ -49888,7 +49971,7 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	justify-content: space-between;
 	flex-wrap: wrap;
 	gap: 10px;
-	padding-top: 14px;
+	padding-top: 10px;
 	border-top: 1px solid rgba(100, 116, 139, 0.18);
 }
 
@@ -49896,7 +49979,7 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-	padding: 6px 10px;
+	padding: 4px 9px;
 	border-radius: 999px;
 	background: rgba(255, 255, 255, 0.72);
 	color: #334155;

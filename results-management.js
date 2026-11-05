@@ -615,6 +615,55 @@ function filterResults() {
 	displayResults(results);
 }
 
+// "By" cell for the results table: initials avatar + wrapped name chips, max
+// 2 then a +N overflow pill. The full comma-separated list stays in title.
+const RESULT_OWNER_CHIPS_MAX = 2;
+
+function renderResultOwnerChips(result, resultTeacherMap, classData) {
+	const raw = window.TeacherFilter
+		? window.TeacherFilter.resolveResultTeacherNames(
+				result,
+				resultTeacherMap,
+				classData,
+			)
+		: '';
+	if (!raw || raw === '—') {
+		return '<span class="q-owner-badge is-empty" title="Teacher">—</span>';
+	}
+	const names = raw
+		.split(', ')
+		.map((name) => name.trim())
+		.filter(Boolean);
+	if (!names.length) {
+		return '<span class="q-owner-badge is-empty" title="Teacher">—</span>';
+	}
+	const chips = names.map((name) => {
+		const initials = name
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 2)
+			.map((part) => part.charAt(0).toUpperCase())
+			.join('');
+		return (
+			`<span class="by-teacher" title="${escapeHtml(name)}">` +
+			`<span class="by-avatar" aria-hidden="true">${escapeHtml(initials || '?')}</span>` +
+			`<span class="by-name">${escapeHtml(name)}</span>` +
+			`</span>`
+		);
+	});
+	const omitted = names.slice(RESULT_OWNER_CHIPS_MAX);
+	const overflowChip =
+		omitted.length > 0
+			? `<span class="by-more" title="${escapeHtml(omitted.join(', '))}">+${omitted.length}</span>`
+			: '';
+	return (
+		`<span class="by-teachers" title="${escapeHtml(raw)}">` +
+		chips.slice(0, RESULT_OWNER_CHIPS_MAX).join('') +
+		overflowChip +
+		`</span>`
+	);
+}
+
 function displayResults(results) {
 	const tbody = document.getElementById('results-list');
 	if (!tbody) return;
@@ -768,7 +817,7 @@ function displayResults(results) {
                 </td>
                 <td data-label="Time"><span class="time-pill"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${escapeHtml(timeFormatted)}</span></td>
                 <td data-label="Source">${sourceCell}</td>
-                <td class="owner-col" data-label="By"><span class="q-owner-badge" title="Teacher">${escapeHtml(window.TeacherFilter ? window.TeacherFilter.resolveResultTeacherNames(result, resultTeacherMap, classData) : '—')}</span></td>
+                <td class="owner-col" data-label="By">${renderResultOwnerChips(result, resultTeacherMap, classData)}</td>
                 <td class="actions-cell">
                     <div class="exam-actions">
                         <button class="exam-action-btn exam-view-btn" onclick="viewResultDetails('${escapeHtml(

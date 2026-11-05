@@ -435,23 +435,65 @@ html[data-theme='dark'] .tournament-recommendation-card {
 }
 
 /* Tabs inside modals / studios */
-html[data-theme='dark'] .gm-tab-btn,
+/* Tournament Studio keeps its pill tabs; Game Studio's steps got a numbered
+   stepper in admin.css (circles + connector line), so the shared pill fill
+   below must not paint over that — gm-tab-* only gets color/token retints. */
 html[data-theme='dark'] .tournament-studio-tab-btn {
 	color: var(--text-secondary);
 	background: transparent;
 	border-color: transparent;
 }
 
-html[data-theme='dark'] .gm-tab-btn:hover,
 html[data-theme='dark'] .tournament-studio-tab-btn:hover {
 	color: var(--text-main);
 	background: var(--bg-surface-alt);
 }
 
-html[data-theme='dark'] .gm-tab-btn.active,
 html[data-theme='dark'] .tournament-studio-tab-btn.active {
 	color: var(--primary);
 	background: var(--primary-light);
+}
+
+/* Game Studio stepper: transparent button body, tint circles via the
+   step-num tokens (matches the light palette in admin.css). */
+html[data-theme='dark'] .gm-tab-btn {
+	color: var(--text-secondary);
+	background: transparent;
+	border-color: transparent;
+}
+
+html[data-theme='dark'] .gm-tab-btn:hover {
+	color: var(--text-main);
+	background: transparent;
+}
+
+html[data-theme='dark'] .gm-tab-btn:hover .gm-step-num {
+	border-color: var(--primary);
+	background: var(--primary-light);
+	color: var(--primary);
+}
+
+html[data-theme='dark'] .gm-tab-btn.active {
+	color: var(--primary);
+	background: transparent;
+}
+
+html[data-theme='dark'] .gm-tab-btn.active .gm-step-num {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: #fff;
+	box-shadow: 0 0 0 4px var(--primary-glow, rgba(99, 102, 241, 0.25));
+}
+
+html[data-theme='dark'] .gm-tab-btn.completed {
+	color: var(--success, #34d399);
+	background: transparent;
+}
+
+html[data-theme='dark'] .gm-tab-btn.completed .gm-step-num {
+	border-color: var(--success, #34d399);
+	background: var(--success, #34d399);
+	color: #06301f;
 }
 
 /* Tables */

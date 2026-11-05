@@ -386,6 +386,12 @@ html[data-theme='dark'] .exam-card {
 	background: linear-gradient(160deg, rgb(31, 61, 91), var(--bg-surface));
 	border: 1px solid rgb(58, 103, 156);
 }
+html[data-theme='dark'] .exam-card:hover {
+	border-color: var(--primary);
+	box-shadow:
+		0 10px 22px rgba(2, 6, 23, 0.5),
+		0 0 0 1px rgba(59, 130, 246, 0.25);
+}
 html[data-theme='dark'] .student-workspace .course-student-card {
 	--course-card-accent: #a5b4fc;
 	--course-card-tint: #1d2b45;
@@ -4887,8 +4893,17 @@ html[data-theme='dark'] .filter-field-icon:focus-within {
 html[data-theme='dark'] .filter-search-input:focus {
 	border-color: rgb(32, 35, 182);
 }
+/* The light theme pins these two controls to white with !important
+   (styles.css: .filter-select background-color:#ffffff, .filter-undo-btn
+   background:#ffffff), so the dark overrides must match that weight. */
 html[data-theme='dark'] .filter-select {
 	border: 1px solid rgb(63, 101, 151) !important;
+	background-color: var(--bg-surface) !important;
+	color: var(--text-main) !important;
+}
+html[data-theme='dark'] .filter-select option {
+	background: var(--bg-surface);
+	color: var(--text-main);
 }
 html[data-theme='dark'] .filter-toolbar .points-interval-filter input {
 	border: 1px solid rgb(63, 101, 151) !important;
@@ -4908,14 +4923,14 @@ html[data-theme='dark'] .filter-toolbar-quick .quick-filter-btn:hover {
 	background: rgb(31, 45, 91);
 }
 html[data-theme='dark'] .filter-undo-btn {
-	border: 1px solid rgb(63, 101, 151);
-	background: var(--bg-surface);
-	color: var(--text-secondary);
+	border: 1px solid rgb(63, 101, 151) !important;
+	background: var(--bg-surface) !important;
+	color: var(--text-secondary) !important;
 }
 html[data-theme='dark'] .filter-undo-btn:hover {
-	border-color: rgb(32, 35, 182);
-	color: var(--text-secondary);
-	background: rgb(31, 45, 91);
+	border-color: rgb(32, 35, 182) !important;
+	color: var(--text-secondary) !important;
+	background: rgb(31, 45, 91) !important;
 }
 @media (max-width: 640px) {
 	html[data-theme='dark'] .filter-toolbar-main .filter-search-input {
@@ -5625,17 +5640,47 @@ html[data-theme='dark'] .sw-spinner {
 }
 html[data-theme='dark'] .gm-tab-btn {
 	color: var(--text-secondary);
-	background: var(--bg-surface);
-	border: 1px solid var(--border-color);
+	background: transparent;
+	border: 0;
 }
 html[data-theme='dark'] .gm-tab-btn:hover {
-	color: rgb(172, 188, 225);
+	color: var(--text-main);
+	background: transparent;
+}
+html[data-theme='dark'] .gm-tab-btn .gm-step-num,
+html[data-theme='dark'] .gm-tab-btn:hover .gm-step-num {
 	border-color: var(--border-color);
+	background: var(--bg-surface-alt);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .gm-tab-btn:hover .gm-step-num {
+	border-color: var(--primary);
+	color: var(--primary);
 }
 html[data-theme='dark'] .gm-tab-btn.active {
-	background: rgb(91, 31, 66);
-	border-color: rgb(182, 32, 114);
-	color: rgb(241, 157, 191);
+	color: var(--primary);
+	background: transparent;
+}
+html[data-theme='dark'] .gm-tab-btn.active .gm-step-num {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: #fff;
+	box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.25);
+}
+html[data-theme='dark'] .gm-tab-btn.completed {
+	color: var(--success, #34d399);
+	background: transparent;
+}
+html[data-theme='dark'] .gm-tab-btn.completed .gm-step-num {
+	border-color: var(--success, #34d399);
+	background: var(--success, #34d399);
+	color: #06301f;
+}
+html[data-theme='dark'] .gm-tab-btn:not(:last-child)::after {
+	background: var(--border-color);
+}
+html[data-theme='dark'] .gm-tab-btn.completed:not(:last-child)::after {
+	background: rgba(52, 211, 153, 0.35);
 }
 html[data-theme='dark'] .game-preset-summary {
 	border: 1px solid rgb(182, 32, 117);
@@ -6184,6 +6229,26 @@ html[data-theme='dark'] .kids-mq-reset-btn:hover { border-color: #4f46e5; color:
 html[data-theme='dark'] .q-owner-badge {
 	background: var(--bg-surface-alt);
 	color: var(--text-secondary);
+}
+
+/* Results "By" teacher chips on dark: same tokens as the badge above so the
+   chips match the rest of the table's pill badges. The avatar keeps its own
+   indigo→blue gradient for contrast. */
+html[data-theme='dark'] #results-table .by-teacher {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #results-table .by-teachers .by-name {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] #results-table .by-teachers .by-more {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-muted);
+}
+html[data-theme='dark'] #results-table .q-owner-badge.is-empty {
+	color: var(--text-muted);
 }
 
 /* Student Account v3 — dark surfaces (complements the light-first v3 block in styles.css). */
@@ -7119,5 +7184,50 @@ html[data-theme='dark'] #settingsModal button[style*='background: #ffffff'] {
 html[data-theme='dark'] #settingsModal button.btn-secondary[style*='background: #fff'] {
 	background: rgba(248, 113, 113, 0.16) !important;
 	color: rgb(252, 165, 165) !important;
+}
+
+/* Settings form fields: the generic `html[data-theme='dark'] .form-control`
+   rule (above) loses to the compact-layout block in styles.css and to
+   native/autofill painting (the General tab's School Name / Email / Phone
+   are prime autofill targets, which Chrome fills with a light yellow-white).
+   Pin them at ID specificity with !important, and switch the modal to
+   `color-scheme: dark` so native select popups and date/scroll widgets
+   follow the theme too. */
+html[data-theme='dark'] #settingsModal {
+	color-scheme: dark;
+}
+html[data-theme='dark'] #settingsModal .settings-section .form-control,
+html[data-theme='dark'] #settingsModal .settings-section input[type='text'],
+html[data-theme='dark'] #settingsModal .settings-section input[type='search'],
+html[data-theme='dark'] #settingsModal .settings-section input[type='email'],
+html[data-theme='dark'] #settingsModal .settings-section input[type='tel'],
+html[data-theme='dark'] #settingsModal .settings-section input[type='url'],
+html[data-theme='dark'] #settingsModal .settings-section input[type='number'],
+html[data-theme='dark'] #settingsModal .settings-section input[type='password'],
+html[data-theme='dark'] #settingsModal .settings-section select,
+html[data-theme='dark'] #settingsModal .settings-section textarea {
+	background-color: var(--bg-surface-alt) !important;
+	color: var(--text-main) !important;
+	border-color: var(--border-color) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-section .form-control::placeholder,
+html[data-theme='dark'] #settingsModal .settings-section input::placeholder,
+html[data-theme='dark'] #settingsModal .settings-section textarea::placeholder {
+	color: var(--text-muted) !important;
+	opacity: 1;
+}
+html[data-theme='dark'] #settingsModal .settings-section input:-webkit-autofill,
+html[data-theme='dark'] #settingsModal .settings-section input:-webkit-autofill:hover,
+html[data-theme='dark'] #settingsModal .settings-section input:-webkit-autofill:focus,
+html[data-theme='dark'] #settingsModal .settings-section textarea:-webkit-autofill,
+html[data-theme='dark'] #settingsModal .settings-section select:-webkit-autofill {
+	-webkit-text-fill-color: var(--text-main);
+	-webkit-box-shadow: 0 0 0 1000px var(--bg-surface-alt) inset;
+	caret-color: var(--text-main);
+}
+html[data-theme='dark'] #settingsModal select.form-control option,
+html[data-theme='dark'] #settingsModal .settings-section select option {
+	background: var(--bg-surface);
+	color: var(--text-main);
 }
 

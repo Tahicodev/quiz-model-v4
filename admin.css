@@ -1744,36 +1744,131 @@
 	}
 }
 
-/* ── Game editor tabs ─────────────────────────────────────────────────── */
+/* ── Game editor steps ─────────────────────────────────────────────────
+   Numbered, clickable steps (same visual language as the Kids Wizard) so
+   the Create/Edit game modal reads as a guided flow instead of unrelated
+   pill tabs. Native buttons keep free navigation: any step can be opened
+   at any time. */
 .gm-tab-nav {
+	position: relative;
 	display: flex;
-	gap: 0.35rem;
-	flex-wrap: wrap;
-	margin-bottom: 1.1rem;
-	padding-bottom: 0.75rem;
+	align-items: flex-start;
+	gap: 0;
+	margin: 0 0 1.25rem;
+	padding: 2px 0 16px;
 	border-bottom: 1px solid #e2e8f0;
 }
 .gm-tab-btn {
-	appearance: none;
-	cursor: pointer;
-	font: inherit;
-	font-size: 0.85rem;
-	font-weight: 600;
+	position: relative;
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+	padding: 0 4px;
+	border: 0;
+	border-radius: 10px;
+	background: transparent;
 	color: #64748b;
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 650;
+	line-height: 1.25;
+	text-align: center;
+	cursor: pointer;
+	transition: color 0.15s ease;
+}
+.gm-tab-btn:focus-visible {
+	outline: 2px solid #2563eb;
+	outline-offset: 3px;
+}
+.gm-tab-btn:not(:last-child)::after {
+	position: absolute;
+	top: 13px;
+	right: calc(-50% + 18px);
+	left: calc(50% + 18px);
+	height: 2px;
+	border-radius: 2px;
+	background: #dbe4f0;
+	content: '';
+}
+.gm-tab-btn .gm-step-num {
+	position: relative;
+	z-index: 1;
+	display: inline-grid;
+	width: 26px;
+	height: 26px;
+	flex: 0 0 auto;
+	place-items: center;
+	border: 1px solid #dbe4f0;
+	border-radius: 50%;
 	background: #f8fafc;
-	border: 1px solid #e2e8f0;
-	border-radius: 999px;
-	padding: 0.45rem 0.95rem;
-	transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+	color: #64748b;
+	font-size: 0.76rem;
+	font-weight: 800;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease,
+		color 0.15s ease,
+		box-shadow 0.15s ease;
+}
+.gm-tab-btn .gm-step-label {
+	overflow-wrap: anywhere;
 }
 .gm-tab-btn:hover {
 	color: #0f172a;
-	border-color: #cbd5e1;
+}
+.gm-tab-btn:hover .gm-step-num {
+	border-color: #bfdbfe;
+	background: #eff6ff;
+	color: #1d4ed8;
 }
 .gm-tab-btn.active {
-	background: #fce7f3;
-	border-color: #f9a8d4;
-	color: #9d174d;
+	color: #1d4ed8;
+}
+.gm-tab-btn.active .gm-step-num {
+	border-color: #2563eb;
+	background: #2563eb;
+	color: #fff;
+	box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
+}
+.gm-tab-btn.completed {
+	color: #047857;
+}
+.gm-tab-btn.completed .gm-step-num {
+	border-color: #10b981;
+	background: #10b981;
+	color: #fff;
+	font-size: 0;
+}
+.gm-tab-btn.completed .gm-step-num::before {
+	color: #fff;
+	font-size: 0.8rem;
+	font-weight: 900;
+	content: '✓';
+}
+.gm-tab-btn.completed:not(:last-child)::after {
+	background: #a7f3d0;
+}
+@media (max-width: 640px) {
+	.gm-tab-nav {
+		padding-bottom: 12px;
+	}
+	.gm-tab-btn {
+		gap: 5px;
+		font-size: 0.68rem;
+	}
+	.gm-tab-btn .gm-step-num {
+		width: 24px;
+		height: 24px;
+		font-size: 0.7rem;
+	}
+	.gm-tab-btn:not(:last-child)::after {
+		top: 12px;
+		right: calc(-50% + 16px);
+		left: calc(50% + 16px);
+	}
 }
 .gm-tab-panel {
 	display: none;

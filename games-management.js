@@ -193,18 +193,27 @@
 		const form = byId('gameForm');
 		if (!form) return;
 		const panels = form.querySelectorAll('.gm-tab-panel');
-		const tabs = form.querySelectorAll('.gm-tab-btn');
+		const tabs = Array.from(form.querySelectorAll('.gm-tab-btn'));
+		const activeIndex = tabs.findIndex(
+			(tab) => tab.getAttribute('data-gm-tab') === tabName,
+		);
 		panels.forEach((panel) => {
 			panel.classList.toggle(
 				'active',
 				panel.getAttribute('data-gm-panel') === tabName,
 			);
 		});
-		tabs.forEach((tab) => {
-			tab.classList.toggle(
-				'active',
-				tab.getAttribute('data-gm-tab') === tabName,
-			);
+		tabs.forEach((tab, index) => {
+			const isActive = index === activeIndex;
+			// Stepper states: the current step lights up, every earlier step
+			// is marked completed (✓), later steps stay pending.
+			const isCompleted = !isActive && activeIndex > -1 && index < activeIndex;
+			tab.classList.toggle('active', isActive);
+			tab.classList.toggle('completed', isCompleted);
+			tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+			// Roving tabindex: only the focused/active step is tabbable; the
+			// arrow keys (bound on the tablist) move between steps.
+			tab.setAttribute('tabindex', isActive ? '0' : '-1');
 		});
 		if (tabName === 'classes') {
 			renderClassOptions();
@@ -6594,6 +6603,36 @@ function buildLobbyHtml(gameId) {
 				);
 			});
 		}
+	}
+
+	// The stepper has role="tablist": support Left/Right/Home/End so keyboard
+	// users can move between steps (with the roving tabindex set in
+	// switchGameEditorTab). Any step stays freely selectable.
+	function handleGameTabKeydown(event) {
+		const nav = event.target.closest?.('.gm-tab-nav');
+		if (!nav) return;
+		const arrows = { ArrowLeft: -1, ArrowRight: 1 };
+		const tabs = Array.from(nav.querySelectorAll('.gm-tab-btn'));
+		if (!tabs.length) return;
+		const current = tabs.indexOf(document.activeElement);
+		let next = null;
+		if (event.key === 'Home') {
+			next = 0;
+		} else if (event.key === 'End') {
+			next = tabs.length - 1;
+		} else if (event.key in arrows) {
+			if (current === -1) return;
+			next = Math.min(tabs.length - 1, Math.max(0, current + arrows[event.key]));
+		}
+		if (next === null) return;
+		event.preventDefault();
+		tabs[next].focus();
+		switchGameEditorTab(tabs[next].getAttribute('data-gm-tab'));
+	}
+
+	if (typeof document !== 'undefined' && !window.__gmTabKeydownBound) {
+		window.__gmTabKeydownBound = true;
+		document.addEventListener('keydown', handleGameTabKeydown);
 	}
 
 	function presetSelectOnchange() {

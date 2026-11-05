@@ -40,10 +40,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-04-round8" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-04-round7" />
-		<link rel="stylesheet" href="theme.css?v=2026-11-04-round8" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-04-round8" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-04-round9" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-04-round9" />
+		<link rel="stylesheet" href="theme.css?v=2026-11-04-round9" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-04-round9" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -2909,15 +2909,30 @@
 								<form id="gameForm" class="game-form">
 									<input type="hidden" id="gameId" value="" />
 
-									<div class="arena-editor-tabs gm-tab-nav" role="tablist">
-										<button type="button" class="gm-tab-btn active" data-gm-tab="game-info">Game info</button>
-										<button type="button" class="gm-tab-btn" data-gm-tab="rules">Game Rules &amp; Features</button>
-										<button type="button" class="gm-tab-btn" data-gm-tab="classes">Assign Classes</button>
-										<button type="button" class="gm-tab-btn" data-gm-tab="main-questions">Main Questions</button>
-										<button type="button" class="gm-tab-btn" data-gm-tab="penalty-questions">Penalty Questions</button>
+									<div class="arena-editor-tabs gm-tab-nav" role="tablist" aria-label="Game editor steps">
+										<button type="button" class="gm-tab-btn active" id="gmTabGameInfo" role="tab" aria-selected="true" aria-controls="gmPanelGameInfo" data-gm-tab="game-info">
+											<span class="gm-step-num" aria-hidden="true">1</span>
+											<span class="gm-step-label">Game info</span>
+										</button>
+										<button type="button" class="gm-tab-btn" id="gmTabRules" role="tab" aria-selected="false" aria-controls="gmPanelRules" data-gm-tab="rules">
+											<span class="gm-step-num" aria-hidden="true">2</span>
+											<span class="gm-step-label">Game Rules &amp; Features</span>
+										</button>
+										<button type="button" class="gm-tab-btn" id="gmTabClasses" role="tab" aria-selected="false" aria-controls="gmPanelClasses" data-gm-tab="classes">
+											<span class="gm-step-num" aria-hidden="true">3</span>
+											<span class="gm-step-label">Assign Classes</span>
+										</button>
+										<button type="button" class="gm-tab-btn" id="gmTabMainQuestions" role="tab" aria-selected="false" aria-controls="gmPanelMainQuestions" data-gm-tab="main-questions">
+											<span class="gm-step-num" aria-hidden="true">4</span>
+											<span class="gm-step-label">Main Questions</span>
+										</button>
+										<button type="button" class="gm-tab-btn" id="gmTabPenaltyQuestions" role="tab" aria-selected="false" aria-controls="gmPanelPenaltyQuestions" data-gm-tab="penalty-questions">
+											<span class="gm-step-num" aria-hidden="true">5</span>
+											<span class="gm-step-label">Penalty Questions</span>
+										</button>
 									</div>
 
-									<div class="gm-tab-panel active" data-gm-panel="game-info">
+									<div class="gm-tab-panel active" id="gmPanelGameInfo" role="tabpanel" aria-labelledby="gmTabGameInfo" data-gm-panel="game-info">
 									<div class="form-group">
 										<label for="gameName">Game Name</label>
 										<input type="text" id="gameName" class="form-control" placeholder="e.g. Speed Duel - Algebra" required />
@@ -3069,7 +3084,7 @@
 									</div><!-- /gameManualSettingsBlock -->
 									</div><!-- /game-info tab panel -->
 
-									<div class="gm-tab-panel" data-gm-panel="rules">
+									<div class="gm-tab-panel" id="gmPanelRules" role="tabpanel" aria-labelledby="gmTabRules" data-gm-panel="rules">
 									<div id="gamePresetSummaryStrip" class="game-preset-summary" hidden>
 										<h4>Rules &amp; Features from this preset</h4>
 										<p class="text-muted">These values come from the selected preset. You can still fine-tune the individual rules below; changing them here only affects this game.</p>
@@ -3344,7 +3359,7 @@
 									</div>
 									</div><!-- /rules tab panel -->
 
-									<div class="gm-tab-panel" data-gm-panel="classes">
+									<div class="gm-tab-panel" id="gmPanelClasses" role="tabpanel" aria-labelledby="gmTabClasses" data-gm-panel="classes">
 										<div class="form-group">
 											<label>Assign Classes</label>
 											<div id="gameClassList" class="checkbox-list"></div>
@@ -3352,7 +3367,7 @@
 										</div>
 									</div>
 
-									<div class="gm-tab-panel" data-gm-panel="main-questions">
+									<div class="gm-tab-panel" id="gmPanelMainQuestions" role="tabpanel" aria-labelledby="gmTabMainQuestions" data-gm-panel="main-questions">
 									<div class="game-question-block">
 										<div class="game-question-header">
 											<h4>Main Questions</h4>
@@ -3387,7 +3402,7 @@
 									</div>
 									</div><!-- /main-questions tab panel -->
 
-									<div class="gm-tab-panel" data-gm-panel="penalty-questions">
+									<div class="gm-tab-panel" id="gmPanelPenaltyQuestions" role="tabpanel" aria-labelledby="gmTabPenaltyQuestions" data-gm-panel="penalty-questions">
 									<div class="game-question-block">
 										<div class="game-question-header">
 											<h4>Penalty Questions</h4>
