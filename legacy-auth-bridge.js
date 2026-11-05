@@ -252,6 +252,31 @@
   }
   window.__sessionSuperseded = handleSessionSuperseded;
 
+  // â”€â”€ Expired session (refresh token gone / rate-limited) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // api-client dispatches `quiz:auth-expired` from invalidateAuthSession()
+  // when a 401/403/429 proves the session can't be refreshed. Without this,
+  // a dead session surfaces only as scattered per-request errors (e.g.
+  // "Deleted 0; 40 failed â€¦ Refresh failed") and the user is never told to
+  // sign in again. Idempotent and shares the `sessionEnded` guard with the
+  // superseded path so only the first explanation shows.
+  function handleSessionExpired() {
+    if (sessionEnded) return;
+    sessionEnded = true;
+    try {
+      if (sessionWatchTimer) {
+        clearInterval(sessionWatchTimer);
+        sessionWatchTimer = null;
+      }
+    } catch (_) {}
+    // api-client already wiped this tab's stored session + token.
+    showMsg('Your session expired \u2014 please sign in again.', 'error');
+    setTimeout(function () {
+      window.location.href = '/';
+    }, 2500);
+  }
+  window.__sessionExpired = handleSessionExpired;
+  window.addEventListener('quiz:auth-expired', handleSessionExpired);
+
   function startSessionWatchdog() {
     if (sessionWatchTimer) return;
     try {

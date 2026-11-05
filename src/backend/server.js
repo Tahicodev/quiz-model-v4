@@ -307,7 +307,13 @@ app.get(['/kids/championship', '/kids/championship/'], (req, res) => {
 	}
 });
 
-app.use('/api/v1/auth', authLimiter, authRoutes);
+// NOTE: no app-level rate limiter here on purpose. /auth/refresh and
+// /auth/session are polled and retried by every open tab; wrapping the whole
+// mount with the strict `authLimiter` let a dead refresh token burn the
+// 20-failure budget and then 429 /auth/login itself (self-inflicted lockout).
+// The routes that need brute-force protection (login, recover/*) carry their
+// own route-level `authLimiter`; refresh/session carry a lenient one.
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/classes', classesRoutes);
 app.use('/api/v1/categories', categoriesRoutes);

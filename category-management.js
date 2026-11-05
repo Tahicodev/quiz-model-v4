@@ -558,6 +558,15 @@ function focusNewSubjectInput() {
 }
 
 function openSubjectManagerModal(options) {
+	// Reset the admin-only filters so a previous session's search/author choice
+	// never silently hides subjects when the modal is reopened.
+	const searchInput = document.getElementById('subjectSearchInput');
+	if (searchInput) searchInput.value = '';
+	const authorSelect = document.getElementById('subjectAuthorFilter');
+	if (authorSelect) {
+		authorSelect.value = '';
+		delete authorSelect.dataset.signature;
+	}
 	loadCategorySubjects();
 	renderSubjectManagerTable();
 	const modal = document.getElementById('subjectManagerModal');
@@ -634,11 +643,54 @@ function renderSubjectManagerTable() {
 	const admin = window.TeacherFilter
 		? window.TeacherFilter.isAdminSession()
 		: !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+
+	// Admin-only filters. Both controls live in a data-roles="admin" row, so
+	// teachers never see them; we only read/honour them in admin sessions.
+	const searchInput = admin ? document.getElementById('subjectSearchInput') : null;
+	const authorSelect = admin ? document.getElementById('subjectAuthorFilter') : null;
+	const search = String(searchInput?.value || '').trim().toLowerCase();
+	const author = String(authorSelect?.value || '');
+
+	// Populate the author dropdown from the distinct owners of the loaded
+	// subjects (the same labels shown in the "By" column).
+	if (authorSelect && typeof getOwnerLabel === 'function') {
+		const labels = Array.from(
+			new Set(
+				categorySubjects
+					.map((s) => getOwnerLabel(s.created_by))
+					.filter(Boolean),
+			),
+		).sort((a, b) => String(a).localeCompare(String(b)));
+		const signature = labels.join('\u0000');
+		if (authorSelect.dataset.signature !== signature) {
+			const keep = authorSelect.value;
+			authorSelect.innerHTML =
+				'<option value="">All authors</option>' +
+				labels
+					.map((label) => `<option value="${escapeHtml(String(label))}">${escapeHtml(String(label))}</option>`)
+					.join('');
+			authorSelect.dataset.signature = signature;
+			// Keep the previous choice when it still exists.
+			if (labels.some((label) => String(label) === keep)) authorSelect.value = keep;
+		}
+	}
+
+	const visible = categorySubjects.filter((subject) => {
+		if (search && !String(subject.name || '').toLowerCase().includes(search)) return false;
+		if (author && typeof getOwnerLabel === 'function' && getOwnerLabel(subject.created_by) !== author) {
+			return false;
+		}
+		return true;
+	});
+
 	if (!categorySubjects.length) {
 		tbody.innerHTML =
 			'<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">No subjects yet — create one to start organizing categories.</td></tr>';
+	} else if (!visible.length) {
+		tbody.innerHTML =
+			'<tr><td colspan="6" class="text-muted" style="text-align:center;padding:20px;">No subjects match your filters.</td></tr>';
 	} else {
-		tbody.innerHTML = categorySubjects
+		tbody.innerHTML = visible
 			.map((subject) => {
 				const categoryCount = categories.filter(
 					(category) => String(category?.subject_id || '') === String(subject.id),
@@ -783,6 +835,16 @@ async function deleteSubject(subjectId, options = {}) {
 			outcome = await window.API.remove('subjects', subjectId);
 		} catch (apiErr) {
 			if (apiErr?.status !== 404) {
+				// An expired/ended session is not a per-row failure — let the
+				// caller (bulk loop) abort the whole batch and explain once.
+				if (
+					typeof options.onAuthFailure === 'function' &&
+					typeof window.isAuthFailure === 'function' &&
+					window.isAuthFailure(apiErr)
+				) {
+					options.onAuthFailure(apiErr);
+					return false;
+				}
 				showToast(
 					`Failed to delete subject on server: ${apiErr?.message || 'network error'}`,
 					'error',
@@ -910,17 +972,26 @@ async function deleteSelectedSubjects() {
 	}
 	let deleted = 0;
 	let removedCourses = 0;
+	let authExpired = false;
 	for (const id of ids) {
 		// One confirmation for the whole selection: the per-subject path is
 		// called with skipConfirm so the user is not asked N+1 times.
 		// eslint-disable-next-line no-await-in-loop
-		const result = await deleteSubject(id, { skipConfirm: true });
+		const result = await deleteSubject(id, {
+			skipConfirm: true,
+			onAuthFailure: () => { authExpired = true; },
+		});
+		if (authExpired) break;
 		if (result) {
 			deleted++;
 			removedCourses += Number(result.coursesRemoved) || 0;
 		}
 	}
 	window.BulkSelect?.clear?.('subjects');
+	if (authExpired) {
+		showToast('Your session expired \u2014 please sign in again.', 'error');
+		return;
+	}
 	if (deleted) {
 		showToast(
 			`Deleted ${pluralCount(deleted, 'subject', 'subjects')}` +
@@ -6535,6 +6606,7 @@ async function deleteSelectedCategories() {
 	const failed = [];
 	const failureReasons = [];
 	const deleted = [];
+	let authExpired = false;
 	if (window.API && typeof window.API.remove === 'function') {
 		for (const categoryId of deletable) {
 			try {
@@ -6544,6 +6616,13 @@ async function deleteSelectedCategories() {
 				if (apiErr?.status === 404) {
 					deleted.push(String(categoryId));
 					continue;
+				}
+				// Expired/ended session: stop the batch so we don't burn the
+				// remaining rows (and the /auth/refresh limiter) on requests
+				// that cannot succeed.
+				if (typeof window.isAuthFailure === 'function' && window.isAuthFailure(apiErr)) {
+					authExpired = true;
+					break;
 				}
 				console.warn('[categories] bulk API delete failed:', apiErr);
 				failed.push(categoryId);
@@ -6594,7 +6673,14 @@ async function deleteSelectedCategories() {
 		}
 	}
 	const okCount = deleted.length;
-	if (failed.length) {
+	if (authExpired) {
+		showToast(
+			okCount
+				? `Deleted ${pluralCount(okCount, 'category', 'categories')} \u2014 your session expired, please sign in again to finish.`
+				: 'Your session expired \u2014 please sign in again.',
+			'error',
+		);
+	} else if (failed.length) {
 		const cause = failureReasons.find(Boolean);
 		showToast(
 			`Deleted ${okCount}; ${failed.length} failed on server \u2014 kept locally so you can retry` +

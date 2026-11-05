@@ -36,6 +36,23 @@ const authLimiter = (process.env.NODE_ENV === 'test' || process.env.RATE_LIMIT_D
       message: { code: 'RATE_LIMITED', message: 'Too many attempts, try again later' },
     });
 
+// Lenient limiter for the session-lifecycle endpoints every open tab polls
+// and retries (`/refresh` on a 401, `/session` on the 60s watchdog). These
+// carry no credentials an attacker could guess, so the goal is only to stop
+// runaway loops — deliberately far above the login budget so a stale cookie
+// can never lock a user out of signing back in.
+const refreshLimiter = (process.env.NODE_ENV === 'test' || process.env.RATE_LIMIT_DISABLED === 'true')
+  ? (req, res, next) => next()
+  : rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 300,
+      skipSuccessfulRequests: true,
+      keyGenerator: (req) => ipKeyGenerator(req.ip),
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { code: 'RATE_LIMITED', message: 'Too many session requests, try again later' },
+    });
+
 // ── Public routes ────────────────────────────────────────────────────────────
 
 // The refresh cookie is scoped per portal (admin vs student) so two tabs of
@@ -76,8 +93,16 @@ router.post('/login', authLimiter, validate(LoginSchema), async (req, res, next)
 			force: force === true,
 		});
 
-		// Set refresh token as httpOnly cookie (SaaS mode; in local mode it's optional)
-		res.cookie(refreshCookieName(normalizePortal(portal)), refreshToken, REFRESH_COOKIE_OPTIONS);
+		// Set refresh token as httpOnly cookie (SaaS mode; in local mode it's optional).
+		// The shared entry page does not know the role before authenticating, so it
+		// omits `portal`. In that case scope the cookie to the role that actually
+		// signed in; otherwise the token lands in the legacy unscoped cookie while a
+		// stale `<portal>`-scoped cookie from an earlier session is still preferred
+		// by /refresh (and rejected as revoked), which would end the new session
+		// right after the redirect.
+		const resolvedPortal =
+			normalizePortal(portal) || (user.role === 'student' ? 'student' : 'admin');
+		res.cookie(refreshCookieName(resolvedPortal), refreshToken, REFRESH_COOKIE_OPTIONS);
 		res.json({ user, accessToken });
 	} catch (err) {
 		next(err);
@@ -141,7 +166,7 @@ router.post('/recover/reset', authLimiter, async (req, res, next) => {
 });
 
 // POST /api/v1/auth/refresh
-router.post('/refresh', async (req, res, next) => {
+router.post('/refresh', refreshLimiter, async (req, res, next) => {
 	try {
 		const { authSvc } = getContainer();
 		// The browser sends ALL cookies regardless of which tab is asking,
@@ -176,7 +201,7 @@ router.post('/refresh', async (req, res, next) => {
 // GET /api/v1/auth/session — is THIS tab's session still the live one?
 // 200 { active: true } while it is; 409 { code: SESSION_SUPERSEDED } once
 // another tab/device took over (the client then ends this session).
-router.get('/session', requireAuth, async (req, res, next) => {
+router.get('/session', refreshLimiter, requireAuth, async (req, res, next) => {
 	try {
 		const { authSvc } = getContainer();
 		const status = await authSvc.sessionStatus(req.user.id, req.user.sid || null);

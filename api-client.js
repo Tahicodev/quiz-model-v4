@@ -170,11 +170,13 @@
           refreshBackoffUntil = Date.now() + Math.max(retryAfter || 0, 60) * 1000;
           var limited = new Error('Refresh rate-limited');
           limited.status = 429;
+          limited.isAuthFailure = true;
           throw limited;
         }
         if (!r.ok) {
           var err = new Error('Refresh failed (' + r.status + ')');
           err.status = r.status;
+          err.isAuthFailure = r.status === 401 || r.status === 403 || r.status === 429;
           throw err;
         }
         return r.json();
@@ -255,7 +257,18 @@
         return refreshAccessToken()
           .then(function () { return request(method, path, body, true); })
           .catch(function (err) {
-            if (err && err.status === 401) invalidateAuthSession();
+            // 401/403 (token gone) or 429 (limiter) means the session cannot
+            // be recovered without a fresh sign-in — end it clearly instead of
+            // letting every queued request retry and fail on its own.
+            if (
+              err &&
+              (err.isAuthFailure === true ||
+                err.status === 401 ||
+                err.status === 403 ||
+                err.status === 429)
+            ) {
+              invalidateAuthSession();
+            }
             throw err;
           });
       }

@@ -515,6 +515,10 @@
           if (!r.ok) {
             var err = new Error('Refresh failed');
             err.status = r.status;
+            // 401/403 = the refresh token is gone/revoked; 429 = the auth
+            // limiter throttled us. All three mean "stop retrying, the human
+            // must sign in again" — distinct from a transient 5xx/network blip.
+            err.isAuthFailure = r.status === 401 || r.status === 403 || r.status === 429;
             throw err;
           }
           return r.json();
@@ -776,6 +780,17 @@
     // rejected (expired/wrong-identity token from a shared-localStorage
     // socket), it refreshes the access token through here.
     window.__legacyBridgeRefresh = refreshAccessToken;
+    // Shared classifier for "this failure means the session is over, don't
+    // retry the remaining rows in a bulk loop". Used by the bulk-delete
+    // handlers so an expired session reports once instead of N times.
+    window.isAuthFailure = function (err) {
+      if (!err) return false;
+      if (err.isAuthFailure === true) return true;
+      var status = Number(err.status);
+      if (status === 401 || status === 403 || status === 429) return true;
+      var msg = String(err.message || err.error || '');
+      return /refresh failed|session expired|not authenticated|unauthori[sz]ed|invalid or expired token/i.test(msg);
+    };
     // Hard cache reset for the school:data-reset broadcast: another tab wiped
     // the server data, so this tab's in-memory cache + localStorage mirrors
     // are now stale. Clearing them here MUST NOT go through the normal write

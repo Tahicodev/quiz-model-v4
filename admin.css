@@ -1082,6 +1082,42 @@
 #subjectManagerModal .bulk-actions-container .divider-vertical {
 	display: none;
 }
+/* Admin-only filter row above the subjects table (hidden for teachers via
+   data-roles + .role-hidden). Inputs/selects reuse the themed search/sort
+   wrappers, so they adapt to dark mode automatically. */
+#subjectManagerModal .subject-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.6rem;
+	margin-bottom: 0.75rem;
+}
+/* Belt-and-braces: styles.css already ships `.role-hidden { display: none
+   !important }`, but the flex rule above is ID-scoped (1,0,1). Re-state the
+   hidden state at the same specificity so a future `!important` on the layout
+   rule can never leak these admin-only filters into a teacher session. */
+#subjectManagerModal .subject-filters[data-roles].role-hidden {
+	display: none !important;
+}
+/* Indigo hint under the realtime-access note. It used to carry an inline
+   `color: #4338ca !important`, which no theme rule could override (inline
+   !important outranks any stylesheet !important) — that is why the line
+   stayed dark indigo on the dark background. A class keeps the light colour
+   and lets theme-dark.css swap it. !important is required to beat
+   `.text-muted { color: var(--text-muted) !important }` (styles.css 11728). */
+#settingsModal .realtime-access-note-hint {
+	color: #4338ca !important;
+}
+#subjectManagerModal .subject-filters .search-wrapper {
+	flex: 1 1 220px;
+	min-width: 0;
+}
+#subjectManagerModal .subject-filters .search-wrapper input {
+	width: 100%;
+}
+#subjectManagerModal .subject-filters .sort-wrapper select {
+	min-width: 160px;
+}
 /* styles.css turns .actions-cell into a flex row, which stops the table from
    sizing that column and pushes the buttons out of the modal. */
 #subjectManagerList td.actions-cell {
@@ -1092,9 +1128,14 @@
 	justify-content: center;
 }
 .subject-create-row {
+	display: flex;
+	justify-content: flex-start;
 	align-items: center;
 	gap: 0.6rem;
 	flex-wrap: wrap;
+	margin-top: 1.25rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--border-color);
 }
 .subject-create-row .subject-create-input {
 	flex: 1 1 190px;
@@ -2691,17 +2732,9 @@ color: #0f172a;
 	padding-bottom: 0;
 }
 
-/* The six "standard form" modals declare their body padding with an
-   ID rule, so repeat the flush here with matching weight. */
-#userModal .modal-body,
-#questionFormModal .modal-body,
-#quickCategoryModal .modal-body {
-	padding-bottom: 0 !important;
-}
-
-/* Keep every in-body action bar pinned at the visible bottom while
-   the body scrolls. (Exam / category / class keep their own pinned
-   overlays on mobile via the specific rules in styles.css.) */
+/* Keep every remaining in-body action bar pinned at the visible bottom while
+   the body scrolls. Standard form modals moved to a real `.modal-footer`
+   (see the unified footer rules near the course-gen modal styles). */
 .modal .form-actions {
 	position: sticky;
 	bottom: 0;
@@ -5761,15 +5794,24 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .course-gen-modal .modal-body > * {
 	flex-shrink: 0;
 }
-.course-gen-modal .modal-footer {
+/* Shared unified footer — used by the course generator and every standard
+   form modal so they all match this design. `.modal-footer--unified` is the
+   reusable hook; the course-gen selector is kept for its existing markup. */
+.course-gen-modal .modal-footer,
+.modal-footer--unified {
 	display: flex;
 	justify-content: flex-end;
+	align-items: center;
+	flex-shrink: 0;
 	gap: 10px;
 	padding: 14px 20px;
 	border-top: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
 	background: var(--bg-surface, #fff);
+	border-bottom-left-radius: var(--radius-lg);
+	border-bottom-right-radius: var(--radius-lg);
 }
-.course-gen-modal .modal-footer .btn {
+.course-gen-modal .modal-footer .btn,
+.modal-footer--unified .btn {
 	min-height: 42px;
 	border-radius: 10px;
 	font-weight: 650;
@@ -5777,30 +5819,52 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		border-color 140ms ease, color 140ms ease;
 }
 /* Ghost Cancel action */
-.course-gen-modal .modal-footer .btn:not(.btn-primary) {
+.course-gen-modal .modal-footer .btn:not(.btn-primary),
+.modal-footer--unified .btn:not(.btn-primary) {
 	background: transparent;
 	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.4));
 	color: var(--text-main, #334155);
 }
-.course-gen-modal .modal-footer .btn:not(.btn-primary):hover {
+.course-gen-modal .modal-footer .btn:not(.btn-primary):hover,
+.modal-footer--unified .btn:not(.btn-primary):hover {
 	color: #4f46e5;
 	border-color: rgba(99, 102, 241, 0.45);
 	background: rgba(99, 102, 241, 0.06);
 }
 /* Primary action: indigo gradient (mirrors the Games studio active pill) */
-.course-gen-modal .modal-footer .btn-primary {
+.course-gen-modal .modal-footer .btn-primary,
+.modal-footer--unified .btn-primary {
 	border: 1px solid transparent;
 	background: linear-gradient(135deg, #6366f1, #4f46e5);
 	color: #fff;
 	box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28);
 }
-.course-gen-modal .modal-footer .btn-primary:not(:disabled):hover {
+.course-gen-modal .modal-footer .btn-primary:not(:disabled):hover,
+.modal-footer--unified .btn-primary:not(:disabled):hover {
 	transform: translateY(-1px);
 	box-shadow: 0 9px 20px rgba(79, 70, 229, 0.34);
 }
-.course-gen-modal .modal-footer .btn:disabled {
+.course-gen-modal .modal-footer .btn:disabled,
+.modal-footer--unified .btn:disabled {
 	opacity: 0.55;
 	cursor: not-allowed;
+}
+@media (max-width: 768px) {
+	/* Full-screen dialogs: respect the device's bottom safe area. */
+	.modal-footer--unified {
+		padding-bottom: max(14px, env(safe-area-inset-bottom));
+	}
+	/* These dialogs go edge-to-edge with square corners on phones, so the
+	   footer must not round its bottom corners against them. */
+	#questionFormModal .modal-footer--unified,
+	#categoryModal .modal-footer--unified,
+	#quickCategoryModal .modal-footer--unified,
+	#userModal .modal-footer--unified,
+	#examModal .modal-footer--unified,
+	#classModal .modal-footer--unified {
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
+	}
 }
 .course-gen-modal .modal-close {
 	border-radius: 9px;

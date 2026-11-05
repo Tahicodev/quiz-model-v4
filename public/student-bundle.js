@@ -16255,8 +16255,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
 
   // src/shared/schemas/category.schema.js
   var CategoryCreateSchema = external_exports.object({
-    name: external_exports.string().min(1).max(100),
+    name: external_exports.string().trim().min(1).max(100),
     parent_id: external_exports.string().uuid().optional().nullable(),
+    subject_id: external_exports.string().uuid().optional().nullable(),
     icon: external_exports.string().max(50).optional().nullable(),
     color: external_exports.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a hex color").optional().nullable()
   });
@@ -16334,9 +16335,25 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       this.#requireAdmin(currentUser);
       const parsed = CategoryCreateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+      await this.#validateSubject(parsed.data.subject_id, currentUser);
+      const { data: siblings } = await this.#repo.getAll("categories", {
+        filters: {
+          school_id: currentUser.school_id,
+          subject_id: parsed.data.subject_id ?? null,
+          parent_id: parsed.data.parent_id ?? null
+        },
+        limit: 1e5
+      });
+      if (siblings.some((category) => category.name.toLocaleLowerCase() === parsed.data.name.toLocaleLowerCase())) {
+        throw new ValidationError({ name: ["A category with this name already exists under this parent in this subject."] });
+      }
       if (parsed.data.parent_id) {
         const parent = await this.#repo.getById("categories", parsed.data.parent_id);
         if (!parent) throw new ValidationError({ parent_id: ["Parent category not found"] });
+        this.#assertCategoryAccess(parent, currentUser);
+        if (String(parent.school_id) !== String(currentUser.school_id) || String(parent.subject_id || "") !== String(parsed.data.subject_id || "")) {
+          throw new ValidationError({ parent_id: ["Parent and child categories must belong to the same subject."] });
+        }
       }
       return this.#repo.create("categories", {
         ...parsed.data,
@@ -16351,10 +16368,60 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       if (!existing) throw new NotFoundError("Category");
       const parsed = CategoryUpdateSchema.safeParse(data);
       if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-      if (parsed.data.parent_id) {
-        if (parsed.data.parent_id === id) throw new ValidationError({ parent_id: ["Cannot set category as its own parent"] });
-        const parent = await this.#repo.getById("categories", parsed.data.parent_id);
+      this.#assertCategoryAccess(existing, currentUser);
+      const subjectId = parsed.data.subject_id === void 0 ? existing.subject_id : parsed.data.subject_id;
+      await this.#validateSubject(subjectId, currentUser);
+      const parentId = parsed.data.parent_id === void 0 ? existing.parent_id : parsed.data.parent_id;
+      const categoryName = parsed.data.name === void 0 ? existing.name : parsed.data.name;
+      if (parsed.data.name !== void 0 || String(parentId || "") !== String(existing.parent_id || "") || String(subjectId || "") !== String(existing.subject_id || "")) {
+        const { data: siblings } = await this.#repo.getAll("categories", {
+          filters: {
+            school_id: existing.school_id,
+            subject_id: subjectId ?? null,
+            parent_id: parentId ?? null
+          },
+          limit: 1e5
+        });
+        if (siblings.some(
+          (category) => String(category.id) !== String(id) && category.name.toLocaleLowerCase() === categoryName.toLocaleLowerCase()
+        )) {
+          throw new ValidationError({ name: ["A category with this name already exists under this parent in this subject."] });
+        }
+      }
+      let subjectMoveIds = [];
+      if (parsed.data.subject_id !== void 0 && String(parsed.data.subject_id || "") !== String(existing.subject_id || "")) {
+        if (existing.parent_id) {
+          throw new ValidationError({ subject_id: ["Change the subject from the top-level category."] });
+        }
+        subjectMoveIds = await this.#getSubtreeIds(id);
+        const { data: targetCategories } = await this.#repo.getAll("categories", {
+          filters: { school_id: existing.school_id, subject_id: subjectId ?? null },
+          limit: 1e5
+        });
+        const movingIds = new Set(subjectMoveIds.map(String));
+        const movingCategories = [];
+        for (const movingId of subjectMoveIds) {
+          const category = await this.#repo.getById("categories", movingId);
+          if (category) {
+            this.#assertCategoryAccess(category, currentUser);
+            movingCategories.push(category);
+          }
+        }
+        const targetNames = new Set(targetCategories.filter((category) => !movingIds.has(String(category.id))).map((category) => `${String(category.parent_id || "")}\0${category.name.toLocaleLowerCase()}`));
+        if (movingCategories.some(
+          (category) => targetNames.has(`${String(category.parent_id || "")}\0${category.name.toLocaleLowerCase()}`)
+        )) {
+          throw new ValidationError({ subject_id: ["A category in this branch already exists in the selected subject. Rename the conflicting category first."] });
+        }
+      }
+      if (parentId) {
+        if (String(parentId) === String(id)) throw new ValidationError({ parent_id: ["Cannot set category as its own parent"] });
+        const parent = await this.#repo.getById("categories", parentId);
         if (!parent) throw new ValidationError({ parent_id: ["Parent category not found"] });
+        this.#assertCategoryAccess(parent, currentUser);
+        if (String(parent.school_id) !== String(existing.school_id) || String(parent.subject_id || "") !== String(subjectId || "")) {
+          throw new ValidationError({ parent_id: ["Parent and child categories must belong to the same subject."] });
+        }
         let ancestorId = parent.parent_id || null;
         const seen = /* @__PURE__ */ new Set([id]);
         while (ancestorId) {
@@ -16366,14 +16433,70 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           ancestorId = ancestor?.parent_id || null;
         }
       }
-      return this.#repo.update("categories", id, parsed.data);
+      const updated = await this.#repo.update("categories", id, parsed.data);
+      for (const childId of subjectMoveIds.filter((categoryId) => String(categoryId) !== String(id))) {
+        await this.#repo.update("categories", childId, { subject_id: subjectId || null });
+      }
+      if (subjectMoveIds.length) {
+        const movingIds = new Set(subjectMoveIds.map(String));
+        const { data: courses } = await this.#repo.getAll("courses", { limit: 1e5 });
+        for (const course of courses || []) {
+          if (course.category_id && movingIds.has(String(course.category_id))) {
+            await this.#repo.update("courses", course.id, { subject_id: subjectId || null });
+          }
+        }
+      }
+      return updated;
+    }
+    async #getSubtreeIds(rootId) {
+      const ids = [String(rootId)];
+      let frontier = [String(rootId)];
+      while (frontier.length) {
+        const next = [];
+        for (const parentId of frontier) {
+          const { data: children } = await this.#repo.getAll("categories", {
+            filters: { parent_id: parentId },
+            limit: 1e5
+          });
+          for (const child of children || []) {
+            const childId = String(child.id);
+            if (!ids.includes(childId)) {
+              ids.push(childId);
+              next.push(childId);
+            }
+          }
+        }
+        frontier = next;
+      }
+      return ids;
+    }
+    async #validateSubject(subjectId, user) {
+      if (!subjectId) return;
+      const subject = await this.#repo.getById("subjects", subjectId);
+      if (!subject || String(subject.school_id) !== String(user.school_id)) {
+        throw new ValidationError({ subject_id: ["Subject not found in this school."] });
+      }
+      if (user.role === ROLES.TEACHER && String(subject.created_by) !== String(user.id)) {
+        throw new ForbiddenError("Not your subject");
+      }
+    }
+    #assertCategoryAccess(category, user) {
+      if (category.school_id != null && user.school_id != null && String(category.school_id) !== String(user.school_id)) {
+        throw new ValidationError({ parent_id: ["Category does not belong to this school."] });
+      }
+      if (user.role === ROLES.TEACHER && String(category.created_by) !== String(user.id)) {
+        throw new ForbiddenError("Not your category");
+      }
     }
     /**
      * Deleting a category deletes the WHOLE subtree (subcategories,
-     * sub-subcategories…) and every question filed under it — this category
+     * sub-subcategories…), every question filed under it — this category
      * or any of its subcategories — becomes uncategorized (category_id NULL,
-     * the UI's "Uncategorized" pseudo-category). Deep joins stay reachable:
-     * no more "cannot delete: has subcategories / contains questions".
+     * the UI's "Uncategorized" pseudo-category), and every course generated
+     * from the branch is removed (lessons/course classes cascade with it):
+     * a course without its category branch is dead content. Deep joins stay
+     * reachable: no more "cannot delete: has subcategories / contains
+     * questions".
      */
     async delete(id, currentUser) {
       this.#requireAdmin(currentUser);
@@ -16405,11 +16528,20 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           await this.#repo.update("questions", q.id, { category_id: null });
         }
       }
+      const { data: courses } = await this.#repo.getAll("courses", { limit: 1e5 });
+      let coursesRemoved = 0;
+      for (const course of courses || []) {
+        if (course?.id && course.category_id && subtree.has(String(course.category_id))) {
+          await this.#repo.delete("courses", course.id);
+          coursesRemoved++;
+        }
+      }
       for (const cid of subtreeIds.slice().reverse()) {
         if (String(cid) === String(id)) continue;
         await this.#repo.delete("categories", cid);
       }
       await this.#repo.delete("categories", id);
+      return { coursesRemoved };
     }
     async moveQuestion(questionId, newCategoryId, currentUser) {
       this.#requireAdmin(currentUser);
@@ -17554,6 +17686,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
               role="status"
               aria-live="polite"
             ></div>
+            <!-- In-place takeover prompt for a 409 SESSION_ACTIVE login.
+                 A native confirm() is avoided so the prompt renders inside
+                 embedded browsers too; it is hidden until that 409 arrives. -->
+            <div
+              id="entryAuthConflict"
+              class="auth-session-conflict"
+              role="alertdialog"
+              aria-labelledby="entryAuthConflictText"
+              hidden
+            >
+              <p id="entryAuthConflictText">
+                This account is already signed in on another device or tab.
+                Signing in here will end that other session.
+              </p>
+              <div class="auth-session-conflict-actions">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  data-conflict-action="cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  data-conflict-action="takeover"
+                >
+                  Sign in anyway
+                </button>
+              </div>
+            </div>
             <p class="auth-footnote">
               Students sign in with their account credentials.
             </p>
@@ -17829,70 +17992,127 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         );
       });
     }
+    const submitBtn = document.getElementById("entryAuthSubmitBtn");
+    const conflictPanel = document.getElementById("entryAuthConflict");
+    let inFlight = false;
+    const setBusy = (busy) => {
+      if (!submitBtn) return;
+      submitBtn.disabled = busy;
+      submitBtn.textContent = busy ? "Signing in..." : "Sign In";
+    };
+    const hideConflict = () => {
+      if (conflictPanel) conflictPanel.hidden = true;
+    };
+    const showConflict = () => {
+      if (!conflictPanel) return false;
+      conflictPanel.hidden = false;
+      const takeoverBtn = conflictPanel.querySelector(
+        '[data-conflict-action="takeover"]'
+      );
+      if (takeoverBtn) takeoverBtn.focus();
+      return true;
+    };
+    const signIn = async ({ username, password, remember }, force) => {
+      if (inFlight) return;
+      inFlight = true;
+      setBusy(true);
+      hideConflict();
+      setAuthStatus("", "");
+      try {
+        const res = await fetch(getApiBase() + "/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: username.trim(),
+            password,
+            force: force === true
+          }),
+          credentials: "include"
+        });
+        const data = await res.json().catch(() => ({}));
+        const code = data && data.error && data.error.code ? data.error.code : "";
+        if (res.status === 409 && code === "SESSION_ACTIVE") {
+          setBusy(false);
+          if (!force && showConflict()) {
+            setAuthStatus("", "");
+            return;
+          }
+          setAuthStatus(
+            data && data.error && data.error.message || "This account is already signed in on another device or tab.",
+            "error"
+          );
+          return;
+        }
+        if (!res.ok) {
+          setBusy(false);
+          setAuthStatus(
+            data && data.error && data.error.message || data && data.message || "Invalid username or password.",
+            "error"
+          );
+          return;
+        }
+        const payload = data && (data.user || data.data) ? data : { user: data };
+        const user = payload.user || payload;
+        const token = payload.accessToken || payload.token || "";
+        persistLegacySession({ ...payload, user, accessToken: token }, remember);
+        sessionStorage.setItem(
+          user.role === "student" ? "studentLoggedIn" : "adminLoggedIn",
+          "true"
+        );
+        setAuthStatus("Signed in \u2014 redirecting...", "success");
+        setTimeout(() => redirectAfterLogin(user.role), 300);
+      } catch (err) {
+        console.error("[entry-auth] login request failed:", err);
+        setBusy(false);
+        setAuthStatus(
+          "Could not reach the server \u2014 check your connection and try again.",
+          "error"
+        );
+      } finally {
+        inFlight = false;
+      }
+    };
+    const readCredentials = () => ({
+      username: (form.querySelector('[data-auth="username"]') || {}).value || "",
+      password: (form.querySelector('[data-auth="password"]') || {}).value || "",
+      remember: Boolean(
+        (form.querySelector('[data-auth="remember"]') || {}).checked
+      )
+    });
     form.addEventListener(
       "submit",
-      async (e) => {
+      (e) => {
         e.preventDefault();
         e.stopImmediatePropagation();
-        const username = (form.querySelector('[data-auth="username"]') || {}).value || "";
-        const password = (form.querySelector('[data-auth="password"]') || {}).value || "";
-        const remember = Boolean(
-          (form.querySelector('[data-auth="remember"]') || {}).checked
-        );
-        if (!username.trim() || !password) {
+        const credentials = readCredentials();
+        if (!credentials.username.trim() || !credentials.password) {
           setAuthStatus("Please enter both your username and password.", "error");
           return;
         }
-        const submitBtn = document.getElementById("entryAuthSubmitBtn");
-        if (submitBtn) {
-          submitBtn.disabled = true;
-          submitBtn.textContent = "Signing in\u2026";
-        }
-        setAuthStatus("", "");
-        try {
-          const res = await fetch(getApiBase() + "/auth/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: username.trim(), password }),
-            credentials: "include"
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            const msg = data && data.error && data.error.message || data && data.message || "Invalid username or password.";
-            setAuthStatus(msg, "error");
-            if (submitBtn) {
-              submitBtn.disabled = false;
-              submitBtn.innerHTML = "Sign In";
-            }
-            return;
-          }
-          const payload = data && (data.user || data.data) ? data : { user: data };
-          const user = payload.user || payload;
-          const token = payload.accessToken || payload.token || "";
-          persistLegacySession(
-            { ...payload, user, accessToken: token },
-            remember
-          );
-          sessionStorage.setItem(
-            user.role === "student" ? "studentLoggedIn" : "adminLoggedIn",
-            "true"
-          );
-          setAuthStatus("Signed in \u2014 redirecting\u2026", "success");
-          setTimeout(() => redirectAfterLogin(user.role), 300);
-        } catch (err) {
-          console.error("[entry-auth] login request failed:", err);
-          setAuthStatus(
-            "Could not reach the server \u2014 check your connection and try again.",
-            "error"
-          );
-          if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = "Sign In";
-          }
-        }
+        signIn(credentials, false);
       },
       { capture: true }
     );
+    if (conflictPanel) {
+      conflictPanel.addEventListener("click", (e) => {
+        const action = e.target.closest("[data-conflict-action]");
+        if (!action) return;
+        if (action.dataset.conflictAction === "cancel") {
+          hideConflict();
+          setAuthStatus(
+            "Sign-in cancelled \u2014 the other session is still active.",
+            ""
+          );
+          return;
+        }
+        const credentials = readCredentials();
+        if (credentials.username.trim() && credentials.password) {
+          signIn(credentials, true);
+        } else {
+          setAuthStatus("Please enter both your username and password.", "error");
+        }
+      });
+    }
   }
   function redirectIfAlreadySignedIn() {
     try {
@@ -18408,11 +18628,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           refreshBackoffUntil = Date.now() + Math.max(retryAfter || 0, 60) * 1e3;
           var limited = new Error("Refresh rate-limited");
           limited.status = 429;
+          limited.isAuthFailure = true;
           throw limited;
         }
         if (!r.ok) {
           var err = new Error("Refresh failed (" + r.status + ")");
           err.status = r.status;
+          err.isAuthFailure = r.status === 401 || r.status === 403 || r.status === 429;
           throw err;
         }
         return r.json();
@@ -18474,7 +18696,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return refreshAccessToken().then(function() {
             return request(method, path, body, true);
           }).catch(function(err) {
-            if (err && err.status === 401) invalidateAuthSession();
+            if (err && (err.isAuthFailure === true || err.status === 401 || err.status === 403 || err.status === 429)) {
+              invalidateAuthSession();
+            }
             throw err;
           });
         }
@@ -18589,6 +18813,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         var out = {
           name: c.name
         };
+        if (Object.prototype.hasOwnProperty.call(c, "subject_id")) out.subject_id = c.subject_id || null;
         if (c.icon != null) out.icon = String(c.icon);
         if (c.color != null) out.color = String(c.color);
         var parent = c.parent_id || c.parentId;
@@ -18597,6 +18822,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           out.parent_id = null;
         }
         return out;
+      },
+      subjects: function(s) {
+        return { name: s.name };
       },
       questions: function(q) {
         var TYPE_MAP = {
@@ -19575,11 +19803,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       // rev stamps the shape/semantics of these defaults. Bump it whenever
       // a default flips meaning (e.g. the Data tab growing a teacher-safe
       // view) so previously auto-saved maps cannot pin stale values.
-      rev: 3,
+      rev: 4,
       tabs: {
         overview: true,
         questions: true,
-        categories: true,
+        subjects: true,
         exams: true,
         classes: true,
         games: true,
@@ -19743,6 +19971,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           return access.settings !== false;
         }
         if (access.tabs && access.tabs[tabName] === false) {
+          return false;
+        }
+        if (tabName === "subjects" && access.tabs && access.tabs.categories === false) {
           return false;
         }
       }
@@ -30217,6 +30448,23 @@ They will be signed out immediately.`
       }, 2500);
     }
     window.__sessionSuperseded = handleSessionSuperseded;
+    function handleSessionExpired() {
+      if (sessionEnded) return;
+      sessionEnded = true;
+      try {
+        if (sessionWatchTimer) {
+          clearInterval(sessionWatchTimer);
+          sessionWatchTimer = null;
+        }
+      } catch (_) {
+      }
+      showMsg("Your session expired \u2014 please sign in again.", "error");
+      setTimeout(function() {
+        window.location.href = "/";
+      }, 2500);
+    }
+    window.__sessionExpired = handleSessionExpired;
+    window.addEventListener("quiz:auth-expired", handleSessionExpired);
     function startSessionWatchdog() {
       if (sessionWatchTimer) return;
       try {

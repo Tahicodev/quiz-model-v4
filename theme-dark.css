@@ -6363,7 +6363,7 @@ html[data-theme='dark'] .curriculum-starter-actions .btn:not(.btn-primary):hover
 	background: rgba(99, 102, 241, 0.1);
 }
 html[data-theme='dark'] .curriculum-starter-card .course-generator-hint {
-	color: #74839c;
+	color: var(--text-muted);
 }
 
 /* ── Subject Management strip ────────────────────────────────────────── */
@@ -6395,29 +6395,35 @@ html[data-theme='dark'] .course-gen-modal .modal-header {
 		var(--bg-surface);
 }
 html[data-theme='dark'] .course-gen-modal .modal-header h3,
-html[data-theme='dark'] .course-gen-modal .modal-footer {
+html[data-theme='dark'] .course-gen-modal .modal-footer,
+html[data-theme='dark'] .modal-footer--unified {
 	color: var(--text-main);
 	background: var(--bg-surface);
 }
-html[data-theme='dark'] .course-gen-modal .modal-footer {
+html[data-theme='dark'] .course-gen-modal .modal-footer,
+html[data-theme='dark'] .modal-footer--unified {
 	border-top: 1px solid var(--border-color);
 }
-html[data-theme='dark'] .course-gen-modal .modal-footer .btn:not(.btn-primary) {
+html[data-theme='dark'] .course-gen-modal .modal-footer .btn:not(.btn-primary),
+html[data-theme='dark'] .modal-footer--unified .btn:not(.btn-primary) {
 	background: transparent;
 	border-color: var(--border-color);
 	color: var(--text-main);
 }
-html[data-theme='dark'] .course-gen-modal .modal-footer .btn:not(.btn-primary):hover {
+html[data-theme='dark'] .course-gen-modal .modal-footer .btn:not(.btn-primary):hover,
+html[data-theme='dark'] .modal-footer--unified .btn:not(.btn-primary):hover {
 	border-color: rgba(129, 140, 248, 0.55);
 	color: #c7d2fe;
 	background: rgba(99, 102, 241, 0.1);
 }
-html[data-theme='dark'] .course-gen-modal .modal-footer .btn-primary {
+html[data-theme='dark'] .course-gen-modal .modal-footer .btn-primary,
+html[data-theme='dark'] .modal-footer--unified .btn-primary {
 	background: linear-gradient(135deg, rgb(79, 70, 229), rgb(67, 56, 202));
 	border-color: rgb(129, 140, 248);
 	color: #fff;
 }
-html[data-theme='dark'] .course-gen-modal .modal-footer .btn-primary:not(:disabled):hover {
+html[data-theme='dark'] .course-gen-modal .modal-footer .btn-primary:not(:disabled):hover,
+html[data-theme='dark'] .modal-footer--unified .btn-primary:not(:disabled):hover {
 	background: linear-gradient(135deg, rgb(91, 82, 244), rgb(79, 70, 229));
 }
 /* Active segmented tab keeps the white-on-indigo look from the light theme. */
@@ -6924,3 +6930,194 @@ html[data-theme='dark'] #ai-image-model-select option {
 	color: #e2e8f0;
 	background: #1e293b;
 }
+
+/* ── App Settings — dark-mode cleanup ──────────────────────────────────────
+   The settings markup carries two classes of hardcoded light colors that
+   inline styles / !important rules keep alive in dark mode:
+     1. Inline `style="background:#f8fafc;color:#374151"` icon tiles (the
+        section headers: Teacher Access Control, Connected Devices, …).
+     2. `#settingsModal .settings-section h3 { color:#0f172a !important }`
+        and the tab hover/active colors (styles.css ~31038, 30990).
+   Re-tint both for dark mode. Icon tiles keep their per-section hue so the
+   color coding still reads; the tile background becomes a neutral dark chip
+   matching the class-based .settings-section-title-icon override above. */
+
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='border-radius: 8px'] {
+	background: rgba(148, 163, 184, 0.16) !important;
+	color: rgb(196, 210, 235) !important;
+}
+
+/* Preserve each section's hue on the inline icon (sky / violet / amber /
+   green / red / cyan) instead of flattening every tile to one color. */
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#0284c7'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#0c4a6e'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#0e7490'] {
+	color: rgb(125, 211, 252) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#7c3aed'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#9333ea'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#a21caf'] {
+	color: rgb(196, 181, 253) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#b45309'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#d97706'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#ea580c'] {
+	color: rgb(252, 211, 77) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#059669'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#65a30d'] {
+	color: rgb(134, 239, 172) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#dc2626'],
+html[data-theme='dark'] #settingsModal .settings-content-wrapper span[style*='#b91c1c'] {
+	color: rgb(252, 165, 165) !important;
+}
+
+/* Section headings: styles.css forces #0f172a !important on every
+   .settings-section h3/h4/h5, which renders black-on-dark. */
+html[data-theme='dark'] #settingsModal .settings-section h3,
+html[data-theme='dark'] #settingsModal .settings-section h4,
+html[data-theme='dark'] #settingsModal .settings-section h5 {
+	color: var(--text-primary) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-section-title h3 {
+	color: var(--text-primary) !important;
+}
+
+/* Settings rail buttons: hover/active force light backgrounds + dark text
+   (styles.css 30990-31006) with no dark equivalent for `color`. */
+html[data-theme='dark'] #settingsModal .settings-tab-btn:hover,
+html[data-theme='dark'] #settingsModal .settings-tab-btn:focus-visible {
+	background: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+	color: var(--text-primary) !important;
+	box-shadow: none !important;
+}
+html[data-theme='dark'] #settingsModal .settings-tab-btn.active {
+	background: rgb(31, 57, 91) !important;
+	border-color: rgb(32, 99, 182) !important;
+	color: rgb(142, 167, 235) !important;
+	box-shadow:
+		inset 3px 0 0 #3b82f6,
+		0 10px 22px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Collapsed settings rail (761–860px): styles.css forces the icon stroke to
+   #475569 / #1d4ed8, which all but vanishes on the dark rail. */
+@media (min-width: 761px) and (max-width: 860px) {
+	html[data-theme='dark'] #settingsModal .settings-tab-btn svg {
+		color: rgb(148, 163, 184) !important;
+	}
+	html[data-theme='dark'] #settingsModal .settings-tab-btn.active svg,
+	html[data-theme='dark'] #settingsModal .settings-tab-btn:hover svg {
+		color: rgb(147, 197, 253) !important;
+	}
+	html[data-theme='dark'] #settingsModal .settings-tab-btn.active {
+		color: transparent !important;
+	}
+}
+
+/* ── App Settings — inline pastel chips, badges & notice panels ────────────
+   The settings markup hardcodes light pastel surfaces inline — e.g.
+   `style="background: #e0f2fe; color: #0369a1"` section badges, and
+   `style="background: #eff6ff; border: 1px solid #93c5fd"` notice panels.
+   A background can only be reached from an inline style attribute, so no
+   theme token can adapt these. In dark mode the notice panels were the worst
+   offenders: they kept a near-white fill while inheriting the light
+   --text-primary, i.e. light-on-light and unreadable.
+
+   Each pastel family is mapped to a translucent dark tint of the same hue and
+   a light foreground, so the colour coding survives without a white slab on a
+   dark panel. `background: #fff` also matches `#ffffff` (substring), which
+   covers the inline white buttons/cards. */
+html[data-theme='dark'] #settingsModal [style*='background: #e0f2fe'],
+html[data-theme='dark'] #settingsModal [style*='background: #f0f9ff'],
+html[data-theme='dark'] #settingsModal [style*='background: #ecfeff'],
+html[data-theme='dark'] #settingsModal [style*='background: #eff6ff'] {
+	background: rgba(56, 189, 248, 0.14) !important;
+	border-color: rgba(56, 189, 248, 0.4) !important;
+	color: rgb(125, 211, 252) !important;
+}
+html[data-theme='dark'] #settingsModal [style*='background: #ede9fe'],
+html[data-theme='dark'] #settingsModal [style*='background: #f3e8ff'],
+html[data-theme='dark'] #settingsModal [style*='background: #fdf4ff'],
+html[data-theme='dark'] #settingsModal [style*='background: #f5f3ff'],
+html[data-theme='dark'] #settingsModal [style*='background: #e0e7ff'],
+html[data-theme='dark'] #settingsModal [style*='background: #eef2ff'] {
+	background: rgba(167, 139, 250, 0.16) !important;
+	border-color: rgba(167, 139, 250, 0.4) !important;
+	color: rgb(196, 181, 253) !important;
+}
+html[data-theme='dark'] #settingsModal [style*='background: #fef3c7'],
+html[data-theme='dark'] #settingsModal [style*='background: #ffedd5'],
+html[data-theme='dark'] #settingsModal [style*='background: #fefce8'] {
+	background: rgba(251, 191, 36, 0.14) !important;
+	border-color: rgba(251, 191, 36, 0.4) !important;
+	color: rgb(252, 211, 77) !important;
+}
+html[data-theme='dark'] #settingsModal [style*='background: #ecfccb'],
+html[data-theme='dark'] #settingsModal [style*='background: #ecfdf5'] {
+	background: rgba(52, 211, 153, 0.14) !important;
+	border-color: rgba(52, 211, 153, 0.4) !important;
+	color: rgb(134, 239, 172) !important;
+}
+html[data-theme='dark'] #settingsModal [style*='background: #fee2e2'],
+html[data-theme='dark'] #settingsModal [style*='background: #fef2f2'] {
+	background: rgba(248, 113, 113, 0.16) !important;
+	border-color: rgba(248, 113, 113, 0.4) !important;
+	color: rgb(252, 165, 165) !important;
+}
+html[data-theme='dark'] #settingsModal [style*='background: #f8fafc'],
+html[data-theme='dark'] #settingsModal [style*='background: #fafaf9'],
+html[data-theme='dark'] #settingsModal [style*='background: #e2e8f0'] {
+	background: rgba(148, 163, 184, 0.16) !important;
+	border-color: rgba(148, 163, 184, 0.4) !important;
+	color: rgb(196, 210, 235) !important;
+}
+html[data-theme='dark'] #settingsModal [style*='background: #fff'] {
+	background: rgba(148, 163, 184, 0.12) !important;
+	border-color: rgba(148, 163, 184, 0.4) !important;
+	color: rgb(203, 213, 225) !important;
+}
+/* The modal shell itself: styles.css pins `#settingsModal .modal-content`
+   and `.modal-body` to #ffffff with !important, so the generic
+   `html[data-theme='dark'] .modal-content` rule (0,2,1) loses to the ID
+   rule and the whole Settings card stays white in dark mode. Re-state the
+   surfaces at ID specificity. */
+html[data-theme='dark'] #settingsModal .modal-content {
+	background: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
+}
+html[data-theme='dark'] #settingsModal .modal-body,
+html[data-theme='dark'] #settingsModal .settings-content-wrapper {
+	background: var(--bg-surface) !important;
+}
+html[data-theme='dark'] #settingsModal .settings-readonly-notice {
+	background: rgba(56, 189, 248, 0.14);
+	border-color: rgba(56, 189, 248, 0.4);
+	color: rgb(125, 211, 252);
+}
+/* A couple of text colours have no light background of their own to pair
+   with, so the pastel rules above never reach them: the indigo line under
+   the realtime notice (`#4338ca`, set with !important in the markup so the
+   `.text-muted` !important rule could not win) and the warm-grey <summary>
+   of the required-data-structure disclosure. Both are dark-on-dark in dark
+   mode. The indigo one is now driven by the `.realtime-access-note-hint`
+   class (admin.css owns the light colour) so the theme can swap it. */
+html[data-theme='dark'] #settingsModal .realtime-access-note-hint {
+	color: rgb(165, 180, 252) !important;
+}
+html[data-theme='dark'] #settingsModal [style*='color: #57534e'] {
+	color: rgb(214, 211, 209) !important;
+}
+/* The inline white buttons keep their intent (blue primary / red danger) even
+   though the white fill itself cannot be themed. */
+html[data-theme='dark'] #settingsModal button[style*='background: #ffffff'] {
+	background: rgba(59, 130, 246, 0.16) !important;
+	color: rgb(147, 197, 253) !important;
+}
+html[data-theme='dark'] #settingsModal button.btn-secondary[style*='background: #fff'] {
+	background: rgba(248, 113, 113, 0.16) !important;
+	color: rgb(252, 165, 165) !important;
+}
+

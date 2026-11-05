@@ -30,7 +30,11 @@ html[data-theme='dark'] {
 
 	--text-main: #e6edf7;
 	--text-secondary: #a8b7cd;
-	--text-muted: #74839c;
+	/* Muted text is deliberately lighter than the light-mode #94a3b8 because
+	   it sits on dark surfaces: #8b9ab5 keeps ≥5.5:1 on --bg-body,
+	   --bg-surface and --bg-surface-alt (the previous #74839c dropped to
+	   4.09:1 on --bg-surface-alt, below WCAG AA for body text). */
+	--text-muted: #8b9ab5;
 	--text-inverted: #ffffff;
 	--text-primary: #e6edf7;
 

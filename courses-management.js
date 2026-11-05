@@ -512,6 +512,7 @@
 			const root = row.root;
 			return (
 				`<tr data-row-key="branch:${esc(root.id)}" data-kind="structure">` +
+				'<td class="checkbox-cell" data-label="Select"></td>' +
 				`<td><button type="button" class="course-name-link" onclick="openStructureBranch('${esc(root.id)}')">${esc(root.name)}</button>${kindChip('structure')}</td>` +
 				`<td>${esc(categoryPath(root.id) || root.name || '—')}</td>` +
 				'<td>—</td>' +
@@ -531,6 +532,7 @@
 			kindChip(row.kind) + '</td>';
 		return (
 			`<tr data-row-key="${esc(course.id)}" data-id="${esc(course.id)}" data-kind="${row.kind}">` +
+			`<td class="checkbox-cell" data-label="Select"><input type="checkbox" class="course-checkbox" data-id="${esc(course.id)}" onchange="toggleBulkRowSelection(this, 'courses')"></td>` +
 			nameCell +
 			`<td>${esc(course.category_path || categoryPath(course.category_id) || '—')}</td>` +
 			`<td>${Number(course.lesson_count) || 0}</td>` +
@@ -563,7 +565,7 @@
 				? (subjectList().find((s) => String(s.id) === String(activeSub))?.name || 'this subject')
 				: 'Unassigned';
 			tbody.innerHTML =
-				'<tr><td colspan="7" class="text-muted course-empty-cell">' +
+				'<tr><td colspan="8" class="text-muted course-empty-cell">' +
 				'<div class="curriculum-starter-card">' +
 				'<div class="curriculum-starter-icon">📚</div>' +
 				'<h3>Welcome to your Teaching & Quiz Studio</h3>' +
@@ -686,6 +688,7 @@
 				window.MobileActionSheet.open(`Course: ${String(course.name || '')}`, actions);
 			});
 		}
+		try { window.BulkSelect?.restore('courses'); } catch (_) { /* bulk helper not loaded */ }
 	};
 
 	async function loadCourses(quiet) {
@@ -765,6 +768,63 @@
 		} catch (err) {
 			toast('Delete failed: ' + (err?.message || 'error'), 'error');
 		}
+	};
+
+	// Bulk delete for the courses table. Server-first, one DELETE per course,
+	// aborting the whole batch on the first auth failure so an expired session
+	// reports once instead of N times (and stops hammering /auth/refresh).
+	window.deleteSelectedCourses = async function () {
+		const A = api();
+		if (!A) return;
+		const ids = window.BulkSelect ? window.BulkSelect.getSelectedIds('courses') : [];
+		if (!ids.length) return;
+		if (
+			!confirm(
+				`Delete ${ids.length} ${ids.length === 1 ? 'course' : 'courses'} and all of their lessons? Students will no longer see them. Questions in the question bank are not affected. This cannot be undone.`,
+			)
+		) {
+			return;
+		}
+		const isAuthFailure = typeof window.isAuthFailure === 'function' ? window.isAuthFailure : () => false;
+		const deleted = [];
+		const failed = [];
+		let authExpired = false;
+		for (const courseId of ids) {
+			try {
+				await A.raw('DELETE', `/courses/${encodeURIComponent(courseId)}`);
+				deleted.push(String(courseId));
+			} catch (err) {
+				if (err?.status === 404) {
+					// Already gone on the server — treat as deleted.
+					deleted.push(String(courseId));
+					continue;
+				}
+				if (isAuthFailure(err)) {
+					authExpired = true;
+					break;
+				}
+				console.warn('[courses] bulk delete failed:', err);
+				failed.push(courseId);
+			}
+		}
+		if (deleted.length) {
+			coursesCache = coursesCache.filter((c) => !deleted.includes(String(c.id)));
+			if (window.BulkSelect) window.BulkSelect.removeIds('courses', deleted);
+			try { renderCourseList(); } catch (_) { /* list not mounted */ }
+			try { await loadCourses(true); } catch (_) { /* cache refresh is best-effort */ }
+		}
+		if (authExpired) {
+			toast('Your session expired \u2014 please sign in again.', 'error');
+			return;
+		}
+		if (failed.length) {
+			toast(
+				`Deleted ${deleted.length}; ${failed.length} failed on server \u2014 kept locally so you can retry`,
+				'error',
+			);
+			return;
+		}
+		toast(`Deleted ${deleted.length} ${deleted.length === 1 ? 'course' : 'courses'}.`);
 	};
 
 	// ── Orphan sweep ─────────────────────────────────────────────────────────

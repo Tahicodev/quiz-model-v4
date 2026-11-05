@@ -278,6 +278,14 @@
 		addBtnId: null,
 		rowSelectedClass: 'question-row-selected',
 	});
+	register('courses', {
+		checkboxClass: 'course-checkbox',
+		selectAllId: 'selectAllCourses',
+		barId: 'bulk-actions-courses',
+		countId: 'selected-count-courses',
+		addBtnId: 'add-course-btn',
+		rowSelectedClass: 'question-row-selected',
+	});
 
 	// Keep select-all indeterminate state correct on viewport changes
 	// (same resize handling as the questions tab).

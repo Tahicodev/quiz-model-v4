@@ -8502,6 +8502,8 @@ tr:last-child td {
    below in the file keep their own tuned geometry (!important rules). */
 #categoryModal .modal-content,
 #quickCategoryModal .modal-content,
+#categoryAssignmentModal .modal-content,
+#resetPasswordModal .modal-content,
 #userModal .modal-content,
 #examModal .modal-content,
 #classModal .modal-content {
@@ -8555,7 +8557,9 @@ tr:last-child td {
 #questionFormModal .modal-body,
 #categoryModal .modal-body,
 #quickCategoryModal .modal-body,
+#categoryAssignmentModal .modal-body,
 #userModal .modal-body,
+#resetPasswordModal .modal-body,
 #examModal .modal-body,
 #classModal .modal-body {
 	flex: 1;
@@ -8565,22 +8569,8 @@ tr:last-child td {
 	-webkit-overflow-scrolling: touch;
 }
 
-/* Sticky unified footer: actions always visible while scrolling.
-   The negative margins pull the bar flush to the scrolling body edges. */
-#questionFormModal .form-actions,
-#categoryModal .form-actions,
-#quickCategoryModal .form-actions,
-#userModal .form-actions,
-#examModal .form-actions,
-#classModal .form-actions {
-	position: sticky;
-	bottom: 0;
-	margin: 20px -clamp(16px, 3vw, 26px) -26px;
-	padding: 14px clamp(16px, 3vw, 26px);
-	background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), #f8fafc 42%);
-	backdrop-filter: blur(6px);
-	border-top: 1px solid var(--border-color);
-}
+/* These standard form modals now use a real `.modal-footer` sibling of the
+   scrolling body (see `.modal-footer--unified`), so no in-body sticky bar. */
 
 /* Question modal: breathing room between builder sections */
 #questionFormModal .modal-body form > .form-group {
@@ -8643,18 +8633,6 @@ tr:last-child td {
 	#examModal .modal-body,
 	#classModal .modal-body {
 		padding: 16px 12px 22px;
-	}
-
-	/* Sticky form-actions revert to the fixed bottom bar (existing rule) */
-	#questionFormModal .form-actions,
-	#categoryModal .form-actions,
-	#quickCategoryModal .form-actions,
-	#userModal .form-actions,
-	#examModal .form-actions,
-	#classModal .form-actions {
-		margin: 16px -12px -22px;
-		padding: 12px 16px;
-		padding-bottom: max(12px, env(safe-area-inset-bottom));
 	}
 
 	#questionFormModal .radio-group {
@@ -8800,38 +8778,9 @@ textarea {
 	border-top: 1px solid var(--border-color);
 }
 
-/* Sticky form actions for mobile — EXCLUDES the unified add modals,
-   which use their own in-dialog sticky bar (see "UNIFIED ADD MODALS"). */
+/* All modal action bars now use a real pinned `.modal-footer`, so there is no
+   viewport-fixed `.form-actions` fallback left to reserve space for. */
 @media (max-width: 768px) {
-	.modal-body {
-		padding-bottom: 80px; /* Make space for sticky footer */
-	}
-
-	.form-actions {
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		background: var(--bg-surface);
-		padding: var(--space-md);
-		margin: 0;
-		z-index: 2999; /* Just below modal */
-		border-top: 1px solid var(--border-color);
-		border-radius: 0;
-		box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-	}
-
-	/* Unified add modals: sticky-in-body instead of viewport-fixed */
-	#questionFormModal .form-actions,
-	#categoryModal .form-actions,
-	#quickCategoryModal .form-actions,
-	#userModal .form-actions,
-	#examModal .form-actions,
-	#classModal .form-actions {
-		position: sticky;
-		bottom: 0;
-		z-index: 6;
-	}
 
 	#questionFormModal .modal-body,
 	#categoryModal .modal-body,
@@ -16040,6 +15989,39 @@ td.actions-cell {
 	color: #047857;
 }
 
+/* Entry page: in-place "already signed in elsewhere" takeover prompt.
+   Shown instead of a native confirm() so it renders inside embedded
+   browsers and stays keyboard-reachable. */
+.auth-session-conflict {
+	padding: 10px 12px;
+	border: 1px solid #fcd34d;
+	border-radius: 10px;
+	background: #fffbeb;
+	color: #78350f;
+	font-size: 0.85rem;
+	line-height: 1.45;
+}
+
+.auth-session-conflict[hidden] {
+	display: none;
+}
+
+.auth-session-conflict p {
+	margin: 0 0 8px;
+}
+
+.auth-session-conflict-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+
+.auth-session-conflict-actions .btn {
+	padding: 6px 12px;
+	font-size: 0.82rem;
+}
+
 .type-badge.draggable-type,
 .type-badge[class*='draggable'] {
 	background: linear-gradient(135deg, #8b5cf6, #7c3aed);
@@ -17228,7 +17210,7 @@ select.form-control {
 	}
 }
 
-/* Map form-actions to modal-footer style */
+/* Map legacy in-body action bars to the footer look. */
 .modal .form-actions {
 	padding: 16px 24px;
 	background: #f8fafc;
@@ -33931,26 +33913,49 @@ body.student-workspace .game-pill.completed {
 	display: none;
 }
 
-#games .tournament-editor-content {
-	overflow: auto;
+/* Game Studio "Create game": the editor panel scrolls and the shared footer
+   stays pinned, so the actions never sit inside the scrolling form. */
+#games #gameEditorModal .arena-editor-content {
+	display: flex;
+	flex-direction: column;
 }
 
-#games .tournament-editor-content > .form-row,
-#games .tournament-editor-content > .form-group,
-#games .tournament-editor-content > .tournament-guidance-card,
-#games .tournament-editor-content > .tournament-recommendation-card,
-#games .tournament-editor-content > .form-actions,
-#games .tournament-editor-content > .tournament-sync-status {
+#games #gameEditorModal .arena-editor-content > .game-admin-panel {
+	flex: 1 1 auto;
+	min-height: 0;
+	max-height: none;
+}
+
+/* Tournament planner: same geometry — fields scroll inside the content body
+   and the shared footer stays pinned. */
+#games #tournamentPlannerModal .tournament-editor-content {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+#games #tournamentPlannerModal .tournament-editor-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+#games .tournament-editor-body > .form-row,
+#games .tournament-editor-body > .form-group,
+#games .tournament-editor-body > .tournament-guidance-card,
+#games .tournament-editor-body > .tournament-recommendation-card,
+#games .tournament-editor-body > .tournament-sync-status {
 	margin-left: 24px;
 	margin-right: 24px;
 }
 
-#games .tournament-editor-content > .form-row:first-of-type {
+#games .tournament-editor-body > .form-row:first-of-type {
 	margin-top: 24px;
 }
 
-#games .tournament-editor-content > .form-actions {
-	padding-bottom: 22px;
+#games .tournament-editor-body > .tournament-sync-status {
+	margin-bottom: 22px;
 }
 
 #games .tournament-assignment-launcher {
@@ -34308,12 +34313,11 @@ body.arena-modal-open {
 	#games .tournament-watch-stats {
 		grid-template-columns: repeat(3, 1fr);
 	}
-	#games .tournament-editor-content > .form-row,
-	#games .tournament-editor-content > .form-group,
-	#games .tournament-editor-content > .tournament-guidance-card,
-	#games .tournament-editor-content > .tournament-recommendation-card,
-	#games .tournament-editor-content > .form-actions,
-	#games .tournament-editor-content > .tournament-sync-status {
+	#games .tournament-editor-body > .form-row,
+	#games .tournament-editor-body > .form-group,
+	#games .tournament-editor-body > .tournament-guidance-card,
+	#games .tournament-editor-body > .tournament-recommendation-card,
+	#games .tournament-editor-body > .tournament-sync-status {
 		margin-left: 16px;
 		margin-right: 16px;
 	}
@@ -51561,13 +51565,13 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 
 	#courseList tbody tr {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-columns: auto minmax(0, 1fr) auto;
 		grid-template-areas:
-			'name status'
-			'branch branch'
-			'lessons updated'
-			'classes classes'
-			'actions actions';
+			'select name status'
+			'branch branch branch'
+			'lessons lessons updated'
+			'classes classes classes'
+			'actions actions actions';
 		gap: 8px 10px;
 		align-items: center;
 		margin-bottom: 10px;
@@ -51607,8 +51611,9 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	}
 
 	#courseList tbody td:nth-child(1) {
-		grid-area: name;
-		font-size: 0.95rem;
+		grid-area: select;
+		align-self: start;
+		justify-self: start;
 	}
 
 	#courseList tbody td:nth-child(1)::before {
@@ -51616,43 +51621,52 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	}
 
 	#courseList tbody td:nth-child(2) {
+		grid-area: name;
+		font-size: 0.95rem;
+	}
+
+	#courseList tbody td:nth-child(2)::before {
+		display: none;
+	}
+
+	#courseList tbody td:nth-child(3) {
 		grid-area: branch;
 		color: var(--text-secondary, #64748b);
 	}
 
-	#courseList tbody td:nth-child(2)::before {
+	#courseList tbody td:nth-child(3)::before {
 		content: 'Category branch';
 	}
 
-	#courseList tbody td:nth-child(3) {
+	#courseList tbody td:nth-child(4) {
 		grid-area: lessons;
 	}
 
-	#courseList tbody td:nth-child(3)::before {
+	#courseList tbody td:nth-child(4)::before {
 		content: 'Lessons';
 	}
 
-	#courseList tbody td:nth-child(4) {
+	#courseList tbody td:nth-child(5) {
 		display: block;
 		grid-area: status;
 		justify-self: end;
 		text-align: right;
 	}
 
-	#courseList tbody td:nth-child(4)::before {
+	#courseList tbody td:nth-child(5)::before {
 		display: none;
 	}
 
-	#courseList tbody td:nth-child(5) {
+	#courseList tbody td:nth-child(6) {
 		display: block;
 		grid-area: classes;
 	}
 
-	#courseList tbody td:nth-child(5)::before {
+	#courseList tbody td:nth-child(6)::before {
 		content: 'Classes';
 	}
 
-	#courseList tbody td:nth-child(6) {
+	#courseList tbody td:nth-child(7) {
 		display: block;
 		grid-area: updated;
 		justify-self: end;
@@ -51660,15 +51674,15 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		color: var(--text-secondary, #64748b);
 	}
 
-	#courseList tbody td:nth-child(6)::before {
+	#courseList tbody td:nth-child(7)::before {
 		content: 'Updated';
 	}
 
-	#courseList tbody td:nth-child(7) {
+	#courseList tbody td:nth-child(8) {
 		grid-area: actions;
 	}
 
-	#courseList tbody td:nth-child(7)::before {
+	#courseList tbody td:nth-child(8)::before {
 		display: none;
 	}
 
@@ -51681,7 +51695,7 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		min-width: 44px;
 	}
 
-	#courseList tbody td:nth-child(7) {
+	#courseList tbody td:nth-child(8) {
 		display: none !important;
 	}
 

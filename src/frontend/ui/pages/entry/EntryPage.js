@@ -117,6 +117,37 @@ const ENTRY_HTML = `
               role="status"
               aria-live="polite"
             ></div>
+            <!-- In-place takeover prompt for a 409 SESSION_ACTIVE login.
+                 A native confirm() is avoided so the prompt renders inside
+                 embedded browsers too; it is hidden until that 409 arrives. -->
+            <div
+              id="entryAuthConflict"
+              class="auth-session-conflict"
+              role="alertdialog"
+              aria-labelledby="entryAuthConflictText"
+              hidden
+            >
+              <p id="entryAuthConflictText">
+                This account is already signed in on another device or tab.
+                Signing in here will end that other session.
+              </p>
+              <div class="auth-session-conflict-actions">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  data-conflict-action="cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  data-conflict-action="takeover"
+                >
+                  Sign in anyway
+                </button>
+              </div>
+            </div>
             <p class="auth-footnote">
               Students sign in with their account credentials.
             </p>
@@ -474,88 +505,157 @@ function bindAuthGate() {
 		});
 	}
 
+// A 409 SESSION_ACTIVE is recoverable here: show the in-place takeover
+	// prompt and replay the request with `force`, so the newest sign-in wins
+	// (the same rule the admin portal applies). Without it this page dead-ends
+	// whenever the account already holds a live session elsewhere.
+	const submitBtn = document.getElementById('entryAuthSubmitBtn');
+	const conflictPanel = document.getElementById('entryAuthConflict');
+	let inFlight = false;
+
+	const setBusy = (busy) => {
+		if (!submitBtn) return;
+		submitBtn.disabled = busy;
+		submitBtn.textContent = busy ? 'Signing in...' : 'Sign In';
+	};
+
+	const hideConflict = () => {
+		if (conflictPanel) conflictPanel.hidden = true;
+	};
+
+	const showConflict = () => {
+		if (!conflictPanel) return false;
+		conflictPanel.hidden = false;
+		const takeoverBtn = conflictPanel.querySelector(
+			'[data-conflict-action="takeover"]',
+		);
+		if (takeoverBtn) takeoverBtn.focus();
+		return true;
+	};
+
+	const signIn = async ({ username, password, remember }, force) => {
+		if (inFlight) return;
+		inFlight = true;
+		setBusy(true);
+		hideConflict();
+		setAuthStatus('', '');
+
+		try {
+			const res = await fetch(getApiBase() + '/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					username: username.trim(),
+					password,
+					force: force === true,
+				}),
+				credentials: 'include',
+			});
+
+			const data = await res.json().catch(() => ({}));
+			const code =
+				data && data.error && data.error.code ? data.error.code : '';
+
+			if (res.status === 409 && code === 'SESSION_ACTIVE') {
+				setBusy(false);
+				if (!force && showConflict()) {
+					setAuthStatus('', '');
+					return;
+				}
+				setAuthStatus(
+					(data && data.error && data.error.message) ||
+						'This account is already signed in on another device or tab.',
+					'error',
+				);
+				return;
+			}
+
+			if (!res.ok) {
+				setBusy(false);
+				setAuthStatus(
+					(data && data.error && data.error.message) ||
+						(data && data.message) ||
+						'Invalid username or password.',
+					'error',
+				);
+				return;
+			}
+
+			const payload =
+				data && (data.user || data.data) ? data : { user: data };
+			const user = payload.user || payload;
+			const token = payload.accessToken || payload.token || '';
+
+			// Persist in the legacy shape so downstream pages (admin.html,
+			// student-workspace.html) instantly recognise the session.
+			persistLegacySession({ ...payload, user, accessToken: token }, remember);
+			sessionStorage.setItem(
+				user.role === 'student' ? 'studentLoggedIn' : 'adminLoggedIn',
+				'true',
+			);
+
+			setAuthStatus('Signed in — redirecting...', 'success');
+			// Small delay so the user sees the success state before the redirect.
+			setTimeout(() => redirectAfterLogin(user.role), 300);
+		} catch (err) {
+			console.error('[entry-auth] login request failed:', err);
+			setBusy(false);
+			setAuthStatus(
+				'Could not reach the server — check your connection and try again.',
+				'error',
+			);
+		} finally {
+			inFlight = false;
+		}
+	};
+
+	// Read straight from the form so a takeover retry uses whatever the user
+	// typed after the prompt appeared (not a stale snapshot).
+	const readCredentials = () => ({
+		username: (form.querySelector('[data-auth="username"]') || {}).value || '',
+		password: (form.querySelector('[data-auth="password"]') || {}).value || '',
+		remember: Boolean(
+			(form.querySelector('[data-auth="remember"]') || {}).checked,
+		),
+	});
+
 	form.addEventListener(
 		'submit',
-		async (e) => {
+		(e) => {
 			e.preventDefault();
 			e.stopImmediatePropagation();
 
-			const username =
-				(form.querySelector('[data-auth="username"]') || {}).value || '';
-			const password =
-				(form.querySelector('[data-auth="password"]') || {}).value || '';
-			const remember = Boolean(
-				(form.querySelector('[data-auth="remember"]') || {}).checked,
-			);
-
-			if (!username.trim() || !password) {
+			const credentials = readCredentials();
+			if (!credentials.username.trim() || !credentials.password) {
 				setAuthStatus('Please enter both your username and password.', 'error');
 				return;
 			}
 
-			const submitBtn = document.getElementById('entryAuthSubmitBtn');
-			if (submitBtn) {
-				submitBtn.disabled = true;
-				submitBtn.textContent = 'Signing in…';
-			}
-			setAuthStatus('', '');
-
-			try {
-				const res = await fetch(getApiBase() + '/auth/login', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ username: username.trim(), password }),
-					credentials: 'include',
-				});
-
-				const data = await res.json().catch(() => ({}));
-
-				if (!res.ok) {
-					const msg =
-						(data && data.error && data.error.message) ||
-						(data && data.message) ||
-						'Invalid username or password.';
-					setAuthStatus(msg, 'error');
-					if (submitBtn) {
-						submitBtn.disabled = false;
-						submitBtn.innerHTML = 'Sign In';
-					}
-					return;
-				}
-
-				const payload =
-					data && (data.user || data.data) ? data : { user: data };
-				const user = payload.user || payload;
-				const token = payload.accessToken || payload.token || '';
-
-				// Persist in the legacy shape so downstream pages (admin.html,
-				// student-workspace.html) instantly recognise the session.
-				persistLegacySession(
-					{ ...payload, user, accessToken: token },
-					remember,
-				);
-				sessionStorage.setItem(
-					user.role === 'student' ? 'studentLoggedIn' : 'adminLoggedIn',
-					'true',
-				);
-
-				setAuthStatus('Signed in — redirecting…', 'success');
-				// Small delay so the user sees the success state before the redirect.
-				setTimeout(() => redirectAfterLogin(user.role), 300);
-			} catch (err) {
-				console.error('[entry-auth] login request failed:', err);
-				setAuthStatus(
-					'Could not reach the server — check your connection and try again.',
-					'error',
-				);
-				if (submitBtn) {
-					submitBtn.disabled = false;
-					submitBtn.innerHTML = 'Sign In';
-				}
-			}
+			signIn(credentials, false);
 		},
 		{ capture: true },
 	); // capture=true so we win if auth.js also bound first
+
+	if (conflictPanel) {
+		conflictPanel.addEventListener('click', (e) => {
+			const action = e.target.closest('[data-conflict-action]');
+			if (!action) return;
+			if (action.dataset.conflictAction === 'cancel') {
+				hideConflict();
+				setAuthStatus(
+					'Sign-in cancelled — the other session is still active.',
+					'',
+				);
+				return;
+			}
+			const credentials = readCredentials();
+			if (credentials.username.trim() && credentials.password) {
+				signIn(credentials, true);
+			} else {
+				setAuthStatus('Please enter both your username and password.', 'error');
+			}
+		});
+	}
 }
 
 /**

@@ -25,7 +25,9 @@ describe('course row actions', () => {
 	});
 
 	it('hides the inline action buttons on mobile', () => {
-		expect(css).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*?#courseList tbody td:nth-child\(7\)\s*\{\s*display:\s*none !important;/);
+		// Actions are the last column; the leading bulk-select checkbox cell
+		// shifted it from nth-child(7) to nth-child(8).
+		expect(css).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*?#courseList tbody td:nth-child\(8\)\s*\{\s*display:\s*none !important;/);
 	});
 
 	it('generates lesson content sequentially for every course level', () => {
