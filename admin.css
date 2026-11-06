@@ -6401,6 +6401,64 @@ td .exam-actions .exam-action-btn.exam-move-btn:hover {
 	box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);
 }
 
+/* Category rows: "add question" (+) tinted like its neighbours (indigo),
+   and the up/down sibling-reorder pair (up = emerald, down = amber). */
+td .exam-actions .exam-action-btn.exam-add-question-btn {
+	background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(79, 70, 229, 0.15));
+	color: #6366f1;
+}
+td .exam-actions .exam-action-btn.exam-add-question-btn:hover {
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+td .exam-actions .exam-action-btn.exam-move-up-btn {
+	background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15));
+	color: #10b981;
+}
+td .exam-actions .exam-action-btn.exam-move-up-btn:hover:not(:disabled) {
+	background: linear-gradient(135deg, #10b981, #059669);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+td .exam-actions .exam-action-btn.exam-move-down-btn {
+	background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.15));
+	color: #f59e0b;
+}
+td .exam-actions .exam-action-btn.exam-move-down-btn:hover:not(:disabled) {
+	background: linear-gradient(135deg, #f59e0b, #d97706);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+td .exam-actions .exam-action-btn.exam-move-up-btn:disabled,
+td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
+	transform: none;
+	box-shadow: none;
+}
+
+/* Mobile viewport: only the up/down reorder buttons stay as inline icons.
+   Every other row action (add question, move-into, course, edit, delete and
+   the system "—" placeholder) is reached through the tap action-sheet, so it
+   is hidden here. Selectors outrank the generic `td.actions-cell button` hide
+   and the styles.css bottom-bar re-show rule (higher specificity + this file
+   loads after styles.css). */
+@media (max-width: 768px) {
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.exam-add-question-btn,
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.exam-move-btn,
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.exam-course-btn,
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.exam-edit-btn,
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.exam-delete-btn,
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .no-actions {
+		display: none !important;
+	}
+}
+
 /* ══════════════════════════════════════════════════════════════════════
    IMPORT MODAL · STEP 1 ORGANIZE — course-fields card refactor
    ══════════════════════════════════════════════════════════════════════ */

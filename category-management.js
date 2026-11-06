@@ -211,25 +211,155 @@ function getSubjectDisplayName(subjectId) {
 	return subject ? String(subject.name || '') : '';
 }
 
+// ── Subject strip: admin filters + collapse/expand ────────────────────────
+// Admins manage dozens of subjects, so their strip gets a search + author
+// filter and collapses past a threshold (teachers keep the plain list of
+// their own few subjects). The selected pill is never hidden while
+// collapsed, and the dashed "New" pill always stays at the end.
+let subjectStripExpanded = false;
+const SUBJECT_STRIP_COLLAPSE_LIMIT = 14;
+
+function subjectStripIsAdminSession() {
+	if (window.TeacherFilter?.isAdminSession) {
+		try {
+			return Boolean(window.TeacherFilter.isAdminSession());
+		} catch (_) { /* fall back to Auth below */ }
+	}
+	return !!(window.Auth?.isAdmin && window.Auth.isAdmin());
+}
+
+function onSubjectStripFilterChange() {
+	renderSubjectTabBar();
+}
+
+function clearSubjectStripFilters() {
+	const searchEl = document.getElementById('subjectStripSearch');
+	const authorEl = document.getElementById('subjectStripAuthor');
+	if (searchEl) searchEl.value = '';
+	if (authorEl) authorEl.value = '';
+	renderSubjectTabBar();
+}
+
+function toggleSubjectStripExpanded() {
+	subjectStripExpanded = !subjectStripExpanded;
+	renderSubjectTabBar();
+}
+
 function renderSubjectTabBar() {
 	const bar = document.getElementById('subjectTabBar');
 	if (!bar) return;
+	const admin = subjectStripIsAdminSession();
+
+	// Toolbar is admin-only (the markup also carries data-roles="admin").
+	const toolbar = document.getElementById('subjectStripToolbar');
+	if (toolbar) toolbar.hidden = !admin;
+	const searchEl = admin ? document.getElementById('subjectStripSearch') : null;
+	const authorEl = admin ? document.getElementById('subjectStripAuthor') : null;
+	const search = String(searchEl?.value || '').trim().toLowerCase();
+	const author = String(authorEl?.value || '');
+
+	// Author dropdown = distinct owners of the loaded subjects (same labels
+	// as the manager table's "By" column); signature guard keeps selection.
+	if (authorEl && typeof getOwnerLabel === 'function') {
+		const labels = Array.from(
+			new Set(
+				categorySubjects
+					.map((s) => getOwnerLabel(s.created_by))
+					.filter(Boolean),
+			)
+		)
+			.sort((a, b) => String(a).localeCompare(String(b)));
+		const signature = labels.join('\u0000');
+		if (authorEl.dataset.signature !== signature) {
+			const keep = authorEl.value;
+			authorEl.innerHTML =
+				'<option value="">All authors</option>' +
+				labels
+					.map((label) => `<option value="${escapeHtml(String(label))}">${escapeHtml(String(label))}</option>`)
+					.join('');
+			authorEl.dataset.signature = signature;
+			if (labels.some((label) => String(label) === keep)) authorEl.value = keep;
+		}
+	}
+
+	const items = categorySubjects.map((subject) => ({
+		kind: 'subject',
+		id: subject.id,
+		name: String(subject.name || ''),
+		owner: typeof getOwnerLabel === 'function' ? getOwnerLabel(subject.created_by) : '',
+		active:
+			!activeLegacyWorkspaceKey &&
+			String(subject.id) === String(activeCategorySubjectId),
+	}));
+	for (const item of listUnassignedWorkspaceItems()) {
+		items.push({
+			kind: 'legacy',
+			key: item.key,
+			name: item.name,
+			owner: '',
+			active: activeLegacyWorkspaceKey === item.key,
+		});
+	}
+
+	const filtersActive = admin && Boolean(search || author);
+	const matched = items.filter((row) => {
+		if (search && !String(row.name || '').toLowerCase().includes(search)) return false;
+		// Leftover/unassigned pills have no author: they only show while the
+		// author filter is untouched.
+		if (author && (row.kind !== 'subject' || row.owner !== author)) return false;
+		return true;
+	});
+
+	const collapsible =
+		!filtersActive && matched.length > SUBJECT_STRIP_COLLAPSE_LIMIT;
+	const collapsed = collapsible && !subjectStripExpanded;
+	let visible = matched;
+	if (collapsed) {
+		visible = matched.slice(0, SUBJECT_STRIP_COLLAPSE_LIMIT);
+		const activeRow = matched.find((row) => row.active);
+		// The selected subject must never vanish from a collapsed strip:
+		// pull it into the last slot when it falls outside the slice.
+		if (activeRow && !visible.includes(activeRow)) {
+			visible = visible.slice(0, SUBJECT_STRIP_COLLAPSE_LIMIT - 1).concat(activeRow);
+		}
+	}
+
 	const plusIcon =
 		'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
-	const pills = categorySubjects.map((subject) => {
-		const active = !activeLegacyWorkspaceKey && String(subject.id) === String(activeCategorySubjectId);
-		return `<button type="button" role="tab" aria-selected="${active}" class="games-studio-tab-btn subject-pill${active ? ' active' : ''}" data-subject-id="${escapeHtml(String(subject.id))}" onclick="selectCategorySubject('${escapeHtml(String(subject.id))}')">${escapeHtml(String(subject.name || ''))}</button>`;
+	const chevronIcon = (points) =>
+		`<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="${points}"></polyline></svg>`;
+	const pills = visible.map((row) => {
+		if (row.kind === 'subject') {
+			return `<button type="button" role="tab" aria-selected="${row.active}" class="games-studio-tab-btn subject-pill${row.active ? ' active' : ''}" data-subject-id="${escapeHtml(String(row.id))}" onclick="selectCategorySubject('${escapeHtml(String(row.id))}')">${escapeHtml(row.name)}</button>`;
+		}
+		return `<button type="button" role="tab" aria-selected="${row.active}" class="games-studio-tab-btn subject-pill${row.active ? ' active' : ''}" data-legacy-key="${escapeHtml(row.key)}" onclick="selectLegacyWorkspaceItem('${escapeHtml(row.key)}')">${escapeHtml(row.name)}</button>`;
 	});
-	for (const item of listUnassignedWorkspaceItems()) {
-		const active = activeLegacyWorkspaceKey === item.key;
+	if (collapsible) {
+		const hiddenCount = matched.length - visible.length;
 		pills.push(
-			`<button type="button" role="tab" aria-selected="${active}" class="games-studio-tab-btn subject-pill${active ? ' active' : ''}" data-legacy-key="${escapeHtml(item.key)}" onclick="selectLegacyWorkspaceItem('${escapeHtml(item.key)}')">${escapeHtml(item.name)}</button>`,
+			hiddenCount > 0
+				? `<button type="button" class="games-studio-tab-btn subject-pill subject-pill-more" onclick="toggleSubjectStripExpanded()" title="Show all subjects">+${hiddenCount} more${chevronIcon('6 9 12 15 18 9')}</button>`
+				: `<button type="button" class="games-studio-tab-btn subject-pill subject-pill-more" onclick="toggleSubjectStripExpanded()" title="Collapse the list">Show fewer${chevronIcon('18 15 12 9 6 15')}</button>`,
 		);
 	}
 	pills.push(
 		`<button type="button" class="games-studio-tab-btn subject-pill subject-pill-new" onclick="createNewSubjectFlow()" title="New subject">${plusIcon}<span>New</span></button>`,
 	);
-	bar.innerHTML = pills.join('');
+	bar.innerHTML =
+		(filtersActive && matched.length === 0
+			? '<span class="subject-strip-empty">No subjects match the current filter.</span>'
+			: '') + pills.join('');
+
+	// Count + clear affordances (admin only, only when they add context).
+	const countEl = document.getElementById('subjectStripCount');
+	if (countEl) {
+		countEl.textContent =
+			admin && items.length && (filtersActive || collapsible)
+				? `${(collapsed ? visible.length : matched.length)} of ${items.length} subjects`
+				: '';
+	}
+	const clearBtn = document.getElementById('subjectStripClearBtn');
+	if (clearBtn) clearBtn.hidden = !filtersActive;
 }
 
 function syncCategoryBandTitle() {
@@ -1308,11 +1438,13 @@ function getCategoryParentPath(id, list, separator = ' › ') {
 	return names.filter(Boolean).join(separator);
 }
 
-// Flat pre-order walk: roots first, children (name-sorted) nested right
-// under their parent. Nodes whose parent is absent from `list` are treated
-// as roots, so filtered subsets still render correctly. Cycle leftovers
-// (unreachable from any root) are appended instead of dropped.
-function getOrderedCategoryTree(list, rootComparator) {
+// Flat pre-order walk: roots first, children nested right under their
+// parent. Manual up/down order wins when present; otherwise siblings sort
+// by name (roots follow the sort control). Nodes whose parent is absent
+// from `list` are treated as roots, so filtered subsets still render
+// correctly. Cycle leftovers (unreachable from any root) are appended
+// instead of dropped.
+function getOrderedCategoryTree(list) {
 	const rows = (Array.isArray(list) ? list : categories).filter(
 		(c) => c && c.id,
 	);
@@ -1334,8 +1466,54 @@ function getOrderedCategoryTree(list, rootComparator) {
 	}
 	const byName = (a, b) =>
 		String(a.name || '').localeCompare(String(b.name || ''));
-	roots.sort(typeof rootComparator === 'function' ? rootComparator : byName);
-	for (const siblings of childrenOf.values()) siblings.sort(byName);
+	const sortMode = rootCategorySortMode();
+	// Roots keep the sort control for date/questions and name desc; with the
+	// default name asc (sortMode null), the manual up/down order wins.
+	let rootSort = (a, b) =>
+		byName(a, b);
+	if (sortMode !== null) {
+		const direction = categorySortDirection === 'asc' ? 1 : -1;
+		rootSort = (a, b) => {
+			switch (sortMode) {
+				case 'date':
+					return (
+						direction *
+						(new Date(b.dateCreated) - new Date(a.dateCreated))
+					);
+				case 'questions':
+					return (
+						direction *
+						((a.questionCount || 0) - (b.questionCount || 0))
+					);
+				default:
+					return (
+						direction *
+						String(a.name || '').localeCompare(String(b.name || ''))
+					);
+			}
+		};
+	}
+	roots.sort(rootSort);
+	if (sortMode === null && Object.keys(categoryManualOrder).length) {
+		// Manual up/down order, applied per root group (roots of different
+		// subjects are separate groups and never cross). Each group is ordered
+		// internally; groups then keep the relative order of their first member
+		// in the name-sorted list (stable, no interleaving across subjects).
+		const rootGroups = new Map();
+		for (const row of roots) {
+			const key = manualOrderKey(row);
+			if (!rootGroups.has(key)) rootGroups.set(key, []);
+			rootGroups.get(key).push(row);
+		}
+		roots.length = 0;
+		for (const [key, group] of rootGroups) {
+			roots.push(...applyManualOrderInPlace(group, key));
+		}
+	}
+	for (const [pid, siblings] of childrenOf) {
+		siblings.sort(byName);
+		applyManualOrderInPlace(siblings, pid);
+	}
 	const out = [];
 	const seen = new Set();
 	const visit = (row, depth) => {
@@ -1395,6 +1573,136 @@ function toggleCategoryCollapse(event, categoryId) {
 		collapsedCategories.add(key);
 	}
 	persistCollapsedCategories();
+	updateCategoryList();
+}
+
+// ============================================
+// MANUAL SIBLING ORDER (persisted per browser)
+// ============================================
+// Up/down buttons reorder a category among its direct siblings only (same
+// parent, or same subject at the root level) — never across categories, so
+// this is orthogonal to the "move into another category" button. Stored as
+// id lists per sibling group, keyed by parent id ('' = root groups, and a
+// root group per subject since roots live in different subjects).
+let categoryManualOrder = {};
+try {
+	const rawManualOrder = localStorage.getItem('quizCategoryManualOrder');
+	const parsedManualOrder = rawManualOrder
+		? JSON.parse(rawManualOrder)
+		: null;
+	if (parsedManualOrder && typeof parsedManualOrder === 'object') {
+		categoryManualOrder = parsedManualOrder;
+	}
+} catch (_) {
+	categoryManualOrder = {};
+}
+
+// Test/patch hook: mutates the live binding from inside this script's scope
+// (an assignment from a separately-evaluated script can't reach `let`s).
+function resetCategoryManualOrder() {
+	categoryManualOrder = {};
+}
+
+function persistCategoryManualOrder() {
+	try {
+		localStorage.setItem(
+			'quizCategoryManualOrder',
+			JSON.stringify(categoryManualOrder),
+		);
+	} catch (_) {
+		/* private mode etc. — manual order just won't survive reloads */
+	}
+}
+
+function manualOrderKey(category) {
+	const parent = getCategoryParentId(category);
+	if (parent) return parent;
+	return String(category?.subject_id || '') || '__unassigned__';
+}
+
+// Sort control as a mode string, or null when the manual up/down order
+// should win instead ('name' asc, or the control missing). Shared by the
+// tree walk and the sibling lookup so both agree on the display order.
+function rootCategorySortMode() {
+	const sortBy =
+		document.getElementById('categorySortBy')?.value || 'name';
+	if (sortBy === 'name' && categorySortDirection === 'asc') return null;
+	return sortBy;
+}
+
+// Manual ranks first (in stored order), unranked siblings after them
+// name-sorted — so rows created elsewhere still appear, just unpinned.
+function applyManualOrder(rows, key) {
+	return applyManualOrderInPlace([...rows], key);
+}
+
+function applyManualOrderInPlace(rows, key) {
+	const stored = Array.isArray(categoryManualOrder[key])
+		? categoryManualOrder[key].map(String)
+		: null;
+	if (!stored) return rows;
+	const rank = new Map(stored.map((id, i) => [id, i]));
+	const BIG = Number.MAX_SAFE_INTEGER;
+	const byName = (a, b) =>
+		String(a?.name || '').localeCompare(String(b?.name || ''));
+	return rows.sort(
+		(a, b) =>
+			(rank.get(String(a?.id)) ?? BIG) -
+				(rank.get(String(b?.id)) ?? BIG) || byName(a, b),
+	);
+}
+
+function persistSiblingOrder(siblings) {
+	if (!siblings.length) return;
+	const key = manualOrderKey(siblings[0]);
+	categoryManualOrder[key] = siblings.map((c) => String(c.id));
+	persistCategoryManualOrder();
+}
+
+// Direct siblings as currently listed, in display order. Same visibility
+// rules as the table, so a move swaps with the neighbour the user sees.
+function getOrderedCategorySiblings(categoryId, list) {
+	const row = getCategoryById(categoryId, list);
+	if (!row || row.isSystem || String(row.id) === 'uncategorized')
+		return [];
+	const visible = getVisibleCategoryRows(Array.isArray(list) ? list : categories);
+	const parent = getCategoryParentId(row);
+	const siblings = visible.filter(
+		(c) =>
+			!c.isSystem &&
+			String(c.id) !== 'uncategorized' &&
+			getCategoryParentId(c) === parent,
+	);
+	if (parent) {
+		return applyManualOrder(siblings, parent);
+	}
+	const rootKey = String(row.subject_id || '') || '__unassigned__';
+	if (rootCategorySortMode() !== null) {
+		// A date/questions (or name desc) control outranks the manual order.
+		return siblings.sort((a, b) =>
+			String(a.name || '').localeCompare(String(b.name || '')),
+		);
+	}
+	return applyManualOrder(siblings, rootKey);
+}
+
+function moveCategorySibling(event, categoryId, offset) {
+	if (event) {
+		event.stopPropagation();
+		if (typeof event.preventDefault === 'function') event.preventDefault();
+	}
+	const siblings = getOrderedCategorySiblings(categoryId);
+	const from = siblings.findIndex(
+		(c) => String(c.id) === String(categoryId),
+	);
+	if (from < 0) return;
+	const to = from + offset;
+	if (to < 0 || to >= siblings.length) return;
+	const next = siblings.slice();
+	const moved = next[from];
+	next[from] = next[to];
+	next[to] = moved;
+	persistSiblingOrder(next);
 	updateCategoryList();
 }
 
@@ -2983,6 +3291,892 @@ function closeAssignCategoryQuestions() {
 	availableQuestionsForCategory = [];
 }
 
+// ============================================
+// ADD QUESTION TO CATEGORY (3-tab modal)
+// One entry point per category row ("+" button, every level). The modal files
+// everything into a leaf level: parents are shown as context in the level
+// tree, only leaves are selectable (server enforces leaf-only filing).
+// ============================================
+
+let addQuestionTargetCategoryId = null;
+let addQuestionTargetLevelId = null; // current leaf selection (null = none)
+let addQuestionBankQuestions = [];
+let addQuestionSelectedBank = new Set(); // question ids (index-free: survives filtering)
+let addQuestionBankFilter = { search: '', category: '', difficulty: '' };
+let addQuestionAiGenerated = [];
+let addQuestionAiSelected = new Set(); // index into addQuestionAiGenerated
+let addQuestionAiGenerating = false;
+
+const ADD_QUESTION_BANK_CATEGORIES = [
+	['', 'All categories'],
+	['uncategorized', 'Uncategorized'],
+];
+const ADD_QUESTION_AI_TYPES = [
+	['multiple-choice', 'Multiple Choice'],
+	['true-false', 'True / False'],
+	['fill-blank', 'Fill in the Blank'],
+];
+
+function getAddQuestionLevelLeaves(categoryId) {
+	// The clicked category itself when it is a leaf, else every leaf below it.
+	if (isLeafCategory(categoryId)) return [categoryId];
+	return getCategoryDescendantIds(categoryId).filter((id) =>
+		isLeafCategory(id),
+	);
+}
+
+function pickAddQuestionLevel(levelId) {
+	addQuestionTargetLevelId = levelId;
+	// The assign/AI panes are launchers that resolve their target when the
+	// button is clicked, so only the shared labels need repainting here.
+	paintAddQuestionLevelUI();
+}
+
+function paintAddQuestionLevelUI() {
+	const levelId = addQuestionTargetLevelId;
+	const pathLabel = levelId ? getCategoryPath(levelId, categories) : '';
+	document
+		.querySelectorAll('#addQuestionLevelOptions .level-option')
+		.forEach((btn) =>
+			btn.classList.toggle('active', btn.dataset.levelId === String(levelId)),
+		);
+	const hint = document.getElementById('addQuestionLevelNone');
+	const chip = document.getElementById('addQuestionTargetChipLabel');
+	const hasLevels = Boolean(
+		document.querySelector('#addQuestionLevelOptions .level-option'),
+	);
+	if (hint) hint.style.display = hasLevels ? 'none' : '';
+	if (chip) {
+		chip.textContent = pathLabel
+			? `Files into: ${pathLabel}`
+			: 'Files into: this category';
+	}
+	const manualHint = document.getElementById('addQuestionManualHint');
+	if (manualHint) {
+		manualHint.textContent = pathLabel
+			? `The editor opens with the category pre-selected: ${pathLabel}.`
+			: 'The editor opens with the category pre-selected.';
+	}
+	const assignHint = document.getElementById('addQuestionAssignHint');
+	if (assignHint) {
+		assignHint.textContent = pathLabel
+			? `The Assign Questions picker opens with the questions already filed in “${pathLabel}” pre-selected — confirm or adjust the selection.`
+			: 'The Assign Questions picker opens pre-loaded with your current questions.';
+	}
+	const aiHint = document.getElementById('addQuestionAiHint');
+	if (aiHint) {
+		aiHint.textContent = pathLabel
+			? `The AI Question Generator opens with the topic and category pre-filled from “${pathLabel}” — edit anything you like before generating.`
+			: 'The AI Question Generator opens with the topic and category pre-filled.';
+	}
+}
+
+function openAddQuestionToCategoryModal(categoryId) {
+	const category =
+		getCategoryById(categoryId) ||
+		categories.find((c) => c.id === categoryId) ||
+		{ id: categoryId, name: 'Category' };
+	addQuestionTargetCategoryId = categoryId;
+	addQuestionSelectedBank.clear();
+	addQuestionAiSelected.clear();
+	addQuestionAiGenerated = [];
+	addQuestionBankFilter = { search: '', category: '', difficulty: '' };
+
+	// Default target: the category itself when it is a leaf, otherwise its
+	// first nested leaf (parents cannot hold questions).
+	const leaves = getAddQuestionLevelLeaves(categoryId);
+	addQuestionTargetLevelId = leaves.length ? leaves[0] : null;
+
+	const titleEl = document.getElementById('addQuestionToCategoryTitle');
+	const subtitleEl = document.getElementById('addQuestionToCategorySubtitle');
+	if (titleEl) titleEl.textContent = `Add Question — ${escapeHtml(category.name)}`;
+	if (subtitleEl) subtitleEl.textContent = `Choose how to add questions to "${escapeHtml(category.name)}"`;
+
+	// Build the level tree: nested leaves as selectable options, intermediate
+	// parents as context labels (indented, not clickable).
+	const levelSelector = document.getElementById('addQuestionLevelSelector');
+	const levelOptions = document.getElementById('addQuestionLevelOptions');
+	if (levelSelector && levelOptions) {
+		const selectable = leaves.filter((id) => String(id) !== String(categoryId));
+		if (selectable.length > 0) {
+			levelSelector.style.display = 'block';
+			levelOptions.innerHTML = '';
+			const leafSet = new Set(selectable.map((id) => String(id)));
+			const renderLevel = (id, depth) => {
+				const row = getCategoryById(id) || categories.find((c) => c.id === id);
+				if (!row) return;
+				const isLeaf = leafSet.has(String(id)) || String(id) === String(categoryId);
+				const el = document.createElement(isLeaf ? 'button' : 'div');
+				el.type = isLeaf ? 'button' : undefined;
+				el.className = isLeaf ? 'level-option' : 'level-branch';
+				el.dataset.levelId = String(id);
+				el.style.marginLeft = `${depth * 18}px`;
+				el.textContent = String(row.name || 'Unnamed');
+				el.title = getCategoryPath(id, categories) || String(row.name || '');
+				if (isLeaf) {
+					el.onclick = () => pickAddQuestionLevel(id);
+				}
+				levelOptions.appendChild(el);
+				getCategoryChildrenIds(id).forEach((childId) => renderLevel(childId, depth + 1));
+			};
+			if (String(categoryId) !== String(addQuestionTargetLevelId)) {
+				const parentRow = document.createElement('div');
+				parentRow.className = 'level-branch';
+				parentRow.dataset.levelId = String(categoryId);
+				parentRow.textContent = `${String(category.name || 'Unnamed')} (level above)`;
+				levelOptions.appendChild(parentRow);
+				getCategoryChildrenIds(categoryId).forEach((childId) => renderLevel(childId, 1));
+			} else {
+				renderLevel(categoryId, 0);
+			}
+		} else {
+			levelSelector.style.display = 'none';
+			levelOptions.innerHTML = '';
+		}
+	}
+
+	// Reset to manual tab, then paint level-dependent UI (target chip and
+	// the three pane hints) for the resolved selection.
+	switchAddQuestionTab('manual');
+	paintAddQuestionLevelUI();
+
+	const modal = document.getElementById('addQuestionToCategoryModal');
+	if (modal) {
+		promoteAddQuestionModal(modal);
+		modal.classList.add('is-open');
+		modal.setAttribute('aria-hidden', 'false');
+		modal.setAttribute('aria-modal', 'true');
+		modal.setAttribute('role', 'dialog');
+		document.documentElement.classList.add('modal-open');
+		document.body.classList.add('modal-open');
+	}
+}
+
+function closeAddQuestionToCategoryModal() {
+	const modal = document.getElementById('addQuestionToCategoryModal');
+	if (modal) {
+		modal.style.setProperty('display', 'none', 'important');
+		[
+			'position', 'inset', 'z-index', 'opacity', 'visibility', 'pointer-events',
+		].forEach((property) => modal.style.removeProperty(property));
+		modal.classList.remove('active', 'is-open');
+		modal.setAttribute('aria-hidden', 'true');
+		modal.removeAttribute('aria-modal');
+		modal.removeAttribute('role');
+		document.documentElement.classList.remove('modal-open');
+		document.body.classList.remove('modal-open');
+	}
+	addQuestionTargetCategoryId = null;
+	addQuestionTargetLevelId = null;
+	addQuestionBankQuestions = [];
+	addQuestionSelectedBank.clear();
+	addQuestionAiGenerated = [];
+	addQuestionAiSelected.clear();
+}
+
+function promoteAddQuestionModal(modal) {
+	if (modal.parentElement !== document.body) {
+		document.body.appendChild(modal);
+	}
+	const profileMenu = document.getElementById('profileMenu');
+	if (profileMenu) profileMenu.classList.remove('active');
+	modal.style.setProperty('display', 'flex', 'important');
+	modal.style.setProperty('position', 'fixed', 'important');
+	modal.style.setProperty('inset', '0', 'important');
+	modal.style.setProperty('z-index', '2147483000', 'important');
+	modal.style.setProperty('opacity', '1', 'important');
+	modal.style.setProperty('visibility', 'visible', 'important');
+	modal.style.setProperty('pointer-events', 'auto', 'important');
+}
+
+// Panes are static (each previews + launches its own modal). Toggle through
+// an explicit id map: the previous string-cased id ('addQuestionTabAi') never
+// matched the markup's 'addQuestionTabAI', and clearing the inline display
+// without the .active class let the base CSS hide every pane except Manual.
+const ADD_QUESTION_TAB_PANES = {
+	manual: 'addQuestionTabManual',
+	assign: 'addQuestionTabAssign',
+	ai: 'addQuestionTabAI',
+};
+
+function switchAddQuestionTab(tab) {
+	document.querySelectorAll('.add-question-tab').forEach((t) => {
+		const on = t.dataset.tab === tab;
+		t.classList.toggle('active', on);
+		t.setAttribute('aria-selected', on ? 'true' : 'false');
+	});
+	Object.keys(ADD_QUESTION_TAB_PANES).forEach((key) => {
+		const pane = document.getElementById(ADD_QUESTION_TAB_PANES[key]);
+		if (!pane) return;
+		pane.style.removeProperty('display');
+		pane.classList.toggle('active', key === tab);
+	});
+}
+
+function addQuestionManual() {
+	const levelId = addQuestionTargetLevelId || addQuestionTargetCategoryId;
+	if (!levelId) {
+		showToast('This category has no level that can hold questions — add a subcategory first.', 'warning');
+		return;
+	}
+	if (typeof window.openQuestionFormModal !== 'function') {
+		showToast('Question editor unavailable — reload the page.', 'error');
+		return;
+	}
+	// Close first (cancels the editor's trailing reset timer), populate the
+	// category select from the in-memory list, then open the editor pre-filled.
+	closeAddQuestionToCategoryModal();
+	setTimeout(() => {
+		try { loadCategoriesIntoSelect('category'); } catch (_) {}
+		window.openQuestionFormModal();
+		const select = document.getElementById('category');
+		if (select && select.querySelector(`option[value="${levelId}"]`)) {
+			select.value = String(levelId);
+		}
+	}, 320);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tabs 2 & 3: launch the proven modals, pre-filled from the selected level.
+// The teacher only confirms or edits what has already been loaded for them.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function addQuestionOpenAssignModal() {
+	const levelId = addQuestionTargetLevelId;
+	if (!levelId) {
+		showToast('This category has no level that can hold questions — add a subcategory first.', 'warning');
+		return;
+	}
+	if (typeof openAssignCategoryQuestions !== 'function') {
+		showToast('Assign Questions modal unavailable — reload the page.', 'error');
+		return;
+	}
+	// Hand over to the category "Assign Questions" modal (the same two-pane
+	// picker used from the category table). It pre-selects the questions
+	// currently filed in this level, so the teacher sees the existing state.
+	closeAddQuestionToCategoryModal();
+	setTimeout(() => openAssignCategoryQuestions(String(levelId)), 320);
+}
+
+function addQuestionOpenAiModal() {
+	const levelId = addQuestionTargetLevelId;
+	if (!levelId) {
+		showToast('This category has no level that can hold questions — add a subcategory first.', 'warning');
+		return;
+	}
+	if (typeof window.openAIGeneratorModal !== 'function') {
+		showToast('AI Question Generator unavailable — reload the page.', 'error');
+		return;
+	}
+	const levelRow = getCategoryById(levelId);
+	const topic =
+		getCategoryPath(levelId, categories, ' › ') ||
+		String(levelRow?.name || '');
+	// The full AI Question Generator modal opens with topic + category
+	// pre-filled (its nested category/subcategory pickers resolve from the
+	// leaf id); the teacher adjusts the prompt and generates as usual.
+	closeAddQuestionToCategoryModal();
+	setTimeout(() => {
+		window.openAIGeneratorModal({ topic, categoryId: String(levelId) });
+	}, 320);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 2: Assign from Bank (inline full-bank picker)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function addQuestionQuestionCategoryId(q) {
+	return String(q.category_id || q.categoryId || q.category || '');
+}
+
+function getAddQuestionVisibleBank() {
+	const search = String(addQuestionBankFilter.search || '').trim().toLowerCase();
+	return addQuestionBankQuestions.filter((q) => {
+		if (search && !String(q.question || '').toLowerCase().includes(search)) {
+			return false;
+		}
+		if (addQuestionBankFilter.category) {
+			const cid = addQuestionQuestionCategoryId(q) || 'uncategorized';
+			if (cid !== String(addQuestionBankFilter.category)) return false;
+		}
+		if (
+			addQuestionBankFilter.difficulty &&
+			String(q.difficulty || 'medium') !== addQuestionBankFilter.difficulty
+		) {
+			return false;
+		}
+		return true;
+	});
+}
+
+function renderAddQuestionBankTab() {
+	const container = document.getElementById('addQuestionTabAssign');
+	if (!container) return;
+	const targetLevel = addQuestionTargetLevelId;
+	const allQuestions = window.__DI_CONTAINER__?.repo?.getAll_sync?.('questions') || [];
+	// The whole bank is pickable: assigning moves questions FROM other levels
+	// (or the general pool) INTO the target level. Questions already filed
+	// here stay visible but are flagged and unselectable.
+	addQuestionBankQuestions = allQuestions.filter((q) => {
+		if (window.Auth?.canAccessItem && !window.Auth.canAccessItem('question', q)) return false;
+		return true;
+	});
+	addQuestionSelectedBank.clear();
+	container.dataset.level = String(targetLevel || '');
+
+	const categoryOptions = ADD_QUESTION_BANK_CATEGORIES.concat(
+		(categories || [])
+			.filter(
+				(c) =>
+					!c.isSystem &&
+					!(typeof isAutoGameCategory === 'function' && isAutoGameCategory(c)),
+			)
+			.map((c) => [String(c.id), String(c.name || 'Unnamed')]),
+	)
+		.map(([value, label]) =>
+			`<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`,
+		)
+		.join('');
+
+	container.innerHTML = `
+		<div class="bank-picker-wrap">
+			<div class="bank-picker-toolbar">
+				<div class="bank-picker-search">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+					<input type="text" id="addQuestionBankSearch" class="form-control" placeholder="Search the question bank\u2026" />
+				</div>
+				<div class="bank-picker-filters">
+					<select id="addQuestionBankCategoryFilter" class="form-control" title="Filter by current category">
+						${categoryOptions}
+					</select>
+					<select id="addQuestionBankDifficultyFilter" class="form-control">
+						<option value="">All difficulties</option>
+						<option value="easy">Easy</option>
+						<option value="medium">Medium</option>
+						<option value="hard">Hard</option>
+					</select>
+				</div>
+			</div>
+			<div class="bank-picker-list" id="addQuestionBankList"></div>
+			<div class="bank-picker-footer">
+				<span class="bank-selected-count" id="addQuestionBankSelectedCount">0 selected</span>
+				<div class="bank-picker-footer-actions">
+					<button type="button" class="btn btn-sm btn-secondary" onclick="selectAllVisibleAddQuestionBank(this)">Select all visible</button>
+					<button type="button" class="btn btn-primary" onclick="saveAddQuestionBank()" id="addQuestionBankSaveBtn" disabled>Assign</button>
+				</div>
+			</div>
+		</div>
+	`;
+
+	const searchEl = document.getElementById('addQuestionBankSearch');
+	if (searchEl) {
+		searchEl.value = addQuestionBankFilter.search;
+		searchEl.addEventListener('input', () => {
+			addQuestionBankFilter.search = searchEl.value;
+			renderAddQuestionBankList();
+		});
+	}
+	const catEl = document.getElementById('addQuestionBankCategoryFilter');
+	if (catEl) {
+		catEl.value = addQuestionBankFilter.category;
+		catEl.addEventListener('change', () => {
+			addQuestionBankFilter.category = catEl.value;
+			renderAddQuestionBankList();
+		});
+	}
+	const diffEl = document.getElementById('addQuestionBankDifficultyFilter');
+	if (diffEl) {
+		diffEl.value = addQuestionBankFilter.difficulty;
+		diffEl.addEventListener('change', () => {
+			addQuestionBankFilter.difficulty = diffEl.value;
+			renderAddQuestionBankList();
+		});
+	}
+
+	renderAddQuestionBankList();
+}
+
+function renderAddQuestionBankList() {
+	const listEl = document.getElementById('addQuestionBankList');
+	if (!listEl) return;
+	const targetLevel = String(addQuestionTargetLevelId || '');
+	const visible = getAddQuestionVisibleBank();
+
+	if (visible.length === 0) {
+		listEl.innerHTML = `<div class="bank-empty">${addQuestionBankQuestions.length === 0
+			? 'The question bank is empty \u2014 create a question manually or generate one via AI first.'
+			: 'No questions match the current search / filters.'}</div>`;
+		updateAddQuestionBankUI();
+		return;
+	}
+
+	const categoryNames = new Map(
+		(categories || []).map((c) => [String(c.id), String(c.name || 'Unnamed')]),
+	);
+	listEl.innerHTML = visible
+		.map((q) => {
+			const cid = addQuestionQuestionCategoryId(q);
+			const alreadyHere = cid === targetLevel && targetLevel;
+			const isSelected = addQuestionSelectedBank.has(String(q.id));
+			const qText = String(q.question || 'Untitled question').replace(/<[^>]*>/g, ' ').trim().slice(0, 140);
+			const qType = q.type || 'multiple-choice';
+			const qDiff = String(q.difficulty || 'medium').toLowerCase();
+			const qPoints = q.points || 1;
+			const catLabel = categoryNames.get(cid) || (cid && cid !== 'uncategorized' ? cid : 'Uncategorized');
+			return `
+				<label class="bank-question-item${isSelected ? ' selected' : ''}${alreadyHere ? ' filed-here' : ''}">
+					<input type="checkbox" class="bank-question-checkbox" ${isSelected || alreadyHere ? 'checked' : ''} ${alreadyHere ? 'disabled' : ''} onchange="toggleAddQuestionBankSelection('${escapeHtml(String(q.id))}')"/>
+					<div class="bank-question-main">
+						<div class="bank-question-text">${escapeHtml(qText)}</div>
+						<div class="bank-question-meta">
+							<span class="bank-meta-chip type-${qDiff}">${escapeHtml(qDiff)}</span>
+							<span class="bank-meta-chip type-${escapeHtml(qType)}">${escapeHtml(qType)}</span>
+							<span class="bank-meta-cat" title="${escapeHtml(catLabel)}">${escapeHtml(catLabel)}</span>
+							<span class="bank-meta-points">${qPoints} pts</span>
+						</div>
+					</div>
+					${alreadyHere
+						? '<span class="bank-filed-badge">Already here</span>'
+						: isSelected ? '<span class="bank-question-check">\u2713</span>' : ''}
+				</label>`;
+		})
+		.join('');
+	updateAddQuestionBankUI();
+}
+
+function toggleAddQuestionBankSelection(questionId) {
+	const key = String(questionId);
+	if (addQuestionSelectedBank.has(key)) {
+		addQuestionSelectedBank.delete(key);
+	} else {
+		addQuestionSelectedBank.add(key);
+	}
+	// Toggle in place (no full re-render) so scroll position survives.
+	const label = document.querySelector(`.bank-question-item:has(input[value="${key}"])`);
+	if (label) {
+		label.classList.toggle('selected', addQuestionSelectedBank.has(key));
+		const cb = label.querySelector('.bank-question-checkbox');
+		if (cb) cb.checked = addQuestionSelectedBank.has(key);
+		const check = label.querySelector('.bank-question-check');
+		if (addQuestionSelectedBank.has(key) && !check && !label.classList.contains('filed-here')) {
+			const mark = document.createElement('span');
+			mark.className = 'bank-question-check';
+			mark.textContent = '\u2713';
+			label.appendChild(mark);
+		} else if (!addQuestionSelectedBank.has(key) && check) {
+			check.remove();
+		}
+	}
+	updateAddQuestionBankUI();
+}
+
+function selectAllVisibleAddQuestionBank(btn) {
+	const targetLevel = String(addQuestionTargetLevelId || '');
+	const visible = getAddQuestionVisibleBank().filter(
+		(q) => addQuestionQuestionCategoryId(q) !== targetLevel,
+	);
+	const allSelected =
+		visible.length > 0 &&
+		visible.every((q) => addQuestionSelectedBank.has(String(q.id)));
+	visible.forEach((q) => {
+		const key = String(q.id);
+		if (allSelected) {
+			addQuestionSelectedBank.delete(key);
+		} else {
+			addQuestionSelectedBank.add(key);
+		}
+	});
+	renderAddQuestionBankList();
+	if (btn) btn.textContent = allSelected ? 'Select all visible' : 'Clear visible';
+}
+
+function updateAddQuestionBankUI() {
+	const btn = document.getElementById('addQuestionBankSaveBtn');
+	const countEl = document.getElementById('addQuestionBankSelectedCount');
+	if (countEl) countEl.textContent = addQuestionSelectedBank.size + ' selected';
+	if (btn) {
+		btn.disabled = addQuestionSelectedBank.size === 0;
+		btn.textContent = `Assign ${addQuestionSelectedBank.size} to level`;
+	}
+}
+
+async function saveAddQuestionBank() {
+	if (addQuestionSelectedBank.size === 0) return;
+	const targetLevel = addQuestionTargetLevelId;
+	if (!targetLevel) {
+		showToast('Pick a target level first.', 'warning');
+		return;
+	}
+	// Rebuild from the live repository (never a filtered snapshot) so saving
+	// cannot drop questions that were loaded after the picker opened.
+	const allQuestions = window.__DI_CONTAINER__?.repo?.getAll_sync?.('questions') || [];
+	const changedIds = new Set(addQuestionSelectedBank);
+	const changed = [];
+	allQuestions.forEach((q) => {
+		if (!q || !q.id || !changedIds.has(String(q.id))) return;
+		q.category = String(targetLevel);
+		q.categoryId = String(targetLevel);
+		q.category_id = String(targetLevel);
+		changed.push(q);
+	});
+	if (changed.length === 0) return;
+
+	const btn = document.getElementById('addQuestionBankSaveBtn');
+	const origText = btn ? btn.textContent : '';
+	if (btn) {
+		btn.disabled = true;
+		btn.textContent = 'Assigning\u2026';
+	}
+
+	try {
+		for (const q of changed) {
+			if (window.API && typeof window.API.raw === 'function') {
+				await window.API.raw('PATCH', `/questions/${encodeURIComponent(q.id)}`, {
+					category_id: q.category_id,
+				});
+			}
+		}
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', allQuestions);
+		if (typeof logActivity === 'function') {
+			logActivity('question', 'Questions assigned', 'updated', { count: changed.length });
+		}
+		showToast(`Assigned ${changed.length} question${changed.length > 1 ? 's' : ''} to this level.`, 'success');
+		closeAddQuestionToCategoryModal();
+		if (typeof updateQuestionList === 'function') updateQuestionList();
+		if (typeof updateCategoryList === 'function') updateCategoryList();
+	} catch (err) {
+		if (btn) {
+			btn.disabled = false;
+			btn.textContent = origText;
+		}
+		showToast('Could not assign questions: ' + (err?.message || 'server error'), 'error');
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 3: Via AI (inline AI generation)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function renderAddQuestionAiTab() {
+	const container = document.getElementById('addQuestionTabAI');
+	if (!container) return;
+	const levelPath = getCategoryPath(addQuestionTargetLevelId, categories, ' › ') || '';
+	container.dataset.level = String(addQuestionTargetLevelId || '');
+
+	const typeCards = ADD_QUESTION_AI_TYPES.map(([key, label]) => `
+		<div class="ai-type-card" data-type="${key}">
+			<span class="ai-type-name">${label}</span>
+			<div class="ai-type-stepper">
+				<button type="button" class="stepper-btn" onclick="adjustAddQuestionAiCount('${key}', -1)" aria-label="Fewer ${label}">−</button>
+				<span class="stepper-val" id="addQuestionAiCount-${key}">${key === 'multiple-choice' ? 3 : 0}</span>
+				<button type="button" class="stepper-btn" onclick="adjustAddQuestionAiCount('${key}', 1)" aria-label="More ${label}">+</button>
+			</div>
+		</div>
+	`).join('');
+
+	container.innerHTML = `
+		<div class="ai-generator-wrap">
+			<div class="ai-generator-form">
+				<div class="form-group">
+					<label class="ai-field-label" for="addQuestionAiTopic">Topic / Subject</label>
+					<textarea id="addQuestionAiTopic" rows="2" class="form-control" placeholder="e.g. Binary number system, Data encoding…">${escapeHtml(levelPath)}</textarea>
+					<small class="text-muted">Prefilled from the selected level — refine it if you want a narrower focus.</small>
+				</div>
+				<div class="ai-type-grid">${typeCards}</div>
+				<div class="form-row ai-gen-params-row">
+					<div class="form-group half">
+						<label class="ai-field-label" for="addQuestionAiDifficulty">Difficulty</label>
+						<select id="addQuestionAiDifficulty" class="form-control">
+							<option value="easy">Easy</option>
+							<option value="medium" selected>Medium</option>
+							<option value="hard">Hard</option>
+						</select>
+					</div>
+					<div class="form-group half">
+						<label class="ai-field-label" for="addQuestionAiPoints">Points</label>
+						<input type="number" id="addQuestionAiPoints" class="form-control" min="1" max="100" value="1"/>
+					</div>
+					<div class="form-group half">
+						<label class="ai-field-label" for="addQuestionAiLanguage">Language</label>
+						<select id="addQuestionAiLanguage" class="form-control">
+							<option value="French" selected>French</option>
+							<option value="English">English</option>
+							<option value="Arabic">Arabic</option>
+						</select>
+					</div>
+				</div>
+				<div class="ai-generator-actions">
+					<button type="button" class="btn btn-primary" id="addQuestionAiGenerateBtn" onclick="addQuestionAiGenerate()">Generate Questions</button>
+				</div>
+			</div>
+			<div id="addQuestionAiResults" class="ai-generator-results"></div>
+		</div>
+	`;
+}
+
+function getAddQuestionAiTypeCounts() {
+	const typeCounts = {};
+	ADD_QUESTION_AI_TYPES.forEach(([key]) => {
+		const el = document.getElementById(`addQuestionAiCount-${key}`);
+		typeCounts[key] = Math.max(0, Math.min(10, parseInt(el?.textContent, 10) || 0));
+	});
+	return typeCounts;
+}
+
+function adjustAddQuestionAiCount(type, delta) {
+	const el = document.getElementById(`addQuestionAiCount-${type}`);
+	if (!el) return;
+	const next = Math.max(0, Math.min(10, (parseInt(el.textContent, 10) || 0) + delta));
+	el.textContent = String(next);
+}
+
+async function addQuestionAiGenerate() {
+	if (addQuestionAiGenerating) return;
+	const topicEl = document.getElementById('addQuestionAiTopic');
+	const diffEl = document.getElementById('addQuestionAiDifficulty');
+	const pointsEl = document.getElementById('addQuestionAiPoints');
+	const langEl = document.getElementById('addQuestionAiLanguage');
+	const resultsEl = document.getElementById('addQuestionAiResults');
+	const btn = document.getElementById('addQuestionAiGenerateBtn');
+
+	const topic = String(topicEl?.value || '').trim() || getCategoryPath(addQuestionTargetLevelId, categories, ' › ') || '';
+	if (!topic) {
+		showToast('Please enter a topic.', 'error');
+		return;
+	}
+	const typeCounts = getAddQuestionAiTypeCounts();
+	const count = Object.values(typeCounts).reduce((s, v) => s + v, 0);
+	if (count === 0) {
+		showToast('Set at least one question type count.', 'warning');
+		return;
+	}
+
+	addQuestionAiGenerating = true;
+	if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+	if (resultsEl) resultsEl.innerHTML = '<div class="ai-loading">Generating questions with AI…</div>';
+
+	try {
+		let questions;
+		if (typeof generateQuestionsViaServer === 'function') {
+			// Same route as the main AI Question Generator modal: server-side
+			// shared/personal model first, browser key only as legacy fallback.
+			questions = await generateQuestionsViaServer({
+				topic,
+				typeCounts,
+				difficulty: diffEl?.value || 'medium',
+				points: Math.min(100, Math.max(1, parseInt(pointsEl?.value, 10) || 1)),
+				language: langEl?.value || 'French',
+				imageOptions: false,
+			});
+		} else if (window.aiGenerator) {
+			questions = await window.aiGenerator.generate({
+				topic,
+				types: Object.keys(typeCounts).filter((t) => typeCounts[t] > 0),
+				typeCounts,
+				count,
+				difficulty: diffEl?.value || 'medium',
+				category: '',
+				language: langEl?.value || 'French',
+			});
+		} else {
+			throw new Error('AI generator not available');
+		}
+
+		// Normalize through the main modal's pipeline (option structure,
+		// fill-blank format, leaf filing) so saved rows match the bank schema.
+		addQuestionAiGenerated = (questions || []).map((q) =>
+			typeof window.normalizeImportedAIQuestion === 'function'
+				? window.normalizeImportedAIQuestion(q, addQuestionTargetLevelId)
+				: q,
+		);
+		addQuestionAiSelected = new Set();
+		renderAddQuestionAiResults();
+		showToast(`✨ Generated ${addQuestionAiGenerated.length} question(s) — pick the ones to keep.`, 'success');
+	} catch (err) {
+		if (resultsEl) resultsEl.innerHTML = '<div class="ai-error">Generation failed: ' + escapeHtml(err?.message || 'unknown error') + '</div>';
+		showToast('AI generation failed: ' + (err?.message || 'server error'), 'error');
+	} finally {
+		addQuestionAiGenerating = false;
+		if (btn) { btn.disabled = false; btn.textContent = 'Generate Questions'; }
+	}
+}
+
+function renderAddQuestionAiResults() {
+	const resultsEl = document.getElementById('addQuestionAiResults');
+	if (!resultsEl) return;
+
+	if (addQuestionAiGenerated.length === 0) {
+		resultsEl.innerHTML = '';
+		return;
+	}
+
+	const items = addQuestionAiGenerated
+		.map((q, i) => {
+			const isSelected = addQuestionAiSelected.has(i);
+			const text = String(q.question || q.text || 'Untitled').replace(/<[^>]*>/g, ' ').trim();
+			const qType = q.type || 'multiple-choice';
+			const qDiff = String(q.difficulty || 'medium').toLowerCase();
+			const qPoints = q.points || 1;
+			const answerText = String(q.answer || '').trim();
+			const opts = (q.options || []).map((o, oi) => {
+				const oText = String(typeof o === 'string' ? o : o?.text || '').trim();
+				const isCorrect =
+					answerText !== '' &&
+					(oText === answerText ||
+						answerText.startsWith(String.fromCharCode(65 + oi) + '.') ||
+						answerText.split(',').map((s) => s.trim()).includes(oText));
+					return `<span class="ai-option-chip${isCorrect ? ' correct' : ''}">${String.fromCharCode(65 + oi)}. ${escapeHtml(oText.slice(0, 60))}</span>`;
+				});
+			return `
+				<label class="ai-question-item${isSelected ? ' selected' : ''}">
+					<input type="checkbox" class="ai-question-checkbox" ${isSelected ? 'checked' : ''} onchange="toggleAddQuestionAiSelection(${i})"/>
+					<div class="ai-question-main">
+						<div class="ai-question-meta">
+							<span class="bank-meta-chip type-${qDiff}">${escapeHtml(qDiff)}</span>
+							<span class="bank-meta-chip type-${escapeHtml(qType)}">${escapeHtml(qType)}</span>
+							<span class="bank-meta-points">${qPoints} pts</span>
+						</div>
+						<div class="ai-question-text">${escapeHtml(text.slice(0, 240))}</div>
+						${opts.length ? `<div class="ai-question-options">${opts.join('')}</div>` : ''}
+					</div>
+					${isSelected ? '<span class="ai-question-check">✓</span>' : ''}
+				</label>`;
+		})
+		.join('');
+
+	resultsEl.innerHTML = `
+		<div class="ai-results-header">
+			<span class="ai-results-title">${addQuestionAiGenerated.length} question${addQuestionAiGenerated.length > 1 ? 's' : ''} ready</span>
+			<button type="button" class="btn btn-sm btn-secondary" onclick="toggleAddQuestionAiAll(this)" id="addQuestionAiSelectAllBtn">Select All</button>
+		</div>
+		<div class="ai-questions-list">${items}</div>
+		<div class="ai-results-footer">
+			<span class="ai-selected-count" id="addQuestionAiSelectedCount">0 selected</span>
+			<button type="button" class="btn btn-primary" onclick="saveAddQuestionAi()" id="addQuestionAiSaveBtn" disabled>Add to Level</button>
+		</div>
+	`;
+	updateAddQuestionAiBtns();
+}
+
+function toggleAddQuestionAiSelection(index) {
+	const i = Number(index);
+	if (addQuestionAiSelected.has(i)) {
+		addQuestionAiSelected.delete(i);
+	} else {
+		addQuestionAiSelected.add(i);
+	}
+	// Toggle the card in place so the scroll position of the list survives.
+	const item = document.querySelector(`#addQuestionAiResults .ai-question-item:nth-of-type(${i + 1})`);
+	if (item) {
+		const on = addQuestionAiSelected.has(i);
+		item.classList.toggle('selected', on);
+		const cb = item.querySelector('.ai-question-checkbox');
+		if (cb) cb.checked = on;
+		let mark = item.querySelector('.ai-question-check');
+		if (on && !mark) {
+			mark = document.createElement('span');
+			mark.className = 'ai-question-check';
+			mark.textContent = '✓';
+			item.appendChild(mark);
+		} else if (!on && mark) {
+			mark.remove();
+		}
+	}
+	updateAddQuestionAiBtns();
+}
+
+function toggleAddQuestionAiAll(btn) {
+	const allSelected =
+		addQuestionAiGenerated.length > 0 &&
+		addQuestionAiSelected.size === addQuestionAiGenerated.length;
+	addQuestionAiSelected = allSelected
+		? new Set()
+		: new Set(addQuestionAiGenerated.map((_, i) => i));
+	renderAddQuestionAiResults();
+	const btnEl = document.getElementById('addQuestionAiSelectAllBtn');
+	if (btnEl) btnEl.textContent = allSelected ? 'Select All' : 'Select None';
+	void btn;
+}
+
+function updateAddQuestionAiBtns() {
+	const btn = document.getElementById('addQuestionAiSaveBtn');
+	const countEl = document.getElementById('addQuestionAiSelectedCount');
+	const selectAllBtn = document.getElementById('addQuestionAiSelectAllBtn');
+	if (countEl) countEl.textContent = addQuestionAiSelected.size + ' selected';
+	if (btn) {
+		btn.disabled = addQuestionAiSelected.size === 0;
+		btn.textContent = `Add ${addQuestionAiSelected.size} to Level`;
+	}
+	if (selectAllBtn) {
+		selectAllBtn.textContent =
+			addQuestionAiGenerated.length > 0 &&
+			addQuestionAiSelected.size === addQuestionAiGenerated.length
+				? 'Select None'
+				: 'Select All';
+	}
+}
+
+async function saveAddQuestionAi() {
+	if (addQuestionAiSelected.size === 0) return;
+	const targetLevel = addQuestionTargetLevelId;
+	if (!targetLevel) {
+		showToast('Pick a target level first.', 'warning');
+		return;
+	}
+	const selected = Array.from(addQuestionAiSelected)
+		.map((i) => addQuestionAiGenerated[i])
+		.filter(Boolean);
+	if (selected.length === 0) return;
+
+	const btn = document.getElementById('addQuestionAiSaveBtn');
+	const genBtn = document.getElementById('addQuestionAiGenerateBtn');
+	const origText = btn ? btn.textContent : '';
+	if (btn) {
+		btn.disabled = true;
+		btn.textContent = 'Saving…';
+	}
+	if (genBtn) genBtn.disabled = true;
+
+	try {
+		const persisted = [];
+		for (const question of selected) {
+			// Same persistence contract as the main modal's import: server
+			// first, then the legacy cache with Prisma's canonical id.
+			if (window.API && typeof window.API.create === 'function') {
+				const saved = await window.API.create('questions', question);
+				if (saved && saved.id) {
+					persisted.push({
+						...question,
+						id: saved.id,
+						category: saved.category_id || question.category || String(targetLevel),
+						categoryId: saved.category_id || question.categoryId || String(targetLevel),
+					});
+					continue;
+				}
+			}
+			persisted.push({ ...question, category: String(targetLevel), categoryId: String(targetLevel) });
+		}
+
+		const allQuestions = window.__DI_CONTAINER__?.repo?.getAll_sync?.('questions') || [];
+		window.__DI_CONTAINER__.repo.setAll_sync('questions', allQuestions.concat(persisted));
+
+		if (typeof logActivity === 'function') {
+			logActivity('question', 'AI Generated Questions', 'created', { count: persisted.length });
+		}
+		showToast(`Saved ${persisted.length} AI-generated question${persisted.length > 1 ? 's' : ''} to this level.`, 'success');
+		closeAddQuestionToCategoryModal();
+		if (typeof updateQuestionList === 'function') updateQuestionList();
+		if (typeof updateCategoryList === 'function') updateCategoryList();
+	} catch (err) {
+		if (btn) {
+			btn.disabled = false;
+			btn.textContent = origText;
+		}
+		if (genBtn) genBtn.disabled = false;
+		showToast('Could not save AI questions: ' + (err?.message || 'server error'), 'error');
+	}
+}
+
 function resetAssignCategoryFilters() {
 	currentFilterForCategory = {
 		search: '',
@@ -4144,7 +5338,33 @@ function categoryTrainingCellHtml(category) {
             </td>`;
 }
 
-function categoryActionsCellHtml(category, assignable) {
+// Up/down reorder buttons: swap within the direct sibling group only (never
+// cross into another category or subject) — see moveCategorySibling.
+function categoryReorderBtnsHtml(category) {
+	if (category.isSystem || String(category.id) === 'uncategorized')
+		return '';
+	const siblings = getOrderedCategorySiblings(category.id);
+	if (siblings.length < 2) return '';
+	const idx = siblings.findIndex(
+		(c) => String(c.id) === String(category.id),
+	);
+	if (idx < 0) return '';
+	const upDisabled = idx === 0 ? ' disabled' : '';
+	const downDisabled = idx === siblings.length - 1 ? ' disabled' : '';
+	return `
+                    <button type="button" class="exam-action-btn exam-move-up-btn"${upDisabled} onclick="moveCategorySibling(event, '${category.id}', -1)" title="Move up in this group">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="18 15 12 9 6 15"></polyline>
+                        </svg>
+                    </button>
+                    <button type="button" class="exam-action-btn exam-move-down-btn"${downDisabled} onclick="moveCategorySibling(event, '${category.id}', 1)" title="Move down in this group">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>`;
+}
+
+function categoryActionsCellHtml(category, assignable, rowCtx) {
 	if (moveModeCategoryId) {
 		const moveActionHtml =
 			String(category.id) === String(moveModeCategoryId)
@@ -4173,19 +5393,15 @@ function categoryActionsCellHtml(category, assignable) {
                     </button>`
 			: '';
 	return `
-            <td class="actions-cell">
+    <td class="actions-cell">
                 <div class="exam-actions">
-                    ${assignable ? `
-                    <button class="exam-action-btn exam-assign-btn" onclick="openAssignCategoryQuestions('${category.id}')" title="Assign Questions">
+                    <button class="exam-action-btn exam-add-question-btn" onclick="openAddQuestionToCategoryModal('${category.id}')" title="Add question to ${escapeHtml(category.name)}">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 11l3 3L22 4"></path>
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h11"></path>
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
                     </button>
-                    ` : `
-                    <span class="no-actions" title="This category has subcategories \u2014 assign questions to a subcategory instead">\u2014</span>
-                    `}
-                    ${moveButtonHtml}
+                    ${moveButtonHtml}${categoryReorderBtnsHtml(category)}
                     ${
 											category.isSystem
 												? `
@@ -4217,37 +5433,24 @@ function categoryActionsCellHtml(category, assignable) {
             </td>`;
 }
 
-function updateCategoryList(categoriesList = categories) {
-	const tbody = document.querySelector('#categoryList tbody');
-	if (!tbody) return;
-
-	// Get all questions from localStorage
-	let savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
-	if (window.Auth?.canAccessItem) {
-		savedQuestions = savedQuestions.filter((q) =>
-			window.Auth.canAccessItem('question', q),
-		);
-	}
-
-	if (window.TeacherFilter) {
-		window.TeacherFilter.populate(
-			'categoryTeacherFilter',
-			'categoryTeacherFilterWrap',
-			() => filterCategories(),
-		);
-	}
-	const categoryTeacherScope = window.TeacherFilter
-		? window.TeacherFilter.getSelectedTeacher('categoryTeacherFilter')
-		: '';
-
+// Table visibility rules (subject/branch scope, auto-game rows, access and
+// owner filters), shared by the render pass and the sibling reorder lookup.
+function getVisibleCategoryRows(categoriesList = categories) {
 	// Two scopes: "subject" is the advanced All categories view, "branch" is the
 	// structure of the opened course (root + descendants, subject filter bypassed
 	// because the branch already pins its subject).
-	const branchScope = categoryScope.mode === 'branch' ? branchIds(categoryScope.rootId) : null;
-	const visibleCategories = categoriesList.filter((category) => {
+	const branchScope =
+		categoryScope.mode === 'branch' ? branchIds(categoryScope.rootId) : null;
+	const categoryTeacherScope = window.TeacherFilter
+		? window.TeacherFilter.getSelectedTeacher('categoryTeacherFilter')
+		: '';
+	return categoriesList.filter((category) => {
 		if (branchScope) {
 			if (!branchScope.has(String(category.id))) return false;
-		} else if (String(category.subject_id || '') !== (activeCategorySubjectId === '__unassigned__' ? '' : activeCategorySubjectId)) {
+		} else if (
+			String(category.subject_id || '') !==
+			(activeCategorySubjectId === '__unassigned__' ? '' : activeCategorySubjectId)
+		) {
 			return false;
 		}
 		if (typeof isAutoGameCategory === 'function' && isAutoGameCategory(category)) {
@@ -4268,6 +5471,30 @@ function updateCategoryList(categoriesList = categories) {
 		}
 		return true;
 	});
+}
+
+function updateCategoryList(categoriesList = categories) {
+	const tbody = document.querySelector('#categoryList tbody');
+	if (!tbody) return;
+
+	// Get all questions from localStorage
+	let savedQuestions = window.__DI_CONTAINER__.repo.getAll_sync('questions');
+	if (window.Auth?.canAccessItem) {
+		savedQuestions = savedQuestions.filter((q) =>
+			window.Auth.canAccessItem('question', q),
+		);
+	}
+
+	if (window.TeacherFilter) {
+		window.TeacherFilter.populate(
+			'categoryTeacherFilter',
+			'categoryTeacherFilterWrap',
+			() => filterCategories(),
+		);
+	}
+	const visibleCategories = getVisibleCategoryRows(categoriesList);
+	const branchScope =
+		categoryScope.mode === 'branch' ? branchIds(categoryScope.rootId) : null;
 
 	// Add "Uncategorized" category if it doesn't exist. Only shown outside a
 	// concrete subject (the legacy bucket, or before any subject is picked):
@@ -4335,28 +5562,7 @@ function updateCategoryList(categoriesList = categories) {
 		}
 	}
 	// Render order: system rows first (as before), then the tree pre-order
-	// (roots sorted by the current sort control, children by name).
-	const sortBy =
-		document.getElementById('categorySortBy')?.value || 'name';
-	const direction = categorySortDirection === 'asc' ? 1 : -1;
-	const rootComparator = (a, b) => {
-		switch (sortBy) {
-			case 'date':
-				return (
-					direction * (new Date(b.dateCreated) - new Date(a.dateCreated))
-				);
-			case 'questions':
-				return (
-					direction * ((a.questionCount || 0) - (b.questionCount || 0))
-				);
-			case 'name':
-			default:
-				return (
-					direction *
-					String(a.name || '').localeCompare(String(b.name || ''))
-				);
-		}
-	};
+	// (roots per the sort control / manual order, children likewise).
 	const systemRows = visibleCategories.filter(
 		(c) => c.isSystem || c.id === 'uncategorized',
 	);
@@ -4364,7 +5570,7 @@ function updateCategoryList(categoriesList = categories) {
 	// tree pre-order (roots per the sort control, children by name).
 	const renderEntries = [
 		...systemRows.map((category) => ({ category, depth: 0 })),
-		...getOrderedCategoryTree(hierarchyScope, rootComparator),
+		...getOrderedCategoryTree(hierarchyScope),
 	];
 
 	tbody.innerHTML = ''; // Clear existing rows
@@ -4423,6 +5629,11 @@ function updateCategoryList(categoriesList = categories) {
 				if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
 				e.stopPropagation();
 				MobileActionSheet.open(`Category: ${escapeHtml(category.name)}`, [
+					{
+						label: 'Add Question',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+						onClick: () => openAddQuestionToCategoryModal(category.id),
+					},
 					{
 						label: 'Assign Questions',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
@@ -4493,7 +5704,7 @@ function updateCategoryList(categoriesList = categories) {
 								? parsedCreatedAt.toLocaleDateString()
 								: '-';
 						})()}</td>
-            ${categoryActionsCellHtml(category, assignable)}
+            ${categoryActionsCellHtml(category, assignable, rowCtx)}
         `;
 		if (isTrainingCategory(category.id)) {
 			row.classList.add('training-enabled');
@@ -6328,6 +7539,21 @@ window.deleteCategory = deleteCategory;
 window.openAssignCategoryQuestions = openAssignCategoryQuestions;
 window.closeAssignCategoryQuestions = closeAssignCategoryQuestions;
 window.saveAssignCategoryQuestions = saveAssignCategoryQuestions;
+window.openAddQuestionToCategoryModal = openAddQuestionToCategoryModal;
+window.closeAddQuestionToCategoryModal = closeAddQuestionToCategoryModal;
+window.switchAddQuestionTab = switchAddQuestionTab;
+window.addQuestionManual = addQuestionManual;
+window.addQuestionOpenAssignModal = addQuestionOpenAssignModal;
+window.addQuestionOpenAiModal = addQuestionOpenAiModal;
+window.toggleAddQuestionBankSelection = toggleAddQuestionBankSelection;
+window.selectAllVisibleAddQuestionBank = selectAllVisibleAddQuestionBank;
+window.saveAddQuestionBank = saveAddQuestionBank;
+window.adjustAddQuestionAiCount = adjustAddQuestionAiCount;
+window.addQuestionAiGenerate = addQuestionAiGenerate;
+window.toggleAddQuestionAiSelection = toggleAddQuestionAiSelection;
+window.toggleAddQuestionAiAll = toggleAddQuestionAiAll;
+window.saveAddQuestionAi = saveAddQuestionAi;
+window.pickAddQuestionLevel = pickAddQuestionLevel;
 
 // Shared helper for the dedicated assignment modals: promote the element to
 // <body> so it always stacks above nested containers, and hide the profile
@@ -6705,6 +7931,9 @@ window.selectLegacyWorkspaceItem = selectLegacyWorkspaceItem;
 window.listUnassignedWorkspaceItems = listUnassignedWorkspaceItems;
 window.getActiveLegacyWorkspaceKey = () => activeLegacyWorkspaceKey;
 window.renderSubjectTabBar = renderSubjectTabBar;
+window.onSubjectStripFilterChange = onSubjectStripFilterChange;
+window.clearSubjectStripFilters = clearSubjectStripFilters;
+window.toggleSubjectStripExpanded = toggleSubjectStripExpanded;
 window.revealCategoryFromActivity = revealCategoryFromActivity;
 window.createNewSubjectFlow = createNewSubjectFlow;
 window.openSubjectManagerModal = openSubjectManagerModal;

@@ -6198,6 +6198,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	setTimeout(() => {
 		if (typeof AIQuestionGenerator !== 'undefined') {
 			aiGenerator = new AIQuestionGenerator();
+			window.aiGenerator = aiGenerator;
 			initAISettingsUI();
 			console.log('AI Question Generator initialized');
 		} else {

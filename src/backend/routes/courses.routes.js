@@ -19,6 +19,7 @@ import { AppError, ForbiddenError, NotFoundError, ValidationError } from '../../
 import {
   CourseGenerateSchema, CourseAssignSchema, CourseReorderSchema,
   LessonContentGenerateSchema, CourseWithStructureSchema,
+  PrepSheetGenerateSchema,
 } from '../../shared/schemas/course.schema.js';
 import { CourseDocumentSchema } from '../../shared/schemas/courseDocument.schema.js';
 import {
@@ -28,6 +29,7 @@ import {
 import { getContainer } from '../container.js';
 import { toStudentPracticeView } from '../utils/studentQuestionView.js';
 import { renderCourseDocument } from '../services/courseDocumentRenderer.js';
+import { renderPrepSheet, PREP_SHEET_EXPORT_SCHEMA } from '../services/prepSheetRenderer.js';
 import {
   buildCourseImportSections,
   detectCourseDocumentOutline,
@@ -41,6 +43,19 @@ router.use(requireAuth, enforceTenant);
 
 const MANAGE_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
 const STUDENT_ROLES = [ROLES.STUDENT, ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
+
+// The prep-sheet routes read the lesson via repo.getById (raw row), where
+// prep_sheet is a JSON string; normalize it back to an object or null.
+function hydratePrepSheet(raw) {
+  if (!raw) return null;
+  if (typeof raw === 'object') return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 function assertCourseOwnership(course, user) {
   if (!course) return;
@@ -736,6 +751,97 @@ router.post('/:courseId/lessons/:lessonId/generate-content', requireRole(MANAGE_
     const detail = err && err.message ? String(err.message) : 'The AI provider call failed — check your connection, key and model, then try again.';
     next(new AppError('AI_PROVIDER_ERROR', detail, 502));
   }
+});
+
+/**
+ * POST /:courseId/lessons/:lessonId/prep-sheet — AI builds the pedagogical
+ * preparation sheet (session planning + one sheet per session) from the saved
+ * lesson content. The result is stored on the lesson; without `force` an
+ * existing sheet is returned as-is so re-opening the modal costs no tokens.
+ */
+router.post('/:courseId/lessons/:lessonId/prep-sheet', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const parsed = PrepSheetGenerateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.flatten().fieldErrors);
+    }
+    const params = parsed.data;
+    const { courseSvc, aiSvc, repo } = getContainer();
+
+    const course = await courseSvc.getById(req.params.courseId);
+    assertCourseOwnership(course, req.user);
+    const lesson = await repo.getById('lessons', req.params.lessonId);
+    if (!lesson || String(lesson.course_id) !== String(course.id)) throw new NotFoundError('Lesson');
+
+    // repo.getById hands back the raw row: prep_sheet is a JSON string there.
+    const saved = hydratePrepSheet(lesson.prep_sheet);
+    if (saved && !params.force) {
+      return res.json({ sheet: saved, regenerated: false });
+    }
+
+    const categoryPath = lesson.category_id
+      ? await buildCategoryPath(lesson.category_id)
+      : course.name;
+    const config = await resolveGenerationConfig(req, params);
+    const sheet = await aiSvc.generateLessonPrepSheet({
+      config,
+      language: params.language,
+      sessionMinutes: params.sessionMinutes,
+      lesson: { ...lesson, course_name: course.name },
+      categoryPath,
+    });
+    await courseSvc.updateLesson(lesson.id, { prep_sheet: sheet }, req.user);
+    res.json({ sheet, regenerated: true });
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
+    const detail = err && err.message ? String(err.message) : 'The AI provider call failed — check your connection, key and model, then try again.';
+    next(new AppError('AI_PROVIDER_ERROR', detail, 502));
+  }
+});
+
+/**
+ * POST /:courseId/lessons/:lessonId/prep-sheet/export — renders the SAVED
+ * sheet to .docx/.pdf (no AI call). 422 when the lesson has no sheet yet.
+ */
+router.post('/:courseId/lessons/:lessonId/prep-sheet/export', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const parsed = PREP_SHEET_EXPORT_SCHEMA.safeParse(req.body || {});
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const { courseSvc, repo } = getContainer();
+
+    const course = await courseSvc.getById(req.params.courseId);
+    assertCourseOwnership(course, req.user);
+    const lesson = await repo.getById('lessons', req.params.lessonId);
+    if (!lesson || String(lesson.course_id) !== String(course.id)) throw new NotFoundError('Lesson');
+    const sheet = hydratePrepSheet(lesson.prep_sheet);
+    if (!sheet) {
+      throw new ValidationError({ prep_sheet: ['Generate the preparation sheet before exporting.'] });
+    }
+
+    // Reuse the saved course identity (ministry, school, teacher, level …) so
+    // the sheet header matches the course documents; fall back to live data.
+    const identity = course.document_header && typeof course.document_header === 'object' ? course.document_header : {};
+    const headerInfo = {
+      ...identity,
+      teacherName: identity.teacherName || req.user.username,
+      subject: identity.subject || course.name,
+      courseName: course.name,
+      lessonTitle: lesson.title,
+    };
+    const rendered = await renderPrepSheet(sheet, headerInfo, parsed.data.format);
+    const safeBase = String(lesson.title || 'prep-sheet')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'prep-sheet';
+    const filename = `fiche-prep-${safeBase}.${rendered.extension}`;
+    res.setHeader('Content-Type', rendered.mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Length', String(rendered.buffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(rendered.buffer);
+  } catch (err) { next(err); }
 });
 
 export default router;

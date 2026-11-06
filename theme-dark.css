@@ -7231,3 +7231,255 @@ html[data-theme='dark'] #settingsModal .settings-section select option {
 	color: var(--text-main);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   Add Question to Category (3-tab modal) — dark overrides
+   Cards fall back to #ffffff in the light sheet; retarget them here to
+   --bg-surface-alt so they read as raised rows above the modal sheet.
+   ═══════════════════════════════════════════════════════════════════════ */
+html[data-theme='dark'] .add-question-modal .modal-content {
+	background: var(--bg-surface) !important;
+	color: var(--text-main) !important;
+	border: 1px solid var(--border-color) !important;
+}
+
+html[data-theme='dark'] .add-question-target-chip {
+	background: rgba(129, 140, 248, 0.18);
+	color: #a5b4fc;
+}
+
+html[data-theme='dark'] .add-question-tab .tab-icon {
+	background: rgba(226, 232, 240, 0.1);
+}
+
+html[data-theme='dark'] .add-question-tab.active .tab-icon {
+	background: rgba(129, 140, 248, 0.22);
+	color: #a5b4fc;
+}
+
+html[data-theme='dark'] .manual-tab-body {
+	border-color: var(--border-color);
+	background: linear-gradient(180deg, rgba(129, 140, 248, 0.08), transparent 60%);
+}
+
+html[data-theme='dark'] .manual-tab-body h3,
+html[data-theme='dark'] .manual-tab-icon {
+	color: #e6edf7;
+}
+
+html[data-theme='dark'] .manual-tab-icon {
+	background: rgba(129, 140, 248, 0.22);
+	color: #a5b4fc;
+}
+
+html[data-theme='dark'] .level-selector,
+html[data-theme='dark'] .bank-picker-list,
+html[data-theme='dark'] .ai-generator-results {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .level-selector-header label,
+html[data-theme='dark'] .ai-field-label,
+html[data-theme='dark'] .ai-results-title {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .level-option,
+html[data-theme='dark'] .level-branch {
+	background: var(--bg-surface);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .level-option:hover {
+	border-color: rgba(129, 140, 248, 0.4);
+	background: rgba(129, 140, 248, 0.1);
+}
+
+html[data-theme='dark'] .level-option.active {
+	border-color: #a5b4fc;
+	background: rgba(129, 140, 248, 0.2);
+	color: #c7d2fe;
+}
+
+html[data-theme='dark'] .level-branch {
+	color: var(--text-secondary);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .level-none-hint {
+	background: rgba(180, 83, 9, 0.25);
+	color: #fbbf24;
+}
+
+html[data-theme='dark'] .bank-question-item,
+html[data-theme='dark'] .ai-question-item,
+html[data-theme='dark'] .ai-type-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .bank-question-item:hover,
+html[data-theme='dark'] .ai-question-item:hover {
+	border-color: rgba(129, 140, 248, 0.45);
+	background: rgba(129, 140, 248, 0.08);
+}
+
+html[data-theme='dark'] .bank-question-item.selected,
+html[data-theme='dark'] .ai-question-item.selected {
+	border-color: #a5b4fc;
+	background: rgba(129, 140, 248, 0.16);
+}
+
+html[data-theme='dark'] .bank-question-item.filed-here,
+html[data-theme='dark'] .bank-question-item.filed-here:hover {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .bank-question-text,
+html[data-theme='dark'] .ai-question-text,
+html[data-theme='dark'] .ai-type-name {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .bank-meta-chip,
+html[data-theme='dark'] .bank-meta-cat,
+html[data-theme='dark'] .ai-option-chip {
+	background: rgba(226, 232, 240, 0.08);
+	color: var(--text-secondary);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .bank-meta-chip.type-easy { background: rgba(34, 197, 94, 0.18); color: #86efac; }
+html[data-theme='dark'] .bank-meta-chip.type-medium { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+html[data-theme='dark'] .bank-meta-chip.type-hard { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
+html[data-theme='dark'] .bank-meta-chip.type-multiple-choice { background: rgba(129, 140, 248, 0.18); color: #c7d2fe; }
+html[data-theme='dark'] .bank-meta-chip.type-true-false { background: rgba(236, 72, 153, 0.18); color: #f9a8d4; }
+html[data-theme='dark'] .bank-meta-chip.type-fill-blank { background: rgba(34, 211, 238, 0.18); color: #a5f3fc; }
+
+html[data-theme='dark'] .bank-filed-badge {
+	background: rgba(34, 197, 94, 0.18);
+	color: #86efac;
+}
+
+html[data-theme='dark'] .bank-question-check,
+html[data-theme='dark'] .ai-question-check {
+	color: #a5b4fc;
+}
+
+html[data-theme='dark'] .ai-option-chip.correct {
+	background: rgba(34, 197, 94, 0.22);
+	border-color: rgba(134, 239, 172, 0.5);
+	color: #86efac;
+}
+
+html[data-theme='dark'] .ai-type-stepper .stepper-btn {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .ai-type-stepper .stepper-btn:hover {
+	background: #4f46e5;
+	border-color: #4f46e5;
+	color: #ffffff;
+}
+
+html[data-theme='dark'] .ai-type-stepper .stepper-val {
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .ai-error {
+	background: rgba(220, 38, 38, 0.18);
+	color: #fca5a5;
+}
+
+html[data-theme='dark'] .bank-picker-list,
+html[data-theme='dark'] .ai-questions-list {
+	scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+}
+
+html[data-theme='dark'] .exam-add-question-btn {
+	border-color: var(--border-color);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] .exam-add-question-btn:hover {
+	background: rgba(129, 140, 248, 0.16);
+	border-color: #a5b4fc;
+	color: #c7d2fe;
+}
+
+/* ── Subjects strip: admin filters + collapse expander (round12) ─────── */
+html[data-theme='dark'] #subjects .subject-strip-toolbar {
+	background: rgba(129, 140, 248, 0.07);
+	border-color: rgba(129, 140, 248, 0.28);
+}
+
+html[data-theme='dark'] #subjects .subject-strip-search > svg {
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] #subjects .subject-strip-toolbar .form-control {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-main);
+}
+
+html[data-theme='dark'] #subjects .subject-strip-clear {
+	color: #a5b4fc;
+}
+
+html[data-theme='dark'] #subjects .subject-strip-clear:hover {
+	background: rgba(129, 140, 248, 0.18);
+}
+
+html[data-theme='dark'] #subjects .subject-strip-count {
+	color: var(--text-secondary);
+}
+
+html[data-theme='dark'] #subjects .subject-pill-more {
+	border-color: rgba(129, 140, 248, 0.55);
+	background: rgba(129, 140, 248, 0.1);
+	color: #a5b4fc;
+}
+
+html[data-theme='dark'] #subjects .subject-pill-more:hover {
+	background: rgba(129, 140, 248, 0.2);
+	border-color: #818cf8;
+	color: #c7d2fe;
+}
+
+html[data-theme='dark'] #subjects .subject-strip-empty {
+	color: var(--text-secondary);
+}
+
+/* ── Lesson preparation sheet modal (round16) ────────────────────── */
+html[data-theme='dark'] .prep-sheet-card {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .prep-sheet-table th {
+	background: #2c4a75;
+	border-color: #3b4a63;
+}
+
+html[data-theme='dark'] .prep-sheet-table td {
+	border-color: #3b4a63;
+}
+
+html[data-theme='dark'] .prep-sheet-table tbody tr:nth-child(even) td {
+	background: #1d2739;
+}
+
+html[data-theme='dark'] .prep-sheet-total td {
+	background: #223047;
+}
+
+html[data-theme='dark'] .prep-sheet-card > h4,
+html[data-theme='dark'] .prep-sheet-card h5 {
+	color: #9db8dc;
+}
+

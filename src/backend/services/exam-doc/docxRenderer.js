@@ -164,9 +164,15 @@ function applyDocxTheme(cfg) {
   })();
 }
 
+// Word cannot open a .docx whose XML carries C0 control characters; they
+// ride in with question text pasted from Word/PDF (vertical tab, form feed).
+// Same guard as the course renderer's makeRun — XML 1.0 allows only \t \n \r.
+const xmlSafe = (text) =>
+  String(text == null ? '' : text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+
 const run = (text, opts = {}) =>
   new TextRun({
-    text,
+    text: xmlSafe(text),
     font: opts.font || FONT,
     size: opts.size ?? BODY,
     bold: !!opts.bold,
@@ -1013,7 +1019,7 @@ export async function renderExamDocumentDocx(model, options = {}) {
             new TextRun({ text: ' / ', font: FONT, size: TINY, color: '000000' }),
             new TextRun({ children: [PageNumber.TOTAL_PAGES], font: FONT, size: TINY, color: '000000' }),
             new TextRun({
-              text: `\t${isKey ? `${model.meta.examName} — confidentiel` : model.meta.examName}`,
+              text: xmlSafe(`\t${isKey ? `${model.meta.examName} — confidentiel` : model.meta.examName}`),
               font: FONT,
               size: TINY,
               color: '000000',

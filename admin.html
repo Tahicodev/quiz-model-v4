@@ -40,10 +40,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-04-round9" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-04-round9" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-06-round4" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-06-round2" />
 		<link rel="stylesheet" href="theme.css?v=2026-11-04-round9" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-04-round9" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-06-round1" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -145,12 +145,12 @@
 		<script src="realtime-admin.js?v=2026-10-14-r2" defer></script>
 
 		<!-- Admin page scripts -->
-		<script src="bulk-selection.js?v=2026-11-04-round6" defer></script>
+		<script src="bulk-selection.js?v=2026-11-06-round4" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-11-04-round6" defer></script>
+		<script src="category-management.js?v=2026-11-06-round2" defer></script>
 		<script src="questions-management.js?v=2026-11-01-courses2" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
-		<script src="courses-management.js?v=2026-11-04-round6" defer></script>
+		<script src="courses-management.js?v=2026-11-06-round4" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
@@ -2045,7 +2045,41 @@
 							<!-- Subject Management: one pill per real subject, leftover
 							     unassigned courses as extra pills, and the dashed + New pill. -->
 							<div class="subject-tab-bar-wrap">
-								<h2 class="subject-tab-bar-label" id="subjectTabBarLabel">Subject Management</h2>
+								<div class="subject-strip-head">
+									<h2 class="subject-tab-bar-label" id="subjectTabBarLabel">Subject Management</h2>
+									<!-- Admin-only: search + author filter for big subject lists -->
+									<div class="subject-strip-toolbar" id="subjectStripToolbar" data-roles="admin" hidden>
+										<div class="subject-strip-search">
+											<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+											<input
+												type="text"
+												id="subjectStripSearch"
+												class="form-control"
+												placeholder="Filter subjects…"
+												aria-label="Filter subjects"
+												oninput="onSubjectStripFilterChange()"
+											/>
+										</div>
+										<select
+											id="subjectStripAuthor"
+											class="form-control"
+											aria-label="Filter subjects by author"
+											onchange="onSubjectStripFilterChange()"
+										>
+											<option value="">All authors</option>
+										</select>
+										<button
+											type="button"
+											class="subject-strip-clear"
+											id="subjectStripClearBtn"
+											onclick="clearSubjectStripFilters()"
+											hidden
+										>
+											Clear
+										</button>
+										<span class="subject-strip-count" id="subjectStripCount" aria-live="polite"></span>
+									</div>
+								</div>
 								<div class="games-studio-tabs subject-strip" id="subjectTabBar" role="tablist" aria-labelledby="subjectTabBarLabel"></div>
 							</div>
 							<div id="subjectOverviewPane">
@@ -2073,6 +2107,56 @@
 												</svg>
 												<span>New Course</span>
 											</button>
+											<div
+												id="bulk-actions-courses"
+												class="bulk-actions-container hidden"
+											>
+												<span class="selection-info">
+													<span id="selected-count-courses">0</span> selected
+												</span>
+												<button
+													type="button"
+													class="btn btn-primary bulk-single-only"
+													title="Rename the selected course"
+													onclick="editSelectedCourseName()"
+												>
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="16"
+														height="16"
+														viewBox="0 0 24 24"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2"
+													>
+														<path d="M12 20h9"></path>
+														<path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+													</svg>
+													<span>Edit</span>
+												</button>
+												<button
+													type="button"
+													class="btn btn-danger-soft"
+													onclick="deleteSelectedCourses()"
+												>
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="16"
+														height="16"
+														viewBox="0 0 24 24"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2"
+													>
+														<polyline points="3 6 5 6 21 6"></polyline>
+														<path
+															d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+														></path>
+													</svg>
+													<span>Delete Selected</span>
+												</button>
+												<div class="divider-vertical"></div>
+											</div>
 										</div>
 										<div class="toolbar-controls">
 											<div class="search-wrapper">
@@ -2110,36 +2194,6 @@
 										>
 											Clean up
 										</button>
-									</div>
-									<div
-										id="bulk-actions-courses"
-										class="bulk-actions-container hidden"
-									>
-										<span class="selection-info">
-											<span id="selected-count-courses">0</span> selected
-										</span>
-										<button
-											type="button"
-											class="btn btn-danger-soft"
-											onclick="deleteSelectedCourses()"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<polyline points="3 6 5 6 21 6"></polyline>
-												<path
-													d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-												></path>
-											</svg>
-											<span>Delete Selected</span>
-										</button>
-										<div class="divider-vertical"></div>
 									</div>
 									<div class="table-container">
 										<table id="courseList">
@@ -4459,6 +4513,94 @@
 							<textarea id="question" rows="3" required></textarea>
 						</div>
 
+						<!-- Curriculum filing lives right under the question text: it is
+						     the first thing the teacher anchors the question to. -->
+						<div class="form-row">
+							<div class="form-group half">
+								<div class="label-with-action label-stack">
+									<label for="category">Curriculum Objective / Category</label>
+									<button
+										type="button"
+										class="btn-text-action"
+										onclick="toggleInlineCategoryInput()"
+										id="addCategoryToggleBtn"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="12"
+											height="12"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<line x1="12" y1="5" x2="12" y2="19"></line>
+											<line x1="5" y1="12" x2="19" y2="12"></line>
+										</svg>
+										+ New Category / Axis
+									</button>
+								</div>
+
+								<!-- Select Mode -->
+								<div id="category-select-container">
+									<select id="category" class="form-control">
+										<option value="">Uncategorized (General Pool)</option>
+									</select>
+								</div>
+
+								<!-- Inline Input Mode -->
+								<div
+									id="category-input-container"
+									class="inline-input-wrapper hidden"
+									style="display: none"
+								>
+									<input
+										type="text"
+										id="inlineCategoryInput"
+										class="form-control"
+										placeholder="Enter name..."
+									/>
+									<button
+										type="button"
+										class="btn-inline-save"
+										onclick="saveInlineCategory()"
+										title="Save"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<polyline points="20 6 9 17 4 12"></polyline>
+										</svg>
+									</button>
+									<button
+										type="button"
+										class="btn-inline-cancel"
+										onclick="toggleInlineCategoryInput()"
+										title="Cancel"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<line x1="18" y1="6" x2="6" y2="18"></line>
+											<line x1="6" y1="6" x2="18" y2="18"></line>
+										</svg>
+									</button>
+								</div>
+							</div>
+						</div>
+
 						<div class="form-group">
 							<label>Question Type</label>
 							<div class="radio-group">
@@ -4905,89 +5047,6 @@
 						</div>
 
 						<div class="form-row">
-							<div class="form-group half">
-								<div class="label-with-action">
-									<label for="category">Curriculum Objective / Category</label>
-									<button
-										type="button"
-										class="btn-text-action"
-										onclick="toggleInlineCategoryInput()"
-										id="addCategoryToggleBtn"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="12"
-											height="12"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<line x1="12" y1="5" x2="12" y2="19"></line>
-											<line x1="5" y1="12" x2="19" y2="12"></line>
-										</svg>
-										+ New Category / Axis
-									</button>
-								</div>
-
-								<!-- Select Mode -->
-								<div id="category-select-container">
-									<select id="category" class="form-control">
-										<option value="">Uncategorized (General Pool)</option>
-									</select>
-								</div>
-
-								<!-- Inline Input Mode -->
-								<div
-									id="category-input-container"
-									class="inline-input-wrapper hidden"
-									style="display: none"
-								>
-									<input
-										type="text"
-										id="inlineCategoryInput"
-										class="form-control"
-										placeholder="Enter name..."
-									/>
-									<button
-										type="button"
-										class="btn-inline-save"
-										onclick="saveInlineCategory()"
-										title="Save"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="14"
-											height="14"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<polyline points="20 6 9 17 4 12"></polyline>
-										</svg>
-									</button>
-									<button
-										type="button"
-										class="btn-inline-cancel"
-										onclick="toggleInlineCategoryInput()"
-										title="Cancel"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="14"
-											height="14"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<line x1="18" y1="6" x2="6" y2="18"></line>
-											<line x1="6" y1="6" x2="18" y2="18"></line>
-										</svg>
-									</button>
-								</div>
-							</div>
 							<div class="form-group half">
 								<label for="points">Points</label>
 								<input
@@ -7886,11 +7945,128 @@
 					>
 						Save Assignment
 					</button>
+		</div>
+	</div>
+</div>
+
+	<!-- Add Question to Category (3-tab modal) -->
+	<div id="addQuestionToCategoryModal" class="modal">
+		<div class="modal-content add-question-modal">
+			<div class="modal-header">
+				<div class="modal-header-with-icon">
+					<div class="modal-header-icon icon-blue">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="22"
+							height="22"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+						>
+							<line x1="12" y1="5" x2="12" y2="19"></line>
+							<line x1="5" y1="12" x2="19" y2="12"></line>
+						</svg>
+					</div>
+					<div class="modal-header-text">
+						<h2 id="addQuestionToCategoryTitle">Add Question</h2>
+						<p class="modal-header-subtitle" id="addQuestionToCategorySubtitle">
+							Choose how to add questions to this category
+						</p>
+						<div class="add-question-target-chip" id="addQuestionTargetChip" aria-live="polite">
+							<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="20 6 9 17 4 12"></polyline></svg>
+							<span id="addQuestionTargetChipLabel">Files into: this category</span>
+						</div>
+					</div>
+				</div>
+				<span class="close" onclick="closeAddQuestionToCategoryModal()">&times;</span>
+			</div>
+			<div class="modal-body">
+				<!-- Level selector (shown when category has nested subcategories) -->
+				<div id="addQuestionLevelSelector" class="level-selector" style="display:none;">
+					<div class="level-selector-header">
+						<label>This level has nested sub-levels. Pick where to file:</label>
+					</div>
+					<div id="addQuestionLevelOptions" class="level-options"></div>
+					<div id="addQuestionLevelNone" class="level-none-hint" style="display:none;">No sub-level can hold questions yet — add one first.</div>
+				</div>
+
+				<!-- Tab navigation -->
+				<div class="add-question-tabs" role="tablist">
+					<button type="button" class="add-question-tab active" role="tab" aria-selected="true" data-tab="manual" onclick="switchAddQuestionTab('manual')">
+						<span class="tab-icon" aria-hidden="true">
+							<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>
+						</span>
+						<span>Question Editor</span>
+					</button>
+					<button type="button" class="add-question-tab" role="tab" aria-selected="false" data-tab="assign" onclick="switchAddQuestionTab('assign')">
+						<span class="tab-icon" aria-hidden="true">
+							<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+						</span>
+						<span>Assign Questions</span>
+					</button>
+					<button type="button" class="add-question-tab" role="tab" aria-selected="false" data-tab="ai" onclick="switchAddQuestionTab('ai')">
+						<span class="tab-icon" aria-hidden="true">
+							<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+						</span>
+						<span>AI Question Generator</span>
+					</button>
+				</div>
+
+				<!-- Tab 1: Manual creation (persistent pane, static content) -->
+				<div id="addQuestionTabManual" class="add-question-tab-content active" role="tabpanel">
+					<div class="manual-tab-body">
+						<div class="manual-tab-icon">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"></path></svg>
+						</div>
+						<h3>Write a new question in the editor</h3>
+						<p class="text-muted" id="addQuestionManualHint">The editor opens with the category pre-selected.</p>
+						<button type="button" class="btn btn-primary manual-open-btn" onclick="addQuestionManual()">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+							Open Question Editor
+						</button>
+					</div>
+				</div>
+
+				<!-- Tab 2: hand over to the proven category Assign Questions modal -->
+				<div id="addQuestionTabAssign" class="add-question-tab-content" role="tabpanel">
+					<div class="manual-tab-body">
+						<div class="manual-tab-icon">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+						</div>
+						<h3>Pick existing questions from the bank</h3>
+						<p class="text-muted" id="addQuestionAssignHint">The Assign Questions picker opens pre-loaded with your current questions.</p>
+						<button type="button" class="btn btn-primary manual-open-btn" onclick="addQuestionOpenAssignModal()">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+							Open Assign Questions
+						</button>
+					</div>
+				</div>
+
+				<!-- Tab 3: hand over to the full AI Question Generator modal -->
+				<div id="addQuestionTabAI" class="add-question-tab-content" role="tabpanel">
+					<div class="manual-tab-body">
+						<div class="manual-tab-icon">
+							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+						</div>
+						<h3>Generate new questions with AI</h3>
+						<p class="text-muted" id="addQuestionAiHint">The AI Question Generator opens with the topic and category pre-filled.</p>
+						<button type="button" class="btn btn-primary manual-open-btn" onclick="addQuestionOpenAiModal()">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:8px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+							Open AI Question Generator
+						</button>
+					</div>
 				</div>
 			</div>
+			<div class="modal-footer modal-footer--unified" role="group" aria-label="Add question actions">
+				<button type="button" class="btn btn-secondary" onclick="closeAddQuestionToCategoryModal()">
+					Cancel
+				</button>
+			</div>
 		</div>
+	</div>
 
-		<!-- Assign Questions to Exam -->
+	<!-- Assign Questions to Exam -->
 		<div id="assignExamQuestionsModal" class="modal">
 			<div class="modal-content assign-modal">
 				<div class="modal-header">

@@ -53,6 +53,18 @@ function sessionActiveWindowMs() {
   return (Number.isFinite(minutes) && minutes > 0 ? minutes : 30) * 60_000;
 }
 
+// Grace window for refresh-token rotation. Two refreshes can present the SAME
+// token within a few seconds — two tabs of one browser sharing the httpOnly
+// cookie, or a client retry after a lost response. The first consumes+revokes
+// it and mints a successor; without this window the second would hit
+// "Refresh token revoked" and the client would read that as a fatal auth
+// failure and sign the user out mid-session. A consumed token replayed inside
+// this window is treated as the same session continuing (see refresh()).
+function rotationGraceMs() {
+  const ms = Number(process.env.REFRESH_ROTATION_GRACE_MS || 30000);
+  return Number.isFinite(ms) && ms > 0 ? ms : 30000;
+}
+
 /** Non-revoked refresh-token rows for a user (any portal — one user, one session). */
 async function liveRefreshTokens(repo, userId) {
   const { data: tokens } = await repo.getAll('refresh_tokens', {
@@ -258,7 +270,23 @@ export class AuthService {
     const stored = tokens[0];
 
     if (!stored) throw new UnauthorizedError('Invalid refresh token');
-    if (stored.revoked) throw new UnauthorizedError('Refresh token revoked');
+
+    if (stored.revoked) {
+      // Rotation-grace replay. If this token was consumed moments ago by a
+      // ROTATION (a live successor exists that was minted without a login
+      // fingerprint — refresh never stamps ip/user-agent, a real sign-in
+      // always does), this is the same session continuing after a racing
+      // duplicate refresh, not a takeover: hand back a fresh access token for
+      // the successor WITHOUT minting another, so the losing caller recovers
+      // transparently. Anything else (a login-minted successor, or none inside
+      // the window) still fails closed as a revoked token.
+      const replay = await this.#rotationGraceSuccessor(stored);
+      if (replay) {
+        const accessToken = this.#signAccess(this.#stripSensitive(replay.user), { sid: replay.token.id });
+        return { accessToken };
+      }
+      throw new UnauthorizedError('Refresh token revoked');
+    }
     if (new Date(stored.expires_at) < new Date()) {
       throw new UnauthorizedError('Refresh token expired');
     }
@@ -300,8 +328,35 @@ export class AuthService {
    * fail open — rotation mints them a sid within one access-TTL window.
    * @returns {Promise<{ active: boolean, reason?: string }>}
    */
-  async sessionStatus(userId, sid) {
+  async sessionStatus(userId, sid, cookieTokens = null) {
     if (!userId) throw new UnauthorizedError();
+    const nowMs = Date.now();
+
+    // Browser-ownership check first. The httpOnly refresh cookie is scoped to
+    // ONE browser and rotated in place, so every tab of this browser sends the
+    // CURRENT live token. If that cookie still maps to a live, un-revoked token
+    // for this user, THIS browser owns the session — the access token's `sid`
+    // can lag it after a sibling tab rotated the cookie, but that is the same
+    // session continuing, not a takeover. Only a revoked/absent cookie (another
+    // device signed in and revoked it) can end the session here.
+    const rawCookies = Array.isArray(cookieTokens) ? cookieTokens : (cookieTokens ? [cookieTokens] : []);
+    for (const raw of rawCookies) {
+      if (!raw) continue;
+      const { data: rows } = await this.#repo.getAll('refresh_tokens', {
+        filters: { token_hash: hashToken(raw) },
+        limit: 1,
+      });
+      const cookieToken = rows[0];
+      if (
+        cookieToken &&
+        String(cookieToken.user_id) === String(userId) &&
+        !cookieToken.revoked &&
+        new Date(cookieToken.expires_at).getTime() > nowMs
+      ) {
+        return { active: true };
+      }
+    }
+
     if (!sid) return { active: true, current: false };
     const { data: tokens } = await this.#repo.getAll('refresh_tokens', {
       filters: { user_id: userId, revoked: false },
@@ -309,7 +364,6 @@ export class AuthService {
       direction: 'desc',
       limit: 100,
     });
-    const nowMs = Date.now();
     const live = (tokens || []).filter((t) => t && new Date(t.expires_at).getTime() > nowMs);
     const mine = live.find((t) => String(t.id) === String(sid));
     if (!mine) return { active: false, reason: 'revoked' };
@@ -318,6 +372,36 @@ export class AuthService {
       return { active: false, reason: 'superseded' };
     }
     return { active: true };
+  }
+
+  /**
+   * Rotation-grace lookup for a just-consumed refresh token: return the live
+   * successor if one was minted by a ROTATION (no ip/user-agent fingerprint)
+   * within the grace window. A successor stamped by a real login means another
+   * device genuinely took over, so we return null and the caller fails closed.
+   */
+  async #rotationGraceSuccessor(consumed) {
+    if (!consumed?.user_id) return null;
+    const grace = rotationGraceMs();
+    const { data: tokens } = await this.#repo.getAll('refresh_tokens', {
+      filters: { user_id: consumed.user_id, revoked: false },
+      orderBy: 'created_at',
+      direction: 'desc',
+      limit: 5,
+    });
+    const nowMs = Date.now();
+    const successor = (tokens || []).find(
+      (t) =>
+        t &&
+        new Date(t.expires_at).getTime() > nowMs &&
+        !t.user_agent &&
+        !t.ip_address &&
+        nowMs - new Date(t.created_at).getTime() <= grace,
+    );
+    if (!successor) return null;
+    const user = await this.#repo.getById('users', successor.user_id);
+    if (!user || user.status !== 'active') return null;
+    return { token: successor, user };
   }
 
   /**

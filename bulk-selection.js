@@ -145,6 +145,11 @@
 				? document.getElementById(cfg.addBtnId)
 				: null;
 			if (bar) {
+				// Publish the current selection count on the bar so CSS can toggle
+				// single-selection-only actions (e.g. the "Edit" button on the
+				// courses bulk bar) without every consumer having to add its own
+				// listener.
+				bar.dataset.count = String(selectedCount);
 				if (selectedCount > 0) {
 					bar.classList.remove('hidden');
 					if (addBtn) addBtn.style.display = 'none';

@@ -188,8 +188,13 @@ router.post('/refresh', refreshLimiter, async (req, res, next) => {
 		const { accessToken, refreshToken } = await authSvc.refresh(rawRefreshToken);
 
 		// Rotate the refresh token cookie under the SAME name it arrived as,
-		// so an admin-tab refresh never touches the student tab's cookie.
-		res.cookie(scopedName || REFRESH_COOKIE_BASE, refreshToken, REFRESH_COOKIE_OPTIONS);
+		// so an admin-tab refresh never touches the student tab's cookie. A
+		// rotation-grace replay returns only an access token (no new refresh
+		// token): leave the cookie untouched so we never clobber the successor
+		// the winning refresh already set for this browser.
+		if (refreshToken) {
+			res.cookie(scopedName || REFRESH_COOKIE_BASE, refreshToken, REFRESH_COOKIE_OPTIONS);
+		}
 		res.json({ accessToken });
 	} catch (err) {
 		next(err);
@@ -204,7 +209,18 @@ router.post('/refresh', refreshLimiter, async (req, res, next) => {
 router.get('/session', refreshLimiter, requireAuth, async (req, res, next) => {
 	try {
 		const { authSvc } = getContainer();
-		const status = await authSvc.sessionStatus(req.user.id, req.user.sid || null);
+		// The browser sends every portal refresh cookie it holds regardless of
+		// which tab is asking; hand them all to the status check so a tab is
+		// judged by the live session THIS browser actually owns (the access
+		// token's `sid` can lag a sibling tab's rotation without that being a
+		// takeover). Cookies are httpOnly and same-site, so a different device
+		// cannot present them.
+		const cookieTokens = [
+			req.cookies?.[refreshCookieName('admin')],
+			req.cookies?.[refreshCookieName('student')],
+			req.cookies?.[REFRESH_COOKIE_BASE],
+		].filter(Boolean);
+		const status = await authSvc.sessionStatus(req.user.id, req.user.sid || null, cookieTokens);
 		if (!status.active) {
 			return res.status(409).json({
 				success: false,

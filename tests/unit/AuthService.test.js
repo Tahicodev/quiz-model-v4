@@ -341,6 +341,71 @@ describe('AuthService', () => {
         current: false,
       });
     });
+
+    it('sessionStatus treats a live browser cookie as active even when the access sid lagged', async () => {
+      const now = Date.now();
+      repo.getAll.mockImplementation(async (table, opts) => {
+        const f = opts?.filters || {};
+        if (table !== 'refresh_tokens') return { data: [], total: 0 };
+        // Cookie lookup (by token_hash): a live token this browser holds.
+        if (f.token_hash) {
+          return { data: [{ id: 'rt-cookie', user_id: 'u-1', revoked: false, expires_at: new Date(now + 3600_000).toISOString() }], total: 1 };
+        }
+        // sid list: our stale sid is NOT the newest — would be superseded.
+        return { data: [{ id: 'rt-other', user_id: 'u-1', revoked: false, expires_at: new Date(now + 3600_000).toISOString(), created_at: new Date(now).toISOString() }], total: 1 };
+      });
+      await expect(service.sessionStatus('u-1', 'rt-mine', ['raw-cookie-token'])).resolves.toEqual({ active: true });
+    });
+
+    it('sessionStatus ignores a cookie belonging to another user and falls back to the sid check', async () => {
+      const now = Date.now();
+      repo.getAll.mockImplementation(async (table, opts) => {
+        const f = opts?.filters || {};
+        if (table !== 'refresh_tokens') return { data: [], total: 0 };
+        if (f.token_hash) {
+          return { data: [{ id: 'rt-x', user_id: 'OTHER', revoked: false, expires_at: new Date(now + 3600_000).toISOString() }], total: 1 };
+        }
+        return { data: [{ id: 'rt-mine', user_id: 'u-1', revoked: false, expires_at: new Date(now + 3600_000).toISOString(), created_at: new Date(now).toISOString() }], total: 1 };
+      });
+      await expect(service.sessionStatus('u-1', 'rt-mine', ['raw-cookie'])).resolves.toEqual({ active: true });
+    });
+
+    it('rotation-grace replay: a just-consumed token with a recent rotation successor returns a new access token', async () => {
+      const jwt = (await import('jsonwebtoken')).default;
+      const { config } = await import('../../src/backend/config.js');
+      const now = Date.now();
+      repo.getAll.mockImplementation(async (table, opts) => {
+        const f = opts?.filters || {};
+        if (table !== 'refresh_tokens') return { data: [], total: 0 };
+        // Presented token was consumed (revoked) by the racing refresh.
+        if (f.token_hash) {
+          return { data: [{ id: 'rt-1', user_id: 'u-1', revoked: true, expires_at: new Date(now + 3600_000).toISOString(), created_at: new Date(now - 60_000).toISOString() }], total: 1 };
+        }
+        // Successor minted by a rotation (no ip/user-agent), moments ago.
+        return { data: [{ id: 'rt-2', user_id: 'u-1', revoked: false, expires_at: new Date(now + 3600_000).toISOString(), created_at: new Date(now).toISOString(), user_agent: null, ip_address: null }], total: 1 };
+      });
+      repo.getById.mockResolvedValue(makeUser());
+      const result = await service.refresh('consumed-token');
+      expect(result.accessToken).toEqual(expect.any(String));
+      expect(result.refreshToken).toBeUndefined(); // no new token minted
+      const payload = jwt.verify(result.accessToken, config.jwtSecret);
+      expect(payload.sid).toBe('rt-2');
+      expect(repo.create).not.toHaveBeenCalled();
+    });
+
+    it('rotation-grace replay refuses a successor minted by a real login (genuine takeover)', async () => {
+      const now = Date.now();
+      repo.getAll.mockImplementation(async (table, opts) => {
+        const f = opts?.filters || {};
+        if (table !== 'refresh_tokens') return { data: [], total: 0 };
+        if (f.token_hash) {
+          return { data: [{ id: 'rt-1', user_id: 'u-1', revoked: true, expires_at: new Date(now + 3600_000).toISOString(), created_at: new Date(now - 60_000).toISOString() }], total: 1 };
+        }
+        // Successor carries a login fingerprint → another device signed in.
+        return { data: [{ id: 'rt-2', user_id: 'u-1', revoked: false, expires_at: new Date(now + 3600_000).toISOString(), created_at: new Date(now).toISOString(), user_agent: 'Firefox', ip_address: '9.9.9.9' }], total: 1 };
+      });
+      await expect(service.refresh('consumed-token')).rejects.toBeInstanceOf(UnauthorizedError);
+    });
   });
 
   describe('admin session inspection', () => {

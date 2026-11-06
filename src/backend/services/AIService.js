@@ -15,6 +15,7 @@
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { ValidationError, AppError } from '../../shared/errors.js';
+import { PrepSheetDataSchema } from '../../shared/schemas/course.schema.js';
 import { QUESTION_TYPES, DIFFICULTY } from '../../shared/constants.js';
 
 const typeValues = Object.values(QUESTION_TYPES);
@@ -498,31 +499,66 @@ Example:
 [{ "categoryId": "abc", "title": "Introduction", "summary": "Ce cours presente..." }]`;
   }
 
+  // Section headings rendered into the document by courseDocumentRenderer
+  // are inserted verbatim, so we localize them here. The renderer never
+  // depends on the English label — it treats every `##` as a generic
+  // subheading — but the reader expects a French course to read "Objectifs",
+  // not "Objectives".
+  #lessonSectionLabels(language = 'French') {
+    const lang = String(language || '').toLowerCase();
+    const table = {
+      french: ['Objectifs', 'Concepts clés', 'Explication', 'Exemples', 'Erreurs fréquentes', "Vérifiez vos acquis"],
+      français: ['Objectifs', 'Concepts clés', 'Explication', 'Exemples', 'Erreurs fréquentes', "Vérifiez vos acquis"],
+      english: ['Objectives', 'Key concepts', 'Explanation', 'Examples', 'Common mistakes', 'Check yourself'],
+      spanish: ['Objetivos', 'Conceptos clave', 'Explicación', 'Ejemplos', 'Errores frecuentes', 'Comprueba lo aprendido'],
+      español: ['Objetivos', 'Conceptos clave', 'Explicación', 'Ejemplos', 'Errores frecuentes', 'Comprueba lo aprendido'],
+      portuguese: ['Objetivos', 'Conceitos-chave', 'Explicação', 'Exemplos', 'Erros comuns', 'Teste seus conhecimentos'],
+      german: ['Lernziele', 'Kernbegriffe', 'Erklärung', 'Beispiele', 'Häufige Fehler', 'Überprüfe dein Wissen'],
+      italian: ['Obiettivi', 'Concetti chiave', 'Spiegazione', 'Esempi', 'Errori comuni', 'Verifica'],
+      dutch: ['Leerdoelen', 'Kernbegrippen', 'Uitleg', 'Voorbeelden', 'Veelgemaakte fouten', 'Test jezelf'],
+      turkish: ['Kazanımlar', 'Temel kavramlar', 'Açıklama', 'Örnekler', 'Sık yapılan hatalar', 'Kendini dene'],
+      arabic: ['الأهداف', 'المفاهيم الأساسية', 'الشرح', 'أمثلة', 'أخطاء شائعة', 'تحقق من تعلمك'],
+    };
+    return table[lang] || table.english;
+  }
+
   buildLessonContentPrompt({ language = 'French', lesson, categoryPath, questionDigest = [], includeQuestions = true }) {
     const digest = questionDigest.length
-      ? `QUESTIONS THE STUDENTS WILL PRACTICE AFTER THIS LESSON (your content must teach what these ask):
-${questionDigest.slice(0, 30).map((t) => `- ${t}`).join('\n')}`
+      ? `QUESTIONS THE STUDENTS WILL PRACTICE AFTER THIS LESSON (your content must teach what these ask):\n${questionDigest.slice(0, 30).map((t) => `- ${t}`).join('\n')}`
       : '';
-    return `You are a teacher writing one lesson of a course. Write the full lesson content for:
+    const [secObjectives, secKeyConcepts, secExplanation, secExamples, secMistakes, secCheck] = this.#lessonSectionLabels(language);
+    const withCheck = includeQuestions && questionDigest.length;
+    const sections = [
+      `## ${secObjectives}`,
+      `## ${secKeyConcepts}`,
+      `## ${secExplanation}`,
+      `## ${secExamples}`,
+      `## ${secMistakes}`,
+      ...(withCheck ? [`## ${secCheck}`] : []),
+    ].join('\n   ');
+    return `You are a teacher writing the body of ONE lesson inside a larger course. The document renderer will place this lesson under its own numbered chapter/section heading, so write ONLY the lesson body — no wrapper title, no breadcrumb, no metadata block.
+
+TARGET LANGUAGE: ${language}. ALL output (headings, prose, examples, list items) must be in ${language}. Never leave a section heading in English.
 
 COURSE: ${lesson.course_name || ''}
-LESSON TITLE: ${lesson.title}
+LESSON TITLE (already shown as the chapter heading by the renderer — do NOT repeat it): ${lesson.title}
 LESSON SUMMARY: ${lesson.summary || '(none)'}
-QUIZ CATEGORY PATH: ${categoryPath}
+QUIZ CATEGORY PATH (context only — do NOT reprint it in the body): ${categoryPath}
 ${digest}
 
 RULES:
-1. Write lesson BODY CONTENT only. Do not invent a course, lesson, quiz, or question record.
-2. Output clean Markdown only: no HTML, code fences, JSON wrapper, or commentary.
-3. Use exactly these top-level sections, in this order:
-   ## Objectives
-   ## Key concepts
-   ## Explanation
-   ## Examples
-   ## Common mistakes${includeQuestions && questionDigest.length ? '\n   ## Check yourself' : ''}
-4. Put the actual teaching text under each heading. Use Markdown paragraphs, lists, and inline code; never include answer keys.
-5. Match the lesson title, summary, quiz category path, and the app's practice-question topic. Do not claim facts not supported by the topic.
-6. Language: ${language}. Keep it focused at roughly 300-600 words.${includeQuestions && questionDigest.length ? '\n7. Under "Check yourself", briefly invite the student to try the attached practice questions without revealing answers.' : '\n7. Do not add a "Check yourself" section because no practice questions are attached.'}`;
+1. Output clean Markdown body content only. No HTML, no code fences (\`\`\`), no JSON, no commentary before or after.
+2. Do NOT hand-number sections or paragraphs (no "1.", "I.", "a)" before a heading). The app applies the document numeration template; anything you write on top of it will duplicate.
+3. Do NOT repeat the lesson title as the first line, and do NOT add a document heading like "Course material", "Leçon", "Lesson" or a category breadcrumb — the renderer already shows those.
+4. Do NOT restate the title inside a section (never write something like "## Définition — Information en informatique : L'information en informatique désigne…"). Assume the reader just read the title; open directly with the substance.
+5. Use exactly these top-level sections, in this order, and translate them verbatim into ${language} if they are not already in that language:
+   ${sections}
+6. Put real teaching content under each heading. Paragraphs, bullet lists, inline \`code\`, and short worked examples only. No answer keys, no "réponses" list.
+7. "${secObjectives}" is 2-4 short bullet items using observable verbs (identifier, appliquer, analyser…). "${secKeyConcepts}" is a compact definition list of the vocabulary the practice questions will use. Both sections must fit on the same page as the chapter heading — keep them tight.
+8. Teach what is assessed: your explanation must cover every fact, term or operation the practice-question digest below expects. Do not invent facts outside the topic.
+9. Keep the body roughly 350-600 words. Prefer density over decoration.${withCheck
+      ? `\n10. Under "${secCheck}", invite the student to run the attached practice questions without revealing any answer (one or two sentences is enough).`
+      : `\n10. Do NOT add a "${secCheck}" section: no practice questions are attached to this lesson.`} `;
   }
 
   /** Repair-and-parse a JSON array of objects from raw model output. */
@@ -542,6 +578,101 @@ RULES:
       if (rows.length) return rows;
     }
     throw new ValidationError({ response: ['The model did not return parseable JSON — try again or pick a stronger model.'] });
+  }
+
+  /** Extract one JSON object from raw model output (fences, prose around it). */
+  #parseJsonObject(raw) {
+    let text = String(raw || '').trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) text = text.slice(start, end + 1);
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new ValidationError({ response: ['Expected a single JSON object.'] });
+    }
+    return parsed;
+  }
+
+  /**
+   * Generate the pedagogical preparation sheet of one lesson: the model first
+   * plans the session split, then writes one detailed sheet per session. The
+   * tolerant PrepSheetDataSchema normalizes the JSON; the Session Distribution
+   * table is recomputed server-side from `sessions` (never trusted from AI).
+   */
+  async generateLessonPrepSheet({ config, language = 'French', sessionMinutes = 55, lesson, categoryPath = '' }) {
+    if (!config?.model_id) throw new ValidationError({ model_id: ['No model selected'] });
+    const prompt = this.buildLessonPrepSheetPrompt({ language, sessionMinutes, lesson, categoryPath });
+    let lastError = null;
+    // One retry: models occasionally emit one stray comma or unescaped quote.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const raw = await this.#callProvider(config, prompt);
+      try {
+        const parsed = PrepSheetDataSchema.parse(this.#parseJsonObject(raw));
+        parsed.lessonTitle = String(lesson?.title || parsed.lessonTitle || '').slice(0, 300);
+        parsed.language = language;
+        parsed.sessionMinutes = sessionMinutes;
+        parsed.generatedAt = new Date().toISOString();
+        parsed.sessions = parsed.sessions.map((s, i) => ({ ...s, index: s.index || i + 1 }));
+        return parsed;
+      } catch (err) {
+        lastError = err;
+        logger?.warn?.({ err: err?.message }, 'prep-sheet: model returned unparseable JSON, retrying');
+      }
+    }
+    throw new AppError(
+      'AI_PROVIDER_ERROR',
+      'The model did not return a valid preparation sheet JSON after two attempts — try again or pick a stronger model.',
+      502,
+    );
+  }
+
+  buildLessonPrepSheetPrompt({ language = 'French', sessionMinutes = 55, lesson, categoryPath = '' }) {
+    const content = String(lesson?.content || '').slice(0, 24000);
+    return `You are an expert in pedagogy, instructional design, and educational planning. From the lesson material below, produce a professional, practical LESSON PREPARATION SHEET that guides the teacher step by step through the teaching session(s).
+
+LESSON TITLE: ${lesson?.title || ''}
+LESSON SUMMARY: ${lesson?.summary || '(none)'}
+POSITION IN THE COURSE STRUCTURE: ${categoryPath || '(none)'}
+LESSON CONTENT (Markdown, the source material — preserve its academic accuracy, do not invent facts beyond it):
+"""
+${content || '(no written content — plan from the title and summary only, and mark uncertain fields "À compléter")'}
+"""
+
+STEP 1 — SESSION PLANNING. Analyze the whole material and decide how many teaching sessions of ${sessionMinutes} minutes are needed. One session per coherent, teachable chunk; do not force everything into one session and do not fragment unnecessarily. The total of every session's "estimatedMinutes" must equal (number of sessions x ${sessionMinutes}).
+
+STEP 2 — ONE PREPARATION SHEET PER SESSION. Each sheet must cover: general information (module/chapter = course structure path, lesson title, type: introduction/apprentissage/pratique/révision/évaluation), a general objective and measurable specific objectives using action verbs, prerequisites, the lesson content in a logical teaching sequence (key concepts each with a heading and a body of definitions, explanations, examples), a DETAILED LESSON PLAN whose rows are chronological stages (introduction et motivation, rappel des prérequis, presentation des objectifs, découverte et explication, exemples et démonstration, activité pratique ou exercices, correction et discussion, synthèse et évaluation) with realistic durations that sum to the session length, and for EVERY row the three distinct dimensions: what the teacher does (teacherRole), what the students do (studentRole), and the expected learning outcome (expectedOutcome) — concrete actions and questions, never generic descriptions. Then: teaching methods, required materials, assessment tasks with evaluation criteria and expected answers, the key points students must remember, and homework when relevant. Each session builds logically on the previous one.
+
+OUTPUT FORMAT — reply with ONE valid JSON object and NOTHING else (no markdown fences, no commentary):
+{
+  "sessions": [
+    {
+      "index": 1,
+      "title": "short session title",
+      "estimatedMinutes": ${sessionMinutes},
+      "contentSummary": "what this session covers",
+      "generalObjective": "what students achieve by the end",
+      "specificObjectives": ["verifiable outcome with an action verb", ...],
+      "prerequisites": ["knowledge or skill", ...],
+      "keyConcepts": [{ "heading": "concept name", "body": "definition, explanation, examples" }, ...],
+      "planRows": [{ "stage": "Introduction et motivation", "duration": "8 min", "activities": "content / activities", "teacherRole": "explains, asks, guides...", "studentRole": "observe, answer, practice...", "resources": "board, textbook page...", "expectedOutcome": "what students can do after" }, ...],
+      "methods": ["démonstration, questionnement, travail en groupe...", ...],
+      "materials": ["teaching materials", ...],
+      "assessment": [{ "task": "short verification activity", "criteria": "how it is judged", "expectedAnswer": "" }, ...],
+      "keyPoints": ["essential point to remember", ...],
+      "homework": ["follow-up exercise", ...]
+    }, ...
+  ]
+}
+
+RULES:
+1. Language of every value: ${language}. Keep standard JSON (double quotes, no trailing commas, no comments).
+2. Never invent information missing from the material: use an empty string "" or "À compléter" instead.
+3. planRows durations are strings like "10 min"; they must sum to that session's estimatedMinutes.
+4. No "sessions" field with fewer than 1 entry; typical chapters need 2-6 sessions.
+5. Do not wrap values in objects where arrays are expected; lists of strings stay plain strings (one idea per entry).`;
   }
 
   /** Server-side provider call with per-provider request shapes + timeout. */

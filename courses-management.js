@@ -19,6 +19,7 @@
 	let currentCourse = null; // full course with lessons (detail view)
 	let aiConfigsCache = null;
 	let courseBatchGenerating = false;
+	let prepSheetBatchGenerating = false;
 	let publishAfterAssignCourseId = null;
 	let courseDetailMode = 'view';
 	let selectedCourseConfigId = '';
@@ -825,6 +826,53 @@
 			return;
 		}
 		toast(`Deleted ${deleted.length} ${deleted.length === 1 ? 'course' : 'courses'}.`);
+	};
+
+	// Bulk bar "Edit" — renames the single selected course without opening the
+	// detail view. Only reachable when exactly one row is checked (the button
+	// carries .bulk-single-only and hides itself otherwise via [data-count]).
+	window.editSelectedCourseName = function () {
+		const A = api();
+		if (!A) return;
+		const ids = window.BulkSelect ? window.BulkSelect.getSelectedIds('courses') : [];
+		if (ids.length !== 1) {
+			toast('Select exactly one course to edit its name.', 'error');
+			return;
+		}
+		const wanted = String(ids[0]);
+		const course = coursesCache.find((c) => String(c.id) === wanted);
+		if (!course) return toast('Course not found \u2014 refresh the list.', 'error');
+		openModal(
+			'courseBulkRenameModal',
+			'Edit course',
+			`<div class="form-group"><label for="courseBulkRenameName">Name</label><input id="courseBulkRenameName" value="${esc(course.name || '')}" style="width:100%;" /></div>` +
+			`<div class="form-group"><label for="courseBulkRenameDesc">Description</label><textarea id="courseBulkRenameDesc" rows="3" style="width:100%;">${esc(course.description || '')}</textarea></div>`,
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseBulkRenameModal\')">Cancel</button>' +
+			`<button type="button" class="btn btn-primary" onclick="saveBulkCourseMeta('${esc(course.id)}')">Save</button>`,
+		);
+	};
+
+	window.saveBulkCourseMeta = async function (courseId) {
+		const A = api();
+		if (!A) return;
+		const name = document.getElementById('courseBulkRenameName')?.value?.trim();
+		const description = document.getElementById('courseBulkRenameDesc')?.value?.trim();
+		if (!name) return toast('Name is required.', 'error');
+		try {
+			const updated = await A.raw('PATCH', `/courses/${encodeURIComponent(courseId)}`, { name, description });
+			const cached = coursesCache.find((c) => String(c.id) === String(courseId));
+			if (cached) Object.assign(cached, updated || { name, description });
+			if (String(currentCourse?.id || '') === String(courseId)) {
+				currentCourse.name = name;
+				currentCourse.description = description;
+			}
+			window.closeCourseModal('courseBulkRenameModal');
+			if (window.BulkSelect) window.BulkSelect.clear('courses');
+			try { renderCourseList(); } catch (_) { /* list not mounted */ }
+			toast('Course updated.');
+		} catch (err) {
+			toast('Update failed: ' + (err?.message || 'error'), 'error');
+		}
 	};
 
 	// ── Orphan sweep ─────────────────────────────────────────────────────────
@@ -2069,6 +2117,9 @@
 			(course.lessons?.length
 				? '<button type="button" class="btn btn-primary btn-sm" data-generate-all-levels onclick="confirmGenerateAllCourseLessons()">Generate all levels with AI</button>'
 				: '') +
+			(course.lessons?.length
+				? '<button type="button" class="btn btn-sm" data-prep-sheets-all onclick="generateAllPrepSheets()">Prep Sheets</button>'
+				: '') +
 			'</div></div>' +
 			`<div class="course-tree">${structureHtml}</div></section>` +
 			'<h3 style="margin:8px 0;">Lessons</h3>' +
@@ -2385,6 +2436,7 @@
 			`<textarea id="lessonContent-${esc(lesson.id)}" class="lesson-card-content" rows="8" aria-label="Lesson content" placeholder="Lesson content (markdown). Use the AI button to fill it.">${esc(lesson.content || '')}</textarea>` +
 			'<div class="lesson-card-actions">' +
 			`<button type="button" class="btn btn-ai-generate btn-sm" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate content via AI</button>` +
+			`<button type="button" class="btn btn-sm" onclick="openLessonPrepSheet('${esc(lesson.id)}')">Prep Sheet</button>` +
 			`<button type="button" class="btn btn-sm" onclick="generateQuestionsFromLesson('${esc(lesson.id)}')">Generate questions</button>` +
 			`<button type="button" class="btn btn-sm" onclick="previewLesson('${esc(lesson.id)}')">Preview</button>` +
 			`<button type="button" class="btn btn-primary btn-sm" onclick="saveLesson('${esc(lesson.id)}')">Save</button>` +
@@ -2593,11 +2645,13 @@
 			: null;
 		try {
 			if (!course) course = await A.raw('GET', `/courses/${encodeURIComponent(courseId)}`);
+			const savedHeader = course.document_header || {};
 			const header = {
 				teacherName: window.currentUser?.name || '',
 				subject: course.name || '',
-				...(course.document_header || {}),
+				...savedHeader,
 			};
+			const identitySaved = Boolean(savedHeader && Object.keys(savedHeader).some((k) => String(savedHeader[k] || '').trim()));
 			const templates = [
 				['classique', 'Classique', 'Balanced · serif'],
 				['moderne', 'Moderne', 'Contemporary · teal'],
@@ -2623,64 +2677,398 @@
 				`<button type="button" class="course-doc-layout${id === 'bandeau' ? ' is-selected' : ''}" data-course-doc-layout="${id}" aria-pressed="${id === 'bandeau'}">` +
 					`<span class="course-doc-layout-icon layout-${id}" aria-hidden="true"><i></i><b></b><em></em></span><strong>${name}</strong><small>${hint}</small></button>`,
 			).join('');
+			const NUMERATION_TEMPLATES = [
+				['default', 'Classic', 'I · 1 · a · i'],
+				['decimal', 'Decimal', '1 · 1.1 · 1.1.1'],
+				['roman', 'Roman', 'I · II · III'],
+				['alpha', 'Alpha', 'A · B · C'],
+				['book', 'Book', 'Chapter · Section · Subsection'],
+				['module', 'Module', 'Module · Unit · Topic · Axis'],
+				['progressif', 'Progressif', '1 · 1.1 · 1.1.1 (no letters)'],
+				['academique', 'Académique', 'Module I · Section 1 · 1.1'],
+			];
+			const COVER_TEMPLATES = [
+				['academic', 'Academic', 'Centered title, clean institution header'],
+				['modern', 'Modern', 'Bold colour band, contemporary look'],
+				['book', 'Book', 'Left accent bar, publication style'],
+				['university', 'University', 'Framed, formal institutional layout'],
+				['elegant', 'Elegant', 'Big centered title between fine rules'],
+				['minimal', 'Minimal', 'Generous whitespace, understated grid'],
+			];
+			const coverCards = COVER_TEMPLATES.map(([id, name, hint]) =>
+				`<button type="button" class="course-doc-cover${id === 'academic' ? ' is-selected' : ''}" data-course-doc-cover="${id}" aria-pressed="${id === 'academic'}">` +
+					`<strong>${name}</strong><small>${hint}</small></button>`,
+			).join('');
+			const numerationCards = NUMERATION_TEMPLATES.map(([id, name, hint]) =>
+				`<button type="button" class="course-doc-numeration${id === 'default' ? ' is-selected' : ''}" data-course-doc-numeration="${id}" aria-pressed="${id === 'default'}">` +
+					`<strong>${name}</strong><small>${hint}</small></button>`,
+			).join('');
 			const formField = (id, label, value, placeholder = '') =>
 				`<label class="course-doc-field"><span>${label}</span><input id="courseDoc${id}" maxlength="200" value="${esc(value || '')}" placeholder="${esc(placeholder)}"></label>`;
+
+			const DOC_STEPS = [
+				{ label: 'Document identity', hint: 'School, teacher and course details' },
+				{ label: 'Visual style', hint: 'Pick a document theme and header arrangement' },
+				{ label: 'Organize the course', hint: 'Choose the opening pages and lesson pagination' },
+				{ label: 'Preview & export', hint: 'Recap your choices and generate the document' },
+			];
+
+			const state = {
+				step: 0,
+				templateId: 'classique',
+				numerationTemplate: 'default',
+				coverTemplate: 'academic',
+				headerLayout: 'bandeau',
+				includeCover: true,
+				includeTableOfContents: true,
+				includeLessonPath: false,
+				startEachLessonOnNewPage: false,
+				identitySaved,
+			};
+
+			// One-click document presets: each bundles a theme + cover + header +
+			// numeration + pagination into a named look so a teacher can start from
+			// a finished style instead of assembling it field by field.
+			const STYLE_PRESETS = [
+				['academique', 'Cours académique', 'Module numbering, university cover, page per lesson', {
+					templateId: 'officiel', coverTemplate: 'university', headerLayout: 'bandeau',
+					numerationTemplate: 'academique', includeCover: true, includeTableOfContents: true,
+					includeLessonPath: false, startEachLessonOnNewPage: true,
+				}],
+				['fiche', 'Fiche moderne', 'Decimal numbering, colour-band cover, flowing pages', {
+					templateId: 'moderne', coverTemplate: 'modern', headerLayout: 'centre',
+					numerationTemplate: 'progressif', includeCover: true, includeTableOfContents: true,
+					includeLessonPath: false, startEachLessonOnNewPage: false,
+				}],
+				['livre', 'Livre', 'Book numbering, publication cover, chapter per lesson', {
+					templateId: 'classique', coverTemplate: 'book', headerLayout: 'classique',
+					numerationTemplate: 'book', includeCover: true, includeTableOfContents: true,
+					includeLessonPath: false, startEachLessonOnNewPage: true,
+				}],
+				['minimal', 'Sans couverture', 'No cover, compact decimal, quick handout', {
+					templateId: 'compact', coverTemplate: 'minimal', headerLayout: 'minimal',
+					numerationTemplate: 'decimal', includeCover: false, includeTableOfContents: true,
+					includeLessonPath: false, startEachLessonOnNewPage: false,
+				}],
+			];
+			const presetCards = STYLE_PRESETS.map(([id, name, hint]) =>
+				`<button type="button" class="course-doc-preset" data-course-doc-preset="${id}">` +
+					`<strong>${esc(name)}</strong><small>${esc(hint)}</small></button>`,
+			).join('');
+
+			const buildIdentityPanel = () =>
+				`<div class="course-doc-fields">
+					${formField('School', 'School / institution', header.schoolName, 'School name')}
+					${formField('Ministry', 'Ministry', header.ministry)}
+					${formField('Academy', 'Academy / region', header.academy)}
+					${formField('Year', 'Academic year', header.academicYear, '2025–2026')}
+					${formField('Teacher', 'Teacher', header.teacherName)}
+					${formField('Subject', 'Subject', header.subject)}
+					${formField('Level', 'Level', header.level)}
+					${formField('Group', 'Class / group', header.group)}
+					${formField('Date', 'Date', header.date || new Date().toISOString().slice(0, 10))}
+				</div>
+				<div class="course-doc-identity-actions">
+					<button type="button" class="btn btn-outline course-doc-save-identity" id="courseDocSaveIdentity">
+						${state.identitySaved ? 'Identity saved' : 'Save as default identity'}
+					</button>
+					${state.identitySaved ? '<button type="button" class="btn btn-secondary btn-sm" id="courseDocEditIdentity">Edit saved identity</button>' : ''}
+					<span class="course-doc-identity-hint">Saved on this course and reused each time you create a document.</span>
+				</div>`;
+
+			const buildStylePanel = () =>
+				`<section class="course-doc-section"><h4>Quick presets</h4>
+					<div class="course-doc-presets">${presetCards}</div>
+					<p class="course-doc-help">Start from a finished look, then fine-tune below.</p>
+				</section>
+				<section class="course-doc-section"><h4>Document template</h4>
+					<div class="course-doc-templates">${templateCards}</div>
+				</section>
+				<section class="course-doc-section"><h4>Level numeration</h4>
+					<div class="course-doc-numerations">${numerationCards}</div>
+					<p class="course-doc-help">Choose how course levels are numbered in the document (automatic — no manual entry needed).</p>
+				</section>
+				<section class="course-doc-section"><h4>Header arrangement</h4>
+					<div class="course-doc-layouts">${headerLayoutCards}</div>
+				</section>
+				<section class="course-doc-section"><h4>Cover page template</h4>
+					<div class="course-doc-covers">${coverCards}</div>
+					<p class="course-doc-help">Choose the look of the first (cover) page.</p>
+				</section>`;
+
+			const buildOrganizePanel = () =>
+				`<div class="course-doc-options">
+					<label><input id="courseDocIncludeCover" type="checkbox"${state.includeCover ? ' checked' : ''}><span><strong>Cover page</strong><small>Course title, branch, school and course overview</small></span></label>
+					<label><input id="courseDocIncludeContents" type="checkbox"${state.includeTableOfContents ? ' checked' : ''}><span><strong>Table of contents</strong><small>Lesson list with its category path</small></span></label>
+					<label><input id="courseDocLessonPath" type="checkbox"${state.includeLessonPath ? ' checked' : ''}><span><strong>Show the lesson path under each title</strong><small>The small breadcrumb line (hidden by default)</small></span></label>
+					<label><input id="courseDocLessonPages" type="checkbox"${state.startEachLessonOnNewPage ? ' checked' : ''}><span><strong>Start every lesson on a new page</strong><small>Use for a workbook-style handout</small></span></label>
+				</div>
+				<p class="course-doc-status" id="courseDocStatus">${course.lessons?.length ? `${course.lessons.length} lessons will be included.` : 'No lessons yet; the document will contain the course header.'}</p>`;
+
+			const buildPreviewPanel = () => {
+				const tplName = templates.find(([id]) => id === state.templateId)[1];
+				const numerationName = NUMERATION_TEMPLATES.find(([id]) => id === state.numerationTemplate)[1];
+				const coverName = COVER_TEMPLATES.find(([id]) => id === state.coverTemplate)[1];
+				const layoutName = headerLayouts.find(([id]) => id === state.headerLayout)[1];
+				const fields = [
+					['School', header.schoolName],
+					['Ministry', header.ministry],
+					['Academy', header.academy],
+					['Year', header.academicYear],
+					['Teacher', header.teacherName],
+					['Subject', header.subject],
+					['Level', header.level],
+					['Group', header.group],
+					['Date', header.date],
+				].filter(([, value]) => String(value || '').trim());
+				const identityHtml = fields.length
+					? fields.map(([label, value]) => `<div class="course-doc-recap-row"><span class="course-doc-recap-label">${esc(label)}</span><span class="course-doc-recap-value">${esc(value)}</span></div>`).join('')
+					: `<div class="course-doc-recap-empty">No identity details filled in.</div>`;
+				return `
+					<div class="course-doc-recap">
+						<h4>Summary of your choices</h4>
+						<div class="course-doc-recap-grid">
+							<div class="course-doc-recap-card">
+								<span class="course-doc-recap-card-title">Document identity</span>
+								${identityHtml}
+							</div>
+							<div class="course-doc-recap-card">
+								<span class="course-doc-recap-card-title">Visual style</span>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Template</span><span class="course-doc-recap-value">${esc(tplName)}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Level numeration</span><span class="course-doc-recap-value">${esc(numerationName)}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Cover template</span><span class="course-doc-recap-value">${esc(coverName)}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Header arrangement</span><span class="course-doc-recap-value">${esc(layoutName)}</span></div>
+							</div>
+							<div class="course-doc-recap-card">
+								<span class="course-doc-recap-card-title">Course organization</span>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Cover page</span><span class="course-doc-recap-value">${state.includeCover ? 'Yes' : 'No'}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Table of contents</span><span class="course-doc-recap-value">${state.includeTableOfContents ? 'Yes' : 'No'}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Lesson path</span><span class="course-doc-recap-value">${state.includeLessonPath ? 'Shown' : 'Hidden'}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Lesson pagination</span><span class="course-doc-recap-value">${state.startEachLessonOnNewPage ? 'New page per lesson' : 'Flowing'}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Lessons</span><span class="course-doc-recap-value">${course.lessons?.length || 0}</span></div>
+							</div>
+						</div>
+						<p class="course-doc-recap-note">Review the choices above, then export the document as PDF or Word. The rendering uses the nested course structure (category → subcategory → … → axis).</p>
+					</div>`;
+			};
+
+			const buildPanels = () =>
+				`<section class="course-doc-panel active" data-course-doc-panel="identity">
+					<h4 class="course-doc-panel-title">Document identity</h4>
+					${buildIdentityPanel()}
+				</section>
+				<section class="course-doc-panel" data-course-doc-panel="style">
+					<h4 class="course-doc-panel-title">Visual style</h4>
+					${buildStylePanel()}
+				</section>
+				<section class="course-doc-panel" data-course-doc-panel="organize">
+					<h4 class="course-doc-panel-title">Organize the course</h4>
+					${buildOrganizePanel()}
+				</section>
+				<section class="course-doc-panel" data-course-doc-panel="preview">
+					${buildPreviewPanel()}
+				</section>`;
+
+			const buildStepper = () =>
+				`<div class="course-doc-stepper" role="tablist" aria-label="Document creation steps">
+					${DOC_STEPS.map((s, i) =>
+						`<button type="button" class="course-doc-step${i === 0 ? ' active' : ''}" data-course-doc-step="${i}" aria-selected="${i === 0}">
+							<span class="course-doc-step-num">${i + 1}</span>
+							<span class="course-doc-step-text"><strong>${esc(s.label)}</strong><br><small>${esc(s.hint)}</small></span>
+						</button>`).join('')}
+				</div>`;
+
+			const buildFooter = () => {
+				const last = state.step === DOC_STEPS.length - 1;
+				const prev = state.step === 0 ? '<button type="button" class="btn btn-secondary btn-sm" data-course-doc-nav="prev" disabled>← Previous</button>' :
+					'<button type="button" class="btn btn-secondary btn-sm" data-course-doc-nav="prev">← Previous</button>';
+				const next = last ? '' : '<button type="button" class="btn btn-primary btn-sm" data-course-doc-nav="next">Next →</button>';
+				const exportButtons = last ?
+					`<button type="button" class="btn course-doc-export course-doc-export-pdf" onclick="exportCourseDocument('pdf')">Export PDF</button>
+					<button type="button" class="btn course-doc-export course-doc-export-docx" onclick="exportCourseDocument('docx')">Export Word</button>` : '';
+				return `${prev}<span class="course-doc-step-indicator">Step ${state.step + 1} of ${DOC_STEPS.length}</span>${next}${exportButtons}
+					<button type="button" class="btn btn-secondary" data-course-doc-nav="close">Close</button>`;
+			};
+
 			const modal = openModal(
 				'courseDocumentModal',
 				`Create document · ${esc(course.name)}`,
 				`<div class="course-doc-form" data-course-id="${esc(course.id)}">
-					<div class="course-doc-step-label"><span>01</span><div><strong>Document identity</strong><small>School, teacher and course details</small></div></div>
-					<section class="course-doc-section">
-						<div class="course-doc-fields">
-							${formField('School', 'School / institution', header.schoolName, 'School name')}
-							${formField('Ministry', 'Ministry', header.ministry)}
-							${formField('Academy', 'Academy / region', header.academy)}
-							${formField('Year', 'Academic year', header.academicYear, '2025–2026')}
-							${formField('Teacher', 'Teacher', header.teacherName)}
-							${formField('Subject', 'Subject', header.subject)}
-							${formField('Level', 'Level', header.level)}
-							${formField('Group', 'Class / group', header.group)}
-							${formField('Date', 'Date', header.date || new Date().toISOString().slice(0, 10))}
-						</div>
-					</section>
-					<div class="course-doc-step-label"><span>02</span><div><strong>Choose the visual style</strong><small>Pick a document theme and header arrangement</small></div></div>
-					<section class="course-doc-section"><h4>Document template</h4>
-						<div class="course-doc-templates">${templateCards}</div>
-					</section>
-					<section class="course-doc-section"><h4>Header arrangement</h4>
-						<div class="course-doc-layouts">${headerLayoutCards}</div>
-					</section>
-					<div class="course-doc-step-label"><span>03</span><div><strong>Organize the course</strong><small>Choose the opening pages and lesson pagination</small></div></div>
-					<section class="course-doc-section course-doc-options">
-						<label><input id="courseDocIncludeCover" type="checkbox" checked><span><strong>Cover page</strong><small>Course title, branch, school and course overview</small></span></label>
-						<label><input id="courseDocIncludeContents" type="checkbox" checked><span><strong>Table of contents</strong><small>Lesson list with its category path</small></span></label>
-						<label><input id="courseDocLessonPages" type="checkbox"><span><strong>Start every lesson on a new page</strong><small>Use for a workbook-style handout</small></span></label>
-					</section>
-					<p class="course-doc-status" id="courseDocStatus" role="status">${course.lessons?.length ? `${course.lessons.length} lessons will be included.` : 'No lessons yet; the document will contain the course header.'}</p>
+					${buildStepper()}
+					${buildPanels()}
 				</div>`,
-				`<button type="button" class="btn" onclick="closeCourseModal('courseDocumentModal')">Cancel</button>
-					<button type="button" class="btn course-doc-export course-doc-export-pdf" onclick="exportCourseDocument('pdf')">Export PDF</button>
-					<button type="button" class="btn course-doc-export course-doc-export-docx" onclick="exportCourseDocument('docx')">Export Word</button>`,
+				buildFooter(),
 				'course-document-modal',
 			);
-			modal.querySelectorAll('[data-course-doc-template]').forEach((button) => {
-				button.addEventListener('click', () => {
-					modal.querySelectorAll('[data-course-doc-template]').forEach((item) => {
-						const selected = item === button;
+
+			const showStep = (index) => {
+				state.step = Math.max(0, Math.min(DOC_STEPS.length - 1, index));
+				const root = modal.querySelector('.course-doc-form');
+				root.querySelectorAll('.course-doc-panel').forEach((panel, i) => {
+					panel.classList.toggle('active', i === state.step);
+				});
+				root.querySelectorAll('[data-course-doc-step]').forEach((btn, i) => {
+					btn.classList.toggle('active', i === state.step);
+					btn.setAttribute('aria-selected', String(i === state.step));
+				});
+				modal.querySelector('.modal-footer').innerHTML = buildFooter();
+				bindFooter(modal);
+				if (state.step === DOC_STEPS.length - 1) {
+					modal.querySelector('.course-doc-panel[data-course-doc-panel="preview"]').innerHTML = buildPreviewPanel();
+				}
+			};
+
+			const bindStepper = () => {
+				modal.querySelectorAll('[data-course-doc-step]').forEach((button) => {
+					button.addEventListener('click', () => {
+						showStep(Number(button.getAttribute('data-course-doc-step')));
+					});
+				});
+			};
+
+			const bindFooter = (root) => {
+				root.querySelectorAll('[data-course-doc-nav]').forEach((button) => {
+					const nav = button.getAttribute('data-course-doc-nav');
+					button.addEventListener('click', () => {
+						if (nav === 'prev') showStep(state.step - 1);
+						else if (nav === 'next') showStep(state.step + 1);
+						else if (nav === 'close') closeCourseModal('courseDocumentModal');
+					});
+				});
+			};
+
+			const bindSelections = () => {
+				modal.querySelectorAll('[data-course-doc-template]').forEach((button) => {
+					button.addEventListener('click', () => {
+						state.templateId = button.dataset.courseDocTemplate || 'classique';
+						modal.querySelectorAll('[data-course-doc-template]').forEach((item) => {
+							const selected = item === button;
+							item.classList.toggle('is-selected', selected);
+							item.setAttribute('aria-pressed', String(selected));
+						});
+					});
+				});
+				modal.querySelectorAll('[data-course-doc-layout]').forEach((button) => {
+					button.addEventListener('click', () => {
+						state.headerLayout = button.dataset.courseDocLayout || 'bandeau';
+						modal.querySelectorAll('[data-course-doc-layout]').forEach((item) => {
+							const selected = item === button;
+							item.classList.toggle('is-selected', selected);
+							item.setAttribute('aria-pressed', String(selected));
+						});
+					});
+				});
+				modal.querySelectorAll('[data-course-doc-numeration]').forEach((button) => {
+					button.addEventListener('click', () => {
+						state.numerationTemplate = button.dataset.courseDocNumeration || 'default';
+						modal.querySelectorAll('[data-course-doc-numeration]').forEach((item) => {
+							const selected = item === button;
+							item.classList.toggle('is-selected', selected);
+							item.setAttribute('aria-pressed', String(selected));
+						});
+					});
+				});
+				modal.querySelectorAll('[data-course-doc-cover]').forEach((button) => {
+					button.addEventListener('click', () => {
+						state.coverTemplate = button.dataset.courseDocCover || 'academic';
+						modal.querySelectorAll('[data-course-doc-cover]').forEach((item) => {
+							const selected = item === button;
+							item.classList.toggle('is-selected', selected);
+							item.setAttribute('aria-pressed', String(selected));
+						});
+					});
+				});
+				// Quick presets apply a whole bundle, then refresh the individual
+				// controls so the manual pickers stay in sync with the preset.
+				const selectGroup = (attr, value) => {
+					modal.querySelectorAll(`[data-course-doc-${attr}]`).forEach((item) => {
+						const selected = item.getAttribute(`data-course-doc-${attr}`) === value;
 						item.classList.toggle('is-selected', selected);
 						item.setAttribute('aria-pressed', String(selected));
 					});
-				});
-			});
-			modal.querySelectorAll('[data-course-doc-layout]').forEach((button) => {
-				button.addEventListener('click', () => {
-					modal.querySelectorAll('[data-course-doc-layout]').forEach((item) => {
-						const selected = item === button;
-						item.classList.toggle('is-selected', selected);
-						item.setAttribute('aria-pressed', String(selected));
+				};
+				modal.querySelectorAll('[data-course-doc-preset]').forEach((button) => {
+					button.addEventListener('click', () => {
+						const preset = STYLE_PRESETS.find(([id]) => id === button.dataset.courseDocPreset);
+						if (!preset) return;
+						Object.assign(state, preset[3]);
+						selectGroup('template', state.templateId);
+						selectGroup('layout', state.headerLayout);
+						selectGroup('numeration', state.numerationTemplate);
+						selectGroup('cover', state.coverTemplate);
+						const coverChk = document.getElementById('courseDocIncludeCover');
+						const tocChk = document.getElementById('courseDocIncludeContents');
+						const pathChk = document.getElementById('courseDocLessonPath');
+						const pageChk = document.getElementById('courseDocLessonPages');
+						if (coverChk) coverChk.checked = state.includeCover;
+						if (tocChk) tocChk.checked = state.includeTableOfContents;
+						if (pathChk) pathChk.checked = state.includeLessonPath;
+						if (pageChk) pageChk.checked = state.startEachLessonOnNewPage;
+						modal.querySelectorAll('[data-course-doc-preset]').forEach((item) => item.classList.toggle('is-selected', item === button));
+						if (state.step === DOC_STEPS.length - 1) {
+							modal.querySelector('.course-doc-panel[data-course-doc-panel="preview"]').innerHTML = buildPreviewPanel();
+						}
+						toast(`Preset “${preset[1]}” applied.`);
 					});
 				});
-			});
+				['IncludeCover', 'IncludeTableOfContents', 'LessonPath', 'LessonPages'].forEach((id) => {
+					const el = document.getElementById(`courseDoc${id}`);
+					if (!el) return;
+					el.addEventListener('change', () => {
+						if (id === 'IncludeCover') state.includeCover = el.checked;
+						else if (id === 'IncludeTableOfContents') state.includeTableOfContents = el.checked;
+						else if (id === 'LessonPath') state.includeLessonPath = el.checked;
+						else if (id === 'LessonPages') state.startEachLessonOnNewPage = el.checked;
+					});
+				});
+			};
+
+			const saveCourseIdentity = async () => {
+				const A = api();
+				if (!A) return;
+				const courseId = modal.querySelector('.course-doc-form').dataset.courseId;
+				const value = (id) => document.getElementById(`courseDoc${id}`)?.value?.trim() || '';
+				const payload = {
+					schoolName: value('School'),
+					ministry: value('Ministry'),
+					academy: value('Academy'),
+					academicYear: value('Year'),
+					teacherName: value('Teacher'),
+					subject: value('Subject'),
+					level: value('Level'),
+					group: value('Group'),
+					date: value('Date'),
+				};
+				const btn = document.getElementById('courseDocSaveIdentity');
+				const prev = btn?.textContent;
+				if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+				try {
+					await A.raw('PATCH', `/courses/${encodeURIComponent(courseId)}`, { document_header: payload });
+					state.identitySaved = true;
+					const root = modal.querySelector('.course-doc-form');
+					root.querySelector('.course-doc-panel[data-course-doc-panel="identity"]').innerHTML = buildIdentityPanel();
+					bindSaveIdentity();
+					toast('Document identity saved on this course.');
+				} catch (err) {
+					if (btn) { btn.disabled = false; btn.textContent = prev; }
+					toast('Could not save identity: ' + (err?.message || 'error'), 'error');
+				}
+			};
+
+			const bindSaveIdentity = () => {
+				const btn = document.getElementById('courseDocSaveIdentity');
+				if (btn) btn.addEventListener('click', saveCourseIdentity);
+				const editBtn = document.getElementById('courseDocEditIdentity');
+				if (editBtn) editBtn.addEventListener('click', () => {
+					// Fields are already editable; just focus the first one.
+					document.getElementById('courseDocSchool')?.focus();
+				});
+			};
+
+			bindStepper();
+			bindFooter(modal);
+			bindSelections();
+			bindSaveIdentity();
 		} catch (err) {
 			toast('Could not prepare course document: ' + (err?.message || 'error'), 'error');
 		}
@@ -2694,13 +3082,17 @@
 		const courseId = form.dataset.courseId;
 		const templateId = form.querySelector('[data-course-doc-template].is-selected')?.dataset.courseDocTemplate || 'classique';
 		const headerLayout = form.querySelector('[data-course-doc-layout].is-selected')?.dataset.courseDocLayout || 'bandeau';
+		const numerationTemplate = form.querySelector('[data-course-doc-numeration].is-selected')?.dataset.courseDocNumeration || 'default';
 		const value = (id) => document.getElementById(`courseDoc${id}`)?.value?.trim() || '';
 		const body = {
 			format,
 			templateId,
+			numerationTemplate,
+			coverTemplate: form.querySelector('[data-course-doc-cover].is-selected')?.dataset.courseDocCover || 'academic',
 			headerLayout,
 			includeCover: Boolean(document.getElementById('courseDocIncludeCover')?.checked),
 			includeTableOfContents: Boolean(document.getElementById('courseDocIncludeContents')?.checked),
+			includeLessonPath: Boolean(document.getElementById('courseDocLessonPath')?.checked),
 			startEachLessonOnNewPage: Boolean(document.getElementById('courseDocLessonPages')?.checked),
 			header: {
 				schoolName: value('School'),
@@ -2759,6 +3151,253 @@
 		} catch (err) {
 			toast('Generation failed: ' + (err?.message || 'error'), 'error');
 			if (btn) { btn.disabled = false; btn.textContent = label || 'Generate course content via AI'; }
+		}
+	};
+
+	// ── Lesson preparation sheets ──────────────────────────────────────────────
+	// The AI sheet (session planning + one sheet per session) is stored on the
+	// lesson (lesson.prep_sheet, hydrated server-side). Preview tables mirror
+	// the Word/PDF export: distribution grid + per-session cards; the compact
+	// 3-column plan stays in the modal because the full 7-column grid only
+	// fits landscape paper.
+	const PREP_DURATION_CHOICES = [30, 45, 55, 60, 90];
+
+	function prepMinutes(value) {
+		const s = String(value || '').trim();
+		if (!s) return NaN;
+		const h = s.match(/(\d+)\s*h\s*(\d+)?/i);
+		if (h) return Number(h[1]) * 60 + Number(h[2] || 0);
+		const min = s.match(/(\d+(?:[.,]\d+)?)\s*(?:min|m\b|$)/i);
+		return min ? Math.round(Number(min[1].replace(',', '.'))) : NaN;
+	}
+
+	function prepFmtMinutes(n) {
+		return Number.isFinite(n) && n > 0 ? (n >= 60 && n % 60 === 0 ? `${n / 60} h` : `${n} min`) : '';
+	}
+
+	function prepSessionRows(sheet) {
+		const sessions = Array.isArray(sheet?.sessions) ? sheet.sessions : [];
+		return sessions.map((s, i) => {
+			const planSum = (s.planRows || []).map((r) => prepMinutes(r.duration)).reduce((a, n) => (Number.isFinite(n) ? a + n : a), 0);
+			const objectives = [s.generalObjective, ...(s.specificObjectives || [])].filter(Boolean);
+			return {
+				...s,
+				index: s.index || i + 1,
+				estimatedMinutes: planSum > 0 ? planSum : s.estimatedMinutes,
+				objectivesText: objectives.slice(0, 4).join(' • '),
+			};
+		});
+	}
+
+	function prepMultiLine(text) {
+		return String(text || '').split(/\r?\n/).filter((l) => l.trim()).map((l) => `${esc(l)}<br>`).join('');
+	}
+
+	function prepBullets(items) {
+		const list = (items || []).map((t) => String(t || '').trim()).filter(Boolean);
+		return list.length
+			? `<ul class="prep-sheet-list">${list.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`
+			: '<div class="prep-sheet-empty">À compléter</div>';
+	}
+
+	function prepSheetPreviewHtml(sheet, lesson) {
+		const rows = prepSessionRows(sheet);
+		const grand = rows.reduce((a, r) => a + (Number.isFinite(r.estimatedMinutes) ? r.estimatedMinutes : 0), 0);
+		const dist = `<table class="prep-sheet-table"><thead><tr><th>Séance</th><th>Titre</th><th>Contenu à couvrir</th><th>Objectifs d'apprentissage</th><th>Durée estimée</th></tr></thead><tbody>`
+			+ rows.map((r, i) => `<tr><td>${r.index || i + 1}</td><td>${esc(r.title || '')}</td><td>${esc(r.contentSummary || '')}</td><td>${esc(r.objectivesText || '')}</td><td>${esc(prepFmtMinutes(r.estimatedMinutes))}</td></tr>`).join('')
+			+ `<tr class="prep-sheet-total"><td></td><td><strong>Total</strong></td><td></td><td></td><td><strong>${esc(prepFmtMinutes(grand))}</strong></td></tr>`
+			+ '</tbody></table>';
+		const cards = rows.map((r, i) => {
+			const plan = (r.planRows || []).length
+				? `<table class="prep-sheet-table"><thead><tr><th>Étape</th><th>Durée</th><th>Contenu / Activités</th></tr></thead><tbody>`
+					+ r.planRows.map((p) => `<tr><td>${esc(p.stage || '')}</td><td>${esc(p.duration || '')}</td><td>${prepMultiLine(p.activities)}</td></tr>`).join('')
+					+ '</tbody></table><div class="prep-sheet-note">Le document exporté contient le déroulé détaillé complet (7 colonnes : enseignant, élèves, supports, résultats attendus) sur pages paysage.</div>'
+				: '<div class="prep-sheet-empty">À compléter</div>';
+			const assessment = (r.assessment || []).length
+				? `<table class="prep-sheet-table"><thead><tr><th>Activité d'évaluation</th><th>Critères</th><th>Réponse attendue</th></tr></thead><tbody>`
+					+ r.assessment.map((a) => `<tr><td>${esc(a.task || '')}</td><td>${esc(a.criteria || '')}</td><td>${prepMultiLine(a.expectedAnswer)}</td></tr>`).join('')
+					+ '</tbody></table>'
+				: '<div class="prep-sheet-empty">À compléter</div>';
+			const concepts = (r.keyConcepts || []).filter((c) => String(c.heading || '').trim() || String(c.body || '').trim())
+				.map((c) => `<h5>${esc(c.heading || 'À compléter')}</h5>${prepMultiLine(c.body) || '<div class="prep-sheet-empty">À compléter</div>'}`).join('')
+				|| '<div class="prep-sheet-empty">À compléter</div>';
+			return `<section class="prep-sheet-card">`
+				+ `<h4>Fiche de préparation ${i + 1} — ${esc(r.title || '')}</h4>`
+				+ `<div class="prep-sheet-meta"><span><strong>Contenu :</strong> ${esc(r.contentSummary || 'À compléter')}</span><span><strong>Durée :</strong> ${esc(prepFmtMinutes(r.estimatedMinutes) || 'À compléter')}</span></div>`
+				+ `<h5>Objectifs</h5><p><strong>Général :</strong> ${esc(r.generalObjective || 'À compléter')}</p>${prepBullets(r.specificObjectives)}`
+				+ `<h5>Prérequis</h5>${prepBullets(r.prerequisites)}`
+				+ `<h5>Contenu de la leçon</h5>${concepts}`
+				+ `<h5>Déroulement détaillé</h5>${plan}`
+				+ `<h5>Méthodes pédagogiques</h5>${prepBullets(r.methods)}`
+				+ `<h5>Matériel didactique</h5>${prepBullets(r.materials)}`
+				+ `<h5>Évaluation</h5>${assessment}`
+				+ `<h5>À retenir</h5>${prepBullets(r.keyPoints)}`
+				+ `<h5>Devoirs</h5>${prepBullets(r.homework)}`
+				+ '</section>';
+		});
+		return `<div class="prep-sheet-preview">`
+			+ `<div class="prep-sheet-head"><h4>${esc(sheet.lessonTitle || lesson?.title || '')}</h4>`
+			+ `<span class="prep-sheet-sub">Fiche de préparation · ${rows.length} séance${rows.length === 1 ? '' : 's'} · ${esc(String(sheet.language || 'French'))} · générée le ${esc(String(sheet.generatedAt || '').slice(0, 10) || '—')}</span></div>`
+			+ `<h5 class="prep-sheet-section">Planification des séances</h5>${dist}`
+			+ cards.join('')
+			+ '<div class="course-generator-hint">Générée par l\'assistant pédagogique — vérifier et compléter avant usage en classe.</div>'
+			+ '</div>';
+	}
+
+	function prepSheetControlsHtml(lesson, sheet) {
+		const minutes = Number(sheet?.sessionMinutes) || 55;
+		const durationOptions = PREP_DURATION_CHOICES
+			.map((m) => `<option value="${m}" ${m === minutes ? 'selected' : ''}>${m} min</option>`)
+			.join('');
+		return `<div class="prep-sheet-controls">`
+			+ (sheet ? '' : `<p>Laissez l'AI analyser le contenu de cette leçon : elle propose d'abord le nombre de séances nécessaire, puis une fiche de préparation détaillée pour chaque séance (avec tableaux), exportable en Word et PDF.</p>`)
+			+ `<div class="prep-sheet-fields">`
+			+ `<div class="form-group"><label for="prepSheetLanguage">Langue du document</label><select id="prepSheetLanguage"><option value="French" ${(sheet?.language || 'French') === 'French' ? 'selected' : ''}>Français</option><option value="English" ${String(sheet?.language || '').toLowerCase() === 'english' ? 'selected' : ''}>Anglais</option></select></div>`
+			+ `<div class="form-group"><label for="prepSheetMinutes">Durée d'une séance</label><select id="prepSheetMinutes">${durationOptions}</select></div>`
+			+ '</div>'
+			+ (lesson && !String(lesson.content || '').trim() ? '<div class="course-generator-hint">Cette leçon n\'a pas encore de contenu — la fiche sera basée uniquement sur le titre et le résumé.</div>' : '')
+			+ '</div>';
+	}
+
+	function prepSheetFooterHtml(lessonId, hasSheet) {
+		const close = '<button type="button" class="btn" onclick="closeCourseModal(\'coursePrepSheetModal\')">Close</button>';
+		const status = '<span id="prepSheetStatus" class="course-batch-status" aria-live="polite"></span>';
+		if (!hasSheet) {
+			return `${close}${status}<button type="button" class="btn btn-primary" data-prep-sheet-action="generate" onclick="runLessonPrepSheet('${esc(lessonId)}', false)">Generate</button>`;
+		}
+		return `${close}${status}`
+			+ `<button type="button" class="btn" data-prep-sheet-action="regenerate" onclick="regenerateLessonPrepSheet('${esc(lessonId)}')">Regenerate</button>`
+			+ `<button type="button" class="btn course-doc-export" onclick="exportLessonPrepSheet('${esc(lessonId)}', 'docx')">Export Word</button>`
+			+ `<button type="button" class="btn course-doc-export" onclick="exportLessonPrepSheet('${esc(lessonId)}', 'pdf')">Export PDF</button>`;
+	}
+
+	function openPrepSheetModal(lesson, sheet) {
+		const modal = openModal(
+			'coursePrepSheetModal',
+			`Prep sheet · ${esc(lesson.title || 'Lesson')}`,
+			(prepSheetControlsHtml(lesson, sheet) || '') + (sheet ? prepSheetPreviewHtml(sheet, lesson) : ''),
+			prepSheetFooterHtml(lesson.id, Boolean(sheet)),
+			'course-document-modal',
+		);
+		const exportBtns = modal.querySelectorAll('.course-doc-export');
+		exportBtns.forEach((button) => { button.disabled = !sheet; });
+		return modal;
+	}
+
+	window.openLessonPrepSheet = function (lessonId) {
+		const lesson = (currentCourse?.lessons || []).find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return toast('Lesson not found in this course.', 'error');
+		const sheet = lesson.prep_sheet && typeof lesson.prep_sheet === 'object' ? lesson.prep_sheet : null;
+		openPrepSheetModal(lesson, sheet);
+	};
+
+	window.regenerateLessonPrepSheet = function (lessonId) {
+		if (!window.confirm('Regenerate this preparation sheet? The current version will be replaced by a new AI run (costs tokens).')) return;
+		return window.runLessonPrepSheet(lessonId, true);
+	};
+
+	window.runLessonPrepSheet = async function (lessonId, force) {
+		const A = api();
+		if (!A || !currentCourse) return null;
+		const lesson = (currentCourse.lessons || []).find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return null;
+		const configId = selectedConfigId(document.getElementById('courseDetailPane'));
+		if (!configId) return toast('Pick an AI model first.', 'error');
+		const language = document.getElementById('prepSheetLanguage')?.value || 'French';
+		const sessionMinutes = Number(document.getElementById('prepSheetMinutes')?.value) || 55;
+		const status = document.getElementById('prepSheetStatus');
+		const buttons = document.querySelectorAll('#coursePrepSheetModal [data-prep-sheet-action]');
+		buttons.forEach((b) => { b.disabled = true; });
+		if (status) status.textContent = force ? 'Regenerating sessions + sheets…' : 'Analyzing the lesson and generating…';
+		try {
+			const result = await A.raw(
+				'POST',
+				`/courses/${encodeURIComponent(currentCourse.id)}/lessons/${encodeURIComponent(lessonId)}/prep-sheet`,
+				{ configId, language, sessionMinutes, force: Boolean(force) },
+			);
+			lesson.prep_sheet = result?.sheet || null;
+			window.closeCourseModal('coursePrepSheetModal');
+			openPrepSheetModal(lesson, lesson.prep_sheet);
+			if (result?.regenerated) toast('Preparation sheet generated.');
+			return lesson.prep_sheet;
+		} catch (err) {
+			if (status) status.textContent = `Generation failed: ${err?.message || 'error'}`;
+			toast('Could not generate the preparation sheet: ' + (err?.message || 'error'), 'error');
+			buttons.forEach((b) => { b.disabled = false; });
+			return null;
+		}
+	};
+
+	window.exportLessonPrepSheet = async function (lessonId, format) {
+		const A = api();
+		if (!A || !currentCourse) return;
+		const status = document.getElementById('prepSheetStatus');
+		const buttons = document.querySelectorAll('#coursePrepSheetModal .course-doc-export');
+		buttons.forEach((b) => { b.disabled = true; });
+		if (status) status.textContent = `Preparing ${format.toUpperCase()}…`;
+		try {
+			const result = await A.blob(
+				'POST',
+				`/courses/${encodeURIComponent(currentCourse.id)}/lessons/${encodeURIComponent(lessonId)}/prep-sheet/export`,
+				{ format },
+			);
+			const url = URL.createObjectURL(result.blob);
+			const anchor = document.createElement('a');
+			anchor.href = url;
+			anchor.download = result.filename || `fiche-prep.${format}`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1000);
+			if (status) status.textContent = `${format.toUpperCase()} file downloaded.`;
+			toast(`${format.toUpperCase()} preparation sheet downloaded.`);
+		} catch (err) {
+			if (status) status.textContent = `Could not export: ${err?.message || 'error'}`;
+			toast(`Could not export the preparation sheet: ${err?.message || 'error'}`, 'error');
+		} finally {
+			buttons.forEach((b) => { b.disabled = false; });
+		}
+	};
+
+	// Course-wide batch: sequential per-lesson calls (short requests, visible
+	// progress); `force` off so lessons that already have a sheet are skipped.
+	window.generateAllPrepSheets = async function () {
+		const A = api();
+		if (!A || !currentCourse?.lessons?.length) return toast('This course has no lessons.', 'error');
+		if (prepSheetBatchGenerating) return;
+		const configId = selectedConfigId(document.getElementById('courseDetailPane'));
+		if (!configId) return toast('Pick an AI model first.', 'error');
+		prepSheetBatchGenerating = true;
+		const courseId = currentCourse.id;
+		const lessons = [...currentCourse.lessons];
+		const button = document.querySelector('[data-prep-sheets-all]');
+		if (button) { button.disabled = true; button.textContent = 'Generating sheets…'; }
+		let done = 0;
+		let skipped = 0;
+		const failures = [];
+		try {
+			for (const [i, lesson] of lessons.entries()) {
+				const status = document.getElementById('courseBatchStatus');
+				if (status) status.textContent = `Generating ${i + 1} / ${lessons.length} — done: ${done}, failed: ${failures.length}`;
+				try {
+					const result = await A.raw(
+						'POST',
+						`/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lesson.id)}/prep-sheet`,
+						{ configId, language: 'French', sessionMinutes: 55, force: false },
+					);
+					if (result?.sheet) {
+						lesson.prep_sheet = result.sheet;
+						if (result.regenerated) done += 1; else skipped += 1;
+					}
+				} catch (err) {
+					failures.push(lesson.title || 'Lesson');
+				}
+			}
+			const summary = `Prep sheets: ${done} generated, ${skipped} already existed${failures.length ? `, ${failures.length} failed (${failures.slice(0, 3).join(', ')}${failures.length > 3 ? '…' : ''})` : ''}.`;
+			toast(summary, failures.length ? 'error' : 'success');
+		} finally {
+			prepSheetBatchGenerating = false;
+			if (String(currentCourse?.id) === String(courseId)) renderCourseDetail();
 		}
 	};
 

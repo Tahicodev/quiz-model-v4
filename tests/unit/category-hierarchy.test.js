@@ -164,7 +164,7 @@ function resetCapture() {
   state.savedCategories = null;
   state.selectValues.categoryParent = '';
   vm.runInContext(
-    `categories = ${JSON.stringify(TREE)}; currentCategoryId = null; categoryTrainingMapCache = null;`,
+    `categories = ${JSON.stringify(TREE)}; currentCategoryId = null; categoryTrainingMapCache = null; resetCategoryManualOrder();`,
     ctx,
   );
 }
@@ -215,6 +215,73 @@ describe('category tree helpers', () => {
       ctx,
     );
     expect(values).toEqual(['', MATH, ADDITION, EQUATIONS, SUBTRACTION, SCIENCE]);
+  });
+});
+
+describe('manual sibling reorder (up/down buttons)', () => {
+  function orderedNames() {
+    return vm.runInContext(
+      'getOrderedCategoryTree().map((e) => e.category.name)',
+      ctx,
+    );
+  }
+
+  it('swaps only direct siblings and wins over the name order', () => {
+    resetCapture();
+    // Children: Addition ↔ Subtraction under Math.
+    vm.runInContext(
+      `moveCategorySibling(null, '${ADDITION}', 1);`,
+      ctx,
+    );
+    expect(
+      vm.runInContext(
+        `getOrderedCategorySiblings('${SUBTRACTION}').map((c) => c.name)`,
+        ctx,
+      ),
+    ).toEqual(['Subtraction', 'Addition']);
+    expect(orderedNames()).toEqual([
+      'Math',
+      'Subtraction',
+      'Addition',
+      'Equations',
+      'Science',
+    ]);
+
+    // Roots: Science above Math, and the child order is untouched.
+    vm.runInContext(`moveCategorySibling(null, '${SCIENCE}', -1);`, ctx);
+    expect(orderedNames()).toEqual([
+      'Science',
+      'Math',
+      'Subtraction',
+      'Addition',
+      'Equations',
+    ]);
+
+    // Boundary taps are no-ops.
+    vm.runInContext(`moveCategorySibling(null, '${SCIENCE}', -1);`, ctx);
+    expect(orderedNames()[0]).toBe('Science');
+  });
+
+  it('never moves a subcategory across parents', () => {
+    resetCapture();
+    // Equations (child of Addition) cannot swap with Subtraction (child of
+    // Math): different sibling groups, so the up tap stays inside Addition.
+    vm.runInContext(`moveCategorySibling(null, '${EQUATIONS}', -1);`, ctx);
+    expect(orderedNames()).toEqual([
+      'Math',
+      'Addition',
+      'Equations',
+      'Subtraction',
+      'Science',
+    ]);
+    vm.runInContext(`moveCategorySibling(null, '${EQUATIONS}', 1);`, ctx);
+    expect(orderedNames()).toEqual([
+      'Math',
+      'Addition',
+      'Equations',
+      'Subtraction',
+      'Science',
+    ]);
   });
 });
 

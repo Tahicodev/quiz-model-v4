@@ -343,6 +343,11 @@ model Course {
   status      String   @default("draft") // draft | published
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
+  // Saved course document identity (school, teacher, subject, level, etc.)
+  // reused whenever the teacher creates a course document. Stored as a JSON
+  // string because the SQLite connector has no Json column type; the service
+  // layer (de)serializes it so the API keeps exchanging objects.
+  document_header String?
 
   school        School        @relation(fields: [school_id], references: [id], onDelete: Cascade)
   creator       User          @relation("CourseCreator", fields: [created_by], references: [id], onDelete: Cascade)
@@ -367,6 +372,10 @@ model Lesson {
   title        String
   summary      String?
   content      String? // markdown body (AI-generated or hand-written)
+  // AI-generated pedagogical lesson preparation sheet (session planning +
+  // per-session detail). Stored as a JSON string (SQLite has no Json type);
+  // the service layer (de)serializes it so the API exchanges objects.
+  prep_sheet   String?
   order_index  Int      @default(0)
   ai_generated Boolean  @default(false)
   created_at   DateTime @default(now())

@@ -267,16 +267,16 @@ describe('course management endpoints', () => {
 	});
 
 	it('generates lesson content into markdown and stores it', async () => {
-		stubProvider('## Objectives\n- reconnaître les pluriels irréguliers\n\n## Check yourself\nPratiquez les questions.');
+		stubProvider('## Objectifs\n- reconnaître les pluriels irréguliers\n\n## Vérifiez vos acquis\nPratiquez les questions.');
 		const res = await asTeacher()
 			.post(`/api/v1/courses/${courseId}/lessons/${lessonIds[0]}/generate-content`)
 			.send({ configId, language: 'French', includeQuestions: true });
 		vi.unstubAllGlobals('fetch');
 		expect(res.status).toBe(200);
-		expect(res.body.content).toContain('## Objectives');
+		expect(res.body.content).toContain('## Objectifs');
 
 		const detail = await asTeacher().get(`/api/v1/courses/${courseId}`);
-		expect(detail.body.lessons[0].content).toContain('Check yourself');
+		expect(detail.body.lessons[0].content).toContain('Vérifiez vos acquis');
 	});
 
 	it('returns the lesson-generation prompt for copying to another AI', async () => {
@@ -285,11 +285,12 @@ describe('course management endpoints', () => {
 			.send({ promptOnly: true, language: 'French', includeQuestions: true });
 		expect(res.status).toBe(200);
 		expect(res.body.prompt).toContain('COURSE: French — Unit 3');
-		expect(res.body.prompt).toContain('LESSON TITLE: Les pluriels irréguliers');
-		expect(res.body.prompt).toContain('QUIZ CATEGORY PATH: Unit 3 > Unit 3 — Axe 1');
+		expect(res.body.prompt).toContain('Les pluriels irréguliers');
+		expect(res.body.prompt).toContain('Unit 3 > Unit 3 — Axe 1');
 		expect(res.body.prompt).toContain('What is the plural of "cheval"?');
-		expect(res.body.prompt).toContain('## Objectives');
-		expect(res.body.prompt).toContain('## Check yourself');
+		// headings are localized to the target language, not left in English
+		expect(res.body.prompt).toContain('## Objectifs');
+		expect(res.body.prompt).toContain('## Vérifiez vos acquis');
 	});
 
 	it('uses the established lesson route for prompt-only mode without calling an AI provider', async () => {
@@ -625,7 +626,7 @@ describe('student visibility over HTTP', () => {
 		expect(list.body.data[0].lesson_count).toBe(1);
 
 		const detail = await asStudent().get(`/api/v1/courses/student/${courseId}`);
-		expect(detail.body.lessons[0].content).toContain('## Objectives');
+		expect(detail.body.lessons[0].content).toContain('## Objectifs');
 		expect(detail.body.lessons[0].category_levels.map((level) => level.name)).toEqual([
 			'Unit 3',
 			'Unit 3 — Axe 1',

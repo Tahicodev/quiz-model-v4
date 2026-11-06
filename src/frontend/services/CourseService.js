@@ -33,6 +33,38 @@ export class CourseService {
     }
   }
 
+  // SQLite has no Json column type on this Prisma version, so JSON payloads
+  // (course document identity, lesson prep sheets) live in TEXT columns.
+  // (De)serialize here so routes and the admin UI keep exchanging objects.
+  static #JSON_FIELDS = ['document_header', 'prep_sheet'];
+
+  #serializeJsonFields(values) {
+    if (!values) return values;
+    let out = values;
+    for (const field of CourseService.#JSON_FIELDS) {
+      // `!== undefined` (not hasOwn): schemas add optional keys with undefined
+      // values, and an update that omits the field must never null it out.
+      if (values[field] !== undefined) {
+        if (out === values) out = { ...values };
+        out[field] = out[field] == null ? null : JSON.stringify(out[field]);
+      }
+    }
+    return out;
+  }
+
+  #hydrateJsonFields(row) {
+    if (!row) return row;
+    let out = row;
+    for (const field of CourseService.#JSON_FIELDS) {
+      if (typeof row[field] === 'string') {
+        if (out === row) out = { ...row };
+        try { out[field] = JSON.parse(row[field]); }
+        catch { out[field] = null; }
+      }
+    }
+    return out;
+  }
+
   async list(filters = {}, pagination = {}) {
     // `created_by` scoping is server-derived (route-enforced), not client
     // input — validate the rest and re-attach (same contract as CategoryService).
@@ -41,13 +73,15 @@ export class CourseService {
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
     const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
     if (created_by !== undefined) rest.created_by = created_by;
-    return this.#repo.getAll('courses', { filters: rest, limit, offset, orderBy, direction, search, ...(or ? { or } : {}) });
+    const result = await this.#repo.getAll('courses', { filters: rest, limit, offset, orderBy, direction, search, ...(or ? { or } : {}) });
+    if (result && Array.isArray(result.data)) result.data = result.data.map((row) => this.#hydrateJsonFields(row));
+    return result;
   }
 
   async getById(id) {
     const course = await this.#repo.getById('courses', id);
     if (!course) throw new NotFoundError('Course');
-    return course;
+    return this.#hydrateJsonFields(course);
   }
 
   async getWithLessons(id, schoolId = null) {
@@ -56,7 +90,11 @@ export class CourseService {
       ...(schoolId ? { schoolId } : {}),
     });
     if (!course) throw new NotFoundError('Course');
-    return course;
+    const hydrated = this.#hydrateJsonFields(course);
+    if (Array.isArray(hydrated.lessons)) {
+      hydrated.lessons = hydrated.lessons.map((lesson) => this.#hydrateJsonFields(lesson));
+    }
+    return hydrated;
   }
 
   async create(data, currentUser) {
@@ -88,12 +126,12 @@ export class CourseService {
     }
     subjectId = subjectId || category.subject_id || null;
     await this.#assertBranchFree(currentUser.school_id, category.id);
-    return this.#repo.create('courses', {
+    return this.#hydrateJsonFields(await this.#repo.create('courses', this.#serializeJsonFields({
       ...parsed.data,
       subject_id: subjectId,
       school_id: currentUser?.school_id,
       created_by: currentUser?.id,
-    });
+    })));
   }
 
   /** Persist a generated course: one transaction-free pass (create + lessons). */
@@ -163,7 +201,7 @@ export class CourseService {
         throw new ValidationError({ subject_id: ['Course and category must belong to the same subject.'] });
       }
     }
-    return this.#repo.update('courses', id, patch);
+    return this.#hydrateJsonFields(await this.#repo.update('courses', id, this.#serializeJsonFields(patch)));
   }
 
   async setStatus(id, status, currentUser) {
@@ -173,7 +211,7 @@ export class CourseService {
     if (!['draft', 'published'].includes(status)) {
       throw new ValidationError({ status: ['Invalid course status'] });
     }
-    return this.#repo.update('courses', id, { status });
+    return this.#hydrateJsonFields(await this.#repo.update('courses', id, { status }));
   }
 
   async delete(id, currentUser) {
@@ -263,11 +301,11 @@ export class CourseService {
     }
     const { data: lessons } = await this.#repo.getAll('lessons', { filters: { course_id: courseId }, limit: 100000 });
     const orderIndex = lessons.length ? Math.max(...lessons.map((l) => l.order_index || 0)) + 1 : 0;
-    return this.#repo.create('lessons', {
+    return this.#hydrateJsonFields(await this.#repo.create('lessons', this.#serializeJsonFields({
       ...parsed.data,
       order_index: parsed.data.order_index || orderIndex,
       course_id: courseId,
-    });
+    })));
   }
 
   /** Lesson lookup + ownership check shared by all lesson mutations. */
@@ -329,7 +367,7 @@ export class CourseService {
         parsed.data.parent_lesson_id,
       );
     }
-    return this.#repo.update('lessons', lessonId, parsed.data);
+    return this.#hydrateJsonFields(await this.#repo.update('lessons', lessonId, this.#serializeJsonFields(parsed.data)));
   }
 
   async deleteLesson(lessonId, currentUser) {
@@ -393,7 +431,8 @@ export class CourseService {
 
   async listForStudent(user) {
     if (!user?.id) throw new ForbiddenError();
-    return this.#repo.query('course.availableForStudent', { userId: user.id });
+    const rows = await this.#repo.query('course.availableForStudent', { userId: user.id });
+    return (rows || []).map((row) => this.#hydrateJsonFields(row));
   }
 
   /** Course + lessons for a student: must be published and class-assigned. */
@@ -404,6 +443,8 @@ export class CourseService {
     const { data: lessons } = await this.#repo.getAll('lessons', {
       filters: { course_id: courseId }, orderBy: 'order_index', direction: 'asc', limit: 1000,
     });
+    // Prep sheets are a teacher tool; keep them out of student payloads.
+    const studentLessons = (lessons || []).map(({ prep_sheet: _drop, ...rest }) => rest);
     const { data: categories } = course.category_id
       ? await this.#repo.getAll('categories', { filters: { school_id: course.school_id }, limit: 100000 })
       : { data: [] };
@@ -446,7 +487,7 @@ export class CourseService {
       ? visit(course.category_id)
       : null;
 
-    const orderedLessons = [...(lessons || [])].sort((a, b) => {
+    const orderedLessons = [...(studentLessons || [])].sort((a, b) => {
       const aOrder = categoryOrder.get(String(a.category_id)) ?? Number.MAX_SAFE_INTEGER;
       const bOrder = categoryOrder.get(String(b.category_id)) ?? Number.MAX_SAFE_INTEGER;
       return aOrder - bOrder || (a.order_index || 0) - (b.order_index || 0);
@@ -494,7 +535,8 @@ export class CourseService {
     const lesson = await this.#repo.getById('lessons', lessonId);
     if (!lesson) throw new NotFoundError('Lesson');
     await this.getForStudent(lesson.course_id, user); // visibility gate (published + assigned)
-    return lesson;
+    const { prep_sheet: _drop, ...rest } = lesson;
+    return rest;
   }
 
   // ── Branch plan (course generation input) ──────────────────────────────────

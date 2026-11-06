@@ -10,7 +10,15 @@ import {
 	PageNumber,
 	Paragraph,
 	ShadingType,
+	Tab,
+	Table,
+	TableCell,
+	TableLayoutType,
+	TableRow,
+	TabStopType,
 	TextRun,
+	VerticalAlign,
+	WidthType,
 } from 'docx';
 
 const THEMES = Object.freeze({
@@ -25,6 +33,101 @@ const THEMES = Object.freeze({
 const HEADER_LAYOUTS = new Set(['bandeau', 'classique', 'centre', 'split', 'boxed', 'banner', 'minimal']);
 const ptToTwips = (value) => Math.round(value * 20);
 const noHash = (value) => value.replace('#', '').toUpperCase();
+
+// A4 portrait in twips and the running chrome shared by every page. The cover
+// keeps the full institutional identity (in the body), while every page carries
+// a slim running header (teacher · school year) and a footer (course name ·
+// page number) — the convention requested for course documents and prep sheets.
+const DOCX_PAGE = { width: 11906, height: 16838 };
+const docxContentWidth = (theme) => DOCX_PAGE.width - (theme.compact ? 720 : 1000) * 2;
+
+/** Cover "general information" as a compact Label/Value/Label/Value grid —
+ * the same table treatment used in the lesson preparation sheets: shaded
+ * label cells, consistent borders, one row per pair of fields. */
+function docxInfoCell(text, { bold, color, size = 9, fill, span, theme } = {}) {
+	return new TableCell({
+		...(span ? { columnSpan: span } : {}),
+		verticalAlign: VerticalAlign.CENTER,
+		margins: { top: 60, bottom: 60, left: 90, right: 90 },
+		...(fill ? { shading: { type: ShadingType.CLEAR, fill: noHash(fill), color: 'auto' } } : {}),
+		children: [new Paragraph({
+			spacing: { after: 0 },
+			children: [makeRun(text || '', { bold, color: color || '273449', size: size * 2, font: theme?.font || 'Arial' })],
+		})],
+	});
+}
+
+function docxCoverIdentityTable(identity, theme) {
+	const cw = docxContentWidth(theme);
+	const lw = Math.round(cw * 0.24);
+	const vw = Math.round(cw * 0.26);
+	const widths = [lw, vw, lw, cw - lw - vw - lw];
+	const accent = noHash(theme.accent);
+	const soft = noHash(theme.soft);
+	const rows = [];
+	for (let i = 0; i < identity.length; i += 2) {
+		const a = identity[i];
+		const b = identity[i + 1];
+		const cells = [
+			docxInfoCell(a[0], { bold: true, color: accent, fill: soft, theme }),
+			docxInfoCell(a[1], { theme }),
+		];
+		if (b) {
+			cells.push(docxInfoCell(b[0], { bold: true, color: accent, fill: soft, theme }));
+			cells.push(docxInfoCell(b[1], { theme }));
+		} else {
+			cells.push(docxInfoCell('', { span: 2, theme }));
+		}
+		rows.push(new TableRow({ cantSplit: true, children: cells }));
+	}
+	const border = { style: BorderStyle.SINGLE, size: 4, color: 'B7C3D0' };
+	return new Table({
+		width: { size: cw, type: WidthType.DXA },
+		columnWidths: widths,
+		layout: TableLayoutType.FIXED,
+		borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border },
+		rows,
+	});
+}
+
+/** Slim running header: teacher on the left, school year on the right. */
+function docxRunningHeader(options, theme) {
+	const h = options.header || {};
+	const left = String(h.teacherName || '').trim();
+	const right = String(h.academicYear || '').trim();
+	if (!left && !right) return new Header({ children: [new Paragraph({ children: [] })] });
+	return new Header({
+		children: [new Paragraph({
+			tabStops: [{ type: TabStopType.RIGHT, position: docxContentWidth(theme) }],
+			border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: noHash(theme.accent), space: 4 } },
+			children: [
+				makeRun(left, { size: 16, bold: true, color: noHash(theme.accent), font: theme.font }),
+				// A real <w:tab/> jumps to the right tab stop — a literal '\t'
+				// inside <w:t> is plain text and Word renders it as a space.
+				...(right ? [
+					new TextRun({ children: [new Tab()], size: 16, font: theme.font }),
+					makeRun(right, { size: 16, color: '526174', font: theme.font }),
+				] : []),
+			],
+		})],
+	});
+}
+
+/** Footer on every page: course name on the left, page number on the right. */
+function docxRunningFooter(course, theme) {
+	const name = String(course?.name || 'Course').trim();
+	return new Footer({
+		children: [new Paragraph({
+			tabStops: [{ type: TabStopType.RIGHT, position: docxContentWidth(theme) }],
+			border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'D2D8E0', space: 4 } },
+			children: [
+				makeRun(name, { size: 15, color: '64748B', font: theme.font }),
+				new TextRun({ children: [new Tab()], size: 15, color: '64748B', font: theme.font }),
+				new TextRun({ children: ['Page ', PageNumber.CURRENT, ' of ', PageNumber.TOTAL_PAGES], size: 15, color: '64748B', font: theme.font }),
+			],
+		})],
+	});
+}
 
 function sortedLessons(course) {
 	const lessons = [...(course.lessons || [])].sort(
@@ -129,36 +232,120 @@ function lessonLevels(lesson, course) {
 	return path.map((name, index) => ({ id: `${index}:${name}`, name }));
 }
 
-function buildDocumentSections(course) {
-	if ((course.lessons || []).some((lesson) => lesson.parent_lesson_id)) {
-		return buildLessonOutline(course);
+function toRoman(n) {
+	const map = [
+		[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'],
+		[100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'],
+		[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+	];
+	let res = '';
+	let m = Math.max(0, Math.floor(Number(n) || 0));
+	for (const [value, symbol] of map) {
+		while (m >= value) { res += symbol; m -= value; }
 	}
-	const roots = [];
-	const nodes = new Map();
-	for (const lesson of sortedLessons(course)) {
-		const levels = lessonLevels(lesson, course);
-		let parent = null;
-		for (const level of levels) {
-			const key = String(level.id || `${parent?.key || 'root'}:${level.name}`);
-			let node = nodes.get(key);
-			if (!node) {
-				node = { key, name: String(level.name), children: [], lessons: [], depth: parent ? parent.depth + 1 : 0 };
-				nodes.set(key, node);
-				if (parent) parent.children.push(node);
-				else roots.push(node);
-			}
-			parent = node;
-		}
-		if (parent) parent.lessons.push(lesson);
-		else roots.push({
-			key: `lesson:${lesson.id}`,
-			name: '',
-			children: [],
-			lessons: [lesson],
-			depth: 0,
-		});
+	return res;
+}
+
+function toAlpha(n, upper = true) {
+	let m = Math.max(1, Math.floor(Number(n) || 1));
+	let res = '';
+	while (m > 0) {
+		m -= 1;
+		const code = upper ? 65 : 97;
+		res = String.fromCharCode(code + (m % 26)) + res;
+		m = Math.floor(m / 26);
 	}
-	return roots;
+	return res;
+}
+
+	const NUMERATION_TEMPLATES = Object.freeze({
+	default: {
+		label: 'Classic (I · 1 · a · i)',
+		labels: null,
+		separator: '- ',
+		formats: [(n) => toRoman(n), (n) => String(n), (n) => toAlpha(n, false), (n) => toRoman(n).toLowerCase()],
+	},
+	decimal: {
+		label: 'Decimal (1 · 1.1 · 1.1.1)',
+		labels: null,
+		separator: '. ',
+		formats: [
+			(n) => String(n),
+			(n, depth, idx) => idx.join('.'),
+			(n, depth, idx) => idx.join('.'),
+			(n, depth, idx) => idx.join('.'),
+		],
+	},
+	roman: {
+		label: 'Roman (I · II · III)',
+		labels: null,
+		separator: '. ',
+		formats: [(n) => toRoman(n), (n) => toRoman(n), (n) => toRoman(n), (n) => toRoman(n)],
+	},
+	alpha: {
+		label: 'Alpha (A · B · C)',
+		labels: null,
+		separator: '. ',
+		formats: [(n) => toAlpha(n, true), (n) => toAlpha(n, true), (n) => toAlpha(n, true), (n) => toAlpha(n, true)],
+	},
+	book: {
+		label: 'Book (Chapter · Section · Subsection)',
+		labels: ['Chapter', 'Section', 'Subsection', 'Division'],
+		separator: ' ',
+		formats: [(n) => toRoman(n), (n) => String(n), (n) => toAlpha(n, false), (n) => toRoman(n).toLowerCase()],
+	},
+	module: {
+		label: 'Module (Module · Unit · Topic · Axis)',
+		labels: ['Module', 'Unit', 'Topic', 'Axis'],
+		separator: ' ',
+		formats: [(n) => toRoman(n), (n) => String(n), (n) => toAlpha(n, false), (n) => toRoman(n).toLowerCase()],
+	},
+	// Purely decimal, no letters anywhere — 1 · 1.1 · 1.1.1. Reads as a clean
+	// technical syllabus and never collides with roman/alpha conventions.
+	progressif: {
+		label: 'Progressif (1 · 1.1 · 1.1.1)',
+		labels: null,
+		separator: '. ',
+		formats: [
+			(n) => String(n),
+			(n, depth, idx) => idx.join('.'),
+			(n, depth, idx) => idx.join('.'),
+			(n, depth, idx) => idx.join('.'),
+		],
+	},
+	// French academic outline: the big structural titles carry a word label
+	// (Module I, then Section 1 …) instead of a bare count, and the running
+	// lesson numbering restarts below them.
+	academique: {
+		label: 'Académique (Module I · Section 1 · 1.1)',
+		labels: ['Module', 'Section', 'Paragraphe', 'Axe'],
+		separator: ' ',
+		formats: [
+			(n) => toRoman(n),
+			(n, depth, idx) => String(idx[idx.length - 1] || n),
+			(n, depth, idx) => idx.slice(1).join('.'),
+			(n, depth, idx) => idx.slice(1).join('.'),
+		],
+	},
+});
+
+function numerationFormat(template, depth, index, pathIndex) {
+	const tpl = NUMERATION_TEMPLATES[template] || NUMERATION_TEMPLATES.default;
+	const formats = tpl.formats;
+	const fmt = formats[depth] || formats[formats.length - 1];
+	const num = fmt(index, depth, pathIndex);
+	const label = tpl.labels ? tpl.labels[depth] : null;
+	return { num, label, separator: tpl.separator };
+}
+
+function sectionSign(template, depth, index, pathIndex) {
+	const f = numerationFormat(template, depth, index, pathIndex);
+	let sign = f.label ? `${f.label} ${f.num}` : f.num;
+	return sign + f.separator;
+}
+
+function formatPath(path) {
+	return path.map((p) => `${p.sign}${p.name}`).join('  /  ');
 }
 
 function stripInlineMarkdown(text) {
@@ -166,21 +353,16 @@ function stripInlineMarkdown(text) {
 }
 
 function headerFields(header = {}) {
+	// The cover carries two zones: this institutional header (ministry /
+	// academy / institution / school year) and the centred identity table
+	// (teacher, subject, level, group, date). Keeping the field sets disjoint
+	// is what stops the same value from being printed twice on the cover.
 	return [
 		['Ministry', header.ministry],
 		['Academy / region', header.academy],
 		['Institution', header.schoolName],
 		['Academic year', header.academicYear],
-		['Teacher', header.teacherName],
-		['Subject', header.subject],
-		['Level', header.level],
-		['Class / group', header.group],
-		['Date', header.date],
 	].filter(([, value]) => String(value || '').trim());
-}
-
-function sectionLabel(depth) {
-	return ['UNIT', 'CHAPTER', 'TOPIC', 'AXIS'][Math.min(depth, 3)];
 }
 
 function renderMarkdownPdf(doc, markdown, theme) {
@@ -215,8 +397,6 @@ function addPdfHeader(doc, course, options, theme) {
 	const header = options.header || {};
 	const fields = headerFields(header);
 	const layout = HEADER_LAYOUTS.has(options.headerLayout) ? options.headerLayout : 'bandeau';
-	const leftFields = fields.slice(0, Math.ceil(fields.length / 2));
-	const rightFields = fields.slice(Math.ceil(fields.length / 2));
 	const y = doc.y;
 	const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
@@ -228,32 +408,31 @@ function addPdfHeader(doc, course, options, theme) {
 	}
 	if (layout === 'split') {
 		doc.font('Helvetica-Bold').fontSize(9).fillColor(theme.accent)
-			.text(leftFields.map((field) => `${field[0]}: ${field[1]}`).join('\n'), doc.page.margins.left, y, { width: width * 0.55 });
+			.text(fields.map((f) => `${f[0]}: ${f[1]}`).join('\n').slice(0, 200), doc.page.margins.left, y, { width: width * 0.5 });
 		doc.font('Helvetica').fontSize(9).fillColor('#526174')
-			.text(rightFields.map((field) => `${field[0]}: ${field[1]}`).join('\n'), doc.page.margins.left + width * 0.58, y, { width: width * 0.42, align: 'right' });
-		doc.y = Math.max(doc.y, y + Math.max(leftFields.length, rightFields.length, 1) * 13);
+			.text(fields.map((f) => `${f[0]}: ${f[1]}`).join('\n').slice(200), doc.page.margins.left + width * 0.52, y, { width: width * 0.48, align: 'right' });
+		doc.y = Math.max(doc.y, y + fields.length * 13 + 6);
+	} else if (layout === 'boxed') {
+		doc.save().roundedRect(doc.page.margins.left, y - 6, width, fields.length * 13 + 18, 5)
+			.lineWidth(1).strokeColor(theme.accent).stroke().restore();
+		doc.x = doc.page.margins.left + 14;
+		doc.y = y;
+		doc.font('Helvetica-Bold').fontSize(8.5).fillColor(theme.accent)
+			.text(fields.map((f) => `${f[0]}: ${f[1]}`).join('    ·    '), { width: width - 28 });
+		doc.y = y + fields.length * 13 + 12;
+	} else if (layout === 'banner') {
+		doc.save().rect(doc.page.margins.left, y - 6, width, 30).fill(theme.accent).restore();
+		doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(10)
+			.text([header.schoolName, header.academicYear, header.subject].filter(Boolean).join('  ·  '), { align: 'center' });
+		doc.y = y + 36;
+	} else if (layout === 'centre') {
+		doc.font('Helvetica-Bold').fontSize(9).fillColor(theme.accent)
+			.text(fields.map((f) => `${f[0]}: ${f[1]}`).join('    ·    '), { align: 'center' });
+		doc.moveDown(0.28);
 	} else {
-		if (layout === 'boxed') {
-			doc.save().roundedRect(doc.page.margins.left, y - 8, width, Math.max(fields.length * 12 + 20, 42), 4)
-				.lineWidth(1).strokeColor(theme.accent).stroke().restore();
-			doc.x = doc.page.margins.left + 12;
-			doc.y = y;
-		} else if (layout === 'banner') {
-			doc.save().rect(doc.page.margins.left, y - 8, width, 27).fill(theme.accent).restore();
-			doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(9)
-				.text([header.schoolName, header.academicYear, header.subject].filter(Boolean).join('  ·  '), { align: 'center' });
-			doc.y = y + 31;
-		} else {
-			const align = layout === 'centre' ? 'center' : 'left';
-			doc.font('Helvetica-Bold').fontSize(9).fillColor(theme.accent)
-				.text(fields.map(([label, value]) => `${label}: ${value}`).join('   ·   '), { align });
-			doc.moveDown(0.25);
-		}
-		if (layout === 'boxed') {
-			doc.font('Helvetica').fontSize(8).fillColor('#526174')
-				.text(fields.map(([label, value]) => `${label}: ${value}`).join('   ·   '), { width: width - 24 });
-			doc.y = y + Math.max(fields.length * 12 + 12, 34);
-		}
+		doc.font('Helvetica-Bold').fontSize(9).fillColor(theme.accent)
+			.text(fields.map((f) => `${f[0]}: ${f[1]}`).join('    ·    '), { align: 'left' });
+		doc.moveDown(0.28);
 	}
 	doc.moveTo(doc.page.margins.left, doc.y + 4)
 		.lineTo(doc.page.margins.left + width, doc.y + 4)
@@ -264,20 +443,148 @@ function addPdfHeader(doc, course, options, theme) {
 
 function pdfCover(doc, course, options, theme, sections) {
 	addPdfHeader(doc, course, options, theme);
-	const top = Math.max(doc.y + 74, 190);
-	doc.y = top;
-	if (options.headerLayout === 'banner') {
-		doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(10).text('COURSE MATERIAL', { align: 'center', characterSpacing: 2 });
+	doc.moveDown(0.4);
+	const header = options.header || {};
+	const coverTemplate = options.coverTemplate || 'academic';
+	const identity = [
+		['Teacher', header.teacherName],
+		['Subject', header.subject],
+		['Level / class', header.level],
+		['Group', header.group],
+		['Academic year', header.academicYear],
+		['Date', header.date],
+	].filter(([, value]) => String(value || '').trim());
+	const details = [
+		`${sortedLessons(course).length} lesson${sortedLessons(course).length === 1 ? '' : 's'}`,
+		`${sections.length} section${sections.length === 1 ? '' : 's'}`,
+		options.header?.academicYear,
+		options.header?.level,
+	].filter(Boolean);
+	const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+	const cx = doc.page.margins.left + width / 2;
+
+	if (coverTemplate === 'modern') {
+		pdfCoverModern(doc, course, options, theme, header, identity, width, cx, details);
+	} else if (coverTemplate === 'book') {
+		pdfCoverBook(doc, course, options, theme, header, identity, width, cx, details);
+	} else if (coverTemplate === 'university') {
+		pdfCoverUniversity(doc, course, options, theme, header, identity, width, cx, details);
+	} else if (coverTemplate === 'elegant') {
+		pdfCoverElegant(doc, course, options, theme, header, identity, width, cx, details);
+	} else if (coverTemplate === 'minimal') {
+		pdfCoverMinimal(doc, course, options, theme, header, identity, width, cx, details);
+	} else {
+		pdfCoverAcademic(doc, course, options, theme, header, identity, width, cx, details);
+	}
+	// No trailing addPage here: the TOC / body blocks each start with their own
+	// page break, and adding one too produced a blank page after the cover.
+}
+
+function pdfCoverAcademic(doc, course, options, theme, header, identity, width, cx, details) {
+	const accent = theme.accent;
+	doc.fillColor(accent).font('Helvetica-Bold').fontSize(theme.title + 2)
+		.text(course.name || 'Course', { align: 'center', lineGap: 8 });
+	doc.moveDown(0.6);
+	if (course.description) {
+		doc.fillColor('#526174').font('Helvetica').fontSize(12.5).text(course.description, {
+			align: 'center',
+			width: doc.page.width * 0.72,
+			lineGap: 4,
+		});
 		doc.moveDown(1);
 	}
-	doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(theme.title)
-		.text(course.name || 'Course', { align: 'center', lineGap: 6 });
+	if (course.category_path) {
+		doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(11)
+			.text(course.category_path, { align: 'center' });
+		doc.moveDown(1.4);
+	}
+	if (identity.length) pdfCoverIdentityTable(doc, identity, theme, width);
+	pdfCoverMetaChip(doc, theme, width, cx, details);
+}
+
+function pdfCoverModern(doc, course, options, theme, header, identity, width, cx, details) {
+	const accent = theme.accent;
+	// Top accent band
+	doc.save().rect(doc.page.margins.left, doc.y, width, 34).fill(accent).restore();
+	doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(13)
+		.text(course.name || 'Course', { align: 'center', y: doc.y + 10 });
+	doc.y += 38;
+	doc.moveDown(0.6);
+	const eyebrow = String(header.subject || '').trim();
+	if (eyebrow) {
+		doc.fillColor(accent).font('Helvetica-Bold').fontSize(11)
+			.text(eyebrow, { align: 'center', characterSpacing: 2 });
+		doc.moveDown(0.4);
+	}
+	if (course.description) {
+		doc.fillColor('#374151').font('Helvetica').fontSize(12).text(course.description, {
+			align: 'center',
+			width: doc.page.width * 0.78,
+			lineGap: 4,
+		});
+		doc.moveDown(1);
+	}
+	if (course.category_path) {
+		doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(10)
+			.text(course.category_path, { align: 'center' });
+		doc.moveDown(1.2);
+	}
+	if (identity.length) pdfCoverIdentityTable(doc, identity, theme, width);
+	pdfCoverMetaChip(doc, theme, width, cx, details);
+}
+
+function pdfCoverBook(doc, course, options, theme, header, identity, width, cx, details) {
+	const accent = theme.accent;
+	// Left accent bar
+	doc.save().rect(doc.page.margins.left, doc.y, 10, 150).fill(accent).restore();
+	doc.x = doc.page.margins.left + 22;
+	doc.fillColor(accent).font('Helvetica-Bold').fontSize(theme.title + 4)
+		.text(course.name || 'Course', { width: width - 40, lineGap: 6 });
+	doc.moveDown(0.8);
+	doc.fillColor('#374151').font('Helvetica').fontSize(12)
+		.text('A course document prepared for study and reference.', { width: width - 40 });
+	doc.moveDown(1.4);
+	if (course.category_path) {
+		doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(10)
+			.text(course.category_path);
+		doc.moveDown(1.4);
+	}
+	if (course.description) {
+		doc.fillColor('#526174').font('Helvetica-Oblique').fontSize(11)
+			.text(course.description, { width: width - 40, lineGap: 4 });
+		doc.moveDown(1.6);
+	}
+	if (identity.length) pdfCoverIdentityTable(doc, identity, theme, width);
+	pdfCoverMetaChip(doc, theme, width, cx, details);
+}
+
+function pdfCoverUniversity(doc, course, options, theme, header, identity, width, cx, details) {
+	const accent = theme.accent;
+	// Formal double rule
+	doc.lineWidth(2.2).strokeColor(accent)
+		.moveTo(doc.page.margins.left, doc.y)
+		.lineTo(doc.page.margins.left + width, doc.y)
+		.stroke();
+	doc.moveDown(0.5);
+	doc.fillColor('#1f2937').font('Helvetica-Bold').fontSize(11)
+		.text([header.schoolName, header.academy, header.ministry].filter(Boolean).join('  ·  '), { align: 'center' });
+	doc.moveDown(0.3);
+	doc.fillColor('#64748b').font('Helvetica').fontSize(9)
+		.text([header.academicYear, header.level, header.group].filter(Boolean).join('  ·  '), { align: 'center' });
+	doc.moveDown(1.4);
+	doc.lineWidth(2.2).strokeColor(accent)
+		.moveTo(doc.page.margins.left, doc.y)
+		.lineTo(doc.page.margins.left + width, doc.y)
+		.stroke();
+	doc.moveDown(1);
+	doc.fillColor(accent).font('Helvetica-Bold').fontSize(theme.title + 2)
+		.text(course.name || 'Course', { align: 'center', lineGap: 8 });
 	doc.moveDown(0.8);
 	if (course.description) {
-		doc.fillColor('#526174').font('Helvetica').fontSize(12).text(course.description, {
+		doc.fillColor('#374151').font('Helvetica').fontSize(12).text(course.description, {
 			align: 'center',
 			width: doc.page.width * 0.7,
-			align: 'center',
+			lineGap: 5,
 		});
 		doc.moveDown(1.2);
 	}
@@ -286,53 +593,205 @@ function pdfCover(doc, course, options, theme, sections) {
 			.text(course.category_path, { align: 'center' });
 		doc.moveDown(1.4);
 	}
-	const details = [
-		`${sortedLessons(course).length} lesson${sortedLessons(course).length === 1 ? '' : 's'}`,
-		`${sections.length} learning unit${sections.length === 1 ? '' : 's'}`,
-		options.header?.academicYear,
-		options.header?.level,
-	].filter(Boolean);
-	const chipY = doc.y;
-	const chipText = details.join('     ·     ');
-	doc.save().roundedRect(doc.page.margins.left + 18, chipY, doc.page.width - doc.page.margins.left - doc.page.margins.right - 36, 40, 6)
-		.fill(theme.soft).restore();
-	doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(10)
-		.text(chipText, doc.page.margins.left + 28, chipY + 13, { width: doc.page.width - doc.page.margins.left - doc.page.margins.right - 56, align: 'center' });
+	if (identity.length) pdfCoverIdentityTable(doc, identity, theme, width);
+	doc.lineWidth(2.2).strokeColor(accent)
+		.moveTo(doc.page.margins.left, doc.y)
+		.lineTo(doc.page.margins.left + width, doc.y)
+		.stroke();
+	pdfCoverMetaChip(doc, theme, width, cx, details);
 }
 
-function drawPdfFooter(doc, course, pageRange) {
+function pdfCoverElegant(doc, course, options, theme, header, identity, width, cx, details) {
+	const accent = theme.accent;
+	doc.moveDown(3);
+	const eyebrow = String(header.subject || '').trim();
+	if (eyebrow) {
+		doc.fillColor('#64748b').font('Helvetica-Bold').fontSize(10)
+			.text(eyebrow, { align: 'center', characterSpacing: 3 });
+		doc.moveDown(1);
+	}
+	// Thin double rule above the title
+	doc.lineWidth(0.8).strokeColor(accent)
+		.moveTo(cx - width * 0.28, doc.y).lineTo(cx + width * 0.28, doc.y).stroke();
+	doc.moveDown(0.6);
+	doc.fillColor(accent).font('Helvetica-Bold').fontSize(theme.title + 4)
+		.text(course.name || 'Course', { align: 'center', width: width * 0.86, lineGap: 8 });
+	doc.moveDown(0.6);
+	doc.lineWidth(0.8).strokeColor(accent)
+		.moveTo(cx - width * 0.28, doc.y).lineTo(cx + width * 0.28, doc.y).stroke();
+	doc.moveDown(1);
+	if (course.description) {
+		doc.fillColor('#526174').font('Helvetica-Oblique').fontSize(12.5).text(course.description, {
+			align: 'center', width: doc.page.width * 0.7, lineGap: 4,
+		});
+		doc.moveDown(0.8);
+	}
+	if (course.category_path) {
+		doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(10)
+			.text(course.category_path, { align: 'center' });
+		doc.moveDown(1.2);
+	}
+	if (identity.length) pdfCoverIdentityTable(doc, identity, theme, width);
+	pdfCoverMetaChip(doc, theme, width, cx, details);
+}
+
+function pdfCoverMinimal(doc, course, options, theme, header, identity, width, cx, details) {
+	const accent = theme.accent;
+	doc.moveDown(5);
+	doc.fillColor('#1f2937').font('Helvetica-Bold').fontSize(theme.title + 3)
+		.text(course.name || 'Course', { align: 'center', width: width * 0.9, lineGap: 8 });
+	doc.moveDown(0.8);
+	// Single hairline rule, short and centred
+	doc.lineWidth(1).strokeColor(accent)
+		.moveTo(cx - 60, doc.y).lineTo(cx + 60, doc.y).stroke();
+	doc.moveDown(1);
+	if (course.description) {
+		doc.fillColor('#475569').font('Helvetica').fontSize(12).text(course.description, {
+			align: 'center', width: doc.page.width * 0.66, lineGap: 5,
+		});
+		doc.moveDown(0.8);
+	}
+	if (course.category_path) {
+		doc.fillColor('#94a3b8').font('Helvetica-Oblique').fontSize(10)
+			.text(course.category_path, { align: 'center' });
+		doc.moveDown(1.4);
+	}
+	if (identity.length) pdfCoverIdentityTable(doc, identity, theme, width);
+	pdfCoverMetaChip(doc, theme, width, cx, details);
+}
+
+function pdfCoverMetaChip(doc, theme, width, cx, details) {
+	if (!details || !details.length) return;
+	const chipText = details.join('     ·     ');
+	const fill = theme.soft;
+	doc.save().roundedRect(doc.page.margins.left + 18, doc.y, width - 36, 40, 6)
+		.fill(fill).restore();
+	doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(10)
+		.text(chipText, doc.page.margins.left + 28, doc.y + 13, { width: width - 56, align: 'center' });
+	doc.moveDown(1.8);
+}
+
+
+/** Cover "general information" as a centred Label/Value/Label/Value grid —
+ * shaded label cells and hairline borders, mirroring the Word cover and the
+ * preparation-sheet identity table. Values are short, so each cell is a single
+ * line (ellipsis guards a rare overflow). */
+function pdfCoverIdentityTable(doc, identity, theme, width) {
+	if (!identity.length) return;
+	const accent = theme.accent;
+	const soft = theme.soft;
+	doc.fillColor(accent).font('Helvetica-Bold').fontSize(9)
+		.text('DOCUMENT IDENTITY', { align: 'center', characterSpacing: 1.5 });
+	doc.moveDown(0.4);
+	const tableW = Math.min(width * 0.82, 470);
+	const startX = doc.page.margins.left + (width - tableW) / 2;
+	const lw = Math.round(tableW * 0.26);
+	const vw = Math.round(tableW * 0.24);
+	const cols = [lw, vw, lw, tableW - lw - vw - lw];
+	const padX = 6;
+	const fontSize = 8.5;
+	const rowH = 17;
+	// pdfkit's `ellipsis` option only works with automatic line breaks, so long
+	// values wrapped over the fixed-height row — truncate them by measured width.
+	const fitCell = (txt, font, maxW) => {
+		doc.font(font).fontSize(fontSize);
+		let s = String(txt || '');
+		if (!s || doc.widthOfString(s, { characterSpacing: 0 }) <= maxW) return s;
+		while (s.length > 1 && doc.widthOfString(`${s}…`, { characterSpacing: 0 }) > maxW) s = s.slice(0, -1);
+		return `${s.trimEnd()}…`;
+	};
+	const rows = [];
+	for (let i = 0; i < identity.length; i += 2) rows.push([identity[i], identity[i + 1]]);
+	const top = doc.y;
+	rows.forEach((pair, ri) => {
+		const [a, b] = pair;
+		const cells = b ? [a[0], a[1], b[0], b[1]] : [a[0], a[1], '', ''];
+		let x = startX;
+		cells.forEach((txt, ci) => {
+			const isLabel = ci % 2 === 0;
+			const cw = cols[ci];
+			if (isLabel && txt) doc.rect(x, top + ri * rowH, cw, rowH).fill(soft);
+			x += cw;
+		});
+	});
+	rows.forEach((pair, ri) => {
+		const [a, b] = pair;
+		const cells = b ? [a[0], a[1], b[0], b[1]] : [a[0], a[1], '', ''];
+		const y = top + ri * rowH;
+		let x = startX;
+		cells.forEach((txt, ci) => {
+			const isLabel = ci % 2 === 0;
+			const cw = cols[ci];
+			const font = isLabel ? 'Helvetica-Bold' : 'Helvetica';
+			doc.fillColor(isLabel ? accent : '#374151').font(font).fontSize(fontSize)
+				.text(fitCell(txt, font, cw - padX * 2), x + padX, y + 4, { width: cw - padX * 2, lineBreak: false });
+			doc.strokeColor('#B7C3D0').lineWidth(0.6).rect(x, y, cw, rowH).stroke();
+			x += cw;
+		});
+	});
+	doc.y = top + rows.length * rowH + 16;
+	doc.font('Helvetica').fontSize(11).fillColor('#273449');
+}
+
+/** Slim running header (teacher · school year) stamped in the top margin of
+ * every page except the cover, which already carries the full identity. */
+function drawPdfRunningHeader(doc, options, theme, skipCover) {
+	const h = options.header || {};
+	const left = String(h.teacherName || '').trim();
+	const right = String(h.academicYear || '').trim();
+	if (!left && !right) return;
 	const range = doc.bufferedPageRange();
 	for (let index = range.start; index < range.start + range.count; index++) {
+		if (skipCover && index === range.start) continue;
+		doc.switchToPage(index);
+		const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+		const y = 26;
+		doc.font('Helvetica-Bold').fontSize(8).fillColor(theme.accent)
+			.text(left, doc.page.margins.left, y, { width: width * 0.6, lineBreak: false });
+		doc.font('Helvetica').fontSize(8).fillColor('#526174')
+			.text(right, doc.page.margins.left, y, { width, align: 'right', lineBreak: false });
+		doc.moveTo(doc.page.margins.left, y + 11).lineTo(doc.page.margins.left + width, y + 11)
+			.lineWidth(0.5).strokeColor(theme.accent).stroke();
+	}
+}
+
+function drawPdfFooter(doc, course, pageRange, skipCover) {
+	const range = doc.bufferedPageRange();
+	for (let index = range.start; index < range.start + range.count; index++) {
+		// The cover page keeps no footer and no number.
+		if (skipCover && index === range.start) continue;
 		doc.switchToPage(index);
 		const pageNo = index - range.start + 1;
 		const bottom = doc.page.height - doc.page.margins.bottom + 14;
 		const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 		doc.moveTo(doc.page.margins.left, bottom - 7).lineTo(doc.page.margins.left + width, bottom - 7)
 			.lineWidth(0.5).strokeColor('#d2d8e0').stroke();
+		// The footer sits inside the bottom margin, past page.maxY — without this
+		// temporary release pdfkit would stamp each footer onto a fresh blank page.
+		const savedBottom = doc.page.margins.bottom;
+		doc.page.margins.bottom = 0;
 		doc.font('Helvetica').fontSize(8).fillColor('#64748b')
 			.text(course.name || 'Course', doc.page.margins.left, bottom, { width: width * 0.72, lineBreak: false });
 		doc.text(`${pageNo} / ${pageRange}`, doc.page.margins.left + width * 0.72, bottom, { width: width * 0.28, align: 'right', lineBreak: false });
+		doc.page.margins.bottom = savedBottom;
 	}
 }
 
-function addPdfLesson(doc, lesson, index, theme, sectionDepth, options, forceNewPage = false, outline = false) {
+function addPdfLesson(doc, lesson, theme, path, options, forceNewPage = false, depth = 0) {
 	if (forceNewPage) doc.addPage();
-	const depth = Math.max(0, Number(sectionDepth) || 0);
-	const label = outline ? `HEADING ${depth + 1}` : sectionLabel(depth);
-	const title = `${String(index + 1).padStart(2, '0')}  ${lesson.title || 'Untitled lesson'}`;
-	doc.save().roundedRect(doc.page.margins.left, doc.y, doc.page.width - doc.page.margins.left - doc.page.margins.right, 20, 3)
-		.fill(theme.soft).restore();
-	doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(8)
-		.text(`${label}  ·  LESSON ${String(index + 1).padStart(2, '0')}`, doc.page.margins.left + 9, doc.y + 6, { characterSpacing: 1 });
-	doc.moveDown(1.4);
 	doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(theme.section + 1)
-		.text(title, { lineGap: 3, indent: outline ? depth * 14 : 0 });
+		.text(lesson.title || 'Untitled lesson', { indent: depth * 16, lineGap: 3 });
+	if (path && options.includeLessonPath) {
+		doc.moveDown(0.2);
+		doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(theme.body - 0.5)
+			.text(formatPath(path), { paragraphGap: 2 });
+	}
 	if (lesson.summary) {
-		doc.moveDown(0.35);
+		doc.moveDown(0.4);
 		doc.fillColor('#64748b').font('Helvetica-Oblique').fontSize(theme.body)
 			.text(lesson.summary, { lineGap: 2 });
 	}
-	doc.moveDown(theme.compact ? 0.45 : 0.8);
+	doc.moveDown(theme.compact ? 0.5 : 0.9);
 	const body = String(lesson.content || '').trim();
 	if (body) renderMarkdownPdf(doc, body, theme);
 	else {
@@ -344,6 +803,7 @@ function addPdfLesson(doc, lesson, index, theme, sectionDepth, options, forceNew
 function pdfBuffer(course, options) {
 	return new Promise((resolve, reject) => {
 		const theme = THEMES[options.templateId] || THEMES.classique;
+		const numeration = options.numerationTemplate || 'default';
 		const doc = new PDFDocument({
 			size: 'A4',
 			margins: { top: 52, right: 54, bottom: 56, left: 54 },
@@ -351,7 +811,7 @@ function pdfBuffer(course, options) {
 			info: {
 				Title: course.name || 'Course',
 				Author: options.header?.teacherName || 'Quiz App',
-				Subject: options.header?.subject || course.name || 'Course material',
+				Subject: options.header?.subject || course.name || 'Course',
 				Creator: 'Quiz App — course document generator',
 			},
 		});
@@ -361,77 +821,111 @@ function pdfBuffer(course, options) {
 		doc.on('end', () => resolve(Buffer.concat(chunks)));
 		const sections = buildDocumentSections(course);
 		const lessons = sortedLessons(course);
-		const outlineDepths = lessonOutlineDepths(course);
 		if (options.includeCover !== false) {
 			pdfCover(doc, course, options, theme, sections);
 		}
 		if (options.includeTableOfContents !== false && lessons.length) {
 			if (options.includeCover !== false) doc.addPage();
-			doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(theme.section + 2).text('Contents');
-			doc.moveDown(0.8);
-			lessons.forEach((lesson, index) => {
-				const levels = lessonLevels(lesson, course);
-				const category = levels.map((level) => level.name).join('  /  ');
-				const indent = (outlineDepths.get(String(lesson.id)) || 0) * 14 + 2;
-				doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(theme.body)
-					.text(`${String(index + 1).padStart(2, '0')}  ${lesson.title}`, { indent });
-				if (category) {
-					doc.fillColor('#64748b').font('Helvetica').fontSize(theme.body - 1)
-						.text(category, { indent: indent + 19, paragraphGap: 5 });
+			doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(theme.section + 2)
+				.text('Contents', { characterSpacing: 1.2 });
+			const tocRuleY = doc.y + 4;
+			doc.moveTo(doc.page.margins.left, tocRuleY)
+				.lineTo(doc.page.width - doc.page.margins.right, tocRuleY)
+				.lineWidth(0.8).strokeColor(theme.accent).stroke();
+			doc.y = tocRuleY + 12;
+			const renderToc = (nodes, depth, path) => {
+				let sib = 0;
+				for (const node of nodes) {
+					sib += 1;
+					const sign = sectionSign(numeration, depth, sib, path.map((p) => p.index));
+					const myPath = [...path, { sign, name: node.name, depth, index: sib }];
+					if (node.name) {
+						doc.moveDown(depth === 0 ? 0.45 : 0.2);
+						doc.fillColor(theme.accent).font('Helvetica-Bold')
+							.fontSize(depth === 0 ? theme.body + 0.5 : theme.body)
+							.text(`${sign}${node.name}`, {
+								indent: depth * 16,
+								characterSpacing: depth === 0 ? 0.6 : 0,
+								paragraphGap: 1,
+							});
+						doc.moveDown(0.15);
+					}
+					let lseq = 0;
+					node.lessons.forEach((lesson) => {
+						lseq += 1;
+						const marker = node.name
+							? `${lseq}) `
+							: `${sign}${node.lessons.length > 1 ? `${lseq}) ` : ''}`;
+						doc.fillColor('#374151').font('Helvetica').fontSize(theme.body - 0.5)
+							.text(`${marker}${lesson.title || 'Untitled lesson'}`, {
+								indent: (depth + 1) * 16 + 8,
+								paragraphGap: 1.4,
+								lineGap: 0.5,
+							});
+					});
+					renderToc(node.children, depth + 1, myPath);
 				}
-			});
+			};
+			renderToc(sections, 0, []);
 		}
 
 		let lessonIndex = 0;
 		const containsLessons = (node) => node.lessons.length > 0 || node.children.some(containsLessons);
-		const visit = (nodes) => {
+		const visit = (nodes, path, isFirstTop = true) => {
+			let sib = 0;
 			for (const node of nodes) {
+				sib += 1;
+				const sign = sectionSign(numeration, node.depth, sib, path.map((p) => p.index));
+				const myPath = [...path, { sign, name: node.name, depth: node.depth, index: sib }];
+				const isTopLevel = node.depth === 0;
+				if (isTopLevel && !isFirstTop && !options.startEachLessonOnNewPage) doc.addPage();
 				if (options.startEachLessonOnNewPage && lessonIndex > 0 && containsLessons(node)) doc.addPage();
 				if (node.name) {
-					if (!options.startEachLessonOnNewPage && lessonIndex > 0) doc.moveDown(theme.compact ? 0.6 : 1);
-					const label = sectionLabel(node.depth);
+					if (!(isTopLevel && !isFirstTop && !options.startEachLessonOnNewPage) && lessonIndex > 0) doc.moveDown(theme.compact ? 0.6 : 1);
 					doc.fillColor(theme.accent).font('Helvetica-Bold').fontSize(Math.max(11, theme.section - node.depth * 2))
-						.text(`${label}  ${node.name}`, { lineGap: 2 });
-					doc.moveTo(doc.page.margins.left, doc.y + 3)
-						.lineTo(doc.page.width - doc.page.margins.right, doc.y + 3)
-						.lineWidth(0.7).strokeColor(theme.accent).stroke();
+						.text(`${sign}${node.name}`, { indent: node.depth * 16, lineGap: 2, characterSpacing: node.depth === 0 ? 0.5 : 0 });
+					// Hairline under every section title — same outline language as the TOC.
+					const sectionRuleY = doc.y + 1;
+					doc.moveTo(doc.page.margins.left + node.depth * 16, sectionRuleY)
+						.lineTo(doc.page.width - doc.page.margins.right, sectionRuleY)
+						.lineWidth(0.6).strokeColor('#CBD5E1').stroke();
+					doc.y = sectionRuleY;
 					doc.moveDown(0.55);
 				}
-				for (let localIndex = 0; localIndex < node.lessons.length; localIndex += 1) {
-					const lesson = node.lessons[localIndex];
-					const newPage = options.startEachLessonOnNewPage && (lessonIndex > 0 || localIndex > 0) &&
-						!(localIndex === 0 && node.name && containsLessons(node) && lessonIndex > 0);
-					addPdfLesson(
-						doc,
-						lesson,
-						lessonIndex,
-						theme,
-						node.depth,
-						options,
-						newPage,
-						node.outlineLesson === true,
-					);
+				node.lessons.forEach((lesson) => {
 					lessonIndex += 1;
-				}
-				visit(node.children);
+					const newPage = options.startEachLessonOnNewPage && lessonIndex > 1;
+					addPdfLesson(doc, lesson, theme, myPath, options, newPage, node.depth + 1);
+				});
+				visit(node.children, myPath, false);
+				isFirstTop = false;
 			}
 		};
 		if ((options.includeCover !== false || options.includeTableOfContents !== false) && lessons.length) doc.addPage();
-		visit(sections);
+		visit(sections, []);
 		const pageCount = doc.bufferedPageRange().count;
-		drawPdfFooter(doc, course, pageCount);
+		drawPdfRunningHeader(doc, options, theme, options.includeCover !== false);
+		drawPdfFooter(doc, course, pageCount, options.includeCover !== false);
 		doc.end();
 	});
 }
 
+// Word refuses to open a .docx whose XML carries C0 control characters —
+// and they do sneak in: vertical tab (\x0B) and form feed (\x0C) arrive with
+// lesson content pasted or imported from Word/PDF documents. The docx library
+// escapes & and <, but not these, and XML 1.0 only allows \t \n \r.
+const stripInvalidXmlChars = (text) =>
+	String(text == null ? '' : text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+
 function makeRun(text, options = {}) {
 	return new TextRun({
-		text,
+		text: stripInvalidXmlChars(text),
 		font: options.font || 'Arial',
 		size: options.size || 22,
 		bold: Boolean(options.bold),
 		italics: Boolean(options.italics),
 		color: options.color || '273449',
+		...(options.tracking ? { characterSpacing: options.tracking } : {}),
 	});
 }
 
@@ -455,19 +949,14 @@ function markdownRuns(line, theme) {
 function docxHeader(options, theme) {
 	const fields = headerFields(options.header);
 	const layout = HEADER_LAYOUTS.has(options.headerLayout) ? options.headerLayout : 'bandeau';
-	const text = layout === 'minimal'
-		? [options.header?.schoolName, options.header?.academicYear, options.header?.subject].filter(Boolean).join('  ·  ')
-		: fields.map(([label, value]) => `${label}: ${value}`).join('   ·   ');
+	const text = fields.map(([label, value]) => `${label}: ${value}`).join('   ·   ');
 	const alignment = layout === 'split' ? AlignmentType.BOTH : AlignmentType.CENTER;
-	const border = {
-		bottom: { style: BorderStyle.SINGLE, size: layout === 'bandeau' ? 16 : 6, color: noHash(theme.accent), space: 6 },
-	};
 	const headerChildren = [];
 	if (layout === 'split') {
 		const splitIndex = Math.ceil(fields.length / 2);
 		headerChildren.push(
 			new Paragraph({ children: [makeRun(fields.slice(0, splitIndex).map(([label, value]) => `${label}: ${value}`).join('   ·  ') || ' ', { size: 17, bold: true, color: noHash(theme.accent) })], alignment: AlignmentType.LEFT }),
-			new Paragraph({ children: [makeRun(fields.slice(splitIndex).map(([label, value]) => `${label}: ${value}`).join('   ·  ') || ' ', { size: 17, color: noHash(theme.accent) })], alignment: AlignmentType.RIGHT }),
+			new Paragraph({ children: [makeRun(fields.slice(splitIndex).map(([label, value]) => `${label}: ${value}`).join('   ·  ') || ' ', { size: 16, color: noHash(theme.accent) })], alignment: AlignmentType.RIGHT }),
 		);
 	} else if (layout === 'bandeau' || layout === 'classique') {
 		headerChildren.push(
@@ -489,83 +978,265 @@ function docxHeader(options, theme) {
 			})],
 			alignment,
 			border: layout === 'boxed' ? {
-					top: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
-					bottom: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
-					left: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
-					right: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
-				} : {
-					bottom: { style: BorderStyle.SINGLE, size: layout === 'bandeau' ? 16 : 6, color: noHash(theme.accent), space: 6 },
-				},
+				top: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
+				bottom: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
+				left: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
+				right: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 },
+			} : {
+				bottom: { style: BorderStyle.SINGLE, size: layout === 'bandeau' ? 16 : 6, color: noHash(theme.accent), space: 6 },
+			},
 			shading: layout === 'banner' ? { type: ShadingType.CLEAR, fill: noHash(theme.accent), color: 'auto' } : undefined,
 			spacing: { after: 100 },
 		}));
 	}
-	return new Header({
-		children: headerChildren,
-	});
+	return new Header({ children: headerChildren });
 }
 
-function docxFooter() {
-	return new Footer({
-		children: [new Paragraph({
-			children: [
-				makeRun('Page ', { size: 16, color: '64748B' }),
-				new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '64748B' }),
-				makeRun(' of ', { size: 16, color: '64748B' }),
-				new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: '64748B' }),
-			],
-			alignment: AlignmentType.CENTER,
-			border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'D2D8E0', space: 6 } },
-		})],
-	});
+function docxCover(course, options, theme, sections) {
+	const paragraphs = [];
+	const accent = noHash(theme.accent);
+	const header = options.header || {};
+	const coverTemplate = options.coverTemplate || 'academic';
+	const school = options.header?.schoolName;
+	const identity = [
+		['Teacher', header.teacherName],
+		['Subject', header.subject],
+		['Level / class', header.level],
+		['Group', header.group],
+		['Academic year', header.academicYear],
+		['Date', header.date],
+	].filter(([, value]) => String(value || '').trim());
+	const coverMeta = [
+		`${sortedLessons(course).length} lesson${sortedLessons(course).length === 1 ? '' : 's'}`,
+		`${sections.length} section${sections.length === 1 ? '' : 's'}`,
+		options.header?.academicYear,
+		options.header?.level,
+	].filter(Boolean).join('   ·   ');
+
+	if (coverTemplate === 'modern') {
+		docxCoverModern(paragraphs, course, options, theme, header, identity, coverMeta, accent);
+	} else if (coverTemplate === 'book') {
+		docxCoverBook(paragraphs, course, options, theme, header, identity, coverMeta, accent);
+	} else if (coverTemplate === 'university') {
+		docxCoverUniversity(paragraphs, course, options, theme, header, identity, coverMeta, accent);
+	} else if (coverTemplate === 'elegant') {
+		docxCoverElegant(paragraphs, course, options, theme, header, identity, coverMeta, accent);
+	} else if (coverTemplate === 'minimal') {
+		docxCoverMinimal(paragraphs, course, options, theme, header, identity, coverMeta, accent);
+	} else {
+		docxCoverAcademic(paragraphs, course, options, theme, header, school, identity, coverMeta, accent);
+	}
+	return paragraphs;
+}
+
+function docxCoverAcademic(paragraphs, course, options, theme, header, school, identity, coverMeta, accent) {
+	if (school) paragraphs.push(new Paragraph({
+		children: [makeRun(school, { bold: true, size: 24, color: accent })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 2400, after: 500 },
+	}));
+	paragraphs.push(new Paragraph({
+		children: [makeRun(course.name || 'Course', { bold: true, size: theme.title * 2, color: accent })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: school ? 1200 : 2400, after: 420 },
+		border: { bottom: { style: BorderStyle.SINGLE, size: 18, color: accent, space: 10 } },
+	}));
+	if (course.description) paragraphs.push(new Paragraph({
+		children: [makeRun(course.description, { size: 24, color: '526174' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 240, after: 500 },
+	}));
+	if (course.category_path) paragraphs.push(new Paragraph({
+		children: [makeRun(course.category_path, { size: 20, italics: true, color: '64748B' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 500 },
+	}));
+	docxCoverIdentity(paragraphs, identity, accent, theme);
+	docxCoverMeta(paragraphs, coverMeta, accent, theme);
+}
+
+function docxCoverModern(paragraphs, course, options, theme, header, identity, coverMeta, accent) {
+	paragraphs.push(new Paragraph({
+		children: [makeRun(course.name || 'Course', { bold: true, size: theme.title * 2, color: 'FFFFFF' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 1600, after: 300 },
+		shading: { type: ShadingType.CLEAR, fill: accent, color: 'auto' },
+		border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: accent, space: 8 } },
+	}));
+	if (course.description) paragraphs.push(new Paragraph({
+		children: [makeRun(course.description, { size: 22, color: 'F1F5F9' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 300, after: 500 },
+		shading: { type: ShadingType.CLEAR, fill: accent, color: 'auto' },
+	}));
+	if (course.category_path) paragraphs.push(new Paragraph({
+		children: [makeRun(course.category_path, { size: 18, italics: true, color: 'CBD5E1' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 700 },
+		shading: { type: ShadingType.CLEAR, fill: accent, color: 'auto' },
+	}));
+	docxCoverIdentity(paragraphs, identity, accent, theme);
+	docxCoverMeta(paragraphs, coverMeta, accent, theme);
+}
+
+function docxCoverBook(paragraphs, course, options, theme, header, identity, coverMeta, accent) {
+	paragraphs.push(new Paragraph({
+		children: [makeRun(course.name || 'Course', { bold: true, size: theme.title * 2 + 4, color: accent })],
+		alignment: AlignmentType.LEFT,
+		spacing: { before: 2200, after: 400 },
+		border: { left: { style: BorderStyle.SINGLE, size: 24, color: accent, space: 12 } },
+	}));
+	paragraphs.push(new Paragraph({
+		children: [makeRun('A course document prepared for study and reference.', { size: 18, color: '374151' })],
+		alignment: AlignmentType.LEFT,
+		spacing: { after: 1000 },
+		border: { left: { style: BorderStyle.SINGLE, size: 24, color: accent, space: 12 } },
+	}));
+	if (course.category_path) paragraphs.push(new Paragraph({
+		children: [makeRun(course.category_path, { size: 17, italics: true, color: '64748B' })],
+		alignment: AlignmentType.LEFT,
+		spacing: { after: 1000 },
+		border: { left: { style: BorderStyle.SINGLE, size: 24, color: accent, space: 12 } },
+	}));
+	if (course.description) paragraphs.push(new Paragraph({
+		children: [makeRun(course.description, { size: 18, italics: true, color: '475569' })],
+		alignment: AlignmentType.LEFT,
+		spacing: { after: 1400 },
+		border: { left: { style: BorderStyle.SINGLE, size: 24, color: accent, space: 12 } },
+	}));
+	docxCoverIdentity(paragraphs, identity, accent, theme);
+	docxCoverMeta(paragraphs, coverMeta, accent, theme);
+}
+
+function docxCoverUniversity(paragraphs, course, options, theme, header, identity, coverMeta, accent) {
+	paragraphs.push(new Paragraph({
+		children: [makeRun([header.schoolName, header.academy, header.ministry].filter(Boolean).join('  ·  '), { bold: true, size: 17, color: accent })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 2000, after: 200 },
+		border: {
+			top: { style: BorderStyle.SINGLE, size: 14, color: accent, space: 6 },
+			bottom: { style: BorderStyle.SINGLE, size: 14, color: accent, space: 6 },
+		},
+	}));
+	paragraphs.push(new Paragraph({
+		children: [makeRun([header.academicYear, header.level, header.group].filter(Boolean).join('  ·  '), { size: 14, color: '64748B' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 1000 },
+		border: { bottom: { style: BorderStyle.SINGLE, size: 14, color: accent, space: 6 } },
+	}));
+	paragraphs.push(new Paragraph({
+		children: [makeRun(course.name || 'Course', { bold: true, size: theme.title * 2, color: accent })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 600, after: 400 },
+		border: { top: { style: BorderStyle.SINGLE, size: 14, color: accent, space: 6 } },
+	}));
+	if (course.description) paragraphs.push(new Paragraph({
+		children: [makeRun(course.description, { size: 20, color: '374151' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 300, after: 500 },
+	}));
+	if (course.category_path) paragraphs.push(new Paragraph({
+		children: [makeRun(course.category_path, { size: 17, italics: true, color: '64748B' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 700 },
+	}));
+	docxCoverIdentity(paragraphs, identity, accent, theme);
+	docxCoverMeta(paragraphs, coverMeta, accent, theme);
+}
+
+/** Elegant: a formal centred composition framed by thin double rules. */
+function docxCoverElegant(paragraphs, course, options, theme, header, identity, coverMeta, accent) {
+	const eyebrow = String(header.subject || '').trim();
+	if (eyebrow) paragraphs.push(new Paragraph({
+		children: [makeRun(eyebrow, { bold: true, size: 15, color: '64748B', tracking: 30 })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 2600, after: 260 },
+	}));
+	paragraphs.push(new Paragraph({
+		children: [makeRun(course.name || 'Course', { bold: true, size: theme.title * 2 + 4, color: accent, font: theme.font })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: eyebrow ? 120 : 2600, after: 120 },
+		border: {
+			top: { style: BorderStyle.SINGLE, size: 6, color: accent, space: 14 },
+			bottom: { style: BorderStyle.SINGLE, size: 6, color: accent, space: 14 },
+		},
+	}));
+	if (course.description) paragraphs.push(new Paragraph({
+		children: [makeRun(course.description, { size: 22, italics: true, color: '526174', font: theme.font })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 260, after: 300 },
+	}));
+	if (course.category_path) paragraphs.push(new Paragraph({
+		children: [makeRun(course.category_path, { size: 18, italics: true, color: '64748B' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 300 },
+	}));
+	docxCoverIdentity(paragraphs, identity, accent, theme);
+	docxCoverMeta(paragraphs, coverMeta, accent, theme);
+}
+
+/** Minimal: generous whitespace, a single hairline rule, centred title. */
+function docxCoverMinimal(paragraphs, course, options, theme, header, identity, coverMeta, accent) {
+	paragraphs.push(new Paragraph({
+		children: [makeRun(course.name || 'Course', { bold: true, size: theme.title * 2 + 2, color: '1F2937', font: theme.font })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 3200, after: 160 },
+	}));
+	paragraphs.push(new Paragraph({
+		children: [makeRun('', {})],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 200 },
+		border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: accent, space: 0 } },
+	}));
+	if (course.description) paragraphs.push(new Paragraph({
+		children: [makeRun(course.description, { size: 21, color: '475569' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 120, after: 260 },
+	}));
+	if (course.category_path) paragraphs.push(new Paragraph({
+		children: [makeRun(course.category_path, { size: 17, italics: true, color: '94A3B8' })],
+		alignment: AlignmentType.CENTER,
+		spacing: { after: 300 },
+	}));
+	docxCoverIdentity(paragraphs, identity, accent, theme);
+	docxCoverMeta(paragraphs, coverMeta, accent, theme);
+}
+
+function docxCoverIdentity(paragraphs, identity, accent, theme) {
+	if (!identity.length) return;
+	paragraphs.push(new Paragraph({
+		children: [makeRun('DOCUMENT IDENTITY', { bold: true, size: 13, color: accent, italics: true })],
+		alignment: AlignmentType.CENTER,
+		spacing: { before: 400, after: 200 },
+		keepNext: true,
+	}));
+	paragraphs.push(docxCoverIdentityTable(identity, theme));
+}
+
+function docxCoverMeta(paragraphs, coverMeta, accent, theme) {
+	if (!coverMeta) return;
+	paragraphs.push(new Paragraph({
+		children: [makeRun(coverMeta, { size: 19, bold: true, color: accent })],
+		alignment: AlignmentType.CENTER,
+		shading: { type: ShadingType.CLEAR, fill: noHash(theme.soft), color: 'auto' },
+		spacing: { before: 700, after: 1800 },
+	}));
+}
+
+const HEADING_LEVELS = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5, HeadingLevel.HEADING_6];
+
+function headingLevelForDepth(depth) {
+	return HEADING_LEVELS[Math.min(depth, HEADING_LEVELS.length - 1)] || HeadingLevel.HEADING_6;
 }
 
 function docxParagraphs(course, options, theme) {
 	const accent = noHash(theme.accent);
 	const lessons = sortedLessons(course);
-	const outlineDepths = lessonOutlineDepths(course);
+	const sections = buildDocumentSections(course);
+	const numeration = options.numerationTemplate || 'default';
 	const paragraphs = [];
 	if (options.includeCover !== false) {
-		const school = options.header?.schoolName;
-		if (school) paragraphs.push(new Paragraph({
-			children: [makeRun(school, { bold: true, size: 24, color: accent })],
-			alignment: AlignmentType.CENTER,
-			spacing: { before: 2400, after: 500 },
-		}));
-		paragraphs.push(new Paragraph({
-			children: [makeRun(course.name || 'Course', { bold: true, size: theme.title * 2, color: accent })],
-			alignment: AlignmentType.CENTER,
-			spacing: { before: school ? 1200 : 2400, after: 420 },
-			border: { bottom: { style: BorderStyle.SINGLE, size: 18, color: accent, space: 10 } },
-		}));
-		if (course.description) paragraphs.push(new Paragraph({
-			children: [makeRun(course.description, { size: 24, color: '526174' })],
-			alignment: AlignmentType.CENTER,
-			spacing: { before: 240, after: 500 },
-		}));
-		if (course.category_path) paragraphs.push(new Paragraph({
-			children: [makeRun(course.category_path, { size: 20, italics: true, color: '64748B' })],
-			alignment: AlignmentType.CENTER,
-			spacing: { after: 500 },
-		}));
-		const coverMeta = [
-			`${lessons.length} lesson${lessons.length === 1 ? '' : 's'}`,
-			options.header?.academicYear,
-			options.header?.level,
-		].filter(Boolean).join('   ·   ');
-		if (coverMeta) paragraphs.push(new Paragraph({
-			children: [makeRun(coverMeta, { size: 19, bold: true, color: accent })],
-			alignment: AlignmentType.CENTER,
-			shading: { type: ShadingType.CLEAR, fill: noHash(theme.soft), color: 'auto' },
-			spacing: { before: 700, after: 1800 },
-		}));
-		for (const [label, value] of headerFields(options.header).filter(([label]) => label !== 'Institution')) {
-			paragraphs.push(new Paragraph({
-				children: [makeRun(`${label}: `, { bold: true, size: 18 }), makeRun(value, { size: 18 })],
-				alignment: AlignmentType.CENTER,
-				spacing: { after: 100 },
-			}));
-		}
+		paragraphs.push(...docxCover(course, options, theme, sections));
 	}
 
 	if (options.includeTableOfContents !== false && lessons.length) {
@@ -573,47 +1244,73 @@ function docxParagraphs(course, options, theme) {
 			text: 'Contents',
 			heading: HeadingLevel.HEADING_1,
 			pageBreakBefore: options.includeCover !== false,
-			spacing: { after: 300 },
+			spacing: { after: 40 },
 		}));
-		lessons.forEach((lesson, index) => {
-			const path = lessonLevels(lesson, course).map((level) => level.name).join('  /  ');
-			const indent = Math.min(
-				(outlineDepths.get(String(lesson.id)) || 0) * 360,
-				1800,
-			);
-			paragraphs.push(new Paragraph({
-				children: [
-					makeRun(`${String(index + 1).padStart(2, '0')}  `, { bold: true, color: accent, size: 21 }),
-					makeRun(lesson.title || 'Untitled lesson', { bold: true, size: 21 }),
-				],
-				keepNext: Boolean(path),
-				indent: indent ? { left: indent } : undefined,
-				spacing: { before: 120, after: path ? 20 : 100 },
-				border: { bottom: { style: BorderStyle.DOTTED, size: 4, color: 'CBD5E1', space: 4 } },
-			}));
-			if (path) paragraphs.push(new Paragraph({
-				children: [makeRun(path, { size: 17, italics: true, color: '64748B' })],
-				indent: { left: 420 },
-				spacing: { after: 100 },
-			}));
-		});
-	}
-	if (options.includeCover !== false || (options.includeTableOfContents !== false && lessons.length)) {
-		paragraphs.push(new Paragraph({ text: 'Course material', pageBreakBefore: true, spacing: { after: 180 } }));
+		// Thin accent rule under the title, then breathing room before the list.
+		paragraphs.push(new Paragraph({
+			text: '',
+			border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: accent, space: 0 } },
+			spacing: { after: 260 },
+		}));
+		const renderToc = (nodes, depth, path) => {
+			let sib = 0;
+			for (const node of nodes) {
+				sib += 1;
+				const sign = sectionSign(numeration, depth, sib, path.map((p) => p.index));
+				const myPath = [...path, { sign, name: node.name, depth, index: sib }];
+				if (node.name) {
+					paragraphs.push(new Paragraph({
+						children: [
+							makeRun(sign, { bold: true, color: accent, size: 21 }),
+							makeRun(node.name, { bold: true, color: accent, size: 21, ...(depth === 0 ? { tracking: 10 } : {}) }),
+						],
+						indent: depth ? { left: Math.min(depth * 360, 1800) } : undefined,
+						spacing: { before: depth === 0 ? 200 : 120, after: 40 },
+						border: depth === 0 ? { bottom: { style: BorderStyle.DOTTED, size: 4, color: 'CBD5E1', space: 4 } } : undefined,
+					}));
+				}
+				let lseq = 0;
+				node.lessons.forEach((lesson) => {
+					lseq += 1;
+					// Number TOC lessons. Under a named section they run 1) 2) …;
+					// a lesson filed directly (anonymous node) carries the section
+					// sign itself, so the TOC is never left unnumbered.
+					const marker = node.name
+						? `${lseq}) `
+						: `${sign}${node.lessons.length > 1 ? `${lseq}) ` : ''}`;
+					paragraphs.push(new Paragraph({
+						children: [
+							makeRun(marker, { bold: true, color: accent, size: 19 }),
+							makeRun(lesson.title || 'Untitled lesson', { size: 19, color: '374151' }),
+						],
+						indent: { left: Math.min((depth + 1) * 360, 1800) + 80 },
+						spacing: { before: 20, after: 20 },
+					}));
+				});
+				renderToc(node.children, depth + 1, myPath);
+			}
+		};
+		renderToc(sections, 0, []);
 	}
 
-	const sections = buildDocumentSections(course);
+	if (options.includeCover !== false || (options.includeTableOfContents !== false && lessons.length)) {
+		// Body starts on a fresh page after the cover/TOC. The old label
+		// "Course material" was a redundant divider heading (already on the
+		// cover) — drop it and just force the page break here.
+		paragraphs.push(new Paragraph({ text: '', pageBreakBefore: true, spacing: { after: 0 } }));
+	}
+
 	let lessonIndex = 0;
-	const headingLevels = [
-		HeadingLevel.HEADING_1,
-		HeadingLevel.HEADING_2,
-		HeadingLevel.HEADING_3,
-		HeadingLevel.HEADING_4,
-		HeadingLevel.HEADING_5,
-		HeadingLevel.HEADING_6,
-	];
-	const visit = (nodes) => {
+	const visit = (nodes, path, isFirstTop = true) => {
+		let sib = 0;
 		for (const node of nodes) {
+			sib += 1;
+			const sign = sectionSign(numeration, node.depth, sib, path.map((p) => p.index));
+			const myPath = [...path, { sign, name: node.name, depth: node.depth, index: sib }];
+			const isTopLevel = node.depth === 0;
+			if (isTopLevel && !isFirstTop && !options.startEachLessonOnNewPage) {
+				paragraphs.push(new Paragraph({ text: '', pageBreakBefore: true, spacing: { after: 0 } }));
+			}
 			if (node.outlineLesson) {
 				const lesson = node.lesson;
 				paragraphs.push(new Paragraph({
@@ -624,32 +1321,9 @@ function docxParagraphs(course, options, theme) {
 							color: accent,
 						}),
 					],
-					heading: headingLevels[Math.min(node.depth, headingLevels.length - 1)],
+					heading: headingLevelForDepth(node.depth),
 					pageBreakBefore: lessonIndex > 0 && options.startEachLessonOnNewPage,
 					indent: node.depth ? { left: Math.min(node.depth * 360, 1800) } : undefined,
-					keepNext: Boolean(lesson.summary),
-					spacing: { before: 260, after: 110 },
-				}));
-			} else if (node.name) {
-				paragraphs.push(new Paragraph({
-					children: [
-						makeRun(`${sectionLabel(node.depth)}  `, { bold: true, size: 17, color: accent }),
-						makeRun(node.name, { bold: true, size: (theme.section - node.depth) * 2, color: accent }),
-					],
-					heading: node.depth === 0 ? HeadingLevel.HEADING_1 : HeadingLevel.HEADING_2,
-					spacing: { before: 260, after: 110 },
-					shading: node.depth === 0 ? { type: ShadingType.CLEAR, fill: noHash(theme.soft), color: 'auto' } : undefined,
-					border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: noHash(theme.accent), space: 5 } },
-				}));
-			}
-			for (const lesson of node.lessons) {
-				if (!node.outlineLesson) paragraphs.push(new Paragraph({
-					children: [
-						makeRun(`LESSON ${String(lessonIndex + 1).padStart(2, '0')}  `, { bold: true, size: 18, color: accent }),
-						makeRun(lesson.title || 'Untitled lesson', { bold: true, size: theme.section * 2, color: accent }),
-					],
-					heading: HeadingLevel.HEADING_2,
-					pageBreakBefore: lessonIndex > 0 && options.startEachLessonOnNewPage,
 					keepNext: Boolean(lesson.summary),
 					spacing: { before: 260, after: 110 },
 				}));
@@ -657,12 +1331,6 @@ function docxParagraphs(course, options, theme) {
 					children: [makeRun(lesson.summary, { italics: true, size: theme.body * 2, color: '64748B' })],
 					keepNext: true,
 					spacing: { after: 180 },
-				}));
-				const path = lessonLevels(lesson, course).map((level) => level.name).join('  /  ');
-				if (path) paragraphs.push(new Paragraph({
-					children: [makeRun(path, { size: 17, color: '64748B' })],
-					keepNext: Boolean(lesson.content),
-					spacing: { after: 160 },
 				}));
 				const content = String(lesson.content || '').replace(/\r\n/g, '\n');
 				if (!content.trim()) {
@@ -682,7 +1350,11 @@ function docxParagraphs(course, options, theme) {
 						} else if (/^\s*[-*•]\s+/.test(raw)) {
 							paragraphs.push(new Paragraph({
 								children: markdownRuns(raw.replace(/^\s*[-*•]\s+/, ''), theme),
-								bullet: { indent: 360 },
+								// `level` is mandatory: docx serializes bullet options
+								// straight into <w:numPr>, and an undefined level emits
+								// <w:ilvl/> without w:val — Word then rejects the whole
+								// file as corrupt. (`indent` is not a bullet option.)
+								bullet: { level: 0 },
 								spacing: { after: 70 },
 							}));
 						} else if (/^\s*\d+[.)]\s+/.test(raw)) {
@@ -697,12 +1369,120 @@ function docxParagraphs(course, options, theme) {
 					}
 				}
 				lessonIndex += 1;
+				visit(node.children, myPath, false);
+				isFirstTop = false;
+				continue;
 			}
-			visit(node.children);
+			if (node.name) {
+				if (!(isTopLevel && !isFirstTop && !options.startEachLessonOnNewPage)) {
+					paragraphs.push(new Paragraph({
+						children: [makeRun(`${sign}${node.name}`, { bold: true, size: Math.max(14, (theme.section - node.depth) * 2), color: accent })],
+						heading: headingLevelForDepth(node.depth),
+						// Nested levels must read as nested: Word heading styles
+						// carry no indent, so every depth sits on the left margin
+						// unless we shift it (same 360 twips step as the TOC).
+						indent: node.depth ? { left: Math.min(node.depth * 360, 1800) } : undefined,
+						spacing: { before: 260, after: 110 },
+						shading: node.depth === 0 ? { type: ShadingType.CLEAR, fill: noHash(theme.soft), color: 'auto' } : undefined,
+					}));
+				}
+			}
+			node.lessons.forEach((lesson) => {
+				paragraphs.push(new Paragraph({
+					children: [makeRun(lesson.title || 'Untitled lesson', { bold: true, size: theme.section * 2, color: accent })],
+					heading: HeadingLevel.HEADING_2,
+					indent: { left: Math.min((node.depth + 1) * 360, 1800) },
+					pageBreakBefore: options.startEachLessonOnNewPage,
+					keepNext: Boolean(lesson.summary),
+					spacing: { before: 260, after: 110 },
+				}));
+				if (options.includeLessonPath && myPath.length) {
+					paragraphs.push(new Paragraph({
+						children: [makeRun(formatPath(myPath), { size: 16, italics: true, color: '64748B' })],
+						keepNext: Boolean(lesson.content),
+						spacing: { after: 160 },
+					}));
+				}
+				if (lesson.summary) paragraphs.push(new Paragraph({
+					children: [makeRun(lesson.summary, { italics: true, size: theme.body * 2, color: '64748B' })],
+					keepNext: true,
+					spacing: { after: 180 },
+				}));
+				const content = String(lesson.content || '').replace(/\r\n/g, '\n');
+				if (!content.trim()) {
+					paragraphs.push(new Paragraph({ children: [makeRun('Lesson content has not been added yet.', { italics: true, color: '64748B' })] }));
+				} else {
+					for (const raw of content.split('\n')) {
+						const line = raw.trim();
+						if (!line) continue;
+						const heading = line.match(/^(#{1,4})\s+(.*)$/);
+						if (heading) {
+							paragraphs.push(new Paragraph({
+								children: [makeRun(heading[2], { bold: true, size: (theme.body + (heading[1].length === 1 ? 4 : 2)) * 2, color: accent })],
+								heading: heading[1].length <= 2 ? HeadingLevel.HEADING_3 : HeadingLevel.HEADING_4,
+								keepNext: true,
+								spacing: { before: 220, after: 90 },
+							}));
+						} else if (/^\s*[-*•]\s+/.test(raw)) {
+							paragraphs.push(new Paragraph({
+								children: markdownRuns(raw.replace(/^\s*[-*•]\s+/, ''), theme),
+								// `level` is mandatory: docx serializes bullet options
+								// straight into <w:numPr>, and an undefined level emits
+								// <w:ilvl/> without w:val — Word then rejects the whole
+								// file as corrupt. (`indent` is not a bullet option.)
+								bullet: { level: 0 },
+								spacing: { after: 70 },
+							}));
+						} else if (/^\s*\d+[.)]\s+/.test(raw)) {
+							paragraphs.push(new Paragraph({
+								children: markdownRuns(raw.trim().replace(/^\d+[.)]\s+/, ''), theme),
+								numbering: { reference: 'course-numbering', level: 0 },
+								spacing: { after: 70 },
+							}));
+						} else {
+							paragraphs.push(new Paragraph({ children: markdownRuns(line, theme), spacing: { after: 130 } }));
+						}
+					}
+				}
+			});
+			visit(node.children, myPath, false);
+			isFirstTop = false;
 		}
 	};
-	visit(sections);
+	visit(sections, []);
 	return paragraphs;
+}
+
+function buildDocumentSections(course) {
+	if ((course.lessons || []).some((lesson) => lesson.parent_lesson_id)) {
+		return buildLessonOutline(course);
+	}
+	const roots = [];
+	const nodes = new Map();
+	for (const lesson of sortedLessons(course)) {
+		const levels = lessonLevels(lesson, course);
+		let parent = null;
+		for (const level of levels) {
+			const key = String(level.id || `${parent?.key || 'root'}:${level.name}`);
+			let node = nodes.get(key);
+			if (!node) {
+				node = { key, name: String(level.name), children: [], lessons: [], depth: parent ? parent.depth + 1 : 0 };
+				nodes.set(key, node);
+				if (parent) parent.children.push(node);
+				else roots.push(node);
+			}
+			parent = node;
+		}
+		if (parent) parent.lessons.push(lesson);
+		else roots.push({
+			key: `lesson:${lesson.id}`,
+			name: '',
+			children: [],
+			lessons: [lesson],
+			depth: 0,
+		});
+	}
+	return roots;
 }
 
 export async function renderCourseDocument(course, options) {
@@ -714,6 +1494,8 @@ export async function renderCourseDocument(course, options) {
 	const pageWidth = 11906;
 	const pageHeight = 16838;
 	const margin = theme.compact ? 720 : 1000;
+	const sections = buildDocumentSections(course);
+	const hasCover = options.includeCover !== false;
 	const buffer = await Packer.toBuffer(new Document({
 		styles: {
 			default: { document: { run: { font: theme.font, size: theme.body * 2, color: '273449' } } },
@@ -733,9 +1515,21 @@ export async function renderCourseDocument(course, options) {
 					size: { width: pageWidth, height: pageHeight },
 					margin: { top: margin, right: margin, bottom: margin, left: margin },
 				},
+				// Cover page keeps the rich institutional header; every following
+				// page gets the slim teacher · year running header instead.
+				titlePage: hasCover,
 			},
-			headers: { default: docxHeader(options, theme) },
-			footers: { default: docxFooter() },
+			headers: {
+				default: docxRunningHeader(options, theme),
+				...(hasCover ? { first: docxHeader(options, theme) } : {}),
+			},
+			footers: {
+				default: docxRunningFooter(course, theme),
+				// A cover page is never numbered: titlePage splits the first-page
+				// chrome, so give the cover an EMPTY footer and let the running
+				// footer start on the contents page.
+				...(hasCover ? { first: new Footer({ children: [new Paragraph({ children: [] })] }) } : {}),
+			},
 			children: docxParagraphs(course, options, theme),
 		}],
 	}));
