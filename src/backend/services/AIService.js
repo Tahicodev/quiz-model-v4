@@ -17,6 +17,7 @@ import { logger } from '../logger.js';
 import { ValidationError, AppError } from '../../shared/errors.js';
 import { PrepSheetDataSchema } from '../../shared/schemas/course.schema.js';
 import { QUESTION_TYPES, DIFFICULTY } from '../../shared/constants.js';
+import { lessonSectionLabels } from '../../shared/lessonSections.js';
 
 const typeValues = Object.values(QUESTION_TYPES);
 const diffValues = Object.values(DIFFICULTY);
@@ -483,9 +484,9 @@ Example output (text options):
   #buildCourseOutlinePrompt({ courseName, language, plan }) {
     const lines = plan.map((p, i) =>
       `${i + 1}. categoryId: "${p.categoryId}" | path: "${p.path}" | existing questions: ${p.questionCount}`);
-    return `You are a course designer for a school platform. Build the lesson outline of the course "${courseName}" from its category plan below. Each plan row becomes EXACTLY ONE lesson, in the same order.
+    return `You are a course designer for a school platform. Build the lesson outline of the course "${courseName}" from its module/chapter plan below. Each plan row becomes EXACTLY ONE lesson, in the same order.
 
-CATEGORY PLAN (one row = one lesson):
+MODULE / CHAPTER PLAN (one row = one lesson):
 ${lines.join('\n')}
 
 RULES:
@@ -499,49 +500,43 @@ Example:
 [{ "categoryId": "abc", "title": "Introduction", "summary": "Ce cours presente..." }]`;
   }
 
-  // Section headings rendered into the document by courseDocumentRenderer
+  // Lesson-section headings rendered into the document by courseDocumentRenderer
   // are inserted verbatim, so we localize them here. The renderer never
   // depends on the English label — it treats every `##` as a generic
   // subheading — but the reader expects a French course to read "Objectifs",
-  // not "Objectives".
-  #lessonSectionLabels(language = 'French') {
-    const lang = String(language || '').toLowerCase();
-    const table = {
-      french: ['Objectifs', 'Concepts clés', 'Explication', 'Exemples', 'Erreurs fréquentes', "Vérifiez vos acquis"],
-      français: ['Objectifs', 'Concepts clés', 'Explication', 'Exemples', 'Erreurs fréquentes', "Vérifiez vos acquis"],
-      english: ['Objectives', 'Key concepts', 'Explanation', 'Examples', 'Common mistakes', 'Check yourself'],
-      spanish: ['Objetivos', 'Conceptos clave', 'Explicación', 'Ejemplos', 'Errores frecuentes', 'Comprueba lo aprendido'],
-      español: ['Objetivos', 'Conceptos clave', 'Explicación', 'Ejemplos', 'Errores frecuentes', 'Comprueba lo aprendido'],
-      portuguese: ['Objetivos', 'Conceitos-chave', 'Explicação', 'Exemplos', 'Erros comuns', 'Teste seus conhecimentos'],
-      german: ['Lernziele', 'Kernbegriffe', 'Erklärung', 'Beispiele', 'Häufige Fehler', 'Überprüfe dein Wissen'],
-      italian: ['Obiettivi', 'Concetti chiave', 'Spiegazione', 'Esempi', 'Errori comuni', 'Verifica'],
-      dutch: ['Leerdoelen', 'Kernbegrippen', 'Uitleg', 'Voorbeelden', 'Veelgemaakte fouten', 'Test jezelf'],
-      turkish: ['Kazanımlar', 'Temel kavramlar', 'Açıklama', 'Örnekler', 'Sık yapılan hatalar', 'Kendini dene'],
-      arabic: ['الأهداف', 'المفاهيم الأساسية', 'الشرح', 'أمثلة', 'أخطاء شائعة', 'تحقق من تعلمك'],
-    };
-    return table[lang] || table.english;
-  }
-
+  // not "Objectives". The table lives in src/shared/lessonSections.js so the
+  // student chapter page can extract the same headings.
   buildLessonContentPrompt({ language = 'French', lesson, categoryPath, questionDigest = [], includeQuestions = true }) {
     const digest = questionDigest.length
       ? `QUESTIONS THE STUDENTS WILL PRACTICE AFTER THIS LESSON (your content must teach what these ask):\n${questionDigest.slice(0, 30).map((t) => `- ${t}`).join('\n')}`
       : '';
-    const [secObjectives, secKeyConcepts, secExplanation, secExamples, secMistakes, secCheck] = this.#lessonSectionLabels(language);
+    const [
+      secIntro,
+      secObjectives,
+      secKeyConcepts,
+      secDefinition,
+      secExplanation,
+      secExamples,
+      secMistakes,
+      secCheck,
+    ] = lessonSectionLabels(language);
     const withCheck = includeQuestions && questionDigest.length;
     const sections = [
+      `## ${secIntro}`,
       `## ${secObjectives}`,
       `## ${secKeyConcepts}`,
+      `## ${secDefinition}`,
       `## ${secExplanation}`,
       `## ${secExamples}`,
       `## ${secMistakes}`,
       ...(withCheck ? [`## ${secCheck}`] : []),
     ].join('\n   ');
-    return `You are a teacher writing the body of ONE lesson inside a larger course. The document renderer will place this lesson under its own numbered chapter/section heading, so write ONLY the lesson body — no wrapper title, no breadcrumb, no metadata block.
+    return `You are a teacher writing the body of ONE lesson inside a larger course. The document renderer will place this lesson under its own unnumbered module/chapter heading, so write ONLY the lesson body — no wrapper title, no breadcrumb, no metadata block.
 
 TARGET LANGUAGE: ${language}. ALL output (headings, prose, examples, list items) must be in ${language}. Never leave a section heading in English.
 
 COURSE: ${lesson.course_name || ''}
-LESSON TITLE (already shown as the chapter heading by the renderer — do NOT repeat it): ${lesson.title}
+LESSON TITLE (already shown as the heading by the renderer — do NOT repeat it): ${lesson.title}
 LESSON SUMMARY: ${lesson.summary || '(none)'}
 QUIZ CATEGORY PATH (context only — do NOT reprint it in the body): ${categoryPath}
 ${digest}
@@ -550,15 +545,16 @@ RULES:
 1. Output clean Markdown body content only. No HTML, no code fences (\`\`\`), no JSON, no commentary before or after.
 2. Do NOT hand-number sections or paragraphs (no "1.", "I.", "a)" before a heading). The app applies the document numeration template; anything you write on top of it will duplicate.
 3. Do NOT repeat the lesson title as the first line, and do NOT add a document heading like "Course material", "Leçon", "Lesson" or a category breadcrumb — the renderer already shows those.
-4. Do NOT restate the title inside a section (never write something like "## Définition — Information en informatique : L'information en informatique désigne…"). Assume the reader just read the title; open directly with the substance.
+4. Do NOT restate the title inside a section (never write something like "## Définition — Information en informatique : L'information en informatique désigne..."). Assume the reader just read the title; open directly with the substance.
 5. Use exactly these top-level sections, in this order, and translate them verbatim into ${language} if they are not already in that language:
    ${sections}
 6. Put real teaching content under each heading. Paragraphs, bullet lists, inline \`code\`, and short worked examples only. No answer keys, no "réponses" list.
-7. "${secObjectives}" is 2-4 short bullet items using observable verbs (identifier, appliquer, analyser…). "${secKeyConcepts}" is a compact definition list of the vocabulary the practice questions will use. Both sections must fit on the same page as the chapter heading — keep them tight.
-8. Teach what is assessed: your explanation must cover every fact, term or operation the practice-question digest below expects. Do not invent facts outside the topic.
-9. Keep the body roughly 350-600 words. Prefer density over decoration.${withCheck
-      ? `\n10. Under "${secCheck}", invite the student to run the attached practice questions without revealing any answer (one or two sentences is enough).`
-      : `\n10. Do NOT add a "${secCheck}" section: no practice questions are attached to this lesson.`} `;
+7. "${secIntro}" is 2-3 sentences that connect the lesson to what came before and announce what the student will be able to do. "${secObjectives}" is 2-4 short bullet items using observable verbs (identifier, appliquer, analyser...). "${secKeyConcepts}" is a compact definition list of the vocabulary the practice questions will use. Keep introduction, objectives and key concepts tight — they must fit on the same page as the chapter heading.
+8. "${secDefinition}" defines the lesson's central term precisely in 1-2 short paragraphs; "${secExplanation}" develops the mechanism step by step; "${secExamples}" gives at least two concrete worked examples; "${secMistakes}" lists 2-3 pitfalls and how to avoid each.
+9. Teach what is assessed: your explanation must cover every fact, term or operation the practice-question digest below expects. Do not invent facts outside the topic.
+10. Keep the body roughly 400-700 words. Prefer density over decoration.${withCheck
+      ? `\n11. Under "${secCheck}", invite the student to run the attached practice questions without revealing any answer (one or two sentences is enough).`
+      : `\n11. Do NOT add a "${secCheck}" section: no practice questions are attached to this lesson.`} `;
   }
 
   /** Repair-and-parse a JSON array of objects from raw model output. */

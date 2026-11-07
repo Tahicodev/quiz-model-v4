@@ -330,7 +330,7 @@ describe('subject pill bar', () => {
   it('the leftover unassigned course pill is active when selected', () => {
     selectLeftover(LEFTOVER_COURSE);
     expect(pillBar.innerHTML).toContain('data-legacy-key="course:course-3"');
-    expect(pillBar.innerHTML).toMatch(/data-legacy-key="course:course-3"[^>]*aria-selected="true"/);
+    expect(pillBar.innerHTML).toMatch(/aria-selected="true"[^>]*data-legacy-key="course:course-3"|data-legacy-key="course:course-3"[^>]*aria-selected="true"/);
     expect(bandTitle.textContent).toBe('Old course · Structure of Old course');
     selectSubject(SUBJECT_MATH);
   });
@@ -427,25 +427,32 @@ describe('course counts come from the Courses tab cache', () => {
   it('prefers the module cache and falls back to the mirror', () => {
     const mirror = state.courses;
     const management = ctx.window.CoursesManagement;
-    // Real app state right after a page load: empty mirror, loaded tab cache.
-    state.courses = [];
-    management.getCourses = () => [
-      { id: 'c-a', category_id: ALGEBRA, subject_id: SUBJECT_MATH },
-      { id: 'c-b', category_id: PHYSICS, subject_id: SUBJECT_SCIENCE },
-      { id: 'c-c', category_id: null, subject_id: SUBJECT_MATH },
-    ];
-    vm.runInContext('renderSubjectManagerTable();', ctx);
-    const html = managerBody.innerHTML;
-    const mathRow = html.split('<tr data-id="').find((chunk) => chunk.startsWith(SUBJECT_MATH));
-    expect(mathRow).toMatch(/data-label="Courses">2<\/td>/);
-    // No cache at all: the mirror is consulted instead.
-    state.courses = mirror;
-    delete management.getCourses;
-    vm.runInContext('renderSubjectManagerTable();', ctx);
-    const mathRowAgain = managerBody.innerHTML
-      .split('<tr data-id="')
-      .find((chunk) => chunk.startsWith(SUBJECT_MATH));
-    expect(mathRowAgain).toMatch(/data-label="Courses">1<\/td>/);
+    const originalGetCourses = management.getCourses;
+    try {
+      // Real app state right after a page load: empty mirror, loaded tab cache.
+      state.courses = [];
+      management.getCourses = () => [
+        { id: 'c-a', category_id: ALGEBRA, subject_id: SUBJECT_MATH },
+        { id: 'c-b', category_id: PHYSICS, subject_id: SUBJECT_SCIENCE },
+        { id: 'c-c', category_id: null, subject_id: SUBJECT_MATH },
+      ];
+      vm.runInContext('renderSubjectManagerTable();', ctx);
+      const html = managerBody.innerHTML;
+      const mathRow = html.split('<tr data-id="').find((chunk) => chunk.startsWith(SUBJECT_MATH));
+      expect(mathRow).toMatch(/data-label="Courses">2<\/td>/);
+      // No cache at all: the mirror is consulted instead.
+      state.courses = mirror;
+      delete management.getCourses;
+      vm.runInContext('renderSubjectManagerTable();', ctx);
+      const mathRowAgain = managerBody.innerHTML
+        .split('<tr data-id="')
+        .find((chunk) => chunk.startsWith(SUBJECT_MATH));
+      expect(mathRowAgain).toMatch(/data-label="Courses">1<\/td>/);
+    } finally {
+      // Later specs rely on the Courses tab cache to resolve leftover pills.
+      state.courses = mirror;
+      management.getCourses = originalGetCourses;
+    }
   });
 });
 
@@ -526,7 +533,7 @@ describe('selection survives a refresh', () => {
 
     expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('__unassigned__');
     expect(vm.runInContext('activeLegacyWorkspaceKey', ctx)).toBe(LEFTOVER_COURSE);
-    expect(pillBar.innerHTML).toMatch(/data-legacy-key="course:course-3"[^>]*aria-selected="true"/);
+    expect(pillBar.innerHTML).toMatch(/aria-selected="true"[^>]*data-legacy-key="course:course-3"|data-legacy-key="course:course-3"[^>]*aria-selected="true"/);
     expect(bandTitle.textContent).toBe('Old course · Structure of Old course');
     expect(rowsHtml().some((r) => r.includes('>Old branch<'))).toBe(true);
   });

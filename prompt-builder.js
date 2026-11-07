@@ -1,6 +1,6 @@
 // ============================================
 // PROMPT BUILDER — hierarchical course → copy-paste prompt for ChatGPT/Claude
-// Structure: Category > Sub-category > Sub-sub-category > Axe (topic)
+// Structure: Module > Chapter > Section > Lesson
 // Each Axe carries: title, count, time/question, difficulty, points, type mix.
 // Generates a strict prompt whose JSON answer imports directly
 // (categories auto-created + questions filed in leaf categories).
@@ -322,8 +322,8 @@
     if (el) {
       el.textContent =
         state.categories.length === 0
-          ? 'No curriculum structure yet — add a chapter / module.'
-          : `${state.categories.length} chapter(s) / module(s) • ${axes.length} learning objective(s) • ${total} total questions`;
+          ? 'No curriculum structure yet — add a module.'
+          : `${state.categories.length} module(s) • ${axes.length} lesson(s) • ${total} total questions`;
     }
   };
 
@@ -345,13 +345,13 @@
 
     return `<div style="border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:8px;padding:10px;background:#fff;margin-top:8px;">
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <span style="font-size:0.75rem;font-weight:700;color:#7c3aed;">🎯 LEARNING OBJECTIVE (Axis)</span>
+        <span style="font-size:0.75rem;font-weight:700;color:#7c3aed;">🎯 LESSON</span>
         <span style="font-size:0.72rem;color:#64748b;">${esc(pathLabel)}</span>
         <div style="flex:1;"></div>
         <button type="button" class="btn btn-sm btn-secondary" onclick="deleteAxeNode('${catId}','${subId || ''}','${ssId || ''}','${axe.id}')">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:2fr 70px 80px 110px 70px;gap:6px;margin-top:8px;">
-        <input type="text" placeholder="Objective / Axis title — e.g. Fractions / Basic Vocabulary" value="${esc(axe.title)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
+        <input type="text" placeholder="Lesson title — e.g. Fractions / Basic Vocabulary" value="${esc(axe.title)}" style="padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
           data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="title" oninput="pbSync(this)" />
         <input type="number" min="1" max="50" value="${Number(axe.count) || 1}" title="Number of questions" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;"
           data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="count" oninput="pbSync(this)" />
@@ -363,7 +363,7 @@
         <input type="number" min="1" max="100" value="${Number(axe.points) || 1}" title="Points / question" style="padding:6px;border:1px solid #cbd5e1;border-radius:6px;"
           data-pb-kind="axe" data-cat="${catId}" data-sub="${subId || ''}" data-ss="${ssId || ''}" data-axe="${axe.id}" data-field="points" oninput="pbSync(this)" />
       </div>
-      <div style="display:flex;gap:6px;font-size:0.7rem;color:#64748b;margin-top:4px;"><span>Objective Title</span><span style="margin-left:52%;">Questions</span><span>Time(s)</span><span>Difficulty</span><span>Pts</span></div>
+      <div style="display:flex;gap:6px;font-size:0.7rem;color:#64748b;margin-top:4px;"><span>Lesson title</span><span style="margin-left:52%;">Questions</span><span>Time(s)</span><span>Difficulty</span><span>Pts</span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${typeInputs}</div>
       <div style="margin-top:6px;">${warn}</div>
     </div>`;
@@ -375,43 +375,43 @@
     if (!state.categories.length) {
       tree.innerHTML = `<div class="prompt-builder-empty" style="text-align:center;padding:48px 20px;background:#f8fafc;border:2px dashed #cbd5e1;border-radius:12px;">
         <div style="font-size:2.2rem;margin-bottom:8px;">🧱</div>
-        <h3 style="margin:0 0 8px;color:#334155;font-weight:700;">No curriculum structure yet</h3>
-        <p style="margin:0 0 16px;font-size:0.9rem;color:#64748b;">Start building your quiz hierarchy by adding chapters or loading an example curriculum template.</p>
+        <h3 style="margin:0 0 8px;color:#334155;font-weight:700;">No course outline yet</h3>
+        <p style="margin:0 0 16px;font-size:0.9rem;color:#64748b;">Start building your course outline by adding modules or loading an example curriculum template.</p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-          <button type="button" class="btn btn-primary" onclick="addCategoryNode()" style="background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);border:none;font-weight:600;padding:8px 18px;border-radius:8px;color:#fff;cursor:pointer;">＋ Add Chapter / Module</button>
+          <button type="button" class="btn btn-primary" onclick="addCategoryNode()" style="background:linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);border:none;font-weight:600;padding:8px 18px;border-radius:8px;color:#fff;cursor:pointer;">＋ Add Module</button>
           <button type="button" class="btn btn-secondary" onclick="loadPromptBuilderTemplate()" style="padding:8px 18px;border-radius:8px;cursor:pointer;">Load Example Template</button>
         </div>
       </div>`;
       window.updatePromptBuilderStats();
       return;
     }
-    tree.innerHTML = state.categories.map((c, ci) => {
+    tree.innerHTML = state.categories.map((c) => {
       const subs = (c.subs || []).map((s) => {
         const directAxes = (s.axes || []).map((a) =>
-          axeCard(c.id, s.id, '', a, `${c.name || 'Chapter'} › ${s.name || 'Topic'}`),
+          axeCard(c.id, s.id, '', a, `${c.name || 'Module'} › ${s.name || 'Chapter'}`),
         ).join('');
         const subsubs = (s.subsubs || []).map((ss) => {
           const axes = (ss.axes || []).map((a) =>
-            axeCard(c.id, s.id, ss.id, a, `${c.name || 'Chapter'} › ${s.name || 'Topic'} › ${ss.name || 'Sub-topic'}`),
+            axeCard(c.id, s.id, ss.id, a, `${c.name || 'Module'} › ${s.name || 'Chapter'} › ${ss.name || 'Section'}`),
           ).join('');
           return `<div style="border:1px dashed #c4b5fd;border-radius:8px;padding:10px;margin-top:8px;background:#faf5ff;">
             <div style="display:flex;gap:8px;align-items:center;">
-              <span style="font-size:0.75rem;font-weight:700;color:#6d28d9;">🏷️ SUB-TOPIC / SUB-SECTION (Level 3)</span>
+              <span style="font-size:0.75rem;font-weight:700;color:#6d28d9;">🏷️ SECTION (Level 3)</span>
               <input type="text" placeholder="e.g. Number Systems / Text Encoding" value="${esc(ss.name)}" style="flex:1;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
                 data-pb-kind="ss" data-cat="${c.id}" data-sub="${s.id}" data-ss="${ss.id}" data-field="name" oninput="pbSync(this)" />
-              <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','${ss.id}')">+ Learning Objective</button>
+              <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','${ss.id}')">+ Lesson</button>
               <button type="button" class="btn btn-sm btn-secondary" onclick="deleteSubSubcategoryNode('${c.id}','${s.id}','${ss.id}')">✕</button>
             </div>
-            ${axes || '<div style="font-size:0.78rem;color:#94a3b8;margin-top:6px;">Add a learning objective (axis) with target questions, time & difficulty.</div>'}
+            ${axes || '<div style="font-size:0.78rem;color:#94a3b8;margin-top:6px;">Add a lesson with target questions, time & difficulty.</div>'}
           </div>`;
         }).join('');
         return `<div style="border:1px solid #bae6fd;border-radius:8px;padding:10px;margin-top:8px;background:#f0f9ff;">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <span style="font-size:0.75rem;font-weight:700;color:#0369a1;">📁 TOPIC / SECTION (Level 2)</span>
+            <span style="font-size:0.75rem;font-weight:700;color:#0369a1;">📁 CHAPTER (Level 2)</span>
             <input type="text" placeholder="e.g. Basic Concepts / Grammar Essentials" value="${esc(s.name)}" style="flex:1;min-width:180px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;"
               data-pb-kind="sub" data-cat="${c.id}" data-sub="${s.id}" data-field="name" oninput="pbSync(this)" />
-            <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','')">+ Learning Objective</button>
-            <button type="button" class="btn btn-sm btn-secondary" onclick="addSubSubcategoryNode('${c.id}','${s.id}')">+ Sub-Topic</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addAxeNode('${c.id}','${s.id}','')">+ Lesson</button>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addSubSubcategoryNode('${c.id}','${s.id}')">+ Section</button>
             <button type="button" class="btn btn-sm btn-secondary" onclick="deleteSubcategoryNode('${c.id}','${s.id}')">✕</button>
           </div>
           ${directAxes}
@@ -420,13 +420,13 @@
       }).join('');
       return `<div style="border:2px solid #10b981;border-radius:10px;padding:12px;margin-bottom:12px;background:#ecfdf5;">
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span style="font-size:0.8rem;font-weight:800;color:#065f46;">📂 CHAPTER / MODULE ${ci + 1}</span>
-          <input type="text" placeholder="e.g. Chapter 1: Introduction to Computer Systems" value="${esc(c.name)}" style="flex:1;min-width:200px;padding:8px;border:1px solid #6ee7b7;border-radius:6px;font-weight:600;"
+          <span style="font-size:0.8rem;font-weight:800;color:#065f46;">📂 MODULE</span>
+          <input type="text" placeholder="e.g. Introduction to Computer Systems" value="${esc(c.name)}" style="flex:1;min-width:200px;padding:8px;border:1px solid #6ee7b7;border-radius:6px;font-weight:600;"
             data-pb-kind="cat" data-cat="${c.id}" data-field="name" oninput="pbSync(this)" />
-          <button type="button" class="btn btn-sm btn-secondary" onclick="addSubcategoryNode('${c.id}')">+ Topic / Section</button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="addSubcategoryNode('${c.id}')">+ Chapter</button>
           <button type="button" class="btn btn-sm btn-secondary" onclick="deleteCategoryNode('${c.id}')">✕</button>
         </div>
-        ${subs || '<div style="font-size:0.85rem;color:#047857;margin-top:8px;">Add a topic / section to begin structuring this chapter.</div>'}
+        ${subs || '<div style="font-size:0.85rem;color:#047857;margin-top:8px;">Add a chapter to begin structuring this module.</div>'}
       </div>`;
     }).join('');
     window.updatePromptBuilderStats();
@@ -453,16 +453,16 @@
     function axeLine2(c, s, ss, a) {
       const path = ss ? `${c.name} > ${s.name} > ${ss.name} > ${a.title}` : `${c.name} > ${s.name} > ${a.title}`;
       const mix = QUESTION_TYPES.map((t) => `${t.id}: ${Number((a.types || {})[t.id]) || 0}`).join(', ');
-      return `AXE "${a.title || '(sans titre)'}" [path: ${path}] → ${a.count} question(s) | difficulté: ${a.difficulty} | temps: ${a.timeSeconds}s/question | points: ${a.points} | types { ${mix} }`;
+      return `LESSON "${a.title || '(sans titre)'}" [path: ${path}] → ${a.count} question(s) | difficulté: ${a.difficulty} | temps: ${a.timeSeconds}s/question | points: ${a.points} | types { ${mix} }`;
     }
     const lines2 = [];
     state.categories.forEach((c) => {
-      lines2.push(`CATEGORY: "${c.name || '(sans nom)'}"`);
+      lines2.push(`MODULE: "${c.name || '(sans nom)'}"`);
       (c.subs || []).forEach((s) => {
-        lines2.push(`  SUB-CATEGORY of "${c.name}": "${s.name || '(sans nom)'}"`);
+        lines2.push(`  CHAPTER of "${c.name}": "${s.name || '(sans nom)'}"`);
         (s.axes || []).forEach((a) => lines2.push('  ' + axeLine2(c, s, null, a)));
         (s.subsubs || []).forEach((ss) => {
-          lines2.push(`    SUB-SUB-CATEGORY of "${s.name}": "${ss.name || '(sans nom)'}"`);
+          lines2.push(`    SECTION of "${s.name}": "${ss.name || '(sans nom)'}"`);
           (ss.axes || []).forEach((a) => lines2.push('    ' + axeLine2(c, s, ss, a)));
         });
       });
@@ -476,11 +476,11 @@
     return `You are a quiz-question generator for a school quiz app. Language of ALL questions/options/explanations: ${lang}.
 ${state.language === 'fr' ? 'Tout le contenu pédagogique doit être en français académique.' : ''}
 
-COURSE HIERARCHY TO COVER (respect exactly — generate the EXACT number per axe):
+COURSE HIERARCHY TO COVER (respect exactly — generate the EXACT number per lesson):
 ${lines2.join('\n')}
 
 TOTAL: EXACTLY ${total} questions.
-${perAxeJsonHints.length ? 'RECAP BY AXE:\n' + perAxeJsonHints.join('\n') + '\n' : ''}
+${perAxeJsonHints.length ? 'RECAP BY LESSON:\n' + perAxeJsonHints.join('\n') + '\n' : ''}
 TYPE RULES (per question):
 ${typeSpecText()}
 
@@ -507,8 +507,8 @@ OUTPUT FORMAT — respond with ONE valid JSON OBJECT and NOTHING else (no markdo
 }
 
 STRICT RULES:
-1. "categories": list EVERY category, sub-category and sub-sub-category from the hierarchy above, each with its parent name (top-level parent = null). Use the EXACT names given.
-2. "questions": EXACTLY ${total} objects, each assigned to its axe via "categoryPath" built as "Category > Sub-category > [Sub-sub-category >] Axe-title" using the EXACT names above.
+1. "categories": list EVERY module, chapter and section from the hierarchy above, each with its parent name (top-level parent = null). Use the EXACT names given. ("categories" is the technical JSON key — it carries the whole module/chapter/section tree.)
+2. "questions": EXACTLY ${total} objects, each assigned to its lesson via "categoryPath" built as "Module > Chapter > [Section >] Lesson-title" using the EXACT names above.
 3. Per axe, respect count + difficulty + time_limit + points + type mix. If a type mix lists 0 for every type, distribute evenly.
 4. "type" is ONLY one of: multiple-choice, multiple-choice-multi, true-false, fill-blank, draggable, odd-one-out, matching-pairs. (QCM-multiple → "type": "multiple-choice" + "allowMultipleAnswers": true.)
 5. "answer" must be copy-pasteable from "options" (exact text), except fill-blank ("1:mot|2:mot") and matching-pairs ("A-->B|C-->D").
@@ -520,11 +520,11 @@ Generate now.`;
   window.generateAndCopyPrompt = async function () {
     const axes = collectAxes();
     if (!axes.length) {
-      if (typeof showToast === 'function') showToast('Ajoutez au moins un axe avec un titre et un nombre.', 'warning');
+      if (typeof showToast === 'function') showToast('Ajoutez au moins une leçon avec un titre et un nombre.', 'warning');
       return;
     }
     const missing = axes.filter((e) => !String(e.axe.title || '').trim());
-    if (missing.length && !confirm(`${missing.length} axe(s) sans titre. Continuer quand même ?`)) return;
+    if (missing.length && !confirm(`${missing.length} leçon(s) sans titre. Continuer quand même ?`)) return;
     const prompt = buildPromptText();
     const out = document.getElementById('promptBuilderOutput');
     if (out) {
@@ -670,7 +670,7 @@ Generate now.`;
   // The builder describes a structure. Turning that structure into a course is
   // a single decision, so the target (subject + course name) is saved with the
   // tree in quizPromptBuilderV1 and consumed by the JSON import. The emitted
-  // prompt itself is unchanged: it still only describes categories and axes.
+  // prompt itself is unchanged: it still only describes modules and lessons.
   function attachState() {
     const raw = state.attachTo && typeof state.attachTo === 'object' ? state.attachTo : {};
     return {
@@ -722,7 +722,7 @@ Generate now.`;
       '</label></div>' +
       '<p class="prompt-builder-attach-hint text-muted">' +
       (current.enabled
-        ? 'On import, the top category of this structure becomes the course’s own structure.'
+        ? 'On import, the top module of this structure becomes the course’s own structure.'
         : 'Off — the import only fills the question bank.') +
       '</p>';
     const enabled = document.getElementById('pbAttachEnabled');

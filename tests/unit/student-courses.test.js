@@ -8,13 +8,17 @@ describe('student course structure', () => {
 		document.body.innerHTML = '<div id="studentCourseGrid"></div><div id="studentCourseReader"></div>';
 		const course = {
 			id: 'course-1',
+			category_id: 'module-1',
 			name: 'Module 1',
 			description: 'Course description',
 			lessons: [{
 				id: 'section-1',
+				category_id: 'axis-1',
 				title: 'AI-generated lesson title',
 				summary: 'Section summary',
-				content: 'The section content.',
+				content: '## Introduction\nThe section content.',
+				objectives: ['Identifier le vocabulaire de base'],
+				key_concepts: ['Information', 'Donnée'],
 				category_levels: [
 					{ id: 'module-1', name: 'Module 1 : Généralités sur les systèmes informatiques' },
 					{ id: 'subcategory-1', name: '1- vocabulaire de base' },
@@ -51,29 +55,34 @@ describe('student course structure', () => {
 		};
 	});
 
-	it('shows matching category hierarchies in contents and section content', async () => {
+	it('opens the course outline, then the chapter lessons and lesson content', async () => {
 		await window.StudentCourses.openCourse('course-1');
 
 		const reader = document.getElementById('studentCourseReader');
-		const toc = reader.querySelector('.course-document-toc');
-		const content = reader.querySelector('.course-document-body');
-		const expectedNames = [
-			'Module 1 : Généralités sur les systèmes informatiques',
-			'1- vocabulaire de base',
-			'Information (en informatique)',
-		];
+		// Course view: course name, aggregated goals and one chapter card.
+		expect(reader.querySelector('.course-document-cover h1').textContent).toBe('Module 1');
+		expect(reader.querySelector('.course-outline-grid').textContent).toContain('1- vocabulaire de base');
+		expect(reader.querySelector('.course-outline-level').textContent).toBe('Chapter');
+		expect(reader.querySelector('.course-highlights').textContent).toContain('Identifier le vocabulaire de base');
+		expect(reader.querySelector('.course-highlights').textContent).toContain('Information');
 
-		for (const name of expectedNames) {
-			expect(toc.textContent).toContain(name);
-			expect(content.textContent).toContain(name);
-		}
-		expect(toc.querySelector('ol ol ol')).not.toBeNull();
-		expect(toc.querySelector('a[href="#student-course-category-axis-1"]')).not.toBeNull();
+		// Chapter view: its own highlights panel and the lesson card.
+		window.StudentCourses.openChapter('subcategory-1');
+		expect(reader.querySelector('.course-view-breadcrumb').textContent).toContain('1- vocabulaire de base');
+		expect(reader.querySelector('.course-highlights').textContent).toContain('Identifier le vocabulaire de base');
+		expect(reader.querySelector('.course-lesson-card h3').textContent).toBe('AI-generated lesson title');
+		expect(reader.querySelector('.course-lesson-kicker').textContent).toBe('Information (en informatique)');
 
-		const axis = content.querySelector('#student-course-category-axis-1');
-		expect(axis.querySelector('.course-document-lesson').textContent).toContain('The section content.');
-		expect(axis.querySelector('.course-document-lesson').textContent).not.toContain('AI-generated lesson title');
-		expect(axis.querySelector('button').textContent).toBe('Practice this section');
+		// Lesson view: rendered markdown body + practice action.
+		window.StudentCourses.openLesson('section-1');
+		expect(reader.querySelector('.course-document-cover h1').textContent).toBe('AI-generated lesson title');
+		expect(reader.querySelector('.course-document-body').textContent).toContain('The section content.');
+		expect(reader.querySelector('.course-lesson-actions button').textContent).toBe('Practice this lesson');
+
+		window.StudentCourses.backToChapter();
+		expect(reader.querySelector('.course-view-breadcrumb').textContent).toContain('1- vocabulaire de base');
+		window.StudentCourses.backToCourse();
+		expect(reader.querySelector('.course-outline-grid')).not.toBeNull();
 	});
 
 	it('renders course cards with clear section counts and keyboard-friendly actions', async () => {
@@ -96,7 +105,7 @@ describe('student course structure', () => {
 		expect(cards[1].textContent).toContain('0 sections');
 	});
 
-	it('keeps summary, contents, and lesson content consistent without category structure', async () => {
+	it('falls back to the lesson paths when the course has no category structure', async () => {
 		window.API.raw = vi.fn(async (_method, path) => {
 			if (path === '/courses/student/plain-course') {
 				return {
@@ -105,6 +114,7 @@ describe('student course structure', () => {
 					lessons: [
 						{
 							id: 'lesson-one',
+							category_id: 'leaf-category',
 							title: 'First section',
 							summary: 'A helpful course summary.',
 							content: 'First lesson content.',
@@ -127,18 +137,23 @@ describe('student course structure', () => {
 		await window.StudentCourses.openCourse('plain-course');
 
 		const reader = document.getElementById('studentCourseReader');
-		expect(reader.querySelector('.course-document-toc h2').textContent).toBe('Summary and contents');
+		expect(reader.querySelector('.course-document-cover h1').textContent).toBe('Module 2');
 		expect(reader.querySelector('.course-document-overview').textContent).toContain('A helpful course summary.');
 		expect(reader.querySelector('.course-document-cover-top').textContent).toContain('All courses');
 		expect(reader.querySelector('.course-document-cover-top').textContent).toContain('Course content');
-		expect(reader.querySelector('.course-document-toc').textContent).toContain('First topic');
-		expect([...reader.querySelectorAll('.course-document-toc a strong')].map((item) => item.textContent)).toEqual([
-			'Module 2',
+		const cards = [...reader.querySelectorAll('.course-lesson-card h3')];
+		expect(cards.map((item) => item.textContent)).toEqual(['First section', 'Second section']);
+		expect([...reader.querySelectorAll('.course-lesson-kicker')].map((item) => item.textContent)).toEqual([
 			'First topic',
-			'Second section',
 		]);
+
+		window.StudentCourses.openChapter('leaf-category');
+		expect(reader.querySelector('.course-lesson-card h3').textContent).toBe('First section');
+		window.StudentCourses.openLesson('lesson-one');
 		expect(reader.querySelector('.course-document-body').textContent).toContain('First lesson content.');
+
+		window.StudentCourses.backToCourse();
+		window.StudentCourses.openLesson('lesson-two');
 		expect(reader.querySelector('.course-document-body').textContent).toContain('Second lesson content.');
-		expect(reader.querySelector('.course-document-toc a[href="#student-course-category-leaf-category"]')).not.toBeNull();
 	});
 });

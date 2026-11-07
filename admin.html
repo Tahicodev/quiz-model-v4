@@ -40,10 +40,10 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-06-round4" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-06-round5" />
 		<link rel="stylesheet" href="admin.css?v=2026-11-06-round2" />
 		<link rel="stylesheet" href="theme.css?v=2026-11-04-round9" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-06-round1" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-06-round2" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -150,7 +150,7 @@
 		<script src="category-management.js?v=2026-11-06-round2" defer></script>
 		<script src="questions-management.js?v=2026-11-01-courses2" defer></script>
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
-		<script src="courses-management.js?v=2026-11-06-round4" defer></script>
+		<script src="courses-management.js?v=2026-11-06-round8" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
 		<script src="results-management.js" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
@@ -185,7 +185,7 @@
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="vendor/jszip.min.js"></script> -->
 		<script src="ai-question-generator.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="prompt-builder.js?v=2026-11-04-round3" defer></script>
+		<script src="prompt-builder.js?v=2026-11-06-round1" defer></script>
 		<script src="rag.js?v=2026-09-22-r1" defer></script>
 
 		<!-- Syntax Highlighting -->
@@ -2116,8 +2116,8 @@
 												</span>
 												<button
 													type="button"
-													class="btn btn-primary bulk-single-only"
-													title="Rename the selected course"
+													class="btn btn-primary bulk-single-only bulk-edit-btn"
+													title="Edit the selected course"
 													onclick="editSelectedCourseName()"
 												>
 													<svg
@@ -2221,21 +2221,32 @@
 										</table>
 									</div>
 								</div>
-								<div id="structurePane" class="hidden">
-									<div class="structure-pane-header">
-										<nav class="structure-breadcrumb" id="structureBreadcrumb" aria-label="Structure location">
-											<span id="structureBreadcrumbText">All categories</span>
-										</nav>
-										<button
-											type="button"
-											id="structureBackBtn"
-											class="btn btn-sm"
-											onclick="closeStructureBranch()"
-											hidden
-										>
-											<span>Back to courses</span>
-										</button>
-									</div>
+<div id="structurePane" class="hidden">
+										<div class="structure-pane-header">
+											<nav class="structure-breadcrumb" id="structureBreadcrumb" aria-label="Structure location">
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9.5 12 3l9 6.5"></path><path d="M5 10v10h14V10"></path><path d="M9 20v-6h6v6"></path></svg>
+												<span id="structureBreadcrumbText">All categories</span>
+											</nav>
+											<div class="structure-header-actions" role="group" aria-label="Course structure actions">
+												<button
+													type="button"
+													id="structureBackBtn"
+													class="btn btn-sm structure-back-btn"
+													onclick="closeStructureBranch()"
+													hidden
+												>
+													<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+													<span>Back to courses</span>
+												</button>
+												<div
+													id="structureCourseActions"
+													class="structure-course-actions"
+													role="group"
+													aria-label="Course actions"
+													hidden
+												></div>
+											</div>
+										</div>
 								<div class="toolbar category-toolbar">
 								<div class="toolbar-header-group">
 									<h3 class="category-toolbar-title" id="categoryBandTitle">Categories</h3>
@@ -4537,7 +4548,7 @@
 											<line x1="12" y1="5" x2="12" y2="19"></line>
 											<line x1="5" y1="12" x2="19" y2="12"></line>
 										</svg>
-										+ New Category / Axis
+										+ New Module / Lesson
 									</button>
 								</div>
 
@@ -5181,22 +5192,22 @@
 				<div class="modal-body">
 					<form id="categoryForm" class="modal-form-layout">
 						<div class="form-group">
-							<label for="categoryName">Category / Outline Node Name</label>
-							<input type="text" id="categoryName" placeholder="e.g. Chapter 1: Fractions / Module 1: Grammar / Axis: Addition" required />
+							<label for="categoryName">Module / Chapter / Lesson name</label>
+							<input type="text" id="categoryName" placeholder="e.g. Fractions and decimals / Grammar basics / Addition" required />
 						</div>
 						<div class="form-group">
 							<label for="categorySubject">Subject / Discipline</label>
 							<select id="categorySubject" class="form-control" onchange="populateCategoryParentPicker(currentCategoryId)"></select>
-							<small class="text-muted">Categories and course structures are organized inside each subject.</small>
+							<small class="text-muted">Modules, chapters and lessons are organized inside each subject.</small>
 						</div>
 						<div class="form-group">
 							<label for="categoryDescription">Description / Pedagogical Notes</label>
 							<textarea id="categoryDescription" rows="2" placeholder="Optional learning objectives or summary for this outline node"></textarea>
 						</div>
 						<div class="form-group">
-							<label for="categoryParent">Parent Chapter or Topic</label>
+							<label for="categoryParent">Parent Module or Chapter</label>
 							<select id="categoryParent" class="form-control"></select>
-							<small class="text-muted" style="display: block; margin-top: 4px;">Optional — nest this inside a parent chapter or topic (e.g. Addition inside Math). Leave blank to create a top-level Chapter / Module. Questions attach to leaf topics and axes.</small>
+							<small class="text-muted" style="display: block; margin-top: 4px;">Optional — nest this inside a parent module or chapter (e.g. Addition inside Math). Leave blank to create a top-level module. Questions attach to leaf lessons.</small>
 						</div>
 						<div class="form-group">
 							<label>Color</label>
@@ -6778,7 +6789,7 @@
 								<details style="background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 8px; padding: 10px 12px;">
 									<summary style="cursor: pointer; font-weight: 600; font-size: 0.9rem; color: #57534e;">📐 Required data structure (what ChatGPT / Claude must output)</summary>
 									<small class="text-muted" style="display: block; margin-top: 8px; line-height: 1.6;">
-										The easiest path is the <strong>AI Question Generator &rarr; 🧱 Prompt Builder tab</strong>: it builds this exact format for you from your Category &rarr; Subcategory &rarr; Axe plan. Generated JSON is imported from <strong>Settings &rarr; Data &rarr; Import AI-Generated Questions</strong> (or the paste zone in the builder tab) — categories and subcategories are created automatically.
+										The easiest path is the <strong>AI Question Generator &rarr; 🧱 Prompt Builder tab</strong>: it builds this exact format for you from your Module &rarr; Chapter &rarr; Lesson plan. Generated JSON is imported from <strong>Settings &rarr; Data &rarr; Import AI-Generated Questions</strong> (or the paste zone in the builder tab) — the module and chapter tree is created automatically.
 										<br /><br />
 										<strong>Top-level format</strong> — one JSON object:
 										<code>{"categories": [{"name": "Module 1", "parent": null}, {"name": "Vocabulaire", "parent": "Module 1"}], "questions": […]}</code>

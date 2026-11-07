@@ -100,8 +100,8 @@ describe('course row actions', () => {
 		expect(js).toContain('window.toggleCourseImportSelectPage = function');
 		expect(js).toContain('window.addSelectedCourseImportSourceLines = function');
 		expect(js).toContain('Make selected lines');
-		expect(js).toContain('Main category · Level 1');
-		expect(js).toContain('Subcategory · Level 2');
+		expect(js).toContain('Module · Level 1');
+		expect(js).toContain('Chapter · Level 2');
 		expect(js).toContain('Axis · Level 3');
 		expect(css).toContain('.course-import-level-tools');
 	});
@@ -144,22 +144,34 @@ describe('course row actions', () => {
 		expect(js).toContain('id="lessonCategory-${esc(lesson.id)}"');
 		expect(js).toContain('updateLessonLevelSelection');
 		expect(js).toContain('category_id: categoryId');
-		expect(js).toContain('<span>Practice category</span>');
-		expect(js).toContain('id="lessonParent-${esc(lesson.id)}"');
-		expect(js).toContain('parent_lesson_id: parentLessonId');
-		expect(js).toContain('Top-level · Heading 1');
-		expect(js).toContain('Choose a parent title to nest this section, like Word heading levels.');
-		expect(js).toContain('data-heading-level="${headingLevel}"');
-		expect(js).toContain("'Main category'");
+		expect(js).toContain('<span>Practice target</span>');
+		expect(js).not.toContain('id="lessonParent-${esc(lesson.id)}"');
+		expect(js).not.toContain('parent_lesson_id: parentLessonId');
+		expect(js).not.toContain('Choose a parent title to nest this section, like Word heading levels.');
+		expect(js).not.toContain('data-heading-level="${headingLevel}"');
+		expect(js).toContain("'Module'");
+		expect(js).toContain("'Chapter'");
 		expect(js).toContain("'Axis'");
-		expect(js).toContain("'Subcategory'");
-		expect(js).toContain("Sub-${'sub-'.repeat(depth - 2)}subcategory");
+		expect(js).toContain("'Lesson'");
+		expect(js).toContain('const categoryType = courseLevelLabel(depth');
 		expect(js).toContain('${categoryType} · ${esc(path)}');
 		expect(js).not.toContain('>Level ${depth + 1} ·');
 		expect(js).toContain('function buildLessonOutline(lessons)');
 		expect(js).toContain('function renderTeacherLessonContentsNode(node, depth = 0)');
 		expect(css).toContain('.lesson-level-field');
-		expect(css).toContain('.lesson-parent-field');
+		expect(css).not.toContain('.lesson-parent-field');
+	});
+
+	it('keeps course actions beside Back to courses while browsing a structure', () => {
+		expect(adminHtml).toContain('id="structureCourseActions"');
+		expect(adminHtml).toContain('class="structure-course-actions"');
+		expect(js).toContain('function renderStructureCourseActions()');
+		expect(js).toContain('View course');
+		expect(js).toContain('renameStructureCourse');
+		expect(js).toContain('sendStructureCourseToStudents');
+		expect(js).toContain('Create document');
+		expect(js).toContain('renderStructureCourseActions();');
+		expect(css).toContain('.structure-course-actions');
 	});
 
 	it('styles teacher course documents, lesson cards, and toolbar for dark mode', () => {
@@ -169,11 +181,14 @@ describe('course row actions', () => {
 		expect(darkCss).toContain("html[data-theme='dark'] .course-detail-mode .btn.active");
 	});
 
-	it('shows students one read-only document with linked contents and inline lesson content', () => {
+	it('shows students course, chapter and lesson views with linked lesson content', () => {
 		expect(studentJs).toContain('student-course-document');
-		expect(studentJs).toContain('class="course-document-toc"');
-		expect(studentJs).toContain('renderCategoryStructure(categoryTree)');
-		expect(studentJs).toContain('class="course-document-lesson"');
+		expect(studentJs).toContain('function renderCourseView(tree)');
+		expect(studentJs).toContain('function renderChapterView(entry)');
+		expect(studentJs).toContain('function renderLessonDocumentView(lesson)');
+		expect(studentJs).toContain('course-highlights');
+		expect(studentJs).toContain('StudentCourses.openChapter');
+		expect(studentJs).toContain('StudentCourses.openLesson');
 		expect(studentJs).not.toContain('class="course-lesson-chip');
 		expect(studentJs).toContain('buildLessonOutline(lessons)');
 		expect(studentJs).toContain('renderLessonOutlineNode(node, depth = 0)');

@@ -51,7 +51,7 @@ export const CourseGenerateSchema = z.object({
   language:    z.string().max(40).default('French'),
   description: z.string().max(2000).optional(),
   // The "create category structure" flow can generate lesson outlines before
-  // teachers have added practice questions to the new axes.
+  // teachers have added practice questions to the new lessons.
   includeEmptyCategories: z.boolean().default(false),
   // Cap the number of lessons generated from the branch (guards against a
   // huge tree eating tokens; default keeps every leaf with questions).
@@ -59,7 +59,7 @@ export const CourseGenerateSchema = z.object({
 });
 
 // POST /courses/with-structure — the single subject-bound structure pipeline:
-// create root + subcategories + axes, then (optionally) the AI outline on top.
+// create module + chapters + lessons, then (optionally) the AI outline on top.
 export const CourseWithStructureGroupSchema = z.object({
   name: z.string().min(1).max(100),
   axes: z.array(z.string().min(1).max(100)).default([]).transform((axes) => [...new Set(axes.map((a) => a.trim()).filter(Boolean))]),
@@ -74,7 +74,7 @@ export const CourseWithStructureSchema = z.object({
   configId:    z.string().max(100).optional(),
   language:    z.string().max(40).default('French'),
   // A brand-new branch has no questions yet, so the outline is built from its
-  // axes unless the caller explicitly asks for question-backed leaves only.
+  // lessons unless the caller explicitly asks for question-backed leaves only.
   includeEmptyCategories: z.boolean().default(true),
   maxLessons:  z.coerce.number().int().min(1).max(50).optional(),
 }).superRefine((value, ctx) => {
@@ -83,7 +83,7 @@ export const CourseWithStructureSchema = z.object({
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['groups'],
-      message: 'A structure can hold at most 200 subcategories and axes at once.',
+      message: 'A structure can hold at most 200 chapters and lessons at once.',
     });
   }
 });

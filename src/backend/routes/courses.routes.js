@@ -74,7 +74,7 @@ async function resolveGenerationConfig(req, params) {
   return aiConfigSvc.resolveForGeneration(req.user, req.schoolId, params.configId);
 }
 
-/** "Root > Sub > Axe" label for a category, walking the parent chain. */
+/** "Module > Chapter > Lesson" label for a category, walking the parent chain. */
 async function buildCategoryPath(categoryId) {
   const { repo } = getContainer();
   const names = [];
@@ -225,7 +225,7 @@ router.post('/', requireRole(MANAGE_ROLES), async (req, res, next) => {
 
 /**
  * POST /with-structure — the single subject-bound structure pipeline: the
- * root, its subcategories and their axes are created server-side (always with
+ * root, its chapters and their lessons are created server-side (always with
  * `subject_id`), then the course — optionally with an AI outline on top of the
  * fresh branch. Anything created before a failure is rolled back, so a
  * half-written course never leaves orphan categories behind.
@@ -268,11 +268,11 @@ router.post('/with-structure', requireRole(MANAGE_ROLES), async (req, res, next)
       const plan = await courseSvc.buildBranchPlan(req.schoolId, root.id, {
         maxLessons: params.maxLessons || 30,
         // A brand-new branch has no questions yet, so the outline is built
-        // from its axes rather than from practice content.
+        // from its lessons rather than from practice content.
         includeEmptyCategories: params.includeEmptyCategories,
       });
       if (!plan.length) {
-        throw new ValidationError({ groups: ['The new structure has no subcategory to outline.'] });
+        throw new ValidationError({ groups: ['The new structure has no chapter to outline.'] });
       }
       const lessons = await aiSvc.generateCourseOutline({
         config,
@@ -366,7 +366,7 @@ router.post('/generate', requireRole(MANAGE_ROLES), async (req, res, next) => {
         categoryId: [
           params.includeEmptyCategories
             ? 'No leaf categories found in this branch.'
-            : 'No questions found in this category branch — create subcategories/axes and add questions first.',
+            : 'No questions found in this category branch — create chapters/lessons and add questions first.',
         ],
       });
     }
@@ -444,7 +444,7 @@ router.post('/import', requireRole(MANAGE_ROLES), async (req, res, next) => {
     const params = parsed.data;
     await subjectSvc.assertCanUse(params.subject_id, req.user, req.schoolId);
     const { roots, introduction } = buildCourseImportSections(params.documentText, params.headings);
-    if (!roots.length) throw new ValidationError({ headings: ['The outline must include at least one main category.'] });
+    if (!roots.length) throw new ValidationError({ headings: ['The outline must include at least one module.'] });
     const { data: existingCategories } = await repo.getAll('categories', {
       filters: { school_id: req.schoolId, subject_id: params.subject_id },
       limit: 100000,

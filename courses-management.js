@@ -129,6 +129,15 @@
 		return cat ? String(cat.name || '') : '';
 	}
 
+	// Canonical curriculum vocabulary, shared by every course surface:
+	// level 0 = Module, level 1 = Chapter, deeper groupings = Axis, and
+	// every leaf is a Lesson (the unit that gets content + practice questions).
+	function courseLevelLabel(depth, isLeaf) {
+		if (depth === 0) return 'Module';
+		if (isLeaf) return 'Lesson';
+		return depth === 1 ? 'Chapter' : 'Axis';
+	}
+
 	function courseCollapseStorageKey(courseId) {
 		return `quizCollapsedCourseCategories:${courseId}`;
 	}
@@ -267,6 +276,77 @@
 	}
 	window.closeCourseModal = closeCourseModal;
 
+	// ── Course meta modal ────────────────────────────────────────────────────
+	// Shared shell for the two "edit course" dialogs (bulk-bar "Edit course"
+	// and the detail pane's "Course details"). It carries an eyebrow / title /
+	// subtitle header, a read-only context strip (subject · branch · status)
+	// and the unified footer, so both entry points look identical. Field ids
+	// are passed in so the existing save functions keep working unchanged.
+	function subjectNameFor(subjectId) {
+		if (!subjectId) return '';
+		const found = subjectList().find((s) => String(s.id) === String(subjectId));
+		return found ? String(found.name || '') : '';
+	}
+
+	function courseContextChips(course) {
+		const chips = [];
+		const subject = subjectNameFor(course?.subject_id);
+		if (subject) chips.push({ label: 'Subject', value: subject });
+		const branch = course?.category_path || categoryPath(course?.category_id) || '';
+		if (branch) chips.push({ label: 'Module', value: branch });
+		chips.push({ label: 'Status', value: course?.status === 'published' ? 'Published' : 'Draft' });
+		return chips;
+	}
+
+	function openCourseMetaModal(opts) {
+		const { id } = opts;
+		closeCourseModal(id);
+		const chips = Array.isArray(opts.context) ? opts.context : [];
+		const overlay = document.createElement('div');
+		overlay.id = id;
+		overlay.className = 'modal active course-meta-modal';
+		overlay.innerHTML =
+			`<div class="modal-content course-meta-modal-content">` +
+			`<div class="modal-header"><div class="course-meta-heading">` +
+			`<span class="course-meta-eyebrow">${esc(opts.eyebrow || 'Course')}</span>` +
+			`<h3>${esc(opts.title || 'Edit course')}</h3>` +
+			(opts.subtitle ? `<p class="course-meta-subtitle">${esc(opts.subtitle)}</p>` : '') +
+			`</div><button type="button" class="modal-close" aria-label="Close" onclick="closeCourseModal('${id}')">&times;</button></div>` +
+			`<div class="modal-body">` +
+			(chips.length
+				? `<div class="course-meta-context">${chips
+						.map(
+							(chip) =>
+								`<span class="course-meta-chip"><span class="course-meta-chip-label">${esc(chip.label)}</span>${esc(chip.value)}</span>`,
+						)
+						.join('')}</div>`
+				: '') +
+			`<div class="form-group"><label for="${opts.nameId}">Course name</label>` +
+			`<input id="${opts.nameId}" class="form-control" maxlength="200" value="${esc(opts.name || '')}" placeholder="e.g. Informatique — Module 1"></div>` +
+			`<div class="form-group"><label for="${opts.descId}">Description</label>` +
+			`<textarea id="${opts.descId}" class="form-control" rows="3" maxlength="2000" placeholder="What will students learn in this course?">${esc(opts.description || '')}</textarea></div>` +
+			`</div>` +
+			`<div class="modal-footer modal-footer--unified">` +
+			`<button type="button" class="btn" onclick="closeCourseModal('${id}')">Cancel</button>` +
+			`<button type="button" class="btn btn-primary" onclick="${opts.onSave}">Save changes</button>` +
+			`</div></div>`;
+		document.body.appendChild(overlay);
+		const nameInput = document.getElementById(opts.nameId);
+		if (nameInput) {
+			nameInput.focus();
+			try { nameInput.setSelectionRange(nameInput.value.length, nameInput.value.length); } catch (_) { /* noop */ }
+			if (typeof opts.onEnter === 'function') {
+				nameInput.addEventListener('keydown', (event) => {
+					if (event.key === 'Enter') {
+						event.preventDefault();
+						opts.onEnter();
+					}
+				});
+			}
+		}
+		return overlay;
+	}
+
 	// ── AI model picker ──────────────────────────────────────────────────────
 	async function ensureAiConfigs() {
 		if (aiConfigsCache) return aiConfigsCache;
@@ -332,6 +412,7 @@
 	// opens its outline/structure (the old category tree) for that branch.
 	let workspaceView = 'courses'; // 'courses' | 'categories' | 'branch' | 'detail'
 	let workspaceBranchCourseId = null;
+	let workspaceBranchRootId = null;
 
 	function activeSubjectId() {
 		if (typeof window.getActiveCategorySubject === 'function') {
@@ -416,6 +497,7 @@
 		if (mode !== 'courses' && mode !== 'categories') return;
 		workspaceView = mode;
 		workspaceBranchCourseId = null;
+		workspaceBranchRootId = null;
 		currentCourse = null;
 		// The category table always falls back to the whole subject here, so the
 		// "All categories" view keeps search, teacher filter, sort and bulk delete.
@@ -424,19 +506,63 @@
 		renderWorkspacePanes();
 	};
 
+	/**
+	 * The course that owns the branch rooted at `rootId`. A structure opened
+	 * from the subject tab only carries the category id, so the owning course is
+	 * resolved here — including when the opened node is nested inside a course
+	 * branch (the category table allows drilling into children).
+	 */
+	function courseOwningBranch(rootId) {
+		const wanted = String(rootId || '');
+		if (!wanted) return null;
+		const direct =
+			coursesCache.find((course) => String(course.category_id || '') === wanted)
+			|| (String(currentCourse?.category_id || '') === wanted ? currentCourse : null);
+		if (direct) return direct;
+		const byId = new Map(categoryList().map((cat) => [String(cat.id), cat]));
+		let node = byId.get(wanted);
+		const seen = new Set();
+		while (node && !seen.has(String(node.id))) {
+			seen.add(String(node.id));
+			const match = coursesCache.find((course) => String(course.category_id || '') === String(node.id));
+			if (match) return match;
+			if (!node.parent_id) break;
+			node = byId.get(String(node.parent_id));
+		}
+		return null;
+	}
+
 	/** Open a branch inside the structure pane (the one and only structure editor). */
 	window.openStructureBranch = function (rootId, options = {}) {
 		const branchRootId = String(rootId || '');
 		if (!branchRootId) return;
-		const courseId = options.courseId ? String(options.courseId) : null;
+		const requestedCourseId = options.courseId ? String(options.courseId) : null;
 		// The breadcrumb spells the chain out (Subject › Course › Structure) and
 		// only this module holds the course rows, so the name is resolved here —
 		// the caller passes the id it has.
-		const course = courseId
-			? coursesCache.find((c) => String(c.id) === courseId)
-				|| (String(currentCourse?.id || '') === courseId ? currentCourse : null)
+		let course = requestedCourseId
+			? coursesCache.find((c) => String(c.id) === requestedCourseId)
+				|| (String(currentCourse?.id || '') === requestedCourseId ? currentCourse : null)
 			: null;
+		// A branch reached from the subject tree has no course id attached; infer
+		// it so the course actions stay available while browsing its structure.
+		if (!course) course = courseOwningBranch(branchRootId);
+		if (!course && !requestedCourseId && !coursesCache.length) {
+			// The Subjects tab can be the first surface opened after login, so the
+			// course cache may still be cold. Resolve the owner once it loads.
+			Promise.resolve(window.CoursesManagement?.ensureLoaded?.())
+				.then(() => {
+					if (workspaceBranchRootId !== branchRootId) return;
+					const owner = courseOwningBranch(branchRootId);
+					if (!owner) return;
+					workspaceBranchCourseId = String(owner.id);
+					renderStructureCourseActions();
+				})
+				.catch(() => { /* the branch still browses without course actions */ });
+		}
+		const courseId = requestedCourseId || (course ? String(course.id) : null);
 		workspaceBranchCourseId = courseId;
+		workspaceBranchRootId = branchRootId;
 		workspaceView = 'branch';
 		window.SubjectsManagement?.openBranch?.(branchRootId, {
 			...options,
@@ -444,15 +570,86 @@
 			courseName: String(options.courseName || course?.name || ''),
 		});
 		renderWorkspacePanes();
+		renderStructureCourseActions();
 	};
 
 	window.closeStructureBranch = function () {
 		window.SubjectsManagement?.setView?.('subject');
 		workspaceBranchCourseId = null;
+		workspaceBranchRootId = null;
 		currentCourse = null;
 		workspaceView = 'courses';
 		renderCourseList();
 		renderWorkspacePanes();
+	};
+
+	/** Course actions available while browsing a course's structure. */
+	function structureActionCourse() {
+		let id = String(workspaceBranchCourseId || '');
+		if (!id && workspaceView === 'branch' && workspaceBranchRootId) {
+			const inferred = courseOwningBranch(workspaceBranchRootId);
+			if (inferred) {
+				workspaceBranchCourseId = String(inferred.id);
+				id = workspaceBranchCourseId;
+			}
+		}
+		if (!id) return null;
+		if (currentCourse && String(currentCourse.id) === id) return currentCourse;
+		return coursesCache.find((course) => String(course.id) === id) || null;
+	}
+
+	function renderStructureCourseActions() {
+		const host = document.getElementById('structureCourseActions');
+		if (!host) return;
+		const course = structureActionCourse();
+		if (!course) {
+			host.hidden = true;
+			host.innerHTML = '';
+			return;
+		}
+		const id = esc(course.id);
+		const published = course.status === 'published';
+		const icon = {
+			view: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+			rename: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>',
+			publish: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
+			unpublish: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18.4 5.6a9 9 0 1 0 0 12.8"></path><path d="M3 3l18 18"></path></svg>',
+			assign: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>',
+			document: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>',
+		};
+		host.hidden = false;
+		host.innerHTML =
+			`<button type="button" class="btn btn-sm btn-primary structure-action is-view" title="Open the course workspace" onclick="openCourseDetail('${id}')">${icon.view}<span>View course</span></button>` +
+			'<span class="structure-action-divider" aria-hidden="true"></span>' +
+			`<button type="button" class="btn btn-sm structure-action is-rename" title="Rename this course" onclick="renameStructureCourse('${id}')">${icon.rename}<span>Rename</span></button>` +
+			`<button type="button" class="btn btn-sm structure-action ${published ? 'is-unpublish' : 'is-publish'}" title="${published ? 'Move this course back to draft' : 'Publish this course for students'}" onclick="toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')">${published ? icon.unpublish : icon.publish}<span>${published ? 'Unpublish' : 'Publish'}</span></button>` +
+			`<button type="button" class="btn btn-sm structure-action is-assign" title="Send this course to your students" onclick="sendStructureCourseToStudents('${id}')">${icon.assign}<span>Send to students</span></button>` +
+			`<button type="button" class="btn btn-sm structure-action is-document" title="Export this course as a PDF or Word document" onclick="createCourseDocument('${id}')">${icon.document}<span>Create document</span></button>`;
+	}
+
+	async function ensureStructureCourse(courseId) {
+		const id = String(courseId || '');
+		if (!id) return null;
+		if (currentCourse && String(currentCourse.id) === id) return currentCourse;
+		const A = api();
+		if (!A) return null;
+		try {
+			currentCourse = await A.raw('GET', `/courses/${encodeURIComponent(id)}`);
+			return currentCourse;
+		} catch (err) {
+			toast('Could not open course: ' + (err?.message || 'error'), 'error');
+			return null;
+		}
+	}
+
+	window.renameStructureCourse = async function (courseId) {
+		if (!(await ensureStructureCourse(courseId))) return;
+		await window.renameCoursePrompt();
+	};
+
+	window.sendStructureCourseToStudents = async function (courseId) {
+		if (!(await ensureStructureCourse(courseId))) return;
+		await window.openAssignClassesModal();
 	};
 
 	function kindChip(kind) {
@@ -576,7 +773,7 @@
 				'<div class="curriculum-steps-guide">' +
 				'<div class="curriculum-step-item"><span class="step-num">1</span><strong>1. Subject</strong><small>Broad curriculum domain</small></div>' +
 				'<div class="curriculum-step-arrow" aria-hidden="true">→</div>' +
-				'<div class="curriculum-step-item"><span class="step-num">2</span><strong>2. Course Outline</strong><small>Chapters, topics & axes</small></div>' +
+				'<div class="curriculum-step-item"><span class="step-num">2</span><strong>2. Course Outline</strong><small>Modules, chapters & lessons</small></div>' +
 				'<div class="curriculum-step-arrow" aria-hidden="true">→</div>' +
 				'<div class="curriculum-step-item"><span class="step-num">3</span><strong>3. Dual Action</strong><small>Lessons & quiz generation</small></div>' +
 				'</div>' +
@@ -690,6 +887,7 @@
 			});
 		}
 		try { window.BulkSelect?.restore('courses'); } catch (_) { /* bulk helper not loaded */ }
+		renderStructureCourseActions();
 	};
 
 	async function loadCourses(quiet) {
@@ -842,14 +1040,19 @@
 		const wanted = String(ids[0]);
 		const course = coursesCache.find((c) => String(c.id) === wanted);
 		if (!course) return toast('Course not found \u2014 refresh the list.', 'error');
-		openModal(
-			'courseBulkRenameModal',
-			'Edit course',
-			`<div class="form-group"><label for="courseBulkRenameName">Name</label><input id="courseBulkRenameName" value="${esc(course.name || '')}" style="width:100%;" /></div>` +
-			`<div class="form-group"><label for="courseBulkRenameDesc">Description</label><textarea id="courseBulkRenameDesc" rows="3" style="width:100%;">${esc(course.description || '')}</textarea></div>`,
-			'<button type="button" class="btn" onclick="closeCourseModal(\'courseBulkRenameModal\')">Cancel</button>' +
-			`<button type="button" class="btn btn-primary" onclick="saveBulkCourseMeta('${esc(course.id)}')">Save</button>`,
-		);
+		openCourseMetaModal({
+			id: 'courseBulkRenameModal',
+			eyebrow: 'Course settings',
+			title: 'Edit course',
+			subtitle: 'Update the course name and description. Students see these on their course card.',
+			context: courseContextChips(course),
+			nameId: 'courseBulkRenameName',
+			descId: 'courseBulkRenameDesc',
+			name: course.name || '',
+			description: course.description || '',
+			onSave: `saveBulkCourseMeta('${esc(course.id)}')`,
+			onEnter: () => window.saveBulkCourseMeta(course.id),
+		});
 	};
 
 	window.saveBulkCourseMeta = async function (courseId) {
@@ -956,7 +1159,7 @@
 		const title = String(heading.title || sourceText.replace(/^\s*#{1,6}\s*/, '').trim());
 		const levelOptions = Array.from({ length: 4 }, (_, optionIndex) => {
 			const level = optionIndex + 1;
-			const label = ['Main category', 'Subcategory', 'Sub-subcategory', 'Axis · content section'][level - 1];
+			const label = ['Module', 'Chapter', 'Axis', 'Lesson'][level - 1];
 			return `<option value="${level}" ${Number(heading.level) === level ? 'selected' : ''}>${label}</option>`;
 		}).join('');
 		return (
@@ -993,11 +1196,11 @@
 			`<p class="course-generator-hint">${draft.detectionMethod === 'docx-styles-and-local-patterns' ? 'Outline detected locally from DOCX heading styles and title patterns.' : 'Outline detected locally from document title patterns.'} No AI model or internet connection is required. Review the source line and hierarchy for every heading; add, remove, or edit headings as needed. Text is preserved exactly and assigned to the section immediately above it. Text before the first heading becomes an Introduction.</p>` +
 			'<p class="course-generator-hint">Detection is best-effort: a document’s heading styles and numbering may not match its intended structure. Check every heading before creating the course. Images, diagrams, tables, and original page layout are not imported.</p>' +
 			'<div class="course-import-level-tools">' +
-			'<label>Make selected lines<select id="courseImportBulkLevel"><option value="1">Main category · Level 1</option><option value="2">Subcategory · Level 2</option><option value="3">Axis · Level 3</option><option value="4">Axis · content section · Heading 4</option></select></label>' +
+			'<label>Make selected lines<select id="courseImportBulkLevel"><option value="1">Module · Level 1</option><option value="2">Chapter · Level 2</option><option value="3">Axis · Level 3</option><option value="4">Lesson · Heading 4</option></select></label>' +
 			'<span data-import-selection-count aria-live="polite">No lines selected</span>' +
 			'<button type="button" class="btn btn-primary btn-sm" data-import-add-source-lines onclick="addSelectedCourseImportSourceLines()" disabled>Add to outline <span aria-hidden="true">→</span></button>' +
 			'</div>' +
-			'<p class="course-import-instructions">Use Heading 1 for the main category, Heading 2 for a subcategory, Heading 3 for an optional sub-subcategory, and Heading 4 for an axis. Lines not added as headings remain content. Text after each heading is saved as that section’s lesson content.</p>' +
+			'<p class="course-import-instructions">Use Heading 1 for a module, Heading 2 for a chapter, Heading 3 for an optional section, and Heading 4 for a lesson. Lines not added as headings remain content. Text after each heading is saved as that lesson’s content.</p>' +
 			'<div id="courseImportSourcePicker" class="course-import-source-picker"></div>' +
 			`<details class="course-import-source"><summary>View extracted text (${draft.lineCount} lines)</summary><pre>${esc(draft.documentText)}</pre></details>` +
 			'</div>' +
@@ -1362,7 +1565,7 @@
 		if (notice) {
 			notice.hidden = unresolved.size === 0;
 			notice.innerHTML = unresolved.size
-				? `<strong>Some category names are already in use in this subject.</strong> Rename the highlighted titles, then select “Create course” again.<span>${[...unresolved].map(esc).join(' · ')}</span>`
+				? `<strong>Some outline titles are already in use in this subject.</strong> Rename the highlighted titles, then select “Create course” again.<span>${[...unresolved].map(esc).join(' · ')}</span>`
 				: '';
 		}
 	};
@@ -1408,7 +1611,7 @@
 		const subjectId = document.getElementById('courseImportSubject')?.value || '';
 		if (!subjectId) return toast('Create or select a subject before importing this course.', 'error');
 		const headingRows = Array.from(document.querySelectorAll('#courseImportHeadings [data-import-heading]'));
-		if (!headingRows.length) return toast('Keep or add at least one category heading.', 'error');
+		if (!headingRows.length) return toast('Keep or add at least one outline heading.', 'error');
 		const headings = headingRows.map((row) => ({
 			line: Number(row.querySelector('[data-import-line]')?.value),
 			level: Number(row.querySelector('[data-import-level]')?.value),
@@ -1474,13 +1677,13 @@
 			'<input id="courseIncludeEmptyCategories" type="hidden" value="' + (defaults.includeEmptyCategories ? 'true' : 'false') + '">' +
 			'<div class="form-group"><label for="newCourseName">Course Title</label>' +
 			`<input type="text" id="newCourseName" value="${esc(defaults.name || '')}" placeholder="e.g. Mathematics — Fractions & Decimals (Grade 5)" style="width:100%;"></div>` +
-			'<div class="course-generator-tabs" role="tablist" aria-label="Course category source">' +
+			'<div class="course-generator-tabs" role="tablist" aria-label="Course outline source">' +
 			'<button type="button" class="course-generator-tab" role="tab" aria-selected="false" aria-controls="courseNewStructurePane" onclick="setCourseGeneratorMode(\'new\')">Build New Outline</button>' +
 			'<button type="button" class="course-generator-tab active" role="tab" aria-selected="true" aria-controls="courseExistingPane" onclick="setCourseGeneratorMode(\'existing\')">Use existing outlines</button>' +
 			'</div>' +
 			'<div class="course-generator-quick-import"><button type="button" class="btn btn-sm" onclick="closeCourseModal(\'courseGenModal\');openCourseDocumentImportModal();">📄 Or extract syllabus from Word / PDF document →</button></div>' +
 			`<div id="courseExistingPane" class="course-generator-pane">` +
-			'<div class="form-group"><label for="newCourseBranch">Category branch</label>' +
+			'<div class="form-group"><label for="newCourseBranch">Module branch</label>' +
 			(options.length
 				? `<select id="newCourseBranch" style="width:100%;">${options.join('')}</select>`
 				: '<div class="course-generator-hint">No categories yet. Choose “Build New Outline” to start one.</div>') +
@@ -1488,12 +1691,13 @@
 			'<p class="course-generator-hint">Lessons are created for leaf categories that already contain questions.</p>' +
 			'</div>' +
 			'<div id="courseNewStructurePane" class="course-generator-pane hidden" hidden>' +
-			'<div class="course-guidance-card"><span class="guidance-icon">💡</span><div><strong>How Course Structure Works</strong><p>A course outline is organized into <strong>Chapters (Module)</strong>, <strong>Topics (Sections)</strong>, and <strong>Learning Objectives (Axes)</strong>. Each objective will have its own <strong>interactive lesson</strong> and will be the target for <strong>evaluations, quizzes, and games</strong>.</p></div></div>' +
-			'<div class="form-group"><label for="newCourseRootCategory">Chapter / Module Name (Main category)</label>' +
-			'<input type="text" id="newCourseRootCategory" maxlength="100" placeholder="e.g. Chapter 1: Verbes du 1er groupe / Fractions de base" style="width:100%;"></div>' +
-			'<div class="course-generator-hint">Add topics and the learning objectives beneath each one. A lesson outline will be generated for every axis; questions can be added later.</div>' +
+			'<div class="course-guidance-card"><span class="guidance-icon">💡</span><div><strong>How Course Structure Works</strong><p>A course outline follows <strong>Module → Chapter → Axis → Lesson</strong>. A new outline creates the module and its chapters; every line under a chapter becomes a lesson. If the category table nests a grouping level inside a chapter, that level is shown as an <strong>Axis</strong> in the document — never as a separate kind of “section”. Each lesson has its own <strong>interactive content</strong> and is the target for <strong>evaluations, quizzes, and games</strong>.</p></div></div>' +
+			'<div class="course-guidance-card"><span class="guidance-icon">🧩</span><div><strong>Structure Reference</strong><p><strong>Module</strong> is the course root · <strong>Chapter</strong> groups lessons · <strong>Axis</strong> is an optional sub-group · <strong>Lesson</strong> holds the content and practice target.</p></div></div>' +
+			'<div class="form-group"><label for="newCourseRootCategory">Module name</label>' +
+			'<input type="text" id="newCourseRootCategory" maxlength="100" placeholder="e.g. Module 1 : Généralités sur les systèmes informatiques" style="width:100%;"></div>' +
+			'<div class="course-generator-hint">Add chapters and the lessons beneath each one. The AI writes content for every lesson; questions can be added later. Extra nesting from the category table is rendered as an Axis level.</div>' +
 			'<div id="courseSubcategoryGroups"></div>' +
-			'<button type="button" class="btn btn-sm btn-secondary" onclick="addCourseSubcategoryGroup()">+ Add Topic / Section</button>' +
+			'<button type="button" class="btn btn-sm btn-secondary" onclick="addCourseSubcategoryGroup()">+ Add Chapter</button>' +
 			'</div>' +
 			'<div class="course-generator-settings">' +
 			'<div class="form-group"><label for="newCourseLanguage">Content language</label>' +
@@ -1531,26 +1735,25 @@
 	window.addCourseSubcategoryGroup = function () {
 		const container = document.getElementById('courseSubcategoryGroups');
 		if (!container) return;
-		const index = container.children.length + 1;
 		const group = document.createElement('div');
 		group.className = 'course-subcategory-group';
 		group.innerHTML =
-			`<div class="course-subcategory-heading"><strong>Topic / Section ${index} (Subcategory ${index})</strong>` +
-			`<button type="button" class="btn btn-sm" aria-label="Remove subcategory ${index}" onclick="this.closest('.course-subcategory-group').remove()">Remove</button></div>` +
-			`<div class="form-group"><label>Topic / Section Name</label><input type="text" class="course-subcategory-name" maxlength="100" placeholder="e.g. Présent de l'indicatif / Simplification" style="width:100%;"></div>` +
+			`<div class="course-subcategory-heading"><strong>Chapter</strong>` +
+			`<button type="button" class="btn btn-sm" aria-label="Remove this chapter" onclick="this.closest('.course-subcategory-group').remove()">Remove</button></div>` +
+			`<div class="form-group"><label>Chapter name</label><input type="text" class="course-subcategory-name" maxlength="100" placeholder="e.g. Vocabulaire de base / Simplification" style="width:100%;"></div>` +
 			// Axes editor: an option-input-style row (same pattern as the
 			// Add-question modal) plus a polished Add button; every axis lands
 			// on its own line in the hidden textarea below, which is what the
 			// submit pipeline reads.
-			'<div class="form-group course-axes-editor"><label>Learning Objectives / Axes <span class="text-muted">(one per line — each becomes a lesson and quiz target)</span></label>' +
+			'<div class="form-group course-axes-editor"><label>Lessons / Axes <span class="text-muted">(one per line — each becomes a lesson with AI content and a quiz target)</span></label>' +
 			'<div class="option-add-row course-axes-add-row">' +
-			'<input type="text" class="option-text-input course-axes-input" placeholder="Enter an axis, e.g. Radical et terminaison…" aria-label="New learning objective axis" onkeydown="courseAxesInputKeydown(event, this)">' +
-			'<button type="button" class="btn btn-primary add-option-btn course-axes-add-btn" title="Add axis" aria-label="Add learning objective axis" onclick="addCourseAxisToGroup(this)">' +
+			'<input type="text" class="option-text-input course-axes-input" placeholder="Enter a lesson, e.g. Radical et terminaison…" aria-label="New lesson" onkeydown="courseAxesInputKeydown(event, this)">' +
+			'<button type="button" class="btn btn-primary add-option-btn course-axes-add-btn" title="Add lesson" aria-label="Add lesson" onclick="addCourseAxisToGroup(this)">' +
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
 			'</button></div>' +
 			`<textarea class="course-subcategory-axes" rows="3" style="display:none;" aria-hidden="true" tabindex="-1"></textarea>` +
-			'<p class="course-axes-empty" hidden>No axes yet — add the first learning objective above.</p>' +
-			'<div class="course-axes-chips" role="list" aria-label="Learning objectives in this section"></div></div>';
+			'<p class="course-axes-empty" hidden>No lessons yet — add the first one above.</p>' +
+			'<div class="course-axes-chips" role="list" aria-label="Lessons in this chapter"></div></div>';
 		container.appendChild(group);
 		renderCourseSubcategoryAxes(group, []);
 	};
@@ -1574,7 +1777,7 @@
 					(axis, axisIndex) =>
 						'<span class="course-axes-chip" role="listitem">' +
 						`<span class="course-axes-chip-label">${esc(axis)}</span>` +
-						`<button type="button" class="course-axes-chip-remove" aria-label="Remove axis: ${esc(axis)}" data-axis-index="${axisIndex}" onclick="removeCourseAxisFromGroup(this)">&times;</button>` +
+						`<button type="button" class="course-axes-chip-remove" aria-label="Remove lesson: ${esc(axis)}" data-axis-index="${axisIndex}" onclick="removeCourseAxisFromGroup(this)">&times;</button>` +
 						'</span>',
 				)
 				.join('');
@@ -1633,9 +1836,9 @@
 		const subjectId = activeSubjectId();
 		if (subjectId === '__unassigned__') return toast('Pick a subject first — a course lives inside one.', 'error');
 		if (!name) return toast('Give the course a name first.', 'error');
-		if (!rootName) return toast('Enter a main category name.', 'error');
+		if (!rootName) return toast('Enter a module name.', 'error');
 		if (!groups.length || groups.some((group) => !group.name || !group.axes.length)) {
-			return toast('Each subcategory needs a name and at least one axis.', 'error');
+			return toast('Each chapter needs a name and at least one lesson.', 'error');
 		}
 		const btn = document.getElementById('courseGenGo');
 		if (btn) { btn.disabled = true; btn.textContent = 'Creating course…'; }
@@ -1679,7 +1882,7 @@
 		const configId = selectedConfigId(document.getElementById('courseGenModal'));
 		const includeEmptyCategories = document.getElementById('courseIncludeEmptyCategories')?.value === 'true';
 		if (!name) return toast('Give the course a name first.', 'error');
-		if (!categoryId) return toast('Pick a category branch first.', 'error');
+		if (!categoryId) return toast('Pick a module branch first.', 'error');
 		if (!configId) return toast('Pick an AI model (Settings → AI Generation if empty).', 'error');
 		const btn = document.getElementById('courseGenGo');
 		if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
@@ -1704,7 +1907,7 @@
 	window.openCourseFromCategory = async function (categoryId) {
 		const cat = categoryList().find((c) => String(c.id) === String(categoryId));
 		if (!cat) {
-			toast('Category not found — refresh the Subjects tab first.', 'error');
+			toast('Module not found — refresh the Subjects tab first.', 'error');
 			return;
 		}
 		try {
@@ -1854,7 +2057,7 @@
 
 	function renderCourseDocumentContentsNode(node, depth = 0) {
 		const category = node.category;
-		const level = depth === 0 ? 'Main category' : node.children.length ? 'Subcategory' : 'Axis';
+		const level = courseLevelLabel(depth, node.children.length === 0);
 		return (
 			`<li><a href="#${esc(courseDocumentCategoryId(category))}">` +
 			`<span>${level}</span><strong>${esc(category.name)}</strong></a>` +
@@ -1868,7 +2071,7 @@
 	function renderCourseDocumentNode(node, depth = 0) {
 		const category = node.category;
 		const headingLevel = Math.min(depth + 2, 5);
-		const level = depth === 0 ? 'Main category' : node.children.length ? 'Subcategory' : 'Axis';
+		const level = courseLevelLabel(depth, node.children.length === 0);
 		const lessons = node.lessons.map((lesson) =>
 			`<section class="course-document-lesson" id="${esc(courseDocumentLessonId(lesson))}">` +
 			(node.children.length && lesson.title !== category.name
@@ -2037,9 +2240,9 @@
 					const lesson = lessonByCat.get(String(category.id));
 					const qCount = questionCountForCategoryBranch(category.id, counts, list, tree);
 					const hasChildren = branchRows.some((row) => String(row.category.parent_id) === String(category.id));
-					const level = depth === 0 ? 'Main category' : hasChildren ? 'Subcategory' : 'Axis';
+					const level = courseLevelLabel(depth, !hasChildren);
 					const toggle = hasChildren
-						? `<button type="button" class="course-tree-toggle" data-course-collapse="${esc(category.id)}" onclick="toggleCourseCategory('${esc(category.id)}')" aria-label="Toggle ${esc(category.name)} subcategories" aria-expanded="${!collapsedCourseCategoryIds.has(String(category.id))}">${collapsedCourseCategoryIds.has(String(category.id)) ? '+' : '−'}</button>`
+						? `<button type="button" class="course-tree-toggle" data-course-collapse="${esc(category.id)}" onclick="toggleCourseCategory('${esc(category.id)}')" aria-label="Toggle ${esc(category.name)} chapters" aria-expanded="${!collapsedCourseCategoryIds.has(String(category.id))}">${collapsedCourseCategoryIds.has(String(category.id)) ? '+' : '−'}</button>`
 						: '<span class="course-tree-toggle-spacer" aria-hidden="true"></span>';
 					const lessonLabel = lesson
 						? `<button type="button" class="btn btn-sm course-tree-lesson-link" onclick="focusLesson('${esc(lesson.id)}')" title="Open lesson">Lesson: ${esc(lesson.title)}</button>`
@@ -2065,27 +2268,55 @@
 			.map((l, idx) => lessonCardHtml(l, idx))
 			.join('');
 
+		const lessonCount = (course.lessons || []).length;
+		const toolbarIcons = {
+			back: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>',
+			view: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+			edit: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>',
+			structure: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect><path d="M6.5 10v4a3 3 0 0 0 3 3H14"></path></svg>',
+			link: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.5 1.5"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7L13 18"></path></svg>',
+			rename: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>',
+			publish: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
+			unpublish: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18.4 5.6a9 9 0 1 0 0 12.8"></path><path d="M3 3l18 18"></path></svg>',
+			assign: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>',
+			add: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>',
+			document: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>',
+		};
+
 		pane.innerHTML =
-			'<div class="course-detail-toolbar">' +
-			'<div class="course-detail-heading"><button type="button" class="btn" onclick="closeCourseDetail()">&larr; Courses</button>' +
-				`<div class="course-detail-title"><h2>${esc(course.name)}</h2>` +
-				`<span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span>` +
-				(!course.category_id ? '<span class="course-kind-chip is-unlinked">No structure</span>' : '') + '</div></div>' +
-			`<div class="course-detail-mode" role="group" aria-label="Course mode">` +
-			`<button type="button" class="btn ${courseDetailMode === 'view' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'view'}" onclick="setCourseDetailMode('view')">View course</button>` +
-			`<button type="button" class="btn ${courseDetailMode === 'edit' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'edit'}" onclick="setCourseDetailMode('edit')">Edit content</button></div>` +
-			'<div class="course-detail-controls">' +
-			(courseDetailMode === 'edit' ? '<div class="course-model-control">' + modelSelectHtml(selectedCourseConfigId, 'courseModelSelect') + '</div>' : '') +
-			'<div class="course-detail-actions">' +
-			(course.category_id
-				? `<button type="button" class="btn course-action-structure" onclick="openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})">Edit structure</button>`
-				: `<button type="button" class="btn course-action-link" onclick="linkStructure('${esc(course.id)}')">Link a structure</button>`) +
-			'<button type="button" class="btn course-action-rename" onclick="renameCoursePrompt()">Rename</button>' +
-			`<button type="button" class="btn ${published ? 'course-action-unpublish' : 'course-action-publish'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? 'Unpublish' : 'Publish'}</button>` +
-			'<button type="button" class="btn course-action-assign" onclick="openAssignClassesModal()">Send to students</button>' +
-			(courseDetailMode === 'edit' ? '<button type="button" class="btn course-action-add" onclick="addLessonManual()">+ Add lesson</button>' : '') +
-			'<button type="button" class="btn course-action-document" onclick="createCourseDocument()">Create document</button>' +
-			'</div></div></div>' +
+			'<div class="course-detail-toolbar" role="region" aria-label="Course workspace">' +
+			'<div class="course-detail-heading">' +
+				`<button type="button" class="btn course-detail-back" title="Back to all courses" onclick="closeCourseDetail()">${toolbarIcons.back}<span>All courses</span></button>` +
+				'<div class="course-detail-title">' +
+					'<span class="course-detail-eyebrow">Course workspace</span>' +
+					`<h2>${esc(course.name)}</h2>` +
+					'<div class="course-detail-badges">' +
+						`<span class="status-badge ${published ? 'status-success' : 'status-warning'}">${published ? 'Published' : 'Draft'}</span>` +
+						`<span class="course-detail-lesson-count">${lessonCount} lesson${lessonCount === 1 ? '' : 's'}</span>` +
+						(!course.category_id ? '<span class="course-kind-chip is-unlinked">No structure</span>' : '') +
+					'</div>' +
+				'</div>' +
+			'</div>' +
+			`<div class="course-detail-controls">` +
+				'<div class="course-detail-tools">' +
+					`<div class="course-detail-mode" role="group" aria-label="Course mode">` +
+						`<button type="button" class="btn ${courseDetailMode === 'view' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'view'}" onclick="setCourseDetailMode('view')">${toolbarIcons.view}<span>View course</span></button>` +
+						`<button type="button" class="btn ${courseDetailMode === 'edit' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'edit'}" onclick="setCourseDetailMode('edit')">${toolbarIcons.edit}<span>Edit content</span></button>` +
+					'</div>' +
+					(courseDetailMode === 'edit' ? '<div class="course-model-control">' + modelSelectHtml(selectedCourseConfigId, 'courseModelSelect') + '</div>' : '') +
+				'</div>' +
+				'<div class="course-detail-actions" role="group" aria-label="Course actions">' +
+					(course.category_id
+						? `<button type="button" class="btn course-action-structure" title="Edit the module and chapter structure" onclick="openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})">${toolbarIcons.structure}<span>Edit structure</span></button>`
+						: `<button type="button" class="btn course-action-link" title="Link a category branch to this course" onclick="linkStructure('${esc(course.id)}')">${toolbarIcons.link}<span>Link a structure</span></button>`) +
+					`<button type="button" class="btn course-action-rename" title="Rename this course" onclick="renameCoursePrompt()">${toolbarIcons.rename}<span>Rename</span></button>` +
+					`<button type="button" class="btn ${published ? 'course-action-unpublish' : 'course-action-publish'}" title="${published ? 'Move this course back to draft' : 'Publish this course for students'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? toolbarIcons.unpublish : toolbarIcons.publish}<span>${published ? 'Unpublish' : 'Publish'}</span></button>` +
+					`<button type="button" class="btn course-action-assign" title="Send this course to your students" onclick="openAssignClassesModal()">${toolbarIcons.assign}<span>Send to students</span></button>` +
+					(courseDetailMode === 'edit' ? `<button type="button" class="btn course-action-add" title="Add a lesson to this course" onclick="addLessonManual()">${toolbarIcons.add}<span>Add lesson</span></button>` : '') +
+					'<span class="course-detail-action-divider" aria-hidden="true"></span>' +
+					`<button type="button" class="btn course-action-document" title="Create course document" onclick="createCourseDocument()">${toolbarIcons.document}<span>Create document</span></button>` +
+				'</div>' +
+			'</div></div>' +
 			(courseDetailMode === 'view'
 				? renderTeacherCourseDocument(course, branchRows)
 				: `<div class="course-command-launchpad">` +
@@ -2106,8 +2337,8 @@
 						`</div>` +
 					`</div>` +
 				`</div>` +
-				`<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No category branch')}</div>` +
-			'<section class="course-structure-panel"><div class="course-section-heading"><div><h3>Category structure</h3>' +
+				`<div class="course-branch-path">${esc(course.category_path || categoryPath(course.category_id) || 'No module branch')}</div>` +
+			'<section class="course-structure-panel"><div class="course-section-heading"><div><h3>Course structure</h3>' +
 			'<p>Lessons follow the categories and axes in this branch.</p></div>' +
 			`<div class="course-structure-tools"><span class="course-structure-count">${branchRows.length} level${branchRows.length === 1 ? '' : 's'}</span>` +
 			(branchRows.some((row) => branchRows.some((child) => String(child.category.parent_id) === String(row.category.id)))
@@ -2330,25 +2561,34 @@
 			}
 			return depth;
 		};
-		const categoryRows = window.CategoryTree?.getOrderedTree?.(categories) ||
+		const orderedCategories = window.CategoryTree?.getOrderedTree?.(categories) ||
 			categories.map((category) => ({
 				category,
 				depth: getCategoryDepth(category),
 			}));
+		// Practice targets are the outlines of *this* course. Showing every
+		// subject category here let a lesson point at another course's branch.
+		const courseRootId = String(currentCourse?.category_id || '');
+		const courseBranch = courseRootId
+			? new Set([
+				courseRootId,
+				...(window.CategoryTree?.getDescendantIds?.(courseRootId, categories) || []).map(String),
+			])
+			: null;
+		const courseRootDepth = courseRootId
+			? (window.CategoryTree?.getDepth?.(courseRootId, categories) || 0)
+			: 0;
+		const categoryRows = courseBranch
+			? orderedCategories.filter(({ category }) => courseBranch.has(String(category.id)))
+			: orderedCategories;
 		const categoryId = String(lesson.category_id || '');
 		const currentCategory = categoryById.get(categoryId);
 		const hasValidCategory = Boolean(currentCategory);
 		const options = categoryRows
 			.map(({ category, depth }) => {
 				const path = categoryPath(category.id) || category.name;
-				const categoryType =
-					depth === 0
-						? 'Main category'
-						: depth === 1
-							? 'Subcategory'
-							: depth >= categoryRows.length - 1
-								? 'Axis'
-								: `Sub-${'sub-'.repeat(depth - 2)}subcategory`;
+				const hasChildren = categories.some((item) => String(item.parent_id) === String(category.id));
+				const categoryType = courseLevelLabel(depth - courseRootDepth, !hasChildren);
 				return `<option value="${esc(category.id)}" ${categoryId === String(category.id) ? 'selected' : ''}>${categoryType} · ${esc(path)}</option>`;
 			})
 			.join('');
@@ -2359,86 +2599,26 @@
 		const categoryStatus = hasValidCategory
 			? `Practice questions: ${esc(categoryPath(categoryId) || currentCategory.name)}`
 			: categoryId
-				? 'Stored category is unavailable. Choose a practice category.'
-				: 'Optional: link practice questions to a category.';
+				? 'Stored target is unavailable. Choose a practice target.'
+				: 'Optional: link practice questions to a target.';
 		const categoryClass =
 			categoryId && !hasValidCategory ? ' is-warning' : '';
-		const lessons = [...(currentCourse?.lessons || [])];
-		const lessonById = new Map(lessons.map((item) => [String(item.id), item]));
-		const excludedParentIds = new Set([String(lesson.id)]);
-		const childrenByParent = new Map();
-		for (const item of lessons) {
-			const parentId = String(item.parent_lesson_id || '');
-			if (!parentId) continue;
-			if (!childrenByParent.has(parentId)) childrenByParent.set(parentId, []);
-			childrenByParent.get(parentId).push(String(item.id));
-		}
-		const pending = [String(lesson.id)];
-		while (pending.length) {
-			const parentId = pending.pop();
-			for (const childId of childrenByParent.get(parentId) || []) {
-				if (excludedParentIds.has(childId)) continue;
-				excludedParentIds.add(childId);
-				pending.push(childId);
-			}
-		}
-		const parentLessonId = String(lesson.parent_lesson_id || '');
-		const parentLesson = lessonById.get(parentLessonId);
-		const validParent = Boolean(parentLesson) && !excludedParentIds.has(parentLessonId);
-		const getLessonDepth = (candidate) => {
-			let depth = 0;
-			let parentId = String(candidate.parent_lesson_id || '');
-			const seen = new Set([String(candidate.id)]);
-			while (parentId && !seen.has(parentId)) {
-				seen.add(parentId);
-				const parent = lessonById.get(parentId);
-				if (!parent) break;
-				depth += 1;
-				parentId = String(parent.parent_lesson_id || '');
-			}
-			return depth;
-		};
-		const parentOptions = lessons
-			.filter((candidate) => !excludedParentIds.has(String(candidate.id)))
-			.sort(
-				(a, b) =>
-					(Number(a.order_index) || 0) - (Number(b.order_index) || 0),
-			)
-			.map((candidate) => {
-				const headingLevel = getLessonDepth(candidate) + 1;
-				const indent = '\u00a0'.repeat(getLessonDepth(candidate) * 3);
-				return `<option value="${esc(candidate.id)}" data-heading-level="${headingLevel}" ${parentLessonId === String(candidate.id) ? 'selected' : ''}>Heading ${headingLevel} · ${indent}${esc(candidate.title || 'Untitled lesson')}</option>`;
-			})
-			.join('');
-		const missingParentOption =
-			parentLessonId && !parentLesson
-				? `<option value="${esc(parentLessonId)}" selected>Saved parent is unavailable</option>`
-				: '';
-		const parentStatus = validParent
-			? `Heading ${getLessonDepth(parentLesson) + 2} · Nested under “${esc(parentLesson.title)}”.`
-			: parentLessonId
-				? 'The saved parent is unavailable. Choose a different lesson or make this a top-level section.'
-				: 'Heading 1 · Top-level. Choose a parent title to nest this section, like Word heading levels.';
 		return (
 			`<article class="lesson-card${categoryClass}" data-lesson-id="${esc(lesson.id)}">` +
 			`<div class="lesson-card-header"><span class="lesson-card-number">${idx + 1}</span>` +
 			`<input type="text" id="lessonTitle-${esc(lesson.id)}" value="${esc(lesson.title)}" class="lesson-card-title" aria-label="Lesson title" placeholder="Lesson title" />` +
 			`<input type="text" id="lessonSummary-${esc(lesson.id)}" value="${esc(lesson.summary || '')}" class="lesson-card-summary" aria-label="Lesson summary" placeholder="One-line summary" />` +
 			`</div>` +
-			`<label class="lesson-level-field" for="lessonCategory-${esc(lesson.id)}"><span>Practice category</span>` +
+			`<label class="lesson-level-field" for="lessonCategory-${esc(lesson.id)}"><span>Practice target</span>` +
 			`<select id="lessonCategory-${esc(lesson.id)}" aria-describedby="lessonLevelStatus-${esc(lesson.id)}" onchange="updateLessonLevelSelection('${esc(lesson.id)}')">` +
-			`<option value="" ${categoryId ? '' : 'selected'}>No practice category</option>${unavailableOption}${options}</select>` +
+			`<option value="" ${categoryId ? '' : 'selected'}>No practice target</option>${unavailableOption}${options}</select>` +
 			`<small id="lessonLevelStatus-${esc(lesson.id)}" class="lesson-level-status${categoryClass}" aria-live="polite">${categoryStatus}</small></label>` +
-			`<label class="lesson-parent-field" for="lessonParent-${esc(lesson.id)}"><span>Outline placement</span>` +
-			`<select id="lessonParent-${esc(lesson.id)}" aria-describedby="lessonParentStatus-${esc(lesson.id)}" onchange="updateLessonParentSelection('${esc(lesson.id)}')">` +
-			`<option value="" ${parentLessonId ? '' : 'selected'}>Top-level · Heading 1</option>${missingParentOption}${parentOptions}</select>` +
-			`<small id="lessonParentStatus-${esc(lesson.id)}" class="lesson-parent-status${parentLessonId && !validParent ? ' is-warning' : ''}" aria-live="polite">${parentStatus}</small></label>` +
 			`<textarea id="lessonContent-${esc(lesson.id)}" class="lesson-card-content" rows="8" aria-label="Lesson content" placeholder="Lesson content (markdown). Use the AI button to fill it.">${esc(lesson.content || '')}</textarea>` +
 			'<div class="lesson-card-actions">' +
 			`<button type="button" class="btn btn-ai-generate btn-sm" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate content via AI</button>` +
-			`<button type="button" class="btn btn-sm" onclick="openLessonPrepSheet('${esc(lesson.id)}')">Prep Sheet</button>` +
-			`<button type="button" class="btn btn-sm" onclick="generateQuestionsFromLesson('${esc(lesson.id)}')">Generate questions</button>` +
-			`<button type="button" class="btn btn-sm" onclick="previewLesson('${esc(lesson.id)}')">Preview</button>` +
+			`<button type="button" class="btn btn-sm lesson-action-prep" onclick="openLessonPrepSheet('${esc(lesson.id)}')">Prep Sheet</button>` +
+			`<button type="button" class="btn btn-sm lesson-action-questions" onclick="generateQuestionsFromLesson('${esc(lesson.id)}')">Generate questions</button>` +
+			`<button type="button" class="btn btn-sm lesson-action-preview" onclick="previewLesson('${esc(lesson.id)}')">Preview</button>` +
 			`<button type="button" class="btn btn-primary btn-sm" onclick="saveLesson('${esc(lesson.id)}')">Save</button>` +
 			`<span class="lesson-card-action-spacer"></span>` +
 			`<div class="lesson-card-reorder" aria-label="Reorder lesson">` +
@@ -2460,31 +2640,16 @@
 		if (!select || !status) return;
 		if (select.value) {
 			const selectedCategory =
-				select.options[select.selectedIndex]?.textContent?.trim() || 'Selected category';
+				select.options[select.selectedIndex]?.textContent?.trim() || 'Selected target';
 			status.textContent = `${selectedCategory}. Save lesson to apply.`;
 			status.classList.remove('is-warning');
 			card?.classList.remove('is-warning');
 		} else {
 			status.textContent =
-				'No practice category selected. Course content still works; category-specific practice will be unavailable.';
+				'No practice target selected. Course content still works; targeted practice will be unavailable.';
 			status.classList.remove('is-warning');
 			card?.classList.remove('is-warning');
 		}
-	};
-
-	window.updateLessonParentSelection = function (lessonId) {
-		const select = document.getElementById(`lessonParent-${lessonId}`);
-		const status = document.getElementById(`lessonParentStatus-${lessonId}`);
-		if (!select || !status) return;
-		const parentTitle =
-			select.options[select.selectedIndex]?.textContent?.trim() || '';
-		const parentHeadingLevel = Number(
-			select.options[select.selectedIndex]?.dataset.headingLevel,
-		);
-		status.textContent = select.value
-			? `Will be Heading ${parentHeadingLevel + 1}, nested under “${parentTitle}”. Save to apply.`
-			: 'Will be a top-level Heading 1. Save to apply.';
-		status.classList.remove('is-warning');
 	};
 
 	window.focusLesson = function (lessonId) {
@@ -2678,14 +2843,14 @@
 					`<span class="course-doc-layout-icon layout-${id}" aria-hidden="true"><i></i><b></b><em></em></span><strong>${name}</strong><small>${hint}</small></button>`,
 			).join('');
 			const NUMERATION_TEMPLATES = [
-				['default', 'Classic', 'I · 1 · a · i'],
-				['decimal', 'Decimal', '1 · 1.1 · 1.1.1'],
+				['default', 'Classic', 'I · II · III'],
+				['decimal', 'Decimal', '1 · 2 · 3'],
 				['roman', 'Roman', 'I · II · III'],
 				['alpha', 'Alpha', 'A · B · C'],
-				['book', 'Book', 'Chapter · Section · Subsection'],
-				['module', 'Module', 'Module · Unit · Topic · Axis'],
+				['book', 'Book', 'I · 1 · a · i'],
+				['module', 'Module', 'I · 1 · a · i'],
 				['progressif', 'Progressif', '1 · 1.1 · 1.1.1 (no letters)'],
-				['academique', 'Académique', 'Module I · Section 1 · 1.1'],
+				['academique', 'Académique', 'I · 1 · 1.1'],
 			];
 			const COVER_TEMPLATES = [
 				['academic', 'Academic', 'Centered title, clean institution header'],
@@ -2722,7 +2887,7 @@
 				includeCover: true,
 				includeTableOfContents: true,
 				includeLessonPath: false,
-				startEachLessonOnNewPage: false,
+				startEachLessonOnNewPage: true,
 				identitySaved,
 			};
 
@@ -2730,22 +2895,22 @@
 			// numeration + pagination into a named look so a teacher can start from
 			// a finished style instead of assembling it field by field.
 			const STYLE_PRESETS = [
-				['academique', 'Cours académique', 'Module numbering, university cover, page per lesson', {
+				['academique', 'Academic course', 'Numbered lesson sections, university cover, page per lesson', {
 					templateId: 'officiel', coverTemplate: 'university', headerLayout: 'bandeau',
 					numerationTemplate: 'academique', includeCover: true, includeTableOfContents: true,
 					includeLessonPath: false, startEachLessonOnNewPage: true,
 				}],
-				['fiche', 'Fiche moderne', 'Decimal numbering, colour-band cover, flowing pages', {
+				['fiche', 'Modern sheet', 'Decimal numbering, colour-band cover, flowing pages', {
 					templateId: 'moderne', coverTemplate: 'modern', headerLayout: 'centre',
 					numerationTemplate: 'progressif', includeCover: true, includeTableOfContents: true,
 					includeLessonPath: false, startEachLessonOnNewPage: false,
 				}],
-				['livre', 'Livre', 'Book numbering, publication cover, chapter per lesson', {
+				['livre', 'Book', 'Classic numbering, publication cover, lesson per page', {
 					templateId: 'classique', coverTemplate: 'book', headerLayout: 'classique',
 					numerationTemplate: 'book', includeCover: true, includeTableOfContents: true,
 					includeLessonPath: false, startEachLessonOnNewPage: true,
 				}],
-				['minimal', 'Sans couverture', 'No cover, compact decimal, quick handout', {
+				['minimal', 'No cover', 'No cover, compact decimal, quick handout', {
 					templateId: 'compact', coverTemplate: 'minimal', headerLayout: 'minimal',
 					numerationTemplate: 'decimal', includeCover: false, includeTableOfContents: true,
 					includeLessonPath: false, startEachLessonOnNewPage: false,
@@ -2784,9 +2949,9 @@
 				<section class="course-doc-section"><h4>Document template</h4>
 					<div class="course-doc-templates">${templateCards}</div>
 				</section>
-				<section class="course-doc-section"><h4>Level numeration</h4>
+<section class="course-doc-section"><h4>Heading numeration</h4>
 					<div class="course-doc-numerations">${numerationCards}</div>
-					<p class="course-doc-help">Choose how course levels are numbered in the document (automatic — no manual entry needed).</p>
+					<p class="course-doc-help">Numbers the headings inside each lesson (Introduction, Definition, Examples...). Modules, chapters and axes stay unnumbered titles.</p>
 				</section>
 				<section class="course-doc-section"><h4>Header arrangement</h4>
 					<div class="course-doc-layouts">${headerLayoutCards}</div>
@@ -2799,9 +2964,9 @@
 			const buildOrganizePanel = () =>
 				`<div class="course-doc-options">
 					<label><input id="courseDocIncludeCover" type="checkbox"${state.includeCover ? ' checked' : ''}><span><strong>Cover page</strong><small>Course title, branch, school and course overview</small></span></label>
-					<label><input id="courseDocIncludeContents" type="checkbox"${state.includeTableOfContents ? ' checked' : ''}><span><strong>Table of contents</strong><small>Lesson list with its category path</small></span></label>
+					<label><input id="courseDocIncludeContents" type="checkbox"${state.includeTableOfContents ? ' checked' : ''}><span><strong>Table of contents</strong><small>Lesson list with its module/chapter path</small></span></label>
 					<label><input id="courseDocLessonPath" type="checkbox"${state.includeLessonPath ? ' checked' : ''}><span><strong>Show the lesson path under each title</strong><small>The small breadcrumb line (hidden by default)</small></span></label>
-					<label><input id="courseDocLessonPages" type="checkbox"${state.startEachLessonOnNewPage ? ' checked' : ''}><span><strong>Start every lesson on a new page</strong><small>Use for a workbook-style handout</small></span></label>
+					<label><input id="courseDocLessonPages" type="checkbox"${state.startEachLessonOnNewPage ? ' checked' : ''}><span><strong>Start every lesson on a new page</strong><small>Recommended — each lesson opens on a fresh page</small></span></label>
 				</div>
 				<p class="course-doc-status" id="courseDocStatus">${course.lessons?.length ? `${course.lessons.length} lessons will be included.` : 'No lessons yet; the document will contain the course header.'}</p>`;
 
@@ -2835,7 +3000,7 @@
 							<div class="course-doc-recap-card">
 								<span class="course-doc-recap-card-title">Visual style</span>
 								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Template</span><span class="course-doc-recap-value">${esc(tplName)}</span></div>
-								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Level numeration</span><span class="course-doc-recap-value">${esc(numerationName)}</span></div>
+								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Heading numeration</span><span class="course-doc-recap-value">${esc(numerationName)}</span></div>
 								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Cover template</span><span class="course-doc-recap-value">${esc(coverName)}</span></div>
 								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Header arrangement</span><span class="course-doc-recap-value">${esc(layoutName)}</span></div>
 							</div>
@@ -2848,7 +3013,7 @@
 								<div class="course-doc-recap-row"><span class="course-doc-recap-label">Lessons</span><span class="course-doc-recap-value">${course.lessons?.length || 0}</span></div>
 							</div>
 						</div>
-						<p class="course-doc-recap-note">Review the choices above, then export the document as PDF or Word. The rendering uses the nested course structure (category → subcategory → … → axis).</p>
+						<p class="course-doc-recap-note">Review the choices above, then export the document as PDF or Word. The rendering uses the nested course structure (module → chapter → lesson).</p>
 					</div>`;
 			};
 
@@ -3083,6 +3248,9 @@
 		const templateId = form.querySelector('[data-course-doc-template].is-selected')?.dataset.courseDocTemplate || 'classique';
 		const headerLayout = form.querySelector('[data-course-doc-layout].is-selected')?.dataset.courseDocLayout || 'bandeau';
 		const numerationTemplate = form.querySelector('[data-course-doc-numeration].is-selected')?.dataset.courseDocNumeration || 'default';
+		const categories = categoryList();
+		const categoryOrder = (window.CategoryTree?.getOrderedTree?.(categories) || categories.map((category) => ({ category })))
+			.map(({ category }) => String(category.id));
 		const value = (id) => document.getElementById(`courseDoc${id}`)?.value?.trim() || '';
 		const body = {
 			format,
@@ -3094,6 +3262,7 @@
 			includeTableOfContents: Boolean(document.getElementById('courseDocIncludeContents')?.checked),
 			includeLessonPath: Boolean(document.getElementById('courseDocLessonPath')?.checked),
 			startEachLessonOnNewPage: Boolean(document.getElementById('courseDocLessonPages')?.checked),
+			categoryOrder,
 			header: {
 				schoolName: value('School'),
 				ministry: value('Ministry'),
@@ -3409,8 +3578,6 @@
 		const content = document.getElementById(`lessonContent-${lessonId}`)?.value;
 		const categoryId =
 			document.getElementById(`lessonCategory-${lessonId}`)?.value || null;
-		const parentLessonId =
-			document.getElementById(`lessonParent-${lessonId}`)?.value || null;
 		if (!title) return toast('Lesson title is required.', 'error');
 		try {
 			const updated = await A.raw('PATCH', `/courses/lessons/${encodeURIComponent(lessonId)}`, {
@@ -3418,16 +3585,12 @@
 				summary,
 				content,
 				category_id: categoryId,
-				parent_lesson_id: parentLessonId,
 			});
 			const lesson = (currentCourse.lessons || []).find((l) => String(l.id) === String(lessonId));
 			const categoryChanged =
 				lesson && String(lesson.category_id || '') !== String(categoryId || '');
-			const parentChanged =
-				lesson &&
-				String(lesson.parent_lesson_id || '') !== String(parentLessonId || '');
 			if (lesson) Object.assign(lesson, updated);
-			if (categoryChanged || parentChanged) renderCourseDetail();
+			if (categoryChanged) renderCourseDetail();
 			toast('Lesson saved.');
 		} catch (err) {
 			toast('Save failed: ' + (err?.message || 'error'), 'error');
@@ -3511,14 +3674,19 @@
 	window.renameCoursePrompt = async function () {
 		const A = api();
 		if (!A || !currentCourse) return;
-		openModal(
-			'courseRenameModal',
-			'Course details',
-			`<div class="form-group"><label for="courseRenameName">Name</label><input id="courseRenameName" value="${esc(currentCourse.name)}" style="width:100%;"></div>` +
-			`<div class="form-group"><label for="courseRenameDesc">Description</label><textarea id="courseRenameDesc" rows="3" style="width:100%;">${esc(currentCourse.description || '')}</textarea></div>`,
-			'<button type="button" class="btn" onclick="closeCourseModal(\'courseRenameModal\')">Cancel</button>' +
-			'<button type="button" class="btn btn-primary" onclick="saveCourseMeta()">Save</button>',
-		);
+		openCourseMetaModal({
+			id: 'courseRenameModal',
+			eyebrow: 'Course settings',
+			title: 'Course details',
+			subtitle: 'These details appear on the student course card and in exported documents.',
+			context: courseContextChips(currentCourse),
+			nameId: 'courseRenameName',
+			descId: 'courseRenameDesc',
+			name: currentCourse.name || '',
+			description: currentCourse.description || '',
+			onSave: 'saveCourseMeta()',
+			onEnter: () => window.saveCourseMeta(),
+		});
 	};
 
 	window.saveCourseMeta = async function () {

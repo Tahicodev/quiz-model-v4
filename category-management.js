@@ -134,7 +134,12 @@ function loadCategorySubjects() {
 	// band title and the table disagree. Leftover course tabs re-open their
 	// own outline instead of the old unassigned dump.
 	const moved = selectFirstKnownSubject();
-	if (moved && !activeLegacyWorkspaceKey) updateCategoryList();
+	if (moved && !activeLegacyWorkspaceKey) {
+		// A fallback from a leftover structure has to drop branch scope too;
+		// otherwise the repaint shows the old branch under the new subject band.
+		categoryScope = { mode: 'subject', rootId: null, courseId: null, courseName: '', rootName: '' };
+		updateCategoryList();
+	}
 	renderSubjectTabBar();
 	if (activeLegacyWorkspaceKey) {
 		selectLegacyWorkspaceItem(activeLegacyWorkspaceKey);

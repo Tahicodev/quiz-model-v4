@@ -322,8 +322,8 @@ model ExamClass {
 
 // ─── Courses ─────────────────────────────────────────────────────────────────
 // AI-generated course content built from a teacher's category branch
-// (Category > Subcategory > … > Axe). Lessons keep a pointer to the
-// category/axe they were generated from so practice pulls that leaf's
+// (Module > Chapter > ... > Lesson). Lessons keep a pointer to the
+// category/leaf they were generated from so practice pulls that leaf's
 // live questions. Sharing mirrors exams: a published course is assigned
 // to classes through the course_classes junction (see ExamClass).
 model Course {
@@ -366,7 +366,7 @@ model Lesson {
   id           String   @id @default(uuid())
   course_id    String
   parent_lesson_id String?
-  // The category/axe this lesson was generated from (drives practice
+  // The category/leaf this lesson was generated from (drives practice
   // questions). Nullable for manually authored lessons.
   category_id  String?
   title        String

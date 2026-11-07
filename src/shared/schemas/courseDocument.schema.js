@@ -9,7 +9,10 @@ export const CourseDocumentSchema = z.object({
 	includeCover: z.boolean().default(true),
 	includeTableOfContents: z.boolean().default(true),
 	includeLessonPath: z.boolean().default(false),
-	startEachLessonOnNewPage: z.boolean().default(false),
+	startEachLessonOnNewPage: z.boolean().default(true),
+	// Category ids in the exact order shown in the category table, so the
+	// exported outline follows the teacher's structure instead of lesson order.
+	categoryOrder: z.array(z.string().max(120)).max(2000).optional().default([]),
 	header: z.object({
 		schoolName: z.string().max(200).optional().default(''),
 		ministry: z.string().max(160).optional().default(''),

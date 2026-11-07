@@ -14,6 +14,7 @@ import {
   LessonCreateSchema, LessonUpdateSchema,
 } from '../../shared/schemas/course.schema.js';
 import { ROLES } from '../../shared/constants.js';
+import { extractLessonHighlights } from '../../shared/lessonSections.js';
 
 const MANAGE_ROLES = [ROLES.ADMIN, ROLES.TEACHER, ROLES.SUPER_ADMIN];
 
@@ -504,9 +505,15 @@ export class CourseService {
         category = categoryById.get(String(category.parent_id || ''));
       }
       const rootIndex = levels.findIndex((level) => level.id === String(course.category_id));
+      // Objectives / Key concepts are Markdown sections inside the lesson
+      // body. Attach the extracted items so the chapter page can aggregate
+      // them without shipping a second endpoint.
+      const highlights = extractLessonHighlights(lesson.content);
       return {
         ...lesson,
         category_levels: rootIndex >= 0 ? levels.slice(rootIndex) : [],
+        objectives: highlights.objectives,
+        key_concepts: highlights.keyConcepts,
       };
     });
     const lessonById = new Map(lessonsWithCategoryLevels.map((lesson) => [String(lesson.id), lesson]));
@@ -520,6 +527,37 @@ export class CourseService {
         representedLessonIds.add(String(lesson.id));
       }
     }
+
+    // Roll the per-lesson highlights up the tree: every grouping node
+    // (module, chapter, section) exposes the Objectives / Key concepts of the
+    // lessons underneath it, de-duplicated and capped so the panel stays
+    // readable. The root node's arrays are the course-level goals.
+    const MAX_HIGHLIGHTS = 24;
+    const aggregateHighlights = (node, seen = new Set()) => {
+      if (!node || seen.has(node.id)) return { objectives: [], keyConcepts: [] };
+      seen.add(node.id);
+      const collected = { objectives: [], keyConcepts: [] };
+      const add = (target, values) => {
+        for (const item of values || []) {
+          if (target.length >= MAX_HIGHLIGHTS) break;
+          if (!target.includes(item)) target.push(item);
+        }
+      };
+      for (const child of node.children || []) {
+        const nested = aggregateHighlights(child, seen);
+        add(collected.objectives, nested.objectives);
+        add(collected.keyConcepts, nested.keyConcepts);
+      }
+      for (const summary of node.lessons || []) {
+        const lesson = lessonById.get(String(summary.id));
+        add(collected.objectives, lesson?.objectives);
+        add(collected.keyConcepts, lesson?.key_concepts);
+      }
+      node.objectives = collected.objectives;
+      node.key_concepts = collected.keyConcepts;
+      return collected;
+    };
+    aggregateHighlights(rootCategory);
 
     return {
       ...course,
