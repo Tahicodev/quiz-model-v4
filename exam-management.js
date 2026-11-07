@@ -2160,18 +2160,36 @@ function editExam(examId) {
 let assignExamQuestionsId = null;
 
 function openAssignExamQuestions(examId) {
-	const modal = document.getElementById('assignExamQuestionsModal');
-	if (!modal) {
-		showToast('Assign Questions modal not found', 'error');
-		return;
-	}
-	const exam = exams.find((e) => e.id === examId);
+	const exam = exams.find((e) => String(e.id) === String(examId));
 	if (!exam) {
 		showToast('Exam not found', 'error');
 		return;
 	}
 
 	assignExamQuestionsId = examId;
+
+	// Ensure Exams tab is active
+	if (typeof window.openTab === 'function') {
+		const examsTab = document.getElementById('exams');
+		if (examsTab && !examsTab.classList.contains('active')) {
+			window.openTab(null, 'exams');
+		}
+	}
+
+	const assignPane = document.getElementById('examAssignQuestionsPane');
+	const listPane = document.getElementById('examListPane');
+	const analysisPane = document.getElementById('examAnalysisPane');
+
+	if (assignPane) {
+		if (listPane) listPane.classList.add('hidden');
+		if (analysisPane) analysisPane.classList.add('hidden');
+		assignPane.classList.remove('hidden');
+
+		const breadcrumbText = document.getElementById('examAssignBreadcrumbText');
+		if (breadcrumbText) {
+			breadcrumbText.textContent = `Exams › ${exam.name} › Assign Questions`;
+		}
+	}
 
 	const titleEl = document.getElementById('assignExamQuestionsTitle');
 	if (titleEl) titleEl.textContent = `Assign Questions — ${exam.name}`;
@@ -2182,17 +2200,22 @@ function openAssignExamQuestions(examId) {
 	const countEl = document.getElementById('selectedQuestionCount');
 	if (countEl) countEl.textContent = '0';
 
+	const modal = document.getElementById('assignExamQuestionsModal');
 	if (typeof window.resetAssignFiltersUI === 'function') {
-		window.resetAssignFiltersUI(modal);
+		window.resetAssignFiltersUI(assignPane || modal);
 	}
-	if (typeof window.openAssignModalLike === 'function') {
-		window.openAssignModalLike(modal, 'examQuestionSearch');
-	} else {
-		if (typeof window.promoteAssignModal === 'function') {
-			window.promoteAssignModal(modal);
+
+	// Legacy modal fallback if pane is missing
+	if (!assignPane && modal) {
+		if (typeof window.openAssignModalLike === 'function') {
+			window.openAssignModalLike(modal, 'examQuestionSearch');
+		} else {
+			if (typeof window.promoteAssignModal === 'function') {
+				window.promoteAssignModal(modal);
+			}
+			modal.style.display = 'flex';
+			setTimeout(() => modal.classList.add('active'), 10);
 		}
-		modal.style.display = 'flex';
-		setTimeout(() => modal.classList.add('active'), 10);
 	}
 
 	// Load the bank, then pre-select the exam's current questions. The exam
@@ -2233,10 +2256,22 @@ function openAssignExamQuestions(examId) {
 			updateSelectedCount();
 		}, 200);
 	}, 100);
+
+	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function closeAssignExamQuestions() {
+	const assignPane = document.getElementById('examAssignQuestionsPane');
+	const listPane = document.getElementById('examListPane');
 	const modal = document.getElementById('assignExamQuestionsModal');
+
+	if (assignPane) {
+		assignPane.classList.add('hidden');
+	}
+	if (listPane) {
+		listPane.classList.remove('hidden');
+	}
+
 	if (modal) {
 		if (typeof window.closeAssignModalLike === 'function') {
 			window.closeAssignModalLike(modal);
@@ -2246,6 +2281,8 @@ function closeAssignExamQuestions() {
 		}
 	}
 	assignExamQuestionsId = null;
+	updateExamList();
+	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function saveAssignExamQuestions() {

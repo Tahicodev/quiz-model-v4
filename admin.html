@@ -2388,13 +2388,213 @@
 						<div id="courseDetailPane" class="hidden">
 							<!-- Course detail (structure tree + lesson editor) rendered by courses-management.js -->
 						</div>
+						<div id="categoryAssignQuestionsPane" class="category-assign-questions-pane hidden">
+							<div class="structure-pane-header">
+								<nav class="structure-breadcrumb" id="categoryAssignBreadcrumb" aria-label="Category location">
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"></path><path d="M6 6h10"></path><path d="M6 10h10"></path></svg>
+									<span id="categoryAssignBreadcrumbText">Courses / Categories › Assign Questions</span>
+								</nav>
+								<div class="structure-header-actions" role="group" aria-label="Category assign actions">
+									<button
+										type="button"
+										id="categoryAssignBackBtn"
+										class="btn btn-sm structure-back-btn"
+										onclick="closeAssignCategoryQuestions()"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+										<span>Back to categories</span>
+									</button>
+									<span class="selection-points-badge"><span id="selectedQuestionPointsCategory">0</span> pts</span>
+									<button
+										type="button"
+										class="btn btn-sm btn-secondary"
+										onclick="closeAssignCategoryQuestions()"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										class="btn btn-sm btn-primary"
+										id="saveAssignCategoryQuestionsBtn"
+										onclick="saveAssignCategoryQuestions()"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+										<span>Save Assignment</span>
+									</button>
+								</div>
+							</div>
+							<div class="page-hero-card">
+								<div class="page-hero-main">
+									<div class="page-hero-icon icon-amber">
+										<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+									</div>
+									<div>
+										<h2 id="assignCategoryQuestionsTitle" class="page-hero-title">Assign Questions</h2>
+										<p class="page-hero-subtitle">Click questions to move them between available and selected, or adjust category filing.</p>
+									</div>
+								</div>
+							</div>
+							<form id="assignCategoryQuestionsForm" class="assign-page-form" onsubmit="return false;">
+								<div class="category-filter-section">
+									<div class="filter-toolbar">
+										<div class="filter-toolbar-group filter-toolbar-main">
+											<div class="filter-search-wrap">
+												<span class="filter-field-icon">
+													<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+												</span>
+												<input
+													type="text"
+													id="questionSearchCategory"
+													class="filter-search-input"
+													placeholder="Search questions..."
+													onkeyup="loadAvailableQuestionsForCategory()"
+												/>
+											</div>
+											<button
+												type="button"
+												class="filters-toggle-btn"
+												onclick="toggleAssignFilters(this)"
+												aria-expanded="false"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+												<span class="filters-toggle-label">Show filters</span>
+												<span class="filters-count-badge hidden">0</span>
+												<svg class="filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+											</button>
+											<select
+												id="categoryFilterCategory"
+												class="filter-select"
+												onchange="loadAvailableQuestionsForCategory()"
+											>
+												<option value="">All Categories</option>
+											</select>
+											<select
+												id="questionFilterCategory"
+												class="filter-select"
+												onchange="loadAvailableQuestionsForCategory()"
+											>
+												<option value="all">All Types</option>
+												<option value="multiple-choice">Multiple Choice</option>
+												<option value="true-false">True / False</option>
+												<option value="draggable">Drag &amp; Drop</option>
+												<option value="odd-one-out">Odd One Out</option>
+												<option value="matching-pairs">Matching Pairs</option>
+												<option value="fill-blank">Fill in Blank</option>
+												<option value="code">Code</option>
+											</select>
+											<select
+												id="difficultyFilterCategory"
+												class="filter-select"
+												onchange="loadAvailableQuestionsForCategory()"
+											>
+												<option value="">All Difficulty</option>
+												<option value="easy">Easy</option>
+												<option value="medium">Medium</option>
+												<option value="hard">Hard</option>
+											</select>
+											<div class="points-interval-filter">
+												<input type="number" id="pointFilterCategoryMin" placeholder="Min pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
+												<span class="points-interval-sep">–</span>
+												<input type="number" id="pointFilterCategoryMax" placeholder="Max pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
+											</div>
+										</div>
+										<div class="filter-toolbar-group filter-toolbar-quick">
+											<div class="quick-filters">
+												<button
+													type="button"
+													class="quick-filter-btn"
+													onclick="setQuickFilterForCategory('recent')"
+													title="Recently Added"
+												>
+													<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+													Recent
+												</button>
+												<button
+													type="button"
+													class="quick-filter-btn"
+													onclick="setQuickFilterForCategory('hard')"
+													title="Hard Questions"
+												>
+													<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+													Hard
+												</button>
+												<button
+													type="button"
+													class="quick-filter-btn"
+													onclick="setQuickFilterForCategory('unused')"
+													title="Unused Questions"
+												>
+													<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+													Unused
+												</button>
+												<button
+													type="button"
+													class="quick-filter-btn"
+													onclick="clearAllCategoryFilters()"
+													title="Clear All Filters"
+												>
+													<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+													Clear All
+												</button>
+											</div>
+											<button
+												type="button"
+												class="btn btn-ghost filter-undo-btn"
+												onclick="undoCategorySelections()"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+												Undo
+											</button>
+										</div>
+									</div>
+								</div>
+								<div class="question-selection-container assign-page-selection">
+									<div class="available-questions">
+										<h4>
+											Available Questions (<span id="availableQuestionCountCategory">0</span>)
+										</h4>
+										<div
+											id="availableQuestionsCategory"
+											class="question-list-scroll"
+										></div>
+									</div>
+									<div class="selected-questions">
+										<h4>
+											Selected Questions (<span id="selectedQuestionCountCategory">0</span>)
+											<span class="selection-points-badge"><span id="selectedQuestionPointsCategoryBadge">0</span> pts</span>
+										</h4>
+										<div
+											id="selectedQuestionsListCategory"
+											class="question-list-scroll"
+										></div>
+									</div>
+								</div>
+								<div class="assign-page-footer-bar">
+									<button
+										type="button"
+										class="btn btn-secondary"
+										onclick="closeAssignCategoryQuestions()"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										class="btn btn-primary"
+										onclick="saveAssignCategoryQuestions()"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+										<span>Save Assignment</span>
+									</button>
+								</div>
+							</form>
+						</div>
 						</div>
 					</div>
 				</section>
 
 				<!-- Exams Tab -->
 				<section id="exams" class="tab-content" data-roles="admin,teacher">
-					<div class="exam-management-container">
+					<div id="examListPane" class="exam-management-container">
 						<div class="toolbar">
 							<div class="toolbar-header-group">
 								<h2>Exam Management</h2>
@@ -2529,11 +2729,210 @@
 							</table>
 						</div>
 					</div>
+					<div id="examAssignQuestionsPane" class="exam-assign-questions-pane hidden">
+						<div class="structure-pane-header">
+							<nav class="structure-breadcrumb" id="examAssignBreadcrumb" aria-label="Exam location">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+								<span id="examAssignBreadcrumbText">Exams › Assign Questions</span>
+							</nav>
+							<div class="structure-header-actions" role="group" aria-label="Exam assign actions">
+								<button
+									type="button"
+									id="examAssignBackBtn"
+									class="btn btn-sm structure-back-btn"
+									onclick="closeAssignExamQuestions()"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+									<span>Back to exams</span>
+								</button>
+								<span class="selection-points-badge"><span id="selectedQuestionPointsBadge">0</span> pts</span>
+								<button
+									type="button"
+									class="btn btn-sm btn-secondary"
+									onclick="closeAssignExamQuestions()"
+								>
+									Cancel
+								</button>
+								<button
+									type="button"
+									class="btn btn-sm btn-primary"
+									id="saveAssignExamQuestionsBtn"
+									onclick="saveAssignExamQuestions()"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+									<span>Save Assignment</span>
+								</button>
+							</div>
+						</div>
+						<div class="page-hero-card">
+							<div class="page-hero-main">
+								<div class="page-hero-icon icon-green">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+								</div>
+								<div>
+									<h2 id="assignExamQuestionsTitle" class="page-hero-title">Assign Questions</h2>
+									<p class="page-hero-subtitle">Select and organize questions for this exam from your question bank.</p>
+								</div>
+							</div>
+						</div>
+						<form id="assignExamQuestionsForm" class="assign-page-form" onsubmit="return false;">
+							<div class="exam-filters-container">
+								<div class="filter-toolbar">
+									<div class="filter-toolbar-group filter-toolbar-main">
+										<div class="filter-search-wrap">
+											<span class="filter-field-icon">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+											</span>
+											<input
+												type="text"
+												id="examQuestionSearch"
+												class="filter-search-input"
+												placeholder="Search questions..."
+												onkeyup="debounceFilterExamQuestions()"
+											/>
+										</div>
+										<button
+											type="button"
+											class="filters-toggle-btn"
+											onclick="toggleAssignFilters(this)"
+											aria-expanded="false"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+											<span class="filters-toggle-label">Show filters</span>
+											<span class="filters-count-badge hidden">0</span>
+											<svg class="filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+										</button>
+										<select
+											id="categoryFilterExam"
+											class="filter-select"
+											onchange="filterExamQuestionsEnhanced()"
+										>
+											<option value="">All Categories</option>
+										</select>
+										<select
+											id="typeFilterExam"
+											class="filter-select"
+											onchange="filterExamQuestionsEnhanced()"
+										>
+											<option value="">All Types</option>
+											<option value="multiple-choice">Multiple Choice</option>
+											<option value="true-false">True / False</option>
+											<option value="draggable">Drag &amp; Drop</option>
+											<option value="odd-one-out">Odd One Out</option>
+											<option value="matching-pairs">Matching Pairs</option>
+											<option value="fill-blank">Fill in Blank</option>
+											<option value="code">Code</option>
+										</select>
+										<select
+											id="difficultyFilterExam"
+											class="filter-select"
+											onchange="filterExamQuestionsEnhanced()"
+										>
+											<option value="">All Difficulty</option>
+											<option value="easy">Easy</option>
+											<option value="medium">Medium</option>
+											<option value="hard">Hard</option>
+										</select>
+										<div class="points-interval-filter">
+											<input type="number" id="pointFilterExamMin" placeholder="Min pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
+											<span class="points-interval-sep">–</span>
+											<input type="number" id="pointFilterExamMax" placeholder="Max pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
+										</div>
+									</div>
+									<div class="filter-toolbar-group filter-toolbar-quick">
+										<div class="quick-filters">
+											<button
+												type="button"
+												class="quick-filter-btn"
+												onclick="applyQuickFilter('recent')"
+												title="Recently Added"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+												Recent
+											</button>
+											<button
+												type="button"
+												class="quick-filter-btn"
+												onclick="applyQuickFilter('hard')"
+												title="Hard Questions"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+												Hard
+											</button>
+											<button
+												type="button"
+												class="quick-filter-btn"
+												onclick="applyQuickFilter('images')"
+												title="With Images"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+												Images
+											</button>
+											<button
+												type="button"
+												class="quick-filter-btn"
+												onclick="clearAllFiltersAndSelections()"
+												title="Clear All Filters and Selections"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+												Clear All
+											</button>
+										</div>
+										<button
+											type="button"
+											class="btn btn-ghost filter-undo-btn"
+											onclick="undoQuestionSelections()"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+											Undo
+										</button>
+									</div>
+								</div>
+							</div>
+							<div class="question-selection-container assign-page-selection">
+								<div class="question-column available-questions">
+									<h4>Available Questions (<span id="availableQuestionCount">0</span>)</h4>
+									<div
+										id="availableQuestions"
+										class="question-list-scroll"
+									></div>
+								</div>
+								<div class="question-column selected-questions">
+									<h4>
+										Selected Questions (<span id="selectedQuestionCount">0</span>)
+										<span class="selection-points-badge"><span id="selectedQuestionPoints">0</span> pts</span>
+									</h4>
+									<div
+										id="selectedQuestionsList"
+										class="question-list-scroll"
+									></div>
+								</div>
+							</div>
+							<div class="assign-page-footer-bar">
+								<button
+									type="button"
+									class="btn btn-secondary"
+									onclick="closeAssignExamQuestions()"
+								>
+									Cancel
+								</button>
+								<button
+									type="button"
+									class="btn btn-primary"
+									onclick="saveAssignExamQuestions()"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+									<span>Save Assignment</span>
+								</button>
+							</div>
+						</form>
+					</div>
+					<div id="examAnalysisPane" class="exam-analysis-pane hidden"></div>
 				</section>
 
 				<!-- Classes Tab -->
 				<section id="classes" class="tab-content" data-roles="admin,teacher">
-					<div class="class-management-container">
+					<div id="classListPane" class="class-management-container">
 						<div class="toolbar">
 							<div class="toolbar-header-group">
 								<h2>Class Management</h2>
@@ -2664,6 +3063,183 @@
 									<!-- Classes will be populated here -->
 								</tbody>
 							</table>
+						</div>
+					</div>
+					<div id="classStudentsPane" class="class-students-pane hidden">
+						<div class="structure-pane-header class-students-header">
+							<nav class="structure-breadcrumb" id="classStudentsBreadcrumb" aria-label="Class location">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+								<span id="classStudentsBreadcrumbText">Classes › Class Name › Students</span>
+							</nav>
+							<div class="structure-header-actions" role="group" aria-label="Class actions">
+								<button
+									type="button"
+									id="classStudentsBackBtn"
+									class="btn btn-sm structure-back-btn"
+									onclick="closeAssignClassStudents()"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+									<span>Back to classes</span>
+								</button>
+								<div id="classHeaderActions" class="class-header-actions-group">
+									<button type="button" class="btn btn-sm btn-outline" id="classActionExamsBtn" onclick="openClassExamsAction()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+										<span>Assign Exams</span>
+									</button>
+									<button type="button" class="btn btn-sm btn-outline" id="classActionGamesBtn" onclick="openClassGamesAction()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="4"></rect><line x1="6" y1="10" x2="6" y2="14"></line><line x1="10" y1="10" x2="10" y2="14"></line><line x1="14" y1="10" x2="14" y2="14"></line><line x1="18" y1="10" x2="18" y2="14"></line></svg>
+										<span>Games</span>
+									</button>
+									<button type="button" class="btn btn-sm btn-outline" id="classActionEditBtn" onclick="openClassEditAction()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+										<span>Edit Class</span>
+									</button>
+									<button type="button" class="btn btn-sm btn-danger-soft" id="classActionDeleteBtn" onclick="openClassDeleteAction()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+										<span>Delete Class</span>
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- Class Students Hero Card -->
+						<div class="class-hero-card">
+							<div class="class-hero-main">
+								<div class="class-hero-icon icon-blue">
+									<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+								</div>
+								<div>
+									<h2 id="assignClassStudentsTitle" class="class-hero-title">Students Management</h2>
+									<p class="class-hero-subtitle">Manage this class's roster — add accounts from Users, import/export CSV, and track student enrollment.</p>
+								</div>
+							</div>
+							<div class="class-hero-kpis" id="classHeroKpis">
+								<div class="hero-kpi-item">
+									<span class="hero-kpi-num" id="classKpiStudentsCount">0</span>
+									<span class="hero-kpi-label">Students</span>
+								</div>
+								<div class="hero-kpi-item">
+									<span class="hero-kpi-num" id="classKpiExamsCount">0</span>
+									<span class="hero-kpi-label">Assigned Exams</span>
+								</div>
+								<div class="hero-kpi-item">
+									<span class="hero-kpi-num" id="classKpiActiveAccounts">0</span>
+									<span class="hero-kpi-label">Active Accounts</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Two-panel workspace -->
+						<div class="class-students-workspace">
+							<!-- Panel 1: Add Students from accounts -->
+							<div class="class-workspace-card class-add-students-card">
+								<div class="card-section-header">
+									<div class="card-section-title">
+										<span class="step-badge">1</span>
+										<h3>Add Students from Accounts</h3>
+									</div>
+									<div id="studentPickerCount" class="badge-count text-muted"></div>
+								</div>
+								<div class="class-user-picker-wrap">
+									<div class="picker-filter-grid">
+										<div class="filter-field">
+											<label for="studentClassFilter">Filter by Origin Class</label>
+											<select id="studentClassFilter" class="form-control" onchange="onStudentClassFilterChange()">
+												<option value="all">All Classes</option>
+											</select>
+										</div>
+										<div class="filter-field">
+											<label for="studentPickerSearch">Search Users</label>
+											<input type="text" id="studentPickerSearch" class="form-control" placeholder="Search by name, username or number..." oninput="populateStudentUserPicker()" />
+										</div>
+									</div>
+									<div class="student-picker-list-wrap">
+										<select id="studentUserPicker" class="form-control student-picker-select" multiple size="10">
+											<option value="" disabled>No student users available</option>
+										</select>
+									</div>
+									<div class="bulk-student-actions-bar">
+										<button type="button" class="btn btn-primary btn-sm" onclick="addStudentFromUserPicker()" title="Add the highlighted students to the roster">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+											<span>Add Selected</span>
+										</button>
+										<button type="button" class="btn btn-secondary btn-sm" onclick="addAllStudentsFromUsers()">
+											Add All
+										</button>
+										<button type="button" class="btn btn-ghost btn-sm" onclick="deselectAllStudentsInPicker()">
+											Deselect All
+										</button>
+									</div>
+									<div class="text-muted small class-helper-text">
+										Students join via signup or are created in Settings → Users.
+									</div>
+								</div>
+							</div>
+
+							<!-- Panel 2: Class Roster Table -->
+							<div class="class-workspace-card class-roster-card">
+								<div class="card-section-header roster-header-wrap">
+									<div class="card-section-title">
+										<span class="step-badge">2</span>
+										<h3>Class Roster</h3>
+										<span class="roster-summary-badge" id="assignClassRosterSummary">0 student(s)</span>
+									</div>
+									<div class="roster-actions-group">
+										<button type="button" class="btn btn-sm btn-outline" onclick="exportStudents()" title="Export roster as CSV">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+											<span>Export CSV</span>
+										</button>
+										<button type="button" class="btn btn-sm btn-outline" onclick="importStudents()" title="Import roster from CSV">
+											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+											<span>Import CSV</span>
+										</button>
+									</div>
+								</div>
+
+								<!-- Roster filter bar -->
+								<div class="roster-toolbar-bar">
+									<div class="search-input-wrap">
+										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+										<input type="text" id="studentRosterSearch" class="form-control" placeholder="Search roster by name or student #..." onkeyup="filterStudentRosterTable()" />
+									</div>
+									<select id="studentRosterStatusFilter" class="form-control roster-status-select" onchange="filterStudentRosterTable()">
+										<option value="all">All Status</option>
+										<option value="active">Active</option>
+										<option value="disabled">Disabled</option>
+										<option value="no-account">No account yet</option>
+									</select>
+								</div>
+
+								<!-- Full Roster Table -->
+								<div class="table-container roster-table-container">
+									<table class="data-table roster-table" id="studentRosterTable">
+										<thead>
+											<tr>
+												<th>Student #</th>
+												<th>Name</th>
+												<th>Account</th>
+												<th>Status</th>
+												<th style="width: 110px">Actions</th>
+											</tr>
+										</thead>
+										<tbody id="selectedStudentsList"></tbody>
+									</table>
+									<div id="rosterEmptyState" class="empty-state hidden">
+										No students found matching your criteria.
+									</div>
+								</div>
+
+								<!-- Footer Save Bar inside Roster card -->
+								<div class="roster-save-bar">
+									<button type="button" class="btn btn-secondary" onclick="closeAssignClassStudents()">
+										Back to Classes
+									</button>
+									<button type="button" class="btn btn-primary" id="saveAssignClassStudentsBtn" onclick="saveAssignClassStudents()">
+										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+										<span>Save Roster</span>
+									</button>
+								</div>
+							</div>
 						</div>
 					</div>
 				</section>
@@ -7722,243 +8298,8 @@
 		     each table's Assign action opens a focused modal below.
 		     ═══════════════════════════════════════════════════════════════ -->
 
-		<!-- Assign Questions to Category -->
-		<div id="assignCategoryQuestionsModal" class="modal">
-			<div class="modal-content assign-modal">
-				<div class="modal-header">
-					<div class="modal-header-with-icon">
-						<div class="modal-header-icon icon-amber">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="22"
-								height="22"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path d="M9 11l3 3L22 4"></path>
-								<path
-									d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
-								></path>
-							</svg>
-						</div>
-						<div class="modal-header-text">
-							<h2 id="assignCategoryQuestionsTitle">Assign Questions</h2>
-							<p class="modal-header-subtitle">
-								Click questions to move them between the columns
-							</p>
-						</div>
-					</div>
-					<span class="close" onclick="closeAssignCategoryQuestions()">&times;</span>
-				</div>
-				<div class="modal-body">
-					<form id="assignCategoryQuestionsForm" class="modal-form-layout" onsubmit="return false;">
-						<div class="category-filter-section">
-							<div class="filter-toolbar">
-								<div class="filter-toolbar-group filter-toolbar-main">
-									<div class="filter-search-wrap">
-									<span class="filter-field-icon">
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-									</span>
-									<input
-										type="text"
-										id="questionSearchCategory"
-										class="filter-search-input"
-										placeholder="Search questions..."
-										onkeyup="loadAvailableQuestionsForCategory()"
-									/>
-									</div>
-									<button
-										type="button"
-										class="filters-toggle-btn"
-										onclick="toggleAssignFilters(this)"
-										aria-expanded="false"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-										<span class="filters-toggle-label">Show filters</span>
-										<span class="filters-count-badge hidden">0</span>
-										<svg class="filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-									</button>
-									<select
-										id="categoryFilterCategory"
-										class="filter-select"
-										onchange="loadAvailableQuestionsForCategory()"
-									>
-										<option value="">All Categories</option>
-									</select>
-									<select
-										id="questionFilterCategory"
-										class="filter-select"
-										onchange="loadAvailableQuestionsForCategory()"
-									>
-										<option value="all">All Types</option>
-										<option value="multiple-choice">Multiple Choice</option>
-										<option value="true-false">True / False</option>
-										<option value="draggable">Drag &amp; Drop</option>
-										<option value="odd-one-out">Odd One Out</option>
-										<option value="matching-pairs">Matching Pairs</option>
-										<option value="fill-blank">Fill in Blank</option>
-										<option value="code">Code</option>
-									</select>
-									<select
-										id="difficultyFilterCategory"
-										class="filter-select"
-										onchange="loadAvailableQuestionsForCategory()"
-									>
-										<option value="">All Difficulty</option>
-										<option value="easy">Easy</option>
-										<option value="medium">Medium</option>
-										<option value="hard">Hard</option>
-									</select>
-									<div class="points-interval-filter">
-										<input type="number" id="pointFilterCategoryMin" placeholder="Min pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
-										<span class="points-interval-sep">–</span>
-										<input type="number" id="pointFilterCategoryMax" placeholder="Max pts" min="0" onchange="loadAvailableQuestionsForCategory()" onkeyup="debounceFilterCategoryQuestions()" />
-									</div>
-								</div>
-								<div class="filter-toolbar-group filter-toolbar-quick">
-									<div class="quick-filters">
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="setQuickFilterForCategory('recent')"
-											title="Recently Added"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<circle cx="12" cy="12" r="10"></circle>
-												<polyline points="12 6 12 12 16 14"></polyline>
-											</svg>
-											Recent
-										</button>
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="setQuickFilterForCategory('hard')"
-											title="Hard Questions"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<path
-													d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-												></path>
-											</svg>
-											Hard
-										</button>
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="setQuickFilterForCategory('unused')"
-											title="Unused Questions"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<circle cx="12" cy="12" r="10"></circle>
-												<line x1="12" y1="8" x2="12" y2="12"></line>
-												<line x1="12" y1="16" x2="12.01" y2="16"></line>
-											</svg>
-											Unused
-										</button>
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="clearAllCategoryFilters()"
-											title="Clear All Filters"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<line x1="18" y1="6" x2="6" y2="18"></line>
-												<line x1="6" y1="6" x2="18" y2="18"></line>
-											</svg>
-											Clear All
-										</button>
-									</div>
-									<button
-										type="button"
-										class="btn btn-ghost filter-undo-btn"
-										onclick="undoCategorySelections()"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
-										Undo
-									</button>
-								</div>
-							</div>
-						</div>
-						<div class="question-selection-container">
-							<div class="available-questions">
-								<h4>
-									Available Questions (<span
-										id="availableQuestionCountCategory"
-										>0</span
-									>)
-								</h4>
-								<div
-									id="availableQuestionsCategory"
-									class="question-list-scroll"
-								></div>
-							</div>
-							<div class="selected-questions">
-								<h4>
-									Selected Questions (<span id="selectedQuestionCountCategory"
-										>0</span
-									>)
-									<span class="selection-points-badge"><span id="selectedQuestionPointsCategory">0</span> pts</span>
-								</h4>
-								<div
-									id="selectedQuestionsListCategory"
-									class="question-list-scroll"
-								></div>
-							</div>
-						</div>
-					</form>
-				</div>
-				<div class="modal-footer modal-footer--unified" role="group" aria-label="Assignment actions">
-					<button
-						type="button"
-						class="btn btn-secondary"
-						onclick="closeAssignCategoryQuestions()"
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						class="btn btn-primary"
-						onclick="saveAssignCategoryQuestions()"
-					>
-						Save Assignment
-					</button>
-		</div>
-	</div>
-</div>
+		<!-- Assign Questions to Category (Refactored to full-page #categoryAssignQuestionsPane in Subjects tab) -->
+		<div id="assignCategoryQuestionsModal" class="modal stub-modal" style="display:none;" aria-hidden="true"></div>
 
 	<!-- Add Question to Category (3-tab modal) -->
 	<div id="addQuestionToCategoryModal" class="modal">
@@ -8077,240 +8418,8 @@
 		</div>
 	</div>
 
-	<!-- Assign Questions to Exam -->
-		<div id="assignExamQuestionsModal" class="modal">
-			<div class="modal-content assign-modal">
-				<div class="modal-header">
-					<div class="modal-header-with-icon">
-						<div class="modal-header-icon icon-green">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="22"
-								height="22"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path d="M9 11l3 3L22 4"></path>
-								<path
-									d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"
-								></path>
-							</svg>
-						</div>
-						<div class="modal-header-text">
-							<h2 id="assignExamQuestionsTitle">Assign Questions</h2>
-							<p class="modal-header-subtitle">
-								Click questions to move them between the columns
-							</p>
-						</div>
-					</div>
-					<span class="close" onclick="closeAssignExamQuestions()">&times;</span>
-				</div>
-				<div class="modal-body">
-					<form id="assignExamQuestionsForm" class="modal-form-layout" onsubmit="return false;">
-						<div class="exam-filters-container">
-							<div class="filter-toolbar">
-								<div class="filter-toolbar-group filter-toolbar-main">
-									<div class="filter-search-wrap">
-									<span class="filter-field-icon">
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-									</span>
-									<input
-										type="text"
-										id="examQuestionSearch"
-										class="filter-search-input"
-										placeholder="Search questions..."
-										onkeyup="debounceFilterExamQuestions()"
-									/>
-									</div>
-									<button
-										type="button"
-										class="filters-toggle-btn"
-										onclick="toggleAssignFilters(this)"
-										aria-expanded="false"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-										<span class="filters-toggle-label">Show filters</span>
-										<span class="filters-count-badge hidden">0</span>
-										<svg class="filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-									</button>
-									<select
-										id="categoryFilterExam"
-										class="filter-select"
-										onchange="filterExamQuestionsEnhanced()"
-									>
-										<option value="">All Categories</option>
-									</select>
-									<select
-										id="typeFilterExam"
-										class="filter-select"
-										onchange="filterExamQuestionsEnhanced()"
-									>
-										<option value="">All Types</option>
-										<option value="multiple-choice">Multiple Choice</option>
-										<option value="true-false">True / False</option>
-										<option value="draggable">Drag &amp; Drop</option>
-										<option value="odd-one-out">Odd One Out</option>
-										<option value="matching-pairs">Matching Pairs</option>
-										<option value="fill-blank">Fill in Blank</option>
-										<option value="code">Code</option>
-									</select>
-									<select
-										id="difficultyFilterExam"
-										class="filter-select"
-										onchange="filterExamQuestionsEnhanced()"
-									>
-										<option value="">All Difficulty</option>
-										<option value="easy">Easy</option>
-										<option value="medium">Medium</option>
-										<option value="hard">Hard</option>
-									</select>
-									<div class="points-interval-filter">
-										<input type="number" id="pointFilterExamMin" placeholder="Min pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
-										<span class="points-interval-sep">–</span>
-										<input type="number" id="pointFilterExamMax" placeholder="Max pts" min="0" onchange="filterExamQuestionsEnhanced()" onkeyup="debounceFilterExamQuestions()" />
-									</div>
-								</div>
-								<div class="filter-toolbar-group filter-toolbar-quick">
-									<div class="quick-filters">
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="applyQuickFilter('recent')"
-											title="Recently Added"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<circle cx="12" cy="12" r="10"></circle>
-												<polyline points="12 6 12 12 16 14"></polyline>
-											</svg>
-											Recent
-										</button>
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="applyQuickFilter('hard')"
-											title="Hard Questions"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<path
-													d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-												></path>
-											</svg>
-											Hard
-										</button>
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="applyQuickFilter('images')"
-											title="With Images"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<rect
-													x="3"
-													y="3"
-													width="18"
-													height="18"
-													rx="2"
-													ry="2"
-												></rect>
-												<circle cx="8.5" cy="8.5" r="1.5"></circle>
-												<polyline points="21 15 16 10 5 21"></polyline>
-											</svg>
-											Images
-										</button>
-										<button
-											type="button"
-											class="quick-filter-btn"
-											onclick="clearAllFiltersAndSelections()"
-											title="Clear All Filters and Selections"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<line x1="18" y1="6" x2="6" y2="18"></line>
-												<line x1="6" y1="6" x2="18" y2="18"></line>
-											</svg>
-											Clear All
-										</button>
-									</div>
-									<button
-										type="button"
-										class="btn btn-ghost filter-undo-btn"
-										onclick="undoQuestionSelections()"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
-										Undo
-									</button>
-									</div>
-								</div>
-							</div>
-							<div class="question-selection-container">
-								<div class="question-column">
-									<h4>Available Questions</h4>
-								<div
-									id="availableQuestions"
-									class="question-list-scroll"
-								></div>
-							</div>
-							<div class="question-column">
-								<h4>Selected Questions <span class="selection-points-badge"><span id="selectedQuestionPointsBadge">0</span> pts</span></h4>
-								<div
-									id="selectedQuestionsList"
-									class="question-list-scroll"
-								></div>
-							</div>
-						</div>
-					</form>
-				</div>
-				<div class="modal-footer modal-footer--unified">
-					<button
-						type="button"
-						class="btn btn-secondary"
-						onclick="closeAssignExamQuestions()"
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						class="btn btn-primary"
-						onclick="saveAssignExamQuestions()"
-					>
-						Save Assignment
-					</button>
-				</div>
-			</div>
-		</div>
+	<!-- Assign Questions to Exam (Refactored to full-page #examAssignQuestionsPane in Exams tab) -->
+	<div id="assignExamQuestionsModal" class="modal stub-modal" style="display:none;" aria-hidden="true"></div>
 
 		<!-- Assign Exam to Classes -->
 		<div id="assignExamClassesModal" class="modal">
@@ -8374,218 +8483,8 @@
 			</div>
 		</div>
 
-		<!-- Assign Students to Class -->
-		<div id="assignClassStudentsModal" class="modal">
-			<div class="modal-content assign-students-modal assign-modal">
-				<div class="modal-header">
-					<div class="modal-header-with-icon">
-						<div class="modal-header-icon icon-blue">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="22"
-								height="22"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-								<circle cx="9" cy="7" r="4"></circle>
-								<path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-							</svg>
-						</div>
-						<div class="modal-header-text">
-							<h2 id="assignClassStudentsTitle">Assign Students</h2>
-							<p class="modal-header-subtitle">
-								Manage this class's roster — accounts and passwords live in Settings → Users
-							</p>
-						</div>
-					</div>
-					<span class="close" onclick="closeAssignClassStudents()">&times;</span>
-				</div>
-				<div class="modal-body">
-					<form id="assignClassStudentsForm" onsubmit="return false;">
-						<!-- Step 1: pick students from user accounts -->
-						<div class="assign-step">
-							<div class="assign-step-title">
-								<span class="assign-step-num">1</span>
-								<span>Add students</span>
-							</div>
-							<div class="class-user-picker-row">
-								<div class="class-filter-row">
-									<label for="studentClassFilter">Filter by Class</label>
-									<select
-										id="studentClassFilter"
-										class="form-control"
-										onchange="onStudentClassFilterChange()"
-									>
-										<option value="all">All Classes</option>
-									</select>
-								</div>
-								<input
-									type="text"
-									id="studentPickerSearch"
-									class="filter-search-input"
-									placeholder="Search students by name or number..."
-									oninput="populateStudentUserPicker()"
-								/>
-								<div class="bulk-student-controls">
-									<select id="studentUserPicker" class="form-control" multiple size="6">
-										<option value="" disabled>No student users available</option>
-									</select>
-									<div class="bulk-student-actions">
-										<button
-											type="button"
-											class="btn btn-primary btn-sm"
-											onclick="addStudentFromUserPicker()"
-											title="Add the highlighted students to the roster below"
-										>
-											Add Selected
-										</button>
-										<button
-											type="button"
-											class="btn btn-secondary btn-sm"
-											onclick="addAllStudentsFromUsers()"
-										>
-											Add All
-										</button>
-										<button
-											type="button"
-											class="btn btn-secondary btn-sm"
-											onclick="deselectAllStudentsInPicker()"
-										>
-											Deselect All
-										</button>
-									</div>
-								</div>
-								<div id="studentPickerCount" class="text-muted"></div>
-							</div>
-						</div>
-
-						<!-- Step 2: review the class roster -->
-						<div class="assign-step">
-							<div class="assign-step-title">
-								<span class="assign-step-num">2</span>
-								<span>Class roster</span>
-								<span class="roster-summary" id="assignClassRosterSummary">0 student(s)</span>
-								<div class="class-section-actions">
-									<button
-										type="button"
-										class="btn btn-sm btn-secondary"
-										onclick="exportStudents()"
-										title="Export roster as CSV"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-											<polyline points="17 8 12 3 7 8"></polyline>
-											<line x1="12" y1="3" x2="12" y2="15"></line>
-										</svg>
-										Export
-									</button>
-									<button
-										type="button"
-										class="btn btn-sm btn-secondary"
-										onclick="importStudents()"
-										title="Import roster from CSV"
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="16"
-											height="16"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-										>
-											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-											<polyline points="7 10 12 15 17 10"></polyline>
-											<line x1="12" y1="15" x2="12" y2="3"></line>
-										</svg>
-										Import
-									</button>
-								</div>
-							</div>
-
-							<!-- Roster toolbar: search + status -->
-							<div class="roster-toolbar">
-								<div class="filter-search-wrap">
-								<span class="filter-field-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-								</span>
-								<input
-									type="text"
-									id="studentRosterSearch"
-									class="filter-search-input"
-									placeholder="Search roster by name or number..."
-									onkeyup="filterStudentRosterTable()"
-								/>
-								</div>
-								<select
-									id="studentRosterStatusFilter"
-									class="filter-select"
-									onchange="filterStudentRosterTable()"
-								>
-									<option value="all">All Status</option>
-									<option value="active">Active</option>
-									<option value="disabled">Disabled</option>
-									<option value="no-account">No account yet</option>
-								</select>
-							</div>
-
-							<!-- Full roster table -->
-							<div class="roster-table-wrapper">
-								<table class="data-table roster-table" id="studentRosterTable">
-									<thead>
-										<tr>
-											<th>Student #</th>
-											<th>Name</th>
-											<th>Account</th>
-											<th>Status</th>
-											<th>Actions</th>
-										</tr>
-									</thead>
-									<tbody id="selectedStudentsList"></tbody>
-								</table>
-								<div id="rosterEmptyState" class="empty-state hidden">
-									No students match your search.
-								</div>
-							</div>
-						</div>
-
-						<div class="text-muted class-helper-text">
-							Students join via signup or are created in Settings → Users. Passwords and
-							credentials are managed there, never in this roster.
-						</div>
-					</form>
-				</div>
-				<div class="modal-footer modal-footer--unified">
-					<button
-						type="button"
-						class="btn btn-secondary"
-						onclick="closeAssignClassStudents()"
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						class="btn btn-primary"
-						id="saveAssignClassStudentsBtn"
-						onclick="saveAssignClassStudents()"
-					>
-						Save Roster
-					</button>
-				</div>
-			</div>
-		</div>
+		<!-- Assign Students to Class (Refactored to full-page #classStudentsPane in Classes tab) -->
+		<div id="assignClassStudentsModal" class="modal stub-modal" style="display:none;" aria-hidden="true"></div>
 
 		<!-- Assign Exams to Class -->
 		<div id="assignClassExamsModal" class="modal">

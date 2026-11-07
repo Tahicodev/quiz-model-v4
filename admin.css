@@ -6606,3 +6606,464 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	background: #fff;
 	padding: 8px 10px;
 }
+
+/* ==========================================================================
+   DEDICATED FULL-PAGE VIEWS (Refactored from narrow modals)
+   - Class Students Page
+   - Exam Analysis & Sessions Page
+   - Exam Assign Questions Page
+   - Category Assign Questions Page
+   ========================================================================== */
+
+/* ── Container Transitions & General Layout ─────────────────────────────── */
+.class-students-pane,
+.exam-analysis-pane,
+.exam-assign-questions-pane,
+.category-assign-questions-pane {
+	width: 100%;
+	display: block;
+	animation: pagePaneFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.class-students-pane.hidden,
+.exam-analysis-pane.hidden,
+.exam-assign-questions-pane.hidden,
+.category-assign-questions-pane.hidden {
+	display: none !important;
+}
+
+@keyframes pagePaneFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* ── Hero Cards ─────────────────────────────────────────────────────────── */
+.page-hero-card,
+.class-hero-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	flex-wrap: wrap;
+	padding: 18px 22px;
+	margin-bottom: 20px;
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+	border-radius: 16px;
+	background:
+		linear-gradient(135deg, rgba(99, 102, 241, 0.05), transparent 45%),
+		var(--bg-surface, #ffffff);
+	box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.page-hero-main,
+.class-hero-main {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	min-width: 0;
+}
+
+.page-hero-icon,
+.class-hero-icon {
+	flex: none;
+	width: 52px;
+	height: 52px;
+	border-radius: 14px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.page-hero-icon.icon-blue,
+.class-hero-icon.icon-blue {
+	background: rgba(59, 130, 246, 0.12);
+	color: #2563eb;
+}
+
+.page-hero-icon.icon-green {
+	background: rgba(16, 185, 129, 0.12);
+	color: #059669;
+}
+
+.page-hero-icon.icon-violet {
+	background: rgba(139, 92, 246, 0.14);
+	color: #7c3aed;
+}
+
+.page-hero-icon.icon-amber {
+	background: rgba(245, 158, 11, 0.14);
+	color: #d97706;
+}
+
+.page-hero-title,
+.class-hero-title {
+	margin: 0;
+	font-size: 1.35rem;
+	font-weight: 700;
+	color: var(--text-primary, #0f172a);
+	letter-spacing: -0.01em;
+}
+
+.page-hero-subtitle,
+.class-hero-subtitle {
+	margin: 3px 0 0;
+	font-size: 0.88rem;
+	color: var(--text-secondary, #64748b);
+}
+
+.class-hero-kpis {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.hero-kpi-item {
+	padding: 8px 16px;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.22));
+	border-radius: 12px;
+	background: var(--bg-surface-alt, #f8fafc);
+	text-align: center;
+	min-width: 90px;
+}
+
+.hero-kpi-num {
+	display: block;
+	font-size: 1.28rem;
+	font-weight: 800;
+	color: var(--primary-color, #4338ca);
+	line-height: 1.15;
+}
+
+.hero-kpi-label {
+	display: block;
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted, #64748b);
+	margin-top: 2px;
+}
+
+/* ── Class Header Actions in Breadcrumb Bar ─────────────────────────────── */
+.class-header-actions-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.class-name-link {
+	color: var(--primary-color, #4f46e5);
+	font-weight: 700;
+	text-decoration: none;
+	cursor: pointer;
+	transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.class-name-link:hover {
+	color: var(--primary-dark, #3730a3);
+	text-decoration: underline;
+}
+
+.clickable-class-row {
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+.clickable-class-row:hover {
+	background-color: var(--bg-surface-hover, rgba(99, 102, 241, 0.04)) !important;
+}
+
+/* ── Class Students Workspace ───────────────────────────────────────────── */
+.class-students-workspace {
+	display: grid;
+	grid-template-columns: 380px 1fr;
+	gap: 20px;
+	align-items: start;
+	margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+	.class-students-workspace {
+		grid-template-columns: 1fr;
+	}
+}
+
+.class-workspace-card {
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.1));
+	border-radius: 16px;
+	background: var(--bg-surface, #ffffff);
+	padding: 20px;
+	box-shadow: 0 4px 16px rgba(15, 23, 42, 0.035);
+}
+
+.card-section-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+}
+
+.card-section-title {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.card-section-title h3 {
+	margin: 0;
+	font-size: 1.05rem;
+	font-weight: 700;
+	color: var(--text-primary, #0f172a);
+}
+
+.step-badge {
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	background: var(--primary-color, #4f46e5);
+	color: #fff;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.76rem;
+	font-weight: 800;
+}
+
+.roster-summary-badge {
+	display: inline-block;
+	padding: 3px 9px;
+	border-radius: 999px;
+	background: rgba(99, 102, 241, 0.1);
+	color: var(--primary-color, #4338ca);
+	font-size: 0.8rem;
+	font-weight: 700;
+}
+
+.picker-filter-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 14px;
+}
+
+.picker-filter-grid .filter-field label {
+	display: block;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--text-secondary, #475569);
+	margin-bottom: 5px;
+}
+
+.student-picker-select {
+	height: 320px !important;
+	width: 100%;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.3));
+	border-radius: 12px;
+	padding: 8px;
+	font-size: 0.86rem;
+	background: var(--bg-surface-alt, #f8fafc);
+}
+
+.student-picker-select option {
+	padding: 8px 12px;
+	border-radius: 8px;
+	margin-bottom: 4px;
+	cursor: pointer;
+}
+
+.bulk-student-actions-bar {
+	display: flex;
+	gap: 8px;
+	margin-top: 12px;
+	flex-wrap: wrap;
+}
+
+.roster-header-wrap {
+	flex-wrap: wrap;
+}
+
+.roster-actions-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.roster-toolbar-bar {
+	display: flex;
+	gap: 12px;
+	margin-bottom: 16px;
+	align-items: center;
+}
+
+.roster-toolbar-bar .search-input-wrap {
+	flex: 1;
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+
+.roster-toolbar-bar .search-input-wrap svg {
+	position: absolute;
+	left: 12px;
+	color: var(--text-muted, #94a3b8);
+	pointer-events: none;
+}
+
+.roster-toolbar-bar .search-input-wrap input {
+	width: 100%;
+	padding-left: 36px;
+}
+
+.roster-status-select {
+	min-width: 150px;
+}
+
+.roster-table-container {
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+	border-radius: 12px;
+	overflow: hidden;
+	max-height: 520px;
+	overflow-y: auto;
+}
+
+.roster-table {
+	width: 100%;
+	margin: 0;
+}
+
+.roster-save-bar {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+	margin-top: 18px;
+	padding-top: 16px;
+	border-top: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+}
+
+/* ── Full-Page Question Selection Workspace ─────────────────────────────── */
+.assign-page-form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	width: 100%;
+}
+
+.assign-page-selection.question-selection-container {
+	display: grid !important;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+	gap: 20px !important;
+	height: calc(100vh - 380px) !important;
+	min-height: 520px !important;
+	margin: 0 !important;
+}
+
+@media (max-width: 900px) {
+	.assign-page-selection.question-selection-container {
+		grid-template-columns: minmax(0, 1fr) !important;
+		height: auto !important;
+	}
+}
+
+.assign-page-selection .available-questions,
+.assign-page-selection .selected-questions,
+.assign-page-selection .question-column {
+	display: flex !important;
+	flex-direction: column !important;
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.1)) !important;
+	border-radius: 16px !important;
+	background: var(--bg-surface, #ffffff) !important;
+	overflow: hidden !important;
+	box-shadow: 0 4px 16px rgba(15, 23, 42, 0.035) !important;
+}
+
+.assign-page-selection h4 {
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+	margin: 0 !important;
+	padding: 14px 18px !important;
+	background: var(--bg-surface-alt, #f8fafc) !important;
+	border-bottom: 1px solid var(--border-color, rgba(15, 23, 42, 0.08)) !important;
+	font-size: 0.96rem !important;
+	font-weight: 700 !important;
+	color: var(--text-primary, #0f172a) !important;
+}
+
+.assign-page-selection .question-list-scroll {
+	flex: 1 1 auto !important;
+	overflow-y: auto !important;
+	padding: 16px !important;
+	min-height: 0 !important;
+	max-height: none !important;
+}
+
+.assign-page-footer-bar {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 14px 20px;
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.1));
+	border-radius: 14px;
+	background: var(--bg-surface, #ffffff);
+	box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
+}
+
+/* ── Full-Page Exam Analysis & Sessions ─────────────────────────────────── */
+.eas-tabs-bar {
+	margin-bottom: 16px;
+}
+
+.eas-tabs-bar .eas-tabs {
+	display: flex;
+	gap: 6px;
+	border-bottom: 2px solid var(--border-color, rgba(15, 23, 42, 0.08));
+	padding-bottom: 0;
+}
+
+.eas-tabs-bar .eas-tab-btn {
+	padding: 10px 18px;
+	font-size: 0.92rem;
+	font-weight: 700;
+	border: none;
+	background: transparent;
+	color: var(--text-secondary, #64748b);
+	border-bottom: 3px solid transparent;
+	margin-bottom: -2px;
+	cursor: pointer;
+	transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.eas-tabs-bar .eas-tab-btn:hover {
+	color: var(--primary-color, #4f46e5);
+}
+
+.eas-tabs-bar .eas-tab-btn.active {
+	color: var(--primary-color, #4f46e5);
+	border-bottom-color: var(--primary-color, #4f46e5);
+}
+
+.eas-page-body {
+	width: 100%;
+}
+
+.eas-page-body .eas-panel {
+	display: none;
+}
+
+.eas-page-body .eas-panel.active {
+	display: block;
+}
+

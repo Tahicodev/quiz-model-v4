@@ -514,6 +514,25 @@ function renderExamAnalysisAccuracyTab(payload) {
 		</div>`;
 }
 
+function closeExamAnalysisView() {
+	const analysisPane = document.getElementById('examAnalysisPane');
+	const listPane = document.getElementById('examListPane');
+	const assignPane = document.getElementById('examAssignQuestionsPane');
+
+	if (analysisPane) analysisPane.classList.add('hidden');
+	if (assignPane) assignPane.classList.add('hidden');
+	if (listPane) listPane.classList.remove('hidden');
+
+	document.removeEventListener('keydown', onExamAnalysisKeyDown);
+	window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function onExamAnalysisKeyDown(e) {
+	if (e.key === 'Escape') {
+		closeExamAnalysisView();
+	}
+}
+
 function openExamAnalysis(examId) {
 	const exams = getExamAnalysisRows('exams') || [];
 	const exam = exams.find((e) => String(e.id) === String(examId));
@@ -523,7 +542,140 @@ function openExamAnalysis(examId) {
 	}
 
 	const payload = buildExamAnalysis(exam);
+	const analysisPane = document.getElementById('examAnalysisPane');
+	const listPane = document.getElementById('examListPane');
+	const assignPane = document.getElementById('examAssignQuestionsPane');
 
+	// If the dedicated full-page pane is available, use it!
+	if (analysisPane) {
+		// Ensure Exams tab is active
+		if (typeof window.openTab === 'function') {
+			const examsTab = document.getElementById('exams');
+			if (examsTab && !examsTab.classList.contains('active')) {
+				window.openTab(null, 'exams');
+			}
+		}
+
+		if (listPane) listPane.classList.add('hidden');
+		if (assignPane) assignPane.classList.add('hidden');
+		analysisPane.classList.remove('hidden');
+
+		const examTitle = exam.name || exam.title || 'Exam';
+		const totalSessions = payload.students ? payload.students.length : 0;
+		const totalQuestions = payload.questions ? payload.questions.length : 0;
+		const avgScore = totalSessions > 0
+			? Math.round(payload.students.reduce((acc, s) => acc + (s.score || 0), 0) / totalSessions)
+			: 0;
+
+		analysisPane.innerHTML = `
+			<div class="structure-pane-header">
+				<nav class="structure-breadcrumb" aria-label="Exam analysis location">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+					<span>Exams › ${examAnalysisEscapeHtml(examTitle)} › Analysis &amp; Sessions</span>
+				</nav>
+				<div class="structure-header-actions" role="group" aria-label="Exam analysis actions">
+					<button
+						type="button"
+						class="btn btn-sm structure-back-btn"
+						onclick="closeExamAnalysisView()"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+						<span>Back to exams</span>
+					</button>
+					<button
+						type="button"
+						class="btn btn-sm btn-outline"
+						onclick="openAssignExamQuestions('${exam.id}')"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+						<span>Assign Questions</span>
+					</button>
+					<button
+						type="button"
+						class="btn btn-sm btn-outline"
+						onclick="editExam('${exam.id}')"
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+						<span>Edit Exam</span>
+					</button>
+				</div>
+			</div>
+
+			<div class="page-hero-card">
+				<div class="page-hero-main">
+					<div class="page-hero-icon icon-violet">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<line x1="12" y1="20" x2="12" y2="10"></line>
+							<line x1="18" y1="20" x2="18" y2="4"></line>
+							<line x1="6" y1="20" x2="6" y2="16"></line>
+						</svg>
+					</div>
+					<div>
+						<h2 class="page-hero-title">Exam Analysis &amp; Sessions</h2>
+						<p class="page-hero-subtitle">${examAnalysisEscapeHtml(examTitle)}</p>
+					</div>
+				</div>
+				<div class="class-hero-kpis">
+					<div class="hero-kpi-item">
+						<span class="hero-kpi-num">${totalQuestions}</span>
+						<span class="hero-kpi-label">Questions</span>
+					</div>
+					<div class="hero-kpi-item">
+						<span class="hero-kpi-num">${totalSessions}</span>
+						<span class="hero-kpi-label">Student Sessions</span>
+					</div>
+					<div class="hero-kpi-item">
+						<span class="hero-kpi-num">${avgScore}%</span>
+						<span class="hero-kpi-label">Average Score</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="eas-tabs-bar">
+				<div class="eas-tabs">
+					<button type="button" class="eas-tab-btn active" data-eas-tab="accuracy">Per-question accuracy</button>
+					<button type="button" class="eas-tab-btn" data-eas-tab="sessions">Students &amp; Sessions</button>
+				</div>
+			</div>
+
+			<div class="eas-page-body">
+				<div class="eas-panel active" data-eas-panel="accuracy">${renderExamAnalysisAccuracyTab(payload)}</div>
+				<div class="eas-panel" data-eas-panel="sessions">${renderExamAnalysisStudentsTab(payload)}</div>
+			</div>
+		`;
+
+		document.addEventListener('keydown', onExamAnalysisKeyDown);
+
+		analysisPane.querySelectorAll('.eas-tab-btn').forEach((tab) => {
+			tab.addEventListener('click', () => {
+				analysisPane.querySelectorAll('.eas-tab-btn').forEach((t) =>
+					t.classList.toggle('active', t === tab),
+				);
+				const name = tab.getAttribute('data-eas-tab');
+				analysisPane.querySelectorAll('.eas-panel').forEach((panel) =>
+					panel.classList.toggle(
+						'active',
+						panel.getAttribute('data-eas-panel') === name,
+					),
+				);
+			});
+		});
+
+		analysisPane.querySelectorAll('.eas-q-row').forEach((row) => {
+			row.addEventListener('click', () => {
+				const idx = row.getAttribute('data-eas-toggle');
+				const detail = analysisPane.querySelector(`.eas-detail-row[data-eas-detail="${idx}"]`);
+				if (!detail) return;
+				const hidden = detail.style.display === 'none';
+				detail.style.display = hidden ? '' : 'none';
+			});
+		});
+
+		window.scrollTo({ top: 0, behavior: 'smooth' });
+		return;
+	}
+
+	// Legacy fallback modal if pane doesn't exist
 	const modal = document.createElement('div');
 	modal.className = 'exam-analysis-modal';
 	modal.setAttribute('role', 'dialog');
@@ -614,3 +766,4 @@ function openExamAnalysis(examId) {
 }
 
 window.openExamAnalysis = openExamAnalysis;
+window.closeExamAnalysisView = closeExamAnalysisView;

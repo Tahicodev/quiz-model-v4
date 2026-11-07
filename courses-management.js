@@ -484,14 +484,27 @@
 		const listPane = document.getElementById('courseListPane');
 		const structurePane = document.getElementById('structurePane');
 		const detailPane = document.getElementById('courseDetailPane');
+		const assignPane = document.getElementById('categoryAssignQuestionsPane');
 		const detailOpen = workspaceView === 'detail';
-		if (listPane) listPane.classList.toggle('hidden', detailOpen || workspaceView !== 'courses');
-		if (structurePane) structurePane.classList.toggle('hidden', detailOpen || workspaceView === 'courses');
+		const assignOpen = workspaceView === 'assign';
+		if (listPane) listPane.classList.toggle('hidden', detailOpen || assignOpen || workspaceView !== 'courses');
+		if (structurePane) structurePane.classList.toggle('hidden', detailOpen || assignOpen || workspaceView === 'courses');
 		if (detailPane) {
 			detailPane.classList.toggle('hidden', !detailOpen);
 			if (!detailOpen) detailPane.innerHTML = '';
 		}
+		if (assignPane) assignPane.classList.toggle('hidden', !assignOpen);
 	}
+
+	window.openCategoryAssignWorkspaceView = function () {
+		workspaceView = 'assign';
+		renderWorkspacePanes();
+	};
+
+	window.closeCategoryAssignWorkspaceView = function () {
+		workspaceView = workspaceBranchRootId ? 'branch' : 'courses';
+		renderWorkspacePanes();
+	};
 
 	window.setSubjectsWorkspaceView = function (mode) {
 		if (mode !== 'courses' && mode !== 'categories') return;

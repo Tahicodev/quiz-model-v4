@@ -1000,24 +1000,66 @@ let assignClassStudentsId = null;
 
 function openAssignClassStudents(classId) {
 	loadClasses();
-	const modal = document.getElementById('assignClassStudentsModal');
-	if (!modal) {
-		showToast('Assign Students modal not found', 'error');
-		return;
-	}
-	const classData = classes.find((c) => c.id === classId);
+	const classData = classes.find((c) => String(c.id) === String(classId));
 	if (!classData) {
 		showToast('Class not found', 'error');
 		return;
 	}
 
 	assignClassStudentsId = classId;
+	currentClassId = classId;
 
+	// Ensure Classes tab is active
+	if (typeof window.openTab === 'function') {
+		const classesTab = document.getElementById('classes');
+		if (classesTab && !classesTab.classList.contains('active')) {
+			window.openTab(null, 'classes');
+		}
+	}
+
+	const listPane = document.getElementById('classListPane');
+	const studentsPane = document.getElementById('classStudentsPane');
+	if (listPane && studentsPane) {
+		listPane.classList.add('hidden');
+		studentsPane.classList.remove('hidden');
+	}
+
+	// Update Breadcrumb & Header Title
+	const breadcrumbText = document.getElementById('classStudentsBreadcrumbText');
+	if (breadcrumbText) {
+		breadcrumbText.textContent = `Classes › ${classData.name} › Students`;
+	}
 	const titleEl = document.getElementById('assignClassStudentsTitle');
-	if (titleEl) titleEl.textContent = `Assign Students — ${classData.name}`;
+	if (titleEl) {
+		titleEl.textContent = `Students Management — ${classData.name}`;
+	}
 
-	// Seed the roster with the class's current students (merged with student
-	// users that already point at this class — same as the legacy edit flow).
+	// Update Hero KPIs
+	const kpiStudents = document.getElementById('classKpiStudentsCount');
+	if (kpiStudents) {
+		kpiStudents.textContent = Array.isArray(classData.students) ? classData.students.length : 0;
+	}
+	const exams = (window.__DI_CONTAINER__?.repo?.getAll_sync
+		? window.__DI_CONTAINER__.repo.getAll_sync('exams')
+		: []) || [];
+	const kpiExams = document.getElementById('classKpiExamsCount');
+	if (kpiExams) {
+		kpiExams.textContent = exams.filter((e) => Array.isArray(e.classes) && e.classes.includes(classId)).length;
+	}
+	const allUsers = (window.__DI_CONTAINER__?.repo?.getAll_sync
+		? window.__DI_CONTAINER__.repo.getAll_sync('users')
+		: []) || [];
+	const activeCount = allUsers.filter(
+		(u) => String(u.role || '').toLowerCase() === 'student' &&
+			String(u.classId || '') === String(classId) &&
+			!u.disabled,
+	).length;
+	const kpiActive = document.getElementById('classKpiActiveAccounts');
+	if (kpiActive) {
+		kpiActive.textContent = activeCount;
+	}
+
+	// Seed the roster with the class's current students
 	const studentsList = document.getElementById('selectedStudentsList');
 	if (studentsList) studentsList.innerHTML = '';
 	const mergedStudents = mergeStudentEntries(
@@ -1035,22 +1077,68 @@ function openAssignClassStudents(classId) {
 	if (rosterSearch) rosterSearch.value = '';
 	const rosterStatus = document.getElementById('studentRosterStatusFilter');
 	if (rosterStatus) rosterStatus.value = 'all';
+
 	populateStudentUserPicker();
 	renderStudentRosterTable();
 
-	if (typeof window.promoteAssignModal === 'function') {
-		window.promoteAssignModal(modal);
+	// Legacy fallback if modal exists instead of pane
+	const modal = document.getElementById('assignClassStudentsModal');
+	if (modal && !studentsPane) {
+		if (typeof window.promoteAssignModal === 'function') {
+			window.promoteAssignModal(modal);
+		}
+		openModalLike(modal, 'className');
 	}
-	openModalLike(modal, 'className');
+
+	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function closeAssignClassStudents() {
+	const listPane = document.getElementById('classListPane');
+	const studentsPane = document.getElementById('classStudentsPane');
+	if (listPane && studentsPane) {
+		studentsPane.classList.add('hidden');
+		listPane.classList.remove('hidden');
+	}
 	const modal = document.getElementById('assignClassStudentsModal');
-	if (modal) {
+	if (modal && typeof closeModalLike === 'function') {
 		closeModalLike(modal);
 	}
 	assignClassStudentsId = null;
+	updateClassList();
+	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+function openClassExamsAction() {
+	if (currentClassId) openAssignClassExams(currentClassId);
+}
+
+function openClassGamesAction() {
+	if (currentClassId && typeof window.openClassGamesModal === 'function') {
+		window.openClassGamesModal(currentClassId);
+	}
+}
+
+function openClassEditAction() {
+	if (currentClassId) editClass(currentClassId);
+}
+
+async function openClassDeleteAction() {
+	if (currentClassId) {
+		const targetId = currentClassId;
+		if (confirm('Are you sure you want to delete this class?')) {
+			const deleted = await deleteClass(targetId);
+			if (deleted !== false) {
+				closeAssignClassStudents();
+			}
+		}
+	}
+}
+
+window.openClassExamsAction = openClassExamsAction;
+window.openClassGamesAction = openClassGamesAction;
+window.openClassEditAction = openClassEditAction;
+window.openClassDeleteAction = openClassDeleteAction;
 
 async function saveAssignClassStudents() {
 	if (!assignClassStudentsId) return;
@@ -1646,47 +1734,14 @@ function updateClassList(classesList = classes) {
 	sortedClasses.forEach((cls) => {
 		const row = document.createElement('tr');
 		row.setAttribute('data-id', cls.id);
+		row.classList.add('clickable-class-row');
 
-		// Mobile click handler
+		// Click anywhere on the class row navigates directly to the Students page
 		row.addEventListener('click', (e) => {
-			// Only trigger on mobile
-			if (window.innerWidth > 768) return;
-
-			// Don't trigger if clicking action button directly
-			if (e.target.closest('button')) return;
-			if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
+			// Don't trigger if clicking action button, input or checkbox directly
+			if (e.target.closest('button, input, select, .checkbox-cell, a')) return;
 			e.stopPropagation();
-
-			// Open mobile action sheet
-			MobileActionSheet.open(`Class: ${cls.name}`, [
-				{
-					label: 'Assign Students',
-					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
-					onClick: () => openAssignClassStudents(cls.id),
-				},
-				{
-					label: 'Assign Exams',
-					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>',
-					onClick: () => openAssignClassExams(cls.id),
-				},
-				{
-					label: 'Add Game',
-					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="4"></rect><line x1="6" y1="10" x2="6" y2="14"></line><line x1="10" y1="10" x2="10" y2="14"></line><line x1="14" y1="10" x2="14" y2="14"></line><line x1="18" y1="10" x2="18" y2="14"></line></svg>',
-					onClick: () => openClassGamesModal(cls.id),
-				},
-				// Changed cls.className to cls.name
-				{
-					label: 'Edit Class',
-					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
-					onClick: () => editClass(cls.id),
-				},
-				{
-					label: 'Delete Class',
-					icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-					variant: 'danger',
-					onClick: () => deleteClass(cls.id),
-				},
-			]);
+			openAssignClassStudents(cls.id);
 		});
 
 		const studentCount = cls.students ? cls.students.length : 0;
@@ -1723,9 +1778,9 @@ function updateClassList(classesList = classes) {
                     data-id="${cls.id}"
                     onchange="toggleBulkRowSelection(this,'classes')">
             </td>
-            <td>${escapeHtml(cls.name)}</td>
+            <td><a href="javascript:void(0)" class="class-name-link" onclick="openAssignClassStudents('${cls.id}'); event.stopPropagation();" title="Manage students in ${escapeHtml(cls.name)}">${escapeHtml(cls.name)}</a></td>
             <td>${dateCreated}</td>
-            <td>${studentCount}</td>
+            <td><span class="badge badge-subtle">${studentCount} students</span></td>
             <td>${teacherCell}</td>
             <td>${examCount}</td>
             <td class="class-assigned-games-cell">${
@@ -1749,7 +1804,7 @@ function updateClassList(classesList = classes) {
                     </button>
                     <button class="exam-action-btn exam-assign-btn" onclick="openAssignClassStudents('${
 											cls.id
-										}')" title="Assign Students">
+										}')" title="Manage Students">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
                             <circle cx="9" cy="7" r="4"></circle>

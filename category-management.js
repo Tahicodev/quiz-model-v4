@@ -3231,17 +3231,11 @@ function promoteCategoryModal(modal) {
 let assignCategoryQuestionsId = null;
 
 function openAssignCategoryQuestions(categoryId) {
-	const modal = document.getElementById('assignCategoryQuestionsModal');
-	if (!modal) {
-		showToast('Assign Questions modal not found', 'error');
-		return;
-	}
-
 	// Resolve target category ('uncategorized' is a system pseudo-category)
 	const isUncategorized = categoryId === 'uncategorized';
 	const category = isUncategorized
 		? { id: 'uncategorized', name: 'Uncategorized' }
-		: categories.find((c) => c.id === categoryId);
+		: categories.find((c) => String(c.id) === String(categoryId));
 	if (!category) {
 		showToast('Category not found', 'error');
 		return;
@@ -3259,21 +3253,41 @@ function openAssignCategoryQuestions(categoryId) {
 
 	assignCategoryQuestionsId = categoryId;
 
-	const titleEl = document.getElementById('assignCategoryQuestionsTitle');
-	if (titleEl) titleEl.textContent = `Assign Questions \u2014 ${category.name}`;
+	// Ensure Subjects tab is active
+	if (typeof window.openTab === 'function') {
+		const subjectsTab = document.getElementById('subjects');
+		if (subjectsTab && !subjectsTab.classList.contains('active')) {
+			window.openTab(null, 'subjects');
+		}
+	}
 
-	// Reset any previous state, then show the modal. Selected questions are
-	// populated inside loadAvailableQuestionsForCategory from the questions'
-	// current category value.
+	const assignPane = document.getElementById('categoryAssignQuestionsPane');
+	if (assignPane && typeof window.openCategoryAssignWorkspaceView === 'function') {
+		window.openCategoryAssignWorkspaceView();
+		const breadcrumbText = document.getElementById('categoryAssignBreadcrumbText');
+		if (breadcrumbText) {
+			breadcrumbText.textContent = `Courses / Categories › ${category.name} › Assign Questions`;
+		}
+	}
+
+	const titleEl = document.getElementById('assignCategoryQuestionsTitle');
+	if (titleEl) titleEl.textContent = `Assign Questions — ${category.name}`;
+
+	// Reset any previous state, then populate questions.
 	selectedQuestionsForCategory = [];
 	const selectedContainer = document.getElementById(
 		'selectedQuestionsListCategory',
 	);
 	if (selectedContainer) selectedContainer.innerHTML = '';
 	resetAssignCategoryFilters();
-	resetAssignFiltersUI(modal);
 
-	openAssignModalLike(modal, 'questionSearchCategory');
+	const modal = document.getElementById('assignCategoryQuestionsModal');
+	resetAssignFiltersUI(assignPane || modal);
+
+	// Legacy modal fallback if pane is missing
+	if (!assignPane && modal) {
+		openAssignModalLike(modal, 'questionSearchCategory');
+	}
 
 	setTimeout(() => {
 		setupCategoryModalFilters();
@@ -3284,16 +3298,23 @@ function openAssignCategoryQuestions(categoryId) {
 		preloadCategorySelectionFromRepo();
 		updateCategoryQuestionCountsUI();
 	}, 100);
+
+	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function closeAssignCategoryQuestions() {
+	if (typeof window.closeCategoryAssignWorkspaceView === 'function') {
+		window.closeCategoryAssignWorkspaceView();
+	}
+
 	const modal = document.getElementById('assignCategoryQuestionsModal');
-	if (modal) {
+	if (modal && typeof closeAssignModalLike === 'function') {
 		closeAssignModalLike(modal);
 	}
 	assignCategoryQuestionsId = null;
 	selectedQuestionsForCategory = [];
 	availableQuestionsForCategory = [];
+	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 // ============================================
