@@ -2550,8 +2550,15 @@
 								</div>
 								<div class="question-selection-container assign-page-selection">
 									<div class="available-questions">
-										<h4>
-											Available Questions (<span id="availableQuestionCountCategory">0</span>)
+										<h4 class="question-column-header">
+											<span class="question-column-heading">
+												<span class="question-column-icon is-available" aria-hidden="true">
+													<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+												</span>
+												<span class="question-column-title">Available Questions</span>
+												<span class="question-column-count" id="availableQuestionCountCategory">0</span>
+											</span>
+											<span class="question-column-hint">Click a question to add it</span>
 										</h4>
 										<div
 											id="availableQuestionsCategory"
@@ -2559,8 +2566,14 @@
 										></div>
 									</div>
 									<div class="selected-questions">
-										<h4>
-											Selected Questions (<span id="selectedQuestionCountCategory">0</span>)
+										<h4 class="question-column-header">
+											<span class="question-column-heading">
+												<span class="question-column-icon is-selected" aria-hidden="true">
+													<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+												</span>
+												<span class="question-column-title">Selected Questions</span>
+												<span class="question-column-count" id="selectedQuestionCountCategory">0</span>
+											</span>
 											<span class="selection-points-badge"><span id="selectedQuestionPointsCategoryBadge">0</span> pts</span>
 										</h4>
 										<div
@@ -2891,15 +2904,30 @@
 							</div>
 							<div class="question-selection-container assign-page-selection">
 								<div class="question-column available-questions">
-									<h4>Available Questions (<span id="availableQuestionCount">0</span>)</h4>
+									<h4 class="question-column-header">
+										<span class="question-column-heading">
+											<span class="question-column-icon is-available" aria-hidden="true">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+											</span>
+											<span class="question-column-title">Available Questions</span>
+											<span class="question-column-count" id="availableQuestionCount">0</span>
+										</span>
+										<span class="question-column-hint">Click a question to add it</span>
+									</h4>
 									<div
 										id="availableQuestions"
 										class="question-list-scroll"
 									></div>
 								</div>
 								<div class="question-column selected-questions">
-									<h4>
-										Selected Questions (<span id="selectedQuestionCount">0</span>)
+									<h4 class="question-column-header">
+										<span class="question-column-heading">
+											<span class="question-column-icon is-selected" aria-hidden="true">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+											</span>
+											<span class="question-column-title">Selected Questions</span>
+											<span class="question-column-count" id="selectedQuestionCount">0</span>
+										</span>
 										<span class="selection-points-badge"><span id="selectedQuestionPoints">0</span> pts</span>
 									</h4>
 									<div

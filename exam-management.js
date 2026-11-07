@@ -481,7 +481,7 @@ function loadAvailableQuestions() {
 				html += `
                 <div class="question-item categorized" data-index="${index}" data-draggable="${
 									question.isDraggable
-								}" data-category="${categoryId}" data-type="${questionType}" data-points="${Number.parseFloat(question.points) || 1}" onclick="toggleQuestionSelection(this)" style="display: block;">
+								}" data-category="${categoryId}" data-type="${questionType}" data-points="${Number.parseFloat(question.points) || 1}" role="button" tabindex="0" title="Add to selection" aria-label="Add question to selection" onclick="toggleQuestionSelection(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleQuestionSelection(this);}" style="display: block;">
                     <div class="question-content">
                         ${window.renderQuestionContent(
 													question.question,
@@ -562,6 +562,8 @@ function addQuestionToSelected(element) {
 	const questionClone = element.cloneNode(true);
 	questionClone.classList.add('selected');
 	questionClone.style.display = 'block';
+	questionClone.title = 'Remove from selection';
+	questionClone.setAttribute('aria-label', 'Remove question from selection');
 	questionClone.onclick = () =>
 		removeQuestionFromSelected(questionId, questionCategory);
 	console.log('Created clone');

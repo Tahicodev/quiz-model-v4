@@ -7067,3 +7067,576 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	display: block;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   EXAMS + CLASSES · final polish pass
+   ──────────────────────────────────────────────────────────────────────
+   1. Create/Edit modals share one width so the two tabs feel like siblings.
+   2. The Assign-Questions workspace gets readable, wrapping question cards
+      with clear "add" / "selected" affordances.
+   3. The Classes table stops clipping its Actions column.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Unified create/edit modal width ──────────────────────────────────
+   styles.css ships several competing widths (95%, 1180px, 1280px). Both
+   modals only hold a short settings form, so a single calm canvas is
+   enough and stops the two tabs from jumping between sizes. */
+#examModal .modal-content,
+#examModal.is-open .modal-content,
+#classModal .modal-content,
+#classModal.is-open .modal-content {
+	width: min(94vw, 760px) !important;
+	max-width: 760px !important;
+}
+
+/* ── 2. Assign-Questions workspace ─────────────────────────────────────── */
+
+/* Column headers: icon + title + count pill on the left, helper text or the
+   points total on the right. */
+.assign-page-selection .question-column-header {
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+	flex-wrap: wrap;
+	gap: 10px 14px !important;
+	margin: 0 !important;
+	padding: 13px 18px !important;
+	background: linear-gradient(
+		180deg,
+		var(--bg-surface-alt, #f8fafc) 0%,
+		var(--bg-surface, #ffffff) 100%
+	) !important;
+	border-bottom: 1px solid var(--border-color, #e2e8f0) !important;
+}
+
+.assign-page-selection .question-column-heading {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.assign-page-selection .question-column-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 30px;
+	height: 30px;
+	border-radius: 9px;
+}
+
+.assign-page-selection .question-column-icon.is-available {
+	background: rgba(99, 102, 241, 0.12);
+	color: #6366f1;
+	box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.16);
+}
+
+.assign-page-selection .question-column-icon.is-selected {
+	background: rgba(16, 185, 129, 0.13);
+	color: #10b981;
+	box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.18);
+}
+
+.assign-page-selection .question-column-title {
+	font-size: 0.98rem !important;
+	font-weight: 700 !important;
+	letter-spacing: -0.01em;
+	color: var(--text-primary, #0f172a) !important;
+	white-space: nowrap;
+}
+
+.assign-page-selection .question-column-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 28px;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: 999px;
+	background: rgba(99, 102, 241, 0.1);
+	color: #4f46e5;
+	font-size: 0.74rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	line-height: 1;
+}
+
+.assign-page-selection .selected-questions .question-column-count {
+	background: rgba(16, 185, 129, 0.12);
+	color: #059669;
+}
+
+.assign-page-selection .question-column-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.74rem;
+	font-weight: 600;
+	color: var(--text-muted, #94a3b8);
+	white-space: nowrap;
+}
+
+.assign-page-selection .question-column-hint::before {
+	content: '';
+	width: 5px;
+	height: 5px;
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0.65;
+}
+
+.assign-page-selection .question-column-header .selection-points-badge {
+	margin-left: 0 !important;
+	background: rgba(16, 185, 129, 0.12);
+	color: #047857;
+	font-size: 0.74rem;
+	font-weight: 700;
+}
+
+/* Cards: readable wrapping text, a soft surface, and a trailing action dot. */
+.assign-page-selection .question-item {
+	position: relative;
+	padding: 12px 46px 12px 14px !important;
+	margin: 0 0 8px !important;
+	border: 1px solid var(--border-color, #e2e8f0) !important;
+	border-radius: 12px !important;
+	background: var(--bg-surface, #ffffff) !important;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+	cursor: pointer;
+	overflow: visible !important;
+	transition:
+		border-color 0.16s ease,
+		box-shadow 0.16s ease,
+		background-color 0.16s ease,
+		transform 0.16s ease;
+}
+
+.assign-page-selection .question-item:last-child {
+	margin-bottom: 0 !important;
+}
+
+.assign-page-selection .available-questions .question-item:hover {
+	border-color: rgba(99, 102, 241, 0.55) !important;
+	background: #f8faff !important;
+	box-shadow: 0 4px 14px rgba(79, 70, 229, 0.12) !important;
+	transform: translateY(-1px);
+}
+
+.assign-page-selection .selected-questions .question-item {
+	border-color: rgba(16, 185, 129, 0.38) !important;
+	background: rgba(16, 185, 129, 0.05) !important;
+}
+
+.assign-page-selection .selected-questions .question-item:hover {
+	border-color: rgba(16, 185, 129, 0.7) !important;
+	background: rgba(16, 185, 129, 0.1) !important;
+	box-shadow: 0 4px 14px rgba(5, 150, 105, 0.14) !important;
+	transform: translateY(-1px);
+}
+
+/* Trailing action indicator — "+" on the left, "✓" on the selected side. */
+.assign-page-selection .question-item::after {
+	position: absolute;
+	top: 50%;
+	right: 12px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	font-size: 0.92rem;
+	font-weight: 700;
+	line-height: 1;
+	transform: translateY(-50%);
+	transition:
+		background-color 0.16s ease,
+		color 0.16s ease,
+		transform 0.16s ease;
+}
+
+.assign-page-selection .available-questions .question-item::after {
+	content: '+';
+	background: rgba(99, 102, 241, 0.12);
+	color: #6366f1;
+}
+
+.assign-page-selection .available-questions .question-item:hover::after {
+	background: #6366f1;
+	color: #ffffff;
+	transform: translateY(-50%) scale(1.06);
+}
+
+.assign-page-selection .selected-questions .question-item::after {
+	content: '✓';
+	background: rgba(16, 185, 129, 0.16);
+	color: #059669;
+}
+
+.assign-page-selection .selected-questions .question-item:hover::after {
+	background: #10b981;
+	color: #ffffff;
+}
+
+/* Text: wrap instead of truncate, with a comfortable reading measure. */
+.assign-page-selection .question-item .question-content,
+.assign-page-selection .question-item .question-content .question-content {
+	width: 100% !important;
+	max-width: 100% !important;
+	white-space: normal !important;
+	overflow: visible !important;
+	text-overflow: clip !important;
+}
+
+.assign-page-selection .question-item .question-text {
+	display: block !important;
+	/* Four readable lines; the list scrolls, and full text is still available
+	   by widening the column. `max-height` works in browsers that dropped the
+	   legacy -webkit-box line-clamp mapping. */
+	max-height: calc(1.55em * 4);
+	overflow: hidden !important;
+	margin: 0 !important;
+	font-size: 0.92rem !important;
+	font-weight: 600 !important;
+	line-height: 1.55 !important;
+	letter-spacing: -0.005em;
+	color: var(--text-main, #1e293b) !important;
+	white-space: normal !important;
+	word-break: break-word;
+	overflow-wrap: anywhere;
+	text-overflow: clip !important;
+}
+
+.assign-page-selection .question-item .question-meta {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px dashed var(--border-color, #e2e8f0);
+}
+
+.assign-page-selection .question-item .type-badge,
+.assign-page-selection .question-item .category-badge {
+	padding: 2px 8px !important;
+	border-radius: 999px !important;
+	font-size: 0.66rem !important;
+	font-weight: 600 !important;
+	letter-spacing: 0.01em;
+	line-height: 1.45 !important;
+}
+
+.assign-page-selection .question-item .type-badge svg {
+	width: 11px;
+	height: 11px;
+}
+
+/* Category folders inside the available list: a compact, obvious group. */
+.assign-page-selection .category-folder {
+	margin: 0 0 10px !important;
+	border: 1px solid var(--border-color, #e2e8f0) !important;
+	border-radius: 12px !important;
+	background: var(--bg-surface, #ffffff) !important;
+	box-shadow: none !important;
+	overflow: hidden !important;
+	transition: border-color 0.16s ease;
+}
+
+.assign-page-selection .category-folder:last-child {
+	margin-bottom: 0 !important;
+}
+
+.assign-page-selection .category-folder:hover {
+	border-color: var(--border-color, #e2e8f0) !important;
+	transform: none !important;
+	box-shadow: none !important;
+}
+
+.assign-page-selection .category-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px !important;
+	background: var(--bg-surface-alt, #f8fafc) !important;
+	border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+
+.assign-page-selection .category-header:hover {
+	background: var(--bg-surface-alt, #f1f5f9) !important;
+}
+
+.assign-page-selection .category-header::before {
+	display: none;
+}
+
+.assign-page-selection .category-header .folder-icon {
+	display: block; /* inline SVG ignores CSS transforms */
+	width: 17px;
+	height: 17px;
+	flex: 0 0 auto;
+	margin: 0;
+	color: #6366f1;
+	transition: transform 0.18s ease;
+}
+
+/* Exam folders toggle `.open`; the category pane toggles an inline
+   display value, so cover both states. */
+.assign-page-selection .category-folder.open .category-header .folder-icon,
+.assign-page-selection
+	.category-folder:has(.category-questions[style*='display: block'])
+	.category-header
+	.folder-icon {
+	transform: rotate(90deg);
+}
+
+.assign-page-selection .category-name {
+	flex: 1;
+	min-width: 0;
+	margin: 0 !important;
+	font-size: 0.88rem !important;
+	font-weight: 700 !important;
+	color: var(--text-main, #1e293b) !important;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.assign-page-selection .category-header .question-count {
+	margin: 0 6px 0 0 !important;
+	padding: 2px 8px !important;
+	border-radius: 999px !important;
+	background: rgba(99, 102, 241, 0.1) !important;
+	color: #4f46e5 !important;
+	font-size: 0.68rem !important;
+	font-weight: 700 !important;
+	font-variant-numeric: tabular-nums;
+	line-height: 1.5 !important;
+}
+
+.assign-page-selection .category-header-actions {
+	flex: 0 0 auto;
+	gap: 4px !important;
+}
+
+.assign-page-selection .category-header-actions .category-action-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	padding: 0 !important;
+	border: 1px solid rgba(99, 102, 241, 0.22) !important;
+	border-radius: 8px !important;
+	background: rgba(99, 102, 241, 0.1) !important;
+	color: #6366f1 !important;
+	transition:
+		background-color 0.16s ease,
+		color 0.16s ease,
+		border-color 0.16s ease;
+}
+
+.assign-page-selection .category-header-actions .category-action-btn:hover {
+	border-color: #6366f1 !important;
+	background: #6366f1 !important;
+	color: #ffffff !important;
+}
+
+.assign-page-selection .category-header-actions .category-action-btn svg {
+	width: 14px;
+	height: 14px;
+}
+
+.assign-page-selection .category-questions {
+	padding: 10px !important;
+	background: var(--bg-surface, #ffffff) !important;
+}
+
+/* Empty selected column: guide the user instead of showing a blank slab. */
+.assign-page-selection .selected-questions .question-list-scroll:empty::before {
+	content: 'No questions selected yet — click a question on the left to add it.';
+	display: block;
+	max-width: 260px;
+	margin: 56px auto 0;
+	padding: 18px 16px;
+	border: 1.5px dashed var(--border-color, #cbd5e1);
+	border-radius: 12px;
+	color: var(--text-muted, #94a3b8);
+	font-size: 0.84rem;
+	font-weight: 500;
+	line-height: 1.55;
+	text-align: center;
+}
+
+/* Slim, theme-aware scrollbars keep the two lists feeling light. */
+.assign-page-selection .question-list-scroll {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+}
+
+.assign-page-selection .question-list-scroll::-webkit-scrollbar {
+	width: 9px;
+}
+
+.assign-page-selection .question-list-scroll::-webkit-scrollbar-thumb {
+	border: 2px solid transparent;
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.5);
+	background-clip: padding-box;
+}
+
+.assign-page-selection .question-list-scroll::-webkit-scrollbar-thumb:hover {
+	background: rgba(100, 116, 139, 0.65);
+	background-clip: padding-box;
+}
+
+.assign-page-footer-bar {
+	flex-wrap: wrap;
+}
+
+/* ── 3. Classes table: stop the Actions column from clipping ─────────────
+   Nine columns at the global 16px cell padding need ~1022px, but the pane
+   gives them ~968px. Trim the horizontal padding and the action cluster so
+   the table fits its card; keep a safe horizontal scroll as a fallback for
+   narrower desktops. */
+@media (min-width: 769px) {
+	#classListPane > .table-container,
+	#examListPane > .table-container {
+		overflow-x: auto !important;
+		overflow-y: hidden !important;
+	}
+
+	#classList th,
+	#classList td {
+		padding: 12px 9px;
+	}
+
+	#classList th:first-child,
+	#classList td:first-child {
+		width: 44px;
+		padding-right: 4px;
+		padding-left: 12px;
+	}
+
+	#classList td.actions-cell {
+		padding: 6px;
+	}
+
+	#classList .exam-actions {
+		gap: 4px;
+	}
+
+	#classList .exam-action-btn {
+		width: 30px;
+		height: 30px;
+		border-radius: 7px;
+	}
+
+	#classList .exam-action-btn svg {
+		width: 15px;
+		height: 15px;
+	}
+}
+
+/* Class rows read as navigable cards: the name is the primary anchor. */
+#classList tbody tr.clickable-class-row {
+	cursor: pointer;
+}
+
+#classList .class-name-link {
+	font-weight: 600;
+	color: var(--text-main, #0f172a);
+	text-decoration: none;
+}
+
+#classList .class-name-link:hover {
+	color: #4f46e5;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+#classList .badge-subtle {
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Dark theme adjustments ─────────────────────────────────────────────── */
+html[data-theme='dark'] .assign-page-selection .question-item .question-text {
+	color: var(--text-main, #e6edf7) !important;
+}
+
+html[data-theme='dark'] .assign-page-selection .available-questions .question-item:hover {
+	border-color: rgba(129, 140, 248, 0.6) !important;
+	background: rgba(99, 102, 241, 0.12) !important;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28) !important;
+}
+
+html[data-theme='dark'] .assign-page-selection .selected-questions .question-item {
+	border-color: rgba(52, 211, 153, 0.38) !important;
+	background: rgba(16, 185, 129, 0.1) !important;
+}
+
+html[data-theme='dark'] .assign-page-selection .selected-questions .question-item:hover {
+	border-color: rgba(52, 211, 153, 0.7) !important;
+	background: rgba(16, 185, 129, 0.16) !important;
+	box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+}
+
+html[data-theme='dark'] .assign-page-selection .question-column-count {
+	background: rgba(99, 102, 241, 0.24);
+	color: #c7d2fe;
+}
+
+html[data-theme='dark'] .assign-page-selection .selected-questions .question-column-count {
+	background: rgba(16, 185, 129, 0.24);
+	color: #6ee7b7;
+}
+
+html[data-theme='dark'] .assign-page-selection .question-column-header .selection-points-badge {
+	background: rgba(16, 185, 129, 0.2);
+	color: #6ee7b7;
+}
+
+html[data-theme='dark'] .assign-page-selection .question-item .question-meta {
+	border-top-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme='dark'] .assign-page-selection .category-header .question-count {
+	background: rgba(99, 102, 241, 0.24) !important;
+	color: #c7d2fe !important;
+}
+
+html[data-theme='dark'] .assign-page-selection .category-header-actions .category-action-btn {
+	border-color: rgba(129, 140, 248, 0.3) !important;
+	background: rgba(99, 102, 241, 0.18) !important;
+	color: #c7d2fe !important;
+}
+
+html[data-theme='dark']
+	.assign-page-selection
+	.category-header-actions
+	.category-action-btn:hover {
+	border-color: #818cf8 !important;
+	background: #6366f1 !important;
+	color: #ffffff !important;
+}
+
+/* ── Small screens ──────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+	.assign-page-selection .question-column-header {
+		padding: 12px 14px !important;
+	}
+
+	.assign-page-selection .question-column-hint {
+		display: none !important;
+	}
+
+	.assign-page-selection .question-item {
+		padding: 11px 44px 11px 12px !important;
+	}
+
+	.assign-page-selection .question-item .question-text {
+		max-height: calc(1.55em * 5);
+		font-size: 0.9rem !important;
+	}
+}
+

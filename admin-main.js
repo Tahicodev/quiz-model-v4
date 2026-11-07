@@ -1387,6 +1387,25 @@ function openTab(event, tabName) {
 		}
 	}
 
+	// Exams & Classes tables can be hydrated after the initial bootstrap (or
+	// mutated by assignment modals). Re-render on tab entry so the table is
+	// never shown empty/stale when the user navigates back to it.
+	if (tabName === 'exams' && typeof window.updateExamList === 'function') {
+		try {
+			window.updateExamList();
+		} catch (e) {
+			console.warn('[admin-main] updateExamList on tab open failed:', e);
+		}
+	}
+
+	if (tabName === 'classes' && typeof window.updateClassList === 'function') {
+		try {
+			window.updateClassList();
+		} catch (e) {
+			console.warn('[admin-main] updateClassList on tab open failed:', e);
+		}
+	}
+
 	// Auto-close mobile menu if open
 	const headerNav = document.getElementById('headerNav');
 	if (
