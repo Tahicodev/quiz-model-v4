@@ -49,7 +49,7 @@ const MIN_RESULTS_FOR_TREND = 5;
 // One school academic year ≈ Sept 1 → Aug 31 of the following year. Records are
 // not year-tagged; this is the derived window the "This academic year" filter
 // applies to date-bearing entities (results, sessions, games, tournaments).
-function parseAcademicYearWindow(rawSchoolYear, now = new Date()) {
+export function parseAcademicYearWindow(rawSchoolYear, now = new Date()) {
   const match = String(rawSchoolYear || '').match(/(\d{4})\D+(\d{4})/);
   if (!match) return null;
   const startYear = Number(match[1]);
@@ -69,7 +69,7 @@ function parseAcademicYearWindow(rawSchoolYear, now = new Date()) {
 // Resolve the [start,end] instant for a period selection. `academicWindow`
 // bounds term/month math to the chosen school year; a null window means the
 // caller picked "All time".
-function resolvePeriodWindow(periodKey, now, academicWindow, customFrom, customTo) {
+export function resolvePeriodWindow(periodKey, now, academicWindow, customFrom, customTo) {
   const d = now instanceof Date ? now : new Date(now);
   const utcDayStart = (date) =>
     new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -86,6 +86,12 @@ function resolvePeriodWindow(periodKey, now, academicWindow, customFrom, customT
     case '30d': {
       const start = new Date(d.getTime() - 30 * 86400000);
       return { key: '30d', label: 'Last 30 days', start, end: d };
+    }
+    case 'week': {
+      // Current week, Monday 00:00 UTC → now (teacher Overview).
+      const day = d.getUTCDay() || 7;
+      const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - day + 1));
+      return { key: 'week', label: 'This week', start, end: d };
     }
     case 'month': {
       const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -129,7 +135,7 @@ function resolvePeriodWindow(periodKey, now, academicWindow, customFrom, customT
 
 // Preceding window of identical length (for trend comparison). Returns null for
 // open-ended windows ("all time") where a delta is not meaningful.
-function precedingWindow(window) {
+export function precedingWindow(window) {
   if (!window.start || !window.end) return null;
   const len = window.end.getTime() - window.start.getTime();
   if (len <= 0) return null;

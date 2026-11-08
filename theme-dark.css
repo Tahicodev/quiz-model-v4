@@ -2006,6 +2006,70 @@ html[data-theme='dark'] .btn-secondary-soft {
 	background: var(--bg-surface-alt);
 	border: 1px solid var(--border-color);
 }
+/* Class roster soft/outline buttons (questions-identity bulk bar) */
+html[data-theme='dark'] .btn-success-soft {
+	background: rgb(13, 42, 33);
+	border: 1px solid rgb(22, 101, 74);
+	color: rgb(110, 231, 183);
+}
+html[data-theme='dark'] .btn-success-soft:hover {
+	background: rgb(13, 42, 33);
+	border-color: rgb(22, 101, 74);
+}
+html[data-theme='dark'] .btn-warning-soft {
+	background: rgb(58, 36, 6);
+	border: 1px solid rgb(146, 90, 10);
+	color: rgb(253, 186, 116);
+}
+html[data-theme='dark'] .btn-warning-soft:hover {
+	background: rgb(58, 36, 6);
+	border-color: rgb(146, 90, 10);
+}
+html[data-theme='dark'] .btn-outline {
+	background: transparent;
+	color: var(--text-main);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .btn-outline:hover {
+	color: rgb(142, 171, 235);
+	border-color: rgb(99, 102, 241);
+	background: rgba(99, 102, 241, 0.1);
+}
+html[data-theme='dark'] .student-picker-list {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .student-picker-item {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .student-picker-item:hover {
+	border-color: rgb(129, 140, 248);
+}
+html[data-theme='dark'] .student-picker-item:has(input:checked) {
+	border-color: rgb(129, 140, 248);
+	background: rgba(99, 102, 241, 0.14);
+}
+html[data-theme='dark'] .student-picker-name {
+	color: var(--text-main);
+}
+html[data-theme='dark'] .student-picker-avatar {
+	background: rgba(96, 165, 250, 0.16);
+	color: rgb(147, 197, 253);
+}
+html[data-theme='dark'] .student-picker-tag.tag-rostered {
+	background: rgba(16, 185, 129, 0.16);
+	color: rgb(110, 231, 183);
+}
+html[data-theme='dark'] .student-picker-tag.tag-disabled {
+	background: rgba(239, 68, 68, 0.14);
+	color: rgb(252, 165, 165);
+}
+html[data-theme='dark'] .roster-pending-hint {
+	background: rgba(245, 158, 11, 0.12);
+	border-color: rgba(245, 158, 11, 0.3);
+	color: rgb(253, 186, 116);
+}
 html[data-theme='dark'] .modal-header {
 	background: var(--bg-surface);
 }
@@ -7738,11 +7802,6 @@ html[data-theme='dark'] .assign-page-selection h4 {
 	background: #0f172a !important;
 	border-color: rgba(148, 163, 184, 0.15) !important;
 	color: #f1f5f9 !important;
-}
-
-html[data-theme='dark'] .assign-page-footer-bar {
-	background: var(--bg-surface, #101a2c);
-	border-color: rgba(129, 140, 248, 0.2);
 }
 
 html[data-theme='dark'] .eas-tabs-bar .eas-tabs {

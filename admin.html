@@ -40,7 +40,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-06-round5" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-08-results-unified4" />
 		<link rel="stylesheet" href="admin.css?v=2026-11-06-round2" />
 		<link rel="stylesheet" href="theme.css?v=2026-11-04-round9" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-11-06-round2" />
@@ -134,7 +134,7 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js?v=2026-10-26-catgame1" defer></script>
 		<script src="api-client.js?v=2026-11-04-round6" defer></script>
-		<script src="auth.js?v=2026-11-03-subjects1" defer></script>
+		<script src="auth.js?v=2026-11-08-results-unified1" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="settings.js?v=2026-11-04-round3" defer></script>
 
@@ -152,10 +152,11 @@
 		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
 		<script src="courses-management.js?v=2026-11-06-round8" defer></script>
 		<script src="class-management.js?v=2026-09-17-r3" defer></script>
-		<script src="results-management.js" defer></script>
+		<script src="results-management.js?v=2026-11-08-results-unified12" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="exam-documents.js?v=2026-10-29-ultra1" defer></script>
 		<script src="overview-dashboard.js?v=2026-11-03-subjects7" defer></script>
+		<script src="teacher-overview.js?v=2026-11-08-results-unified1" defer></script>
 		<script src="global-search.js?v=2026-11-04-round3" defer></script>
 		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
@@ -170,7 +171,7 @@
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
-		<script src="admin-main.js?v=2026-10-31-kidsseed1" defer></script>
+		<script src="admin-main.js?v=2026-11-08-results-unified1" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
 			<script src="legacy-auth-bridge.js?v=2026-11-04-round6" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -696,6 +697,17 @@
 							<button type="button" class="overview-scope-clear" id="overviewClearFilters" onclick="window.clearOverviewFilters()">Clear filters</button>
 						</div>
 
+						<!-- Teacher pedagogical dashboard (teacher sessions only).
+						     Rendered by teacher-overview.js from the teacher-scoped,
+						     server-aggregated /teacher-overview/overview bundle.
+						     Admin sessions never use this block. -->
+						<div id="teacherOverview" hidden></div>
+
+						<!-- Legacy Overview surface. One container so a teacher session
+						     hides the WHOLE old dashboard (header, KPI grids, category
+						     insights, report charts and activity feed) instead of leaving
+						     pieces of it visible under the teacher dashboard. -->
+						<div id="legacyOverviewContent">
 						<div id="legacyOverviewBlocks">
 						<div class="kpi-section-title">People &amp; Students</div>
 						<div class="kpi-grid">
@@ -1459,6 +1471,7 @@
 								</div>
 							</div>
 						</div>
+						</div><!-- /legacyOverviewContent -->
 					</div>
 				</section>
 
@@ -2582,23 +2595,6 @@
 										></div>
 									</div>
 								</div>
-								<div class="assign-page-footer-bar">
-									<button
-										type="button"
-										class="btn btn-secondary"
-										onclick="closeAssignCategoryQuestions()"
-									>
-										Cancel
-									</button>
-									<button
-										type="button"
-										class="btn btn-primary"
-										onclick="saveAssignCategoryQuestions()"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-										<span>Save Assignment</span>
-									</button>
-								</div>
 							</form>
 						</div>
 						</div>
@@ -2936,23 +2932,6 @@
 									></div>
 								</div>
 							</div>
-							<div class="assign-page-footer-bar">
-								<button
-									type="button"
-									class="btn btn-secondary"
-									onclick="closeAssignExamQuestions()"
-								>
-									Cancel
-								</button>
-								<button
-									type="button"
-									class="btn btn-primary"
-									onclick="saveAssignExamQuestions()"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-									<span>Save Assignment</span>
-								</button>
-							</div>
 						</form>
 					</div>
 					<div id="examAnalysisPane" class="exam-analysis-pane hidden"></div>
@@ -3103,14 +3082,14 @@
 								<button
 									type="button"
 									id="classStudentsBackBtn"
-									class="btn btn-sm structure-back-btn"
+									class="btn btn-sm btn-secondary structure-back-btn"
 									onclick="closeAssignClassStudents()"
 								>
 									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
 									<span>Back to classes</span>
 								</button>
 								<div id="classHeaderActions" class="class-header-actions-group">
-									<button type="button" class="btn btn-sm btn-outline" id="classActionExamsBtn" onclick="openClassExamsAction()">
+									<button type="button" class="btn btn-sm btn-primary" id="classActionExamsBtn" onclick="openClassExamsAction()">
 										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
 										<span>Assign Exams</span>
 									</button>
@@ -3157,116 +3136,232 @@
 							</div>
 						</div>
 
-						<!-- Two-panel workspace -->
-						<div class="class-students-workspace">
-							<!-- Panel 1: Add Students from accounts -->
-							<div class="class-workspace-card class-add-students-card">
-								<div class="card-section-header">
-									<div class="card-section-title">
-										<span class="step-badge">1</span>
-										<h3>Add Students from Accounts</h3>
+						<!-- Roster management card (questions-table identity: toolbar
+						         with search/filters + bulk bar, full-width table,
+						         pagination, sticky save bar). Adding students happens
+						         in the #addStudentsPickerModal. -->
+						<div class="class-workspace-card class-roster-card">
+							<div class="toolbar roster-main-toolbar">
+								<div class="toolbar-header-group">
+									<h2>Class Roster</h2>
+									<span class="roster-summary-badge" id="assignClassRosterSummary">0 student(s)</span>
+									<!-- Bulk Actions Area (questions identity) -->
+									<div
+										id="bulk-actions-students"
+										class="bulk-actions-container hidden"
+									>
+										<span class="selection-info">
+											<span id="selected-count-students">0</span> selected
+										</span>
+										<button
+											type="button"
+											id="bulkEnableStudentsBtn"
+											class="btn btn-success-soft admin-only-bulk-action"
+											onclick="bulkSetStudentAccounts('active')"
+											title="Activate the selected students' accounts"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+											<span>Enable</span>
+										</button>
+										<button
+											type="button"
+											id="bulkDisableStudentsBtn"
+											class="btn btn-warning-soft admin-only-bulk-action"
+											onclick="bulkSetStudentAccounts('disabled')"
+											title="Suspend the selected students' accounts"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+											<span>Disable</span>
+										</button>
+										<button
+											type="button"
+											class="btn btn-outline"
+											onclick="exportSelectedStudents()"
+											title="Export the selected students as CSV"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+											<span>Export</span>
+										</button>
+										<button
+											type="button"
+											class="btn btn-danger-soft"
+											onclick="deleteSelectedStudents()"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<polyline points="3 6 5 6 21 6"></polyline>
+												<path
+													d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+												></path>
+											</svg>
+											<span>Delete Selected</span>
+										</button>
+										<div class="divider-vertical"></div>
 									</div>
-									<div id="studentPickerCount" class="badge-count text-muted"></div>
+									<div class="roster-add-actions">
+										<button
+											type="button"
+											class="btn btn-outline"
+											onclick="openAddStudentModal()"
+											title="Add a student without an account (number + name only)"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+											<span>Add Student</span>
+										</button>
+										<button
+											type="button"
+											id="addStudentsPickerBtn"
+											class="btn btn-primary"
+											onclick="openAddStudentsPickerModal()"
+											title="Add students from existing user accounts"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+											<span>Add Students</span>
+										</button>
+									</div>
 								</div>
-								<div class="class-user-picker-wrap">
-									<div class="picker-filter-grid">
-										<div class="filter-field">
-											<label for="studentClassFilter">Filter by Origin Class</label>
-											<select id="studentClassFilter" class="form-control" onchange="onStudentClassFilterChange()">
-												<option value="all">All Classes</option>
-											</select>
-										</div>
-										<div class="filter-field">
-											<label for="studentPickerSearch">Search Users</label>
-											<input type="text" id="studentPickerSearch" class="form-control" placeholder="Search by name, username or number..." oninput="populateStudentUserPicker()" />
-										</div>
+								<div class="toolbar-controls">
+									<button
+										type="button"
+										class="mobile-filters-toggle"
+										data-filter-target="#studentRosterSortWrap, #rosterCsvActions"
+										onclick="toggleMobileFilters(this)"
+										aria-expanded="false"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+										<span class="mobile-filters-toggle-label">Filters</span>
+										<span class="mobile-filters-count hidden">0</span>
+										<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+									</button>
+									<div class="search-wrapper">
+										<input
+											type="text"
+											id="studentRosterSearch"
+											placeholder="Search roster by name or student #..."
+											onkeyup="filterStudentRosterTable()"
+										/>
 									</div>
-									<div class="student-picker-list-wrap">
-										<select id="studentUserPicker" class="form-control student-picker-select" multiple size="10">
-											<option value="" disabled>No student users available</option>
+									<div class="sort-wrapper collapsible-filter-controls">
+										<select id="studentRosterStatusFilter" onchange="filterStudentRosterTable()">
+											<option value="all">All Status</option>
+											<option value="active">Active</option>
+											<option value="disabled">Disabled</option>
+											<option value="no-account">No account yet</option>
 										</select>
 									</div>
-									<div class="bulk-student-actions-bar">
-										<button type="button" class="btn btn-primary btn-sm" onclick="addStudentFromUserPicker()" title="Add the highlighted students to the roster">
-											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
-											<span>Add Selected</span>
-										</button>
-										<button type="button" class="btn btn-secondary btn-sm" onclick="addAllStudentsFromUsers()">
-											Add All
-										</button>
-										<button type="button" class="btn btn-ghost btn-sm" onclick="deselectAllStudentsInPicker()">
-											Deselect All
+									<div class="sort-wrapper collapsible-filter-controls" id="studentRosterSortWrap">
+										<select id="studentRosterSortBy" onchange="sortStudentRoster()">
+											<option value="name">Name</option>
+											<option value="number">Student #</option>
+											<option value="status">Status</option>
+										</select>
+										<button
+											id="sortRosterDirection"
+											class="btn-icon"
+											onclick="toggleRosterSortDirection()"
+											title="Toggle Sort Direction"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+											>
+												<path d="M12 5v14M19 12l-7 7-7-7" />
+											</svg>
 										</button>
 									</div>
-									<div class="text-muted small class-helper-text">
-										Students join via signup or are created in Settings → Users.
-									</div>
-								</div>
-							</div>
-
-							<!-- Panel 2: Class Roster Table -->
-							<div class="class-workspace-card class-roster-card">
-								<div class="card-section-header roster-header-wrap">
-									<div class="card-section-title">
-										<span class="step-badge">2</span>
-										<h3>Class Roster</h3>
-										<span class="roster-summary-badge" id="assignClassRosterSummary">0 student(s)</span>
-									</div>
-									<div class="roster-actions-group">
-										<button type="button" class="btn btn-sm btn-outline" onclick="exportStudents()" title="Export roster as CSV">
+									<div class="sort-wrapper collapsible-filter-controls" id="rosterCsvActions">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline"
+											onclick="exportStudents()"
+											title="Export roster as CSV"
+										>
 											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
 											<span>Export CSV</span>
 										</button>
-										<button type="button" class="btn btn-sm btn-outline" onclick="importStudents()" title="Import roster from CSV">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline"
+											onclick="importStudents()"
+											title="Import roster from CSV"
+										>
 											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
 											<span>Import CSV</span>
 										</button>
 									</div>
 								</div>
+							</div>
 
-								<!-- Roster filter bar -->
-								<div class="roster-toolbar-bar">
-									<div class="search-input-wrap">
-										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-										<input type="text" id="studentRosterSearch" class="form-control" placeholder="Search roster by name or student #..." onkeyup="filterStudentRosterTable()" />
-									</div>
-									<select id="studentRosterStatusFilter" class="form-control roster-status-select" onchange="filterStudentRosterTable()">
-										<option value="all">All Status</option>
-										<option value="active">Active</option>
-										<option value="disabled">Disabled</option>
-										<option value="no-account">No account yet</option>
-									</select>
+							<!-- Full Roster Table -->
+							<div class="table-container roster-table-container">
+								<table class="data-table roster-table" id="studentRosterTable">
+									<thead>
+										<tr>
+											<th style="width: 44px">
+												<input
+													type="checkbox"
+													id="selectAllStudents"
+													onchange="toggleBulkSelectAllGeneric(this, 'students')"
+												/>
+											</th>
+											<th style="width: 40px" data-label="#">#</th>
+											<th data-label="Student #">Student #</th>
+											<th data-label="Name">Name</th>
+											<th data-label="Account">Account</th>
+											<th data-label="Status">Status</th>
+											<th style="width: 140px" data-label="Actions">Actions</th>
+										</tr>
+									</thead>
+									<tbody id="selectedStudentsList"></tbody>
+								</table>
+								<div id="rosterEmptyState" class="empty-state hidden">
+									No students found matching your criteria.
 								</div>
+							</div>
 
-								<!-- Full Roster Table -->
-								<div class="table-container roster-table-container">
-									<table class="data-table roster-table" id="studentRosterTable">
-										<thead>
-											<tr>
-												<th>Student #</th>
-												<th>Name</th>
-												<th>Account</th>
-												<th>Status</th>
-												<th style="width: 110px">Actions</th>
-											</tr>
-										</thead>
-										<tbody id="selectedStudentsList"></tbody>
-									</table>
-									<div id="rosterEmptyState" class="empty-state hidden">
-										No students found matching your criteria.
-									</div>
-								</div>
-
-								<!-- Footer Save Bar inside Roster card -->
-								<div class="roster-save-bar">
-									<button type="button" class="btn btn-secondary" onclick="closeAssignClassStudents()">
-										Back to Classes
+							<!-- Roster pagination (same identity as the questions table) -->
+							<div class="pagination roster-pagination" id="rosterPagination">
+								<span class="pagination-info"
+									>Showing <span id="rosterPaginationStart">0</span> to
+									<span id="rosterPaginationEnd">0</span> of
+									<span id="rosterPaginationTotal">0</span> students</span
+								>
+								<div class="pagination-controls">
+									<button id="rosterPrevPage" onclick="changeRosterPage(-1)" disabled>
+										Previous
 									</button>
-									<button type="button" class="btn btn-primary" id="saveAssignClassStudentsBtn" onclick="saveAssignClassStudents()">
-										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-										<span>Save Roster</span>
+									<span id="rosterCurrentPage">1</span> / <span id="rosterTotalPages">1</span>
+									<button id="rosterNextPage" onclick="changeRosterPage(1)" disabled>
+										Next
 									</button>
 								</div>
+							</div>
+
+							<!-- Footer Save Bar inside Roster card -->
+							<div class="roster-save-bar">
+								<span id="rosterPendingHint" class="roster-pending-hint hidden">
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+									<span>Unsaved roster changes — click Save Roster to apply.</span>
+								</span>
+								<button type="button" class="btn btn-secondary" onclick="closeAssignClassStudents()">
+									Back to Classes
+								</button>
+								<button type="button" class="btn btn-primary" id="saveAssignClassStudentsBtn" onclick="saveAssignClassStudents()">
+									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+									<span>Save Roster</span>
+								</button>
 							</div>
 						</div>
 					</div>
@@ -3275,17 +3370,22 @@
 				<!-- Results Tab -->
 				<section id="results" class="tab-content" data-roles="admin,teacher">
 					<div class="dashboard-container results-container">
-						<div class="dashboard-header results-header">
-							<div class="welcome-text">
-								<h2>Results</h2>
-								<p class="text-muted">
-									Track student attempts, grades and pass rates across exams, training and games.
-								</p>
+						<header class="toolbar results-toolbar">
+							<div class="toolbar-header-group results-toolbar-main">
+								<div>
+									<h2>Results</h2>
+									<p class="text-muted">
+										Student performance, individual histories and every attempt.
+									</p>
+								</div>
 							</div>
-							<div class="results-header-actions">
-								<span class="date-badge results-count-badge"><span id="resultsCountBadge">0</span> attempts</span>
+							<div class="toolbar-controls results-header-actions">
+								<span class="date-badge results-count-badge">
+									<strong id="resultsStudentCount">0</strong> <span id="resultsStudentLabel">students</span> ·
+									<span id="resultsCountBadge">0</span> <span id="resultsAttemptLabel">attempts</span>
+								</span>
 								<div class="results-export-group">
-									<button type="button" class="btn-export" onclick="exportResultsCSV()" title="Export visible results as CSV">
+									<button type="button" class="btn-export" onclick="exportResultsCSV()" title="Export the visible attempts as CSV">
 										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
 											<polyline points="7 10 12 15 17 10"></polyline>
@@ -3293,7 +3393,7 @@
 										</svg>
 										CSV
 									</button>
-									<button type="button" class="btn-export" onclick="exportResultsJSON()" title="Export visible results as JSON">
+									<button type="button" class="btn-export" onclick="exportResultsJSON()" title="Export the visible attempts as JSON">
 										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
 											<polyline points="7 10 12 15 17 10"></polyline>
@@ -3312,49 +3412,10 @@
 									<input type="file" id="importResultsInput" accept=".json" style="display: none" onchange="importResultsJSON(this)" />
 								</div>
 							</div>
-						</div>
+						</header>
 
 						<div class="kpi-grid results-kpi-grid" id="resultsKpiGrid">
-							<div class="stat-card blue">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-										<polyline points="14 2 14 8 20 8"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-total">0</h3>
-									<p>Total Attempts</p>
-								</div>
-							</div>
-							<div class="stat-card green">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-										<polyline points="22 4 12 14.01 9 11.01"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-avg">0 / 20</h3>
-									<p>Average Grade</p>
-								</div>
-							</div>
-							<div class="stat-card amber">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-										<polyline points="17 6 23 6 23 12"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-pass-rate">0%</h3>
-									<p>Pass Rate (≥ 10/20)</p>
-								</div>
-							</div>
-							<div class="stat-card purple">
+							<div class="stat-card blue" data-tooltip="Unique student accounts in the current class scope. Each student is counted once, even with no attempts.">
 								<div class="stat-bar"></div>
 								<div class="stat-icon">
 									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3365,16 +3426,78 @@
 									</svg>
 								</div>
 								<div class="stat-info">
-									<h3 id="kpi-results-top-class">-</h3>
-									<p>Top Class</p>
+									<h3 id="kpi-results-students">0</h3>
+									<p>Students</p>
+								</div>
+							</div>
+							<div class="stat-card cyan" data-tooltip="Students with at least one completed exam, training or game activity in the selected period and filters.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-active">0</h3>
+									<p>Active Students</p>
+								</div>
+							</div>
+							<div class="stat-card indigo" data-tooltip="Mean of formal exam attempts, normalized to /20. Training practice and game scores are excluded.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+										<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-avg">—</h3>
+									<p>Average Exam Score</p>
+								</div>
+							</div>
+							<div class="stat-card green" data-tooltip="Formal exam attempts scoring at least 10/20. Training and game results never count as certification.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+										<polyline points="22 4 12 14.01 9 11.01"></polyline>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-pass-rate">—</h3>
+									<p>Exam Pass Rate</p>
+								</div>
+							</div>
+							<div class="stat-card rose" data-tooltip="Students with two or more exam attempts averaging below 10/20, a decline of 1.5+ points, or no activity in the selected period.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+										<line x1="12" y1="9" x2="12" y2="13"></line>
+										<line x1="12" y1="17" x2="12.01" y2="17"></line>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-attention">0</h3>
+									<p>Needs Attention</p>
 								</div>
 							</div>
 						</div>
 
-						<div class="dashboard-panel results-filter-panel">
-							<div class="panel-header results-filter-header">
-								<h3>Filters</h3>
-								<div class="results-filter-header-actions">
+						<div class="results-filter-shell">
+							<div class="results-filter-top">
+								<div class="results-view-switch" role="tablist" aria-label="Results view">
+									<button type="button" class="results-view-btn is-active" data-results-view="students" role="tab" aria-selected="true" aria-controls="resultsStudentsView">
+										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+										Students
+									</button>
+									<button type="button" class="results-view-btn" data-results-view="attempts" role="tab" aria-selected="false" aria-controls="resultsAttemptsView">
+										<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+										All attempts
+									</button>
+								</div>
+								<div class="results-filter-top-actions">
+									<span class="text-muted results-view-hint" id="resultsViewHint">One row per student, with their latest performance.</span>
 									<button
 										type="button"
 										class="mobile-filters-toggle"
@@ -3387,59 +3510,131 @@
 										<span class="mobile-filters-count hidden">0</span>
 										<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 									</button>
-									<button type="button" class="btn-text-only" onclick="clearAllResultFilters()">Clear all</button>
 								</div>
 							</div>
-							<div class="panel-body results-filter-body">
-								<div class="results-filters-row collapsible-filter-controls">
-									<div class="filter-group">
-										<label for="resultFilterExam">Exam</label>
-										<select id="resultFilterExam" class="form-control" onchange="filterResults()">
-											<option value="">All Exams</option>
-										</select>
-									</div>
-									<div class="filter-group">
-										<label for="resultFilterClass">Class</label>
-										<select id="resultFilterClass" class="form-control" onchange="filterResults()">
-											<option value="">All Classes</option>
-										</select>
-									</div>
-									<div class="filter-group">
-										<label for="resultFilterMode">Mode</label>
-										<select id="resultFilterMode" class="form-control" onchange="filterResults()">
-											<option value="">All Modes</option>
-											<option value="exam">Exam</option>
-											<option value="training">Training</option>
-											<option value="solo">Solo Practice</option>
-											<option value="game">Games</option>
-										</select>
-									</div>
-									<div class="filter-group">
-										<label for="resultFilterDate">Date Range</label>
-										<select id="resultFilterDate" class="form-control" onchange="filterResults()">
-											<option value="">All Time</option>
-											<option value="today">Today</option>
-											<option value="week">This Week</option>
-											<option value="month">This Month</option>
-										</select>
-									</div>
-									<div class="filter-group">
-										<label for="resultFilterScore">Score</label>
-										<select id="resultFilterScore" class="form-control" onchange="filterResults()">
-											<option value="">All Scores</option>
-											<option value="lt10">&lt; 10</option>
-											<option value="gte10">&gt;= 10</option>
-										</select>
-									</div>
-									<div class="filter-group" id="resultTeacherFilterWrap">
-										<label for="resultTeacherFilter">Teacher</label>
-										<select id="resultTeacherFilter" class="form-control" onchange="filterResults()">
-											<option value="">All Teachers</option>
-										</select>
+							<div class="results-filters-row collapsible-filter-controls">
+								<div class="filter-group">
+									<label for="resultFilterClass">Class</label>
+									<select id="resultFilterClass" class="form-control" onchange="filterResults()">
+										<option value="">All Classes</option>
+									</select>
+								</div>
+								<div class="filter-group">
+									<label for="resultFilterExam">Exam</label>
+									<select id="resultFilterExam" class="form-control" onchange="filterResults()">
+										<option value="">All Exams</option>
+									</select>
+								</div>
+								<div class="filter-group">
+									<label for="resultFilterDate">Period</label>
+									<select id="resultFilterDate" class="form-control" onchange="filterResults()">
+										<option value="">All Time</option>
+										<option value="today">Today</option>
+										<option value="week">Last 7 days</option>
+										<option value="month">Last 30 days</option>
+									</select>
+								</div>
+								<div class="filter-group" id="resultStatusFilterWrap">
+									<label for="resultFilterStatus">Status</label>
+									<select id="resultFilterStatus" class="form-control" onchange="filterResults()">
+										<option value="">All Students</option>
+										<option value="attention">Needs attention</option>
+										<option value="on-track">On track</option>
+										<option value="inactive">Inactive / no activity</option>
+										<option value="no-exam">No exam data</option>
+									</select>
+								</div>
+								<div class="filter-group hidden" id="resultModeFilterWrap">
+									<label for="resultFilterMode">Mode</label>
+									<select id="resultFilterMode" class="form-control" onchange="filterResults()">
+										<option value="">All Modes</option>
+										<option value="exam">Exams</option>
+										<option value="training">Training</option>
+										<option value="game">Games</option>
+									</select>
+								</div>
+								<div class="filter-group hidden" id="resultScoreFilterWrap">
+									<label for="resultFilterScore">Attempt score</label>
+									<select id="resultFilterScore" class="form-control" onchange="filterResults()">
+										<option value="">All Scores</option>
+										<option value="lt10">&lt; 10 / 20</option>
+										<option value="gte10">≥ 10 / 20</option>
+									</select>
+								</div>
+								<div class="filter-group" id="resultTeacherFilterWrap">
+									<label for="resultTeacherFilter">Teacher</label>
+									<select id="resultTeacherFilter" class="form-control" onchange="filterResults()">
+										<option value="">All Teachers</option>
+									</select>
+								</div>
+								<div class="filter-group results-filter-search">
+									<label for="resultSearch">Search</label>
+									<div class="results-search-field">
+										<svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<circle cx="11" cy="11" r="8"></circle>
+											<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+										</svg>
+										<input type="text" id="resultSearch" placeholder="Student, number or class…" onkeyup="filterResults()" />
 									</div>
 								</div>
-								<div class="results-search-row">
-									<div class="results-actions-row">
+							</div>
+							<div class="results-filter-summary hidden" id="resultsScopeBar">
+								<span class="results-filter-summary-label">Filtered by</span>
+								<div class="results-filter-chips" id="resultsFilterChips"></div>
+								<button type="button" class="results-filter-clear-all" onclick="clearAllResultFilters()">Clear all</button>
+							</div>
+						</div>
+
+						<div id="resultsStudentsView">
+							<div class="dashboard-panel results-students-panel">
+								<div class="panel-header results-students-header">
+									<div>
+										<h3>Student performance</h3>
+										<p class="text-muted text-xs" id="resultsStudentsHint">One row per student. Open a profile for the full history.</p>
+									</div>
+									<label class="results-sort-label">
+										<span class="text-muted text-xs">Sort</span>
+										<select id="resultSort" class="form-control" onchange="setResultsSort(this.value)">
+											<option value="priority">Needs attention first</option>
+											<option value="name">Name A–Z</option>
+											<option value="lowest">Lowest average</option>
+											<option value="highest">Highest average</option>
+											<option value="attempts">Most attempts</option>
+											<option value="recent">Recent activity</option>
+										</select>
+									</label>
+								</div>
+								<div class="table-container results-students-table-wrap">
+									<table class="data-table results-students-table">
+										<thead>
+											<tr>
+												<th>Student</th>
+												<th>Class</th>
+												<th>Activity</th>
+												<th>Average /20</th>
+												<th>Pass rate</th>
+												<th>Recent trend</th>
+												<th>Last activity</th>
+												<th>Status</th>
+												<th class="actions-cell">Profile</th>
+											</tr>
+										</thead>
+										<tbody id="results-students-list">
+											<!-- Student rows are rendered by results-management.js -->
+										</tbody>
+									</table>
+								</div>
+							</div>
+						</div>
+
+						<div id="resultsAttemptsView" class="hidden">
+							<div class="dashboard-panel results-table-panel">
+								<div class="panel-header results-table-header">
+									<div>
+										<h3>All attempts</h3>
+										<span class="text-muted text-xs" id="resultsTableHint">Newest first</span>
+									</div>
+									<div class="results-table-actions">
 										<div id="bulk-actions-results" class="bulk-actions-container hidden">
 											<span class="selection-info">
 												<span id="selected-count-results">0</span> selected
@@ -3451,47 +3646,52 @@
 												</svg>
 												<span>Delete Selected</span>
 											</button>
-											<div class="divider-vertical"></div>
-										</div>
-										<div class="search-group results-search">
-											<svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<circle cx="11" cy="11" r="8"></circle>
-												<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-											</svg>
-											<input type="text" id="resultSearch" placeholder="Search by student name or number..." onkeyup="filterResults()" />
 										</div>
 									</div>
+								</div>
+								<div class="table-container results-table-wrap">
+									<table id="results-table" class="data-table">
+										<thead>
+											<tr>
+												<th class="checkbox-cell" style="width: 40px">
+													<input type="checkbox" id="selectAllResults" onchange="toggleBulkSelectAllGeneric(this, 'results')" />
+												</th>
+												<th>Date</th>
+												<th>Student</th>
+												<th>Class</th>
+												<th>Exam</th>
+												<th>Score</th>
+												<th>Time</th>
+												<th>Source</th>
+												<th class="owner-col">By</th>
+												<th class="actions-cell">Actions</th>
+											</tr>
+										</thead>
+										<tbody id="results-list">
+											<!-- Results will be populated here -->
+										</tbody>
+									</table>
 								</div>
 							</div>
 						</div>
 
-						<div class="dashboard-panel results-table-panel">
-							<div class="panel-header results-table-header">
-								<h3>Attempts</h3>
-								<span class="text-muted text-xs" id="resultsTableHint">Newest first</span>
-							</div>
-							<div class="table-container results-table-wrap">
-								<table id="results-table" class="data-table">
-									<thead>
-										<tr>
-											<th class="checkbox-cell" style="width: 40px">
-												<input type="checkbox" id="selectAllResults" onchange="toggleBulkSelectAllGeneric(this, 'results')" />
-											</th>
-											<th>Date</th>
-											<th>Student</th>
-											<th>Class</th>
-											<th>Exam</th>
-											<th>Score</th>
-											<th>Time</th>
-											<th>Source</th>
-											<th class="owner-col">By</th>
-											<th class="actions-cell">Actions</th>
-										</tr>
-									</thead>
-									<tbody id="results-list">
-										<!-- Results will be populated here -->
-									</tbody>
-								</table>
+						<div id="resultsStudentProfileModal" class="modal results-profile-modal" role="dialog" aria-modal="true" aria-labelledby="studentProfileTitle">
+							<div class="modal-content">
+								<div class="modal-header results-profile-header">
+									<div class="results-profile-identity">
+										<span class="results-profile-avatar" id="studentProfileAvatar">?</span>
+										<div class="results-profile-identity-text">
+											<h2 id="studentProfileTitle">Student</h2>
+											<p class="text-muted" id="studentProfileSubtitle">—</p>
+										</div>
+									</div>
+									<button type="button" class="modal-close" data-profile-close aria-label="Close student profile">×</button>
+								</div>
+								<div class="modal-body results-profile-body" id="studentProfileBody"></div>
+								<div class="modal-footer results-profile-footer">
+									<button type="button" class="btn btn-secondary" onclick="exportStudentProfileCSV()">Export history</button>
+									<button type="button" class="btn btn-primary" data-profile-close>Close</button>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -8316,6 +8516,57 @@
 						Cancel
 					</button>
 					<button type="submit" form="classForm" class="btn btn-primary">Save Class</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Add Students to Class (searchable checklist picker; replaces the
+		     old native multi-select in the two-panel workspace) -->
+		<div id="addStudentsPickerModal" class="modal">
+			<div class="modal-content">
+				<div class="modal-header">
+					<div class="modal-header-with-icon">
+						<div class="modal-header-icon icon-blue">
+							<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+						</div>
+						<div class="modal-header-text">
+							<h2 id="addStudentsPickerTitle">Add Students</h2>
+							<p class="modal-header-subtitle">
+								Pick student accounts to add to this class roster
+							</p>
+						</div>
+					</div>
+					<span class="close" onclick="closeAddStudentsPickerModal()">&times;</span>
+				</div>
+				<div class="modal-body">
+					<div class="picker-toolbar">
+						<div class="filter-field">
+							<label for="studentClassFilter">Origin Class</label>
+							<select id="studentClassFilter" class="form-control" onchange="onStudentClassFilterChange()">
+								<option value="all">All Classes</option>
+							</select>
+						</div>
+						<div class="filter-field picker-search-field">
+							<label for="studentPickerSearch">Search</label>
+							<input type="text" id="studentPickerSearch" class="form-control" placeholder="Search by name, username or number..." oninput="renderStudentPickerList()" />
+						</div>
+					</div>
+					<div id="studentPickerList" class="student-picker-list" aria-label="Available student accounts"></div>
+					<p class="text-muted small picker-helper-text">
+						Students join via signup or are created in Settings → Users. Adding stages rows in the roster — click <strong>Save Roster</strong> to persist.
+					</p>
+				</div>
+				<div class="modal-footer modal-footer--unified">
+					<button type="button" class="btn btn-ghost" onclick="deselectAllStudentsInPicker()">
+						Deselect All
+					</button>
+					<button type="button" class="btn btn-secondary" onclick="addAllStudentsFromUsers()">
+						Add All
+					</button>
+					<button type="button" class="btn btn-primary" id="addStudentsPickerConfirmBtn" onclick="addStudentFromUserPicker()">
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+						<span>Add Selected (<span id="addStudentsPickerCount">0</span>)</span>
+					</button>
 				</div>
 			</div>
 		</div>

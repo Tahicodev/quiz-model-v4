@@ -1340,6 +1340,19 @@ function openTab(event, tabName) {
 		content.classList.remove('active');
 	});
 
+	// A student profile is tied to the Results tab; never leave it floating
+	// over another module.
+	if (
+		tabName !== 'results' &&
+		typeof window.closeStudentProfile === 'function'
+	) {
+		try {
+			window.closeStudentProfile();
+		} catch (e) {
+			/* optional */
+		}
+	}
+
 	// Remove active class from all tabs
 	const tabs = document.querySelectorAll('.nav-tab');
 	tabs.forEach((tab) => {
@@ -1403,6 +1416,17 @@ function openTab(event, tabName) {
 			window.updateClassList();
 		} catch (e) {
 			console.warn('[admin-main] updateClassList on tab open failed:', e);
+		}
+	}
+
+	// The Results tab aggregates students and attempts from the live repo.
+	// Re-render on entry so a profile opened from Overview (or a result saved
+	// in another tab) is visible immediately, without a full page reload.
+	if (tabName === 'results' && typeof window.loadResults === 'function') {
+		try {
+			window.loadResults();
+		} catch (e) {
+			console.warn('[admin-main] loadResults on tab open failed:', e);
 		}
 	}
 

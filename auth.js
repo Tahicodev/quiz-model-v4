@@ -964,17 +964,46 @@
 			if (type === 'result') {
 				const classIds = getTeacherClassIds();
 				if (!classIds.length) return false;
-				const classId = item.classId || '';
-				if (classId && classIds.includes(classId)) return true;
+				const classId = item.classId || item.class_id || '';
+				if (classId && classIds.includes(String(classId))) return true;
 
-				const className = item.class || item.className || '';
-				if (!className) return false;
-				const classes = safeJsonParse(
-					JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
-					[],
-				);
-				const match = classes.find((c) => c.name === className);
-				return Boolean(match && classIds.includes(match.id));
+				const className = item.class || item.className || item.class_name || '';
+				if (className) {
+					const classes = safeJsonParse(
+						JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync('classes')),
+						[],
+					);
+					const match = classes.find((c) => c.name === className);
+					if (match && classIds.includes(String(match.id))) return true;
+				}
+
+				// Server-persisted result rows carry only user_id (no class
+				// fields), so resolve the student's registered class from the
+				// cached roster. Without this, a teacher's Results tab silently
+				// dropped almost every server row and showed only legacy local
+				// attempts that happened to embed a class.
+				const userId = item.userId || item.user_id || '';
+				if (userId) {
+					const users = window.__DI_CONTAINER__.repo.getAll_sync('users') || [];
+					const student = users.find(
+						(u) => String(u.id) === String(userId),
+					);
+					const studentClassId =
+						student?.classId || student?.class_id || '';
+					if (studentClassId && classIds.includes(String(studentClassId))) {
+						return true;
+					}
+					const studentClassName =
+						student?.className || student?.class_name || student?.class || '';
+					if (studentClassName) {
+						const classes = window.__DI_CONTAINER__.repo.getAll_sync('classes') || [];
+						const match = classes.find(
+							(c) => c.name === studentClassName,
+						);
+						if (match && classIds.includes(String(match.id))) return true;
+					}
+				}
+				return false;
 			}
 		}
 

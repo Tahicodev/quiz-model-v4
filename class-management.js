@@ -7,6 +7,15 @@ let classListenersBound = false;
 // Initialize class management
 function initClassManagement() {
 	loadClasses();
+	if (window.BulkSelect) {
+		window.BulkSelect.register('students', {
+			checkboxClass: 'student-checkbox',
+			selectAllId: 'selectAllStudents',
+			barId: 'bulk-actions-students',
+			countId: 'selected-count-students',
+			rowSelectedClass: 'question-row-selected',
+		});
+	}
 	updateClassList();
 	setupClassEventListeners();
 
@@ -459,68 +468,130 @@ function getSelectedStudentNumbers() {
 }
 
 function enableStudentPickerClickSelection(picker) {
-	if (!picker || picker.dataset.clickSelectEnabled === 'true') return;
-	picker.dataset.clickSelectEnabled = 'true';
-
-	picker.addEventListener('mousedown', (event) => {
-		const target = event.target;
-		if (!target || target.tagName !== 'OPTION') return;
-		event.preventDefault();
-		target.selected = !target.selected;
-		picker.focus();
-	});
+	// Legacy no-op: the native multi-select picker was replaced by the
+	// checkbox list rendered by renderStudentPickerList(). Kept as a stub so
+	// stale callers don't crash.
 }
 
-function populateStudentUserPicker() {
-	const picker = document.getElementById('studentUserPicker');
-	if (!picker) return;
+// ── Add Students picker modal (questions-identity checklist) ────────────────
+// Renders every available student account as a checkbox row (number, name,
+// origin class). Students already staged in the roster are disabled.
+
+function openAddStudentsPickerModal() {
+	const modal = document.getElementById('addStudentsPickerModal');
+	if (!modal) {
+		showToast('Add Students modal not found', 'error');
+		return;
+	}
+	const classData = assignClassStudentsId
+		? classes.find((c) => String(c.id) === String(assignClassStudentsId))
+		: null;
+	const titleEl = document.getElementById('addStudentsPickerTitle');
+	if (titleEl && classData) {
+		titleEl.textContent = `Add Students to ${classData.name}`;
+	}
+	const classFilter = document.getElementById('studentClassFilter');
+	if (classFilter) classFilter.value = 'all';
+	const pickerSearch = document.getElementById('studentPickerSearch');
+	if (pickerSearch) pickerSearch.value = '';
+	openModalLike(modal, 'studentPickerSearch');
+	renderStudentPickerList();
+}
+
+function closeAddStudentsPickerModal() {
+	closeModalLike(document.getElementById('addStudentsPickerModal'));
+}
+
+function renderStudentPickerList() {
+	const listEl = document.getElementById('studentPickerList');
+	if (!listEl) return;
 
 	const allUsers = getStudentUsersForPicker();
 	populateStudentClassFilterOptions(allUsers);
 	const users = getFilteredStudentUsersForPicker(allUsers);
 	const classById = getClassLookupMap();
-	const selectedNumbers = getSelectedStudentNumbers();
-	const availableUsers = users
-		.filter(
-			(user) => !selectedNumbers.has(String(user.studentNumber || '').trim()),
-		)
-		.map((user) => {
-			const classMeta = getUserClassMeta(user, classById);
-			const classLabel = ` (${classMeta.classLabel})`;
-			return {
-				...user,
-				label: `${user.studentNumber} - ${user.name || user.username}${classLabel}`,
-			};
-		});
+	const rosteredNumbers = getSelectedStudentNumbers();
 
-	if (!availableUsers.length) {
-		picker.innerHTML =
-			'<option value="" disabled>No student users available</option>';
-		enableStudentPickerClickSelection(picker);
+	if (!users.length) {
+		listEl.innerHTML =
+			'<div class="student-picker-empty">No student accounts match your search.</div>';
 		updateStudentPickerCount(0);
 		return;
 	}
 
-	picker.innerHTML = availableUsers
-		.map(
-			(user) =>
-				`<option value="${escapeHtml(String(user.id))}">${escapeHtml(user.label)}</option>`,
-		)
+	const html = users
+		.map((user) => {
+			const number = String(user.studentNumber || '').trim();
+			const name = String(user.name || user.username || '').trim();
+			const classMeta = getUserClassMeta(user, classById);
+			const alreadyRostered = rosteredNumbers.has(number);
+			const status = String(user.status || 'active').toLowerCase();
+			const isDisabled = status === 'disabled' || status === 'inactive';
+			return `
+				<label class="student-picker-item${alreadyRostered ? ' is-rostered' : ''}">
+					<input type="checkbox"
+						class="student-picker-checkbox"
+						data-user-id="${escapeHtml(String(user.id))}"
+						data-number="${escapeHtml(number)}"
+						${alreadyRostered ? 'disabled' : ''}>
+					<span class="student-picker-avatar">${escapeHtml(number)}</span>
+					<span class="student-picker-meta">
+						<span class="student-picker-name">${escapeHtml(name)}</span>
+						<span class="student-picker-class">${escapeHtml(classMeta.classLabel)}</span>
+					</span>
+					${
+						alreadyRostered
+							? '<span class="student-picker-tag tag-rostered">In roster</span>'
+							: isDisabled
+								? '<span class="student-picker-tag tag-disabled">Disabled</span>'
+								: ''
+					}
+				</label>
+			`;
+		})
 		.join('');
-	enableStudentPickerClickSelection(picker);
-	updateStudentPickerCount(availableUsers.length);
+
+	window.safeSetHTML
+		? window.safeSetHTML(listEl, html)
+		: (listEl.innerHTML = html);
+
+	// Footer button reflects how many rows are checked (starts at 0).
+	updateStudentPickerCount(0);
+	listEl
+		.querySelectorAll('.student-picker-checkbox')
+		.forEach((checkbox) => {
+			checkbox.addEventListener('change', () => updateStudentPickerCount());
+		});
+}
+
+function populateStudentUserPicker() {
+	// Legacy entry point (still called after roster mutations). The picker is
+	// now a modal; refresh its list only while it is open.
+	const modal = document.getElementById('addStudentsPickerModal');
+	if (modal && !modal.classList.contains('hidden')) {
+		renderStudentPickerList();
+	}
 }
 
 function updateStudentPickerCount(n) {
-	const countEl = document.getElementById('studentPickerCount');
-	if (!countEl) return;
-	countEl.textContent = n
-		? `${n} available — select, then Add Selected`
-		: '';
+	// Two surfaces: the modal footer "Add Selected (N)" button reflects the
+	// checked rows; the old #studentPickerCount badge is gone.
+	const confirmBtn = document.getElementById('addStudentsPickerConfirmBtn');
+	if (!confirmBtn) return;
+	const listEl = document.getElementById('studentPickerList');
+	let checkedCount = n;
+	if (checkedCount == null) {
+		checkedCount = listEl
+			? listEl.querySelectorAll('.student-picker-checkbox:checked').length
+			: 0;
+	}
+	const countEl = document.getElementById('addStudentsPickerCount');
+	if (countEl) countEl.textContent = String(checkedCount);
+	confirmBtn.disabled = checkedCount === 0;
 }
 
 function onStudentClassFilterChange() {
-	populateStudentUserPicker();
+	renderStudentPickerList();
 }
 
 function appendStudentFromUser(user, options = {}) {
@@ -543,16 +614,17 @@ function appendStudentFromUser(user, options = {}) {
 	if (!studentsList) return false;
 	studentsList.appendChild(createStudentItem(number, name, user.id));
 	renderStudentRosterTable();
+	markRosterDirty();
 	return true;
 }
 
 function addStudentFromUserPicker() {
-	const picker = document.getElementById('studentUserPicker');
-	if (!picker) return;
-	const selectedIds = Array.from(picker.selectedOptions || [])
-		.map((option) => String(option.value || '').trim())
-		.filter(Boolean);
-	if (!selectedIds.length) {
+	const listEl = document.getElementById('studentPickerList');
+	if (!listEl) return;
+	const checkedBoxes = Array.from(
+		listEl.querySelectorAll('.student-picker-checkbox:checked'),
+	);
+	if (!checkedBoxes.length) {
 		showToast('Select one or more student users first', 'warning');
 		return;
 	}
@@ -560,19 +632,21 @@ function addStudentFromUserPicker() {
 		getStudentUsersForPicker().map((entry) => [String(entry.id), entry]),
 	);
 	let addedCount = 0;
-	selectedIds.forEach((userId) => {
-		const user = byId.get(userId);
+	checkedBoxes.forEach((checkbox) => {
+		const user = byId.get(String(checkbox.dataset.userId || '').trim());
 		if (appendStudentFromUser(user, { quiet: true })) {
 			addedCount += 1;
 		}
 	});
 	if (!addedCount) {
 		showToast('No new students were added', 'info');
-		populateStudentUserPicker();
+		renderStudentPickerList();
 		return;
 	}
 	showToast(`Added ${addedCount} student(s) from users`, 'success');
-	populateStudentUserPicker();
+	closeAddStudentsPickerModal();
+	renderStudentRosterTable();
+	markRosterDirty();
 }
 
 function addAllStudentsFromUsers() {
@@ -593,16 +667,18 @@ function addAllStudentsFromUsers() {
 		}
 	});
 	showToast(`Added ${addedCount} student(s) from users`, 'success');
-	populateStudentUserPicker();
+	closeAddStudentsPickerModal();
+	renderStudentRosterTable();
+	markRosterDirty();
 }
 
 function deselectAllStudentsInPicker() {
-	const picker = document.getElementById('studentUserPicker');
-	if (!picker) return;
-	Array.from(picker.options || []).forEach((option) => {
-		option.selected = false;
-	});
-	picker.blur();
+	document
+		.querySelectorAll('#studentPickerList .student-picker-checkbox:checked')
+		.forEach((checkbox) => {
+			checkbox.checked = false;
+		});
+	updateStudentPickerCount();
 }
 
 function createStudentItem(number, name, userId = '') {
@@ -654,14 +730,53 @@ function buildRosterRows() {
 	});
 }
 
+// Roster sort state (Name / Student # / Status + asc/desc toggle)
+let rosterSortDirection = 'asc';
+
+function sortStudentRosterRows(rows) {
+	const sortByEl = document.getElementById('studentRosterSortBy');
+	const sortBy = String(sortByEl?.value || 'name');
+	const dir = rosterSortDirection === 'desc' ? -1 : 1;
+	const statusRank = (row) => {
+		if (!row.account) return 2; // no account yet
+		const status = String(row.account.status || 'active').toLowerCase();
+		return status === 'disabled' || status === 'inactive' ? 1 : 0;
+	};
+	return rows.sort((a, b) => {
+		let cmp = 0;
+		if (sortBy === 'number') {
+			cmp = String(a.number).localeCompare(String(b.number), undefined, {
+				numeric: true,
+			});
+		} else if (sortBy === 'status') {
+			cmp = statusRank(a) - statusRank(b);
+			if (!cmp) cmp = String(a.name).localeCompare(String(b.name));
+		} else {
+			cmp = String(a.name).localeCompare(String(b.name));
+		}
+		return cmp * dir;
+	});
+}
+
+function sortStudentRoster() {
+	// Re-render from the staged rows so the sort is visible immediately.
+	renderStudentRosterTable();
+}
+
+function toggleRosterSortDirection() {
+	rosterSortDirection = rosterSortDirection === 'asc' ? 'desc' : 'asc';
+	const btn = document.getElementById('sortRosterDirection');
+	if (btn) btn.classList.toggle('desc', rosterSortDirection === 'desc');
+	renderStudentRosterTable();
+}
+
 function renderStudentRosterTable() {
 	const tbody = document.getElementById('selectedStudentsList');
 	const emptyState = document.getElementById('rosterEmptyState');
 	const summary = document.getElementById('assignClassRosterSummary');
 	if (!tbody) return;
 
-	const rows = buildRosterRows();
-	const isAdminSession = window.Auth?.isAdmin?.() === true;
+	const rows = sortStudentRosterRows(buildRosterRows());
 	const classId = assignClassStudentsId;
 	const classData = classId ? classes.find((c) => c.id === classId) : null;
 	const className = classData ? classData.name : '';
@@ -671,23 +786,28 @@ function renderStudentRosterTable() {
 	}
 	const saveBtn = document.getElementById('saveAssignClassStudentsBtn');
 	if (saveBtn) {
-		saveBtn.textContent = rows.length
-			? `Save Roster (${rows.length})`
-			: 'Save Roster';
+		const saveLabel = saveBtn.querySelector('span');
+		if (saveLabel) {
+			saveLabel.textContent = rows.length
+				? `Save Roster (${rows.length})`
+				: 'Save Roster';
+		}
 	}
 
 	if (!rows.length) {
 		tbody.innerHTML = '';
 		if (emptyState) {
 			emptyState.classList.remove('hidden');
-			emptyState.textContent =
-				'No students in this class yet — add them from the picker above.';
+			emptyState.innerHTML =
+				'No students in this class yet — add them with <strong>Add Students</strong>.';
 		}
+		if (window.BulkSelect) window.BulkSelect.clear('students');
+		applyRosterPagination();
 		return;
 	}
 
 	const html = rows
-		.map(({ number, name, userId, account }) => {
+		.map(({ number, name, userId, account }, index) => {
 			const hasAccount = Boolean(account);
 			const status = String(account?.status || 'active').toLowerCase();
 			const isDisabled = status === 'disabled' || status === 'inactive';
@@ -704,23 +824,31 @@ function renderStudentRosterTable() {
 			const accountLabel = hasAccount
 				? escapeHtml(String(account.name || account.username || ''))
 				: '—';
+			const safeNumber = escapeHtml(number);
+			const safeName = escapeHtml(name);
 
 			return `
-				<tr class="selected-student-item" data-number="${escapeHtml(number)}" data-name="${escapeHtml(name)}"${userId ? ` data-user-id="${escapeHtml(userId)}"` : ''}>
-					<td class="roster-number">${escapeHtml(number)}</td>
-					<td class="roster-name">
-						<span class="roster-name-text">${escapeHtml(name)}</span>
-						${className ? `<span class="roster-name-class">${escapeHtml(className)}</span>` : ''}
+				<tr class="selected-student-item" data-id="${safeNumber}" data-number="${safeNumber}" data-name="${safeName}"${userId ? ` data-user-id="${escapeHtml(userId)}"` : ''}>
+					<td class="checkbox-cell" data-label="Select">
+						<input type="checkbox"
+							class="student-checkbox"
+							data-id="${safeNumber}"
+							onchange="toggleBulkRowSelection(this,'students')">
 					</td>
-					<td class="roster-account">${accountLabel}</td>
-					<td><span class="${statusClass}">${statusLabel}</span></td>
-					<td class="roster-actions">
-						<button type="button" class="btn-icon roster-action-btn" title="Edit student info" onclick="editRosterStudent('${escapeHtml(number)}')" ${hasAccount ? '' : 'disabled'}>
-							<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-						</button>
-						<button type="button" class="btn-icon roster-action-btn roster-action-danger" title="${isAdminSession ? 'Remove from roster' : 'Remove from roster'}" onclick="removeRosterStudent('${escapeHtml(number)}')">
-							<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-						</button>
+					<td class="qnum-cell" data-label="#">${index + 1}</td>
+					<td class="student-number-cell" data-label="Student #">${safeNumber}</td>
+					<td class="student-name-cell" data-label="Name">${safeName}</td>
+					<td class="student-account-cell" data-label="Account">${accountLabel}</td>
+					<td data-label="Status"><span class="${statusClass}">${statusLabel}</span></td>
+					<td class="roster-actions actions-cell" data-label="Actions" style="width: 140px">
+						<div class="exam-actions">
+							<button type="button" class="exam-action-btn exam-edit-btn" onclick="editStudent('${safeNumber}')" title="Edit student" ${!hasAccount ? 'disabled' : ''}>
+								<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+							</button>
+							<button type="button" class="exam-action-btn roster-action-danger" onclick="removeRosterStudent('${safeNumber}')" title="Remove from roster">
+								<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+							</button>
+						</div>
 					</td>
 				</tr>
 			`;
@@ -732,6 +860,23 @@ function renderStudentRosterTable() {
 		: (tbody.innerHTML = html);
 
 	if (emptyState) emptyState.classList.add('hidden');
+
+	// Mobile: tap a row to open the action sheet (same identity as the
+	// questions / exams tables). Controls keep their own behavior.
+	if (window.innerWidth <= 768) {
+		tbody.querySelectorAll('tr.selected-student-item').forEach((row) => {
+			row.addEventListener('click', (e) => {
+				if (e.target.closest('button, input, select')) return;
+				const number = row.dataset.number || '';
+				const name = row.dataset.name || '';
+				if (number) openStudentActionSheet(number, name);
+			});
+		});
+	}
+
+	// Restore bulk selection after re-render (filter/sort safe) + refresh bulk bar
+	if (window.BulkSelect) window.BulkSelect.restore('students');
+
 	// Re-apply the client-side search/status filters to the fresh rows.
 	filterStudentRosterTable();
 }
@@ -772,6 +917,8 @@ function filterStudentRosterTable() {
 
 		const visible = matchesSearch && matchesStatus;
 		row.style.display = visible ? '' : 'none';
+		// Pagination reads this flag to page only over matched rows.
+		row.dataset.filteredOut = visible ? 'false' : 'true';
 		if (visible) visibleCount += 1;
 	});
 
@@ -780,13 +927,87 @@ function filterStudentRosterTable() {
 		const total = rows.length;
 		if (visibleCount === 0) {
 			emptyState.classList.remove('hidden');
-			emptyState.textContent = total
+			emptyState.innerHTML = total
 				? 'No students match your search.'
-				: 'No students in this class yet — add them from the picker above.';
+				: 'No students in this class yet — add them with <strong>Add Students</strong>.';
 		} else {
 			emptyState.classList.add('hidden');
 		}
 	}
+
+	applyRosterPagination();
+}
+
+// ── Roster pagination (questions-table identity) ────────────────────────────
+const ROSTER_ITEMS_PER_PAGE = 15;
+
+function applyRosterPagination() {
+	const tbody = document.getElementById('selectedStudentsList');
+	if (!tbody) return;
+
+	const rows = Array.from(tbody.querySelectorAll('.selected-student-item'));
+	// "Matched" rows are those the search/status filter left visible.
+	const matchedRows = rows.filter((row) => row.dataset.filteredOut !== 'true');
+	const totalPages = Math.max(
+		1,
+		Math.ceil(matchedRows.length / ROSTER_ITEMS_PER_PAGE),
+	);
+	let currentPage = parseInt(
+		document.getElementById('rosterCurrentPage')?.textContent || '1',
+	);
+	if (Number.isNaN(currentPage) || currentPage < 1) currentPage = 1;
+	if (currentPage > totalPages) currentPage = totalPages;
+
+	const startIndex = (currentPage - 1) * ROSTER_ITEMS_PER_PAGE;
+	const endIndex = Math.min(startIndex + ROSTER_ITEMS_PER_PAGE, matchedRows.length);
+
+	rows.forEach((row) => {
+		row.style.display = 'none';
+	});
+	for (let i = startIndex; i < endIndex; i++) {
+		if (matchedRows[i]) matchedRows[i].style.display = '';
+	}
+
+	const startDisplay = matchedRows.length > 0 ? startIndex + 1 : 0;
+	const setText = (id, value) => {
+		const el = document.getElementById(id);
+		if (el) el.textContent = String(value);
+	};
+	setText('rosterPaginationStart', startDisplay);
+	setText('rosterPaginationEnd', endIndex);
+	setText('rosterPaginationTotal', matchedRows.length);
+	setText('rosterCurrentPage', currentPage);
+	setText('rosterTotalPages', totalPages);
+	const prevBtn = document.getElementById('rosterPrevPage');
+	if (prevBtn) prevBtn.disabled = currentPage <= 1;
+	const nextBtn = document.getElementById('rosterNextPage');
+	if (nextBtn) nextBtn.disabled = currentPage >= totalPages;
+	const paginationEl = document.getElementById('rosterPagination');
+	if (paginationEl) {
+		paginationEl.classList.toggle('hidden', rows.length === 0);
+	}
+}
+
+function changeRosterPage(direction) {
+	const currentPageEl = document.getElementById('rosterCurrentPage');
+	if (!currentPageEl) return;
+	const current = parseInt(currentPageEl.textContent) || 1;
+	currentPageEl.textContent = String(current + direction);
+	applyRosterPagination();
+	// Re-sync the bulk bar: it counts only rows visible on the current page.
+	if (window.BulkSelect) window.BulkSelect.updateBar('students');
+}
+
+// ── Roster dirty (pending changes) hint ─────────────────────────────────────
+
+function markRosterDirty() {
+	const hint = document.getElementById('rosterPendingHint');
+	if (hint) hint.classList.remove('hidden');
+}
+
+function clearRosterDirty() {
+	const hint = document.getElementById('rosterPendingHint');
+	if (hint) hint.classList.add('hidden');
 }
 
 function editRosterStudent(number) {
@@ -813,6 +1034,320 @@ function removeRosterStudent(number) {
 	row.remove();
 	renderStudentRosterTable();
 	populateStudentUserPicker();
+	markRosterDirty();
+}
+
+// ── Student CRUD + action sheet (questions-table identity) ──────────────────
+
+function editStudent(number) {
+	editRosterStudent(number);
+}
+
+function openStudentActionSheet(number, name) {
+	const account = getRosterAccountInfo(number);
+	const hasAccount = Boolean(account);
+	const actions = [
+		{
+			label: 'Edit Student',
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+			onClick: () => editStudent(number),
+		},
+		...(hasAccount
+			? [
+					{
+						label: 'Open Account',
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+						onClick: () => {
+							if (
+								typeof window.openUserModal === 'function' &&
+								account
+							) {
+								window.openUserModal(account.id);
+							}
+						},
+					},
+			  ]
+			: []),
+		{
+			label: 'Remove from Roster',
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+			variant: 'danger',
+			onClick: () => removeRosterStudent(number),
+		},
+	];
+	if (window.MobileActionSheet) {
+		window.MobileActionSheet.open(
+			`Student: ${escapeHtml(name || number)}`,
+			actions,
+		);
+	}
+}
+
+async function deleteSelectedStudents() {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('students')
+		: [];
+	if (!ids.length) {
+		showToast('No students selected', 'error');
+		return;
+	}
+	if (
+		!confirm(
+			`Are you sure you want to remove ${ids.length} student(s) from the roster?`,
+		)
+	) {
+		return;
+	}
+	let removed = 0;
+	ids.forEach((number) => {
+		const row = document.querySelector(
+			`#selectedStudentsList .selected-student-item[data-number="${CSS.escape(String(number))}"]`,
+		);
+		if (row) {
+			row.remove();
+			removed += 1;
+		}
+	});
+	if (removed) {
+		renderStudentRosterTable();
+		populateStudentUserPicker();
+		if (window.BulkSelect) window.BulkSelect.clear('students');
+		markRosterDirty();
+		showToast(`Removed ${removed} student(s) from the roster`, 'success');
+		if (typeof logActivity === 'function') {
+			logActivity('class', `${removed} student(s)`, 'removed from roster', {
+				classId: assignClassStudentsId,
+				count: removed,
+			});
+		}
+	} else {
+		showToast('No students were removed', 'info');
+	}
+}
+
+// ── Bulk account actions (admin-only, questions-table identity) ─────────────
+// Enable/Disable flips the selected students' user accounts. Persistence
+// mirrors Auth.toggleUserStatus: API first (User.status enum maps 'disabled'
+// → 'suspended'), then the localStorage mirror — never both on failure.
+
+async function bulkSetStudentAccounts(targetStatus) {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('students')
+		: [];
+	if (!ids.length) {
+		showToast('No students selected', 'error');
+		return;
+	}
+
+	const targets = [];
+	ids.forEach((number) => {
+		const account = getRosterAccountInfo(number);
+		if (!account) return; // no account yet — nothing to enable/disable
+		const status = String(account.status || 'active').toLowerCase();
+		const isDisabled = status === 'disabled' || status === 'inactive';
+		if (targetStatus === 'active' && isDisabled) targets.push(account);
+		if (targetStatus === 'disabled' && !isDisabled) targets.push(account);
+	});
+
+	if (!targets.length) {
+		showToast(
+			targetStatus === 'active'
+				? 'Selected students are already active (or have no account)'
+				: 'Selected students are already disabled (or have no account)',
+			'info',
+		);
+		return;
+	}
+
+	const verb = targetStatus === 'active' ? 'activate' : 'suspend';
+	if (
+		!confirm(
+			`Are you sure you want to ${verb} ${targets.length} student account(s)?`,
+		)
+	) {
+		return;
+	}
+
+	const users = window.Auth.getUsers ? window.Auth.getUsers() : [];
+	let succeeded = 0;
+	for (const account of targets) {
+		if (window.API && typeof window.API.update === 'function') {
+			try {
+				await window.API.update('users', account.id, {
+					status: targetStatus === 'active' ? 'active' : 'suspended',
+				});
+			} catch (apiErr) {
+				console.warn('[classes] bulk status API update failed:', apiErr);
+				continue; // leave this account untouched on both sides
+			}
+		}
+		const user = users.find((u) => String(u.id) === String(account.id));
+		if (user) {
+			user.status = targetStatus;
+			user.updatedAt = new Date().toISOString();
+		}
+		succeeded += 1;
+	}
+
+	if (succeeded) {
+		if (window.Auth.saveUsers) window.Auth.saveUsers(users);
+		if (
+			typeof window.syncUsersToClients === 'function' &&
+			window.Auth?.isAdmin?.()
+		) {
+			window.syncUsersToClients();
+		}
+		renderStudentRosterTable();
+		showToast(
+			`${succeeded} account(s) ${targetStatus === 'active' ? 'activated' : 'suspended'}`,
+			'success',
+		);
+		if (typeof logActivity === 'function') {
+			logActivity(
+				'class',
+				`${succeeded} student account(s)`,
+				targetStatus === 'active' ? 'activated' : 'suspended',
+				{ classId: assignClassStudentsId, count: succeeded },
+			);
+		}
+	}
+	if (succeeded < targets.length) {
+		showToast(
+			`${targets.length - succeeded} account(s) could not be updated on the server`,
+			'error',
+		);
+	}
+}
+
+// Export just the selected students as CSV (number, name, account, status).
+function exportSelectedStudents() {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('students')
+		: [];
+	if (!ids.length) {
+		showToast('No students selected', 'error');
+		return;
+	}
+	const idSet = new Set(ids.map(String));
+	const students = Array.from(
+		document.querySelectorAll('#selectedStudentsList .selected-student-item'),
+	)
+		.filter((el) => idSet.has(String(el.dataset.number || '').trim()))
+		.map((el) => {
+			const account = getRosterAccountInfo(el.dataset.number);
+			const status = !account
+				? 'no account'
+				: String(account.status || 'active').toLowerCase() === 'disabled' ||
+					  String(account.status || '').toLowerCase() === 'inactive'
+					? 'disabled'
+					: 'active';
+			return {
+				number: String(el.dataset.number || '').trim(),
+				name: String(el.dataset.name || '').trim(),
+				account: account ? String(account.username || '') : '',
+				status,
+			};
+		});
+
+	if (!students.length) {
+		showToast('No selected students found in the roster', 'warning');
+		return;
+	}
+
+	let csv = 'Number,Name,Account,Status\n';
+	students.forEach((student) => {
+		csv += `"${student.number}","${student.name}","${student.account}","${student.status}"\n`;
+	});
+
+	const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+	const link = document.createElement('a');
+	const url = URL.createObjectURL(blob);
+	const assignedClass = assignClassStudentsId
+		? classes.find((c) => c.id === assignClassStudentsId)
+		: null;
+	const className = assignedClass?.name || 'students';
+	link.setAttribute('href', url);
+	link.setAttribute(
+		'download',
+		`${className}_selected_students_${new Date().toISOString().split('T')[0]}.csv`,
+	);
+	link.click();
+	showToast(`Exported ${students.length} selected student(s)`, 'success');
+}
+
+// Add-student modal (Create) -------------------------------------------------
+
+function openAddStudentModal() {
+	let modal = document.getElementById('addStudentModal');
+	if (!modal) {
+		modal = document.createElement('div');
+		modal.id = 'addStudentModal';
+		modal.className = 'modal';
+		modal.innerHTML = `
+			<div class="modal-content modal-sm">
+				<div class="modal-header">
+					<h3 style="margin:0;font-size:1rem;font-weight:600;">Add Student</h3>
+					<button type="button" class="btn-icon" onclick="closeAddStudentModal()" style="background:none;border:none;font-size:1.5rem;color:#64748b;cursor:pointer;">×</button>
+				</div>
+				<form id="addStudentForm" onsubmit="event.preventDefault(); saveAddStudent();">
+					<div class="modal-body" style="padding:20px 24px;">
+						<div class="form-group" style="margin-bottom:16px;">
+							<label class="form-label" style="display:block;margin-bottom:6px;font-size:0.875rem;font-weight:600;color:#374151;">Student #</label>
+							<input type="text" id="addStudentNumber" class="form-control" placeholder="e.g. S001" required />
+						</div>
+						<div class="form-group" style="margin-bottom:16px;">
+							<label class="form-label" style="display:block;margin-bottom:6px;font-size:0.875rem;font-weight:600;color:#374151;">Full Name</label>
+							<input type="text" id="addStudentName" class="form-control" placeholder="Enter student name" required />
+						</div>
+						<p class="text-muted" style="font-size:0.8125rem;margin:0;">Staged in this roster — click Save Roster to persist.</p>
+					</div>
+					<div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:12px 24px;">
+						<button type="button" class="btn btn-secondary btn-sm" onclick="closeAddStudentModal()">Cancel</button>
+						<button type="submit" class="btn btn-primary btn-sm">Add Student</button>
+					</div>
+				</form>
+			</div>
+		`;
+		document.body.appendChild(modal);
+	}
+	const numberInput = document.getElementById('addStudentNumber');
+	const nameInput = document.getElementById('addStudentName');
+	if (numberInput) numberInput.value = '';
+	if (nameInput) nameInput.value = '';
+	openModalLike(modal, 'addStudentNumber');
+	numberInput?.focus();
+}
+
+function closeAddStudentModal() {
+	closeModalLike(document.getElementById('addStudentModal'));
+}
+
+function saveAddStudent() {
+	const number = String(
+		document.getElementById('addStudentNumber')?.value || '',
+	).trim();
+	const name = String(
+		document.getElementById('addStudentName')?.value || '',
+	).trim();
+	if (!number || !name) {
+		showToast('Please enter both student # and name', 'error');
+		return;
+	}
+	if (getSelectedStudentNumbers().has(number)) {
+		showToast('Student already added to this class', 'info');
+		closeAddStudentModal();
+		return;
+	}
+	const studentsList = document.getElementById('selectedStudentsList');
+	if (!studentsList) {
+		closeAddStudentModal();
+		return;
+	}
+	studentsList.appendChild(createStudentItem(number, name));
+	renderStudentRosterTable();
+	closeAddStudentModal();
+	markRosterDirty();
+	showToast(`Student "${escapeHtml(name)}" added to roster`, 'success');
 }
 
 function setupClassEventListeners() {
@@ -1069,6 +1604,8 @@ function openAssignClassStudents(classId) {
 	mergedStudents.forEach((student) => {
 		studentsList.appendChild(createStudentItem(student.number, student.name));
 	});
+	// Reset the roster toolbar controls (search / status / sort / pagination
+	// page) so every class opens on a clean, page-1 view.
 	const classFilter = document.getElementById('studentClassFilter');
 	if (classFilter) classFilter.value = 'all';
 	const pickerSearch = document.getElementById('studentPickerSearch');
@@ -1077,8 +1614,24 @@ function openAssignClassStudents(classId) {
 	if (rosterSearch) rosterSearch.value = '';
 	const rosterStatus = document.getElementById('studentRosterStatusFilter');
 	if (rosterStatus) rosterStatus.value = 'all';
+	const rosterSortBy = document.getElementById('studentRosterSortBy');
+	if (rosterSortBy) rosterSortBy.value = 'name';
+	rosterSortDirection = 'asc';
+	const sortDirBtn = document.getElementById('sortRosterDirection');
+	if (sortDirBtn) sortDirBtn.classList.remove('desc');
+	const rosterPageEl = document.getElementById('rosterCurrentPage');
+	if (rosterPageEl) rosterPageEl.textContent = '1';
+	clearRosterDirty();
 
-	populateStudentUserPicker();
+	// Bulk Enable/Disable touch user accounts — an admin-only operation.
+	// Hide the buttons for teacher sessions.
+	const isAdminSession = window.Auth?.isAdmin?.() === true;
+	document
+		.querySelectorAll('#classStudentsPane .admin-only-bulk-action')
+		.forEach((btn) => {
+			btn.classList.toggle('hidden', !isAdminSession);
+		});
+
 	renderStudentRosterTable();
 
 	// Legacy fallback if modal exists instead of pane
@@ -1105,6 +1658,7 @@ function closeAssignClassStudents() {
 		closeModalLike(modal);
 	}
 	assignClassStudentsId = null;
+	clearRosterDirty();
 	updateClassList();
 	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1132,6 +1686,50 @@ async function openClassDeleteAction() {
 				closeAssignClassStudents();
 			}
 		}
+	}
+}
+
+// Mobile action sheet for a class row (mirrors the roster's student sheet).
+function openClassActionSheet(classId) {
+	const classData = classes.find((c) => String(c.id) === String(classId));
+	if (!classData) return;
+	const actions = [
+		{
+			label: 'Manage Students',
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+			onClick: () => openAssignClassStudents(classId),
+		},
+		{
+			label: 'Assign Exams',
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>',
+			onClick: () => openAssignClassExams(classId),
+		},
+		{
+			label: 'Games',
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="4"></rect><line x1="6" y1="10" x2="6" y2="14"></line><line x1="10" y1="10" x2="10" y2="14"></line><line x1="14" y1="10" x2="14" y2="14"></line><line x1="18" y1="10" x2="18" y2="14"></line></svg>',
+			onClick: () => {
+				if (typeof window.openClassGamesModal === 'function') {
+					window.openClassGamesModal(classId);
+				}
+			},
+		},
+		{
+			label: 'Edit Class',
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+			onClick: () => editClass(classId),
+		},
+		{
+			label: 'Delete Class',
+			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+			variant: 'danger',
+			onClick: () => deleteClass(classId),
+		},
+	];
+	if (window.MobileActionSheet) {
+		window.MobileActionSheet.open(
+			`Class: ${escapeHtml(classData.name)}`,
+			actions,
+		);
 	}
 }
 
@@ -1736,10 +2334,14 @@ function updateClassList(classesList = classes) {
 		row.setAttribute('data-id', cls.id);
 		row.classList.add('clickable-class-row');
 
-		// Click anywhere on the class row navigates directly to the Students page
+		// Click anywhere on the class row navigates directly to the Students
+		// page — except on mobile, where the tap opens the action sheet
+		// (same identity as the questions/exams tables) and navigation goes
+		// through the sheet's "Manage Students" action.
 		row.addEventListener('click', (e) => {
 			// Don't trigger if clicking action button, input or checkbox directly
 			if (e.target.closest('button, input, select, .checkbox-cell, a')) return;
+			if (window.innerWidth <= 768) return;
 			e.stopPropagation();
 			openAssignClassStudents(cls.id);
 		});
@@ -1778,18 +2380,18 @@ function updateClassList(classesList = classes) {
                     data-id="${cls.id}"
                     onchange="toggleBulkRowSelection(this,'classes')">
             </td>
-            <td><a href="javascript:void(0)" class="class-name-link" onclick="openAssignClassStudents('${cls.id}'); event.stopPropagation();" title="Manage students in ${escapeHtml(cls.name)}">${escapeHtml(cls.name)}</a></td>
-            <td>${dateCreated}</td>
-            <td><span class="badge badge-subtle">${studentCount} students</span></td>
-            <td>${teacherCell}</td>
-            <td>${examCount}</td>
-            <td class="class-assigned-games-cell">${
+            <td data-label="Class"><a href="javascript:void(0)" class="class-name-link" onclick="openAssignClassStudents('${cls.id}'); event.stopPropagation();" title="Manage students in ${escapeHtml(cls.name)}">${escapeHtml(cls.name)}</a></td>
+            <td data-label="Created">${dateCreated}</td>
+            <td data-label="Students"><span class="badge badge-subtle">${studentCount} students</span></td>
+            <td data-label="Teacher">${teacherCell}</td>
+            <td data-label="Exams">${examCount}</td>
+            <td class="class-assigned-games-cell" data-label="Games">${
 							window.renderClassGamesCell
 								? window.renderClassGamesCell(cls.id)
 								: 'No games'
 						}</td>
             <td class="owner-col" data-label="By">${window.TeacherFilter ? window.TeacherFilter.ownerBadge(cls) : ''}</td>
-            <td class="actions-cell">
+            <td class="actions-cell" data-label="Actions">
                 <div class="exam-actions">
                     <button class="exam-action-btn exam-classes-btn" onclick="openClassGamesModal('${
 											cls.id
@@ -1843,6 +2445,18 @@ function updateClassList(classesList = classes) {
         `;
 		tbody.appendChild(row);
 	});
+
+	// Mobile: tap a class row to open the action sheet (same identity as the
+	// roster / questions tables). Controls keep their own behavior.
+	if (window.innerWidth <= 768) {
+		tbody.querySelectorAll('tr.clickable-class-row').forEach((rowEl) => {
+			rowEl.addEventListener('click', (e) => {
+				if (e.target.closest('button, input, select, a')) return;
+				const classId = rowEl.dataset.id;
+				if (classId) openClassActionSheet(classId);
+			});
+		});
+	}
 
 	// Owner badges are admin-only (see teacher-filter.js + hide-owner-col CSS).
 	if (classTable) {
@@ -2114,10 +2728,24 @@ window.onStudentClassFilterChange = onStudentClassFilterChange;
 window.populateStudentUserPicker = populateStudentUserPicker;
 window.filterStudentRosterTable = filterStudentRosterTable;
 window.editRosterStudent = editRosterStudent;
-window.removeRosterStudent = removeRosterStudent;
-window.renderStudentRosterTable = renderStudentRosterTable;
-window.exportStudents = exportStudents;
+	window.removeRosterStudent = removeRosterStudent;
+	window.renderStudentRosterTable = renderStudentRosterTable;
+	window.editStudent = editStudent;
+	window.openStudentActionSheet = openStudentActionSheet;
+	window.openAddStudentModal = openAddStudentModal;
+	window.closeAddStudentModal = closeAddStudentModal;
+	window.saveAddStudent = saveAddStudent;
+	window.exportStudents = exportStudents;
 window.importStudents = importStudents;
+window.exportSelectedStudents = exportSelectedStudents;
+window.bulkSetStudentAccounts = bulkSetStudentAccounts;
+window.openAddStudentsPickerModal = openAddStudentsPickerModal;
+window.closeAddStudentsPickerModal = closeAddStudentsPickerModal;
+window.renderStudentPickerList = renderStudentPickerList;
+window.sortStudentRoster = sortStudentRoster;
+window.toggleRosterSortDirection = toggleRosterSortDirection;
+window.changeRosterPage = changeRosterPage;
+window.openClassActionSheet = openClassActionSheet;
 window.openAssignClassStudents = openAssignClassStudents;
 window.closeAssignClassStudents = closeAssignClassStudents;
 window.saveAssignClassStudents = saveAssignClassStudents;
@@ -2215,7 +2843,8 @@ async function deleteSelectedClasses() {
 		showToast(`Deleted ${okIds.size} class(es)!`);
 	}
 }
-window.deleteSelectedClasses = deleteSelectedClasses;
+	window.deleteSelectedClasses = deleteSelectedClasses;
+	window.deleteSelectedStudents = deleteSelectedStudents;
 
 // Import staging for the Assign Students modal: admins add rows directly;
 // teachers hand the parsed roster to the admin confirmation queue instead
@@ -2323,6 +2952,7 @@ function importStudents() {
 				if (importedCount > 0) {
 					populateStudentUserPicker();
 					renderStudentRosterTable();
+					markRosterDirty();
 					showToast(
 						`Imported ${importedCount} student(s) successfully`,
 						'success',

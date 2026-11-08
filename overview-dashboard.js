@@ -24,14 +24,26 @@ document.addEventListener('DOMContentLoaded', () => {
 // Exposed init function for tab switching
 function initDashboard() {
 	overviewStatsCache = null;
+	updateGreeting();
+	// Teachers with the pedagogical dashboard take the server-aggregated path
+	// and skip the legacy client computations entirely (no duplicated work and
+	// no two dashboards racing for the same screen). The legacy path below
+	// remains the fallback when #teacherOverview or its module is absent, e.g.
+	// an older cached page or the unit-test harness.
+	if (!overviewIsAdmin()) {
+		const teacherHost = document.getElementById('teacherOverview');
+		if (teacherHost && window.TeacherOverview && typeof window.TeacherOverview.load === 'function') {
+			renderAdminOverviewChrome();
+			window.TeacherOverview.load();
+			return;
+		}
+	}
 	populateOverviewFilters();
 	updateOverviewScopeBar();
 	updateDashboardStats();
 	renderRecentActivity();
-	updateGreeting();
 	// Admin sessions overlay the correct, server-aggregated school-wide metrics
-	// on top of the client path above. Teachers keep the scoped classroom view
-	// untouched (the client path already rendered their numbers).
+	// on top of the client path above.
 	renderAdminOverviewChrome();
 	if (overviewIsAdmin()) loadAdminOverview();
 }
@@ -3126,15 +3138,41 @@ function renderAdminOverviewChrome() {
 	const ayWrap = document.getElementById('overviewAcademicYearFilterWrap');
 	if (ayWrap) ayWrap.hidden = !isAdmin;
 	const legacy = document.getElementById('legacyOverviewBlocks');
+	// The whole legacy Overview surface (KPI grids, category insights, report
+	// charts, activity feed) is wrapped in one container. Hiding only the KPI
+	// grids left the rest of the old dashboard visible under the teacher
+	// dashboard — the "two structures" problem.
+	const legacyContent = document.getElementById('legacyOverviewContent');
 	const adminSec = document.getElementById('adminSchoolInsights');
+	const teacherHost = document.getElementById('teacherOverview');
+	const filterBar = document.getElementById('overviewFilterBar');
+	const scopeBar = document.getElementById('overviewScopeBar');
+	// The legacy welcome header would duplicate the new dashboard header.
+	const legacyHeader = document.querySelector('#overview .dashboard-header');
 	if (!isAdmin) {
 		if (adminSec) adminSec.hidden = true;
-		if (legacy) legacy.hidden = false;
+		const useTeacherDashboard = !!(teacherHost && window.TeacherOverview);
+		if (teacherHost) teacherHost.hidden = !useTeacherDashboard;
+		// With the pedagogical dashboard active, the legacy stat grids, charts,
+		// category insights, activity feed and the admin filter bar are all
+		// redundant. Hide the whole legacy surface; keep it as the fallback.
+		if (legacyContent) legacyContent.hidden = useTeacherDashboard;
+		if (legacy) legacy.hidden = useTeacherDashboard;
+		if (filterBar) filterBar.hidden = useTeacherDashboard;
+		if (scopeBar) scopeBar.hidden = useTeacherDashboard;
+		if (legacyHeader) legacyHeader.hidden = useTeacherDashboard;
 		return;
 	}
-	// Admin: the server section replaces the legacy grids (legacy values stay
-	// in the DOM as a degraded fallback but are hidden while loading/loaded).
+	// Admin: never show the teacher dashboard; the server section replaces the
+	// legacy grids (legacy values stay in the DOM as a degraded fallback and
+	// are re-shown by loadAdminOverview on failure).
+	if (teacherHost) teacherHost.hidden = true;
 	if (adminSec) adminSec.hidden = false;
+	if (legacyContent) legacyContent.hidden = false;
+	if (filterBar) filterBar.hidden = false;
+	if (scopeBar) scopeBar.hidden = false;
+	if (legacy) legacy.hidden = false;
+	if (legacyHeader) legacyHeader.hidden = false;
 }
 
 function ovCardText(id, text) {

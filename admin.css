@@ -6781,20 +6781,10 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	background-color: var(--bg-surface-hover, rgba(99, 102, 241, 0.04)) !important;
 }
 
-/* ── Class Students Workspace ───────────────────────────────────────────── */
-.class-students-workspace {
-	display: grid;
-	grid-template-columns: 380px 1fr;
-	gap: 20px;
-	align-items: start;
-	margin-bottom: 24px;
-}
-
-@media (max-width: 1024px) {
-	.class-students-workspace {
-		grid-template-columns: 1fr;
-	}
-}
+/* ── Class Students Pane (roster-first, questions-table identity) ────────── */
+/* The old two-panel workspace (picker + roster side by side) was replaced by
+   a single full-width roster card; adding students happens in the
+   #addStudentsPickerModal. */
 
 .class-workspace-card {
 	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.1));
@@ -6804,40 +6794,104 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	box-shadow: 0 4px 16px rgba(15, 23, 42, 0.035);
 }
 
-.card-section-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
+/* Roster card toolbar reuses the global .toolbar card look; the header row
+   mirrors the questions/exams toolbars (title + bulk bar + primary actions). */
+.roster-main-toolbar {
 	margin-bottom: 16px;
-	padding-bottom: 12px;
-	border-bottom: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
 }
 
-.card-section-title {
+.roster-main-toolbar h2 {
+	font-size: 1.15rem;
+}
+
+.roster-add-actions {
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: 8px;
+	flex-wrap: wrap;
 }
 
-.card-section-title h3 {
-	margin: 0;
-	font-size: 1.05rem;
-	font-weight: 700;
-	color: var(--text-primary, #0f172a);
+/* Soft button variants used by the roster bulk bar. Same treatment as
+   .btn-danger-soft in styles.css (white → tinted hover flip). */
+.btn-success-soft {
+	background: #ffffff;
+	color: #059669;
+	border: 1px solid #a7f3d0;
+	padding: 6px 12px;
+	font-size: 13px;
+	border-radius: 6px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
 }
 
-.step-badge {
-	width: 24px;
-	height: 24px;
-	border-radius: 50%;
-	background: var(--primary-color, #4f46e5);
-	color: #fff;
+.btn-success-soft:hover {
+	background: #059669;
+	color: #ffffff;
+	border-color: #059669;
+}
+
+.btn-warning-soft {
+	background: #ffffff;
+	color: #d97706;
+	border: 1px solid #fde68a;
+	padding: 6px 12px;
+	font-size: 13px;
+	border-radius: 6px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.btn-warning-soft:hover {
+	background: #d97706;
+	color: #ffffff;
+	border-color: #d97706;
+}
+
+/* Ghost button (subtle text action, e.g. picker modal footer). */
+.btn-ghost {
+	background: transparent;
+	color: var(--text-secondary, #475569);
+	border: 1px solid transparent;
+	padding: 6px 12px;
+	font-size: 13px;
+	border-radius: 6px;
 	display: inline-flex;
 	align-items: center;
-	justify-content: center;
-	font-size: 0.76rem;
-	font-weight: 800;
+	gap: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.btn-ghost:hover {
+	background: var(--bg-surface-alt, #f1f5f9);
+	color: var(--text-main, #0f172a);
+}
+
+/* Outline button (roster toolbar + class header actions). */
+.btn-outline {
+	background: transparent;
+	color: var(--text-main, #0f172a);
+	border: 1px solid var(--border-color, #d5dbe4);
+	padding: 6px 12px;
+	font-size: 13px;
+	border-radius: 6px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.btn-outline:hover {
+	border-color: var(--primary, #2563eb);
+	color: var(--primary, #2563eb);
+	background: rgba(59, 130, 246, 0.06);
 }
 
 .roster-summary-badge {
@@ -6850,90 +6904,11 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	font-weight: 700;
 }
 
-.picker-filter-grid {
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	margin-bottom: 14px;
-}
-
-.picker-filter-grid .filter-field label {
-	display: block;
-	font-size: 0.78rem;
-	font-weight: 600;
-	color: var(--text-secondary, #475569);
-	margin-bottom: 5px;
-}
-
-.student-picker-select {
-	height: 320px !important;
-	width: 100%;
-	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.3));
-	border-radius: 12px;
-	padding: 8px;
-	font-size: 0.86rem;
-	background: var(--bg-surface-alt, #f8fafc);
-}
-
-.student-picker-select option {
-	padding: 8px 12px;
-	border-radius: 8px;
-	margin-bottom: 4px;
-	cursor: pointer;
-}
-
-.bulk-student-actions-bar {
-	display: flex;
-	gap: 8px;
-	margin-top: 12px;
-	flex-wrap: wrap;
-}
-
-.roster-header-wrap {
-	flex-wrap: wrap;
-}
-
-.roster-actions-group {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.roster-toolbar-bar {
-	display: flex;
-	gap: 12px;
-	margin-bottom: 16px;
-	align-items: center;
-}
-
-.roster-toolbar-bar .search-input-wrap {
-	flex: 1;
-	position: relative;
-	display: flex;
-	align-items: center;
-}
-
-.roster-toolbar-bar .search-input-wrap svg {
-	position: absolute;
-	left: 12px;
-	color: var(--text-muted, #94a3b8);
-	pointer-events: none;
-}
-
-.roster-toolbar-bar .search-input-wrap input {
-	width: 100%;
-	padding-left: 36px;
-}
-
-.roster-status-select {
-	min-width: 150px;
-}
-
 .roster-table-container {
 	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
 	border-radius: 12px;
 	overflow: hidden;
-	max-height: 520px;
+	max-height: 560px;
 	overflow-y: auto;
 }
 
@@ -6942,14 +6917,210 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	margin: 0;
 }
 
+/* Roster pagination: keep the questions-table look but sit it inside the card. */
+.class-roster-card .pagination {
+	background: transparent;
+	border-top: none;
+	border-radius: 0;
+	padding: 14px 2px 0;
+}
+
+/* Save bar: pending-changes hint on the left, actions on the right. */
 .roster-save-bar {
 	display: flex;
 	align-items: center;
-	justify-content: flex-end;
+	justify-content: space-between;
 	gap: 12px;
-	margin-top: 18px;
+	flex-wrap: wrap;
+	margin-top: 14px;
 	padding-top: 16px;
 	border-top: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+}
+
+.roster-pending-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: #d97706;
+	background: rgba(245, 158, 11, 0.1);
+	border: 1px solid rgba(245, 158, 11, 0.28);
+	padding: 6px 12px;
+	border-radius: 999px;
+}
+
+.roster-pending-hint.hidden {
+	display: none;
+}
+
+/* ── Add Students picker modal (searchable checklist) ────────────────────── */
+.picker-toolbar {
+	display: flex;
+	gap: 12px;
+	margin-bottom: 14px;
+	flex-wrap: wrap;
+}
+
+.picker-toolbar .filter-field {
+	flex: 1 1 200px;
+	min-width: 170px;
+}
+
+.picker-toolbar .filter-field.picker-search-field {
+	flex: 2 1 260px;
+}
+
+.picker-toolbar .filter-field label {
+	display: block;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--text-secondary, #475569);
+	margin-bottom: 5px;
+}
+
+.picker-toolbar .filter-field select,
+.picker-toolbar .filter-field input {
+	width: 100%;
+}
+
+.student-picker-list {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 380px;
+	overflow-y: auto;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.3));
+	border-radius: 12px;
+	padding: 8px;
+	background: var(--bg-surface-alt, #f8fafc);
+}
+
+.student-picker-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 10px;
+	border-radius: 10px;
+	background: var(--bg-surface, #ffffff);
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.22));
+	cursor: pointer;
+	transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.student-picker-item:hover {
+	border-color: var(--primary-color, #6366f1);
+}
+
+.student-picker-item:has(input:checked) {
+	border-color: var(--primary-color, #4f46e5);
+	background: rgba(99, 102, 241, 0.06);
+}
+
+.student-picker-item.is-rostered {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.student-picker-item input[type='checkbox'] {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	accent-color: var(--primary-color, #4f46e5);
+	cursor: pointer;
+}
+
+.student-picker-item.is-rostered input[type='checkbox'] {
+	cursor: not-allowed;
+}
+
+.student-picker-avatar {
+	flex: none;
+	min-width: 44px;
+	height: 32px;
+	padding: 0 6px;
+	border-radius: 9px;
+	background: rgba(59, 130, 246, 0.12);
+	color: #2563eb;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.02em;
+}
+
+.student-picker-meta {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.student-picker-name {
+	font-weight: 600;
+	font-size: 0.88rem;
+	color: var(--text-primary, #0f172a);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.student-picker-class {
+	font-size: 0.75rem;
+	color: var(--text-muted, #64748b);
+}
+
+.student-picker-tag {
+	flex: none;
+	font-size: 0.68rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	padding: 3px 8px;
+	border-radius: 999px;
+}
+
+.student-picker-tag.tag-rostered {
+	background: rgba(16, 185, 129, 0.12);
+	color: #059669;
+}
+
+.student-picker-tag.tag-disabled {
+	background: rgba(239, 68, 68, 0.1);
+	color: #dc2626;
+}
+
+.student-picker-empty {
+	padding: 28px 12px;
+	text-align: center;
+	color: var(--text-muted, #64748b);
+	font-size: 0.88rem;
+}
+
+.picker-helper-text {
+	margin: 10px 2px 0;
+}
+
+/* Roster toolbar on small screens: action buttons stretch full-width. */
+@media (max-width: 768px) {
+	.class-workspace-card {
+		padding: 14px;
+	}
+
+	.roster-add-actions {
+		width: 100%;
+	}
+
+	.roster-add-actions .btn {
+		flex: 1;
+		justify-content: center;
+	}
+
+	.class-roster-card .pagination {
+		flex-direction: column;
+		gap: 10px;
+	}
 }
 
 /* ── Full-Page Question Selection Workspace ─────────────────────────────── */
@@ -6964,8 +7135,12 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	display: grid !important;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
 	gap: 20px !important;
-	height: calc(100vh - 380px) !important;
-	min-height: 520px !important;
+	/* The bottom action bar is gone (Cancel / Save live in the pane header),
+	   so the columns get the space it used. 540px ≈ app header (121) + pane
+	   header/hero/filters chrome (~400) + page paddings; the min-height keeps
+	   both lists usable on shorter screens (the page then scrolls a little). */
+	height: calc(100vh - 540px) !important;
+	min-height: 460px !important;
 	margin: 0 !important;
 }
 
@@ -7007,18 +7182,6 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	padding: 16px !important;
 	min-height: 0 !important;
 	max-height: none !important;
-}
-
-.assign-page-footer-bar {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 12px;
-	padding: 14px 20px;
-	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.1));
-	border-radius: 14px;
-	background: var(--bg-surface, #ffffff);
-	box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
 }
 
 /* ── Full-Page Exam Analysis & Sessions ─────────────────────────────────── */
@@ -7488,10 +7651,6 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 .assign-page-selection .question-list-scroll::-webkit-scrollbar-thumb:hover {
 	background: rgba(100, 116, 139, 0.65);
 	background-clip: padding-box;
-}
-
-.assign-page-footer-bar {
-	flex-wrap: wrap;
 }
 
 /* ── 3. Classes table: stop the Actions column from clipping ─────────────

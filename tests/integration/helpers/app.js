@@ -36,6 +36,7 @@ import bulkRoutes from '../../../src/backend/routes/bulk.routes.js';
 import notificationRoutes from '../../../src/backend/routes/notifications.routes.js';
 import teacherMessageRoutes from '../../../src/backend/routes/teacher-messages.routes.js';
 import devicesRoutes from '../../../src/backend/routes/devices.routes.js';
+import teacherOverviewRoutes from '../../../src/backend/routes/teacher-overview.routes.js';
 import kidsChampionshipRoutes from '../../../src/backend/routes/kids-championships.routes.js';
 import kidsRoutes from '../../../src/backend/routes/kids.routes.js';
 
@@ -80,6 +81,7 @@ app.use('/api/v1/teacher-messages', teacherMessageRoutes);
 app.use('/api/v1/kids/championships', kidsChampionshipRoutes);
 app.use('/api/v1/kids', kidsRoutes);
 app.use('/api/v1/devices', devicesRoutes);
+app.use('/api/v1/teacher-overview', teacherOverviewRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {
