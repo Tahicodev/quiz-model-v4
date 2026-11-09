@@ -265,11 +265,11 @@ function loadAvailableExams() {
 }
 
 function addStudent() {
-	// The manual number/name entry row was removed from the Assign Students
-	// modal — students now come from signup or Settings → Users (use the
-	// "Add from users" picker). Kept as a safe stub for any stale callers.
+	// The manual number/name entry row was removed: students are now enrolled
+	// through the Add Students modal (create a new account, enroll an existing
+	// one, or approve a pending signup). Kept as a safe stub for stale callers.
 	showToast(
-		'Students are added via signup or Settings → Users — use "Add from users" to pick accounts',
+		'Use Add Students to create an account, enroll an existing student, or approve a signup',
 		'info',
 	);
 }
@@ -473,29 +473,117 @@ function enableStudentPickerClickSelection(picker) {
 	// stale callers don't crash.
 }
 
-// ── Add Students picker modal (questions-identity checklist) ────────────────
-// Renders every available student account as a checkbox row (number, name,
-// origin class). Students already staged in the roster are disabled.
+// ── Add Students modal: Create New / Existing & Signups ────────────────────
+// Roster edits persist immediately (there is no Save Roster step), so this
+// modal is the single enrollment surface: it creates a complete student
+// account, enrolls existing accounts, and approves pending online signups.
 
-function openAddStudentsPickerModal() {
+function getRosterClassContext() {
+	if (!assignClassStudentsId) return null;
+	return (
+		classes.find(
+			(c) => String(c.id) === String(assignClassStudentsId),
+		) || null
+	);
+}
+
+function openAddStudentsPickerModal(options = {}) {
 	const modal = document.getElementById('addStudentsPickerModal');
 	if (!modal) {
 		showToast('Add Students modal not found', 'error');
 		return;
 	}
-	const classData = assignClassStudentsId
-		? classes.find((c) => String(c.id) === String(assignClassStudentsId))
-		: null;
-	const titleEl = document.getElementById('addStudentsPickerTitle');
-	if (titleEl && classData) {
-		titleEl.textContent = `Add Students to ${classData.name}`;
+	const classData = getRosterClassContext();
+	if (!classData) {
+		showToast('Open a class roster before adding students', 'error');
+		return;
 	}
+
+	const titleEl = document.getElementById('addStudentsPickerTitle');
+	if (titleEl) titleEl.textContent = `Add Students to ${classData.name}`;
+
 	const classFilter = document.getElementById('studentClassFilter');
 	if (classFilter) classFilter.value = 'all';
 	const pickerSearch = document.getElementById('studentPickerSearch');
 	if (pickerSearch) pickerSearch.value = '';
-	openModalLike(modal, 'studentPickerSearch');
+
+	// Reset the create form for every open (callers may pre-fill a roster row
+	// that has no account yet).
+	const form = document.getElementById('addStudentForm');
+	if (form) form.reset();
+	const classLabel = document.getElementById('newStudentClassLabel');
+	if (classLabel) classLabel.textContent = classData.name;
+	const prefill = options.prefill || {};
+	const nameInput = document.getElementById('newStudentName');
+	if (nameInput) nameInput.value = String(prefill.name || '');
+	const numberInput = document.getElementById('newStudentNumber');
+	if (numberInput) numberInput.value = String(prefill.number || '');
+	const passwordInput = document.getElementById('newStudentPassword');
+	if (passwordInput) {
+		passwordInput.type = 'password';
+		const toggleLabel = document.getElementById(
+			'newStudentPasswordToggleLabel',
+		);
+		if (toggleLabel) toggleLabel.textContent = 'Show';
+	}
+
+	switchAddStudentsTab('new');
+	openModalLike(modal, 'newStudentName');
+	renderPendingSignups();
 	renderStudentPickerList();
+}
+
+function switchAddStudentsTab(tab) {
+	const nextTab = tab === 'existing' ? 'existing' : 'new';
+	const newBtn = document.getElementById('addStudentsTabNewBtn');
+	const existingBtn = document.getElementById('addStudentsTabExistingBtn');
+	const newPanel = document.getElementById('addStudentsNewPanel');
+	const existingPanel = document.getElementById('addStudentsExistingPanel');
+	const isNew = nextTab === 'new';
+
+	if (newBtn) {
+		newBtn.classList.toggle('is-active', isNew);
+		newBtn.setAttribute('aria-selected', isNew ? 'true' : 'false');
+	}
+	if (existingBtn) {
+		existingBtn.classList.toggle('is-active', !isNew);
+		existingBtn.setAttribute('aria-selected', isNew ? 'false' : 'true');
+	}
+	if (newPanel) newPanel.classList.toggle('hidden', !isNew);
+	if (existingPanel) existingPanel.classList.toggle('hidden', isNew);
+
+	if (!isNew) {
+		renderPendingSignups();
+		renderStudentPickerList();
+	}
+}
+
+function toggleNewStudentPassword() {
+	const input = document.getElementById('newStudentPassword');
+	if (!input) return;
+	const show = input.type === 'password';
+	input.type = show ? 'text' : 'password';
+	const label = document.getElementById('newStudentPasswordToggleLabel');
+	if (label) label.textContent = show ? 'Hide' : 'Show';
+}
+
+function generateNewStudentPassword() {
+	const input = document.getElementById('newStudentPassword');
+	if (!input) return;
+	// Readable but non-trivial: no ambiguous 0/O/1/l characters.
+	const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+	let password = '';
+	const cryptoObj = window.crypto || window.msCrypto;
+	for (let i = 0; i < 10; i += 1) {
+		const random = cryptoObj?.getRandomValues
+			? cryptoObj.getRandomValues(new Uint32Array(1))[0] % alphabet.length
+			: Math.floor(Math.random() * alphabet.length);
+		password += alphabet[random];
+	}
+	input.type = 'text';
+	input.value = password;
+	const toggleLabel = document.getElementById('newStudentPasswordToggleLabel');
+	if (toggleLabel) toggleLabel.textContent = 'Hide';
 }
 
 function closeAddStudentsPickerModal() {
@@ -526,7 +614,7 @@ function renderStudentPickerList() {
 			const classMeta = getUserClassMeta(user, classById);
 			const alreadyRostered = rosteredNumbers.has(number);
 			const status = String(user.status || 'active').toLowerCase();
-			const isDisabled = status === 'disabled' || status === 'inactive';
+			const isDisabled = isDisabledAccountStatus(status);
 			return `
 				<label class="student-picker-item${alreadyRostered ? ' is-rostered' : ''}">
 					<input type="checkbox"
@@ -594,31 +682,161 @@ function onStudentClassFilterChange() {
 	renderStudentPickerList();
 }
 
-function appendStudentFromUser(user, options = {}) {
-	const quiet = options.quiet === true;
-	if (!user) return false;
+// ── Immediate roster persistence helpers ───────────────────────────────────
+// There is no Save Roster step: every add/remove writes the student's class
+// assignment to the backend first (when the API is available) and then mirrors
+// it locally, so the roster can never drift from the users table again.
+
+function isDisabledAccountStatus(status) {
+	const value = String(status || 'active').toLowerCase();
+	return value === 'disabled' || value === 'inactive' || value === 'suspended';
+}
+
+function toServerAccountStatus(status) {
+	// The backend enum is active | inactive | suspended; the UI uses
+	// active | disabled (legacy rows may also carry inactive).
+	return isDisabledAccountStatus(status) ? 'suspended' : 'active';
+}
+
+function toLocalAccountStatus(status) {
+	return isDisabledAccountStatus(status) ? 'disabled' : 'active';
+}
+
+async function persistStudentClassAssignment(userId, classId) {
+	if (!userId || !window.API || typeof window.API.raw !== 'function') return;
+	// The legacy mapper drops falsy class ids, so an explicit null is the only
+	// way to unassign through the API.
+	await window.API.raw('PATCH', '/users/' + encodeURIComponent(String(userId)), {
+		class_id: classId || null,
+	});
+}
+
+function updateLocalStudentAccount(userId, updates = {}) {
+	if (!userId || !window.Auth?.getUsers) return null;
+	const users = window.Auth.getUsers();
+	const target = users.find((u) => String(u.id) === String(userId));
+	if (!target) return null;
+	Object.assign(target, updates, { updatedAt: new Date().toISOString() });
+	window.Auth.saveUsers(users);
+	return target;
+}
+
+function detachStudentFromOtherClassRosters(number, keepClassId) {
+	const target = String(number || '').trim();
+	if (!target) return;
+	classes.forEach((cls) => {
+		if (String(cls.id) === String(keepClassId)) return;
+		if (!Array.isArray(cls.students)) return;
+		cls.students = cls.students.filter(
+			(entry) => String(entry?.number || '').trim() !== target,
+		);
+	});
+}
+
+function updateRosterHeroKpis() {
+	const classData = getRosterClassContext();
+	if (!classData) return;
+	const studentCount = Array.isArray(classData.students)
+		? classData.students.length
+		: 0;
+	const kpiStudents = document.getElementById('classKpiStudentsCount');
+	if (kpiStudents) kpiStudents.textContent = String(studentCount);
+
+	const users = window.Auth?.getUsers ? window.Auth.getUsers() : [];
+	const activeCount = users.filter(
+		(u) =>
+			String(u.role || '').toLowerCase() === 'student' &&
+			String(u.classId || '') === String(classData.id) &&
+			!isDisabledAccountStatus(u.status),
+	).length;
+	const kpiActive = document.getElementById('classKpiActiveAccounts');
+	if (kpiActive) kpiActive.textContent = String(activeCount);
+}
+
+function pruneRosterMirrorAgainstAccounts() {
+	// class.students is a legacy mirror; the account's class_id is the source
+	// of truth. Drop mirror rows whose account has moved to another class so a
+	// student can never appear in two rosters after an Edit User move.
+	if (!window.Auth?.getUsers) return;
+	const accountsByNumber = new Map();
+	window.Auth.getUsers().forEach((user) => {
+		if (String(user.role || '').toLowerCase() !== 'student') return;
+		const number = String(user.studentNumber || '').trim();
+		if (number) accountsByNumber.set(number, user);
+	});
+	classes.forEach((cls) => {
+		if (!Array.isArray(cls.students)) return;
+		cls.students = cls.students.filter((entry) => {
+			const account = accountsByNumber.get(String(entry?.number || '').trim());
+			if (!account) return true; // roster-only row — nothing to verify
+			const accountClassId = String(account.classId || '').trim();
+			if (!accountClassId) return true; // unassigned accounts keep a stub row
+			return accountClassId === String(cls.id);
+		});
+	});
+}
+
+function refreshRosterAfterMutation() {
+	const classData = getRosterClassContext();
+	if (!classData) return;
+	if (!Array.isArray(classData.students)) classData.students = [];
+	pruneRosterMirrorAgainstAccounts();
+	classData.students = mergeStudentEntries(
+		classData.students,
+		getStudentsFromUsers(classData.id),
+	);
+	saveClasses();
+	updateClassList();
+	updateRosterHeroKpis();
+	if (typeof window.renderUsersTable === 'function') {
+		window.renderUsersTable();
+	}
+	// Re-seed the staging rows before rendering so the table always reflects
+	// the merged source, not whatever happened to be left in the DOM.
+	const studentsList = document.getElementById('selectedStudentsList');
+	if (studentsList) {
+		studentsList.innerHTML = '';
+		classData.students.forEach((student) => {
+			studentsList.appendChild(
+				createStudentItem(student.number, student.name),
+			);
+		});
+	}
+	renderStudentRosterTable();
+	renderStudentPickerList();
+	renderPendingSignups();
+	if (
+		typeof window.syncUsersToClients === 'function' &&
+		window.Auth?.isAdmin?.()
+	) {
+		window.syncUsersToClients();
+	}
+}
+
+async function enrollExistingStudent(user) {
+	const classData = getRosterClassContext();
+	if (!classData || !user) return false;
 	const number = String(user.studentNumber || '').trim();
 	const name = String(user.name || user.username || '').trim();
-	if (!number || !name) {
-		if (!quiet) showToast('Student user is missing number or name', 'error');
-		return false;
-	}
+	if (!number || !name) return false;
+	if (getSelectedStudentNumbers().has(number)) return false;
 
-	const existingNumbers = getSelectedStudentNumbers();
-	if (existingNumbers.has(number)) {
-		if (!quiet) showToast('Student already added to this class', 'info');
-		return false;
-	}
-
+	// Backend first: a failed assignment must not leave a phantom roster row.
+	await persistStudentClassAssignment(user.id, classData.id);
+	updateLocalStudentAccount(user.id, {
+		classId: String(classData.id),
+		className: classData.name,
+	});
+	classData.students = mergeStudentEntries(classData.students || [], [
+		{ number, name },
+	]);
+	detachStudentFromOtherClassRosters(number, classData.id);
 	const studentsList = document.getElementById('selectedStudentsList');
-	if (!studentsList) return false;
-	studentsList.appendChild(createStudentItem(number, name, user.id));
-	renderStudentRosterTable();
-	markRosterDirty();
+	if (studentsList) studentsList.appendChild(createStudentItem(number, name, user.id));
 	return true;
 }
 
-function addStudentFromUserPicker() {
+async function addStudentFromUserPicker() {
 	const listEl = document.getElementById('studentPickerList');
 	if (!listEl) return;
 	const checkedBoxes = Array.from(
@@ -628,28 +846,49 @@ function addStudentFromUserPicker() {
 		showToast('Select one or more student users first', 'warning');
 		return;
 	}
+	const confirmBtn = document.getElementById('addStudentsPickerConfirmBtn');
+	if (confirmBtn) confirmBtn.disabled = true;
+
 	const byId = new Map(
 		getStudentUsersForPicker().map((entry) => [String(entry.id), entry]),
 	);
 	let addedCount = 0;
-	checkedBoxes.forEach((checkbox) => {
+	let failedCount = 0;
+	for (const checkbox of checkedBoxes) {
 		const user = byId.get(String(checkbox.dataset.userId || '').trim());
-		if (appendStudentFromUser(user, { quiet: true })) {
-			addedCount += 1;
+		if (!user) continue;
+		try {
+			if (await enrollExistingStudent(user)) addedCount += 1;
+		} catch (err) {
+			failedCount += 1;
+			console.warn('[classes] student enrollment failed:', err);
 		}
-	});
+	}
+	if (confirmBtn) confirmBtn.disabled = false;
+
 	if (!addedCount) {
-		showToast('No new students were added', 'info');
+		showToast(
+			failedCount
+				? 'Students could not be assigned — check the connection and try again'
+				: 'No new students were added',
+			failedCount ? 'error' : 'info',
+		);
 		renderStudentPickerList();
 		return;
 	}
-	showToast(`Added ${addedCount} student(s) from users`, 'success');
+	refreshRosterAfterMutation();
 	closeAddStudentsPickerModal();
-	renderStudentRosterTable();
-	markRosterDirty();
+	if (failedCount) {
+		showToast(
+			`${addedCount} student(s) added; ${failedCount} could not be assigned`,
+			'warning',
+		);
+	} else {
+		showToast(`Added ${addedCount} student(s) to the class`, 'success');
+	}
 }
 
-function addAllStudentsFromUsers() {
+async function addAllStudentsFromUsers() {
 	const availableUsers = getFilteredStudentUsersForPicker(
 		getStudentUsersForPicker(),
 	).filter(
@@ -660,16 +899,27 @@ function addAllStudentsFromUsers() {
 		showToast('No available students to add', 'info');
 		return;
 	}
+	const confirmBtn = document.getElementById('addStudentsPickerConfirmBtn');
+	if (confirmBtn) confirmBtn.disabled = true;
 	let addedCount = 0;
-	availableUsers.forEach((user) => {
-		if (appendStudentFromUser(user, { quiet: true })) {
-			addedCount += 1;
+	let failedCount = 0;
+	for (const user of availableUsers) {
+		try {
+			if (await enrollExistingStudent(user)) addedCount += 1;
+		} catch (err) {
+			failedCount += 1;
+			console.warn('[classes] student enrollment failed:', err);
 		}
-	});
-	showToast(`Added ${addedCount} student(s) from users`, 'success');
+	}
+	if (confirmBtn) confirmBtn.disabled = false;
+	refreshRosterAfterMutation();
 	closeAddStudentsPickerModal();
-	renderStudentRosterTable();
-	markRosterDirty();
+	showToast(
+		failedCount
+			? `${addedCount} student(s) added; ${failedCount} could not be assigned`
+			: `Added ${addedCount} student(s) to the class`,
+		failedCount ? 'warning' : 'success',
+	);
 }
 
 function deselectAllStudentsInPicker() {
@@ -693,10 +943,435 @@ function createStudentItem(number, name, userId = '') {
 	return row;
 }
 
+// ── Pending online signups (account requests) ───────────────────────────────
+// A student who requested an account from the student workspace lands here.
+// Approving materializes the account (server-first via Auth), assigns it to
+// this class and activates it — no Settings detour needed.
+
+function getPendingSignupsForClass() {
+	const classData = getRosterClassContext();
+	if (!classData || !window.Auth?.getAccountRequests) return [];
+	const isAdminSession = window.Auth.isAdmin?.() === true;
+	return window.Auth
+		.getAccountRequests()
+		.filter((request) => String(request.status || 'pending') === 'pending')
+		.filter((request) => {
+			const requestClassId = String(request.classId || '').trim();
+			if (requestClassId) return requestClassId === String(classData.id);
+			// Class-less requests can only be attached by an admin (teachers are
+			// scoped to requests that already target one of their classes).
+			return isAdminSession;
+		})
+		.sort((a, b) =>
+			String(b.createdAt || '').localeCompare(String(a.createdAt || '')),
+		);
+}
+
+function updatePendingSignupBadge(count) {
+	const badge = document.getElementById('addStudentsPendingCount');
+	if (!badge) return;
+	badge.textContent = String(count);
+	badge.classList.toggle('hidden', count === 0);
+}
+
+function renderPendingSignups() {
+	const section = document.getElementById('pendingSignupsSection');
+	const listEl = document.getElementById('pendingSignupsList');
+	const pending = getPendingSignupsForClass();
+	updatePendingSignupBadge(pending.length);
+	if (!section || !listEl) return;
+
+	if (!pending.length) {
+		section.classList.add('hidden');
+		listEl.innerHTML = '';
+		return;
+	}
+
+	const classData = getRosterClassContext();
+	const rows = pending
+		.map((request) => {
+			const name = String(request.fullName || request.username || 'Student');
+			const initial = name.trim().charAt(0).toUpperCase() || '?';
+			const meta = [
+				request.username ? `@${request.username}` : '',
+				request.studentNumber ? `#${request.studentNumber}` : '',
+				request.classId
+					? ''
+					: `→ ${classData ? classData.name : 'this class'}`,
+			]
+				.filter(Boolean)
+				.join(' · ');
+			const requestedAt = request.createdAt
+				? new Date(request.createdAt).toLocaleDateString()
+				: '';
+			return `
+				<div class="pending-signup-card">
+					<span class="pending-signup-avatar">${escapeHtml(initial)}</span>
+					<div class="pending-signup-meta">
+						<span class="pending-signup-name">${escapeHtml(name)}</span>
+						<span class="pending-signup-info">${escapeHtml(meta)}${requestedAt ? ` · ${escapeHtml(requestedAt)}` : ''}</span>
+						${request.note ? `<span class="pending-signup-note">${escapeHtml(request.note)}</span>` : ''}
+					</div>
+					<div class="pending-signup-actions">
+						<button type="button" class="btn btn-sm btn-primary" onclick="approvePendingSignup('${escapeHtml(String(request.id))}')">
+							Approve &amp; add
+						</button>
+						<button type="button" class="btn btn-sm btn-ghost" onclick="rejectPendingSignup('${escapeHtml(String(request.id))}')">
+							Reject
+						</button>
+					</div>
+				</div>
+			`;
+		})
+		.join('');
+
+	if (window.safeSetHTML) window.safeSetHTML(listEl, rows);
+	else listEl.innerHTML = rows;
+	section.classList.remove('hidden');
+}
+
+async function approvePendingSignup(requestId) {
+	const classData = getRosterClassContext();
+	if (!classData || !window.Auth?.approveAccountRequest) return;
+	const request = (window.Auth.getAccountRequests?.() || []).find(
+		(entry) => String(entry.id) === String(requestId),
+	);
+	if (!request) return;
+
+	const button = document.querySelector(
+		`.pending-signup-card [onclick*="${CSS.escape(String(requestId))}"]`,
+	);
+	if (button) button.disabled = true;
+
+	const reviewerId = window.Auth.getCurrentUser?.()?.id || '';
+	const approved = await window.Auth.approveAccountRequest(requestId, reviewerId);
+	if (!approved) {
+		if (button) button.disabled = false;
+		return;
+	}
+
+	const userId = approved.createdUserId || '';
+	const targetClassId = String(classData.id);
+	const sourceClassId = String(
+		approved.classId || request.classId || '',
+	).trim();
+
+	// Approval materializes the account with the request's class; make sure it
+	// is active and attached to the class the teacher is managing right now.
+	try {
+		await persistStudentClassAssignment(userId, targetClassId);
+		if (sourceClassId !== targetClassId) {
+			updateLocalStudentAccount(userId, {
+				classId: targetClassId,
+				className: classData.name,
+			});
+		}
+		updateLocalStudentAccount(userId, { status: 'active' });
+	} catch (err) {
+		console.warn('[classes] approved signup class assignment failed:', err);
+		showToast(
+			'Signup approved, but assigning the class failed — retry from Edit User',
+			'warning',
+		);
+	}
+
+	let account = (window.Auth.getUsers?.() || []).find(
+		(u) => String(u.id) === String(userId),
+	);
+	if (!account && userId && window.API?.get) {
+		try {
+			const remote = await window.API.get('users', userId);
+			if (remote) {
+				account = buildLocalStudentUser({
+					id: remote.id,
+					name: remote.name,
+					title: remote.title,
+					username: remote.username,
+					status: remote.status,
+					studentNumber: remote.numero,
+					classId: remote.class_id || targetClassId,
+					className: classData.name,
+					createdAt: remote.created_at,
+					updatedAt: remote.updated_at,
+				});
+				const users = window.Auth.getUsers();
+				users.push(account);
+				window.Auth.saveUsers(users);
+			}
+		} catch (err) {
+			console.warn('[classes] approved signup refresh failed:', err);
+		}
+	}
+
+	const number = String(
+		approved.studentNumber || account?.studentNumber || '',
+	).trim();
+	const name = String(
+		approved.fullName || account?.name || approved.username || '',
+	).trim();
+	if (number && name && !getSelectedStudentNumbers().has(number)) {
+		classData.students = mergeStudentEntries(classData.students || [], [
+			{ number, name },
+		]);
+		detachStudentFromOtherClassRosters(number, classData.id);
+		const studentsList = document.getElementById('selectedStudentsList');
+		if (studentsList) {
+			studentsList.appendChild(
+				createStudentItem(number, name, userId),
+			);
+		}
+	}
+
+	refreshRosterAfterMutation();
+	showToast(
+		`${name || 'Student'} approved and added to ${classData.name}`,
+		'success',
+	);
+}
+
+async function rejectPendingSignup(requestId) {
+	if (!window.Auth?.rejectAccountRequest) return;
+	if (
+		!confirm(
+			'Reject this signup request? The student will need to request an account again.',
+		)
+	) {
+		return;
+	}
+	const reviewerId = window.Auth.getCurrentUser?.()?.id || '';
+	const rejected = await window.Auth.rejectAccountRequest(
+		requestId,
+		reviewerId,
+	);
+	if (rejected) {
+		renderPendingSignups();
+		showToast('Signup request rejected', 'info');
+	}
+}
+
+// ── Create New student ──────────────────────────────────────────────────────
+// Creates the User row (identity + credentials + access/status) and enrolls it
+// in the class in one step. The backend hashes the password; the local mirror
+// is only written after the server confirms.
+
+function generateLocalUserId() {
+	if (typeof generateUUID === 'function') return generateUUID();
+	if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+	return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+		const random = (Math.random() * 16) | 0;
+		const value = char === 'x' ? random : (random & 0x3) | 0x8;
+		return value.toString(16);
+	});
+}
+
+function buildLocalStudentUser(data = {}) {
+	const now = new Date().toISOString();
+	const title =
+		data.title === 'Mr' || data.title === 'Mme' ? data.title : '';
+	return {
+		id: data.id || generateLocalUserId(),
+		name: String(data.name || '').trim(),
+		title,
+		username: String(data.username || '').trim(),
+		role: 'student',
+		status: toLocalAccountStatus(data.status),
+		passwordHash: data.passwordHash || '',
+		avatar: '',
+		classIds: [],
+		studentNumber: String(data.studentNumber || '').trim(),
+		classId: String(data.classId || ''),
+		className: String(data.className || ''),
+		email: '',
+		phone: '',
+		subjects: [],
+		createdAt: data.createdAt || now,
+		updatedAt: data.updatedAt || now,
+	};
+}
+
+function setCreateStudentBusy(busy) {
+	const button = document.getElementById('createStudentSubmitBtn');
+	if (!button) return;
+	button.disabled = busy;
+	const label = button.querySelector('span');
+	if (label) {
+		label.textContent = busy ? 'Creating…' : 'Create & Add Student';
+	}
+}
+
+async function submitNewStudentForm(event) {
+	event?.preventDefault?.();
+	const classData = getRosterClassContext();
+	if (!classData) {
+		showToast('Open a class roster before adding students', 'error');
+		return;
+	}
+
+	const name = String(
+		document.getElementById('newStudentName')?.value || '',
+	).trim();
+	const studentNumber = String(
+		document.getElementById('newStudentNumber')?.value || '',
+	).trim();
+	const username = String(
+		document.getElementById('newStudentUsername')?.value || '',
+	).trim();
+	const password = String(
+		document.getElementById('newStudentPassword')?.value || '',
+	);
+	const titleValue = String(
+		document.getElementById('newStudentTitle')?.value || '',
+	).trim();
+	const title = titleValue === 'Mr' || titleValue === 'Mme' ? titleValue : '';
+	const status = String(
+		document.getElementById('newStudentStatus')?.value || 'active',
+	).toLowerCase();
+
+	if (!name || !studentNumber || !username) {
+		showToast('Name, student number and username are required', 'error');
+		return;
+	}
+	if (password.length < 6) {
+		showToast('Password must be at least 6 characters', 'error');
+		return;
+	}
+
+	const users = window.Auth?.getUsers ? window.Auth.getUsers() : [];
+	if (
+		users.some(
+			(user) =>
+				String(user.username || '').toLowerCase() === username.toLowerCase(),
+		)
+	) {
+		showToast('Username already exists', 'error');
+		return;
+	}
+	if (
+		users.some(
+			(user) =>
+				String(user.role || '').toLowerCase() === 'student' &&
+				String(user.studentNumber || '').trim() === studentNumber,
+		)
+	) {
+		showToast('Student number already exists', 'error');
+		return;
+	}
+	if (getSelectedStudentNumbers().has(studentNumber)) {
+		showToast('This student number is already in the roster', 'info');
+		return;
+	}
+
+	const pendingDuplicate = window.Auth?.getAccountRequests
+		? window.Auth.getAccountRequests().find(
+				(request) =>
+					String(request.status || 'pending') === 'pending' &&
+					String(request.username || '').toLowerCase() ===
+						username.toLowerCase(),
+			)
+		: null;
+	if (pendingDuplicate) {
+		showToast(
+			'A pending signup already uses this username — approve it from Existing & Signups',
+			'warning',
+		);
+		return;
+	}
+
+	setCreateStudentBusy(true);
+	try {
+		let localUser = null;
+		if (window.API && typeof window.API.create === 'function') {
+			const created = await window.API.create('users', {
+				username,
+				password,
+				name,
+				title: title || null,
+				role: 'student',
+				status: toServerAccountStatus(status),
+				class_id: String(classData.id),
+				numero: studentNumber,
+			});
+			localUser = buildLocalStudentUser({
+				id: created.id,
+				name: created.name,
+				title: created.title,
+				username: created.username,
+				status: created.status,
+				studentNumber: created.numero,
+				classId: created.class_id || classData.id,
+				className: classData.name,
+				createdAt: created.created_at,
+				updatedAt: created.updated_at,
+			});
+		} else {
+			// Offline / legacy bundle: mirror the account locally with a hashed
+			// password, matching what the server would have stored.
+			const passwordHash = window.Auth?.hashText
+				? await window.Auth.hashText(password)
+				: '';
+			localUser = buildLocalStudentUser({
+				name,
+				title,
+				username,
+				status,
+				studentNumber,
+				classId: classData.id,
+				className: classData.name,
+				passwordHash,
+			});
+		}
+
+		// Re-read after the await so a concurrent change is never overwritten.
+		// A realtime sync may already have mirrored the new row; replace it
+		// rather than duplicating the user.
+		const latestUsers = window.Auth.getUsers();
+		const existingIndex = latestUsers.findIndex(
+			(u) =>
+				String(u.id) === String(localUser.id) ||
+				String(u.username || '').toLowerCase() ===
+					String(localUser.username || '').toLowerCase(),
+		);
+		if (existingIndex === -1) latestUsers.push(localUser);
+		else latestUsers[existingIndex] = localUser;
+		window.Auth.saveUsers(latestUsers);
+
+		classData.students = mergeStudentEntries(classData.students || [], [
+			{ number: studentNumber, name },
+		]);
+		detachStudentFromOtherClassRosters(studentNumber, classData.id);
+		const studentsList = document.getElementById('selectedStudentsList');
+		if (studentsList) {
+			studentsList.appendChild(
+				createStudentItem(studentNumber, name, localUser.id),
+			);
+		}
+
+		refreshRosterAfterMutation();
+		const form = document.getElementById('addStudentForm');
+		if (form) form.reset();
+		closeAddStudentsPickerModal();
+		showToast(
+			`${name} was created and added to ${classData.name}${
+				isDisabledAccountStatus(status) ? ' (account disabled)' : ''
+			}`,
+			'success',
+		);
+	} catch (err) {
+		console.error('[classes] create student failed:', err);
+		showToast(
+			'Failed to create student: ' +
+				(err?.message || 'network error'),
+			'error',
+		);
+	} finally {
+		setCreateStudentBusy(false);
+	}
+}
+
 // ── Roster table rendering ──────────────────────────────────────────────────
 // The Assign Students modal shows the full roster as a data table: number,
 // name, account presence, status and per-row actions. Auth info (username /
-// password) intentionally stays out — it's managed in Settings → Users.
+// password) is managed through the single "Edit User" action.
 
 function getRosterAccountInfo(number) {
 	// Find the student user matching this roster number (any class).
@@ -740,7 +1415,7 @@ function sortStudentRosterRows(rows) {
 	const statusRank = (row) => {
 		if (!row.account) return 2; // no account yet
 		const status = String(row.account.status || 'active').toLowerCase();
-		return status === 'disabled' || status === 'inactive' ? 1 : 0;
+		return isDisabledAccountStatus(status) ? 1 : 0;
 	};
 	return rows.sort((a, b) => {
 		let cmp = 0;
@@ -784,16 +1459,6 @@ function renderStudentRosterTable() {
 	if (summary) {
 		summary.textContent = `${rows.length} student${rows.length === 1 ? '' : 's'}`;
 	}
-	const saveBtn = document.getElementById('saveAssignClassStudentsBtn');
-	if (saveBtn) {
-		const saveLabel = saveBtn.querySelector('span');
-		if (saveLabel) {
-			saveLabel.textContent = rows.length
-				? `Save Roster (${rows.length})`
-				: 'Save Roster';
-		}
-	}
-
 	if (!rows.length) {
 		tbody.innerHTML = '';
 		if (emptyState) {
@@ -810,7 +1475,7 @@ function renderStudentRosterTable() {
 		.map(({ number, name, userId, account }, index) => {
 			const hasAccount = Boolean(account);
 			const status = String(account?.status || 'active').toLowerCase();
-			const isDisabled = status === 'disabled' || status === 'inactive';
+			const isDisabled = isDisabledAccountStatus(status);
 			const statusLabel = !hasAccount
 				? 'No account yet'
 				: isDisabled
@@ -821,6 +1486,13 @@ function renderStudentRosterTable() {
 				: isDisabled
 					? 'roster-status roster-status-disabled'
 					: 'roster-status roster-status-active';
+			// Keep the canonical status on the row so the status filter can
+			// read it without re-querying the users store on every keystroke.
+			const statusValue = !hasAccount
+				? 'no-account'
+				: isDisabled
+					? 'disabled'
+					: 'active';
 			const accountLabel = hasAccount
 				? escapeHtml(String(account.name || account.username || ''))
 				: '—';
@@ -828,7 +1500,7 @@ function renderStudentRosterTable() {
 			const safeName = escapeHtml(name);
 
 			return `
-				<tr class="selected-student-item" data-id="${safeNumber}" data-number="${safeNumber}" data-name="${safeName}"${userId ? ` data-user-id="${escapeHtml(userId)}"` : ''}>
+				<tr class="selected-student-item" data-id="${safeNumber}" data-number="${safeNumber}" data-name="${safeName}" data-account-status="${statusValue}"${userId ? ` data-user-id="${escapeHtml(userId)}"` : ''}>
 					<td class="checkbox-cell" data-label="Select">
 						<input type="checkbox"
 							class="student-checkbox"
@@ -840,16 +1512,6 @@ function renderStudentRosterTable() {
 					<td class="student-name-cell" data-label="Name">${safeName}</td>
 					<td class="student-account-cell" data-label="Account">${accountLabel}</td>
 					<td data-label="Status"><span class="${statusClass}">${statusLabel}</span></td>
-					<td class="roster-actions actions-cell" data-label="Actions" style="width: 140px">
-						<div class="exam-actions">
-							<button type="button" class="exam-action-btn exam-edit-btn" onclick="editStudent('${safeNumber}')" title="Edit student" ${!hasAccount ? 'disabled' : ''}>
-								<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-							</button>
-							<button type="button" class="exam-action-btn roster-action-danger" onclick="removeRosterStudent('${safeNumber}')" title="Remove from roster">
-								<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-							</button>
-						</div>
-					</td>
 				</tr>
 			`;
 		})
@@ -861,18 +1523,18 @@ function renderStudentRosterTable() {
 
 	if (emptyState) emptyState.classList.add('hidden');
 
-	// Mobile: tap a row to open the action sheet (same identity as the
-	// questions / exams tables). Controls keep their own behavior.
-	if (window.innerWidth <= 768) {
-		tbody.querySelectorAll('tr.selected-student-item').forEach((row) => {
-			row.addEventListener('click', (e) => {
-				if (e.target.closest('button, input, select')) return;
-				const number = row.dataset.number || '';
-				const name = row.dataset.name || '';
-				if (number) openStudentActionSheet(number, name);
-			});
+	// The row is the single entry point for per-student actions: a click (or
+	// tap) opens the action sheet with Edit User / Remove from Roster. There is
+	// no per-row Actions column, so this works the same on every viewport.
+	// Controls inside the row keep their own behavior.
+	tbody.querySelectorAll('tr.selected-student-item').forEach((row) => {
+		row.addEventListener('click', (e) => {
+			if (e.target.closest('button, input, select, a, .checkbox-cell')) return;
+			const number = row.dataset.number || '';
+			const name = row.dataset.name || '';
+			if (number) openStudentActionSheet(number, name);
 		});
-	}
+	});
 
 	// Restore bulk selection after re-render (filter/sort safe) + refresh bulk bar
 	if (window.BulkSelect) window.BulkSelect.restore('students');
@@ -899,20 +1561,7 @@ function filterStudentRosterTable() {
 		const name = String(row.dataset.name || '').toLowerCase();
 		const matchesSearch = !term || number.includes(term) || name.includes(term);
 
-		// Status is computed from the matched student user.
-		let rowStatus = 'no-account';
-		if (row.dataset.accountStatus) {
-			rowStatus = String(row.dataset.accountStatus);
-		} else {
-			const account = getRosterAccountInfo(row.dataset.number);
-			if (account) {
-				rowStatus =
-					String(account.status || 'active').toLowerCase() === 'disabled'
-						? 'disabled'
-						: 'active';
-				row.dataset.accountStatus = rowStatus; // cache for this pass
-			}
-		}
+		const rowStatus = String(row.dataset.accountStatus || 'no-account');
 		const matchesStatus = statusValue === 'all' || rowStatus === statusValue;
 
 		const visible = matchesSearch && matchesStatus;
@@ -936,6 +1585,9 @@ function filterStudentRosterTable() {
 	}
 
 	applyRosterPagination();
+
+	// Keep the bulk bar in sync with the rows the filter left visible.
+	if (window.BulkSelect) window.BulkSelect.updateBar('students');
 }
 
 // ── Roster pagination (questions-table identity) ────────────────────────────
@@ -998,27 +1650,15 @@ function changeRosterPage(direction) {
 	if (window.BulkSelect) window.BulkSelect.updateBar('students');
 }
 
-// ── Roster dirty (pending changes) hint ─────────────────────────────────────
-
-function markRosterDirty() {
-	const hint = document.getElementById('rosterPendingHint');
-	if (hint) hint.classList.remove('hidden');
-}
-
-function clearRosterDirty() {
-	const hint = document.getElementById('rosterPendingHint');
-	if (hint) hint.classList.add('hidden');
-}
-
-function editRosterStudent(number) {
-	// Open the Users → user modal for the student account matching this
-	// roster number. Auth fields (username/password) live there, not here.
+function editRosterStudent(number, name = '') {
+	// A roster row with an account opens the single User editor (identity,
+	// credentials, access & role). A row without an account opens the Create
+	// New tab pre-filled — no dead end.
 	const account = getRosterAccountInfo(number);
 	if (!account) {
-		showToast(
-			'No student account exists for this number yet — create it in Settings → Users',
-			'info',
-		);
+		openAddStudentsPickerModal({
+			prefill: { number: String(number || ''), name: String(name || '') },
+		});
 		return;
 	}
 	if (typeof window.openUserModal === 'function') {
@@ -1026,21 +1666,47 @@ function editRosterStudent(number) {
 	}
 }
 
-function removeRosterStudent(number) {
+async function unenrollStudentFromClass(number) {
+	const classData = getRosterClassContext();
+	if (!classData) return false;
 	const row = document.querySelector(
 		`#selectedStudentsList .selected-student-item[data-number="${CSS.escape(String(number))}"]`,
 	);
-	if (!row) return;
-	row.remove();
-	renderStudentRosterTable();
-	populateStudentUserPicker();
-	markRosterDirty();
+	const account = getRosterAccountInfo(number);
+
+	// Backend first: never remove the row if the server still has the student
+	// in this class (that is exactly how rosters used to drift after reloads).
+	if (account?.id) {
+		await persistStudentClassAssignment(account.id, null);
+		updateLocalStudentAccount(account.id, { classId: '', className: '' });
+	}
+
+	if (row) row.remove();
+	classData.students = (classData.students || []).filter(
+		(entry) => String(entry?.number || '').trim() !== String(number).trim(),
+	);
+	return true;
+}
+
+async function removeRosterStudent(number) {
+	try {
+		const removed = await unenrollStudentFromClass(number);
+		if (!removed) return;
+		refreshRosterAfterMutation();
+		showToast('Student removed from the class roster', 'info');
+	} catch (err) {
+		console.warn('[classes] remove student failed:', err);
+		showToast(
+			'Could not remove the student — check the connection and try again',
+			'error',
+		);
+	}
 }
 
 // ── Student CRUD + action sheet (questions-table identity) ──────────────────
 
-function editStudent(number) {
-	editRosterStudent(number);
+function editStudent(number, name = '') {
+	editRosterStudent(number, name);
 }
 
 function openStudentActionSheet(number, name) {
@@ -1048,26 +1714,11 @@ function openStudentActionSheet(number, name) {
 	const hasAccount = Boolean(account);
 	const actions = [
 		{
-			label: 'Edit Student',
+			// One account editor only: "Open Account" used to duplicate this.
+			label: hasAccount ? 'Edit User' : 'Create User Account',
 			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
-			onClick: () => editStudent(number),
+			onClick: () => editStudent(number, name),
 		},
-		...(hasAccount
-			? [
-					{
-						label: 'Open Account',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
-						onClick: () => {
-							if (
-								typeof window.openUserModal === 'function' &&
-								account
-							) {
-								window.openUserModal(account.id);
-							}
-						},
-					},
-			  ]
-			: []),
 		{
 			label: 'Remove from Roster',
 			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
@@ -1076,10 +1727,9 @@ function openStudentActionSheet(number, name) {
 		},
 	];
 	if (window.MobileActionSheet) {
-		window.MobileActionSheet.open(
-			`Student: ${escapeHtml(name || number)}`,
-			actions,
-		);
+		// MobileActionSheet sets the title with textContent, so pass the raw
+		// name instead of an HTML-escaped string.
+		window.MobileActionSheet.open(`Student: ${name || number}`, actions);
 	}
 }
 
@@ -1099,21 +1749,24 @@ async function deleteSelectedStudents() {
 		return;
 	}
 	let removed = 0;
-	ids.forEach((number) => {
-		const row = document.querySelector(
-			`#selectedStudentsList .selected-student-item[data-number="${CSS.escape(String(number))}"]`,
-		);
-		if (row) {
-			row.remove();
-			removed += 1;
+	let failed = 0;
+	for (const number of ids) {
+		try {
+			if (await unenrollStudentFromClass(number)) removed += 1;
+		} catch (err) {
+			failed += 1;
+			console.warn('[classes] bulk remove student failed:', err);
 		}
-	});
+	}
 	if (removed) {
-		renderStudentRosterTable();
-		populateStudentUserPicker();
+		refreshRosterAfterMutation();
 		if (window.BulkSelect) window.BulkSelect.clear('students');
-		markRosterDirty();
-		showToast(`Removed ${removed} student(s) from the roster`, 'success');
+		showToast(
+			failed
+				? `Removed ${removed} student(s); ${failed} could not be removed`
+				: `Removed ${removed} student(s) from the roster`,
+			failed ? 'warning' : 'success',
+		);
 		if (typeof logActivity === 'function') {
 			logActivity('class', `${removed} student(s)`, 'removed from roster', {
 				classId: assignClassStudentsId,
@@ -1121,7 +1774,12 @@ async function deleteSelectedStudents() {
 			});
 		}
 	} else {
-		showToast('No students were removed', 'info');
+		showToast(
+			failed
+				? 'Students could not be removed — check the connection and try again'
+				: 'No students were removed',
+			failed ? 'error' : 'info',
+		);
 	}
 }
 
@@ -1144,7 +1802,7 @@ async function bulkSetStudentAccounts(targetStatus) {
 		const account = getRosterAccountInfo(number);
 		if (!account) return; // no account yet — nothing to enable/disable
 		const status = String(account.status || 'active').toLowerCase();
-		const isDisabled = status === 'disabled' || status === 'inactive';
+		const isDisabled = isDisabledAccountStatus(status);
 		if (targetStatus === 'active' && isDisabled) targets.push(account);
 		if (targetStatus === 'disabled' && !isDisabled) targets.push(account);
 	});
@@ -1191,13 +1849,7 @@ async function bulkSetStudentAccounts(targetStatus) {
 
 	if (succeeded) {
 		if (window.Auth.saveUsers) window.Auth.saveUsers(users);
-		if (
-			typeof window.syncUsersToClients === 'function' &&
-			window.Auth?.isAdmin?.()
-		) {
-			window.syncUsersToClients();
-		}
-		renderStudentRosterTable();
+		refreshRosterAfterMutation();
 		showToast(
 			`${succeeded} account(s) ${targetStatus === 'active' ? 'activated' : 'suspended'}`,
 			'success',
@@ -1237,8 +1889,7 @@ function exportSelectedStudents() {
 			const account = getRosterAccountInfo(el.dataset.number);
 			const status = !account
 				? 'no account'
-				: String(account.status || 'active').toLowerCase() === 'disabled' ||
-					  String(account.status || '').toLowerCase() === 'inactive'
+				: isDisabledAccountStatus(account.status)
 					? 'disabled'
 					: 'active';
 			return {
@@ -1273,81 +1924,6 @@ function exportSelectedStudents() {
 	);
 	link.click();
 	showToast(`Exported ${students.length} selected student(s)`, 'success');
-}
-
-// Add-student modal (Create) -------------------------------------------------
-
-function openAddStudentModal() {
-	let modal = document.getElementById('addStudentModal');
-	if (!modal) {
-		modal = document.createElement('div');
-		modal.id = 'addStudentModal';
-		modal.className = 'modal';
-		modal.innerHTML = `
-			<div class="modal-content modal-sm">
-				<div class="modal-header">
-					<h3 style="margin:0;font-size:1rem;font-weight:600;">Add Student</h3>
-					<button type="button" class="btn-icon" onclick="closeAddStudentModal()" style="background:none;border:none;font-size:1.5rem;color:#64748b;cursor:pointer;">×</button>
-				</div>
-				<form id="addStudentForm" onsubmit="event.preventDefault(); saveAddStudent();">
-					<div class="modal-body" style="padding:20px 24px;">
-						<div class="form-group" style="margin-bottom:16px;">
-							<label class="form-label" style="display:block;margin-bottom:6px;font-size:0.875rem;font-weight:600;color:#374151;">Student #</label>
-							<input type="text" id="addStudentNumber" class="form-control" placeholder="e.g. S001" required />
-						</div>
-						<div class="form-group" style="margin-bottom:16px;">
-							<label class="form-label" style="display:block;margin-bottom:6px;font-size:0.875rem;font-weight:600;color:#374151;">Full Name</label>
-							<input type="text" id="addStudentName" class="form-control" placeholder="Enter student name" required />
-						</div>
-						<p class="text-muted" style="font-size:0.8125rem;margin:0;">Staged in this roster — click Save Roster to persist.</p>
-					</div>
-					<div class="modal-footer" style="display:flex;justify-content:flex-end;gap:10px;padding:12px 24px;">
-						<button type="button" class="btn btn-secondary btn-sm" onclick="closeAddStudentModal()">Cancel</button>
-						<button type="submit" class="btn btn-primary btn-sm">Add Student</button>
-					</div>
-				</form>
-			</div>
-		`;
-		document.body.appendChild(modal);
-	}
-	const numberInput = document.getElementById('addStudentNumber');
-	const nameInput = document.getElementById('addStudentName');
-	if (numberInput) numberInput.value = '';
-	if (nameInput) nameInput.value = '';
-	openModalLike(modal, 'addStudentNumber');
-	numberInput?.focus();
-}
-
-function closeAddStudentModal() {
-	closeModalLike(document.getElementById('addStudentModal'));
-}
-
-function saveAddStudent() {
-	const number = String(
-		document.getElementById('addStudentNumber')?.value || '',
-	).trim();
-	const name = String(
-		document.getElementById('addStudentName')?.value || '',
-	).trim();
-	if (!number || !name) {
-		showToast('Please enter both student # and name', 'error');
-		return;
-	}
-	if (getSelectedStudentNumbers().has(number)) {
-		showToast('Student already added to this class', 'info');
-		closeAddStudentModal();
-		return;
-	}
-	const studentsList = document.getElementById('selectedStudentsList');
-	if (!studentsList) {
-		closeAddStudentModal();
-		return;
-	}
-	studentsList.appendChild(createStudentItem(number, name));
-	renderStudentRosterTable();
-	closeAddStudentModal();
-	markRosterDirty();
-	showToast(`Student "${escapeHtml(name)}" added to roster`, 'success');
 }
 
 function setupClassEventListeners() {
@@ -1621,7 +2197,6 @@ function openAssignClassStudents(classId) {
 	if (sortDirBtn) sortDirBtn.classList.remove('desc');
 	const rosterPageEl = document.getElementById('rosterCurrentPage');
 	if (rosterPageEl) rosterPageEl.textContent = '1';
-	clearRosterDirty();
 
 	// Bulk Enable/Disable touch user accounts — an admin-only operation.
 	// Hide the buttons for teacher sessions.
@@ -1658,7 +2233,6 @@ function closeAssignClassStudents() {
 		closeModalLike(modal);
 	}
 	assignClassStudentsId = null;
-	clearRosterDirty();
 	updateClassList();
 	window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1737,102 +2311,6 @@ window.openClassExamsAction = openClassExamsAction;
 window.openClassGamesAction = openClassGamesAction;
 window.openClassEditAction = openClassEditAction;
 window.openClassDeleteAction = openClassDeleteAction;
-
-async function saveAssignClassStudents() {
-	if (!assignClassStudentsId) return;
-	const classId = assignClassStudentsId;
-	const classData = classes.find((c) => c.id === classId);
-	if (!classData) {
-		showToast('Class not found', 'error');
-		return;
-	}
-
-	// Read the staged roster from the modal (table rows carry number/name in
-	// their dataset — rendered by renderStudentRosterTable).
-	const students = mergeStudentEntries(
-		Array.from(
-			document.querySelectorAll('#selectedStudentsList .selected-student-item'),
-		).map((el) => ({
-			number: String(el.dataset.number || '').trim(),
-			name: String(el.dataset.name || '').trim(),
-		})),
-	);
-
-	// ── Teacher gate: roster changes materialize only after admin confirms ──
-	// Teachers can stage the new roster in this modal, but pushing it live
-	// would create/move student accounts without review. Diff against the
-	// current roster and hand the change set to the admin confirmation queue
-	// (same flow as Users → Pending Imports). Admins keep the direct save.
-	const isTeacherSession = window.Auth?.isTeacher && window.Auth.isTeacher();
-	if (isTeacherSession) {
-		const currentNumbers = new Set(
-			(classData.students || []).map((s) => String(s.number || '').trim()),
-		);
-		const stagedNumbers = new Set(
-			students.map((s) => String(s.number || '').trim()),
-		);
-		const added = students.filter(
-			(s) => !currentNumbers.has(String(s.number || '').trim()),
-		);
-		const removedCount = Array.from(currentNumbers).filter(
-			(n) => !stagedNumbers.has(n),
-		).length;
-
-		if (added.length || removedCount) {
-			if (window.Auth?.stagePendingImport) {
-				const staged = window.Auth.stagePendingImport({
-					classId,
-					students: added.length ? added : students,
-					sourceFileName: 'roster edit',
-				});
-				if (staged) {
-					closeAssignClassStudents();
-					showToast(
-						`Roster changes staged: ${added.length} added, ${removedCount} removed — an admin must confirm`,
-						'success',
-					);
-					return;
-				}
-			}
-			showToast(
-				'Your changes need admin confirmation, but staging is unavailable right now',
-				'warning',
-			);
-			return;
-		}
-
-		// No diff → nothing to confirm; just close.
-		closeAssignClassStudents();
-		showToast('No roster changes to apply', 'info');
-		return;
-	}
-
-	classData.students = students;
-	saveClasses();
-	updateClassList();
-
-	// Sync student user accounts (creates / moves / unassigns student users)
-	if (window.Auth?.syncClassStudentsFromClassData) {
-		try {
-			await window.Auth.syncClassStudentsFromClassData(classData, students);
-		} catch (error) {
-			console.error('Failed to sync class students:', error);
-		}
-	}
-
-	closeAssignClassStudents();
-	showToast(
-		`${students.length} student(s) assigned to "${classData.name}"!`,
-		'success',
-	);
-
-	if (typeof logActivity === 'function') {
-		logActivity('class', classData.name, 'assigned students', {
-			id: classData.id,
-			studentCount: students.length,
-		});
-	}
-}
 
 // ============================================
 // ASSIGN EXAMS MODAL (class ↔ exams)
@@ -2634,58 +3112,6 @@ function exportStudentsLegacy() {
 	linkElement.click();
 }
 
-function importStudentsLegacy() {
-	const input = document.createElement('input');
-	input.type = 'file';
-	input.accept = '.json';
-
-	input.onchange = (e) => {
-		const file = e.target.files[0];
-		const reader = new FileReader();
-
-		reader.onload = (event) => {
-			try {
-				const newStudents = JSON.parse(event.target.result);
-
-				if (
-					!Array.isArray(newStudents) ||
-					!newStudents.every(isValidStudentStructure)
-				) {
-					throw new Error('Invalid student data structure');
-				}
-
-				const studentsList = document.getElementById('selectedStudentsList');
-
-				// Add each imported student to the list
-				newStudents.forEach((student) => {
-					const normalized = normalizeStudentEntry(student);
-					if (!normalized) return;
-					studentsList.appendChild(
-						createStudentItem(normalized.number, normalized.name),
-					);
-				});
-				populateStudentUserPicker();
-
-				showToast('Students imported successfully!');
-			} catch (error) {
-				showToast('Error importing students: ' + error.message, 'error');
-			}
-		};
-
-		reader.readAsText(file);
-	};
-
-	input.click();
-}
-
-function isValidStudentStructure(student) {
-	return (
-		student &&
-		typeof student.number === 'string' &&
-		typeof student.name === 'string'
-	);
-}
-
 // Helper function to escape HTML special characters
 function escapeHtml(unsafe) {
 	return unsafe
@@ -2728,19 +3154,22 @@ window.onStudentClassFilterChange = onStudentClassFilterChange;
 window.populateStudentUserPicker = populateStudentUserPicker;
 window.filterStudentRosterTable = filterStudentRosterTable;
 window.editRosterStudent = editRosterStudent;
-	window.removeRosterStudent = removeRosterStudent;
-	window.renderStudentRosterTable = renderStudentRosterTable;
-	window.editStudent = editStudent;
-	window.openStudentActionSheet = openStudentActionSheet;
-	window.openAddStudentModal = openAddStudentModal;
-	window.closeAddStudentModal = closeAddStudentModal;
-	window.saveAddStudent = saveAddStudent;
-	window.exportStudents = exportStudents;
-window.importStudents = importStudents;
+window.removeRosterStudent = removeRosterStudent;
+window.renderStudentRosterTable = renderStudentRosterTable;
+window.refreshRosterAfterMutation = refreshRosterAfterMutation;
+window.editStudent = editStudent;
+window.openStudentActionSheet = openStudentActionSheet;
+window.exportStudents = exportStudents;
 window.exportSelectedStudents = exportSelectedStudents;
 window.bulkSetStudentAccounts = bulkSetStudentAccounts;
 window.openAddStudentsPickerModal = openAddStudentsPickerModal;
 window.closeAddStudentsPickerModal = closeAddStudentsPickerModal;
+window.switchAddStudentsTab = switchAddStudentsTab;
+window.submitNewStudentForm = submitNewStudentForm;
+window.approvePendingSignup = approvePendingSignup;
+window.rejectPendingSignup = rejectPendingSignup;
+window.toggleNewStudentPassword = toggleNewStudentPassword;
+window.generateNewStudentPassword = generateNewStudentPassword;
 window.renderStudentPickerList = renderStudentPickerList;
 window.sortStudentRoster = sortStudentRoster;
 window.toggleRosterSortDirection = toggleRosterSortDirection;
@@ -2748,7 +3177,6 @@ window.changeRosterPage = changeRosterPage;
 window.openClassActionSheet = openClassActionSheet;
 window.openAssignClassStudents = openAssignClassStudents;
 window.closeAssignClassStudents = closeAssignClassStudents;
-window.saveAssignClassStudents = saveAssignClassStudents;
 window.openAssignClassExams = openAssignClassExams;
 window.closeAssignClassExams = closeAssignClassExams;
 window.saveAssignClassExams = saveAssignClassExams;
@@ -2846,29 +3274,6 @@ async function deleteSelectedClasses() {
 	window.deleteSelectedClasses = deleteSelectedClasses;
 	window.deleteSelectedStudents = deleteSelectedStudents;
 
-// Import staging for the Assign Students modal: admins add rows directly;
-// teachers hand the parsed roster to the admin confirmation queue instead
-// (same gate as saveAssignClassStudents).
-function appendImportedStudent(number, name) {
-	const isTeacherSession = window.Auth?.isTeacher && window.Auth.isTeacher();
-	if (
-		isTeacherSession &&
-		window.Auth?.stagePendingImport &&
-		assignClassStudentsId
-	) {
-		const staged = window.Auth.stagePendingImport({
-			classId: assignClassStudentsId,
-			students: [{ number, name }],
-			sourceFileName: 'roster CSV import',
-		});
-		return Boolean(staged);
-	}
-	const studentsList = document.getElementById('selectedStudentsList');
-	if (!studentsList) return false;
-	studentsList.appendChild(createStudentItem(number, name));
-	return true;
-}
-
 // Export students as CSV
 function exportStudents() {
 	const students = Array.from(
@@ -2904,68 +3309,4 @@ function exportStudents() {
 	);
 	link.click();
 	showToast('Students exported successfully', 'success');
-}
-
-// Import students from CSV
-function importStudents() {
-	const input = document.createElement('input');
-	input.type = 'file';
-	input.accept = '.csv';
-	input.onchange = (e) => {
-		const file = e.target.files[0];
-		if (!file) return;
-
-		const reader = new FileReader();
-		reader.onload = (event) => {
-			try {
-				const csv = event.target.result;
-				const lines = csv.split('\n').filter((line) => line.trim());
-
-				// Skip header if present
-				let startIndex = 0;
-				if (
-					lines[0].toLowerCase().includes('number') &&
-					lines[0].toLowerCase().includes('name')
-				) {
-					startIndex = 1;
-				}
-
-				let importedCount = 0;
-				const studentsList = document.getElementById('selectedStudentsList');
-				const existingNumbers = getSelectedStudentNumbers();
-				for (let i = startIndex; i < lines.length; i++) {
-					// Parse CSV line (handle quoted values)
-					const match = lines[i].match(/"([^"]+)"|[^,]+/g);
-					if (!match || match.length < 2) continue;
-
-					let number = match[0].replace(/"/g, '').trim();
-					let name = match[1].replace(/"/g, '').trim();
-
-					if (!number || !name) continue;
-					if (existingNumbers.has(number)) continue; // skip duplicates
-
-					// Add student (teacher session: stage for admin confirmation)
-					const staged = appendImportedStudent(number, name);
-					if (staged) importedCount++;
-				}
-
-				if (importedCount > 0) {
-					populateStudentUserPicker();
-					renderStudentRosterTable();
-					markRosterDirty();
-					showToast(
-						`Imported ${importedCount} student(s) successfully`,
-						'success',
-					);
-				} else {
-					showToast('No valid students found in file', 'warning');
-				}
-			} catch (error) {
-				console.error('Error importing students:', error);
-				showToast('Error importing students: ' + error.message, 'error');
-			}
-		};
-		reader.readAsText(file);
-	};
-	input.click();
 }

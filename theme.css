@@ -976,7 +976,7 @@ html[data-theme='dark'] .odd-one-option.incorrect {
 	color: #fecaca !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal.is-open .ai-modal-tab.active {
+html[data-theme='dark'] #aiGeneratorPage .ai-generator-tab.active {
 	border-color: #a5b4fc !important;
 	background: rgba(99, 102, 241, 0.22) !important;
 }
@@ -1566,180 +1566,170 @@ html[data-theme='dark'] #assignClassStudentsModal .roster-status-pending {
 }
 
 /* AI Question Generator */
-html[data-theme='dark'] #aiGeneratorModal .modal-content,
-html[data-theme='dark'] #aiGeneratorModal.is-open .modal-content {
+html[data-theme='dark'] #aiGeneratorPage {
 	background-color: var(--bg-surface) !important;
+	border-color: var(--border-color) !important;
 	color: var(--text-main) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal.is-open .modal-body {
-	background-color: var(--bg-body) !important;
-	color: var(--text-main) !important;
-}
-
-html[data-theme='dark'] #aiGeneratorModal.is-open .ai-modal-header {
-	background-image: linear-gradient(118deg, #312e81 0%, #3730a3 58%, #4c1d95 100%) !important;
-	color: #ffffff !important;
-}
-
-html[data-theme='dark'] #aiGeneratorModal.is-open .ai-modal-subtitle { color: rgba(255,255,255,.76) !important; }
-
-html[data-theme='dark'] #aiGeneratorModal .ai-modal-tabs {
-	background-color: var(--bg-surface) !important;
+html[data-theme='dark'] #aiGeneratorPage .ai-generator-tabs {
+	background-color: var(--bg-surface-alt) !important;
 	border-bottom-color: var(--border-color) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .ai-modal-tab.active {
+html[data-theme='dark'] #aiGeneratorPage .ai-generator-tab.active {
 	background-color: rgba(99, 102, 241, 0.18) !important;
+	border-color: rgba(129, 140, 248, 0.55) !important;
+	color: #c7d2fe !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .ai-modal-tab {
+html[data-theme='dark'] #aiGeneratorPage .ai-generator-tab {
 	background-color: var(--bg-surface-alt) !important;
 	border-color: var(--border-color) !important;
 	color: var(--text-secondary) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .ai-modal-tab small { color: var(--text-muted) !important; }
-html[data-theme='dark'] #aiGeneratorModal .ai-tab-icon { background: rgba(99,102,241,.2) !important; color: #c7d2fe !important; }
-html[data-theme='dark'] #aiGeneratorModal .form-control {
+html[data-theme='dark'] #aiGeneratorPage .ai-generator-tab small { color: var(--text-muted) !important; }
+html[data-theme='dark'] #aiGeneratorPage .ai-tab-icon { background: rgba(99,102,241,.2) !important; color: #c7d2fe !important; }
+html[data-theme='dark'] #aiGeneratorPage .ai-option-style {
+	background-color: var(--bg-surface-alt) !important;
+	border-color: var(--border-color) !important;
+}
+html[data-theme='dark'] #aiGeneratorPage .ai-style-btn {
+	color: var(--text-secondary) !important;
+}
+html[data-theme='dark'] #aiGeneratorPage .ai-style-btn:hover {
+	color: #c7d2fe !important;
+}
+html[data-theme='dark'] #aiGeneratorPage .form-control {
 	background-color: var(--bg-surface-alt) !important;
 	border-color: var(--border-color) !important;
 	color: var(--text-main) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal .ai-type-card-v2 {
+html[data-theme='dark'] #aiGeneratorPage .ai-type-card-v2 {
 	background-color: var(--bg-surface) !important;
 	border-color: var(--border-color) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-generator-form > .form-row:first-child,
-html[data-theme='dark'] #aiGeneratorModal #ai-text-style-fields > .form-row:nth-of-type(2) {
+html[data-theme='dark'] #aiGeneratorPage #ai-generator-form > .form-row:first-child,
+html[data-theme='dark'] #aiGeneratorPage #ai-text-style-fields > .form-row:nth-of-type(2) {
 	background: var(--bg-surface-alt) !important;
 	border-color: var(--border-color) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal #tab-ai-standard {
-	border-bottom-color: #6366f1 !important;
-}
-
-html[data-theme='dark'] #aiGeneratorModal #tab-ai-document,
-html[data-theme='dark'] #aiGeneratorModal #tab-ai-builder,
-html[data-theme='dark'] #aiGeneratorModal #tab-ai-import {
-	color: var(--text-muted) !important;
-}
-
-html[data-theme='dark'] #aiGeneratorModal #ai-generator-footer {
-	background-color: var(--bg-surface) !important;
+html[data-theme='dark'] #aiGeneratorPage #ai-generator-footer {
+	background-color: var(--bg-surface-alt) !important;
 	border-top-color: var(--border-color) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .ai-pro-tips {
+html[data-theme='dark'] #aiGeneratorPage .ai-pro-tips {
 	background-image: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.7)) !important;
 	border-color: var(--border-color) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .tip-item {
+html[data-theme='dark'] #aiGeneratorPage .tip-item {
 	background-color: rgba(15, 23, 42, 0.45) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .supported-formats {
+html[data-theme='dark'] #aiGeneratorPage .supported-formats {
 	background-color: var(--bg-surface-alt) !important;
 	border-color: var(--border-color) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .strategy-card.active {
+html[data-theme='dark'] #aiGeneratorPage .strategy-card.active {
 	background-color: rgba(99, 102, 241, 0.18) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .progress-container {
+html[data-theme='dark'] #aiGeneratorPage .progress-container {
 	background-color: var(--bg-surface-alt) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .progress-bar {
+html[data-theme='dark'] #aiGeneratorPage .progress-bar {
 	background-color: var(--border-color) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal #previewContent {
+html[data-theme='dark'] #aiGeneratorPage #previewContent {
 	background-color: var(--bg-surface-alt) !important;
 	border-color: var(--border-color) !important;
 	color: var(--text-main) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal .cooldown-bar {
+html[data-theme='dark'] #aiGeneratorPage .cooldown-bar {
 	background-color: var(--border-color) !important;
 }
 
-html[data-theme='dark'] #aiGeneratorModal [style*='background: white'],
-html[data-theme='dark'] #aiGeneratorModal [style*='background: #fff'],
-html[data-theme='dark'] #aiGeneratorModal [style*='background: #ffffff'],
-html[data-theme='dark'] #aiGeneratorModal [style*='background: #f8fafc'],
-html[data-theme='dark'] #aiGeneratorModal [style*='background: #f1f5f9'],
-html[data-theme='dark'] #aiGeneratorModal [style*='background: rgba(255, 255, 255, 0.7)'] {
+html[data-theme='dark'] #aiGeneratorPage [style*='background: white'],
+html[data-theme='dark'] #aiGeneratorPage [style*='background: #fff'],
+html[data-theme='dark'] #aiGeneratorPage [style*='background: #ffffff'],
+html[data-theme='dark'] #aiGeneratorPage [style*='background: #f8fafc'],
+html[data-theme='dark'] #aiGeneratorPage [style*='background: #f1f5f9'],
+html[data-theme='dark'] #aiGeneratorPage [style*='background: rgba(255, 255, 255, 0.7)'] {
 	background-color: var(--bg-surface-alt) !important;
 }
 
 /* ── Prompt Builder + Import JSON tabs (dark) ── */
 /* Toolbar (teal gradient in light mode) */
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f0fdfa'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='#f0fdfa'] {
 	background: rgba(13, 148, 136, 0.14) !important;
 	border-color: rgba(45, 212, 191, 0.35) !important;
 }
 
 /* Hierarchy cards: keep the accent coding, darkened */
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#ecfdf5'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='#ecfdf5'] {
 	background: rgba(16, 185, 129, 0.10) !important;
 	border-color: rgba(52, 211, 153, 0.45) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f0f9ff'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='#f0f9ff'] {
 	background: rgba(56, 189, 248, 0.10) !important;
 	border-color: rgba(56, 189, 248, 0.40) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#faf5ff'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='#faf5ff'] {
 	background: rgba(167, 139, 250, 0.12) !important;
 	border-color: rgba(167, 139, 250, 0.45) !important;
 }
 /* Axe card (white + violet left accent in light mode) */
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='border-left:4px solid #8b5cf6'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='border-left:4px solid #8b5cf6'] {
 	background: var(--bg-surface) !important;
 	border-color: var(--border-color) !important;
 	border-left-color: #8b5cf6 !important;
 }
 /* Type-mix chips + language bar + empty state */
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f8fafc'],
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='#f1f5f9'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='#f8fafc'],
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='#f1f5f9'] {
 	background-color: var(--bg-surface-alt) !important;
 	border-color: var(--border-color) !important;
 }
 
 /* All builder/import fields readable on dark */
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form input,
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form select,
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form textarea,
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form textarea {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form input,
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form select,
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form textarea,
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form textarea {
 	background-color: var(--bg-body) !important;
 	border-color: var(--border-color) !important;
 	color: var(--text-main) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form input::placeholder,
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form textarea::placeholder,
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form textarea::placeholder {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form input::placeholder,
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form textarea::placeholder,
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form textarea::placeholder {
 	color: var(--text-muted) !important;
 	opacity: 1;
 }
-html[data-theme='dark'] #aiGeneratorModal #promptBuilderOutput {
+html[data-theme='dark'] #aiGeneratorPage #promptBuilderOutput {
 	background: rgba(16, 185, 129, 0.08) !important;
 	border-color: rgba(52, 211, 153, 0.4) !important;
 	color: var(--text-main) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #promptBuilderImportInput {
+html[data-theme='dark'] #aiGeneratorPage #promptBuilderImportInput {
 	background: var(--bg-body) !important;
 	border-color: rgba(167, 139, 250, 0.5) !important;
 	color: var(--text-main) !important;
 }
 /* Import wrap (violet gradient in light mode) */
-html[data-theme='dark'] #aiGeneratorModal #promptBuilderImportWrap {
+html[data-theme='dark'] #aiGeneratorPage #promptBuilderImportWrap {
 	background: rgba(124, 58, 237, 0.12) !important;
 	border-color: rgba(167, 139, 250, 0.45) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form code {
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form code {
 	background-color: var(--bg-surface-alt) !important;
 	color: #c4b5fd !important;
 	border-radius: 4px;
@@ -1747,40 +1737,40 @@ html[data-theme='dark'] #aiGeneratorModal #ai-import-form code {
 }
 
 /* Inline accent text colors → readable light variants */
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#065f46'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#065f46'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#065f46'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#065f46'] {
 	color: #6ee7b7 !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#047857'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#047857'],
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#059669'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#059669'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#047857'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#047857'],
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#059669'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#059669'] {
 	color: #34d399 !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#0369a1'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#0369a1'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#0369a1'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#0369a1'] {
 	color: #7dd3fc !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#6d28d9'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#6d28d9'],
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#7c3aed'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#7c3aed'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#6d28d9'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#6d28d9'],
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#7c3aed'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#7c3aed'] {
 	color: #c4b5fd !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#334155'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#334155'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#334155'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#334155'] {
 	color: #e2e8f0 !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#64748b'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#64748b'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#64748b'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#64748b'] {
 	color: #94a3b8 !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#b45309'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#b45309'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#b45309'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#b45309'] {
 	color: #fbbf24 !important;
 }
-html[data-theme='dark'] #aiGeneratorModal #ai-builder-form [style*='color:#0d9488'],
-html[data-theme='dark'] #aiGeneratorModal #ai-import-form [style*='color:#0d9488'] {
+html[data-theme='dark'] #aiGeneratorPage #ai-builder-form [style*='color:#0d9488'],
+html[data-theme='dark'] #aiGeneratorPage #ai-import-form [style*='color:#0d9488'] {
 	color: #5eead4 !important;
 }
 

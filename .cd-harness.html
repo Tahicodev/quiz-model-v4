@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Classroom Devices harness</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="admin.css" />
+<style>body { margin: 0; padding: 16px; }</style>
+</head>
+<body>
+	<main class="main-content">
+		<section id="devices" class="tab-content active" data-roles="admin,teacher">
+			<div class="dashboard-container">
+				<div class="dashboard-header">
+					<div class="welcome-text">
+						<h2>Classroom Devices</h2>
+						<p class="text-muted">Machines that connected to this school. Block, allow, or assign each one to a student.</p>
+					</div>
+				</div>
+
+				<div class="kpi-grid" id="devicesKpiGrid">
+					<div class="stat-card blue"><div class="stat-bar"></div><div class="stat-info"><h3 id="kpi-devices-total">0</h3><p>Total Devices</p></div></div>
+					<div class="stat-card green"><div class="stat-bar"></div><div class="stat-info"><h3 id="kpi-devices-online">0</h3><p>Online Now</p></div></div>
+					<div class="stat-card amber"><div class="stat-bar"></div><div class="stat-info"><h3 id="kpi-devices-blocked">0</h3><p>Blocked</p></div></div>
+				</div>
+
+				<div class="dashboard-panel devices-filter-panel">
+					<div class="panel-header devices-filter-header">
+						<h3>Filters</h3>
+						<div class="devices-filter-header-actions">
+							<button type="button" class="mobile-filters-toggle" onclick="window.ClassroomDevices && window.ClassroomDevices.toggleFilters(this)" aria-expanded="false">
+								<span class="mobile-filters-toggle-label">Filters</span>
+								<span class="mobile-filters-count hidden">0</span>
+								<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+							</button>
+							<button type="button" class="btn-text-only" onclick="window.ClassroomDevices && window.ClassroomDevices.clearFilters()">Clear all</button>
+						</div>
+					</div>
+					<div class="panel-body collapsible-filter-controls" id="devicesFilters">
+						<div class="devices-search-row">
+							<div class="search-group devices-search">
+								<input type="search" id="devicesSearch" placeholder="Search machine, IP or student…" oninput="window.ClassroomDevices && window.ClassroomDevices.filter()" />
+							</div>
+							<button type="button" class="btn btn-secondary" onclick="window.ClassroomDevices && window.ClassroomDevices.refresh()">Refresh</button>
+						</div>
+						<div class="devices-filters-row">
+							<div class="filter-group"><label for="deviceFilterStatus">Status</label>
+								<select id="deviceFilterStatus" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()"><option value="">All statuses</option><option value="allowed">Allowed</option><option value="blocked">Blocked</option></select>
+							</div>
+							<div class="filter-group"><label for="deviceFilterType">Type</label>
+								<select id="deviceFilterType" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()"><option value="">All types</option><option value="desktop">PC</option><option value="mobile">Mobile</option><option value="tablet">Tablet</option></select>
+							</div>
+							<div class="filter-group"><label for="deviceFilterPresence">Presence</label>
+								<select id="deviceFilterPresence" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()"><option value="">All</option><option value="online">Online now</option><option value="offline">Offline</option></select>
+							</div>
+							<div class="filter-group"><label for="deviceFilterStudent">Student</label>
+								<select id="deviceFilterStudent" class="form-control" onchange="window.ClassroomDevices && window.ClassroomDevices.filter()"><option value="">All devices</option><option value="assigned">Assigned</option><option value="unassigned">Unassigned</option><option value="staff">Staff</option></select>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="table-container">
+					<div id="bulk-actions-devices" class="bulk-actions-container hidden">
+						<span class="selection-info"><span id="selected-count-devices">0</span> selected</span>
+						<button type="button" class="btn btn-danger-soft" onclick="window.ClassroomDevices.deleteSelectedDevices()"><span>Delete Selected</span></button>
+					</div>
+					<table class="data-table" id="devicesTable">
+						<thead>
+							<tr>
+								<th class="checkbox-cell" style="width: 40px"><input type="checkbox" id="selectAllDevices" onchange="toggleBulkSelectAllGeneric(this, 'devices')" /></th>
+								<th>Machine</th>
+								<th>Type</th>
+								<th>IP</th>
+								<th>Assigned student</th>
+								<th>Status</th>
+								<th>Last seen</th>
+								<th>Actions</th>
+							</tr>
+						</thead>
+						<tbody id="devicesTableBody"></tbody>
+					</table>
+					<div id="devicesMobileList" class="devices-mobile-list"></div>
+				</div>
+			</div>
+		</section>
+	</main>
+
+	<script>
+	// ---- stubs so classroom-devices.js runs standalone ----
+	window.__authToken = 'harness-token';
+	window.APP_CONFIG = { apiUrl: '/api/v1' };
+	window.Auth = { isAdmin: function () { return true; } };
+	window.TeacherFilter = { isAdminSession: function () { return true; } };
+	window.showToast = function (m, t) { console.log('[toast]', t, m); };
+	window.getSocket = function () { return { on: function () {} }; };
+	window.__sheetOpens = 0;
+	window.MobileActionSheet = { open: function (title, actions) { window.__sheetOpens++; var t = document.createElement('div'); t.id = 'sheet-probe'; t.textContent = title + '::' + (actions || []).map(function (a) { return a.label; }).join(','); document.body.appendChild(t); } };
+	window.BulkSelect = { restore: function () {}, getSelectedIds: function () { return []; }, removeIds: function () {} };
+	window.toggleBulkRowSelection = function () {};
+	window.toggleBulkSelectAllGeneric = function () {};
+
+	var now = Date.now();
+	var DEVICES = [
+		{ id: 'dev-1', device_key: 'lab-pc-1', hostname: 'Lab A - PC 01', note: null, device_type: 'desktop', platform: 'Windows 11', last_ip: '192.168.1.21', status: 'allowed', assigned_user_id: 'stu-1', assignedUser: { id: 'stu-1', name: 'Sara Bennani', username: 's.bennani', role: 'student' }, last_seen: new Date(now - 120000).toISOString() },
+		{ id: 'dev-2', device_key: 'lab-pc-2', hostname: 'Lab A - PC 02', note: null, device_type: 'desktop', platform: 'Windows 11', last_ip: '192.168.1.22', status: 'blocked', assigned_user_id: 'stu-2', assignedUser: { id: 'stu-2', name: 'Omar Idrissi', username: 'o.idrissi', role: 'student' }, last_seen: new Date(now - 600000).toISOString() },
+		{ id: 'dev-3', device_key: 'teacher-pc', hostname: null, note: 'Salle des profs', device_type: 'desktop', platform: 'Windows 10', last_ip: '192.168.1.10', status: 'allowed', assigned_user_id: 'tea-1', assignedUser: { id: 'tea-1', name: 'Hicham Taybi', username: 'h.taybi', role: 'teacher' }, last_seen: new Date(now - 30000).toISOString() },
+		{ id: 'dev-4', device_key: 'tablet-7', hostname: 'Tablette 07', note: null, device_type: 'tablet', platform: 'Android 13', last_ip: '192.168.1.44', status: 'allowed', assigned_user_id: null, assignedUser: null, last_seen: new Date(now - 3600000).toISOString() }
+	];
+	var LIVE = [
+		{ user: { id: 'stu-1', name: 'Sara Bennani', username: 's.bennani', role: 'student' }, sessions: [ { id: 's1', created_at: new Date(now - 120000).toISOString(), ip_address: '192.168.1.21', user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0' }, { id: 's2', created_at: new Date(now - 100000).toISOString(), ip_address: '192.168.1.21', user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0' } ] },
+		{ user: { id: 'stu-2', name: 'Omar Idrissi', username: 'o.idrissi', role: 'student' }, sessions: [ { id: 's3', created_at: new Date(now - 600000).toISOString(), ip_address: '192.168.1.22', user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/121.0' } ] },
+		{ user: { id: 'tea-1', name: 'Hicham Taybi', username: 'h.taybi', role: 'teacher' }, sessions: [ { id: 's4', created_at: new Date(now - 30000).toISOString(), ip_address: '192.168.1.10', user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/120.0' } ] }
+	];
+	window.fetch = function (url) {
+		url = String(url);
+		var body = {};
+		if (url.indexOf('/users') !== -1) body = { data: [{ id: 'stu-1', name: 'Sara Bennani', username: 's.bennani' }, { id: 'stu-2', name: 'Omar Idrissi', username: 'o.idrissi' }], total: 2 };
+		else if (url.indexOf('/sessions/live') !== -1) body = LIVE;
+		else if (url.indexOf('/devices') !== -1) body = DEVICES;
+		return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(body); } });
+	};
+	</script>
+	<script src="classroom-devices.js"></script>
+	<script>
+	window.ClassroomDevices.refresh();
+	</script>
+</body>
+</html>

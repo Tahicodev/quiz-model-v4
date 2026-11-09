@@ -52,9 +52,23 @@ const STUDENT_ROW = {
 
 const state = {
   isAdmin: true,
+  isTeacher: false,
   filterStudent: '',
   search: '',
   rows: [STAFF_ROW, STUDENT_ROW],
+  live: [
+    {
+      user: { id: 'teacher-1', name: 'Hicham', username: 'hicham', role: 'teacher' },
+      sessions: [
+        {
+          id: 'tok-1',
+          created_at: new Date().toISOString(),
+          ip_address: '192.168.1.10',
+          user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0',
+        },
+      ],
+    },
+  ],
 };
 
 function makeEl(over = {}) {
@@ -111,7 +125,7 @@ beforeAll(() => {
       confirm: () => true,
       prompt: () => null,
       innerWidth: 1280,
-      Auth: { isAdmin: () => state.isAdmin },
+      Auth: { isAdmin: () => state.isAdmin, isTeacher: () => state.isTeacher },
       TeacherFilter: { isAdminSession: () => state.isAdmin },
       MobileActionSheet: null,
       showToast: () => {},
@@ -143,19 +157,7 @@ beforeAll(() => {
         return {
           ok: true,
           status: 200,
-          json: async () => [
-            {
-              user: { id: 'teacher-1', name: 'Hicham', username: 'hicham', role: 'teacher' },
-              sessions: [
-                {
-                  id: 'tok-1',
-                  created_at: new Date().toISOString(),
-                  ip_address: '192.168.1.10',
-                  user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0',
-                },
-              ],
-            },
-          ],
+          json: async () => state.live,
         };
       }
       return { ok: false, status: 404, json: async () => ({}) };
@@ -267,15 +269,23 @@ describe('phone structure (<= 768px)', () => {
     expect(els.devicesMobileList.innerHTML).toContain('dm-sessions-empty');
   });
 
-  it('shows no session block to a teacher', async () => {
+  it('shows sessions to a teacher, but no end-session action', async () => {
     resetEls();
     state.isAdmin = false;
+    state.isTeacher = true;
     await setViewport(390);
     await refresh();
-    const html = els.devicesMobileList.innerHTML;
+    let html = els.devicesMobileList.innerHTML;
     expect(html).toContain('device-mcard');
-    expect(html).not.toContain('dm-sessions');
+    expect(html).toContain('dm-sessions-toggle');
+    vm.runInContext("window.ClassroomDevices.toggleSessions('dev-teacher');", ctx);
+    await vm.runInContext('window.ClassroomDevices.filter()', ctx);
+    html = els.devicesMobileList.innerHTML;
+    expect(html).toContain('dm-sessions');
+    expect(html).toContain('Hicham');
+    expect(html).not.toContain('endUserSessions(');
     state.isAdmin = true;
+    state.isTeacher = false;
   });
 
   // The render split is only half the fix: the CSS has to drop the table on
@@ -291,6 +301,143 @@ describe('phone structure (<= 768px)', () => {
     // Desktop hide first, phone swap after it — later wins at equal weight.
     expect(css.search(wide)).toBeGreaterThan(css.search(base));
     const block = css.lastIndexOf('@media', css.search(card));
-    expect(css.slice(block, css.indexOf('{', block))).toMatch(/max-width:\s*768px/);
+    expect(css.slice(block, css.indexOf('{', block))).toMatch(/max-width:\s*1024px/);
+  });
+});
+
+describe('session correlation', () => {
+  it('matches a session to the machine across IPv4/IPv6 spellings', async () => {
+    resetEls();
+    const prevIp = STUDENT_ROW.last_ip;
+    const prevAssigned = STUDENT_ROW.assigned_user_id;
+    const prevUser = STUDENT_ROW.assignedUser;
+    const prevLive = state.live;
+    STUDENT_ROW.last_ip = '::1';
+    STUDENT_ROW.assigned_user_id = null;
+    STUDENT_ROW.assignedUser = null;
+    state.live = [
+      {
+        user: { id: 'stranger-1', name: 'Stranger', username: 'stranger', role: 'student' },
+        sessions: [
+          {
+            id: 'tok-9',
+            created_at: new Date().toISOString(),
+            ip_address: '::ffff:127.0.0.1',
+            user_agent: 'Mozilla/5.0 Chrome/120.0',
+          },
+        ],
+      },
+    ];
+    try {
+      await refresh();
+      vm.runInContext("window.ClassroomDevices.toggleSessions('dev-student')", ctx);
+      await vm.runInContext('window.ClassroomDevices.filter()', ctx);
+      expect(els.devicesTableBody.innerHTML).toContain('Stranger');
+    } finally {
+      STUDENT_ROW.last_ip = prevIp;
+      STUDENT_ROW.assigned_user_id = prevAssigned;
+      STUDENT_ROW.assignedUser = prevUser;
+      state.live = prevLive;
+      vm.runInContext("window.ClassroomDevices.toggleSessions('dev-student')", ctx);
+    }
+  });
+
+  it('shows fingerprint-free sessions of users whose machine shares the same IP', async () => {
+    resetEls();
+    const prevRows = state.rows;
+    const prevLive = state.live;
+    state.rows = [
+      { ...STUDENT_ROW, id: 'dev-a', last_ip: '::1', assigned_user_id: 'student-1' },
+      {
+        ...STAFF_ROW,
+        id: 'dev-b',
+        device_key: 'mate-pc',
+        hostname: 'Mate PC',
+        last_ip: '127.0.0.1',
+        assigned_user_id: 'mate-1',
+        assignedUser: { id: 'mate-1', name: 'Mate', username: 'mate', role: 'student' },
+      },
+    ];
+    state.live = [
+      {
+        user: { id: 'mate-1', name: 'Linked Session', username: 'mate', role: 'student' },
+        sessions: [
+          {
+            id: 'tok-null-ip',
+            created_at: new Date().toISOString(),
+            ip_address: null,
+            user_agent: null,
+          },
+        ],
+      },
+    ];
+    try {
+      await refresh();
+      vm.runInContext("window.ClassroomDevices.toggleSessions('dev-a')", ctx);
+      await vm.runInContext('window.ClassroomDevices.filter()', ctx);
+      expect(els.devicesTableBody.innerHTML).toContain('Linked Session');
+    } finally {
+      state.rows = prevRows;
+      state.live = prevLive;
+    }
+  });
+});
+
+describe('bulk delete', () => {
+  it('routes through the refresh-aware shared client', async () => {
+    resetEls();
+    await refresh();
+    const calls = [];
+    const toasts = [];
+    const prevToast = ctx.window.showToast;
+    ctx.window.API = {
+      raw: async (method, path) => {
+        calls.push({ method, path });
+        const err = new Error('Not your device');
+        err.status = 403;
+        throw err;
+      },
+    };
+    ctx.window.BulkSelect = { getSelectedIds: () => ['dev-teacher'], removeIds() {} };
+    ctx.window.showToast = (m, t) => toasts.push({ m, t });
+    try {
+      await vm.runInContext('window.ClassroomDevices.deleteSelectedDevices()', ctx);
+    } finally {
+      delete ctx.window.API;
+      delete ctx.window.BulkSelect;
+      ctx.window.showToast = prevToast;
+    }
+    expect(calls).toEqual([{ method: 'DELETE', path: '/devices/dev-teacher' }]);
+    expect(toasts.some((x) => x.t === 'error' && x.m.includes('Not your device'))).toBe(true);
+  });
+
+  it('shows the server message instead of [object Object]', async () => {
+    resetEls();
+    await refresh();
+    const toasts = [];
+    const prevFetch = ctx.fetch;
+    const prevToast = ctx.window.showToast;
+    ctx.window.BulkSelect = { getSelectedIds: () => ['dev-teacher'], removeIds() {} };
+    ctx.window.showToast = (m, t) => toasts.push({ m, t });
+    ctx.fetch = async () => ({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      json: async () => ({
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'Not your device' },
+      }),
+    });
+    try {
+      await vm.runInContext('window.ClassroomDevices.deleteSelectedDevices()', ctx);
+    } finally {
+      ctx.fetch = prevFetch;
+      delete ctx.window.BulkSelect;
+      ctx.window.showToast = prevToast;
+    }
+    const err = toasts.find((x) => x.t === 'error');
+    expect(err).toBeTruthy();
+    expect(err.m).toContain('Not your device');
+    expect(err.m).not.toContain('[object Object]');
   });
 });

@@ -1,17 +1,18 @@
 /**
  * tests/unit/teacher-overview-render.test.js
  *
- * Render smoke test for teacher-overview.js (no browser needed). It loads the
- * real script in a node:vm context with a stubbed DOM + REST client and checks
- * that a real-shaped analytics bundle produces every dashboard section, that
- * the loading/error state is honest, and that an admin session never renders
- * the teacher dashboard.
+ * Render smoke test for the charts-only teacher Overview (no browser needed).
+ * It loads the real chart kit and dashboard script in a node:vm context with a
+ * stubbed DOM + REST client and checks that a real-shaped analytics bundle
+ * produces every analytics section, that loading/error states stay honest,
+ * and that an admin session never renders the teacher dashboard.
  */
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
+const ANALYTICS = readFileSync('teacher-analytics.js', 'utf8');
 const SOURCE = readFileSync('teacher-overview.js', 'utf8');
 
 function payload() {
@@ -58,6 +59,12 @@ function payload() {
 				},
 				successRate: { value: 60, passed: 3, total: 5, explanation: 'Share of attempts at least 10/20.' },
 				completedExams: { value: 2, explanation: 'Exams with at least one valid attempt.' },
+				assessedStudents: { value: 2, total: 2, rate: 100 },
+				certifiedStudents: { value: 1, total: 2, rate: 50 },
+				failedExamStudents: { value: 1, total: 2 },
+				neverAssessedStudents: { value: 0, total: 2 },
+				notCertifiedStudents: { value: 1, total: 2, rate: 50, failed: 1, neverAssessed: 0 },
+				certificationRate: { value: 50, passed: 1, total: 2 },
 				needingAttention: { value: 1, academic: 1, engagement: 0, both: 0 },
 			},
 			progress: {
@@ -70,6 +77,7 @@ function payload() {
 					previousPoints: [{ label: 'Week of 12-22', avg20: 8, attempts: 2 }],
 					comparable: true,
 					direction: 'improving',
+					change: 2.5,
 				},
 				participationEvolution: {
 					granularity: 'week',
@@ -79,7 +87,39 @@ function payload() {
 					],
 				},
 				classComparison: [
-					{ classId: 'C1', className: 'Class One', avg20: 10.4, sample: 5, students: 2, successRate: 60, reliable: true },
+					{
+						classId: 'C1',
+						className: 'Class One',
+						avg20: 10.4,
+						sample: 5,
+						students: 2,
+						successRate: 60,
+						reliable: true,
+						passCount: 3,
+						failCount: 2,
+						studentsAbove10: 1,
+						studentsBelow10: 1,
+						attention: { total: 1, academic: 1, engagement: 0, both: 0 },
+					},
+				],
+				bestClass: {
+					classId: 'C1',
+					className: 'Class One',
+					avg20: 10.4,
+					sample: 5,
+					reliable: true,
+				},
+				weekComparison: {
+					label: 'Last 7 days',
+					start: '2026-01-26T00:00:00.000Z',
+					end: '2026-02-01T10:00:00.000Z',
+					classes: [{ classId: 'C1', className: 'Class One', avg20: 8, sample: 5, reliable: true }],
+					best: { classId: 'C1', className: 'Class One', avg20: 8, sample: 5, reliable: true },
+					weakest: { classId: 'C1', className: 'Class One', avg20: 8, sample: 5, reliable: true },
+					note: 'Ranked on formal exam attempts recorded in the last 7 days.',
+				},
+				attentionByClass: [
+					{ classId: 'C1', className: 'Class One', total: 1, academic: 1, engagement: 0, both: 0 },
 				],
 				subjectPerformance: [
 					{ subjectId: 'MATH', subjectName: 'Mathematics', avg20: 12, sample: 3, successRate: 67, reliable: false, mixedExams: 0 },
@@ -111,7 +151,8 @@ function payload() {
 						intervention: { label: 'Review results & chapters', action: 'student', tab: 'results' },
 					},
 				],
-				summary: { total: 1, academic: 1, engagement: 0, both: 0 },
+				summary: { total: 1, academic: 1, engagement: 0, both: 0, shown: 1 },
+				byClass: [{ classId: 'C1', className: 'Class One', total: 1, academic: 1, engagement: 0, both: 0 }],
 				rules: ['Academic: two attempts averaging below 10/20.'],
 				classes: [],
 			},
@@ -164,11 +205,15 @@ function payload() {
 			exams: {
 				summary: {
 					completed: { value: 2 },
-					avg20: { value: 10.4, sample: 5 },
-					successRate: { value: 60 },
+					avg20: { value: 10.4, sample: 5, scale: 20 },
+					successRate: { value: 60, passed: 3, total: 5 },
+					awaitingCount: { value: 1 },
 					pendingAttempts: { value: 0 },
 				},
-				distribution: [{ bucket: '0-5', label: '0–5', count: 1, pct: 20 }],
+				distribution: [
+					{ bucket: '0-5', label: '0–5', count: 1, pct: 20 },
+					{ bucket: '10-15', label: '10–15', count: 4, pct: 80 },
+				],
 				classComparison: [],
 				awaiting: [{ examId: 'E1', name: 'Maths Exam', assigned: 2, completed: 2, pending: 0 }],
 				recent: [
@@ -226,9 +271,42 @@ function payload() {
 				topActivities: [{ id: 'G1', type: 'game', name: 'Fractions Race', participants: 1, completions: 1 }],
 				unavailable: { ranking: 'Engagement only.' },
 			},
+			questions: {
+				summary: {
+					total: { value: 8 },
+					examAssigned: { value: 5 },
+					practised: { value: 6 },
+					untouched: { value: 2 },
+					struggling: { value: 1 },
+					strong: { value: 4 },
+					createdInPeriod: { value: 8 },
+				},
+				typeMix: [{ key: 'mcq', count: 6, pct: 75 }],
+				difficultyMix: [{ key: 'medium', count: 8, pct: 100 }],
+				bySubject: [{ subjectId: 'MATH', subjectName: 'Mathematics', count: 8, practised: 6, struggling: 1 }],
+				byChapter: [],
+				coverage: {
+					total: 8,
+					categorised: 7,
+					uncategorised: 1,
+					examAssigned: 5,
+					practised: 6,
+					untouched: 2,
+					assignmentRate: 62.5,
+					practiceRate: 75,
+				},
+				performance: [],
+				hardestQuestions: [
+					{ questionId: 'Q1', text: 'One half?', attempts: 4, correctRate: 25, subjectName: 'Mathematics' },
+				],
+				strongestQuestions: [],
+				thresholds: { minAttempts: 4, passPercent: 50, strongPercent: 75 },
+				unavailable: { difficulty: 'Observed only.' },
+			},
 			insights: [
 				{
 					id: 'low-exam-average',
+					domain: 'results',
 					severity: 'high',
 					observation: 'Class One is below the pass mark.',
 					metric: 'Average 9.2/20 over 6 attempts.',
@@ -237,8 +315,31 @@ function payload() {
 					action: 'Investigate results',
 					link: { tab: 'results', action: 'attention' },
 				},
+				{
+					id: 'exam-improvement',
+					domain: 'overview',
+					severity: 'positive',
+					observation: 'Average examination results improved.',
+					metric: '+2.4 points (/20).',
+					scope: 'All classes',
+					target: 'Performance evolution',
+					action: 'See evolution',
+					link: { tab: 'overview', action: 'progress' },
+				},
 			],
 		},
+	};
+}
+
+function presencePayload() {
+	return {
+		generatedAt: '2026-02-01T10:00:00.000Z',
+		studentsOnline: 2,
+		classesOnline: 1,
+		totalClasses: 2,
+		totalStudents: 2,
+		onlineRate: 100,
+		byClass: [{ classId: 'C1', className: 'Class One', online: 2, total: 2 }],
 	};
 }
 
@@ -251,8 +352,11 @@ function boot(opts = {}) {
 	};
 	const window = {
 		API: {
-			list: async () => {
+			list: async (path) => {
 				if (opts.fail) throw new Error('Network down');
+				if (String(path).includes('presence')) {
+					return { data: opts.noPresence ? null : presencePayload() };
+				}
 				return { data: payload() };
 			},
 		},
@@ -265,37 +369,56 @@ function boot(opts = {}) {
 	};
 	const context = { window, document, console, setTimeout, clearTimeout };
 	vm.createContext(context);
+	vm.runInContext(ANALYTICS, context, { filename: 'teacher-analytics.js' });
 	vm.runInContext(SOURCE, context, { filename: 'teacher-overview.js' });
 	return { host, window };
 }
 
 describe('teacher-overview renderer', () => {
-	it('renders every section from a real-shaped bundle', async () => {
+	it('renders every analytics section from a real-shaped bundle', async () => {
 		const { host, window } = boot();
 		await window.TeacherOverview.load({ force: true });
 		const html = host.innerHTML;
 		for (const expected of [
-			'Classroom at a glance',
-			'Learning progress &amp; performance',
+			'Live classroom pulse',
+			'Emergency decisions',
+			'Class comparison',
+			'Learning insights',
+			'Courses &amp; subjects insights',
+			'Questions insights',
+			'Score distribution',
+			'Educational engagement',
+			'Educational insights',
+			'Classes online',
 			'Students needing attention',
-			'Examinations',
-			'Courses &amp; training',
-			'Games &amp; tournaments',
-			'Teaching insights',
-			'10.4',
-			'Student Two',
-			'Fractions Course',
-			'Maths Exam',
+			'Remaining students not passing',
+			'Best-ranked class',
+			'Weakest class this week',
 			'Chapter difficulty',
 			'Class One is below the pass mark',
+			'Fractions Course',
+			'10.4',
 		]) {
 			expect(html).toContain(expected);
 		}
+		// The KPI cards show live presence when the endpoint answers.
+		expect(html).toContain('1 / 2');
+		// Chart primitives are inline SVG; no chart library is required.
+		expect(html).toContain('<svg');
+		expect(html).toContain('role="img"');
 		// No unformatted values leaked into the UI.
 		expect(html).not.toContain('undefined');
 		expect(html).not.toContain('NaN');
 		// Filter options come from the full assignment, not only the selection.
 		expect(html).toContain('Class Two');
+	});
+
+	it('keeps the dashboard usable when live presence is unavailable', async () => {
+		const { host, window } = boot({ noPresence: true });
+		await window.TeacherOverview.load({ force: true });
+		expect(host.innerHTML).toContain('Live presence is unavailable');
+		expect(host.innerHTML).toContain('Live classroom pulse');
+		expect(host.innerHTML).not.toContain('undefined');
 	});
 
 	it('shows an honest error state and a retry action', async () => {
@@ -338,6 +461,7 @@ describe('teacher-overview renderer', () => {
 		empty.sections.insights = [
 			{
 				id: 'no-classes',
+				domain: 'classes',
 				severity: 'info',
 				observation: 'No class is assigned.',
 				metric: '0 classes',
@@ -351,6 +475,6 @@ describe('teacher-overview renderer', () => {
 		await window.TeacherOverview.load({ force: true });
 		expect(host.innerHTML).toContain('No classes to report on');
 		expect(host.innerHTML).toContain('No class is assigned to your account.');
-		expect(host.innerHTML).not.toContain('Classroom at a glance');
+		expect(host.innerHTML).not.toContain('Live classroom pulse');
 	});
 });

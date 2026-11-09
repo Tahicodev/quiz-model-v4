@@ -63,12 +63,14 @@ const SUBTRACTION = '33333333-3333-4333-8333-333333333333';
 const EQUATIONS = '44444444-4444-4444-8444-444444444444';
 const SCIENCE = '55555555-5555-4555-8555-555555555555';
 
+const SUBJECT = '99999999-9999-4999-8999-999999999999';
+
 const TREE = [
-  { id: MATH, name: 'Math', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-01', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: null, parentId: null },
-  { id: ADDITION, name: 'Addition', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-02', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: MATH, parentId: MATH },
-  { id: EQUATIONS, name: 'Equations', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-03', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: ADDITION, parentId: ADDITION },
-  { id: SUBTRACTION, name: 'Subtraction', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-04', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: MATH, parentId: MATH },
-  { id: SCIENCE, name: 'Science', color: '#10b981', questionCount: 0, dateCreated: '2026-01-05', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: null, parentId: null },
+  { id: MATH, name: 'Math', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-01', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: null, parentId: null, subject_id: SUBJECT },
+  { id: ADDITION, name: 'Addition', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-02', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: MATH, parentId: MATH, subject_id: SUBJECT },
+  { id: EQUATIONS, name: 'Equations', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-03', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: ADDITION, parentId: ADDITION, subject_id: SUBJECT },
+  { id: SUBTRACTION, name: 'Subtraction', color: '#3b82f6', questionCount: 0, dateCreated: '2026-01-04', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: MATH, parentId: MATH, subject_id: SUBJECT },
+  { id: SCIENCE, name: 'Science', color: '#10b981', questionCount: 0, dateCreated: '2026-01-05', isSystem: false, created_by: 't1', ownerId: 't1', parent_id: null, parentId: null, subject_id: SUBJECT },
 ];
 
 beforeAll(() => {
@@ -88,6 +90,7 @@ beforeAll(() => {
     categoryForm: makeEl(),
     categoryModal: makeEl(),
     categoryParent: parentSelect,
+    categorySubject: makeEl({ value: SUBJECT, disabled: false }),
     assignCategoryQuestionsModal: makeEl(),
   };
   const sandbox = {
@@ -164,7 +167,7 @@ function resetCapture() {
   state.savedCategories = null;
   state.selectValues.categoryParent = '';
   vm.runInContext(
-    `categories = ${JSON.stringify(TREE)}; currentCategoryId = null; categoryTrainingMapCache = null; resetCategoryManualOrder();`,
+    `categories = ${JSON.stringify(TREE)}; currentCategoryId = null; categoryTrainingMapCache = null; resetCategoryManualOrder(); activeCategorySubjectId = '${SUBJECT}';`,
     ctx,
   );
 }

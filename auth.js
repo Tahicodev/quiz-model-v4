@@ -850,8 +850,11 @@
 			games: true,
 			kidsGames: true,
 			results: true,
-			// Activity Log and Monitoring are admin-only views, hard-hidden
-			// for teachers in every gate below — no toggle exists for them.
+			// Notifications are always available to teachers — the server
+			// scopes the feed to their own activity, classes and students.
+			notifications: true,
+			// Monitoring is an admin-only view, hard-hidden for teachers in
+			// every gate below — no toggle exists for it.
 			activity: false,
 			monitoring: false,
 		},
@@ -908,6 +911,9 @@
 		// them for teachers.
 		mergedTabs.activity = false;
 		mergedTabs.monitoring = false;
+		// The Notifications tab is role-scoped server-side, so it is never
+		// revocable for teachers.
+		mergedTabs.notifications = true;
 		const mergedSettingsTabs = {
 			...DEFAULT_TEACHER_ACCESS.settingsTabs,
 			...(stored.settingsTabs || {}),
@@ -1286,15 +1292,14 @@
 		});
 	}
 
-	// The Recent Activity "View All" button opens the activity tab — hide it
-	// whenever the current user cannot access that tab (e.g. a teacher whose
-	// admin revoked activity-tab access), instead of letting the click land
-	// on an "Access denied" toast. Runs for every role so admin sessions
-	// always restore the button.
+	// The Recent Activity "View All" button opens the Notifications tab — hide
+	// it whenever the current user cannot access that tab instead of letting
+	// the click land on an "Access denied" toast. Runs for every role so admin
+	// sessions always restore the button.
 	function syncRecentActivityViewAll() {
 		const btn = document.getElementById('recentActivityViewAll');
 		if (!btn) return;
-		btn.classList.toggle('role-hidden', !canAccessTab('activity'));
+		btn.classList.toggle('role-hidden', !canAccessTab('notifications'));
 	}
 
 	// ── School branding ───────────────────────────────────────────────────────
@@ -3381,7 +3386,12 @@
 				roleSelect.disabled = false;
 			}
 		}
-		if (statusSelect) statusSelect.value = user?.status || 'active';
+		if (statusSelect) {
+			// suspended is the backend's word for a disabled account; the form
+			// only offers Active / Disabled.
+			const status = String(user?.status || 'active').toLowerCase();
+			statusSelect.value = status === 'active' ? 'active' : 'disabled';
+		}
 		// Server rows use snake_case (numero / class_id); legacy rows use
 		// camelCase — accept both so the editor pre-fills after a bootstrap.
 		if (studentNumberInput)
@@ -3750,7 +3760,13 @@
 			name: updatedUser.name,
 			title: updatedUser.title || null,
 			role: updatedUser.role,
-			status: updatedUser.status || 'active',
+			// The backend only knows active | inactive | suspended; the UI's
+			// "disabled" is the local label for a suspended account.
+			status: ['disabled', 'inactive', 'suspended'].includes(
+				String(updatedUser.status || 'active').toLowerCase(),
+			)
+				? 'suspended'
+				: 'active',
 		};
 		if (password) payload.password = password;
 		if (updatedUser.classId) payload.class_id = updatedUser.classId;
@@ -3778,6 +3794,11 @@
 					// Adopt the server's canonical shape (snake_case) so the
 					// local cache matches what bootstrap will return next time.
 					updatedUser.id = serverUser.id;
+					updatedUser.status = ['suspended', 'inactive', 'disabled'].includes(
+						String(serverUser.status || '').toLowerCase(),
+					)
+						? 'disabled'
+						: 'active';
 					updatedUser.classId =
 						serverUser.class_id || updatedUser.classId || '';
 					updatedUser.studentNumber =
@@ -3877,6 +3898,13 @@
 		}
 		closeUserModal();
 		renderUsersTable();
+		// Edits made from the class roster (name/status/class) must be visible
+		// immediately — the roster no longer has a separate Save step.
+		if (typeof window.refreshRosterAfterMutation === 'function') {
+			window.refreshRosterAfterMutation();
+		} else if (typeof window.renderStudentRosterTable === 'function') {
+			window.renderStudentRosterTable();
+		}
 		showToast('User saved successfully', 'success');
 	}
 
@@ -3924,6 +3952,9 @@
 			window.syncUsersToClients();
 		}
 		renderUsersTable();
+		if (typeof window.refreshRosterAfterMutation === 'function') {
+			window.refreshRosterAfterMutation();
+		}
 		showToast(
 			`User ${user.status === 'disabled' ? 'suspended' : 'activated'}`,
 			'success',

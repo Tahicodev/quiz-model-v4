@@ -4886,8 +4886,53 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	font-size: 12px;
 }
 
+/* Sessions disclosure in the actions column. The whole row also toggles the
+   panel; the button exists so the affordance is visible and keyboard
+   reachable. */
+#devices .device-expand-btn svg {
+	width: 15px;
+	height: 15px;
+	transition: transform 0.18s ease;
+}
+
+#devices tr.device-card.is-expanded .device-expand-btn {
+	background: var(--primary-light);
+	color: var(--primary);
+}
+
+#devices tr.device-card.is-expanded .device-expand-btn svg {
+	transform: rotate(180deg);
+}
+
 #devices .device-assign {
 	max-width: 220px;
+}
+
+/* The global .data-table uses table-layout: fixed, which squeezes all eight
+   columns equally on tablets and narrow desktop windows. Auto layout plus a
+   minimum width keeps names/IPs intact and lets the container scroll instead
+   of truncating every cell. */
+#devices #devicesTable {
+	table-layout: auto;
+	min-width: 900px;
+}
+
+#devices .table-container {
+	overflow-x: auto;
+}
+
+#devices #devicesTable th,
+#devices #devicesTable td {
+	white-space: nowrap;
+}
+
+#devices #devicesTable td.device-cell-machine,
+#devices #devicesTable td.device-cell-actions {
+	white-space: normal;
+}
+
+#devices #devicesTable .device-assign {
+	min-width: 160px;
 }
 
 #devices .device-badge-allowed {
@@ -5088,9 +5133,11 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 /* ============================================================
    CLASSROOM DEVICES — phones/tablets: the machine table gives way
-   to its own card structure (#devicesMobileList)
+   to its own card structure (#devicesMobileList). 1024px, not 768px:
+   the eight-column machine table cannot fit a tablet or a half-window
+   desktop, and the cards carry every field without truncation.
    ============================================================ */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
 	/* Search + refresh stack full-width inside the toggled container. */
 	#devices .devices-search-row {
 		flex-direction: column;
@@ -5165,7 +5212,7 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	   so no icon bar crowds the card. */
 	#devices .device-mcard {
 		position: relative;
-		padding: 14px 46px 13px 15px;
+		padding: 13px 44px 13px 14px;
 		background: var(--bg-surface);
 		border: 1px solid var(--border-color);
 		border-radius: 16px;
@@ -5190,12 +5237,13 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		border-color: var(--primary);
 	}
 
-	/* ── Card header: online dot · name (+ session badge) over platform ·
-	   type, status badge on the right, checkbox pinned top-right ── */
+	/* ── Card header: online dot · name (+ session badge) over status ·
+	   platform · type. The status badge lives on the meta line instead of
+	   stealing a whole header column, so the name keeps the full width. ── */
 	#devices .dm-head {
 		display: grid;
-		grid-template-columns: auto minmax(0, 1fr) auto;
-		align-items: center;
+		grid-template-columns: auto minmax(0, 1fr);
+		align-items: start;
 		gap: 9px;
 		padding-bottom: 10px;
 		border-bottom: 1px solid var(--border-color);
@@ -5203,8 +5251,8 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 	#devices .dm-check {
 		position: absolute;
-		top: 15px;
-		right: 15px;
+		top: 13px;
+		right: 13px;
 		display: flex;
 		z-index: 2;
 	}
@@ -5226,17 +5274,37 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	}
 
 	#devices .dm-title .device-name {
-		font-size: 1rem;
-		overflow-wrap: anywhere;
+		font-size: 0.98rem;
+		font-weight: 700;
+		line-height: 1.3;
+		overflow-wrap: break-word;
+		word-break: normal;
 	}
 
-	/* Platform · type on one muted line — the "Type" column folded into the
-	   header so the card has fewer fields to scan. */
+	/* Status pill + platform/type share one muted line; both can wrap
+	   independently, so narrow phones never squeeze the machine name. */
 	#devices .dm-sub {
-		margin-top: 2px;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 5px 8px;
+		margin-top: 5px;
 		color: var(--text-muted);
 		font-size: 0.72rem;
 		font-weight: 600;
+	}
+
+	#devices .dm-sub .badge {
+		padding: 1px 8px;
+		font-size: 10px;
+		line-height: 1.6;
+		letter-spacing: 0.03em;
+		white-space: nowrap;
+	}
+
+	#devices .dm-sub-text {
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 
 	/* ── Facts: label over value, two columns; the picker spans both ── */
@@ -5290,15 +5358,114 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 	/* ── Live sessions, inside the machine's own card ──
 	   The phone answer to the desktop colspan sub-row: one block per user
-	   holding a sign-in on this machine, no table semantics anywhere. Hidden
-	   until the sheet's "View sessions" opens the card — the per-user End
-	   action stays in the sheet, not on the card. */
+	   holding a sign-in on this machine, no table semantics anywhere. The
+	   toggle below is part of every admin card so the count is visible and
+	   the panel is one tap away without the action sheet. */
+	#devices .dm-card-actions {
+		display: flex;
+		align-items: stretch;
+		justify-content: flex-end;
+		gap: 8px;
+		margin-top: 12px;
+	}
+
+	#devices .dm-sessions-toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex: 1 1 auto;
+		width: auto;
+		min-width: 0;
+		margin-top: 0;
+		padding: 9px 10px;
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		background: var(--bg-surface-alt);
+		color: var(--text-main);
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 700;
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		transition: border-color 0.16s ease, background 0.16s ease;
+	}
+
+	/* Explicit route to Block/Allow, Rename and Forget now that tapping the
+	   card itself expands the sessions panel. */
+	#devices .dm-more-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		width: 40px;
+		padding: 0;
+		border: 1px solid var(--border-color);
+		border-radius: 10px;
+		background: var(--bg-surface-alt);
+		color: var(--text-muted);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+		transition: border-color 0.16s ease, color 0.16s ease;
+	}
+
+	#devices .dm-more-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
+	#devices .dm-sessions-toggle:hover {
+		border-color: var(--primary);
+	}
+
+	#devices .dm-sessions-toggle.is-open {
+		border-color: var(--primary);
+		background: var(--primary-light);
+	}
+
+	#devices .dm-sessions-toggle-icon {
+		display: inline-flex;
+		flex: 0 0 auto;
+		color: var(--primary);
+	}
+
+	#devices .dm-sessions-toggle-icon svg {
+		width: 15px;
+		height: 15px;
+	}
+
+	#devices .dm-sessions-toggle-label {
+		flex: 1 1 auto;
+		min-width: 0;
+		text-align: left;
+	}
+
+	#devices .dm-sessions-count {
+		flex: 0 0 auto;
+		min-width: 20px;
+		padding: 0 6px;
+		background: #3b82f6;
+		border-radius: 999px;
+		color: #fff;
+		font-size: 10px;
+		font-weight: 800;
+		line-height: 18px;
+		text-align: center;
+	}
+
+	#devices .dm-sessions-chevron {
+		flex: 0 0 auto;
+		color: var(--text-muted);
+		transition: transform 0.18s ease;
+	}
+
+	#devices .dm-sessions-toggle.is-open .dm-sessions-chevron {
+		transform: rotate(180deg);
+	}
+
 	#devices .dm-sessions {
 		display: grid;
 		gap: 8px;
-		margin-top: 12px;
-		padding-top: 12px;
-		border-top: 1px dashed var(--border-color);
+		margin-top: 10px;
 	}
 
 	#devices .dm-session {
@@ -5310,6 +5477,7 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 	#devices .dm-session-head {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 8px;
 		min-width: 0;
@@ -5317,15 +5485,22 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 	#devices .dm-session-head .device-staff-badge {
 		margin-right: 0;
+		flex: 0 0 auto;
+	}
+
+	#devices .dm-session-head .badge {
+		flex: 0 0 auto;
 	}
 
 	#devices .dm-session-user {
-		flex: 1 1 auto;
+		flex: 1 1 100%;
+		order: 2;
 		min-width: 0;
 		color: var(--text-main);
 		font-size: 0.85rem;
 		font-weight: 700;
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
+		word-break: normal;
 	}
 
 	#devices .dm-session-count {
@@ -5370,6 +5545,38 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 		font-size: 0.82rem;
 		font-weight: 600;
 		text-align: center;
+	}
+}
+
+/* Tablet / half-window desktop: two cards per row, so a 900px window does
+   not turn each machine into a very wide single strip. The search row keeps
+   its horizontal form here — full-width stacking is a phone-only idiom. */
+@media (min-width: 769px) and (max-width: 1024px) {
+	#devices .devices-mobile-list {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: start;
+		gap: 14px;
+	}
+
+	#devices .devices-search-row {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	#devices .devices-search-row .devices-search {
+		width: auto;
+		flex: 1 1 auto;
+	}
+
+	#devices .devices-search-row .btn {
+		width: auto;
+		min-height: 0;
+	}
+
+	#devices .devices-filters-row .filter-group select {
+		min-height: 0;
+		font-size: 14px;
 	}
 }
 
@@ -6781,6 +6988,29 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	background-color: var(--bg-surface-hover, rgba(99, 102, 241, 0.04)) !important;
 }
 
+/* Exams use the same affordance as the Class list: the whole row is a
+   drill-down on desktop (exams also carry a keyboard-focusable name link). */
+.clickable-exam-row {
+	cursor: pointer;
+	transition: background-color 0.15s ease;
+}
+
+.clickable-exam-row:hover {
+	background-color: var(--bg-surface-hover, rgba(99, 102, 241, 0.04)) !important;
+}
+
+.exam-name-link {
+	color: var(--text-main);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.exam-name-link:hover,
+.exam-name-link:focus-visible {
+	color: var(--primary);
+	text-decoration: underline;
+}
+
 /* ── Class Students Pane (roster-first, questions-table identity) ────────── */
 /* The old two-panel workspace (picker + roster side by side) was replaced by
    a single full-width roster card; adding students happens in the
@@ -6802,6 +7032,157 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 
 .roster-main-toolbar h2 {
 	font-size: 1.15rem;
+}
+
+/* The roster toolbar is its own two-row block: title + primary actions on
+   top, search/filters underneath. It deliberately opts out of the generic
+   `.toolbar` flex row so the bulk bar (which used to live inside this row)
+   can never collide with the title or the Add buttons. */
+.class-roster-card .roster-main-toolbar {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 14px;
+	margin-bottom: 14px;
+	padding: 0 0 14px;
+	background: transparent;
+	border: 0;
+	border-bottom: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+	border-radius: 0;
+}
+
+.roster-toolbar-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	width: 100%;
+}
+
+.roster-title-block {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.roster-mobile-select-all {
+	display: none;
+	align-items: center;
+	gap: 7px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--text-secondary, #475569);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.roster-mobile-select-all input {
+	width: 17px;
+	height: 17px;
+	margin: 0;
+	accent-color: var(--primary, #2563eb);
+}
+
+.roster-filter-bar {
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
+	flex-wrap: wrap;
+	width: 100%;
+}
+
+.roster-search {
+	flex: 1 1 280px;
+	min-width: 200px;
+}
+
+.roster-search .search-wrapper {
+	width: 100%;
+}
+
+/* #classes constrains its list toolbars to compact 170px search fields.
+   The roster toolbar has its own two-row layout, so let the search breathe. */
+#classes .class-roster-card .roster-search .search-wrapper input {
+	width: 100%;
+	max-width: none;
+}
+
+#classes .class-roster-card .roster-filter-field select {
+	max-width: none;
+}
+
+.roster-filter-controls {
+	display: flex;
+	align-items: flex-end;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.roster-filter-field {
+	display: flex;
+	flex-direction: column;
+	min-width: 150px;
+}
+
+.roster-filter-field .roster-filter-label {
+	display: block;
+	margin: 0 0 5px 2px;
+	font-size: 0.66rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-muted, #64748b);
+}
+
+.roster-filter-field select {
+	min-height: 38px;
+	min-width: 150px;
+}
+
+.roster-filter-field .sort-wrapper {
+	gap: 6px;
+}
+
+.roster-filter-field .sort-wrapper select {
+	flex: 1 1 auto;
+}
+
+.roster-filter-io {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-left: auto;
+}
+
+.roster-filter-io .btn {
+	min-height: 38px;
+	white-space: nowrap;
+}
+
+/* Bulk actions: a full-width row of their own, directly above the table. */
+.roster-bulk-bar {
+	width: 100%;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 12px;
+	margin: 0 0 14px;
+	padding: 10px 12px;
+}
+
+.roster-bulk-bar .roster-bulk-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-left: auto;
+}
+
+.roster-bulk-bar .roster-bulk-actions .btn {
+	white-space: nowrap;
 }
 
 .roster-add-actions {
@@ -6904,6 +7285,77 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	font-weight: 700;
 }
 
+/* Student status pills. The original pill styles were scoped to the old
+   assign-students modal, so the roster table lost them when it moved into the
+   class card. Keep the same visual language here. */
+.class-roster-card .roster-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 9px;
+	border-radius: 999px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+
+.class-roster-card .roster-status::before {
+	content: '';
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.class-roster-card .roster-status-active {
+	color: #047857;
+	background: #ecfdf5;
+	border: 1px solid #a7f3d0;
+}
+
+.class-roster-card .roster-status-active::before {
+	background: #10b981;
+}
+
+.class-roster-card .roster-status-disabled {
+	color: #b45309;
+	background: #fffbeb;
+	border: 1px solid #fde68a;
+}
+
+.class-roster-card .roster-status-disabled::before {
+	background: #f59e0b;
+}
+
+.class-roster-card .roster-status-pending {
+	color: #64748b;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+}
+
+.class-roster-card .roster-status-pending::before {
+	background: #94a3b8;
+}
+
+html[data-theme='dark'] .class-roster-card .roster-status-active {
+	color: rgb(157, 241, 217);
+	background: rgb(31, 91, 63);
+	border-color: rgb(32, 182, 113);
+}
+
+html[data-theme='dark'] .class-roster-card .roster-status-disabled {
+	color: rgb(241, 193, 157);
+	background: rgb(91, 79, 31);
+	border-color: rgb(182, 152, 32);
+}
+
+html[data-theme='dark'] .class-roster-card .roster-status-pending {
+	color: var(--text-secondary);
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+
 .roster-table-container {
 	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
 	border-radius: 12px;
@@ -6917,6 +7369,13 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	margin: 0;
 }
 
+/* The row itself is the entry point for per-student actions (it opens the
+   action sheet with Edit User / Remove from Roster), so it reads as clickable
+   on every viewport. */
+#studentRosterTable tbody tr.selected-student-item {
+	cursor: pointer;
+}
+
 /* Roster pagination: keep the questions-table look but sit it inside the card. */
 .class-roster-card .pagination {
 	background: transparent;
@@ -6925,34 +7384,8 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	padding: 14px 2px 0;
 }
 
-/* Save bar: pending-changes hint on the left, actions on the right. */
-.roster-save-bar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	flex-wrap: wrap;
-	margin-top: 14px;
-	padding-top: 16px;
-	border-top: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
-}
-
-.roster-pending-hint {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 0.8rem;
-	font-weight: 600;
-	color: #d97706;
-	background: rgba(245, 158, 11, 0.1);
-	border: 1px solid rgba(245, 158, 11, 0.28);
-	padding: 6px 12px;
-	border-radius: 999px;
-}
-
-.roster-pending-hint.hidden {
-	display: none;
-}
+/* Roster edits persist immediately — there is no "Save Roster" step, so the
+   card ends with the bulk bar / pagination instead of a save footer. */
 
 /* ── Add Students picker modal (searchable checklist) ────────────────────── */
 .picker-toolbar {
@@ -7102,19 +7535,516 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	margin: 10px 2px 0;
 }
 
-/* Roster toolbar on small screens: action buttons stretch full-width. */
+/* ── Add Students modal: tabs, create form, pending signups ──────────────── */
+.add-students-modal-content {
+	max-width: 740px;
+}
+
+.add-students-tabs {
+	display: flex;
+	gap: 6px;
+	padding: 4px;
+	margin-bottom: 16px;
+	background: var(--bg-surface-alt, #f1f5f9);
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.28));
+	border-radius: 12px;
+}
+
+.add-students-tab {
+	flex: 1 1 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 9px 14px;
+	border: none;
+	border-radius: 9px;
+	background: transparent;
+	color: var(--text-secondary, #475569);
+	font-family: inherit;
+	font-size: 0.85rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.add-students-tab:hover {
+	color: var(--text-primary, #0f172a);
+}
+
+.add-students-tab.is-active {
+	background: var(--bg-surface, #ffffff);
+	color: var(--text-primary, #0f172a);
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.add-students-tab svg {
+	flex: none;
+}
+
+.add-students-tab-badge {
+	min-width: 18px;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: #f59e0b;
+	color: #ffffff;
+	font-size: 0.68rem;
+	font-weight: 700;
+	line-height: 1.4;
+	text-align: center;
+}
+
+.add-students-tab-badge.hidden {
+	display: none;
+}
+
+.add-students-class-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 9px 12px;
+	margin-bottom: 12px;
+	border: 1px solid rgba(59, 130, 246, 0.22);
+	border-radius: 9px;
+	background: rgba(59, 130, 246, 0.08);
+	color: #1d4ed8;
+	font-size: 0.82rem;
+}
+
+.add-students-card {
+	padding: 14px 16px;
+	margin-bottom: 12px;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.28));
+	border-radius: 12px;
+	background: var(--bg-surface, #ffffff);
+}
+
+.add-students-card-title {
+	margin: 0 0 12px;
+	font-size: 0.76rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--text-muted, #64748b);
+}
+
+.add-students-grid {
+	display: grid;
+	gap: 12px;
+}
+
+.add-students-grid-2 {
+	grid-template-columns: 1fr 1fr;
+}
+
+.add-students-grid-identity {
+	grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.add-students-card .form-group {
+	margin-bottom: 12px;
+}
+
+.add-students-card .form-group:last-child {
+	margin-bottom: 0;
+}
+
+.add-students-hint {
+	margin: 4px 0 0;
+	font-size: 0.78rem;
+	color: var(--text-muted, #64748b);
+}
+
+.password-input-group {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.password-input-group .form-control {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.password-input-group .btn {
+	flex: none;
+	white-space: nowrap;
+}
+
+.add-students-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-top: 14px;
+}
+
+.add-students-actions .btn-ghost {
+	margin-right: auto;
+}
+
+/* Pending online signups (account requests) surfaced in the class context. */
+.pending-signups-section {
+	padding: 12px 14px;
+	margin-bottom: 14px;
+	border: 1px solid rgba(245, 158, 11, 0.35);
+	border-radius: 12px;
+	background: rgba(245, 158, 11, 0.07);
+}
+
+.pending-signups-section.hidden {
+	display: none;
+}
+
+.pending-signups-head {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.pending-signups-head h4 {
+	margin: 0;
+	font-size: 0.9rem;
+	color: var(--text-primary, #0f172a);
+}
+
+.pending-signups-sub {
+	font-size: 0.76rem;
+	color: var(--text-muted, #64748b);
+}
+
+.pending-signups-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 10px;
+}
+
+.pending-signup-card {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	border: 1px solid rgba(245, 158, 11, 0.25);
+	border-radius: 10px;
+	background: var(--bg-surface, #ffffff);
+}
+
+.pending-signup-avatar {
+	flex: none;
+	width: 34px;
+	height: 34px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	background: rgba(245, 158, 11, 0.18);
+	color: #b45309;
+	font-weight: 700;
+}
+
+.pending-signup-meta {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.pending-signup-name {
+	font-weight: 600;
+	font-size: 0.86rem;
+	color: var(--text-primary, #0f172a);
+}
+
+.pending-signup-info {
+	font-size: 0.75rem;
+	color: var(--text-muted, #64748b);
+}
+
+.pending-signup-note {
+	font-size: 0.75rem;
+	font-style: italic;
+	color: var(--text-secondary, #475569);
+}
+
+.pending-signup-actions {
+	flex: none;
+	display: flex;
+	gap: 6px;
+}
+
+@media (max-width: 560px) {
+	.add-students-grid-2,
+	.add-students-grid-identity {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.add-students-tab {
+		padding: 9px 8px;
+		font-size: 0.8rem;
+	}
+
+	.password-input-group {
+		flex-wrap: wrap;
+	}
+
+	.password-input-group .form-control {
+		flex-basis: 100%;
+	}
+
+	.pending-signup-card {
+		flex-wrap: wrap;
+	}
+
+	.pending-signup-actions {
+		width: 100%;
+		justify-content: flex-end;
+	}
+}
+
+/* Roster on small screens: a compact header, a filter sheet behind the
+   "Filters" button, and one card per student instead of a squeezed table. */
 @media (max-width: 768px) {
 	.class-workspace-card {
 		padding: 14px;
 	}
 
+	.roster-toolbar-head {
+		align-items: center;
+	}
+
+	.roster-title-block {
+		flex: 1 1 auto;
+	}
+
+	.roster-mobile-select-all {
+		display: inline-flex;
+		flex: 0 0 auto;
+	}
+
 	.roster-add-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+		width: 100%;
+	}
+
+	.roster-add-actions .mobile-filters-toggle {
+		grid-column: 1 / -1;
+		justify-content: center;
 		width: 100%;
 	}
 
 	.roster-add-actions .btn {
-		flex: 1;
 		justify-content: center;
+		width: 100%;
+		min-height: 40px;
+	}
+
+	/* There is a single add action (the Add Students picker), so it takes the
+	   full row under the Filters toggle instead of half of it. */
+	.roster-add-actions .btn:not(.mobile-filters-toggle) {
+		grid-column: 1 / -1;
+	}
+
+	/* The global ≤640px rule hides `svg + span` labels on every .btn. The
+	   roster's primary actions are not self-explanatory as bare icons, so
+	   keep their labels on phones. */
+	.class-roster-card .roster-add-actions .btn svg + span,
+	.class-roster-card .roster-filter-io .btn svg + span,
+	.class-roster-card .roster-bulk-bar .btn svg + span {
+		display: inline;
+	}
+
+	.roster-filter-bar {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 10px;
+		align-items: stretch;
+	}
+
+	.roster-search {
+		min-width: 0;
+	}
+
+	.roster-filter-controls {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 10px;
+	}
+
+	.roster-filter-field {
+		min-width: 0;
+	}
+
+	.roster-filter-field select {
+		width: 100%;
+		min-width: 0;
+	}
+
+	.roster-filter-io {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+		width: 100%;
+		margin-left: 0;
+	}
+
+	.roster-filter-io .btn {
+		justify-content: center;
+		width: 100%;
+	}
+
+	.roster-bulk-bar {
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	.roster-bulk-bar .selection-info {
+		width: 100%;
+	}
+
+	.roster-bulk-bar .roster-bulk-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 8px;
+		width: 100%;
+		margin-left: 0;
+	}
+
+	.roster-bulk-bar .roster-bulk-actions .btn {
+		justify-content: center;
+		width: 100%;
+		min-height: 38px;
+	}
+
+	.roster-bulk-bar .roster-bulk-actions .btn-ghost {
+		grid-column: 1 / -1;
+	}
+
+	/* ── Student roster as cards ───────────────────────────────────────── */
+	.class-roster-card .roster-table-container {
+		overflow: visible;
+		max-height: none;
+		margin-top: 2px;
+		background: transparent;
+		border: 0;
+		border-radius: 0;
+	}
+
+	.class-roster-card #studentRosterTable,
+	.class-roster-card #studentRosterTable tbody {
+		display: block;
+		width: 100%;
+	}
+
+	.class-roster-card #studentRosterTable thead {
+		display: none;
+	}
+
+	.class-roster-card #studentRosterTable tbody tr.selected-student-item {
+		display: grid !important;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 3px 12px;
+		position: relative;
+		margin: 0 0 10px;
+		padding: 12px 14px;
+		background: var(--bg-surface);
+		border: 1px solid var(--border-color);
+		border-radius: 12px;
+		box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+		cursor: pointer;
+		-webkit-tap-highlight-color: transparent;
+	}
+
+	.class-roster-card #studentRosterTable tbody tr.selected-student-item.question-row-selected {
+		border-color: var(--primary);
+		background: var(--primary-light);
+	}
+
+	.class-roster-card #studentRosterTable tbody tr.selected-student-item td {
+		display: block !important;
+		width: auto !important;
+		padding: 0 !important;
+		border: 0 !important;
+		text-align: left;
+		white-space: normal;
+		overflow-wrap: anywhere;
+		font-size: 0.8rem;
+		line-height: 1.4;
+		color: var(--text-primary);
+	}
+
+	.class-roster-card #studentRosterTable tbody tr.selected-student-item td.checkbox-cell {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		display: flex !important;
+		align-items: center;
+		justify-content: flex-end;
+		width: auto !important;
+		padding: 0 !important;
+	}
+
+	.class-roster-card #studentRosterTable .student-checkbox {
+		width: 18px;
+		height: 18px;
+		margin: 0;
+		accent-color: var(--primary, #2563eb);
+	}
+
+	.class-roster-card #studentRosterTable td.qnum-cell {
+		display: none !important;
+	}
+
+	.class-roster-card #studentRosterTable tbody tr.selected-student-item td.student-number-cell {
+		grid-column: 1;
+		grid-row: 1;
+		padding-right: 34px !important;
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
+		color: var(--text-muted) !important;
+	}
+
+	.class-roster-card #studentRosterTable td.student-number-cell::before {
+		content: 'Student # ';
+		font-weight: 600;
+	}
+
+	.class-roster-card #studentRosterTable tbody tr.selected-student-item td[data-label='Status'] {
+		grid-column: 2;
+		grid-row: 1;
+		justify-self: end;
+		align-self: center;
+		/* Leave room for the absolutely-positioned row checkbox so the pill
+		   never runs underneath it. Specificity must beat the base
+		   `td { padding: 0 !important }` card rule. */
+		padding-right: 30px !important;
+	}
+
+	.class-roster-card #studentRosterTable td.student-name-cell {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		font-size: 0.95rem;
+		font-weight: 700;
+		color: var(--text-primary) !important;
+	}
+
+	.class-roster-card #studentRosterTable td.student-account-cell {
+		grid-column: 1 / -1;
+		grid-row: 3;
+		font-size: 0.75rem;
+		color: var(--text-muted) !important;
+	}
+
+	.class-roster-card #studentRosterTable td.student-account-cell::before {
+		content: 'Account: ';
+		font-weight: 600;
 	}
 
 	.class-roster-card .pagination {

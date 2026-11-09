@@ -56,29 +56,75 @@ function kickDeviceSockets(schoolId, deviceKey) {
 	return kicked;
 }
 
+// The HTTP and socket stacks report the same client differently
+// (`::ffff:127.0.0.1`, `::1`, `127.0.0.1`); sessions must attach to the
+// machine row even when the spellings differ.
+function normalizeIp(value) {
+  const s = String(value || '').trim().toLowerCase();
+  if (!s) return '';
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(s);
+  if (mapped) return mapped[1];
+  if (s === '::1') return '127.0.0.1';
+  return s;
+}
+
 router.get('/', requireRole(DEVICE_ROLES), async (req, res, next) => {
   try {
-    const { deviceSvc, repo } = getContainer();
+    const { deviceSvc, authSvc, repo } = getContainer();
     const rows = await deviceSvc.list(req.schoolId);
     // Teacher isolation: own machine + machines of own students +
-    // unassigned hardware. Other teachers' machines stay invisible.
+    // unassigned hardware + any machine hosting a live session of theirs or
+    // their students (the row is often assigned to whoever registered it
+    // first — e.g. an admin testing on the same PC). Other teachers'
+    // machines stay invisible.
     if (req.user.role === ROLES.TEACHER) {
       const classIds = await getTeacherClassIds(req.schoolId, req.user.id);
-      const { data: students } = await repo.getAll('users', {
-        filters: { school_id: req.schoolId, role: 'student' },
+      const { data: users } = await repo.getAll('users', {
+        filters: { school_id: req.schoolId },
         limit: 100000,
       });
       const ownStudentIds = new Set(
-        (students || [])
-          .filter((s) => s?.id && s.class_id && classIds.includes(String(s.class_id)))
-          .map((s) => String(s.id)),
+        (users || [])
+          .filter(
+            (u) =>
+              u?.id &&
+              u.role === ROLES.STUDENT &&
+              u.class_id &&
+              classIds.includes(String(u.class_id)),
+          )
+          .map((u) => String(u.id)),
       );
+      // Machines registered while an admin was signed in are owned by the
+      // admin account; a lab PC used by a whole class sits in that bucket.
+      const adminIds = new Set(
+        (users || [])
+          .filter((u) => u?.id && (u.role === ROLES.ADMIN || u.role === ROLES.SUPER_ADMIN))
+          .map((u) => String(u.id)),
+      );
+      const sessionIps = new Set();
+      try {
+        const feed = await authSvc.listLiveSessions(req.schoolId, {
+          includeIdle: true,
+          userIds: [String(req.user.id), ...ownStudentIds],
+        });
+        for (const entry of feed) {
+          for (const s of entry.sessions || []) {
+            const ip = normalizeIp(s.ip_address);
+            if (ip) sessionIps.add(ip);
+          }
+        }
+      } catch (err) {
+        logger.warn({ err: err?.message }, 'devices.routes: session ip lookup skipped');
+      }
       return res.json(
         rows.filter(
           (d) =>
             !d.assigned_user_id ||
             String(d.assigned_user_id) === String(req.user.id) ||
-            ownStudentIds.has(String(d.assigned_user_id)),
+            ownStudentIds.has(String(d.assigned_user_id)) ||
+            (adminIds.has(String(d.assigned_user_id)) &&
+              d.last_ip &&
+              sessionIps.has(normalizeIp(d.last_ip))),
         ),
       );
     }

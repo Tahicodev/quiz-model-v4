@@ -59,4 +59,24 @@ router.get('/overview', async (req, res, next) => {
   }
 });
 
+router.get('/presence', async (req, res, next) => {
+  try {
+    const { teacherOverviewSvc } = getContainer();
+    const q = req.query || {};
+    const data = await teacherOverviewSvc.getPresence({
+      schoolId: req.schoolId,
+      teacherId: req.user.id,
+      filters: { classIds: parseIdList(q.classIds) },
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ data });
+  } catch (err) {
+    logger.warn(
+      { err: err?.message, teacherId: req.user?.id },
+      'teacher-overview: presence snapshot failed',
+    );
+    next(err);
+  }
+});
+
 export default router;

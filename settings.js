@@ -36,6 +36,9 @@ const DEFAULT_SETTINGS = {
 			games: true,
 			kidsGames: true,
 			results: true,
+			// Notifications are always available to teachers — the server
+			// scopes the feed to their own activity, classes and students.
+			notifications: true,
 			// Activity Log and Monitoring are admin-only views, hard-hidden
 			// for teachers in every gate (no toggle exists for them).
 			activity: false,

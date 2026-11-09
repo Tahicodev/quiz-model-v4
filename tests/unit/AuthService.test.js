@@ -448,6 +448,91 @@ describe('AuthService', () => {
       expect(rows[1].live).toBe(false);
     });
 
+    it('listLiveSessions backfills a rotated token fingerprint from the login row', async () => {
+      const user = makeUser({ id: 'u-1', school_id: 's-1', role: 'teacher' });
+      const now = Date.now();
+      const live = {
+        id: 'rt-live',
+        user_id: 'u-1',
+        revoked: false,
+        expires_at: new Date(now + 3600_000).toISOString(),
+        created_at: new Date(now).toISOString(),
+        user_agent: null,
+        ip_address: null,
+      };
+      const login = {
+        id: 'rt-login',
+        user_id: 'u-1',
+        revoked: true,
+        expires_at: new Date(now + 3600_000).toISOString(),
+        created_at: new Date(now - 5000).toISOString(),
+        user_agent: 'Chrome/120',
+        ip_address: '10.0.0.5',
+      };
+      repo.getAll.mockImplementation(async (table, opts) => {
+        if (table === 'users') return { data: [user], total: 1 };
+        if (opts?.filters?.revoked === false) return { data: [live], total: 1 };
+        if (opts?.filters?.user_id === 'u-1') return { data: [login], total: 1 };
+        return { data: [], total: 0 };
+      });
+
+      const rows = await service.listLiveSessions('s-1');
+      expect(rows).toHaveLength(1);
+      expect(rows[0].sessions[0].ip_address).toBe('10.0.0.5');
+      expect(rows[0].sessions[0].user_agent).toBe('Chrome/120');
+      expect(rows[0].user.password_hash).toBeUndefined();
+    });
+
+    it('includeIdle keeps valid sessions that are no longer blocking', async () => {
+      const user = makeUser({ id: 'u-1', school_id: 's-1' });
+      const stale = {
+        id: 'rt-old',
+        user_id: 'u-1',
+        revoked: false,
+        expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        created_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+        user_agent: 'Chrome',
+        ip_address: '1.2.3.4',
+      };
+      repo.getAll.mockImplementation(async (table, opts) => {
+        if (table === 'users') return { data: [user], total: 1 };
+        if (opts?.filters?.revoked === false) return { data: [stale], total: 1 };
+        return { data: [], total: 0 };
+      });
+
+      await expect(service.listLiveSessions('s-1')).resolves.toEqual([]);
+      const rows = await service.listLiveSessions('s-1', { includeIdle: true });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].sessions[0].live).toBe(false);
+      expect(rows[0].blocking).toBe(false);
+    });
+
+    it('userIds limits the feed to the caller scope', async () => {
+      const mine = makeUser({ id: 'u-1', school_id: 's-1' });
+      const other = makeUser({ id: 'u-2', school_id: 's-1' });
+      const now = Date.now();
+      const mkToken = (id, user_id) => ({
+        id,
+        user_id,
+        revoked: false,
+        expires_at: new Date(now + 3600_000).toISOString(),
+        created_at: new Date(now).toISOString(),
+        user_agent: 'Chrome',
+        ip_address: '1.2.3.4',
+      });
+      repo.getAll.mockImplementation(async (table, opts) => {
+        if (table === 'users') return { data: [mine, other], total: 2 };
+        if (opts?.filters?.revoked === false) {
+          return { data: [mkToken('rt-1', 'u-1'), mkToken('rt-2', 'u-2')], total: 2 };
+        }
+        return { data: [], total: 0 };
+      });
+
+      const rows = await service.listLiveSessions('s-1', { userIds: ['u-1'] });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].user.id).toBe('u-1');
+    });
+
     it('revokeUserSessions revokes everything and returns the count', async () => {
       repo.getAll.mockResolvedValue({
         data: [{ id: 'rt-1' }, { id: 'rt-2' }],

@@ -371,9 +371,7 @@
 	function archivesOpenPreview(year) {
 		var modal = document.getElementById('archivePreviewModal');
 		if (!modal) return;
-		// Modal is authored inside a hidden ancestor (#aiGeneratorModal), so pull
-		// it up to <body> first or it can never render (same pattern as
-		// openResetDataModal/openQuickStart).
+		// Keep the modal at <body> level so no hidden ancestor can block it.
 		if (modal.parentElement && modal.parentElement !== document.body) {
 			document.body.appendChild(modal);
 		}

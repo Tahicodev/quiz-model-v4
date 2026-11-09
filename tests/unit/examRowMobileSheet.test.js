@@ -49,6 +49,14 @@ describe('exam row mobile action sheet', () => {
     // The reported bug: the paper panel was desktop-only.
     expect(sheetActions()).toContain('openExamDocuments');
   });
+
+  it('makes the whole exam row a desktop drill-down, with a keyboard link', () => {
+    expect(js).toContain('class="clickable-exam-row"');
+    expect(js).toContain('class="exam-name-link"');
+    expect(js).toMatch(
+      /if \(window\.innerWidth > 768\) \{[\s\S]{0,160}openExamAnalysis\(exam\.id\)/,
+    );
+  });
 });
 
 describe('exam action bar on small viewports', () => {

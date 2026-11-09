@@ -194,35 +194,40 @@ if (!document.getElementById('toast-animations')) {
  * @param {string} action - The action performed (created, deleted, edited, imported, exported)
  * @param {object} metadata - Optional additional data
  */
-function logActivity(type, name, action = 'created', metadata = {}) {
-    // ── Session actor: capture WHO triggered this activity ──────────────
-    // Stored on the entry (and the notification payload) so the Activity Log
-    // tab can show the student/teacher/admin session behind every message.
-    let actor = null;
+function getActivitySessionActor() {
     try {
         const sessionUser =
             (window.Auth && typeof window.Auth.getCurrentUser === 'function'
                 ? window.Auth.getCurrentUser()
                 : null) || window.currentUser || null;
-        if (sessionUser) {
-            let studentIdentity = null;
-            try {
-                studentIdentity =
-                    window.Auth && typeof window.Auth.getStudentIdentity === 'function'
-                        ? window.Auth.getStudentIdentity(sessionUser)
-                        : null;
-            } catch (_) { studentIdentity = null; }
-            actor = {
-                id: sessionUser.id || '',
-                name: sessionUser.name || sessionUser.username || '',
-                username: sessionUser.username || '',
-                role: sessionUser.role || '',
-                studentNumber: sessionUser.studentNumber || '',
-                className: (studentIdentity && studentIdentity.class) || sessionUser.className || '',
-                classId: sessionUser.classId || '',
-            };
-        }
-    } catch (_) { actor = null; }
+        if (!sessionUser) return null;
+        let studentIdentity = null;
+        try {
+            studentIdentity =
+                window.Auth && typeof window.Auth.getStudentIdentity === 'function'
+                    ? window.Auth.getStudentIdentity(sessionUser)
+                    : null;
+        } catch (_) { studentIdentity = null; }
+        return {
+            id: sessionUser.id || '',
+            name: sessionUser.name || sessionUser.username || '',
+            username: sessionUser.username || '',
+            role: sessionUser.role || '',
+            studentNumber: sessionUser.studentNumber || '',
+            className: (studentIdentity && studentIdentity.class) || sessionUser.className || '',
+            classId: sessionUser.classId || '',
+        };
+    } catch (_) {
+        return null;
+    }
+}
+
+window.getActivitySessionActor = getActivitySessionActor;
+
+function logActivity(type, name, action = 'created', metadata = {}) {
+    // Session actor: stored on the entry so the Activity Log / Notifications
+    // feed can attribute every message. The server re-stamps it on write.
+    const actor = getActivitySessionActor();
 
     // ── Backend-first: persist to Notification table so the bell shows it ──
     // The /notifications endpoint creates a real DB row (unlike audit_logs
@@ -282,11 +287,18 @@ const ADMIN_NOTIFICATIONS_SEEN_KEY = 'adminNotificationsSeenAt';
 		function addAdminNotification(payload = {}) {
 			var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
 		    var notifications = r ? r.getValue_sync('notifications', []) : JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || '[]');
+		    var data = payload.data && typeof payload.data === 'object' ? { ...payload.data } : {};
+		    if (!data.actor) {
+		        var actor = typeof getActivitySessionActor === 'function'
+		            ? getActivitySessionActor()
+		            : null;
+		        if (actor) data.actor = actor;
+		    }
 		    var entry = {
 		        id: typeof generateUUID === 'function' ? generateUUID() : '' + Date.now(),
 		        type: payload.type || 'activity',
 		        message: payload.message || 'New activity',
-		        data: payload.data || {},
+		        data,
 		        createdAt: new Date().toISOString()
 		    };
 		    notifications.unshift(entry);

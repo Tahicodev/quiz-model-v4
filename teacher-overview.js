@@ -1,24 +1,27 @@
 // ============================================================
-// TEACHER OVERVIEW — MONITORING DASHBOARD
+// TEACHER OVERVIEW — EDUCATIONAL ANALYTICS DASHBOARD
 // ============================================================
 // Teacher Overview only. Admins keep the school-wide Overview (server
-// /admin/overview) and the legacy blocks as their fallback, untouched.
+// /admin/overview) untouched.
 //
-// Architectural rule: this module NEVER manages data. It displays a
-// server-aggregated monitoring bundle and every action navigates to the
-// existing module (Courses, Questions, Exams, Classes, Results, Games).
+// Architectural rule: this module NEVER manages data. It renders a
+// server-aggregated analytics bundle as charts and every action navigates to
+// the existing module (Courses, Questions, Exams, Classes, Results, Games).
 // No CRUD, no duplicate forms, no alternate management workflow lives here.
 //
-// Design rule: reuse the application design system (.toolbar, .stat-card,
-// .dashboard-panel, .data-table, .btn) instead of a private dashboard skin,
-// so the Overview reads like every other module and follows the shared
+// Design rule: every figure is a chart or a KPI card built from the shared
+// chart kit (teacher-analytics.js) and the application design system
+// (.stat-card, .dashboard-panel, .btn), so the Overview follows the shared
 // light/dark theme tokens.
 //
-// Data comes from GET /api/v1/teacher-overview/overview (teacher JWT scope).
+// Data comes from GET /api/v1/teacher-overview/overview (teacher JWT scope)
+// plus GET /api/v1/teacher-overview/presence for the live classroom pulse.
 // Nothing is fabricated: unavailable metrics render an explicit explanation.
 
 (function () {
 	'use strict';
+
+	const T = window.TeacherAnalytics || null;
 
 	const PERIODS = [
 		{ key: 'week', label: 'This week' },
@@ -31,12 +34,11 @@
 		loading: false,
 		error: null,
 		data: null,
+		presence: null,
 		lastLoadAt: 0,
 		requestToken: 0,
 		options: { classes: [], subjects: [] },
 		filters: { classIds: [], subjectIds: [], period: 'month', from: '', to: '' },
-		attentionFilter: 'all',
-		attentionSort: 'priority',
 	};
 
 	let linkRegistry = [];
@@ -65,8 +67,7 @@
 	function trimNumber(value) {
 		const n = Number(value);
 		if (!Number.isFinite(n)) return '—';
-		const rounded = Math.round(n * 10) / 10;
-		return String(rounded);
+		return String(Math.round(n * 10) / 10);
 	}
 
 	function fmt20(value) {
@@ -109,30 +110,6 @@
 		return 'Good evening';
 	}
 
-	function severityBadge(severity) {
-		const map = {
-			high: { cls: 'badge-rose', label: 'Priority' },
-			medium: { cls: 'badge-amber', label: 'Watch' },
-			info: { cls: 'badge-blue', label: 'Info' },
-			positive: { cls: 'badge-green', label: 'Positive' },
-		};
-		const tone = map[severity] || map.info;
-		return `<span class="badge ${tone.cls}">${esc(tone.label)}</span>`;
-	}
-
-	function trendBadge(trend, delta, suffix = ' pts') {
-		if (trend == null) return '';
-		const cls =
-			trend === 'up'
-				? 'teacher-overview__trend--up'
-				: trend === 'down'
-					? 'teacher-overview__trend--down'
-					: 'teacher-overview__trend--muted';
-		const glyph = trend === 'up' ? '▲' : trend === 'down' ? '▼' : '•';
-		const text = delta == null ? 'stable' : `${delta > 0 ? '+' : ''}${trimNumber(delta)}${suffix}`;
-		return `<span class="teacher-overview__trend ${cls}">${glyph} ${esc(text)}</span>`;
-	}
-
 	function registerLink(link, label, className, title) {
 		const index = linkRegistry.push(link) - 1;
 		return `<button type="button" class="${className || 'teacher-overview__link'}" data-tov-link="${index}"${
@@ -141,14 +118,15 @@
 	}
 
 	function emptyState(title, message) {
-		return `<p class="empty-state-small teacher-overview__empty"><strong>${esc(title)}</strong> ${esc(
-			message,
-		)}</p>`;
+		return T
+			? T.empty(title, message)
+			: `<p class="empty-state-small teacher-overview__empty"><strong>${esc(title)}</strong> ${esc(
+					message || '',
+				)}</p>`;
 	}
 
-	function unavailableNote(text) {
-		if (!text) return '';
-		return `<p class="teacher-overview__note text-muted">${esc(text)}</p>`;
+	function chartOrEmpty(markup, title, message) {
+		return markup || emptyState(title, message);
 	}
 
 	// ── data ───────────────────────────────────────────────────────────────
@@ -176,6 +154,13 @@
 		state.error = null;
 		if (!state.data) renderShell();
 
+		// Presence is fetched in parallel and is never allowed to break the
+		// dashboard: a disabled socket registry simply yields null.
+		const presencePromise = Promise.resolve()
+			.then(() => window.API.list('teacher-overview/presence', params()))
+			.then((payload) => (payload && payload.data) || null)
+			.catch(() => null);
+
 		try {
 			if (!window.API || typeof window.API.list !== 'function') {
 				throw new Error('The REST client is not available. Reload the page.');
@@ -185,6 +170,8 @@
 			const data = payload && payload.data;
 			if (!data || !data.sections) throw new Error('Unexpected analytics response.');
 			state.data = data;
+			state.presence = await presencePromise;
+			if (token !== state.requestToken) return;
 			state.lastLoadAt = Date.now();
 			cacheOptions(data.meta);
 			// Clear the loading flag BEFORE rendering: filtersHtml() and the
@@ -218,8 +205,6 @@
 
 	function clearFilters() {
 		state.filters = { classIds: [], subjectIds: [], period: 'month', from: '', to: '' };
-		state.attentionFilter = 'all';
-		state.attentionSort = 'priority';
 		load({ force: true });
 	}
 
@@ -241,7 +226,7 @@
 		if (!link) return;
 		const action = String(link.action || '');
 		if (action === 'attention') {
-			document.getElementById('tov-attention')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			if (typeof window.openTab === 'function') window.openTab(null, 'results');
 			return;
 		}
 		if (action === 'progress') {
@@ -344,7 +329,7 @@
 		const data = state.data;
 		const meta = (data && data.meta) || {};
 		host.hidden = false;
-		host.innerHTML = `${headerHtml(meta)}${filtersHtml()}${scopeBarHtml(meta)}<div id="tovBody">${skeletonHtml()}</div>`;
+		host.innerHTML = `${headerHtml(meta)}${filtersShellHtml(meta)}<div id="tovBody">${skeletonHtml()}</div>`;
 		bindHost();
 	}
 
@@ -355,7 +340,7 @@
 		const meta = (data && data.meta) || {};
 		linkRegistry = [];
 		host.hidden = false;
-		host.innerHTML = `${headerHtml(meta)}${filtersHtml()}${scopeBarHtml(meta)}<div id="tovBody">${bodyHtml()}</div>`;
+		host.innerHTML = `${headerHtml(meta)}${filtersShellHtml(meta)}<div id="tovBody">${bodyHtml()}</div>`;
 		bindHost();
 	}
 
@@ -413,22 +398,59 @@
 		return range ? `${label} (${range})` : label;
 	}
 
-	function scopeBarHtml(meta) {
+	function activeFilterChips(meta) {
 		const f = state.filters;
-		const classNames = f.classIds
-			.map((id) => (state.options.classes.find((c) => String(c.id) === String(id)) || {}).name)
-			.filter(Boolean);
-		const subjectNames = f.subjectIds
-			.map((id) => (state.options.subjects.find((s) => String(s.id) === String(id)) || {}).name)
-			.filter(Boolean);
-		const classText = classNames.length ? classNames.join(', ') : 'All classes';
-		const subjectText = subjectNames.length ? subjectNames.join(', ') : 'All subjects';
-		const periodText = periodScopeText(meta);
-		return `<div class="overview-scope-bar teacher-overview__scope-bar">
-			<span class="overview-scope-label">Showing ${esc(classText)} · ${esc(subjectText)} · ${esc(
-				periodText,
-			)}</span>
-			<button type="button" class="overview-scope-clear" data-tov-clear>Clear filters</button>
+		const chips = [];
+		if (f.classIds.length) {
+			const names = f.classIds
+				.map(
+					(id) =>
+						(state.options.classes.find((c) => String(c.id) === String(id)) || {}).name ||
+						id,
+				)
+				.filter(Boolean);
+			if (names.length) chips.push({ key: 'class', label: 'Class', value: names.join(', ') });
+		}
+		if (f.subjectIds.length) {
+			const names = f.subjectIds
+				.map(
+					(id) =>
+						(state.options.subjects.find((s) => String(s.id) === String(id)) || {}).name ||
+						id,
+				)
+				.filter(Boolean);
+			if (names.length) chips.push({ key: 'subject', label: 'Subject', value: names.join(', ') });
+		}
+		// The default view is This month; only show a period chip when the
+		// teacher deliberately narrowed or changed the window.
+		if (f.period !== 'month') {
+			chips.push({ key: 'period', label: 'Period', value: periodScopeText(meta) });
+		}
+		return chips;
+	}
+
+	function filterSummaryHtml(meta) {
+		const chips = activeFilterChips(meta);
+		return `<div class="teacher-overview__filter-summary${
+			chips.length ? '' : ' hidden'
+		}" id="tovFilterSummary">
+			<span class="teacher-overview__filter-summary-label">Filtered by</span>
+			<div class="teacher-overview__filter-chips" id="tovFilterChips">${chips
+				.map(
+					(chip) =>
+						`<button type="button" class="teacher-overview__filter-chip" data-tov-clear-filter="${chip.key}" title="Remove this filter">${esc(
+							chip.label,
+						)}: ${esc(chip.value)} <span aria-hidden="true">×</span></button>`,
+				)
+				.join('')}</div>
+			<button type="button" class="teacher-overview__filter-clear" data-tov-clear>Clear all</button>
+		</div>`;
+	}
+
+	function filtersShellHtml(meta) {
+		return `<div class="teacher-overview__filter-shell">
+			${filtersHtml()}
+			${filterSummaryHtml(meta)}
 		</div>`;
 	}
 
@@ -500,6 +522,15 @@
 			</div>`;
 		}
 		if (!state.data) return skeletonHtml();
+		if (!T) {
+			return `<div class="dashboard-panel">
+				<div class="panel-header"><h3>Chart kit unavailable</h3></div>
+				<div class="panel-body">
+					<p class="teacher-overview__note text-muted">teacher-analytics.js did not load. Reload the page.</p>
+					<button type="button" class="btn btn-primary" data-tov-retry>Try again</button>
+				</div>
+			</div>`;
+		}
 		const data = state.data;
 		const meta = data.meta || {};
 		if (meta.scope && meta.scope.empty) {
@@ -511,7 +542,7 @@
 					)}</p>
 					${registerLink({ tab: 'classes' }, 'Open classes', 'btn btn-secondary')}
 				</div>
-			</div>${insightsSection(data.sections.insights)}`;
+			</div>`;
 		}
 		return `${statusHtml(meta)}${sectionsHtml(data.sections)}`;
 	}
@@ -541,38 +572,25 @@
 
 	// ── shared building blocks ─────────────────────────────────────────────
 
-	function statCard({ label, value, note, tone, trend, tooltip }) {
-		return `<article class="stat-card ${tone || 'blue'} teacher-overview__stat"${
+	function kpiCard({ label, value, note, foot, tone, tooltip }) {
+		return `<article class="stat-card ${tone || 'blue'} ta-stat"${
 			tooltip ? ` data-tooltip="${esc(tooltip)}"` : ''
 		}>
 			<div class="stat-bar"></div>
 			<div class="stat-info">
 				<h3>${esc(value)}</h3>
 				<p>${esc(label)}</p>
-				${note ? `<span class="teacher-overview__stat-note">${esc(note)}</span>` : ''}
-				${trend || ''}
+				${note ? `<span class="ta-stat__note">${esc(note)}</span>` : ''}
+				${foot ? `<span class="ta-stat__foot">${foot}</span>` : ''}
 			</div>
 		</article>`;
 	}
 
-	function summaryItem(label, value, note) {
-		return `<div class="teacher-overview__summary-item">
-			<span class="teacher-overview__summary-label">${esc(label)}</span>
-			<strong class="teacher-overview__summary-value">${esc(value)}</strong>
-			${note ? `<span class="teacher-overview__summary-note">${esc(note)}</span>` : ''}
-		</div>`;
-	}
-
-	function panel(title, subtitle, body, action) {
-		return `<div class="dashboard-panel">
-			<div class="panel-header">
-				<div>
-					<h3>${esc(title)}</h3>
-					${subtitle ? `<p class="teacher-overview__panel-sub">${esc(subtitle)}</p>` : ''}
-				</div>
-				${action || ''}
-			</div>
-			<div class="panel-body">${body}</div>
+	function metric(label, value, note) {
+		return `<div class="ta-metric">
+			<span class="ta-metric__label">${esc(label)}</span>
+			<strong class="ta-metric__value">${esc(value)}</strong>
+			${note ? `<span class="ta-metric__note">${esc(note)}</span>` : ''}
 		</div>`;
 	}
 
@@ -589,828 +607,856 @@
 		</section>`;
 	}
 
+	function chartPanel(title, subtitle, body, action) {
+		return T.panel({ title, subtitle, body, action: action || '' });
+	}
+
+	function panelAction(link, label) {
+		return registerLink(link, label, 'btn btn-secondary btn-sm');
+	}
+
 	function sectionsHtml(s) {
 		return [
 			section(
-				'glance',
-				'Classroom at a glance',
-				'The six numbers that frame the period. Each card explains the evidence behind its value.',
-				glanceHtml(s.glance),
+				'pulse',
+				'Live classroom pulse',
+				'Who is here now, who needs help, and which class leads or trails the ranking.',
+				pulseHtml(s),
+			),
+			section(
+				'decisions',
+				'Emergency decisions',
+				'Teaching decisions that cannot wait. Each observation carries its evidence and a direct next step.',
+				emergencyHtml(s.insights),
+				{ link: { tab: 'results' }, label: 'Open intervention list' },
 			),
 			section(
 				'progress',
-				'Learning progress & performance',
-				'Are results improving, which class needs help, and where does practice differ from assessment?',
-				progressHtml(s.progress),
+				'Class comparison',
+				'Average score, pass split, attention load, learning progression and activity — compared by class.',
+				progressHtml(s.progress, s.attention),
 				{ link: { tab: 'results' }, label: 'Open results' },
 			),
 			section(
-				'attention',
-				'Students needing attention',
-				'Academic and engagement difficulties are listed separately, each with a next action that opens the student record.',
-				attentionHtml(s.attention),
-				{ link: { tab: 'results' }, label: 'Open students' },
+				'learning',
+				'Learning insights',
+				'Where the learning is going, which subject leads, and how practice differs from assessment.',
+				learningHtml(s.progress),
+				{ link: { tab: 'results' }, label: 'Open results' },
 			),
 			section(
-				'exams',
-				'Examinations',
-				'Formal assessment only. Training and game scores never enter these metrics; open an exam for question-level analysis.',
-				examsHtml(s.exams),
-				{ link: { tab: 'exams' }, label: 'Open exams' },
-			),
-			section(
-				'courses',
-				'Courses & training',
+				'subjects',
+				'Courses & subjects insights',
 				'Is the learning material being practised, and which chapters generate the most errors?',
-				contentHtml(s.content),
+				coursesHtml(s.content),
 				{ link: { tab: 'subjects' }, label: 'Open courses' },
 			),
 			section(
-				'games',
-				'Games & tournaments',
-				'Engagement and reinforcement only — never an academic measure.',
-				gamesHtml(s.engagement),
+				'questions',
+				'Questions insights',
+				'Bank coverage, composition and observed difficulty — never author-declared difficulty.',
+				questionsHtml(s.questions),
+				{ link: { tab: 'questions' }, label: 'Open questions' },
+			),
+			section(
+				'distribution',
+				'Score distribution',
+				'How formal assessment results are spread across the /20 scale, with assessment health.',
+				distributionHtml(s.exams, s.glance),
+				{ link: { tab: 'exams' }, label: 'Open exams' },
+			),
+			section(
+				'engagement',
+				'Educational engagement',
+				'Games and tournaments reinforce learning. Engagement only — never an academic measure.',
+				engagementHtml(s.engagement),
 				{ link: { tab: 'games' }, label: 'Open games' },
 			),
 			section(
 				'insights',
-				'Teaching insights',
-				'Deterministic observations computed from the data above, each with its evidence and next step.',
-				insightsSection(s.insights),
+				'Educational insights',
+				'Positive signals and context to keep teaching decisions balanced.',
+				educationalInsightsHtml(s.insights),
 			),
 		].join('');
 	}
 
-	// ── 01 glance ──────────────────────────────────────────────────────────
+	// ── 01 live classroom pulse (KPIs) ─────────────────────────────────────
 
-	function glanceHtml(glance) {
-		const g = glance || {};
-		const avg = g.avgExamScore || {};
-		const rate = g.successRate || {};
-		const attention = g.needingAttention || {};
-		const active = g.activeStudents || {};
-		const avgFoot = [];
-		if (avg.sample) avgFoot.push(`${avg.sample} valid attempt${avg.sample === 1 ? '' : 's'}`);
-		if (avg.comparable && avg.previous != null) avgFoot.push(`previous ${fmt20(avg.previous)}`);
-		return `<div class="kpi-grid">
-			${statCard({
-				label: 'Total students',
-				value: fmtCount((g.totalStudents || {}).value),
-				note: (g.totalStudents || {}).explanation || 'Unique students in your assigned classes.',
+	function pulseHtml(sections) {
+		const glance = (sections && sections.glance) || {};
+		const progress = (sections && sections.progress) || {};
+		const attention = glance.needingAttention || {};
+		const notCertified = glance.notCertifiedStudents || {};
+		const presence = state.presence;
+		const totalClasses = presence
+			? presence.totalClasses
+			: (state.options.classes || []).length;
+		const best = progress.bestClass;
+		const weakest = progress.weekComparison ? progress.weekComparison.weakest : null;
+
+		return `<div class="kpi-grid ta-kpi-grid">
+			${kpiCard({
+				label: 'Classes online',
+				value: presence ? `${fmtCount(presence.classesOnline)} / ${fmtCount(totalClasses)}` : '—',
+				note: presence
+					? `${fmtCount(presence.studentsOnline)} student(s) connected live`
+					: 'Live presence is unavailable',
 				tone: 'blue',
-				tooltip: (g.totalStudents || {}).explanation,
+				foot: registerLink({ tab: 'classes' }, 'Open classes'),
+				tooltip: 'Classes with at least one student connected right now.',
 			})}
-			${statCard({
-				label: 'Active students',
-				value: fmtCount(active.value),
-				note: active.rate == null ? active.explanation : `${fmtPct(active.rate)} of your students`,
+			${kpiCard({
+				label: 'Students online',
+				value: presence ? fmtCount(presence.studentsOnline) : '—',
+				note: presence
+					? `${fmtPct(presence.onlineRate)} of ${fmtCount(presence.totalStudents)} students`
+					: 'Live presence is unavailable',
 				tone: 'cyan',
-				tooltip: active.explanation,
+				foot: registerLink({ tab: 'results' }, 'Open students'),
+				tooltip: 'Distinct student accounts connected right now.',
 			})}
-			${statCard({
-				label: 'Average exam score',
-				value: fmt20(avg.value),
-				note: avgFoot.join(' · '),
-				tone: 'indigo',
-				trend: trendBadge(avg.trend, avg.delta),
-				tooltip: avg.explanation,
-			})}
-			${statCard({
-				label: 'Exam success rate',
-				value: fmtPct(rate.value),
-				note: rate.total ? `${rate.passed} of ${rate.total} attempts at or above 10/20` : rate.explanation,
-				tone: 'green',
-				tooltip: rate.explanation,
-			})}
-			${statCard({
+			${kpiCard({
 				label: 'Students needing attention',
 				value: fmtCount(attention.value),
 				note: `${fmtCount(attention.academic)} academic · ${fmtCount(attention.engagement)} engagement`,
 				tone: 'rose',
-				tooltip: 'Academic difficulty and inactivity are counted separately so inactivity never implies weakness.',
+				foot: registerLink({ tab: 'results', action: 'attention' }, 'Open intervention list'),
+				tooltip:
+					'Academic difficulty and inactivity are counted separately so inactivity never implies weakness.',
 			})}
-			${statCard({
-				label: 'Completed exams',
-				value: fmtCount((g.completedExams || {}).value),
-				note: (g.completedExams || {}).explanation || 'Exams with at least one valid attempt in the period.',
+			${kpiCard({
+				label: 'Remaining students not passing',
+				value: fmtCount(notCertified.value),
+				note: `${fmtCount(notCertified.failed)} below 10/20 · ${fmtCount(
+					notCertified.neverAssessed,
+				)} never assessed`,
 				tone: 'amber',
-				tooltip: (g.completedExams || {}).explanation,
+				foot: registerLink({ tab: 'results' }, 'Open results'),
+				tooltip: 'Students who are assessed below the certification line, or not assessed at all.',
+			})}
+			${kpiCard({
+				label: 'Best-ranked class',
+				value: best ? best.className : '—',
+				note: best
+					? `${fmt20(best.avg20)} · ${fmtCount(best.sample)} attempt(s)${
+							best.reliable ? '' : ' · small sample'
+						}`
+					: 'No formal exam result in this period',
+				tone: 'green',
+				foot: best
+					? registerLink(
+							{ tab: 'results', action: 'class', id: best.classId, query: best.className },
+							'Review class results',
+						)
+					: '',
+				tooltip: 'Highest average on formal examinations in the selected scope and period.',
+			})}
+			${kpiCard({
+				label: 'Weakest class this week',
+				value: weakest ? weakest.className : '—',
+				note: weakest
+					? `${fmt20(weakest.avg20)} · ${fmtCount(weakest.sample)} attempt(s) · last 7 days${
+							weakest.reliable ? '' : ' · small sample'
+						}`
+					: 'No formal exam result in the last 7 days',
+				tone: 'violet',
+				foot: weakest
+					? registerLink(
+							{ tab: 'results', action: 'class', id: weakest.classId, query: weakest.className },
+							'Review class results',
+						)
+					: '',
+				tooltip:
+					'Trailing seven days, independent of the reporting period: a live teaching decision.',
 			})}
 		</div>`;
 	}
 
-	// ── 02 progress ────────────────────────────────────────────────────────
+	// ── insight cards ──────────────────────────────────────────────────────
 
-	function lineChart(current, previous) {
-		const pts = Array.isArray(current) ? current : [];
-		if (!pts.length) return '';
-		const width = 640;
-		const height = 220;
-		const padL = 36;
-		const padR = 16;
-		const padT = 16;
-		const padB = 30;
-		const n = Math.max(pts.length, (previous || []).length, 2);
-		const x = (i) => padL + (i / (n - 1)) * (width - padL - padR);
-		const y = (v) => padT + (1 - Math.max(0, Math.min(20, v)) / 20) * (height - padT - padB);
-		const grid = [0, 5, 10, 15, 20]
-			.map(
-				(v) =>
-					`<line x1="${padL}" y1="${y(v)}" x2="${width - padR}" y2="${y(v)}" class="teacher-overview__chart-grid"/>` +
-					`<text x="${padL - 8}" y="${y(v) + 4}" text-anchor="end" class="teacher-overview__chart-axis">${v}</text>`,
-			)
-			.join('');
-		const path = (list, cls) => {
-			let d = '';
-			list.forEach((point, index) => {
-				if (point.avg20 == null) return;
-				d += `${d ? 'L' : 'M'}${x(index).toFixed(1)},${y(point.avg20).toFixed(1)} `;
-			});
-			return d ? `<path d="${d}" class="${cls}"/>` : '';
-		};
-		const dots = pts
-			.map((point, index) =>
-				point.avg20 == null
-					? ''
-					: `<circle cx="${x(index).toFixed(1)}" cy="${y(point.avg20).toFixed(1)}" r="3.5" class="teacher-overview__chart-dot">
-						<title>${esc(point.label)}: ${fmt20(point.avg20)} · ${point.attempts} attempt${point.attempts === 1 ? '' : 's'}</title>
-					</circle>`,
-			)
-			.join('');
-		const labelEvery = Math.max(1, Math.ceil(pts.length / 6));
-		const labels = pts
-			.map((point, index) =>
-				index % labelEvery === 0
-					? `<text x="${x(index).toFixed(1)}" y="${height - 8}" text-anchor="middle" class="teacher-overview__chart-axis">${esc(point.label)}</text>`
-					: '',
-			)
-			.join('');
-		return `<svg viewBox="0 0 ${width} ${height}" class="teacher-overview__chart" role="img" aria-label="Average exam score over time">
-			${grid}
-			${path(previous || [], 'teacher-overview__chart-line teacher-overview__chart-line--prev')}
-			${path(pts, 'teacher-overview__chart-line')}
-			${dots}${labels}
-		</svg>`;
-	}
-
-	function groupedBars(points) {
-		if (!Array.isArray(points) || !points.length) return '';
-		const width = 640;
-		const height = 200;
-		const padL = 32;
-		const padR = 12;
-		const padT = 12;
-		const padB = 26;
-		const max = Math.max(1, ...points.map((p) => (p.examAttempts || 0) + (p.trainingAttempts || 0)));
-		const slot = (width - padL - padR) / points.length;
-		const barW = Math.min(26, Math.max(6, slot / 3));
-		const y = (v) => padT + (1 - v / max) * (height - padT - padB);
-		const labelEvery = Math.max(1, Math.ceil(points.length / 6));
-		return `<svg viewBox="0 0 ${width} ${height}" class="teacher-overview__chart" role="img" aria-label="Exam and training attempts over time">
-			<line x1="${padL}" y1="${height - padB}" x2="${width - padR}" y2="${height - padB}" class="teacher-overview__chart-grid"/>
-			${points
-				.map((point, index) => {
-					const cx = padL + index * slot + slot / 2;
-					const examH = height - padB - y(point.examAttempts || 0);
-					const trainH = height - padB - y(point.trainingAttempts || 0);
-					const label =
-						index % labelEvery === 0
-							? `<text x="${cx}" y="${height - 8}" text-anchor="middle" class="teacher-overview__chart-axis">${esc(point.label)}</text>`
-							: '';
-					return `${label}
-						<rect x="${cx - barW - 1}" y="${y(point.examAttempts || 0)}" width="${barW}" height="${Math.max(0, examH)}" rx="2" class="teacher-overview__chart-bar teacher-overview__chart-bar--exam">
-							<title>${esc(point.label)}: ${point.examAttempts || 0} exam attempt(s)</title>
-						</rect>
-						<rect x="${cx + 1}" y="${y(point.trainingAttempts || 0)}" width="${barW}" height="${Math.max(0, trainH)}" rx="2" class="teacher-overview__chart-bar teacher-overview__chart-bar--training">
-							<title>${esc(point.label)}: ${point.trainingAttempts || 0} training attempt(s)</title>
-						</rect>`;
-				})
-				.join('')}
-		</svg>`;
-	}
-
-	function chartLegend(items) {
-		return `<div class="teacher-overview__legend">${items
-			.map(
-				(item) =>
-					`<span><i class="teacher-overview__legend-key teacher-overview__legend-key--${item.tone}"></i>${esc(
-						item.label,
-					)}</span>`,
-			)
-			.join('')}</div>`;
-	}
-
-	function barList(rows, opts) {
-		const list = Array.isArray(rows) ? rows : [];
-		if (!list.length) return emptyState(opts.emptyTitle || 'No data', opts.empty || 'Nothing to compare in this scope.');
-		const values = list.map((row) => Number(opts.value(row)) || 0);
-		const max = Math.max(opts.max || 0, ...values, 1);
-		return `<div class="teacher-overview__bars">
-			${list
-				.map((row) => {
-					const value = Number(opts.value(row)) || 0;
-					const width = Math.max(2, Math.round((value / max) * 100));
-					const label = opts.label(row);
-					const meta = opts.meta ? opts.meta(row) : '';
-					const link = opts.link ? opts.link(row) : null;
-					const labelHtml = link
-						? registerLink(link, label, 'teacher-overview__bar-label teacher-overview__link')
-						: `<span class="teacher-overview__bar-label">${esc(label)}</span>`;
-					return `<div class="teacher-overview__bar-row">
-						<div class="teacher-overview__bar-head">${labelHtml}<span class="teacher-overview__bar-value">${esc(
-							opts.display ? opts.display(value, row) : value,
-						)}</span></div>
-						<div class="teacher-overview__bar-track" role="img" aria-label="${esc(label)}: ${esc(
-							opts.display ? opts.display(value, row) : value,
-						)}"><span class="teacher-overview__bar-fill ${
-							opts.tone ? `teacher-overview__bar-fill--${opts.tone(row)}` : ''
-						}" style="width:${width}%"></span></div>
-						${meta ? `<p class="teacher-overview__bar-meta">${esc(meta)}</p>` : ''}
-					</div>`;
-				})
-				.join('')}
-		</div>`;
-	}
-
-	function progressHtml(progress) {
-		const p = progress || {};
-		const evolution = p.performanceEvolution || { points: [] };
-		const participation = p.participationEvolution || { points: [] };
-		const classRows = p.classComparison || [];
-		const subjectRows = p.subjectPerformance || [];
-		const tve = p.trainingVsExam || {};
-
-		const evolutionValid = (evolution.points || []).filter((pt) => pt.avg20 != null).length;
-		const evolutionCard =
-			evolution.points && evolutionValid >= 2
-				? `${chartLegend(
-						[
-							{ label: 'Selected period', tone: 'line' },
-							...(evolution.comparable ? [{ label: 'Previous period', tone: 'prev' }] : []),
-						],
-					)}
-					${lineChart(evolution.points, evolution.previousPoints)}
-					${
-						evolution.direction
-							? `<p class="teacher-overview__note text-muted">Trend: ${esc(
-									evolution.direction === 'improving'
-										? 'improving'
-										: evolution.direction === 'declining'
-											? 'declining'
-											: 'stable',
-								)}</p>`
-							: ''
-					}`
-				: emptyState(
-						'Not enough examination results to chart a trend',
-						'A trend needs at least two periods with valid formal exam attempts in the selected window.',
-					);
-
-		const comparisonCard = barList(classRows, {
-			value: (row) => row.avg20,
-			max: 20,
-			label: (row) => row.className,
-			display: (value, row) => `${fmt20(value)}${row.reliable ? '' : ' · small sample'}`,
-			meta: (row) =>
-				`${row.sample} attempt${row.sample === 1 ? '' : 's'} · ${fmtPct(row.successRate)} success · ${row.students} student${
-					row.students === 1 ? '' : 's'
-				}`,
-			link: (row) => ({ tab: 'results', action: 'class', id: row.classId, query: row.className }),
-			tone: (row) => (row.avg20 < 10 ? 'warn' : 'ok'),
-			emptyTitle: 'No class comparison',
-			empty: 'No formal exam results in the selected period.',
-		});
-
-		const subjectCard = barList(subjectRows, {
-			value: (row) => row.avg20,
-			max: 20,
-			label: (row) => row.subjectName,
-			display: (value, row) => `${fmt20(value)}${row.mixedExams ? ' · mixed' : ''}`,
-			meta: (row) =>
-				`${row.sample} attempt${row.sample === 1 ? '' : 's'} · ${fmtPct(row.successRate)} success${
-					row.reliable ? '' : ' · small sample'
-				}`,
-			link: (row) => ({ tab: 'subjects', action: 'subject', id: row.subjectId }),
-			tone: (row) => (row.avg20 < 10 ? 'warn' : 'ok'),
-			emptyTitle: 'No subject comparison',
-			empty: 'Exam results could not be attributed to a subject in this period.',
-		});
-
-		const participationCard =
-			participation.points && participation.points.some((pt) => pt.examAttempts || pt.trainingAttempts)
-				? `${groupedBars(participation.points)}
-					${chartLegend([
-						{ label: 'Exam attempts', tone: 'exam' },
-						{ label: 'Training attempts', tone: 'training' },
-					])}`
-				: emptyState('No learning activity', 'No exam or training attempt was recorded in this period.');
-
-		return `<div class="teacher-overview__panel-stack">
-			${panel(
-				'Performance evolution',
-				`Average formal exam score (/20) per ${evolution.granularity || 'period'}.`,
-				evolutionCard,
-			)}
-			<div class="dashboard-charts-grid">
-				${panel(
-					'Class comparison',
-					'Average exam score by class. Small samples are labelled.',
-					comparisonCard,
-				)}
-				${panel(
-					'Subject performance',
-					'Lowest first. An exam spanning subjects is attributed to its dominant subject.',
-					subjectCard,
-				)}
-			</div>
-			${panel(
-				'Participation evolution',
-				`Attempts per ${participation.granularity || 'period'}. Distinct active students: ${fmtCount(
-					(participation.points || []).reduce((max, pt) => Math.max(max, pt.activeStudents || 0), 0),
-				)} at peak.`,
-				participationCard,
-			)}
-			${panel(
-				'Training vs examination',
-				'Two different assessment contexts — a gap is a cue to investigate, not proof of mastery.',
-				`<div class="teacher-overview__compare">
-					<div class="teacher-overview__compare-item">
-						<span class="teacher-overview__compare-label">Training</span>
-						<strong>${fmt20((tve.training || {}).avg20)}</strong>
-						<span class="teacher-overview__note text-muted">${fmtCount((tve.training || {}).sample)} attempt(s) · ${fmtCount(
-							(tve.training || {}).students,
-						)} student(s)</span>
-					</div>
-					<div class="teacher-overview__compare-item">
-						<span class="teacher-overview__compare-label">Formal examinations</span>
-						<strong>${fmt20((tve.exam || {}).avg20)}</strong>
-						<span class="teacher-overview__note text-muted">${fmtCount((tve.exam || {}).sample)} attempt(s) · ${fmtCount(
-							(tve.exam || {}).students,
-						)} student(s)</span>
-					</div>
-				</div>
-				${tve.note ? `<p class="teacher-overview__note text-muted">${esc(tve.note)}</p>` : ''}`,
-			)}
-		</div>`;
-	}
-
-	// ── 03 attention ───────────────────────────────────────────────────────
-
-	function attentionRows(attention) {
-		const rows = Array.isArray(attention.rows) ? attention.rows.slice() : [];
-		const filter = state.attentionFilter;
-		const filtered = rows.filter((row) => {
-			if (filter === 'all') return true;
-			return row.kind === filter || row.kind === 'both';
-		});
-		if (state.attentionSort === 'average') {
-			filtered.sort((a, b) => (a.avg20 ?? 99) - (b.avg20 ?? 99));
-		} else if (state.attentionSort === 'inactive') {
-			filtered.sort((a, b) => (b.daysInactive ?? -1) - (a.daysInactive ?? -1));
+	function insightCards(list, emergency) {
+		const items = Array.isArray(list) ? list : [];
+		if (!items.length) {
+			return emptyState(
+				emergency ? 'No urgent decision required' : 'No additional insight',
+				emergency
+					? 'No pedagogical alert crosses a threshold in the selected period.'
+					: 'Positive or contextual insights appear here once enough activity is recorded.',
+			);
 		}
-		return filtered;
-	}
-
-	function attentionHtml(attention) {
-		const a = attention || {};
-		const summary = a.summary || {};
-		const rows = attentionRows(a);
-		const chip = (key, label, count) =>
-			`<button type="button" class="btn btn-sm ${
-				state.attentionFilter === key ? 'btn-primary is-active' : 'btn-secondary'
-			}" data-tov-attention-filter="${key}" aria-pressed="${state.attentionFilter === key}">${esc(
-				label,
-			)} <span>${fmtCount(count)}</span></button>`;
-
-		const table = rows.length
-			? `<div class="table-container teacher-overview__table-wrap">
-				<table class="data-table teacher-overview__table">
-					<thead><tr>
-						<th scope="col">Student</th><th scope="col">Class</th><th scope="col">Avg /20</th>
-						<th scope="col">Recent trend</th><th scope="col">Detected difficulty</th><th scope="col">Next action</th>
-					</tr></thead>
-					<tbody>
-						${rows
-							.map((row) => {
-								const link = { tab: 'results', action: 'student', id: row.studentId, query: row.name };
-								const weak = (row.difficulty && row.difficulty.weakChapters ? row.difficulty.weakChapters : [])[0];
-								const weakHtml = weak
-									? registerLink(
-											weak.courseId
-												? { tab: 'subjects', action: 'course', id: weak.courseId }
-												: { tab: 'questions', action: 'category', id: weak.categoryId, query: weak.name },
-											`${weak.name} · ${fmtPct(weak.errorRate)} errors`,
-											'badge badge-amber',
-											'Open the chapter content',
-										)
-									: '';
-								const difficultyLabel = row.difficulty ? row.difficulty.label : row.reason;
-								const activity = row.lastActivity
-									? `Last activity ${dateText(row.lastActivity)}`
-									: 'No activity in period';
-								const activityHtml =
-									activity && activity !== difficultyLabel
-										? `<span class="teacher-overview__cell-meta">${esc(activity)}</span>`
-										: '';
-								return `<tr>
-									<td data-label="Student">${registerLink(link, row.name, 'teacher-overview__link')}${
-										row.numero ? `<span class="teacher-overview__cell-meta">#${esc(row.numero)}</span>` : ''
-									}</td>
-									<td data-label="Class">${esc(row.className)}</td>
-									<td data-label="Average /20"><span class="teacher-overview__score${
-										row.avg20 != null && row.avg20 < 10 ? ' teacher-overview__score--low' : ''
-									}">${fmt20(row.avg20)}</span></td>
-									<td data-label="Recent trend">${trendBadge(row.trend, row.trendDelta) || '—'}</td>
-									<td data-label="Detected difficulty"><span class="teacher-overview__difficulty">${esc(
-										difficultyLabel,
-									)}</span>${activityHtml}${weakHtml}</td>
-									<td data-label="Next action">${registerLink(
-										link,
-										row.intervention?.label || 'Review student',
-										'btn btn-secondary btn-sm',
-									)}</td>
-								</tr>`;
-							})
-							.join('')}
-					</tbody>
-				</table>
-			</div>`
-			: emptyState(
-					'No student meets the intervention criteria',
-					'Either results are above the thresholds or there is not enough data in this period.',
-				);
-
-		return `<div class="dashboard-panel">
-			<div class="panel-header">
-				<div>
-					<h3>Intervention list</h3>
-					<p class="teacher-overview__panel-sub">Filter by difficulty, then open the student record for the full history.</p>
-				</div>
-				<div class="teacher-overview__toolbar">
-					<div class="teacher-overview__chips">
-						${chip('all', 'All', summary.total || 0)}
-						${chip('academic', 'Academic', summary.academic || 0)}
-						${chip('engagement', 'Engagement', summary.engagement || 0)}
-					</div>
-					<label class="sort-wrapper teacher-overview__sort">
-						<span class="text-muted text-xs">Sort</span>
-						<select id="tovAttentionSort">
-							<option value="priority" ${state.attentionSort === 'priority' ? 'selected' : ''}>Priority</option>
-							<option value="average" ${state.attentionSort === 'average' ? 'selected' : ''}>Lowest average</option>
-							<option value="inactive" ${state.attentionSort === 'inactive' ? 'selected' : ''}>Most inactive</option>
-						</select>
-					</label>
-				</div>
-			</div>
-			<div class="panel-body">
-				${table}
-				<details class="teacher-overview__rules">
-					<summary>How students are flagged</summary>
-					<ul>${(a.rules || []).map((rule) => `<li>${esc(rule)}</li>`).join('')}</ul>
-				</details>
-			</div>
-		</div>`;
-	}
-
-	// ── 04 examinations ────────────────────────────────────────────────────
-
-	function examDistributionHtml(distribution) {
-		const rows = Array.isArray(distribution) ? distribution : [];
-		if (!rows.length) return emptyState('No score distribution', 'No valid exam result in this period.');
-		const max = Math.max(1, ...rows.map((r) => r.count || 0));
-		return `<div class="teacher-overview__bars">
-			${rows
-				.map((row) => {
-					const bucketStart = Number(String(row.bucket || '').split('-')[0]);
-					return `<div class="teacher-overview__bar-row">
-						<div class="teacher-overview__bar-head"><span class="teacher-overview__bar-label">${esc(
-							row.label,
-						)}/20</span><span class="teacher-overview__bar-value">${fmtCount(row.count)}</span></div>
-						<div class="teacher-overview__bar-track"><span class="teacher-overview__bar-fill ${
-							bucketStart >= 10 ? 'teacher-overview__bar-fill--ok' : 'teacher-overview__bar-fill--warn'
-						}" style="width:${Math.max(2, Math.round(((row.count || 0) / max) * 100))}%"></span></div>
-						<p class="teacher-overview__bar-meta">${fmtPct(row.pct)} of valid attempts</p>
-					</div>`;
-				})
-				.join('')}
-		</div>`;
-	}
-
-	function examsHtml(exams) {
-		const e = exams || {};
-		const summary = e.summary || {};
-		const awaiting = Array.isArray(e.awaiting) ? e.awaiting : [];
-		const recent = Array.isArray(e.recent) ? e.recent : [];
-
-		const awaitingHtml = awaiting.length
-			? `<ul class="teacher-overview__list">
-					${awaiting
-						.map(
-							(exam) => `<li>
-								<div class="teacher-overview__list-main">
-									${registerLink(
-										{ tab: 'exams', action: 'exam-analysis', id: exam.examId },
-										exam.name,
-										'teacher-overview__link',
-									)}
-									<span class="teacher-overview__list-meta">${fmtCount(exam.completed)} completed · ${fmtCount(
-										exam.pending,
-									)} pending of ${fmtCount(exam.assigned)}</span>
-								</div>
-								<div class="teacher-overview__list-side">
-									<span class="status-badge ${
-										exam.pending > 0 ? 'status-warning' : 'status-success'
-									}">${exam.pending > 0 ? 'Awaiting' : 'Complete'}</span>
-								</div>
-							</li>`,
-						)
-						.join('')}
-				</ul>`
-			: emptyState('No active exam awaiting completion', 'Assigned active exams will appear here with their pending attempts.');
-
-		const recentHtml = recent.length
-			? `<div class="table-container teacher-overview__table-wrap">
-					<table class="data-table teacher-overview__table">
-						<thead><tr><th scope="col">Student</th><th scope="col">Exam</th><th scope="col">Score</th><th scope="col">Date</th></tr></thead>
-						<tbody>${recent
-							.slice(0, 6)
-							.map(
-								(row) => `<tr>
-									<td data-label="Student">${registerLink(
-										{ tab: 'results', action: 'student', id: row.studentId, query: row.studentName },
-										row.studentName,
-										'teacher-overview__link',
-									)}<span class="teacher-overview__cell-meta">${esc(row.className)}</span></td>
-									<td data-label="Exam">${registerLink(
-										{ tab: 'exams', action: 'exam-analysis', id: row.examId },
-										row.examName,
-										'teacher-overview__link',
-									)}</td>
-									<td data-label="Score"><span class="teacher-overview__score${
-										row.passed ? '' : ' teacher-overview__score--low'
-									}">${fmt20(row.score20)}</span></td>
-									<td data-label="Date">${esc(dateText(row.date))}</td>
-								</tr>`,
-							)
-							.join('')}</tbody>
-					</table>
-				</div>`
-			: emptyState('No recent results', 'No formal exam result was recorded in this period.');
-
-		return `<div class="teacher-overview__panel-stack">
-			<div class="teacher-overview__summary">
-				${summaryItem('Average (/20)', fmt20((summary.avg20 || {}).value), `${fmtCount(
-					(summary.avg20 || {}).sample,
-				)} attempts`)}
-				${summaryItem('Success rate', fmtPct((summary.successRate || {}).value), 'at 10/20')}
-				${summaryItem('Completed exams', fmtCount((summary.completed || {}).value), 'in period')}
-				${summaryItem('Pending attempts', fmtCount((summary.pendingAttempts || {}).value), 'assigned, not completed')}
-			</div>
-			<div class="dashboard-charts-grid">
-				${panel('Score distribution', 'Share of valid formal attempts by /20 band.', examDistributionHtml(e.distribution))}
-				${panel(
-					'Awaiting completion',
-					'Exams have no scheduled date; this is the assigned work still outstanding.',
-					awaitingHtml,
-				)}
-			</div>
-			${panel(
-				'Recent results',
-				'Six most recent formal exam attempts in the period. Open an exam for question-level analysis.',
-				recentHtml,
-			)}
-			${unavailableNote((e.unavailable || {}).schedule)}
-		</div>`;
-	}
-
-	// ── 05 courses & training ──────────────────────────────────────────────
-
-	function courseListHtml(rows, emptyTitle) {
-		const list = Array.isArray(rows) ? rows : [];
-		if (!list.length) return emptyState(emptyTitle, 'No published course in this scope.');
-		return `<ul class="teacher-overview__list">
-			${list
+		return `<div class="ta-insights${emergency ? ' ta-insights--emergency' : ''}">
+			${items
 				.map(
-					(course) => `<li>
-						<div class="teacher-overview__list-main">
-							${registerLink(
-								{ tab: 'subjects', action: 'course', id: course.courseId },
-								course.name,
-								'teacher-overview__link',
-							)}
-							<span class="teacher-overview__list-meta">${esc(
-								course.subjectName || 'No subject',
-							)} · ${fmtCount(course.lessonCount)} lesson(s)</span>
-						</div>
-						<div class="teacher-overview__list-side">
-							${fmtCount(course.practicingStudents)} student(s)<br>
-							${fmtCount(course.trainingAttempts)} training · ${fmt20(course.avgTraining20)}
-						</div>
-					</li>`,
-				)
-				.join('')}
-		</ul>`;
-	}
-
-	function contentHtml(content) {
-		const c = content || {};
-		const chapters = Array.isArray(c.chapters) ? c.chapters : [];
-		const training = c.training || {};
-		const visibleChapters = chapters.slice(0, 5);
-		const chapterRows = visibleChapters.length
-			? `<div class="table-container teacher-overview__table-wrap">
-					<table class="data-table teacher-overview__table">
-						<thead><tr>
-							<th scope="col">Chapter</th><th scope="col">Answers</th><th scope="col">Students</th>
-							<th scope="col">Correct</th><th scope="col">Errors</th><th scope="col">Context</th><th scope="col"></th>
-						</tr></thead>
-						<tbody>${visibleChapters
-							.map(
-								(chapter) => `<tr>
-									<td data-label="Chapter"><span class="teacher-overview__cell-strong">${esc(
-										chapter.name,
-									)}</span><span class="teacher-overview__cell-meta">${esc(chapter.path || '')}</span></td>
-									<td data-label="Answers">${fmtCount(chapter.attempts)}</td>
-									<td data-label="Students">${fmtCount(chapter.students)}</td>
-									<td data-label="Correct">${fmtPct(chapter.correctRate)}</td>
-									<td data-label="Errors"><span class="teacher-overview__score${
-										chapter.errorRate >= 50 ? ' teacher-overview__score--low' : ''
-									}">${fmtPct(chapter.errorRate)}</span></td>
-									<td data-label="Context"><span class="badge ${
-										chapter.severity === 'high'
-											? 'badge-rose'
-											: chapter.severity === 'medium'
-												? 'badge-amber'
-												: 'badge-green'
-									}">${chapter.severity === 'high' ? 'Priority' : chapter.severity === 'medium' ? 'Watch' : 'OK'}</span>
-									<span class="teacher-overview__cell-meta">${fmtCount(chapter.trainingAttempts)} training · ${fmtCount(
-										chapter.examAttempts,
-									)} exam</span></td>
-									<td data-label="Action">${
-										chapter.courseId
-											? registerLink(
-													{ tab: 'subjects', action: 'course', id: chapter.courseId },
-													'Open course',
-													'teacher-overview__link',
-												)
-											: registerLink(
-													{ tab: 'questions', action: 'category', id: chapter.categoryId, query: chapter.name },
-													'Review questions',
-													'teacher-overview__link',
-												)
-									}</td>
-								</tr>`,
-							)
-							.join('')}</tbody>
-					</table>
-				</div>
-				${
-					chapters.length > visibleChapters.length
-						? `<p class="teacher-overview__note text-muted">Showing the ${visibleChapters.length} highest-priority chapters. Open Courses for the full outline.</p>`
-						: ''
-				}`
-			: emptyState('No chapter data', 'No answered question in your courses during this period.');
-
-		return `<div class="teacher-overview__panel-stack">
-			<div class="teacher-overview__summary">
-				${summaryItem(
-					'Published courses',
-					fmtCount((c.publishedCourses || {}).value),
-					`${fmtCount((c.draftCourses || {}).value)} draft`,
-				)}
-				${summaryItem(
-					'Training attempts',
-					fmtCount(training.attempts),
-					`${fmtCount(training.attemptsPerStudent)} per active student`,
-				)}
-				${summaryItem('Training average', fmt20(training.avg20), 'practice only')}
-				${summaryItem(
-					'Training participation',
-					fmtPct(training.participationRate),
-					`${fmtCount(training.students)} student(s)`,
-				)}
-			</div>
-			<div class="dashboard-charts-grid">
-				${panel(
-					'Most practised',
-					'Courses whose chapters students actually worked on.',
-					courseListHtml(c.mostPracticed, 'No practice recorded'),
-				)}
-				${panel(
-					'Least practised',
-					'Published courses with the least practice — a candidate for a reminder.',
-					courseListHtml(c.leastPracticed, 'No published course'),
-				)}
-			</div>
-			${panel(
-				'Chapter difficulty',
-				'Computed from real training and exam answers. High error rate with enough volume and breadth.',
-				chapterRows,
-			)}
-			${unavailableNote((c.unavailable || {}).completion)}
-			${unavailableNote((c.unavailable || {}).participation)}
-		</div>`;
-	}
-
-	// ── 06 games & tournaments ─────────────────────────────────────────────
-
-	function gamesHtml(engagement) {
-		const en = engagement || {};
-		const games = en.games || {};
-		const tournaments = en.tournaments || {};
-		const trend = Array.isArray(en.trend) ? en.trend : [];
-		const topActivities = Array.isArray(en.topActivities) ? en.topActivities : [];
-		const hasTrend = trend.some((pt) => pt.games || pt.tournaments);
-		const trendMax = Math.max(1, ...trend.map((pt) => Math.max(pt.games || 0, pt.tournaments || 0)));
-		const trendGranularity = trend[0] && String(trend[0].period || '').length === 7 ? 'month' : 'week';
-
-		const trendHtml = hasTrend
-			? `<div class="teacher-overview__trend-bars">${trend
-					.map(
-						(point) =>
-							`<div class="teacher-overview__trend-col" title="${esc(point.label)} — ${point.games} game session(s), ${point.tournaments} tournament entry(ies)">
-								<span class="teacher-overview__trend-fill teacher-overview__trend-fill--game" style="height:${Math.max(
-									2,
-									Math.round(((point.games || 0) / trendMax) * 100),
-								)}%"></span>
-								<span class="teacher-overview__trend-fill teacher-overview__trend-fill--tour" style="height:${Math.max(
-									2,
-									Math.round(((point.tournaments || 0) / trendMax) * 100),
-								)}%"></span>
-								<span class="teacher-overview__trend-label">${esc(point.label)}</span>
-							</div>`,
-					)
-					.join('')}</div>
-				${chartLegend([
-					{ label: 'Games', tone: 'exam' },
-					{ label: 'Tournaments', tone: 'training' },
-				])}`
-			: emptyState('No game activity', 'No game session or tournament entry in this period.');
-
-		const activitiesHtml = topActivities.length
-			? `<ul class="teacher-overview__list">${topActivities
-					.slice(0, 5)
-					.map(
-						(activity) => `<li>
-							<div class="teacher-overview__list-main">
-								${esc(activity.name)}
-								<span class="badge badge-blue">${activity.type === 'game' ? 'Game' : 'Tournament'}</span>
-							</div>
-							<div class="teacher-overview__list-side">${fmtCount(activity.participants)} participant(s)<br>${fmtCount(
-								activity.completions,
-							)} completed</div>
-						</li>`,
-					)
-					.join('')}</ul>`
-			: emptyState('No activity', 'No game or tournament activity in this period.');
-
-		return `<div class="teacher-overview__panel-stack">
-			<div class="teacher-overview__summary">
-				${summaryItem('Game sessions', fmtCount(games.sessions), `${fmtCount(games.students)} student(s)`)}
-				${summaryItem('Game participation', fmtPct(games.participationRate), 'engagement only')}
-				${summaryItem('Tournament entries', fmtCount(tournaments.entries), `${fmtCount(tournaments.students)} student(s)`)}
-				${summaryItem('Active tournaments', fmtCount(tournaments.active), 'open or running')}
-			</div>
-			${panel(
-				'Engagement trend',
-				`Game sessions and tournament entries per ${trendGranularity}.`,
-				trendHtml,
-			)}
-			${panel(
-				'Most engaging activities',
-				'Ranked by participants — engagement, never academic ranking.',
-				activitiesHtml,
-			)}
-			${unavailableNote((en.unavailable || {}).ranking)}
-		</div>`;
-	}
-
-	// ── 07 insights ────────────────────────────────────────────────────────
-
-	function insightsSection(insights) {
-		const list = Array.isArray(insights) ? insights : [];
-		if (!list.length) {
-			return emptyState('No insight yet', 'Insights appear once enough activity is recorded in the period.');
-		}
-		return `<div class="teacher-overview__insights">
-			${list
-				.map(
-					(insight) => `<article class="teacher-overview__insight teacher-overview__insight--${esc(
-						insight.severity || 'info',
-					)}">
-						<div class="teacher-overview__insight-head">
-							${severityBadge(insight.severity)}
-							<span class="text-muted text-xs">${esc(insight.scope || '')}</span>
+					(insight) => `<article class="ta-insight ta-insight--${esc(insight.severity || 'info')}">
+						<div class="ta-insight__head">
+							<span class="ta-insight__domain">${esc(insight.domain || 'overview')}</span>
+							<span class="ta-insight__scope">${esc(insight.scope || '')}</span>
 						</div>
 						<h4>${esc(insight.observation)}</h4>
-						<p class="teacher-overview__insight-metric">${esc(insight.metric)}</p>
-						<div class="teacher-overview__insight-foot">
+						<p class="ta-insight__metric">${esc(insight.metric)}</p>
+						<div class="ta-insight__foot">
 							<span class="text-muted text-xs">${esc(insight.target || '')}</span>
 							${registerLink(insight.link, insight.action || 'Open', 'btn btn-secondary btn-sm')}
 						</div>
 					</article>`,
 				)
 				.join('')}
+		</div>`;
+	}
+
+	function emergencyHtml(insights) {
+		const list = (Array.isArray(insights) ? insights : []).filter(
+			(item) => item.severity === 'high' || item.severity === 'medium',
+		);
+		return insightCards(list, true);
+	}
+
+	function educationalInsightsHtml(insights) {
+		const list = (Array.isArray(insights) ? insights : []).filter(
+			(item) => item.severity === 'positive' || item.severity === 'info',
+		);
+		return insightCards(list, false);
+	}
+
+	// ── 02 class comparison ────────────────────────────────────────────────
+
+	function progressHtml(progress, attention) {
+		const p = progress || {};
+		const rows = Array.isArray(p.classComparison) ? p.classComparison : [];
+		const byClass = Array.isArray(p.attentionByClass)
+			? p.attentionByClass
+			: Array.isArray(attention && attention.byClass)
+				? attention.byClass
+				: [];
+		const evolution = p.performanceEvolution || {};
+		const participation = p.participationEvolution || {};
+
+		const means = chartOrEmpty(
+			T.barChart({
+				rows,
+				value: (row) => row.avg20,
+				max: 20,
+				threshold: 10,
+				label: (row) => row.className,
+				display: (value) => fmt20(value),
+				tone: (row) => (row.avg20 == null ? 'muted' : row.avg20 < 10 ? 'danger' : 'success'),
+				ariaLabel: 'Average examination score by class',
+			}),
+			'No class comparison',
+			'No formal exam result was recorded in this period.',
+		);
+		const meansLegend = T.legend([
+			{ label: 'Class average /20', tone: 'primary' },
+			{ label: 'Pass line 10/20', tone: 'danger' },
+		]);
+
+		const passSplit =
+			rows.length > 0
+				? `${T.legend([
+						{ label: 'At or above 10/20', tone: 'success' },
+						{ label: 'Below 10/20', tone: 'danger' },
+					])}
+					${T.groupedBarChart({
+						rows,
+						series: [
+							{ key: 'studentsAbove10', label: 'At or above 10/20', tone: 'success' },
+							{ key: 'studentsBelow10', label: 'Below 10/20', tone: 'danger' },
+						],
+						label: (row) => row.className,
+						ariaLabel: 'Students above and below 10 out of 20 by class',
+					})}`
+				: emptyState('No pass split', 'No tested student in this period.');
+
+		const attentionRows = byClass
+			.map((row) => {
+				const both = Number(row.both) || 0;
+				return {
+					classId: row.classId,
+					className: row.className,
+					academicOnly: Math.max(0, (Number(row.academic) || 0) - both),
+					engagementOnly: Math.max(0, (Number(row.engagement) || 0) - both),
+					both,
+					total: Number(row.total) || 0,
+				};
+			})
+			.filter((row) => row.total > 0);
+		const attentionChart =
+			attentionRows.length > 0
+				? `${T.legend([
+						{ label: 'Academic only', tone: 'warning' },
+						{ label: 'Engagement only', tone: 'info' },
+						{ label: 'Both', tone: 'danger' },
+					])}
+					${T.stackedBarChart({
+						rows: attentionRows,
+						segments: [
+							{ key: 'academicOnly', label: 'Academic only', tone: 'warning' },
+							{ key: 'engagementOnly', label: 'Engagement only', tone: 'info' },
+							{ key: 'both', label: 'Academic and engagement', tone: 'danger' },
+						],
+						label: (row) => row.className,
+						valueText: (row) => `${row.total} student(s)`,
+						ariaLabel: 'Students requiring attention by class and reason',
+					})}`
+				: emptyState(
+						'No student requires attention',
+						'No academic or engagement threshold is crossed in this period.',
+					);
+
+		const evolutionPoints = Array.isArray(evolution.points) ? evolution.points : [];
+		const validEvolution = evolutionPoints.filter((point) => point.avg20 != null).length;
+		const progression =
+			validEvolution >= 2
+				? `${T.legend([
+						{ label: 'Selected period', tone: 'primary' },
+						...(evolution.comparable ? [{ label: 'Previous period', tone: 'muted' }] : []),
+					])}
+					${T.lineChart({
+						points: evolutionPoints,
+						previousPoints: evolution.previousPoints || [],
+						valueKey: 'avg20',
+						max: 20,
+						threshold: 10,
+						ariaLabel: 'Average examination score progression',
+					})}
+					${T.note
+						? T.note(
+								`Average per ${evolution.granularity || 'period'}. ${
+									evolution.direction
+										? `Direction: ${evolution.direction}.`
+										: 'Direction needs more valid periods.'
+								}`,
+							)
+						: ''}`
+				: emptyState(
+						'Not enough examination results to chart progression',
+						'A progression needs at least two periods with valid formal exam attempts.',
+					);
+
+		const participationPoints = Array.isArray(participation.points)
+			? participation.points
+			: [];
+		const activityChart = participationPoints.some(
+			(point) => point.examAttempts || point.trainingAttempts,
+		)
+			? `${T.legend([
+					{ label: 'Exam attempts', tone: 'primary' },
+					{ label: 'Training attempts', tone: 'info' },
+				])}
+				${T.columnChart({
+					points: participationPoints,
+					series: [
+						{ key: 'examAttempts', label: 'Exam attempts', tone: 'primary' },
+						{ key: 'trainingAttempts', label: 'Training attempts', tone: 'info' },
+					],
+					labelKey: 'label',
+					ariaLabel: 'Exam and training activity per period',
+				})}`
+			: emptyState('No learning activity', 'No exam or training attempt was recorded in this period.');
+
+		return `<div class="ta-stack">
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel('Class means', 'Average formal exam score (/20). The pass line is 10/20.', `${means}${meansLegend}`)}
+				${chartPanel(
+					'Students above / below 10 out of 20',
+					'Per-student average across the period, grouped by class.',
+					passSplit,
+				)}
+			</div>
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel(
+					'Students requiring attention',
+					'Academic and engagement difficulties are counted separately.',
+					attentionChart,
+				)}
+				${chartPanel(
+					'Learning progression',
+					'Average exam score per period against the previous equivalent period.',
+					progression,
+				)}
+			</div>
+			${chartPanel(
+				'Activity engagement',
+				`Attempts per ${participation.granularity || 'period'} — practice volume, not achievement.`,
+				activityChart,
+			)}
+		</div>`;
+	}
+
+	// ── 03 learning insights ───────────────────────────────────────────────
+
+	function learningHtml(progress) {
+		const p = progress || {};
+		const subjectRows = Array.isArray(p.subjectPerformance) ? p.subjectPerformance : [];
+		const evolution = p.performanceEvolution || {};
+		const tve = p.trainingVsExam || {};
+		const training = tve.training || {};
+		const exam = tve.exam || {};
+		const classes = Array.isArray(p.classComparison) ? p.classComparison : [];
+
+		const subjects = chartOrEmpty(
+			T.barChart({
+				rows: subjectRows,
+				value: (row) => row.avg20,
+				max: 20,
+				threshold: 10,
+				label: (row) => row.subjectName,
+				display: (value) => fmt20(value),
+				tone: (row) => (row.avg20 == null ? 'muted' : row.avg20 < 10 ? 'danger' : 'success'),
+				ariaLabel: 'Average examination score by subject',
+			}),
+			'No subject comparison',
+			'Exam results could not be attributed to a subject in this period.',
+		);
+
+		const contextRows = [
+			{ label: 'Training', avg20: training.avg20, sample: training.sample, students: training.students },
+			{
+				label: 'Formal examinations',
+				avg20: exam.avg20,
+				sample: exam.sample,
+				students: exam.students,
+			},
+		];
+		const context = T.barChart({
+			rows: contextRows,
+			value: (row) => row.avg20,
+			max: 20,
+			threshold: 10,
+			label: (row) => row.label,
+			display: (value) => fmt20(value),
+			tone: (row) => (row.label === 'Training' ? 'info' : 'primary'),
+			ariaLabel: 'Training average compared with formal examination average',
+		});
+
+		const reliable = classes.filter((row) => row.reliable);
+		const spread =
+			reliable.length >= 2
+				? Math.round((reliable[0].avg20 - reliable[reliable.length - 1].avg20) * 10) / 10
+				: null;
+		const strongestSubject = subjectRows.length
+			? subjectRows.slice().sort((a, b) => b.avg20 - a.avg20)[0]
+			: null;
+		const weakestSubject = subjectRows.length ? subjectRows[0] : null;
+
+		const direction =
+			evolution.direction === 'improving'
+				? 'Improving'
+				: evolution.direction === 'declining'
+					? 'Declining'
+					: evolution.direction === 'stable'
+						? 'Stable'
+						: 'Not comparable';
+
+		const metrics = `<div class="ta-metrics">
+			${metric('Learning direction', direction, evolution.granularity ? `per ${evolution.granularity}` : '')}
+			${metric(
+				'Change across period',
+				evolution.change == null
+					? '—'
+					: `${evolution.change > 0 ? '+' : ''}${trimNumber(evolution.change)} pts`,
+				'first vs last valid period',
+			)}
+			${metric(
+				'Class spread',
+				spread == null ? '—' : `${trimNumber(spread)} pts`,
+				reliable.length ? `${reliable.length} reliable class(es)` : 'not enough reliable classes',
+			)}
+			${metric(
+				'Strongest subject',
+				strongestSubject ? strongestSubject.subjectName : '—',
+				strongestSubject ? fmt20(strongestSubject.avg20) : 'no subject result',
+			)}
+			${metric(
+				'Weakest subject',
+				weakestSubject ? weakestSubject.subjectName : '—',
+				weakestSubject ? fmt20(weakestSubject.avg20) : 'no subject result',
+			)}
+		</div>`;
+
+		return `<div class="ta-stack">
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel(
+					'Subject performance',
+					'Average formal exam score by subject — lowest first.',
+					subjects,
+				)}
+				${chartPanel(
+					'Training vs examination',
+					'Two different assessment contexts; a gap is a cue to investigate, never proof of mastery.',
+					context,
+				)}
+			</div>
+			${chartPanel('Learning direction', 'A summary of the evidence behind the charts above.', metrics)}
+			${tve.note ? `<p class="ta-note text-muted">${esc(tve.note)}</p>` : ''}
+		</div>`;
+	}
+
+	// ── 04 courses & subjects insights ─────────────────────────────────────
+
+	function coursesHtml(content) {
+		const c = content || {};
+		const training = c.training || {};
+		const published = Number((c.publishedCourses || {}).value) || 0;
+		const draft = Number((c.draftCourses || {}).value) || 0;
+		const chapters = Array.isArray(c.chapters) ? c.chapters : [];
+		const most = Array.isArray(c.mostPracticed) ? c.mostPracticed : [];
+		const least = Array.isArray(c.leastPracticed) ? c.leastPracticed : [];
+
+		const statusDonut =
+			published + draft > 0
+				? `${T.donut({
+						segments: [
+							{ label: 'Published', value: published, tone: 'success' },
+							{ label: 'Draft', value: draft, tone: 'warning' },
+						],
+						centerValue: String(published + draft),
+						centerLabel: 'courses',
+						ariaLabel: 'Published and draft courses',
+					})}
+					${T.legend([
+						{ label: `Published ${published}`, tone: 'success' },
+						{ label: `Draft ${draft}`, tone: 'warning' },
+					])}`
+				: emptyState('No course', 'No course exists in the selected scope.');
+
+		const participationRing = T.ring({
+			value: training.participationRate,
+			max: 100,
+			label: 'Training participation',
+			sublabel: `${fmtCount(training.students)} student(s)`,
+			tone:
+				training.participationRate == null
+					? 'muted'
+					: training.participationRate >= 60
+						? 'success'
+						: training.participationRate >= 30
+							? 'warning'
+							: 'danger',
+		});
+
+		const practiceChart = (rows, emptyTitle, emptyMessage) => {
+			if (!rows.length) return emptyState(emptyTitle, emptyMessage);
+			return `${T.barChart({
+				rows,
+				value: (row) => row.practicingStudents,
+				label: (row) => row.name,
+				display: (value) => `${fmtCount(value)} student(s)`,
+				tone: 'primary',
+				ariaLabel: 'Practising students per course',
+			})}
+			${T.legend([{ label: 'Students who practised a chapter', tone: 'primary' }])}`;
+		};
+
+		const chapterChart =
+			chapters.length > 0
+				? `${T.barChart({
+						rows: chapters.slice(0, 6),
+						value: (row) => row.errorRate,
+						max: 100,
+						threshold: 50,
+						label: (row) => row.name,
+						display: (value) => fmtPct(value),
+						tone: (row) =>
+							row.severity === 'high' ? 'danger' : row.severity === 'medium' ? 'warning' : 'success',
+						ariaLabel: 'Error rate per chapter',
+					})}
+					${T.legend([
+						{ label: 'High priority', tone: 'danger' },
+						{ label: 'Watch', tone: 'warning' },
+						{ label: 'Healthy', tone: 'success' },
+					])}`
+				: emptyState('No chapter data', 'No answered question in your courses during this period.');
+
+		const metrics = `<div class="ta-metrics">
+			${metric('Training attempts', fmtCount(training.attempts), `${fmtCount(training.attemptsPerStudent)} per active student`)}
+			${metric('Training average', fmt20(training.avg20), 'practice only — never academic ranking')}
+			${metric('Participating students', fmtCount(training.students), `${fmtPct(training.participationRate)} of your students`)}
+		</div>`;
+
+		return `<div class="ta-stack">
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel('Course status', 'Published courses are visible to students.', statusDonut)}
+				${chartPanel('Practice coverage', 'Share of your students who practised a course chapter.', `${participationRing}${metrics}`)}
+			</div>
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel(
+					'Most practised',
+					'Courses whose chapters students actually worked on.',
+					practiceChart(most, 'No practice recorded', 'No course was practised in this period.'),
+				)}
+				${chartPanel(
+					'Least practised',
+					'Published courses with the least practice — a candidate for a reminder.',
+					practiceChart(least, 'No published course', 'No published course in this scope.'),
+				)}
+			</div>
+			${chartPanel(
+				'Chapter difficulty',
+				'Observed error rate from real training and exam answers. The 50% line marks a priority chapter.',
+				chapterChart,
+			)}
+			${c.unavailable && c.unavailable.completion ? `<p class="ta-note text-muted">${esc(c.unavailable.completion)}</p>` : ''}
+		</div>`;
+	}
+
+	// ── 05 questions insights ──────────────────────────────────────────────
+
+	function mixDonut(items, ariaLabel) {
+		const list = (Array.isArray(items) ? items : []).filter((item) => Number(item.count) > 0);
+		if (!list.length) return '';
+		const tones = ['primary', 'info', 'violet', 'success', 'warning', 'danger', 'muted'];
+		const segments = list.map((item, index) => ({
+			label: item.key || 'Unspecified',
+			value: Number(item.count) || 0,
+			tone: tones[index % tones.length],
+		}));
+		const total = segments.reduce((sum, segment) => sum + segment.value, 0);
+		return `${T.donut({
+			segments,
+			centerValue: String(total),
+			centerLabel: 'questions',
+			ariaLabel,
+		})}
+		${T.legend(
+			segments.map((segment) => ({
+				label: `${segment.label} ${segment.value}`,
+				tone: segment.tone,
+			})),
+		)}`;
+	}
+
+	function questionsHtml(questions) {
+		const q = questions || {};
+		const coverage = q.coverage || {};
+		const summary = q.summary || {};
+		const hardest = Array.isArray(q.hardestQuestions) ? q.hardestQuestions : [];
+		const bySubject = Array.isArray(q.bySubject) ? q.bySubject : [];
+
+		const assignmentRing = T.ring({
+			value: coverage.assignmentRate,
+			max: 100,
+			label: 'Used in an exam',
+			sublabel: `${fmtCount(coverage.examAssigned)} / ${fmtCount(coverage.total)}`,
+			tone: (coverage.assignmentRate || 0) >= 60 ? 'success' : 'warning',
+		});
+		const practiceRing = T.ring({
+			value: coverage.practiceRate,
+			max: 100,
+			label: 'Answered by students',
+			sublabel: `${fmtCount(coverage.practised)} / ${fmtCount(coverage.total)}`,
+			tone: (coverage.practiceRate || 0) >= 60 ? 'success' : 'warning',
+		});
+
+		const coverageMetrics = `<div class="ta-metrics">
+			${metric('Question bank', fmtCount(coverage.total), `${fmtCount(coverage.uncategorised)} without a chapter`)}
+			${metric('Never used', fmtCount(coverage.untouched), 'neither exam-assigned nor practised')}
+			${metric('Struggling questions', fmtCount((summary.struggling || {}).value), `below ${fmtPct((q.thresholds || {}).passPercent)} correct`)}
+			${metric('Strong questions', fmtCount((summary.strong || {}).value), 'at least 75% correct')}
+		</div>`;
+
+		const typeMix = chartOrEmpty(
+			mixDonut(q.typeMix, 'Question types'),
+			'No question type',
+			'No question exists in the selected scope.',
+		);
+		const difficultyMix = chartOrEmpty(
+			mixDonut(q.difficultyMix, 'Author-declared difficulty'),
+			'No declared difficulty',
+			'Questions have no difficulty metadata.',
+		);
+
+		const subjectChart = chartOrEmpty(
+			T.barChart({
+				rows: bySubject,
+				value: (row) => row.count,
+				label: (row) => row.subjectName,
+				display: (value) => `${fmtCount(value)} q.`,
+				tone: 'violet',
+				ariaLabel: 'Questions per subject',
+			}),
+			'No subject distribution',
+			'No question is attached to a subject.',
+		);
+
+		const hardestChart = hardest.length
+			? `${T.barChart({
+					rows: hardest.slice(0, 5),
+					value: (row) => row.correctRate,
+					max: 100,
+					threshold: 50,
+					label: (row) => row.text || 'Question',
+					display: (value) => fmtPct(value),
+					tone: (row) => ((row.correctRate ?? 100) < 50 ? 'danger' : 'warning'),
+					ariaLabel: 'Lowest observed correct rate per question',
+				})}
+				${T.legend([
+					{ label: 'Correct rate', tone: 'danger' },
+					{ label: 'Pass line 50%', tone: 'muted' },
+				])}
+				<p class="ta-note text-muted">${esc(
+					`Observed over at least ${fmtCount((q.thresholds || {}).minAttempts)} answers. Author difficulty is never substituted.`,
+				)}</p>`
+			: emptyState(
+					'Not enough answers to rank questions',
+					'A question needs several real answers before it appears here.',
+				);
+
+		return `<div class="ta-stack">
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel(
+					'Bank coverage',
+					'Assignment and practice coverage of the question bank.',
+					`<div class="ta-metrics">${assignmentRing}${practiceRing}</div>${coverageMetrics}`,
+				)}
+				${chartPanel('Question types', 'Composition of the bank by question type.', typeMix)}
+			</div>
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel(
+					'Author-declared difficulty',
+					'How authors labelled the bank. Observed performance is shown separately.',
+					difficultyMix,
+				)}
+				${chartPanel('Questions per subject', 'Where the bank is concentrated.', subjectChart)}
+			</div>
+			${chartPanel(
+				'Hardest questions',
+				'Lowest observed correct rate — a review candidate, not a judgement on the author.',
+				hardestChart,
+			)}
+			${q.unavailable && q.unavailable.difficulty ? `<p class="ta-note text-muted">${esc(q.unavailable.difficulty)}</p>` : ''}
+		</div>`;
+	}
+
+	// ── 06 score distribution ──────────────────────────────────────────────
+
+	function distributionHtml(exams, glance) {
+		const e = exams || {};
+		const g = glance || {};
+		const distribution = Array.isArray(e.distribution) ? e.distribution : [];
+		const summary = e.summary || {};
+		const avg = summary.avg20 || {};
+		const success = summary.successRate || {};
+		const certification = g.certificationRate || {};
+
+		const histogram = chartOrEmpty(
+			T.histogram({ buckets: distribution, ariaLabel: 'Distribution of formal exam scores out of 20' }),
+			'No score distribution',
+			'No valid formal exam result in this period.',
+		);
+		const histogramLegend = T.legend([{ label: 'Valid exam attempts', tone: 'primary' }]);
+
+		const rings = `<div class="ta-metrics">
+			${T.ring({
+				value: success.value,
+				max: 100,
+				label: 'Exam success',
+				sublabel: `${fmtCount(success.passed)} / ${fmtCount(success.total)} attempts`,
+				tone: (success.value || 0) >= 50 ? 'success' : 'danger',
+			})}
+			${T.ring({
+				value: certification.value,
+				max: 100,
+				label: 'Certification',
+				sublabel: 'students at or above 10/20',
+				tone: (certification.value || 0) >= 50 ? 'success' : 'warning',
+			})}
+			${T.ring({
+				value: avg.value,
+				max: 20,
+				label: 'Average score',
+				sublabel: `${fmtCount(avg.sample)} attempt(s)`,
+				tone: (avg.value || 0) >= 10 ? 'success' : 'danger',
+			})}
+		</div>`;
+
+		const metrics = `<div class="ta-metrics">
+			${metric('Completed exams', fmtCount((summary.completed || {}).value), 'in the selected period')}
+			${metric('Assessed students', fmtCount((g.assessedStudents || {}).value), `${fmtPct((g.assessedStudents || {}).rate)} of your students`)}
+			${metric('Certified students', fmtCount((g.certifiedStudents || {}).value), 'at or above 10/20')}
+			${metric('Below 10/20', fmtCount((g.failedExamStudents || {}).value), 'assessed students')}
+		</div>`;
+
+		return `<div class="ta-stack">
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel(
+					'Score distribution',
+					'Share of valid formal attempts by /20 band. Training and games are excluded.',
+					`${histogram}${histogramLegend}`,
+				)}
+				${chartPanel('Assessment health', 'Success, certification and average score.', rings)}
+			</div>
+			${chartPanel('Assessment totals', 'Evidence behind the distribution and health rings.', metrics)}
+			${(e.unavailable && e.unavailable.schedule) ? `<p class="ta-note text-muted">${esc(e.unavailable.schedule)}</p>` : ''}
+		</div>`;
+	}
+
+	// ── 07 educational engagement ──────────────────────────────────────────
+
+	function engagementHtml(engagement) {
+		const en = engagement || {};
+		const games = en.games || {};
+		const tournaments = en.tournaments || {};
+		const trend = Array.isArray(en.trend) ? en.trend : [];
+		const topActivities = Array.isArray(en.topActivities) ? en.topActivities : [];
+		const activeClasses = Array.isArray(en.activeClasses) ? en.activeClasses : [];
+
+		const trendChart = trend.some((point) => point.games || point.tournaments)
+			? `${T.legend([
+					{ label: 'Game sessions', tone: 'violet' },
+					{ label: 'Tournament entries', tone: 'info' },
+				])}
+				${T.columnChart({
+					points: trend,
+					series: [
+						{ key: 'games', label: 'Game sessions', tone: 'violet' },
+						{ key: 'tournaments', label: 'Tournament entries', tone: 'info' },
+					],
+					labelKey: 'label',
+					ariaLabel: 'Game sessions and tournament entries over time',
+				})}`
+			: emptyState('No game activity', 'No game session or tournament entry in this period.');
+
+		const activitiesChart = topActivities.length
+			? T.barChart({
+					rows: topActivities,
+					value: (row) => row.participants,
+					label: (row) => `${row.name} · ${row.type === 'game' ? 'Game' : 'Tournament'}`,
+					display: (value) => `${fmtCount(value)} participant(s)`,
+					tone: (row) => (row.type === 'game' ? 'violet' : 'info'),
+					ariaLabel: 'Most engaging activities by participants',
+				})
+			: emptyState('No activity', 'No game or tournament activity in this period.');
+
+		const classesChart = activeClasses.length
+			? T.barChart({
+					rows: activeClasses,
+					value: (row) => row.students,
+					label: (row) => row.className,
+					display: (value) => `${fmtCount(value)} student(s)`,
+					tone: 'info',
+					ariaLabel: 'Participating students per class',
+				})
+			: emptyState('No participating class', 'No class recorded engagement in this period.');
+
+		const metrics = `<div class="ta-metrics">
+			${metric('Game sessions', fmtCount(games.sessions), `${fmtCount(games.students)} student(s)`)}
+			${metric('Game participation', fmtPct(games.participationRate), `${fmtCount(games.completed)} completed`)}
+			${metric('Tournament entries', fmtCount(tournaments.entries), `${fmtCount(tournaments.students)} student(s)`)}
+			${metric('Active tournaments', fmtCount(tournaments.active), 'open or running')}
+		</div>`;
+
+		return `<div class="ta-stack">
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel('Engagement trend', 'Game sessions and tournament entries per period.', trendChart)}
+				${chartPanel('Top activities', 'Ranked by participants — engagement, never academic ranking.', activitiesChart)}
+			</div>
+			<div class="dashboard-charts-grid ta-grid--2">
+				${chartPanel('Participation by class', 'Students who played at least one game or tournament.', classesChart)}
+				${chartPanel('Engagement totals', 'Evidence behind the engagement charts.', metrics)}
+			</div>
+			${en.unavailable && en.unavailable.ranking ? `<p class="ta-note text-muted">${esc(en.unavailable.ranking)}</p>` : ''}
 		</div>`;
 	}
 
@@ -1434,6 +1480,19 @@
 			load({ force: true });
 			return;
 		}
+		const clearChip = target.closest('[data-tov-clear-filter]');
+		if (clearChip) {
+			const key = clearChip.getAttribute('data-tov-clear-filter');
+			if (key === 'class') state.filters.classIds = [];
+			if (key === 'subject') state.filters.subjectIds = [];
+			if (key === 'period') {
+				state.filters.period = 'month';
+				state.filters.from = '';
+				state.filters.to = '';
+			}
+			load({ force: true });
+			return;
+		}
 		if (target.closest('[data-tov-clear]')) {
 			clearFilters();
 			return;
@@ -1445,12 +1504,6 @@
 			state.filters.to = to ? to.value : '';
 			if (!state.filters.from || !state.filters.to) return;
 			load({ force: true });
-			return;
-		}
-		const attentionFilter = target.closest('[data-tov-attention-filter]');
-		if (attentionFilter) {
-			state.attentionFilter = attentionFilter.getAttribute('data-tov-attention-filter');
-			render();
 		}
 	}
 
@@ -1481,11 +1534,6 @@
 				return;
 			}
 			load({ force: true });
-			return;
-		}
-		if (target.id === 'tovAttentionSort') {
-			state.attentionSort = target.value;
-			render();
 		}
 	}
 
@@ -1495,6 +1543,15 @@
 		load,
 		refresh: () => load({ force: true }),
 		clearFilters,
+		// Read-only snapshot so the per-tab analytics panels read the same
+		// class/subject/period scope as the Overview dashboard.
+		getFilters: () => ({
+			classIds: [...state.filters.classIds],
+			subjectIds: [...state.filters.subjectIds],
+			period: state.filters.period || 'month',
+			from: state.filters.period === 'custom' ? state.filters.from : '',
+			to: state.filters.period === 'custom' ? state.filters.to : '',
+		}),
 		open: (link) => openLink(link),
 	};
 

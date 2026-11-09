@@ -15,6 +15,7 @@ import { LoginSchema, ChangePasswordSchema } from '../../shared/schemas/user.sch
 import { ROLES } from '../../shared/constants.js';
 import { requireRole } from '../middleware/role.js';
 import { getContainer } from '../container.js';
+import { getTeacherClassIds } from './users.routes.js';
 
 const router = Router();
 
@@ -103,6 +104,22 @@ router.post('/login', authLimiter, validate(LoginSchema), async (req, res, next)
 		const resolvedPortal =
 			normalizePortal(portal) || (user.role === 'student' ? 'student' : 'admin');
 		res.cookie(refreshCookieName(resolvedPortal), refreshToken, REFRESH_COOKIE_OPTIONS);
+
+		// Sign-ins are part of the school activity feed (admin sees everyone,
+		// teachers see their own + their students'). Best-effort by design.
+		try {
+			const { auditSvc } = getContainer();
+			await auditSvc.log({
+				schoolId: user.school_id,
+				actorId: user.id,
+				entityType: 'auth',
+				entityId: user.id,
+				action: 'login',
+				ip: req.ip,
+				userAgent: req.headers['user-agent'],
+			});
+		} catch (_) { /* audit must never block login */ }
+
 		res.json({ user, accessToken });
 	} catch (err) {
 		next(err);
@@ -236,16 +253,35 @@ router.get('/session', refreshLimiter, requireAuth, async (req, res, next) => {
 	}
 });
 
-// GET /api/v1/auth/sessions/live — school-wide blocking sign-ins (admin
-// rescue view for stuck "already signed in" accounts). Lists every user of
-// the caller's school holding at least one live refresh token, newest
-// first. Token hashes are never exposed. Without this, an admin cannot
-// discover WHO is blocked — login sessions are not device rows, so the
-// Classroom Devices table never shows them.
-router.get('/sessions/live', requireAuth, enforceTenant, requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
+// GET /api/v1/auth/sessions/live — signed-in sessions visible to the caller.
+// Admins get the whole school (rescue view for stuck "already signed in"
+// accounts); teachers get themselves plus students of their assigned
+// classes, which is what Classroom Devices needs to nest a student's session
+// under their machine. Token hashes are never exposed.
+// `?include=idle` widens the feed to every non-revoked, unexpired session:
+// Classroom Devices needs it to keep showing a machine's signed-in users
+// after a tab has been idle past the 30-minute blocking window.
+router.get('/sessions/live', requireAuth, enforceTenant, requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), async (req, res, next) => {
 	try {
-		const { authSvc } = getContainer();
-		res.json(await authSvc.listLiveSessions(req.schoolId));
+		const { authSvc, repo } = getContainer();
+		const includeIdle = String(req.query?.include || '').toLowerCase() === 'idle';
+		if (req.user.role !== ROLES.TEACHER) {
+			return res.json(await authSvc.listLiveSessions(req.schoolId, { includeIdle }));
+		}
+		// Teacher isolation: never reveal another teacher's students or the
+		// school's staff accounts.
+		const classIds = await getTeacherClassIds(req.schoolId, req.user.id);
+		const { data: students } = await repo.getAll('users', {
+			filters: { school_id: req.schoolId, role: 'student' },
+			limit: 100000,
+		});
+		const allowed = [String(req.user.id)];
+		for (const s of students || []) {
+			if (s?.id && s.class_id && classIds.includes(String(s.class_id))) {
+				allowed.push(String(s.id));
+			}
+		}
+		res.json(await authSvc.listLiveSessions(req.schoolId, { includeIdle, userIds: allowed }));
 	} catch (err) {
 		next(err);
 	}

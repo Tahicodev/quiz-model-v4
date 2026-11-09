@@ -196,6 +196,55 @@ describe('staff devices', () => {
     expect(otherKeys).toContain('lab-pc-9');
   });
 
+  it('teacher sees an admin-owned machine hosting their student session', async () => {
+    // The shared lab PC was registered while the admin was signed in, so the
+    // row belongs to the admin even though the teacher's student uses it.
+    const lab = await prisma.device.create({
+      data: {
+        school_id: 'school-test',
+        device_key: 'admin-lab-pc',
+        last_ip: '10.0.0.5',
+        status: 'allowed',
+        assigned_user_id: 'user-test-admin',
+      },
+    });
+    const passwordHash = await bcrypt.hash('student123', 4);
+    const student = await prisma.user.create({
+      data: {
+        school_id: 'school-test',
+        username: 't1-student',
+        name: 'T1 Student',
+        password_hash: passwordHash,
+        role: 'student',
+        status: 'active',
+        class_id: class1Id,
+      },
+    });
+    await prisma.refreshToken.create({
+      data: {
+        user_id: student.id,
+        token_hash: 't1-student-hash-' + Date.now(),
+        expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
+        revoked: false,
+        ip_address: '10.0.0.5',
+        user_agent: 'Chrome',
+      },
+    });
+
+    const mine = await request(app)
+      .get('/api/v1/devices')
+      .set('Authorization', `Bearer ${teacher1Token}`);
+    expect(mine.status).toBe(200);
+    expect(mine.body.map((d) => d.device_key)).toContain('admin-lab-pc');
+
+    const other = await request(app)
+      .get('/api/v1/devices')
+      .set('Authorization', `Bearer ${teacher2Token}`);
+    expect(other.status).toBe(200);
+    expect(other.body.map((d) => d.device_key)).not.toContain('admin-lab-pc');
+    await prisma.device.delete({ where: { id: lab.id } });
+  });
+
   it('teachers cannot touch other scopes device rows', async () => {
     const row = await prisma.device.findFirst({
       where: { school_id: 'school-test', device_key: 'hicham-pc-1' },
@@ -211,6 +260,30 @@ describe('staff devices', () => {
       .send({ hostname: 'Hicham PC' });
     expect(renamed.status).toBe(200);
     expect(renamed.body.hostname).toBe('Hicham PC');
+  });
+
+  it('admin can forget a device', async () => {
+    const row = await prisma.device.create({
+      data: { school_id: 'school-test', device_key: 'forget-me', status: 'allowed' },
+    });
+    const res = await request(app)
+      .delete('/api/v1/devices/' + row.id)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(204);
+    const gone = await prisma.device.findUnique({ where: { id: row.id } });
+    expect(gone).toBeNull();
+  });
+
+  it('teacher cannot forget another scope device', async () => {
+    const row = await prisma.device.findFirst({
+      where: { school_id: 'school-test', device_key: 'hicham-pc-1' },
+    });
+    const res = await request(app)
+      .delete('/api/v1/devices/' + row.id)
+      .set('Authorization', `Bearer ${teacher2Token}`);
+    expect(res.status).toBe(403);
+    const still = await prisma.device.findUnique({ where: { id: row.id } });
+    expect(still).toBeTruthy();
   });
 
   it('admin can end sessions from the device-linked user', async () => {

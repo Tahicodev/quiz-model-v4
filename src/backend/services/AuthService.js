@@ -428,14 +428,19 @@ export class AuthService {
   }
 
   /**
-   * School-wide blocking sessions: every user of the school holding at
-   * least one LIVE refresh token (i.e. a login elsewhere would be rejected
-   * as "already signed in"). Powers the admin rescue view for stuck
-   * accounts — without it, an admin cannot discover WHO is blocked.
-   * Token hashes are never exposed.
+   * School-wide sessions: every user of the school holding at least one
+   * session token. By default only "live" tokens (active within the last
+   * 30 min) are returned — that is the blocking view: it answers WHO is
+   * blocking a new sign-in. Pass `{ includeIdle: true }` for the Classroom
+   * Devices panel, which needs every still-valid session (a tab that has
+   * been open but idle for an hour is still signed in, and its machine must
+   * show it). Token hashes are never exposed.
+   * @param {string} schoolId
+   * @param {{ includeIdle?: boolean, userIds?: string[] }} [options]
    * @returns {Promise<Array<{ user, sessions, blocking }>>}
    */
-  async listLiveSessions(schoolId) {
+  async listLiveSessions(schoolId, { includeIdle = false, userIds = null } = {}) {
+    const allowedIds = Array.isArray(userIds) ? new Set(userIds.map(String)) : null;
     const { data: users } = await this.#repo.getAll('users', {
       filters: { school_id: schoolId },
       limit: 100000,
@@ -448,26 +453,71 @@ export class AuthService {
     const nowMs = Date.now();
     const grouped = new Map();
     for (const t of tokens || []) {
-      if (!t?.user_id || !isTokenLive(t, nowMs)) continue;
+      if (!t?.user_id) continue;
+      const live = isTokenLive(t, nowMs);
+      if (!live) {
+        if (!includeIdle) continue;
+        if (new Date(t.expires_at).getTime() <= nowMs) continue;
+      }
       const user = byId.get(String(t.user_id));
       // Tenant-scoped: tokens whose user is outside this school (moved or
       // stale rows) never surface in another school's admin view.
       if (!user || String(user.school_id) !== String(schoolId)) continue;
+      // Caller-scoped feeds (teacher view) skip everyone outside the set.
+      if (allowedIds && !allowedIds.has(String(user.id))) continue;
       if (!grouped.has(user.id)) grouped.set(user.id, { user, sessions: [] });
       grouped.get(user.id).sessions.push({
         id: t.id,
         created_at: t.created_at,
         expires_at: t.expires_at,
-        live: true,
+        live,
         user_agent: t.user_agent || null,
         ip_address: t.ip_address || null,
       });
     }
+
+    // Refresh rotation deliberately mints fingerprint-free successors (that is
+    // how the rotation-grace replay is recognised), so an open tab's live
+    // token usually has no IP/user-agent at all. Without a fingerprint the
+    // Classroom Devices panel cannot tie the session to a machine. Backfill
+    // each such session from the user's most recent fingerprinted token —
+    // normally the login that started the same session lineage.
+    const fingerprints = new Map();
+    const missing = [...grouped.values()].filter(({ sessions }) =>
+      sessions.some((s) => !s.ip_address || !s.user_agent),
+    );
+    await Promise.all(
+      missing.map(async ({ user }) => {
+        const uid = String(user.id);
+        if (fingerprints.has(uid)) return;
+        const { data: rows } = await this.#repo.getAll('refresh_tokens', {
+          filters: { user_id: user.id },
+          orderBy: 'created_at',
+          direction: 'desc',
+          limit: 25,
+        });
+        const hit = (rows || []).find((r) => r?.ip_address || r?.user_agent);
+        if (!hit) return;
+        fingerprints.set(uid, {
+          ip_address: hit.ip_address || null,
+          user_agent: hit.user_agent || null,
+        });
+      }),
+    );
+    for (const { user, sessions } of grouped.values()) {
+      const fp = fingerprints.get(String(user.id));
+      if (!fp) continue;
+      for (const s of sessions) {
+        s.ip_address = s.ip_address || fp.ip_address;
+        s.user_agent = s.user_agent || fp.user_agent;
+      }
+    }
+
     return [...grouped.values()]
       .map(({ user, sessions }) => {
         const { password_hash, ...safe } = user;
         sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        return { user: safe, sessions, blocking: true };
+        return { user: safe, sessions, blocking: sessions.some((s) => s.live) };
       })
       .sort((a, b) => new Date(b.sessions[0].created_at) - new Date(a.sessions[0].created_at));
   }

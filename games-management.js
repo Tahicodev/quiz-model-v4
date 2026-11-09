@@ -3906,7 +3906,7 @@
 							? 'Watch Replay'
 							: 'Watch Lobby';
 				return `
-				<div class="game-list-card">
+				<div class="game-list-card" data-game-id="${escapeHtml(String(game.id || ''))}">
 					<div class="game-list-header">
 						<div>
 							<h4>${escapeHtml(game.name)}</h4>
@@ -6942,9 +6942,7 @@ function buildLobbyHtml(gameId) {
 		if (form) form.style.display = 'block';
 		const modal = byId('gamePresetModal');
 		if (!modal) return;
-		// Modal is authored inside a hidden ancestor (#aiGeneratorModal), so pull
-		// it up to <body> first or it can never render (same pattern as
-		// openResetDataModal/openQuickStart).
+		// Keep the modal at <body> level so no hidden ancestor can block it.
 		if (modal.parentElement && modal.parentElement !== document.body) {
 			document.body.appendChild(modal);
 		}
@@ -7686,7 +7684,7 @@ function buildLobbyHtml(gameId) {
 				? entry.roundAssignments.reduce((total, round) => total + (Array.isArray(round?.gameIds) ? round.gameIds.length : 0), 0)
 				: 0;
 			const isActive = status === 'active' || status === 'paused';
-			return `<article class="tournament-library-card ${isActive ? 'is-live' : ''}">
+			return `<article class="tournament-library-card ${isActive ? 'is-live' : ''}" data-tournament-id="${id}">
 				<div class="tournament-library-card-main">
 					<div class="tournament-library-card-heading">
 						<div><span class="arena-eyebrow">${escapeHtml(getTournamentModeLabel(entry.targetMode))}</span><h4>${escapeHtml(entry.name || 'Untitled tournament')}</h4></div>

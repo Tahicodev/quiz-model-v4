@@ -2407,7 +2407,7 @@ function renderRecentActivity() {
 				}
 				whatAction = rawVerb;
 				whatItem = itemLabel;
-				actionLink = `onclick="openTab(event, 'activity')" style="cursor: pointer;"`;
+				actionLink = `onclick="if(window.QuizNotifications){ window.QuizNotifications.openInbox(event); } else { openTab(event, 'notifications'); }" style="cursor: pointer;"`;
 			}
 
 			// Determine WHEN (humanized time with full date on hover)

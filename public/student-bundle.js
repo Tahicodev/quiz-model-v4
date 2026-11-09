@@ -19903,16 +19903,37 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (type === "result") {
           const classIds = getTeacherClassIds();
           if (!classIds.length) return false;
-          const classId = item.classId || "";
-          if (classId && classIds.includes(classId)) return true;
-          const className = item.class || item.className || "";
-          if (!className) return false;
-          const classes = safeJsonParse(
-            JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
-            []
-          );
-          const match = classes.find((c) => c.name === className);
-          return Boolean(match && classIds.includes(match.id));
+          const classId = item.classId || item.class_id || "";
+          if (classId && classIds.includes(String(classId))) return true;
+          const className = item.class || item.className || item.class_name || "";
+          if (className) {
+            const classes = safeJsonParse(
+              JSON.stringify(window.__DI_CONTAINER__.repo.getAll_sync("classes")),
+              []
+            );
+            const match = classes.find((c) => c.name === className);
+            if (match && classIds.includes(String(match.id))) return true;
+          }
+          const userId = item.userId || item.user_id || "";
+          if (userId) {
+            const users = window.__DI_CONTAINER__.repo.getAll_sync("users") || [];
+            const student = users.find(
+              (u) => String(u.id) === String(userId)
+            );
+            const studentClassId = student?.classId || student?.class_id || "";
+            if (studentClassId && classIds.includes(String(studentClassId))) {
+              return true;
+            }
+            const studentClassName = student?.className || student?.class_name || student?.class || "";
+            if (studentClassName) {
+              const classes = window.__DI_CONTAINER__.repo.getAll_sync("classes") || [];
+              const match = classes.find(
+                (c) => c.name === studentClassName
+              );
+              if (match && classIds.includes(String(match.id))) return true;
+            }
+          }
+          return false;
         }
       }
       if (isStudent()) {
@@ -21787,7 +21808,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           roleSelect.disabled = false;
         }
       }
-      if (statusSelect) statusSelect.value = user?.status || "active";
+      if (statusSelect) {
+        const status = String(user?.status || "active").toLowerCase();
+        statusSelect.value = status === "active" ? "active" : "disabled";
+      }
       if (studentNumberInput)
         studentNumberInput.value = user?.studentNumber || user?.numero || "";
       const teacherNumeroInput = document.getElementById("teacherNumeroField");
@@ -22069,7 +22093,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         name: updatedUser.name,
         title: updatedUser.title || null,
         role: updatedUser.role,
-        status: updatedUser.status || "active"
+        // The backend only knows active | inactive | suspended; the UI's
+        // "disabled" is the local label for a suspended account.
+        status: ["disabled", "inactive", "suspended"].includes(
+          String(updatedUser.status || "active").toLowerCase()
+        ) ? "suspended" : "active"
       };
       if (password) payload.password = password;
       if (updatedUser.classId) payload.class_id = updatedUser.classId;
@@ -22092,6 +22120,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           }
           if (serverUser && serverUser.id) {
             updatedUser.id = serverUser.id;
+            updatedUser.status = ["suspended", "inactive", "disabled"].includes(
+              String(serverUser.status || "").toLowerCase()
+            ) ? "disabled" : "active";
             updatedUser.classId = serverUser.class_id || updatedUser.classId || "";
             updatedUser.studentNumber = serverUser.numero || updatedUser.studentNumber || "";
             updatedUser.email = serverUser.email || "";
@@ -22159,6 +22190,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       closeUserModal();
       renderUsersTable();
+      if (typeof window.refreshRosterAfterMutation === "function") {
+        window.refreshRosterAfterMutation();
+      } else if (typeof window.renderStudentRosterTable === "function") {
+        window.renderStudentRosterTable();
+      }
       showToast2("User saved successfully", "success");
     }
     async function toggleUserStatus(userId) {
@@ -22197,6 +22233,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         window.syncUsersToClients();
       }
       renderUsersTable();
+      if (typeof window.refreshRosterAfterMutation === "function") {
+        window.refreshRosterAfterMutation();
+      }
       showToast2(
         `User ${user.status === "disabled" ? "suspended" : "activated"}`,
         "success"

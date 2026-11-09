@@ -1,12 +1,11 @@
 /**
  * tests/integration/auth-sessions-live.test.js
  *
- * GET /api/v1/auth/sessions/live — school-wide blocking sign-ins.
+ * GET /api/v1/auth/sessions/live — signed-in sessions visible to the caller.
  *
- * Login sessions are not device rows, so a stuck "already signed in"
- * account never appears in Classroom Devices. This endpoint makes every
- * blocking session discoverable so an admin can end it (DELETE
- * /users/:id/sessions) and unblock the next login.
+ * Admins get the school-wide blocking view; teachers get themselves plus
+ * students of their assigned classes, which powers the nested session panel
+ * in Classroom Devices. Token hashes are never exposed.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -18,6 +17,7 @@ let app;
 let prisma;
 let adminToken;
 let teacherToken;
+let teacherId;
 let studentId;
 let studentToken;
 
@@ -46,7 +46,7 @@ beforeAll(async () => {
     },
   });
   studentId = student.id;
-  await prisma.user.create({
+  const teacher = await prisma.user.create({
     data: {
       school_id: 'school-test',
       username: 'session-teacher',
@@ -56,6 +56,7 @@ beforeAll(async () => {
       status: 'active',
     },
   });
+  teacherId = teacher.id;
 
   adminToken = await login('admin', 'admin123');
   teacherToken = await login('session-teacher', 'student123');
@@ -67,7 +68,7 @@ afterAll(async () => {
 });
 
 describe('GET /api/v1/auth/sessions/live', () => {
-  it('lists the blocking session, never token hashes; teachers get 403', async () => {
+  it('lists the blocking session, never token hashes; teachers see only themselves', async () => {
     const res = await request(app)
       .get('/api/v1/auth/sessions/live')
       .set('Authorization', `Bearer ${adminToken}`);
@@ -82,10 +83,64 @@ describe('GET /api/v1/auth/sessions/live', () => {
     expect(entry.sessions.every((s) => s.live === true)).toBe(true);
     expect(JSON.stringify(res.body)).not.toContain('token_hash');
 
-    const forbidden = await request(app)
-      .get('/api/v1/auth/sessions/live')
+    // Teachers are allowed through, but the feed is scoped to their own
+    // classes — with no assignment yet that means only themselves.
+    const mine = await request(app)
+      .get('/api/v1/auth/sessions/live?include=idle')
       .set('Authorization', `Bearer ${teacherToken}`);
-    expect(forbidden.status).toBe(403);
+    expect(mine.status).toBe(200);
+    const teacherIds = mine.body.map((e) => String(e.user?.id));
+    expect(teacherIds).toContain(String(teacherId));
+    expect(teacherIds).not.toContain(String(studentId));
+  });
+
+  it('teacher feed includes students of assigned classes only', async () => {
+    const passwordHash = await bcrypt.hash('student123', 4);
+    const mkClass = (name) =>
+      prisma.class.create({ data: { school_id: 'school-test', name } });
+    const klassA = await mkClass('Session Class A');
+    const klassB = await mkClass('Session Class B');
+    await prisma.setting.create({
+      data: {
+        school_id: 'school-test',
+        key: 'teacherClassAssignments',
+        value: JSON.stringify({ [teacherId]: [klassA.id] }),
+        visibility: 'admin',
+      },
+    });
+    const mkStudent = (username, classId) =>
+      prisma.user.create({
+        data: {
+          school_id: 'school-test',
+          username,
+          name: username,
+          password_hash: passwordHash,
+          role: 'student',
+          status: 'active',
+          class_id: classId,
+        },
+      });
+    const mineStudent = await mkStudent('class-a-student', klassA.id);
+    const otherStudent = await mkStudent('class-b-student', klassB.id);
+    for (const u of [mineStudent, otherStudent]) {
+      await prisma.refreshToken.create({
+        data: {
+          user_id: u.id,
+          token_hash: 'tok-' + u.id,
+          expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
+          revoked: false,
+        },
+      });
+    }
+
+    const res = await request(app)
+      .get('/api/v1/auth/sessions/live?include=idle')
+      .set('Authorization', `Bearer ${teacherToken}`);
+    expect(res.status).toBe(200);
+    const ids = res.body.map((e) => String(e.user?.id));
+    expect(ids).toContain(String(mineStudent.id));
+    expect(ids).not.toContain(String(otherStudent.id));
+    expect(JSON.stringify(res.body)).not.toContain('token_hash');
   });
 
   it('omits stale tokens and other schools', async () => {
@@ -141,6 +196,22 @@ describe('GET /api/v1/auth/sessions/live', () => {
     expect(ids).not.toContain(String(staleUser.id));
     expect(ids).not.toContain(String(outsider.id));
     expect(ids).toContain(String(studentId));
+  });
+
+  it('include=idle also returns still-valid sessions that no longer block', async () => {
+    const stale = await prisma.user.findFirst({
+      where: { school_id: 'school-test', username: 'stale-student' },
+    });
+    expect(stale).toBeTruthy();
+
+    const res = await request(app)
+      .get('/api/v1/auth/sessions/live?include=idle')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    const entry = res.body.find((e) => String(e.user?.id) === String(stale.id));
+    expect(entry).toBeTruthy();
+    expect(entry.blocking).toBe(false);
+    expect(entry.sessions.some((s) => s.live === false)).toBe(true);
   });
 
   it('admin revoke clears the list and unblocks the next login', async () => {

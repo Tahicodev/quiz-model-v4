@@ -64,6 +64,9 @@ function makeEl(over = {}) {
     querySelector: () => null,
     querySelectorAll: () => [],
     focus() {},
+    get options() {
+      return this.children;
+    },
     ...over,
   };
   let html = '';
@@ -670,7 +673,7 @@ describe('cross-tab jumps into the Subjects tab', () => {
     selectSubject(SUBJECT_MATH);
   });
 
-  it('creates a category in the first subject when the legacy pill is selected', () => {
+  it('creates a category in the first subject when the legacy pill is selected', async () => {
     const openedBefore = state.categoryModalOpens;
     vm.runInContext(
       `openCategoryModal = () => { window.openCategoryModalProbe(); };
@@ -678,7 +681,7 @@ describe('cross-tab jumps into the Subjects tab', () => {
       ctx,
     );
     selectSubject('__unassigned__');
-    vm.runInContext('createNewCategory()', ctx);
+    await vm.runInContext('createNewCategory()', ctx);
 
     expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe(SUBJECT_MATH);
     expect(state.categoryModalOpens).toBe(openedBefore + 1);
@@ -687,23 +690,30 @@ describe('cross-tab jumps into the Subjects tab', () => {
     selectSubject(SUBJECT_MATH);
   });
 
-  it('hands over to the subject creator when no subject exists yet', () => {
-    const toastsBefore = state.toasts.length;
+  it('opens the category form with a subject notice when no subject exists yet', async () => {
     const focusBefore = state.focused;
     const openedBefore = state.categoryModalOpens;
     const savedSubjects = state.subjects;
     try {
       state.subjects = [];
       vm.runInContext(
-        'categorySubjects = []; activeCategorySubjectId = ""; currentCategoryId = null;',
+        `categorySubjects = []; activeCategorySubjectId = ""; currentCategoryId = null;
+         openCategoryModal = () => { window.openCategoryModalProbe(); };
+         populateCategoryParentPicker = () => {};`,
         ctx,
       );
-      vm.runInContext('createNewCategory()', ctx);
+      await vm.runInContext('createNewCategory()', ctx);
 
-      expect(state.toasts[toastsBefore]).toContain('Add a subject first');
-      expect(els.subjectManagerModal.style.display).toBe('flex');
-      expect(state.focused).toBe(focusBefore + 1);
-      expect(state.categoryModalOpens).toBe(openedBefore);
+      // A category action must never silently create a subject pill; the form
+      // opens on the category flow and points at the inline subject creator.
+      expect(state.categoryModalOpens).toBe(openedBefore + 1);
+      expect(els.subjectManagerModal.style.display).toBe('none');
+      expect(state.focused).toBe(focusBefore);
+      expect(vm.runInContext('activeCategorySubjectId', ctx)).toBe('');
+      const notice = els.categoryForm.children
+        .map((child) => child.textContent)
+        .join(' ');
+      expect(notice).toContain('No subject exists yet');
     } finally {
       state.subjects = savedSubjects;
       vm.runInContext('window.SubjectsManagement.refresh();', ctx);

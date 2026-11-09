@@ -254,7 +254,7 @@
 			}
 		} catch (_) { ownerBadge = ''; }
 		return '' +
-			'<div class="kids-game-card">' +
+			'<div class="kids-game-card" data-kids-game-id="' + esc(String(game.id || '')) + '">' +
 			'<div class="kids-game-card-thumb" style="background:' + bg + '">' +
 			'<span class="kids-game-card-type-badge">' + meta.icon + ' ' + esc(meta.label) + '</span>' +
 			'<span class="kids-game-card-status ' + esc(status) + '">' + esc(status) + '</span>' +

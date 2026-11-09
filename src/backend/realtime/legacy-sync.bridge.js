@@ -22,6 +22,7 @@
 
 import { logger } from '../logger.js';
 import { getContainer } from '../container.js';
+import { listPresence, removePresence, upsertPresence } from './presence.registry.js';
 
 const STAFF_ROLES = new Set(['admin', 'teacher', 'super_admin']);
 
@@ -43,7 +44,6 @@ export function registerLegacySyncHandlers(io) {
 	// School-scoped sync cache so students connecting between pushes still get
 	// the last snapshot without a full bootstrap round trip.
 	const syncCache = new Map(); // schoolId -> { games?, users?, gamification?, session? }
-	const connectedClients = new Map();
 
 	function clientInfo(socket) {
 		const user = socket.data?.user || {};
@@ -75,10 +75,7 @@ export function registerLegacySyncHandlers(io) {
 	}
 
 	function broadcastClients(schoolId) {
-		const clients = [...connectedClients.values()].filter(
-			(client) =>
-				!schoolId || String(client.schoolId || '') === String(schoolId),
-		);
+		const clients = listPresence({ schoolId });
 		for (const candidate of io.sockets.sockets.values()) {
 			if (candidate.role !== 'admin') continue;
 			if (
@@ -93,8 +90,7 @@ export function registerLegacySyncHandlers(io) {
 		socket.data.connectedAt = new Date().toISOString();
 
 		socket.on('disconnect', () => {
-			const previous = connectedClients.get(socket.id);
-			connectedClients.delete(socket.id);
+			const previous = removePresence(socket.id);
 			if (previous) broadcastClients(previous.schoolId);
 		});
 
@@ -113,7 +109,7 @@ export function registerLegacySyncHandlers(io) {
 		// Staff presence: teachers'/admins' browsers join the live roster so
 		// Classroom Devices shows their machines (students still get the
 		// game-snapshot replays below, staff never do).
-		connectedClients.set(socket.id, clientInfo(socket));
+		upsertPresence(clientInfo(socket));
 			if (requestedRole === 'admin' && !isStaff) {
 				socket.emit('admin:auth:error', {
 					message: 'Admin access requires an admin or teacher account.',
@@ -196,7 +192,7 @@ export function registerLegacySyncHandlers(io) {
 						message: 'This device has been blocked by a teacher.',
 					});
 				} catch { /* socket already gone */ }
-				connectedClients.delete(socket.id);
+				removePresence(socket.id);
 				broadcastClients(schoolId);
 				socket.disconnect(true);
 				return;
@@ -208,7 +204,7 @@ export function registerLegacySyncHandlers(io) {
 				if (persisted.hostname) socket.data.deviceName = persisted.hostname;
 			}
 
-			connectedClients.set(socket.id, clientInfo(socket));
+			upsertPresence(clientInfo(socket));
 			broadcastClients(socket.data.user?.school_id);
 		});
 

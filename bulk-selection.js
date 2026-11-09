@@ -132,9 +132,12 @@
 				document.querySelectorAll(checkboxSelector(tableId)),
 			);
 			const visibleBoxes = allBoxes.filter(isVisible);
-			// Count checked among visible rows (mirrors question-tab UX where
-			// the bar reflects what the user can see/select).
-			const checkedBoxes = visibleBoxes.filter((cb) => cb.checked);
+			// Count every checked row, including rows hidden by a filter or
+			// moved to another page. The bar must never report "0 selected"
+			// while a hidden row is still selected (the bulk actions operate
+			// on the full selection).
+			const checkedBoxes = allBoxes.filter((cb) => cb.checked);
+			const visibleCheckedBoxes = checkedBoxes.filter(isVisible);
 			const selectedCount = checkedBoxes.length;
 
 			const countSpan = document.getElementById(cfg.countId);
@@ -159,14 +162,28 @@
 				}
 			}
 
+			const selectAllState = {
+				checked:
+					visibleBoxes.length > 0 &&
+					visibleCheckedBoxes.length === visibleBoxes.length,
+				indeterminate:
+					visibleCheckedBoxes.length > 0 &&
+					visibleCheckedBoxes.length < visibleBoxes.length,
+			};
 			const selectAll = document.getElementById(cfg.selectAllId);
 			if (selectAll) {
-				selectAll.checked =
-					visibleBoxes.length > 0 &&
-					selectedCount === visibleBoxes.length;
-				selectAll.indeterminate =
-					selectedCount > 0 && selectedCount < visibleBoxes.length;
+				selectAll.checked = selectAllState.checked;
+				selectAll.indeterminate = selectAllState.indeterminate;
 			}
+			// Mirror the header checkbox on alternate select-all controls
+			// (e.g. the mobile roster toolbar).
+			document
+				.querySelectorAll(`[data-bulk-select-all="${tableId}"]`)
+				.forEach((cb) => {
+					if (cb === selectAll) return;
+					cb.checked = selectAllState.checked;
+					cb.indeterminate = selectAllState.indeterminate;
+				});
 		} catch (e) {
 			console.error(`[bulk] updateBar(${tableId}) failed:`, e);
 		}

@@ -626,35 +626,22 @@ Generate now.`;
     }
   };
 
-  // ---------- open/close: the builder now lives as a tab of the AI Generator modal ----------
+  // ---------- open/close: the builder now lives as a tab of the AI Generator ----------
   function ensureGeneratorOpen() {
-    const modal = document.getElementById('aiGeneratorModal');
-    if (!modal) return null;
-    const isOpen =
-      modal.classList.contains('is-open') || modal.style.display === 'flex';
-    if (!isOpen) {
-      if (modal.parentElement !== document.body) {
-        document.body.appendChild(modal);
-      }
+    const page = document.getElementById('aiGeneratorPage');
+    if (!page) return null;
+    const pane = document.getElementById('questionsAIGeneratorPane');
+    const isOpen = pane ? !pane.classList.contains('hidden') : false;
+    if (!isOpen && typeof window.openAIGeneratorModal === 'function') {
+      // The generator is a detail page inside the Questions tab; let the
+      // canonical opener handle tab switching and reveals.
       try {
-        modal.inert = false;
-        modal.removeAttribute('inert');
-      } catch (_) {}
-      modal.style.setProperty('display', 'flex', 'important');
-      modal.style.setProperty('position', 'fixed', 'important');
-      modal.style.setProperty('inset', '0', 'important');
-      modal.style.setProperty('z-index', '2147483000', 'important');
-      modal.style.setProperty('opacity', '1', 'important');
-      modal.style.setProperty('visibility', 'visible', 'important');
-      modal.style.setProperty('pointer-events', 'auto', 'important');
-      modal.classList.add('is-open', 'active');
-      modal.setAttribute('aria-hidden', 'false');
-      modal.setAttribute('aria-modal', 'true');
-      modal.setAttribute('role', 'dialog');
-      document.documentElement.classList.add('modal-open');
-      document.body.classList.add('modal-open');
+        window.openAIGeneratorModal();
+      } catch (_) {
+        /* fall through with the existing node */
+      }
     }
-    return modal;
+    return page;
   }
 
   function syncBuilderInputs() {

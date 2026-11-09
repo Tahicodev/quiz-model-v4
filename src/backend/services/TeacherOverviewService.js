@@ -115,10 +115,18 @@ function extractAnswers(answersJson) {
 export class TeacherOverviewService {
   #repo;
   #m;
+  #listPresence;
 
-  /** @param {import('../infrastructure/PrismaRepository.js').PrismaRepository} repo */
-  constructor(repo) {
+  /**
+   * @param {import('../infrastructure/PrismaRepository.js').PrismaRepository} repo
+   * @param {{ listPresence?: Function }} [options]
+   *   listPresence reads the live socket registry. Injected so the service
+   *   stays testable and has no hard dependency on the realtime layer; when
+   *   absent, presence reports zero rather than guessing.
+   */
+  constructor(repo, { listPresence = null } = {}) {
     this.#repo = repo;
+    this.#listPresence = typeof listPresence === 'function' ? listPresence : () => [];
     this.#m = {
       user: repo.modelFor('users'),
       class: repo.modelFor('classes'),
@@ -134,6 +142,8 @@ export class TeacherOverviewService {
       result: repo.modelFor('results'),
       game: repo.modelFor('games'),
       gameSession: repo.modelFor('game_sessions'),
+      kidsGame: repo.modelFor('kidsGames'),
+      kidsGameSession: repo.modelFor('kidsGameSessions'),
       tournament: repo.modelFor('tournaments'),
       tournamentEntry: repo.modelFor('tournament_entries'),
       setting: repo.modelFor('settings'),
@@ -254,7 +264,14 @@ export class TeacherOverviewService {
       user: studentScope,
     };
 
-    const [examRowsRaw, prevExamRowsRaw, activityRowsRaw] = await Promise.all([
+    // "This week" is a rolling 7-day window ending now. It is queried
+    // independently of the reporting period so the weakest-class-this-week KPI
+    // stays correct even when the selected period is older or shorter.
+    const weekStart = new Date(now);
+    weekStart.setUTCHours(0, 0, 0, 0);
+    weekStart.setUTCDate(weekStart.getUTCDate() - 6);
+
+    const [examRowsRaw, prevExamRowsRaw, activityRowsRaw, weekExamRowsRaw] = await Promise.all([
       this.#m.result.findMany({
         where: { ...examWhere, ...dateWindow('date_taken') },
         select: { id: true, user_id: true, exam_id: true, score: true, date_taken: true },
@@ -272,6 +289,12 @@ export class TeacherOverviewService {
       this.#m.result.findMany({
         where: { ...activityWhere, ...dateWindow('date_taken') },
         select: { id: true, user_id: true, exam_id: true, mode: true, score: true, date_taken: true },
+        orderBy: { date_taken: 'desc' },
+        take: MAX_RESULT_ROWS,
+      }),
+      this.#m.result.findMany({
+        where: { ...examWhere, date_taken: { gte: weekStart, lte: now } },
+        select: { id: true, user_id: true, exam_id: true, score: true, date_taken: true },
         orderBy: { date_taken: 'desc' },
         take: MAX_RESULT_ROWS,
       }),
@@ -303,6 +326,7 @@ export class TeacherOverviewService {
     // filter already guarantees it, but a stale class_id must never leak).
     const examRows = examRowsRaw.filter((r) => studentById.has(String(r.user_id)));
     const prevExamRows = prevExamRowsRaw.filter((r) => studentById.has(String(r.user_id)));
+    const weekExamRows = weekExamRowsRaw.filter((r) => studentById.has(String(r.user_id)));
     const activityRows = activityRowsRaw.filter((r) => studentById.has(String(r.user_id)));
     const answerRows = answerRowsRaw
       .filter((r) => studentById.has(String(r.user_id)))
@@ -311,7 +335,9 @@ export class TeacherOverviewService {
     const trainingRows = activityRows.filter((r) => r.mode === RESULT_MODE.TRAINING);
 
     // ── exam metadata, questions and subject attribution ──────────────────
-    const examIds = [...new Set(examRows.map((r) => String(r.exam_id)).filter(Boolean))];
+    const examIds = [...new Set(
+      [...examRows, ...weekExamRows].map((r) => String(r.exam_id)).filter(Boolean),
+    )];
     const examsById = new Map();
     if (examIds.length) {
       const examRowsMeta = await this.#findByIds(this.#m.exam, examIds, {
@@ -396,18 +422,54 @@ export class TeacherOverviewService {
       courseClassesByCourse.get(cid).add(String(row.class_id));
     }
 
-    // Categories the teacher actually owns content for: their own categories,
-    // their courses' chapters, and the categories of their own questions.
-    const teacherQuestionCats = await this.#m.question.findMany({
-      where: { school_id: schoolId, created_by: String(teacherId), category_id: { not: null } },
-      select: { category_id: true },
+    // Categories the teacher actually uses: their own categories, their
+    // courses' chapters, their authored questions, and the questions used in
+    // exams they created. A teacher who adopts a shared exam still gets question
+    // analytics for it instead of an empty bank.
+    let teacherQuestions = await this.#m.question.findMany({
+      where: { school_id: schoolId, created_by: String(teacherId) },
+      select: {
+        id: true,
+        text: true,
+        type: true,
+        answer: true,
+        options_json: true,
+        category_id: true,
+        difficulty: true,
+        created_at: true,
+      },
+      take: MAX_RESULT_ROWS,
     });
+    const myExamQuestionRows = await this.#m.examQuestion.findMany({
+      where: { exam: { school_id: schoolId, creator_id: String(teacherId) } },
+      select: { question_id: true },
+      take: MAX_RESULT_ROWS,
+    });
+    const myExamQuestionIds = new Set(myExamQuestionRows.map((r) => String(r.question_id)));
+    const ownedQuestionIds = new Set(teacherQuestions.map((q) => String(q.id)));
+    const missingExamQuestionIds = [...myExamQuestionIds].filter((id) => !ownedQuestionIds.has(id));
+    if (missingExamQuestionIds.length) {
+      const adoptedQuestions = await this.#findByIds(this.#m.question, missingExamQuestionIds, {
+        id: true,
+        text: true,
+        type: true,
+        answer: true,
+        options_json: true,
+        category_id: true,
+        difficulty: true,
+        created_at: true,
+      });
+      teacherQuestions = teacherQuestions.concat(adoptedQuestions).slice(0, MAX_RESULT_ROWS);
+    }
     const scopeCategoryIds = new Set(categoryRows.filter((c) => String(c.created_by || '') === String(teacherId)).map((c) => String(c.id)));
     for (const set of courseCategoryIds.values()) set.forEach((id) => scopeCategoryIds.add(id));
-    teacherQuestionCats.forEach((q) => scopeCategoryIds.add(String(q.category_id)));
+    teacherQuestions.forEach((q) => {
+      if (q.category_id) scopeCategoryIds.add(String(q.category_id));
+    });
 
     // ── games & tournaments (engagement only) ─────────────────────────────
-    const [gameSessions, tournamentEntries] = await Promise.all([
+    const studentIds = students.map((s) => String(s.id));
+    const [gameSessions, tournamentEntries, kidsGameSessions] = await Promise.all([
       this.#m.gameSession.findMany({
         where: {
           school_id: schoolId,
@@ -426,11 +488,35 @@ export class TeacherOverviewService {
         select: { tournament_id: true, user_id: true, completed: true, score: true, registered_at: true },
         take: MAX_RESULT_ROWS,
       }),
+      // Kids games are the active game system: play lives in KidsGameSession,
+      // not in the legacy GameSession table.
+      studentIds.length
+        ? this.#m.kidsGameSession.findMany({
+            where: {
+              school_id: schoolId,
+              user_id: { in: studentIds },
+              ...dateWindow('created_at'),
+            },
+            select: {
+              game_id: true,
+              user_id: true,
+              tournament_id: true,
+              completed: true,
+              score: true,
+              created_at: true,
+            },
+            take: MAX_RESULT_ROWS,
+          })
+        : [],
     ]);
 
     const gameIds = [...new Set(gameSessions.map((s) => String(s.game_id)))];
     const tournamentIds = [...new Set(tournamentEntries.map((e) => String(e.tournament_id)))];
-    const [games, tournaments] = await Promise.all([
+    const kidsGameIds = [...new Set(kidsGameSessions.map((s) => String(s.game_id)))];
+    const kidsTournamentIds = [
+      ...new Set(kidsGameSessions.map((s) => s.tournament_id).filter(Boolean).map(String)),
+    ];
+    const [games, tournaments, kidsGames] = await Promise.all([
       gameIds.length
         ? this.#findByIds(this.#m.game, gameIds, {
             id: true,
@@ -442,8 +528,8 @@ export class TeacherOverviewService {
             created_at: true,
           })
         : [],
-      tournamentIds.length
-        ? this.#findByIds(this.#m.tournament, tournamentIds, {
+      tournamentIds.length || kidsTournamentIds.length
+        ? this.#findByIds(this.#m.tournament, [...tournamentIds, ...kidsTournamentIds], {
             id: true,
             name: true,
             status: true,
@@ -453,9 +539,19 @@ export class TeacherOverviewService {
             ends_at: true,
           })
         : [],
+      kidsGameIds.length
+        ? this.#findByIds(this.#m.kidsGame, kidsGameIds, {
+            id: true,
+            name: true,
+            subject: true,
+            game_type: true,
+            status: true,
+          })
+        : [],
     ]);
     const gamesById = new Map(games.map((g) => [String(g.id), g]));
     const tournamentsById = new Map(tournaments.map((t) => [String(t.id), t]));
+    const kidsGamesById = new Map(kidsGames.map((g) => [String(g.id), g]));
 
     // ── assigned active exams (no schedule field → awaiting completion) ───
     const assignedExamIds = await this.#assignedExamIds(schoolId, classIds);
@@ -522,7 +618,7 @@ export class TeacherOverviewService {
         status: { in: ['open', 'active'] },
         OR: [
           { creator_id: String(teacherId) },
-          { id: { in: [...new Set(tournamentEntries.map((e) => String(e.tournament_id)))] } },
+          { id: { in: [...new Set([...tournamentIds, ...kidsTournamentIds])] } },
         ],
       },
       select: { id: true },
@@ -548,8 +644,11 @@ export class TeacherOverviewService {
       subjects: subjectRows,
       subjectById,
       scopeCategoryIds,
+      teacherQuestions,
+      myExamQuestionIds,
       examRows,
       prevExamRows,
+      weekExamRows,
       activityRows,
       allActivityRows: activityRows,
       trainingRows,
@@ -564,15 +663,19 @@ export class TeacherOverviewService {
       courseCategoryIds,
       courseClassesByCourse,
       gamesById,
+      kidsGamesById,
       tournamentsById,
       activeTournamentIds,
       gameSessions,
+      kidsGameSessions,
       tournamentEntries,
       activeAssignedExams,
       examClassMap,
       completionByExam,
       resultRowsCapped:
-        examRowsRaw.length >= MAX_RESULT_ROWS || activityRowsRaw.length >= MAX_RESULT_ROWS,
+        examRowsRaw.length >= MAX_RESULT_ROWS ||
+        weekExamRowsRaw.length >= MAX_RESULT_ROWS ||
+        activityRowsRaw.length >= MAX_RESULT_ROWS,
       answerRowsCapped: answerRowsRaw.length >= ANSWER_SAMPLE_CAP,
     };
 
@@ -636,6 +739,7 @@ export class TeacherOverviewService {
       const examSubjectOf = (row) => String(examSubjects.get(String(row.exam_id))?.subjectId || '');
       ctx.examRows = examRows.filter((r) => allowed.has(examSubjectOf(r)));
       ctx.prevExamRows = prevExamRows.filter((r) => allowed.has(examSubjectOf(r)));
+      ctx.weekExamRows = weekExamRows.filter((r) => allowed.has(examSubjectOf(r)));
       ctx.answerRows = answerRows.filter((r) =>
         r.mode === RESULT_MODE.EXAM
           ? allowed.has(examSubjectOf(r))
@@ -666,6 +770,7 @@ export class TeacherOverviewService {
     const content = this.#sectionContent(ctx);
     const exams = this.#sectionExams(ctx);
     const engagement = this.#sectionEngagement(ctx);
+    const questions = this.#sectionQuestions(ctx);
 
     glance.needingAttention = {
       value: attention.summary.total,
@@ -675,7 +780,33 @@ export class TeacherOverviewService {
       basis: 'period',
     };
 
-    const insights = this.#buildInsights({ glance, progress, attention, content, exams, engagement, ctx });
+    // Class comparison and attention share the same class buckets so the
+    // dashboard can chart "students requiring attention" beside class means
+    // without a second pass over the students.
+    const attentionByClass = new Map(attention.byClass.map((row) => [row.classId, row]));
+    progress.attentionByClass = attention.byClass;
+    for (const cls of progress.classComparison) {
+      const bucket = attentionByClass.get(cls.classId);
+      cls.attention = bucket
+        ? {
+            total: bucket.total,
+            academic: bucket.academic,
+            engagement: bucket.engagement,
+            both: bucket.both,
+          }
+        : { total: 0, academic: 0, engagement: 0, both: 0 };
+    }
+
+    const insights = this.#buildInsights({
+      glance,
+      progress,
+      attention,
+      content,
+      exams,
+      engagement,
+      questions,
+      ctx,
+    });
 
     return {
       meta: {
@@ -715,6 +846,7 @@ export class TeacherOverviewService {
           examSchedule: 'Exams have no scheduled date field; assigned exams awaiting completion replace a calendar of upcoming exams.',
           trainingAbandonment: 'Only formal exam sessions are recorded as sessions; abandoned training attempts are not measurable.',
           gameAcademicRanking: 'Game and tournament scores are engagement data and are never merged into academic averages.',
+          questionDifficulty: 'Question difficulty is authored metadata, not a measured value; observed difficulty comes only from real student answers.',
         },
         sample: {
           resultRowsCapped: ctx.resultRowsCapped,
@@ -723,7 +855,93 @@ export class TeacherOverviewService {
           answerRowsCap: ANSWER_SAMPLE_CAP,
         },
       },
-      sections: { glance, progress, attention, content, exams, engagement, insights },
+      sections: { glance, progress, attention, content, exams, engagement, questions, insights },
+    };
+  }
+
+  // ── live presence ────────────────────────────────────────────────────────
+
+  /**
+   * Students/classes currently connected, scoped to the teacher's classes.
+   * Presence is socket state, not history: it is read from the injected
+   * registry and never inferred from last_login or result timestamps.
+   */
+  async getPresence({ schoolId, teacherId, filters = {}, now = new Date() }) {
+    const assignedClassIds = await this.#teacherClassIds(schoolId, teacherId);
+    const allowedClasses = assignedClassIds.length
+      ? await this.#m.class.findMany({
+          where: { school_id: schoolId, id: { in: assignedClassIds } },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        })
+      : [];
+    const requested = Array.isArray(filters.classIds)
+      ? filters.classIds.map(String).filter(Boolean)
+      : [];
+    const selected = requested.length
+      ? allowedClasses.filter((c) => requested.includes(String(c.id)))
+      : allowedClasses;
+    const classIds = selected.map((c) => String(c.id));
+
+    if (!classIds.length) {
+      return {
+        generatedAt: now.toISOString(),
+        studentsOnline: 0,
+        classesOnline: 0,
+        totalClasses: 0,
+        totalStudents: 0,
+        onlineRate: null,
+        byClass: [],
+        scope: { classIds: [] },
+      };
+    }
+
+    const students = await this.#m.user.findMany({
+      where: { school_id: schoolId, role: 'student', class_id: { in: classIds } },
+      select: { id: true, class_id: true },
+    });
+    const studentById = new Map(students.map((s) => [String(s.id), s]));
+    const classTotals = new Map();
+    for (const student of students) {
+      const cid = String(student.class_id || '');
+      classTotals.set(cid, (classTotals.get(cid) || 0) + 1);
+    }
+
+    const onlineUsers = new Map();
+    for (const client of this.#listPresence({ schoolId }) || []) {
+      if (client.schoolId && String(client.schoolId) !== String(schoolId)) continue;
+      if (String(client.role || '').toLowerCase() !== 'student') continue;
+      if (client.kind && client.kind !== 'student') continue;
+      const uid = client.userId ? String(client.userId) : '';
+      if (!uid || !studentById.has(uid) || onlineUsers.has(uid)) continue;
+      onlineUsers.set(uid, String(studentById.get(uid).class_id || ''));
+    }
+
+    const onlineByClass = new Map();
+    for (const cid of onlineUsers.values()) {
+      if (!cid) continue;
+      onlineByClass.set(cid, (onlineByClass.get(cid) || 0) + 1);
+    }
+
+    const byClass = selected.map((c) => {
+      const cid = String(c.id);
+      return {
+        classId: cid,
+        className: c.name,
+        online: onlineByClass.get(cid) || 0,
+        total: classTotals.get(cid) || 0,
+      };
+    });
+
+    return {
+      generatedAt: now.toISOString(),
+      studentsOnline: onlineUsers.size,
+      classesOnline: byClass.filter((c) => c.online > 0).length,
+      totalClasses: byClass.length,
+      totalStudents: students.length,
+      onlineRate: pct(onlineUsers.size, students.length),
+      byClass,
+      scope: { classIds },
     };
   }
 
@@ -1011,6 +1229,22 @@ export class TeacherOverviewService {
     const comparable = examSample >= MIN_AVG_SAMPLE && prevSample >= MIN_AVG_SAMPLE && avg20 != null && prevAvg20 != null;
     const delta = comparable ? round2(avg20 - prevAvg20) : null;
 
+    // Student-level certification: a student is certified when their own
+    // average across the period's formal attempts reaches 10/20. A single
+    // failing attempt is not the same as a failing student, and a student with
+    // no attempt is "not assessed" — never silently counted as failed.
+    let assessedStudents = 0;
+    let certifiedStudents = 0;
+    let failedExamStudents = 0;
+    for (const metric of metrics.values()) {
+      if (!metric.examAttempts) continue;
+      assessedStudents += 1;
+      if (metric.avg20 != null && metric.avg20 >= 10) certifiedStudents += 1;
+      else failedExamStudents += 1;
+    }
+    const neverAssessedStudents = Math.max(0, totalStudents - assessedStudents);
+    const notCertifiedStudents = failedExamStudents + neverAssessedStudents;
+
     return {
       totalStudents: {
         value: totalStudents,
@@ -1046,6 +1280,48 @@ export class TeacherOverviewService {
         basis: 'period',
         explanation: 'Distinct exams that produced at least one valid formal attempt in the period.',
       },
+      assessedStudents: {
+        value: assessedStudents,
+        total: totalStudents,
+        rate: pct(assessedStudents, totalStudents),
+        basis: 'period',
+        explanation: 'Students with at least one valid formal exam attempt in the selected period.',
+      },
+      certifiedStudents: {
+        value: certifiedStudents,
+        total: totalStudents,
+        rate: pct(certifiedStudents, totalStudents),
+        basis: 'period',
+        explanation: 'Students whose own average over the period reaches 10/20 or more.',
+      },
+      failedExamStudents: {
+        value: failedExamStudents,
+        total: assessedStudents,
+        basis: 'period',
+        explanation: 'Assessed students whose own average stays below 10/20.',
+      },
+      neverAssessedStudents: {
+        value: neverAssessedStudents,
+        total: totalStudents,
+        basis: 'period',
+        explanation: 'Students with no valid formal exam attempt in the selected period. They are not counted as failed.',
+      },
+      notCertifiedStudents: {
+        value: notCertifiedStudents,
+        total: totalStudents,
+        rate: pct(notCertifiedStudents, totalStudents),
+        failed: failedExamStudents,
+        neverAssessed: neverAssessedStudents,
+        basis: 'period',
+        explanation: 'Students still below the 10/20 certification line: assessed failures plus students never assessed.',
+      },
+      certificationRate: {
+        value: pct(certifiedStudents, totalStudents),
+        passed: certifiedStudents,
+        total: totalStudents,
+        basis: 'period',
+        explanation: 'Share of all students in scope who reach a 10/20 average. Never-assessed students count as not certified.',
+      },
       needingAttention: { value: 0, academic: 0, engagement: 0, both: 0, basis: 'period' },
     };
   }
@@ -1067,22 +1343,43 @@ export class TeacherOverviewService {
       const student = ctx.studentById.get(String(row.user_id));
       const cid = student ? String(student.class_id || '') : '';
       if (!cid) continue;
-      if (!classBuckets.has(cid)) classBuckets.set(cid, { scores: [], passed: 0, students: new Set() });
+      if (!classBuckets.has(cid)) {
+        classBuckets.set(cid, {
+          scores: [],
+          passed: 0,
+          students: new Set(),
+          byStudent: new Map(),
+        });
+      }
       const bucket = classBuckets.get(cid);
-      bucket.scores.push(Number(row.score) || 0);
+      const score = Number(row.score) || 0;
+      bucket.scores.push(score);
       if (isPass(row.score)) bucket.passed += 1;
-      bucket.students.add(String(row.user_id));
+      const uid = String(row.user_id);
+      bucket.students.add(uid);
+      if (!bucket.byStudent.has(uid)) bucket.byStudent.set(uid, { sum: 0, count: 0 });
+      const studentBucket = bucket.byStudent.get(uid);
+      studentBucket.sum += score;
+      studentBucket.count += 1;
     }
     const classComparison = [...classBuckets.entries()]
-      .map(([cid, bucket]) => ({
-        classId: cid,
-        className: ctx.classById.get(cid)?.name || 'Unassigned',
-        avg20: round2(avg(bucket.scores) / 5),
-        sample: bucket.scores.length,
-        students: bucket.students.size,
-        successRate: pct(bucket.passed, bucket.scores.length),
-        reliable: bucket.scores.length >= MIN_AVG_SAMPLE,
-      }))
+      .map(([cid, bucket]) => {
+        const studentMeans = [...bucket.byStudent.values()].map((s) => s.sum / s.count);
+        return {
+          classId: cid,
+          className: ctx.classById.get(cid)?.name || 'Unassigned',
+          avg20: round2(avg(bucket.scores) / 5),
+          sample: bucket.scores.length,
+          students: bucket.students.size,
+          successRate: pct(bucket.passed, bucket.scores.length),
+          reliable: bucket.scores.length >= MIN_AVG_SAMPLE,
+          passCount: bucket.passed,
+          failCount: bucket.scores.length - bucket.passed,
+          studentsAbove10: studentMeans.filter((mean) => isPass(mean)).length,
+          studentsBelow10: studentMeans.filter((mean) => !isPass(mean)).length,
+          attention: { total: 0, academic: 0, engagement: 0, both: 0 },
+        };
+      })
       .filter((c) => c.avg20 != null)
       .sort((a, b) => b.avg20 - a.avg20);
 
@@ -1123,10 +1420,17 @@ export class TeacherOverviewService {
       ? round2(avg(ctx.examRows.map((r) => Number(r.score) / 5)))
       : null;
 
+    // Best class for the selected scope: prefer a decision-worthy sample when
+    // one exists, otherwise report the leader with its reliability flag.
+    const reliableClasses = classComparison.filter((c) => c.reliable);
+    const bestClass = reliableClasses[0] || classComparison[0] || null;
+
     return {
       performanceEvolution,
       participationEvolution,
       classComparison,
+      bestClass,
+      weekComparison: this.#weekComparison(ctx),
       subjectPerformance,
       trainingVsExam: {
         training: {
@@ -1141,6 +1445,57 @@ export class TeacherOverviewService {
         },
         note: 'Training and examination attempts are different assessment contexts. A training/exam difference is a cue to investigate, never proof of mastery.',
       },
+    };
+  }
+
+  // Trailing 7-day class ranking, independent of the reporting period.
+  // Used for "weakest class this week" — a live teaching decision must not
+  // change because the teacher switched the dashboard period elsewhere.
+  #weekComparison(ctx) {
+    const end = new Date(ctx.now);
+    const start = new Date(ctx.now);
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - 6);
+
+    const buckets = new Map();
+    for (const row of ctx.weekExamRows || []) {
+      const student = ctx.studentById.get(String(row.user_id));
+      const cid = student ? String(student.class_id || '') : '';
+      if (!cid) continue;
+      if (!buckets.has(cid)) buckets.set(cid, { scores: [], passed: 0, students: new Set() });
+      const bucket = buckets.get(cid);
+      const score = Number(row.score) || 0;
+      bucket.scores.push(score);
+      if (isPass(row.score)) bucket.passed += 1;
+      bucket.students.add(String(row.user_id));
+    }
+
+    const classes = [...buckets.entries()]
+      .map(([cid, bucket]) => ({
+        classId: cid,
+        className: ctx.classById.get(cid)?.name || 'Unassigned',
+        avg20: round2(avg(bucket.scores) / 5),
+        sample: bucket.scores.length,
+        students: bucket.students.size,
+        successRate: pct(bucket.passed, bucket.scores.length),
+        reliable: bucket.scores.length >= MIN_AVG_SAMPLE,
+      }))
+      .filter((c) => c.avg20 != null)
+      .sort((a, b) => b.avg20 - a.avg20);
+
+    const eligible = classes.filter((c) => c.reliable);
+    const decisionSet = eligible.length ? eligible : classes;
+
+    return {
+      label: 'Last 7 days',
+      start: start.toISOString(),
+      end: end.toISOString(),
+      classes,
+      best: decisionSet[0] || null,
+      weakest: decisionSet.length ? decisionSet[decisionSet.length - 1] : null,
+      note: classes.length
+        ? 'Ranked on formal exam attempts recorded in the last 7 days; classes with fewer than 5 attempts are marked as a small sample.'
+        : 'No formal exam result was recorded in the last 7 days.',
     };
   }
 
@@ -1292,9 +1647,20 @@ export class TeacherOverviewService {
 
   #sectionAttention(ctx, metrics) {
     const rows = [];
+    const byClass = new Map();
     let academic = 0;
     let engagement = 0;
     let both = 0;
+
+    const classBucket = (cid, className) => {
+      if (!byClass.has(cid)) {
+        byClass.set(cid, { classId: cid, className, total: 0, academic: 0, engagement: 0, both: 0 });
+      }
+      return byClass.get(cid);
+    };
+    for (const cid of ctx.classIds) {
+      classBucket(String(cid), ctx.classById.get(String(cid))?.name || 'Unassigned');
+    }
 
     for (const student of ctx.students) {
       const metric = metrics.get(String(student.id));
@@ -1310,9 +1676,22 @@ export class TeacherOverviewService {
       const hasEngagement = (metric?.activityCount || 0) === 0;
       if (!hasAcademic && !hasDecline && !hasEngagement) continue;
 
-      if (hasAcademic || hasDecline) academic += 1;
-      if (hasEngagement) engagement += 1;
-      if ((hasAcademic || hasDecline) && hasEngagement) both += 1;
+      const studentClassId = String(student.class_id || '');
+      const bucket = classBucket(studentClassId, ctx.classById.get(studentClassId)?.name || 'Unassigned');
+      bucket.total += 1;
+
+      if (hasAcademic || hasDecline) {
+        academic += 1;
+        bucket.academic += 1;
+      }
+      if (hasEngagement) {
+        engagement += 1;
+        bucket.engagement += 1;
+      }
+      if ((hasAcademic || hasDecline) && hasEngagement) {
+        both += 1;
+        bucket.both += 1;
+      }
 
       const weakChapters = [...(metric?.chapterErrors.entries() || [])]
         .sort((a, b) => b[1].errorRate - a[1].errorRate)
@@ -1395,6 +1774,7 @@ export class TeacherOverviewService {
         both,
         shown: Math.min(rows.length, 50),
       },
+      byClass: [...byClass.values()].filter((row) => row.total > 0 || ctx.classIds.includes(row.classId)),
       rules: [
         'Academic: at least 2 valid formal exam attempts with an average below 10/20.',
         'Academic: a drop of at least 1.5 points (/20) versus the previous equivalent period.',
@@ -1586,6 +1966,211 @@ export class TeacherOverviewService {
       current = current.parent_id ? catById.get(String(current.parent_id)) : null;
     }
     return names.join(' › ');
+  }
+
+  // ── Section E2 — Question bank ──────────────────────────────────────────
+
+  #sectionQuestions(ctx) {
+    const selectedSubjects = new Set((ctx.selectedSubjectIds || []).map(String));
+    const subjectOf = (question) => {
+      const category = question.category_id ? ctx.catById.get(String(question.category_id)) : null;
+      return category?.subject_id ? String(category.subject_id) : '';
+    };
+    const inScope = (ctx.teacherQuestions || []).filter((question) => {
+      if (!selectedSubjects.size) return true;
+      return selectedSubjects.has(subjectOf(question));
+    });
+    const byId = new Map(inScope.map((q) => [String(q.id), q]));
+
+    // Observed performance uses real answers only, from formal exams and
+    // training in the reporting period. Authored difficulty is never treated
+    // as evidence of how students actually perform.
+    const stats = new Map();
+    for (const row of ctx.answerRows) {
+      for (const [rawQid, given] of Object.entries(row.answers)) {
+        const qid = String(rawQid);
+        if (!byId.has(qid)) continue;
+        if (given == null || String(given).trim() === '') continue;
+        const question = byId.get(qid);
+        if (!stats.has(qid)) {
+          stats.set(qid, {
+            attempts: 0,
+            correct: 0,
+            students: new Set(),
+            examAttempts: 0,
+            trainingAttempts: 0,
+          });
+        }
+        const stat = stats.get(qid);
+        stat.attempts += 1;
+        stat.students.add(String(row.user_id));
+        if (row.mode === RESULT_MODE.EXAM) stat.examAttempts += 1;
+        else stat.trainingAttempts += 1;
+        const decoded = decodeStoredAnswer(question);
+        const type = normalizeQuestionType(decoded);
+        if (isAnswerCorrect(given, decoded.answer, type)) stat.correct += 1;
+      }
+    }
+
+    const performanceAll = [...stats.entries()]
+      .map(([qid, stat]) => {
+        const question = byId.get(qid) || {};
+        const categoryId = question.category_id ? String(question.category_id) : '';
+        const category = categoryId ? ctx.catById.get(categoryId) : null;
+        const subjectId = category?.subject_id ? String(category.subject_id) : null;
+        return {
+          questionId: qid,
+          text: String(question.text || '').slice(0, 240),
+          type: question.type || null,
+          difficulty: question.difficulty || null,
+          categoryId: categoryId || null,
+          categoryName: category?.name || null,
+          subjectId,
+          subjectName: subjectId ? ctx.subjectById.get(subjectId)?.name || null : null,
+          attempts: stat.attempts,
+          correct: stat.correct,
+          correctRate: pct(stat.correct, stat.attempts),
+          errorRate: pct(stat.attempts - stat.correct, stat.attempts),
+          students: stat.students.size,
+          examAttempts: stat.examAttempts,
+          trainingAttempts: stat.trainingAttempts,
+        };
+      })
+      .filter((row) => row.text)
+      .sort((a, b) => b.attempts - a.attempts);
+
+    const graded = performanceAll.filter((row) => row.attempts >= MIN_QUESTION_ATTEMPTS);
+    const hardestQuestions = graded
+      .slice()
+      .sort((a, b) => (a.correctRate ?? 100) - (b.correctRate ?? 100))
+      .slice(0, 5);
+    const strongestQuestions = graded
+      .slice()
+      .sort((a, b) => (b.correctRate ?? 0) - (a.correctRate ?? 0))
+      .slice(0, 5);
+    const struggling = graded.filter(
+      (row) => row.correctRate != null && row.correctRate < PASS_PERCENT,
+    ).length;
+    const strong = graded.filter((row) => row.correctRate != null && row.correctRate >= 75).length;
+
+    const mix = (keyFn) => {
+      const counts = new Map();
+      for (const question of inScope) {
+        const key = keyFn(question) || 'unspecified';
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      return [...counts.entries()]
+        .map(([key, count]) => ({ key, count, pct: pct(count, inScope.length) }))
+        .sort((a, b) => b.count - a.count);
+    };
+
+    const subjectBuckets = new Map();
+    const chapterBuckets = new Map();
+    for (const question of inScope) {
+      const qid = String(question.id);
+      const stat = stats.get(qid);
+      const categoryId = question.category_id ? String(question.category_id) : '';
+      const category = categoryId ? ctx.catById.get(categoryId) : null;
+      const subjectId = category?.subject_id ? String(category.subject_id) : '';
+      if (subjectId) {
+        if (!subjectBuckets.has(subjectId)) {
+          subjectBuckets.set(subjectId, { subjectId, count: 0, practised: 0, struggling: 0 });
+        }
+        const bucket = subjectBuckets.get(subjectId);
+        bucket.count += 1;
+        if (stat) bucket.practised += 1;
+        if (stat && stat.attempts >= MIN_QUESTION_ATTEMPTS && stat.correct / stat.attempts < 0.5) {
+          bucket.struggling += 1;
+        }
+      }
+      if (categoryId) {
+        if (!chapterBuckets.has(categoryId)) {
+          chapterBuckets.set(categoryId, { categoryId, count: 0, practised: 0 });
+        }
+        const bucket = chapterBuckets.get(categoryId);
+        bucket.count += 1;
+        if (stat) bucket.practised += 1;
+      }
+    }
+
+    const bySubject = [...subjectBuckets.values()]
+      .map((bucket) => ({
+        ...bucket,
+        subjectName: ctx.subjectById.get(bucket.subjectId)?.name || 'Subject',
+      }))
+      .sort((a, b) => b.count - a.count);
+    const byChapter = [...chapterBuckets.values()]
+      .map((bucket) => {
+        const category = ctx.catById.get(bucket.categoryId);
+        return {
+          ...bucket,
+          name: category?.name || 'Chapter',
+          path: this.#categoryPath(bucket.categoryId, ctx.catById),
+          subjectId: category?.subject_id ? String(category.subject_id) : null,
+          courseId: ctx.categoryToCourse.get(bucket.categoryId) || null,
+        };
+      })
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const examAssigned = inScope.filter((question) =>
+      ctx.myExamQuestionIds.has(String(question.id)),
+    ).length;
+    const used = new Set();
+    for (const question of inScope) {
+      if (ctx.myExamQuestionIds.has(String(question.id))) used.add(String(question.id));
+    }
+    for (const qid of stats.keys()) used.add(qid);
+    const untouched = Math.max(0, inScope.length - used.size);
+
+    let createdInPeriod = null;
+    if (ctx.window.start && ctx.window.end) {
+      const start = ctx.window.start.getTime();
+      const end = ctx.window.end.getTime();
+      createdInPeriod = inScope.filter((question) => {
+        const at = new Date(question.created_at).getTime();
+        return Number.isFinite(at) && at >= start && at <= end;
+      }).length;
+    }
+
+    return {
+      summary: {
+        total: { value: inScope.length, basis: 'current-state' },
+        examAssigned: { value: examAssigned, basis: 'current-state' },
+        practised: { value: performanceAll.length, basis: 'period' },
+        untouched: { value: untouched, basis: 'current-state' },
+        struggling: { value: struggling, basis: 'period' },
+        strong: { value: strong, basis: 'period' },
+        createdInPeriod: { value: createdInPeriod, basis: 'period' },
+      },
+      typeMix: mix((question) => question.type),
+      difficultyMix: mix((question) => question.difficulty),
+      bySubject,
+      byChapter,
+      coverage: {
+        total: inScope.length,
+        categorised: inScope.filter((question) => question.category_id).length,
+        uncategorised: inScope.filter((question) => !question.category_id).length,
+        examAssigned,
+        practised: performanceAll.length,
+        untouched,
+        assignmentRate: pct(examAssigned, inScope.length),
+        practiceRate: pct(performanceAll.length, inScope.length),
+      },
+      // Bounded list for the tab table; counts above always cover the whole bank.
+      performance: performanceAll.slice(0, 200),
+      hardestQuestions,
+      strongestQuestions,
+      thresholds: {
+        minAttempts: MIN_QUESTION_ATTEMPTS,
+        passPercent: PASS_PERCENT,
+        strongPercent: 75,
+      },
+      unavailable: {
+        difficulty:
+          'Difficulty is author metadata; observed difficulty comes only from real student answers in the selected period.',
+      },
+    };
   }
 
   // ── Section F — Examinations ────────────────────────────────────────────
@@ -1830,8 +2415,18 @@ export class TeacherOverviewService {
   // ── Section G — Games & tournaments (engagement only) ───────────────────
 
   #sectionEngagement(ctx) {
-    const gameStudents = new Set(ctx.gameSessions.map((s) => String(s.user_id))).size;
-    const tournamentStudents = new Set(ctx.tournamentEntries.map((e) => String(e.user_id))).size;
+    const kidsSessions = Array.isArray(ctx.kidsGameSessions) ? ctx.kidsGameSessions : [];
+    const kidsGames = kidsSessions.filter((s) => !s.tournament_id);
+    const kidsTournamentSessions = kidsSessions.filter((s) => s.tournament_id);
+
+    const gameStudentIds = new Set([
+      ...ctx.gameSessions.map((s) => String(s.user_id)),
+      ...kidsGames.map((s) => String(s.user_id)).filter(Boolean),
+    ]);
+    const tournamentStudentIds = new Set([
+      ...ctx.tournamentEntries.map((e) => String(e.user_id)),
+      ...kidsTournamentSessions.map((s) => String(s.user_id)).filter(Boolean),
+    ]);
 
     const spanDays = ctx.window.start && ctx.window.end
       ? Math.max(1, Math.ceil((ctx.window.end.getTime() - ctx.window.start.getTime()) / 86400000))
@@ -1842,8 +2437,16 @@ export class TeacherOverviewService {
       const bucket = buckets.get(this.#bucketKey(session.joined_at, granularity));
       if (bucket) bucket.gameSessions = (bucket.gameSessions || 0) + 1;
     }
+    for (const session of kidsGames) {
+      const bucket = buckets.get(this.#bucketKey(session.created_at, granularity));
+      if (bucket) bucket.gameSessions = (bucket.gameSessions || 0) + 1;
+    }
     for (const entry of ctx.tournamentEntries) {
       const bucket = buckets.get(this.#bucketKey(entry.registered_at, granularity));
+      if (bucket) bucket.tournamentEntries = (bucket.tournamentEntries || 0) + 1;
+    }
+    for (const session of kidsTournamentSessions) {
+      const bucket = buckets.get(this.#bucketKey(session.created_at, granularity));
       if (bucket) bucket.tournamentEntries = (bucket.tournamentEntries || 0) + 1;
     }
     const trend = [...buckets.values()].map((b) => ({
@@ -1864,7 +2467,9 @@ export class TeacherOverviewService {
       b.attempts += 1;
     };
     ctx.gameSessions.forEach((s) => addClassActivity(s.user_id, 'game'));
+    kidsGames.forEach((s) => addClassActivity(s.user_id, 'game'));
     ctx.tournamentEntries.forEach((e) => addClassActivity(e.user_id, 'tournament'));
+    kidsTournamentSessions.forEach((s) => addClassActivity(s.user_id, 'tournament'));
     const activeClasses = [...classBuckets.entries()]
       .map(([cid, b]) => ({
         classId: cid,
@@ -1900,10 +2505,29 @@ export class TeacherOverviewService {
       b.sessions += 1;
       b.students.add(String(session.user_id));
     }
+    // Kids games store their subject as a label, not a foreign key.
+    const subjectByName = new Map(
+      [...ctx.subjectById.entries()].map(([id, subject]) => [
+        String(subject.name || '').trim().toLowerCase(),
+        id,
+      ]),
+    );
+    for (const session of kidsGames) {
+      const game = ctx.kidsGamesById.get(String(session.game_id));
+      const label = String(game?.subject || '').trim();
+      if (!label) continue;
+      const sid = subjectByName.get(label.toLowerCase()) || `kids:${label.toLowerCase()}`;
+      if (!subjectBuckets.has(sid)) {
+        subjectBuckets.set(sid, { sessions: 0, students: new Set(), label });
+      }
+      const b = subjectBuckets.get(sid);
+      b.sessions += 1;
+      if (session.user_id) b.students.add(String(session.user_id));
+    }
     const bySubject = [...subjectBuckets.entries()]
       .map(([sid, b]) => ({
         subjectId: sid,
-        subjectName: ctx.subjectById.get(sid)?.name || 'Subject',
+        subjectName: ctx.subjectById.get(sid)?.name || b.label || 'Subject',
         sessions: b.sessions,
         students: b.students.size,
       }))
@@ -1941,6 +2565,38 @@ export class TeacherOverviewService {
       b.participants.add(String(entry.user_id));
       if (entry.completed) b.completions += 1;
     }
+    // Kid game sessions are the active engagement system; legacy GameSession
+    // rows are usually empty, so both must feed the activity ranking.
+    for (const session of kidsGames) {
+      const key = `kids-game:${session.game_id}`;
+      if (!activityBuckets.has(key)) {
+        activityBuckets.set(key, {
+          type: 'game',
+          id: String(session.game_id),
+          name: ctx.kidsGamesById.get(String(session.game_id))?.name || 'Game',
+          participants: new Set(),
+          completions: 0,
+        });
+      }
+      const b = activityBuckets.get(key);
+      if (session.user_id) b.participants.add(String(session.user_id));
+      if (session.completed) b.completions += 1;
+    }
+    for (const session of kidsTournamentSessions) {
+      const key = `kids-tournament:${session.tournament_id}`;
+      if (!activityBuckets.has(key)) {
+        activityBuckets.set(key, {
+          type: 'tournament',
+          id: String(session.tournament_id),
+          name: ctx.tournamentsById.get(String(session.tournament_id))?.name || 'Tournament',
+          participants: new Set(),
+          completions: 0,
+        });
+      }
+      const b = activityBuckets.get(key);
+      if (session.user_id) b.participants.add(String(session.user_id));
+      if (session.completed) b.completions += 1;
+    }
     const topActivities = [...activityBuckets.values()]
       .map((b) => ({
         id: b.id,
@@ -1953,21 +2609,25 @@ export class TeacherOverviewService {
       .slice(0, 5);
 
     // Active tournaments relevant to this teacher: created by them, or with
-    // entries from their students.
+    // entries from their students (legacy and kid-game tournaments alike).
     const activeTournamentIds = ctx.activeTournamentIds || new Set();
+    const kidsTournamentAttempts = new Set(
+      kidsTournamentSessions.map((s) => `${s.tournament_id}:${s.user_id}`),
+    ).size;
 
     return {
       games: {
-        sessions: ctx.gameSessions.length,
-        students: gameStudents,
-        completed: ctx.gameSessions.filter((s) => s.completed).length,
-        participationRate: pct(gameStudents, ctx.students.length),
+        sessions: ctx.gameSessions.length + kidsGames.length,
+        students: gameStudentIds.size,
+        completed: ctx.gameSessions.filter((s) => s.completed).length
+          + kidsGames.filter((s) => s.completed).length,
+        participationRate: pct(gameStudentIds.size, ctx.students.length),
       },
       tournaments: {
-        entries: ctx.tournamentEntries.length,
-        students: tournamentStudents,
+        entries: ctx.tournamentEntries.length + kidsTournamentAttempts,
+        students: tournamentStudentIds.size,
         active: activeTournamentIds.size,
-        participationRate: pct(tournamentStudents, ctx.students.length),
+        participationRate: pct(tournamentStudentIds.size, ctx.students.length),
       },
       trend,
       activeClasses,
@@ -1982,7 +2642,7 @@ export class TeacherOverviewService {
 
   // ── Section H — pedagogical insights (deterministic rules) ──────────────
 
-  #buildInsights({ glance, progress, attention, content, exams, engagement, ctx }) {
+  #buildInsights({ glance, progress, attention, content, exams, engagement, questions, ctx }) {
     const insights = [];
     const push = (insight) => {
       if (insight) insights.push(insight);
@@ -1993,6 +2653,7 @@ export class TeacherOverviewService {
       if (chapter.severity !== 'high') continue;
       push({
         id: `chapter-${chapter.categoryId}`,
+        domain: 'subjects',
         severity: 'high',
         observation: `Students struggle with “${chapter.name}”.`,
         metric: `${chapter.errorRate}% wrong answers across ${chapter.attempts} answers from ${chapter.students} students.`,
@@ -2022,6 +2683,7 @@ export class TeacherOverviewService {
       if (delta > -1) continue;
       push({
         id: `subject-decline-${subject.subjectId}`,
+        domain: 'subjects',
         severity: delta <= -2 ? 'high' : 'medium',
         observation: `${subject.subjectName} results declined compared with the previous period.`,
         metric: `${round2(subject.avg20)}/20 vs ${round2(prevAvg)}/20 (${round2(delta)}), ${subject.sample} attempts.`,
@@ -2037,6 +2699,7 @@ export class TeacherOverviewService {
       if (!cls.reliable || cls.avg20 >= 10) continue;
       push({
         id: `class-low-${cls.classId}`,
+        domain: 'classes',
         severity: cls.avg20 < 8 ? 'high' : 'medium',
         observation: `${cls.className} is below the pass line in examinations.`,
         metric: `${cls.avg20}/20 average over ${cls.sample} attempts · ${cls.successRate}% success.`,
@@ -2054,13 +2717,14 @@ export class TeacherOverviewService {
     if (inactiveCount >= 3) {
       push({
         id: 'inactive-students',
+        domain: 'results',
         severity: inactiveCount >= Math.max(5, Math.ceil(ctx.students.length * 0.25)) ? 'high' : 'medium',
         observation: `${inactiveCount} students had no learning activity in this period.`,
         metric: `${inactiveCount} of ${ctx.students.length} students recorded no exam, training or game activity.`,
         scope: 'Your classes',
         target: 'Inactive students',
         action: 'Open attention list',
-        link: { tab: 'overview', action: 'attention' },
+        link: { tab: 'results', action: 'attention' },
       });
     }
 
@@ -2072,6 +2736,7 @@ export class TeacherOverviewService {
       if (!question) continue;
       push({
         id: `question-${exam.examId}-${question.questionId}`,
+        domain: 'exams',
         severity: 'medium',
         observation: `A question in “${exam.name}” was frequently answered incorrectly.`,
         metric: `${question.correctRate}% correct across ${question.attempts} answers (${question.categoryName || 'uncategorised'}).`,
@@ -2088,6 +2753,7 @@ export class TeacherOverviewService {
     if (lowCompletion) {
       push({
         id: `exam-pending-${lowCompletion.examId}`,
+        domain: 'exams',
         severity: 'medium',
         observation: `“${lowCompletion.name}” has not been completed by most assigned students.`,
         metric: `${lowCompletion.completed} completed · ${lowCompletion.pending} pending of ${lowCompletion.assigned} assigned.`,
@@ -2102,6 +2768,7 @@ export class TeacherOverviewService {
     if (ctx.students.length >= 5 && (content.training.participationRate ?? 0) < 40) {
       push({
         id: 'training-participation',
+        domain: 'subjects',
         severity: 'medium',
         observation: 'Few students practised the course chapters in this period.',
         metric: `${content.training.participationRate ?? 0}% of students attempted training (${content.training.students} of ${ctx.students.length}).`,
@@ -2116,6 +2783,7 @@ export class TeacherOverviewService {
     if (glance.avgExamScore.comparable && (glance.avgExamScore.delta || 0) >= 1) {
       push({
         id: 'exam-improvement',
+        domain: 'overview',
         severity: 'positive',
         observation: 'Average examination results improved compared with the previous period.',
         metric: `+${glance.avgExamScore.delta} points (/20): ${glance.avgExamScore.value}/20 vs ${glance.avgExamScore.previous}/20.`,
@@ -2130,6 +2798,7 @@ export class TeacherOverviewService {
     if (engagement.games.students > 0) {
       push({
         id: 'games-engagement',
+        domain: 'games',
         severity: 'info',
         observation: 'Educational games are being used to reinforce learning.',
         metric: `${engagement.games.students} students played ${engagement.games.sessions} game sessions.`,
@@ -2140,17 +2809,75 @@ export class TeacherOverviewService {
       });
     }
 
+    // 10. Question bank coverage: content that no exam and no student uses.
+    if (questions.coverage.total >= 5 && questions.coverage.untouched > 0) {
+      push({
+        id: 'questions-untouched',
+        domain: 'questions',
+        severity:
+          questions.coverage.untouched >= Math.ceil(questions.coverage.total * 0.5)
+            ? 'medium'
+            : 'info',
+        observation: 'Some questions are neither used in an exam nor practised by students.',
+        metric: `${questions.coverage.untouched} of ${questions.coverage.total} questions are unused · ${questions.coverage.uncategorised} have no chapter.`,
+        scope: 'Question bank',
+        target: 'Unused questions',
+        action: 'Open questions',
+        link: { tab: 'questions', action: 'questions' },
+      });
+    }
+
+    // 11. Weakest class in the trailing week — a live teaching decision.
+    const weekWeakest = progress.weekComparison?.weakest;
+    if (weekWeakest && weekWeakest.reliable && weekWeakest.avg20 < 10) {
+      push({
+        id: `class-week-low-${weekWeakest.classId}`,
+        domain: 'classes',
+        severity: weekWeakest.avg20 < 8 ? 'high' : 'medium',
+        observation: `${weekWeakest.className} has the weakest examination average this week.`,
+        metric: `${weekWeakest.avg20}/20 over ${weekWeakest.sample} attempts in the last 7 days.`,
+        scope: weekWeakest.className,
+        target: weekWeakest.className,
+        action: 'Review class results',
+        link: {
+          tab: 'results',
+          action: 'class',
+          id: weekWeakest.classId,
+          query: weekWeakest.className,
+        },
+      });
+    }
+
+    // 12. Certification gap: assessed failures plus never-assessed students.
+    const totalStudents = glance.totalStudents?.value || 0;
+    const assessedStudents = glance.assessedStudents?.value || 0;
+    const notCertified = glance.notCertifiedStudents?.value || 0;
+    if (assessedStudents >= 3 && totalStudents > 0 && notCertified / totalStudents >= 0.5) {
+      push({
+        id: 'certification-gap',
+        domain: 'results',
+        severity: (glance.failedExamStudents?.value || 0) >= 5 ? 'high' : 'medium',
+        observation: 'Half or more of the students are still below the certification line.',
+        metric: `${glance.failedExamStudents?.value || 0} assessed below 10/20 · ${glance.neverAssessedStudents?.value || 0} never assessed · ${totalStudents} students.`,
+        scope: 'Your classes',
+        target: 'Certification',
+        action: 'Open attention list',
+        link: { tab: 'results', action: 'attention' },
+      });
+    }
+
     // Nothing actionable at all: say so honestly.
     if (!insights.length) {
       insights.push({
         id: 'no-signal',
+        domain: 'overview',
         severity: 'info',
         observation: 'No pedagogical alert is currently triggered.',
         metric: 'There is not enough activity or no threshold is crossed in this period.',
         scope: 'Your classes',
         target: 'Teaching insights',
         action: 'Open attention list',
-        link: { tab: 'overview', action: 'attention' },
+        link: { tab: 'results', action: 'attention' },
       });
     }
 
@@ -2170,6 +2897,7 @@ export class TeacherOverviewService {
     const noAttention = {
       rows: [],
       summary: { total: 0, academic: 0, engagement: 0, both: 0, shown: 0 },
+      byClass: [],
       rules: [],
       classes,
     };
@@ -2221,12 +2949,36 @@ export class TeacherOverviewService {
           avgExamScore: { value: null, sample: 0, comparable: false, trend: null, explanation: empty.explanation },
           successRate: { value: null, passed: 0, total: 0, threshold: '10/20', explanation: empty.explanation },
           completedExams: { value: 0, explanation: empty.explanation },
+          assessedStudents: { value: 0, total: 0, rate: null, explanation: empty.explanation },
+          certifiedStudents: { value: 0, total: 0, rate: null, explanation: empty.explanation },
+          failedExamStudents: { value: 0, total: 0, explanation: empty.explanation },
+          neverAssessedStudents: { value: 0, total: 0, explanation: empty.explanation },
+          notCertifiedStudents: {
+            value: 0,
+            total: 0,
+            rate: null,
+            failed: 0,
+            neverAssessed: 0,
+            explanation: empty.explanation,
+          },
+          certificationRate: { value: null, passed: 0, total: 0, explanation: empty.explanation },
           needingAttention: { value: 0, academic: 0, engagement: 0, both: 0 },
         },
         progress: {
           performanceEvolution: { granularity: 'day', points: [], previousPoints: [], comparable: false, direction: null, change: null },
           participationEvolution: { granularity: 'day', points: [] },
           classComparison: [],
+          bestClass: null,
+          weekComparison: {
+            label: 'Last 7 days',
+            start: null,
+            end: null,
+            classes: [],
+            best: null,
+            weakest: null,
+            note: 'No classes assigned.',
+          },
+          attentionByClass: [],
           subjectPerformance: [],
           trainingVsExam: {
             training: { avg20: null, sample: 0, students: 0 },
@@ -2270,9 +3022,40 @@ export class TeacherOverviewService {
           topActivities: [],
           unavailable: {},
         },
+        questions: {
+          summary: {
+            total: { value: 0 },
+            examAssigned: { value: 0 },
+            practised: { value: 0 },
+            untouched: { value: 0 },
+            struggling: { value: 0 },
+            strong: { value: 0 },
+            createdInPeriod: { value: null },
+          },
+          typeMix: [],
+          difficultyMix: [],
+          bySubject: [],
+          byChapter: [],
+          coverage: {
+            total: 0,
+            categorised: 0,
+            uncategorised: 0,
+            examAssigned: 0,
+            practised: 0,
+            untouched: 0,
+            assignmentRate: null,
+            practiceRate: null,
+          },
+          performance: [],
+          hardestQuestions: [],
+          strongestQuestions: [],
+          thresholds: { minAttempts: MIN_QUESTION_ATTEMPTS, passPercent: PASS_PERCENT, strongPercent: 75 },
+          unavailable: {},
+        },
         insights: [
           {
             id: 'no-classes',
+            domain: 'classes',
             severity: 'info',
             observation: message || 'No classes assigned.',
             metric: 'The dashboard only reports on students in your assigned classes.',

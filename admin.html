@@ -40,10 +40,11 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-08-results-unified4" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-06-round2" />
-		<link rel="stylesheet" href="theme.css?v=2026-11-04-round9" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-06-round2" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-09-notifmeta1" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-09-devices1" />
+		<link rel="stylesheet" href="theme.css?v=2026-11-09-aipage1" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-09-notifmeta1" />
+		<link rel="stylesheet" href="teacher-analytics.css?v=2026-11-09-tabs-right1" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -134,9 +135,9 @@
 			<!-- Load shared utilities first -->
 		<script src="utils.js?v=2026-10-26-catgame1" defer></script>
 		<script src="api-client.js?v=2026-11-04-round6" defer></script>
-		<script src="auth.js?v=2026-11-08-results-unified1" defer></script>
+		<script src="auth.js?v=2026-11-09-notifications2" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-11-04-round3" defer></script>
+		<script src="settings.js?v=2026-11-09-notifications2" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -145,22 +146,23 @@
 		<script src="realtime-admin.js?v=2026-10-14-r2" defer></script>
 
 		<!-- Admin page scripts -->
-		<script src="bulk-selection.js?v=2026-11-06-round4" defer></script>
+		<script src="bulk-selection.js?v=2026-11-08-roster1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-11-06-round2" defer></script>
-		<script src="questions-management.js?v=2026-11-01-courses2" defer></script>
-		<script src="exam-management.js?v=2026-10-30-examsheet1" defer></script>
-		<script src="courses-management.js?v=2026-11-06-round8" defer></script>
-		<script src="class-management.js?v=2026-09-17-r3" defer></script>
+		<script src="category-management.js?v=2026-11-09-subjectpick1" defer></script>
+		<script src="questions-management.js?v=2026-11-09-aipage1" defer></script>
+		<script src="exam-management.js?v=2026-11-08-examrow1" defer></script>
+		<script src="courses-management.js?v=2026-11-09-rowclick1" defer></script>
+		<script src="class-management.js?v=2026-11-08-roster1" defer></script>
 		<script src="results-management.js?v=2026-11-08-results-unified12" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="exam-documents.js?v=2026-10-29-ultra1" defer></script>
 		<script src="overview-dashboard.js?v=2026-11-03-subjects7" defer></script>
-		<script src="teacher-overview.js?v=2026-11-08-results-unified1" defer></script>
-		<script src="global-search.js?v=2026-11-04-round3" defer></script>
+		<script src="teacher-analytics.js?v=2026-11-08-overview1" defer></script>
+		<script src="teacher-overview.js?v=2026-11-08-analytics2" defer></script>
+		<script src="global-search.js?v=2026-11-09-notifications2" defer></script>
 		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
-		<script src="classroom-devices.js?v=2026-10-30-devcards1" defer></script>
+		<script src="classroom-devices.js?v=2026-11-09-teacher-sessions" defer></script>
 		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
 		<script src="games-management.js?v=2026-10-26-catgame1" defer></script>
 		<script src="kids-games-management.js?v=2026-10-31-kidsdel1" defer></script>
@@ -171,7 +173,9 @@
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
-		<script src="admin-main.js?v=2026-11-08-results-unified1" defer></script>
+		<script src="admin-main.js?v=2026-11-09-notifications2" defer></script>
+		<script src="notifications.js?v=2026-11-09-notifmeta1" defer></script>
+		<script src="teacher-domain-analytics.js?v=2026-11-08-domain3" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
 			<script src="legacy-auth-bridge.js?v=2026-11-04-round6" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -186,14 +190,12 @@
 <!-- JSZip pour extraction PowerPoint (.pptx) - chargé dynamiquement si nécessaire -->
 <!-- <script src="vendor/jszip.min.js"></script> -->
 		<script src="ai-question-generator.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="prompt-builder.js?v=2026-11-06-round1" defer></script>
+		<script src="prompt-builder.js?v=2026-11-09-aipage1" defer></script>
 		<script src="rag.js?v=2026-09-22-r1" defer></script>
 
 		<!-- Syntax Highlighting -->
 		<link rel="stylesheet" href="vendor/atom-one-dark.min.css">
 		<script src="vendor/highlight.min.js"></script>
-
-
 
 		
 	</head>
@@ -334,6 +336,22 @@
 									<span class="user-email" id="currentUserEmail">admin@example.com</span>
 								</div>
 								<div class="menu-divider"></div>
+								<div class="profile-notifications" id="profileNotifications">
+									<div class="profile-notifications-header">
+										<span>Recent activity</span>
+										<button
+											type="button"
+											class="profile-notifications-viewall"
+											id="profileNotificationsViewAll"
+										>
+											View all
+										</button>
+									</div>
+									<div class="profile-notification-list" id="profileNotificationList">
+										<div class="profile-notification-empty">Loading activity…</div>
+									</div>
+								</div>
+								<div class="menu-divider"></div>
 								<a
 									href="#"
 									class="menu-item"
@@ -380,7 +398,6 @@
 								</a>
 							</div>
 						</div>
-
 
 					</div>
 				</div>
@@ -527,9 +544,9 @@
 						</button>
 						<button
 							class="nav-tab"
-							data-tab="activity"
+							data-tab="notifications"
 							data-roles="admin,teacher"
-							onclick="openTab(event, 'activity'); if(window.loadActivityLog) window.loadActivityLog()"
+							onclick="if(window.QuizNotifications){ window.QuizNotifications.openInbox(event); } else { openTab(event, 'notifications'); }"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -539,10 +556,13 @@
 								fill="none"
 								stroke="currentColor"
 								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
 							>
-								<path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+								<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+								<path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
 							</svg>
-							Activity Log
+							Notifications
 						</button>
 						<button
 							class="nav-tab"
@@ -1460,7 +1480,7 @@
 									<button
 										id="recentActivityViewAll"
 										class="btn-text-only"
-										onclick="openTab(event, 'activity')"
+										onclick="if(window.QuizNotifications){ window.QuizNotifications.openInbox(event); } else { openTab(event, 'notifications'); }"
 									>
 										View All
 									</button>
@@ -1475,15 +1495,18 @@
 					</div>
 				</section>
 
-				<!-- Activity Log Tab -->
-				<section id="activity" class="tab-content" data-roles="admin,teacher">
+				<!-- Notifications Tab: role-scoped activity inbox -->
+				<section id="notifications" class="tab-content" data-roles="admin,teacher">
 					<div class="content-header">
-						<h1>Activity Log</h1>
-						<div class="header-actions">
+						<div>
+							<h1>Notifications</h1>
+							<p class="text-muted" id="notificationsScopeLabel">Recent activity</p>
+						</div>
+						<div class="notifications-header-actions">
 							<button
 								type="button"
 								class="mobile-filters-toggle"
-								data-filter-target="#activityFilters"
+								data-filter-target="#notificationsFilters"
 								onclick="toggleMobileFilters(this)"
 								aria-expanded="false"
 							>
@@ -1492,79 +1515,47 @@
 								<span class="mobile-filters-count hidden">0</span>
 								<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 							</button>
-							<div class="search-box">
-								<input
-									type="text"
-									id="activitySearch"
-									placeholder="Search activity..."
-									onkeyup="filterActivityTable()"
-								/>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-								>
-									<circle cx="11" cy="11" r="8"></circle>
-									<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-								</svg>
-							</div>
-							<button class="btn-export" onclick="exportActivityLog()">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-								>
-									<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-									<polyline points="7 10 12 15 17 10"></polyline>
-									<line x1="12" y1="15" x2="12" y2="3"></line>
-								</svg>
+							<button type="button" class="btn btn-secondary" id="notificationsExportBtn">
 								Export CSV
+							</button>
+							<button type="button" class="btn btn-secondary" id="notificationsMarkAll">
+								Mark all as read
 							</button>
 						</div>
 					</div>
-
-					<div class="activity-filters collapsible-filter-controls" id="activityFilters">
-						<div class="activity-filter">
-							<label for="activityTypeFilter">Type</label>
-							<select id="activityTypeFilter" class="form-control" onchange="filterActivityTable()">
+					<div class="notifications-filters collapsible-filter-controls" id="notificationsFilters">
+						<div class="notifications-filter notifications-filter-search">
+							<label for="notificationsSearch">Search</label>
+							<input
+								type="search"
+								id="notificationsSearch"
+								placeholder="Search activity..."
+							/>
+						</div>
+						<div class="notifications-filter">
+							<label for="notificationsTypeFilter">Type</label>
+							<select id="notificationsTypeFilter">
 								<option value="">All types</option>
-								<option value="question">Question</option>
-								<option value="exam">Exam</option>
-								<option value="class">Class</option>
-								<option value="category">Category</option>
-								<option value="result">Result</option>
-								<option value="import">Import</option>
-								<option value="export">Export</option>
-								<option value="device">Device</option>
-								<option value="profile_request">Profile request</option>
 							</select>
 						</div>
-						<div class="activity-filter">
-							<label for="activityRoleFilter">Role</label>
-							<select id="activityRoleFilter" class="form-control" onchange="filterActivityTable()">
+						<div class="notifications-filter">
+							<label for="notificationsRoleFilter">Role</label>
+							<select id="notificationsRoleFilter">
 								<option value="">All roles</option>
 								<option value="admin">Admin</option>
 								<option value="teacher">Teacher</option>
 								<option value="student">Student</option>
 							</select>
 						</div>
-						<div class="activity-filter">
-							<label for="activityUserFilter">User</label>
-							<select id="activityUserFilter" class="form-control" onchange="filterActivityTable()">
+						<div class="notifications-filter">
+							<label for="notificationsUserFilter">User</label>
+							<select id="notificationsUserFilter">
 								<option value="">All users</option>
 							</select>
 						</div>
-						<div class="activity-filter">
-							<label for="activityDateFilter">Period</label>
-							<select id="activityDateFilter" class="form-control" onchange="filterActivityTable()">
+						<div class="notifications-filter">
+							<label for="notificationsDateFilter">Period</label>
+							<select id="notificationsDateFilter">
 								<option value="">All time</option>
 								<option value="today">Today</option>
 								<option value="7">Last 7 days</option>
@@ -1572,24 +1563,12 @@
 								<option value="month">This month</option>
 							</select>
 						</div>
-						<button type="button" class="btn btn-secondary activity-filter-clear" onclick="clearActivityFilters()">Clear filters</button>
+						<button type="button" class="btn btn-secondary" id="notificationsClearFilters">
+							Clear filters
+						</button>
 					</div>
-
-					<div class="table-container">
-						<table class="data-table" id="activityTable">
-							<thead>
-								<tr>
-									<th>Type</th>
-									<th>Description</th>
-									<th>User</th>
-									<th>Date</th>
-									<th>Status</th>
-								</tr>
-							</thead>
-							<tbody id="activityTableBody">
-								<!-- Activity rows will be populated here -->
-							</tbody>
-						</table>
+					<div class="notifications-feed" id="notificationsFeed">
+						<div class="notifications-empty">Loading activity…</div>
 					</div>
 				</section>
 
@@ -1844,6 +1823,791 @@
 
 				<!-- Questions Tab -->
 				<section id="questions" class="tab-content" data-roles="admin,teacher">
+					<div id="questionsAnalytics" class="teacher-domain-analytics" data-domain="questions" hidden></div>
+
+					<!-- AI generator detail page: replaces the bank view exactly like
+					     Exam Analysis replaces the exam list. -->
+					<div id="questionsAIGeneratorPane" class="questions-ai-pane hidden">
+						<div class="page-hero-card ai-generator-hero">
+							<div class="page-hero-main">
+								<div class="page-hero-icon icon-violet">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+								</div>
+								<div>
+									<h2 class="page-hero-title">AI Question Generator</h2>
+									<p class="page-hero-subtitle">Build thoughtful, classroom-ready questions in seconds.</p>
+								</div>
+							</div>
+							<div class="ai-generator-hero-meta">
+								<span id="ai-active-model-badge" class="active-model-badge">
+									<span class="pulse-dot"></span>
+									<span id="ai-current-model-name">Loading model...</span>
+								</span>
+							</div>
+						</div>
+						<div class="structure-pane-header">
+							<nav class="structure-breadcrumb" aria-label="AI generator location">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+								<span>Questions › AI Question Generator</span>
+							</nav>
+							<div class="structure-header-actions" role="group" aria-label="AI generator actions">
+								<button
+									type="button"
+									class="btn btn-sm structure-back-btn"
+									onclick="closeAIGeneratorModal()"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
+									<span>Back to questions</span>
+								</button>
+							</div>
+						</div>
+
+						<div id="aiGeneratorPage" class="ai-generator-page">
+
+												<!-- Tab Navigation -->
+												<div class="ai-generator-tabs" role="tablist" aria-label="Question source">
+													<button class="ai-generator-tab active" role="tab" aria-selected="true" onclick="switchAIGeneratorTab('standard')" id="tab-ai-standard">
+														<span class="ai-tab-icon" aria-hidden="true">✦</span><span><strong>From a topic</strong><small>Create questions from a subject</small></span>
+													</button>
+													<button class="ai-generator-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('document')" id="tab-ai-document">
+														<span class="ai-tab-icon" aria-hidden="true">▤</span><span><strong>From materials</strong><small>Use your uploaded documents</small></span>
+													</button>
+													<button class="ai-generator-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('builder')" id="tab-ai-builder">
+														<span class="ai-tab-icon" aria-hidden="true">🧱</span><span><strong>Prompt Builder</strong><small>ChatGPT / Claude course plan</small></span>
+													</button>
+													<button class="ai-generator-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('import')" id="tab-ai-import">
+														<span class="ai-tab-icon" aria-hidden="true">📥</span><span><strong>Import JSON</strong><small>Réponse du modèle</small></span>
+													</button>
+												</div>
+
+												<!-- Tab Contents -->
+												<div class="ai-tab-containers" style="position: relative;">
+													<!-- Tab 1: Standard Topic-based Generator -->
+													<div id="ai-generator-form" class="ai-tab-pane active" style="padding: 24px;">
+							<!-- Option Style: Text (classic) vs Images (manual image builder) -->
+													<div class="form-row ai-option-style-row" style="margin-top: 0;">
+														<div class="form-group" style="flex: 1;">
+															<label style="font-weight: 700; font-size: 1rem;">🎨 Option Style</label>
+															<small class="text-muted ai-style-description">Choose how answer options appear in the generated question.</small>
+															<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px;">
+																<div class="ai-option-style" id="ai-option-style" role="group" aria-label="Option style">
+																	<button type="button" class="ai-style-btn active" data-style="text" aria-pressed="true" onclick="window.setAIOptionStyle('text')"><span aria-hidden="true">📝</span><span>Text options</span><small>Generate from a topic</small></button>
+																	<button type="button" class="ai-style-btn" data-style="image" aria-pressed="false" onclick="window.setAIOptionStyle('image')"><span aria-hidden="true">🖼️</span><span>Image options</span><small>Build one question</small></button>
+																</div>
+																<input type="hidden" id="ai-option-style-value" value="text" />
+																<small class="text-muted" id="ai-option-style-warning"></small>
+															</div>
+														</div>
+													</div>
+
+													<!-- TEXT style fields: classic generation (model + topic + types → text options) -->
+													<div id="ai-text-style-fields">
+													<!-- Topic Input -->
+													<div class="form-group">
+														<label for="ai-topic" style="font-weight: 600; font-size: 1rem;">
+															📝 Topic / Subject
+														</label>
+														<textarea id="ai-topic" rows="2" class="form-control" placeholder="Ex: Windows 10 basics, File management, Internet security..." style="padding: 12px; font-size: 1rem;"></textarea>
+														<small class="text-muted">Describe the topic or subject for your questions</small>
+													</div>
+
+													<!-- AI Model (writes the questions as text) -->
+													<div class="form-row" style="margin-top: 20px;">
+														<div class="form-group" style="flex: 1;">
+															<label for="ai-generator-model-select" style="font-weight: 600;">🤖 AI Model <small class="text-muted">(writes the questions)</small></label>
+															<select id="ai-generator-model-select" class="form-control" style="padding: 10px;" onchange="window.onAIGeneratorModelChange(this)">
+																<option value="">-- Use default (your last selection in Settings) --</option>
+															</select>
+															<small class="text-muted" id="ai-generator-model-hint">Pick a model here, or use your last Settings selection. It writes the question text and the text options.</small>
+														</div>
+													</div>
+
+														<!-- Config Row: Difficulty + Category side by side -->
+														<div class="form-row" style="margin-top: 20px;">
+							<div class="form-group half">
+																	<label for="ai-difficulty" style="font-weight: 600;">Difficulty</label>
+																	<select id="ai-difficulty" class="form-control" style="padding: 10px;">
+																	<option value="easy">🟢 Easy</option>
+																	<option value="medium" selected>🟡 Medium</option>
+																	<option value="hard">🔴 Hard</option>
+																	<option value="mixed">🌈 Mixed</option>
+																</select>
+															</div>
+															<div class="form-group half">
+																<label for="ai-category" style="font-weight: 600;">Category</label>
+																<select id="ai-category" class="form-control" style="padding: 10px;" onchange="onAICategoryChange('ai-category', 'ai-subcategory')">
+																	<option value="uncategorized">Uncategorized</option>
+																</select>
+															</div>
+														</div>
+
+														<!-- Config Row: Subcategory + Time per question -->
+														<div class="form-row" style="margin-top: 20px;">
+															<div class="form-group half">
+																<label for="ai-subcategory" style="font-weight: 600;">Subcategory</label>
+																<select id="ai-subcategory" class="form-control" style="padding: 10px;">
+																	<option value="">—</option>
+																</select>
+																<small class="text-muted">Questions are filed in the deepest level</small>
+															</div>
+															<div class="form-group half">
+																<label for="ai-time-limit" style="font-weight: 600;">⏱ Time per question (sec)</label>
+																<input type="number" id="ai-time-limit" class="form-control" style="padding: 10px;" min="0" max="3600" step="5" value="30" />
+																<small class="text-muted">0 = no time limit</small>
+															</div>
+														</div>
+
+														<!-- Hidden legacy count field for backwards compat -->
+											<!-- Hidden legacy count field for backwards compat -->
+													<input type="hidden" id="ai-count" value="0" />
+
+													<!-- Question Types with Per-Type Steppers -->
+													<div class="form-group" style="margin-top: 20px;">
+														<div class="ai-types-header">
+															<label style="font-weight: 600;">✅ Question Types &amp; Counts</label>
+															<span class="ai-total-badge" id="ai-total-badge-standard">Total: <strong id="ai-total-count-standard">1</strong></span>
+														</div>
+														<small class="text-muted" style="display:block; margin-bottom:12px;">Select types and set how many of each to generate</small>
+
+														<div class="ai-type-grid-v2" id="ai-type-grid-standard">
+
+															<div class="ai-type-card-v2 selected" data-type="multiple-choice" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="multiple-choice" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" checked />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">📝</span>
+																	<span class="ai-type-name-v2">MC (Single)</span>
+																	<div class="ai-type-stepper" id="stepper-standard-multiple-choice">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-multiple-choice">1</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<div class="ai-type-card-v2" data-type="multiple-choice-multi" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="multiple-choice-multi" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">☑️</span>
+																	<span class="ai-type-name-v2">MC (Multi)</span>
+																	<div class="ai-type-stepper hidden" id="stepper-standard-multiple-choice-multi">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice-multi',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-multiple-choice-multi">0</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice-multi',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<div class="ai-type-card-v2" data-type="true-false" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="true-false" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">✅</span>
+																	<span class="ai-type-name-v2">True / False</span>
+																	<div class="ai-type-stepper hidden" id="stepper-standard-true-false">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','true-false',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-true-false">0</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','true-false',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<div class="ai-type-card-v2" data-type="draggable" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="draggable" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">↕️</span>
+																	<span class="ai-type-name-v2">Drag &amp; Drop</span>
+																	<div class="ai-type-stepper hidden" id="stepper-standard-draggable">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','draggable',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-draggable">0</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','draggable',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<div class="ai-type-card-v2" data-type="odd-one-out" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="odd-one-out" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">🔍</span>
+																	<span class="ai-type-name-v2">Odd One Out</span>
+																	<div class="ai-type-stepper hidden" id="stepper-standard-odd-one-out">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','odd-one-out',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-odd-one-out">0</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','odd-one-out',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<div class="ai-type-card-v2" data-type="matching-pairs" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="matching-pairs" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">🔗</span>
+																	<span class="ai-type-name-v2">Matching Pairs</span>
+																	<div class="ai-type-stepper hidden" id="stepper-standard-matching-pairs">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','matching-pairs',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-matching-pairs">0</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','matching-pairs',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<div class="ai-type-card-v2" data-type="fill-blank" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="fill-blank" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">✏️</span>
+																	<span class="ai-type-name-v2">Fill in Blank</span>
+																	<div class="ai-type-stepper hidden" id="stepper-standard-fill-blank">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','fill-blank',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-fill-blank">0</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','fill-blank',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<div class="ai-type-card-v2 code-type-card" data-type="code" data-tab="standard">
+																<input type="checkbox" name="ai-question-type" value="code" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
+																<div class="ai-type-card-inner">
+																	<span class="ai-type-icon-v2">💻</span>
+																	<span class="ai-type-name-v2">Code</span>
+																	<div class="ai-type-stepper hidden" id="stepper-standard-code">
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','code',-1)">−</button>
+																		<span class="stepper-val" id="count-standard-code">0</span>
+																		<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','code',1)">+</button>
+																	</div>
+																</div>
+															</div>
+
+															<!-- Code Answer Mode Panel for Standard (Moved Inside Grid) -->
+															<div class="ai-code-mode-panel" id="ai-standard-code-options" style="display:none;">
+																<div class="ai-code-mode-header">
+																	<span class="ai-code-mode-icon" aria-hidden="true">&lt;/&gt;</span>
+																	<div class="ai-code-mode-copy">
+																		<label class="ai-code-mode-label">Code Formats Selection</label>
+																		<div class="ai-code-mode-help">Match the format counts to the Code total.</div>
+																	</div>
+																</div>
+																<div class="ai-code-formats-grid">
+																	<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','multiple-choice')">
+																		<span class="ai-type-name-v2">Multiple Choice</span>
+																		<div class="ai-type-stepper ai-code-format-stepper">
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','multiple-choice',-1)">&minus;</button>
+																			<span class="stepper-val" id="count-standard-code-multiple-choice">0</span>
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','multiple-choice',1)">+</button>
+																		</div>
+																	</div>
+																	<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','fill-blank')">
+																		<span class="ai-type-name-v2">Fill Blank</span>
+																		<div class="ai-type-stepper ai-code-format-stepper">
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','fill-blank',-1)">&minus;</button>
+																			<span class="stepper-val" id="count-standard-code-fill-blank">0</span>
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','fill-blank',1)">+</button>
+																		</div>
+																	</div>
+																	<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','odd-one-out')">
+																		<span class="ai-type-name-v2">Odd One Out</span>
+																		<div class="ai-type-stepper ai-code-format-stepper">
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','odd-one-out',-1)">&minus;</button>
+																			<span class="stepper-val" id="count-standard-code-odd-one-out">0</span>
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','odd-one-out',1)">+</button>
+																		</div>
+																	</div>
+																	<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','draggable')">
+																		<span class="ai-type-name-v2">Ordering</span>
+																		<div class="ai-type-stepper ai-code-format-stepper">
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','draggable',-1)">&minus;</button>
+																			<span class="stepper-val" id="count-standard-code-draggable">0</span>
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','draggable',1)">+</button>
+																		</div>
+																	</div>
+																	<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','matching-pairs')">
+																		<span class="ai-type-name-v2">Matching Pairs</span>
+																		<div class="ai-type-stepper ai-code-format-stepper">
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','matching-pairs',-1)">&minus;</button>
+																			<span class="stepper-val" id="count-standard-code-matching-pairs">0</span>
+																			<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','matching-pairs',1)">+</button>
+																		</div>
+																	</div>
+																</div>
+															</div>
+														</div>
+													</div>
+													</div><!-- /#ai-text-style-fields -->
+
+													<!-- IMAGE style builder: one manually-authored question with picture options -->
+													<div id="ai-image-style-builder" data-hidden="1" style="margin-top: 20px;">
+														<div class="ai-image-builder-head">
+															<div style="flex: 1;">
+																	<label style="font-weight: 700; font-size: 1rem;">🖼️ Question with image options</label>
+																<small class="text-muted" style="display: block; margin-top: 4px;">Build one question manually: type the question text, add options and describe the picture for each, mark the correct one, pick the Image Model, then hit Generate.</small>
+															</div>
+															<button type="button" class="btn btn-primary-outline" id="ai-image-create-btn" onclick="window.createAIImageQuestion()" style="padding: 10px 16px; white-space: nowrap;">➕ Create question with image options</button>
+														</div>
+
+														<div id="ai-image-builder-panel" style="display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #f8fafc;">
+															<div class="form-group">
+																<label for="ai-image-question-text" style="font-weight: 600;">📝 Question</label>
+																<textarea id="ai-image-question-text" rows="2" class="form-control" placeholder="Type the question text, e.g. &quot;Which image shows a wireless router?&quot;" style="padding: 12px; font-size: 1rem;"></textarea>
+															</div>
+
+															<div class="form-group" style="margin-top: 16px;">
+																<label style="font-weight: 600;">🖼️ Options <small class="text-muted">(describe what each option image should show — click the radio or the row to mark the correct answer)</small></label>
+																<div id="ai-image-options-list"></div>
+																<button type="button" class="btn btn-secondary" id="ai-image-add-option" onclick="window.addAIImageOption()" style="margin-top: 12px;">➕ Add option</button>
+															</div>
+
+															<div class="form-group" style="margin-top: 16px;">
+																<label for="ai-image-model-select" style="font-weight: 600;">🤖 Image Model <small class="text-muted">(renders the option pictures)</small></label>
+																<select id="ai-image-model-select" class="form-control" style="padding: 10px;" onchange="window.onAIImageModelChange(this)">
+																	<option value="">-- Select an image model --</option>
+																</select>
+																<small class="text-muted" id="ai-image-model-hint"></small>
+															</div>
+														</div>
+													</div>
+
+													<!-- Points per question + Language -->
+													<div class="form-row ai-common-question-settings" style="margin-top: 20px;">
+														<div class="form-group half">
+															<label for="ai-points" style="font-weight: 600;">Points per Question</label>
+															<input type="number" id="ai-points" class="form-control" style="padding: 10px;" min="1" max="100" step="1" value="1" />
+														</div>
+														<div class="form-group half">
+															<label for="ai-language" style="font-weight: 600;">Language</label>
+															<input type="text" id="ai-language" class="form-control" style="padding: 10px;" placeholder="Ex: French, English, Arabic..." value="French" />
+														</div>
+													</div>
+												</div>
+
+													<!-- Tab 2: Document RAG Generator -->
+													<div id="ai-document-form" class="ai-tab-pane" style="display: none; padding: 24px;">
+														<div class="document-generator-content">
+															<!-- Zone d'upload -->
+															<div class="upload-zone" id="uploadZone" style="margin-bottom: 24px;">
+																<div class="upload-icon">📁</div>
+																<h3 style="margin-top: 10px;">Upload Materials</h3>
+																<p class="text-muted">Drag & drop files or click to select</p>
+																<input type="file" id="documentFileInput" multiple accept=".pdf,.docx,.xlsx,.pptx,.md,.html,.txt" style="display: none;">
+																<button type="button" class="btn btn-secondary" id="btnSelectFiles" style="margin-top: 10px; padding: 8px 16px;">
+																	Select Files
+																</button>
+																<div class="supported-formats" style="margin-top: 20px; padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #17a2b8;">
+																	<small style="color: #64748b;">
+																		<strong>Supported:</strong> PDF, Word, Excel, PowerPoint, MD, HTML, TXT
+																	</small>
+																</div>
+															</div>
+
+															<!-- Liste des fichiers uploadés -->
+															<div id="uploadedFilesList" class="uploaded-files-list" style="display: none; margin-bottom: 24px;">
+																<h4 style="margin-bottom: 12px; font-size: 1rem; font-weight: 600;">📎 Selected Files</h4>
+																<div id="filesContainer"></div>
+															</div>
+
+															<!-- Configuration de génération RAG -->
+															<div id="generationConfig" style="display: none;">
+																<hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;">
+
+																<h4 style="margin-bottom: 20px; font-weight: 700; color: #1e293b; font-size: 1rem;">⚙️ Generation Settings</h4>
+
+																<!-- Settings Row 1 -->
+																<div class="form-row" style="margin-top: 20px;">
+																	<div class="form-group half">
+																		<label for="docQuestionCount" style="font-weight: 600;">Number of Questions</label>
+																		<select id="docQuestionCount" class="form-control" style="padding: 10px;">
+																			<option value="1">1 question</option>
+																			<option value="3">3 questions</option>
+																			<option value="5" selected>5 questions</option>
+																			<option value="10">10 questions</option>
+																			<option value="15">15 questions</option>
+																			<option value="20">20 questions</option>
+																		</select>
+																	</div>
+																	<div class="form-group half">
+																		<label for="docDifficulty" style="font-weight: 600;">Difficulty</label>
+																		<select id="docDifficulty" class="form-control" style="padding: 10px;">
+																			<option value="easy">Easy</option>
+																			<option value="medium" selected>Medium</option>
+																			<option value="hard">Hard</option>
+																			<option value="mixed">Mixed</option>
+																		</select>
+																	</div>
+																</div>
+
+																<!-- Settings Row 2 -->
+																<div class="form-row" style="margin-top: 20px;">
+																	<div class="form-group half">
+																		<label for="docCategory" style="font-weight: 600;">Category</label>
+																		<select id="docCategory" class="form-control" style="padding: 10px;" onchange="onAICategoryChange('docCategory', 'docSubcategory')">
+																			<option value="uncategorized">Uncategorized</option>
+																		</select>
+																	</div>
+																	<div class="form-group half">
+																		<label for="docPoints" style="font-weight: 600;">Points per Question</label>
+																		<select id="docPoints" class="form-control" style="padding: 10px;">
+																			<option value="1" selected>1 point</option>
+																			<option value="2">2 points</option>
+																			<option value="5">5 points</option>
+																			<option value="10">10 points</option>
+																		</select>
+																	</div>
+																</div>
+
+																<!-- Settings Row 3: Subcategory + Time -->
+																<div class="form-row" style="margin-top: 20px;">
+																	<div class="form-group half">
+																		<label for="docSubcategory" style="font-weight: 600;">Subcategory</label>
+																		<select id="docSubcategory" class="form-control" style="padding: 10px;">
+																			<option value="">—</option>
+																		</select>
+																		<small class="text-muted">Questions are filed in the deepest level</small>
+																	</div>
+																	<div class="form-group half">
+																		<label for="docTimeLimit" style="font-weight: 600;">⏱ Time per question (sec)</label>
+																		<input type="number" id="docTimeLimit" class="form-control" style="padding: 10px;" min="0" max="3600" step="5" value="30" />
+																		<small class="text-muted">0 = no time limit</small>
+																	</div>
+																</div>
+
+																<div class="form-group" style="margin-top: 20px;">
+												<div class="ai-types-header">
+													<label style="font-weight: 600;">✅ Question Types &amp; Counts</label>
+													<span class="ai-total-badge" id="ai-total-badge-document">Total: <strong id="ai-total-count-document">1</strong></span>
+												</div>
+												<small class="text-muted" style="display:block; margin-bottom:12px;">Select types and set how many of each</small>
+												<input type="hidden" id="docQuestionCount" value="0" />
+												<div class="ai-type-grid-v2" id="ai-type-grid-document">
+
+													<div class="ai-type-card-v2 selected" data-type="multiple-choice" data-tab="document">
+														<input type="checkbox" name="docQuestionType" value="multiple-choice" class="ai-type-check" onchange="onAITypeToggle(this,'document')" checked />
+														<div class="ai-type-card-inner">
+															<span class="ai-type-icon-v2">📝</span>
+															<span class="ai-type-name-v2">MC (Single)</span>
+															<div class="ai-type-stepper" id="stepper-document-multiple-choice">
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice',-1)">−</button>
+																<span class="stepper-val" id="count-document-multiple-choice">1</span>
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice',1)">+</button>
+															</div>
+														</div>
+													</div>
+
+													<div class="ai-type-card-v2" data-type="multiple-choice-multi" data-tab="document">
+														<input type="checkbox" name="docQuestionType" value="multiple-choice-multi" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
+														<div class="ai-type-card-inner">
+															<span class="ai-type-icon-v2">☑️</span>
+															<span class="ai-type-name-v2">MC (Multi)</span>
+															<div class="ai-type-stepper hidden" id="stepper-document-multiple-choice-multi">
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice-multi',-1)">−</button>
+																<span class="stepper-val" id="count-document-multiple-choice-multi">0</span>
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice-multi',1)">+</button>
+															</div>
+														</div>
+													</div>
+
+													<div class="ai-type-card-v2" data-type="draggable" data-tab="document">
+														<input type="checkbox" name="docQuestionType" value="draggable" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
+														<div class="ai-type-card-inner">
+															<span class="ai-type-icon-v2">↕️</span>
+															<span class="ai-type-name-v2">Drag &amp; Drop</span>
+															<div class="ai-type-stepper hidden" id="stepper-document-draggable">
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','draggable',-1)">−</button>
+																<span class="stepper-val" id="count-document-draggable">0</span>
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','draggable',1)">+</button>
+															</div>
+														</div>
+													</div>
+
+													<div class="ai-type-card-v2" data-type="odd-one-out" data-tab="document">
+														<input type="checkbox" name="docQuestionType" value="odd-one-out" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
+														<div class="ai-type-card-inner">
+															<span class="ai-type-icon-v2">🔍</span>
+															<span class="ai-type-name-v2">Odd One Out</span>
+															<div class="ai-type-stepper hidden" id="stepper-document-odd-one-out">
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','odd-one-out',-1)">−</button>
+																<span class="stepper-val" id="count-document-odd-one-out">0</span>
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','odd-one-out',1)">+</button>
+															</div>
+														</div>
+													</div>
+
+													<div class="ai-type-card-v2" data-type="matching-pairs" data-tab="document">
+														<input type="checkbox" name="docQuestionType" value="matching-pairs" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
+														<div class="ai-type-card-inner">
+															<span class="ai-type-icon-v2">🔗</span>
+															<span class="ai-type-name-v2">Matching Pairs</span>
+															<div class="ai-type-stepper hidden" id="stepper-document-matching-pairs">
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','matching-pairs',-1)">−</button>
+																<span class="stepper-val" id="count-document-matching-pairs">0</span>
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','matching-pairs',1)">+</button>
+															</div>
+														</div>
+													</div>
+
+													<div class="ai-type-card-v2" data-type="fill-blank" data-tab="document">
+														<input type="checkbox" name="docQuestionType" value="fill-blank" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
+														<div class="ai-type-card-inner">
+															<span class="ai-type-icon-v2">✏️</span>
+															<span class="ai-type-name-v2">Fill in Blank</span>
+															<div class="ai-type-stepper hidden" id="stepper-document-fill-blank">
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','fill-blank',-1)">−</button>
+																<span class="stepper-val" id="count-document-fill-blank">0</span>
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','fill-blank',1)">+</button>
+															</div>
+														</div>
+													</div>
+
+													<div class="ai-type-card-v2 code-type-card" data-type="code" data-tab="document">
+														<input type="checkbox" name="docQuestionType" value="code" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
+														<div class="ai-type-card-inner">
+															<span class="ai-type-icon-v2">💻</span>
+															<span class="ai-type-name-v2">Code</span>
+															<div class="ai-type-stepper hidden" id="stepper-document-code">
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','code',-1)">−</button>
+																<span class="stepper-val" id="count-document-code">0</span>
+																<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','code',1)">+</button>
+															</div>
+														</div>
+													</div>
+
+													<!-- Code Answer Mode Panel for Document (Moved Inside Grid) -->
+													<div class="ai-code-mode-panel" id="ai-document-code-options" style="display:none;">
+														<div class="ai-code-mode-header">
+															<span class="ai-code-mode-icon" aria-hidden="true">&lt;/&gt;</span>
+															<div class="ai-code-mode-copy">
+																<label class="ai-code-mode-label">Code Formats Selection</label>
+																<div class="ai-code-mode-help">Match the format counts to the Code total.</div>
+															</div>
+														</div>
+														<div class="ai-code-formats-grid">
+															<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','multiple-choice')">
+																<span class="ai-type-name-v2">Multiple Choice</span>
+																<div class="ai-type-stepper ai-code-format-stepper">
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','multiple-choice',-1)">&minus;</button>
+																	<span class="stepper-val" id="count-document-code-multiple-choice">0</span>
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','multiple-choice',1)">+</button>
+																</div>
+															</div>
+															<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','fill-blank')">
+																<span class="ai-type-name-v2">Fill Blank</span>
+																<div class="ai-type-stepper ai-code-format-stepper">
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','fill-blank',-1)">&minus;</button>
+																	<span class="stepper-val" id="count-document-code-fill-blank">0</span>
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','fill-blank',1)">+</button>
+																</div>
+															</div>
+															<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','odd-one-out')">
+																<span class="ai-type-name-v2">Odd One Out</span>
+																<div class="ai-type-stepper ai-code-format-stepper">
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','odd-one-out',-1)">&minus;</button>
+																	<span class="stepper-val" id="count-document-code-odd-one-out">0</span>
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','odd-one-out',1)">+</button>
+																</div>
+															</div>
+															<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','draggable')">
+																<span class="ai-type-name-v2">Ordering</span>
+																<div class="ai-type-stepper ai-code-format-stepper">
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','draggable',-1)">&minus;</button>
+																	<span class="stepper-val" id="count-document-code-draggable">0</span>
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','draggable',1)">+</button>
+																</div>
+															</div>
+															<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','matching-pairs')">
+																<span class="ai-type-name-v2">Matching Pairs</span>
+																<div class="ai-type-stepper ai-code-format-stepper">
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','matching-pairs',-1)">&minus;</button>
+																	<span class="stepper-val" id="count-document-code-matching-pairs">0</span>
+																	<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','matching-pairs',1)">+</button>
+																</div>
+															</div>
+														</div>
+													</div>
+												</div>
+
+																<!-- Mode de génération -->
+																<div class="form-group" style="margin-top: 24px;">
+																	<label style="font-weight: 600; display: block; margin-bottom: 12px;">Generation Strategy</label>
+																	<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+																		<label style="cursor: pointer;">
+																			<input type="radio" name="generationMode" value="auto" checked style="display: none;">
+																			<div class="strategy-card active" id="strategy-auto" style="padding: 12px; border: 2px solid #8b5cf6; background: #f5f3ff; border-radius: 12px; text-align: center; transition: all 0.2s;">
+																				<div style="font-size: 1.2rem; margin-bottom: 4px;">🤖</div>
+																				<strong style="display: block; font-size: 0.85rem;">Automatic</strong>
+																				<small style="font-size: 0.7rem; color: #6b7280;">Full intelligent analysis</small>
+																			</div>
+																		</label>
+																		<label style="cursor: pointer;">
+																			<input type="radio" name="generationMode" value="sections" style="display: none;">
+																			<div class="strategy-card" id="strategy-sections" style="padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; text-align: center; transition: all 0.2s;">
+																				<div style="font-size: 1.2rem; margin-bottom: 4px;">📑</div>
+																				<strong style="display: block; font-size: 0.85rem;">By Sections</strong>
+																				<small style="font-size: 0.7rem; color: #6b7280;">Follow document structure</small>
+																			</div>
+																		</label>
+																	</div>
+																</div>
+															</div>
+
+															<!-- Progression d'extraction -->
+															<div id="extractionProgress" style="display: none; margin-top: 24px;">
+																<div class="progress-container" style="background: #f1f5f9; padding: 20px; border-radius: 12px;">
+																	<h4 style="margin-bottom: 12px; font-size: 0.9rem; font-weight: 600;">⚙️ Extracting Content...</h4>
+																	<div class="progress-bar" style="height: 10px; background: #cbd5e1; border-radius: 999px; overflow: hidden; position: relative;">
+																		<div class="progress-bar-fill" id="extractionProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); transition: width 0.3s ease;"></div>
+																	</div>
+																	<p id="extractionStatus" style="font-size: 0.8rem; margin-top: 10px; text-align: center; color: #64748b; font-weight: 500;">Preparing...</p>
+																</div>
+															</div>
+
+															<!-- Aperçu du contenu extrait -->
+															<div id="extractedPreview" style="display: none; margin-top: 24px;">
+																<hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;">
+																<h4 style="margin-bottom: 12px; font-weight: 600;">👁️ Extracted Preview</h4>
+																<div class="content-preview" id="previewContent" style="max-height: 200px; overflow-y: auto; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; line-height: 1.4; color: #334155;"></div>
+																<div class="content-stats" style="margin-top: 8px; font-size: 0.75rem; color: #64748b; text-align: right; font-weight: 500;">
+																	<span id="wordCount">0 words</span> • <span id="charCount">0 characters</span>
+																</div>
+															</div>
+														</div>
+													</div>
+												</div>
+
+													<!-- Tab 3: Prompt Builder (no API key — guided prompt for ChatGPT / Claude) -->
+													<div id="ai-builder-form" class="ai-tab-pane" style="display: none; padding: 24px;">
+														<div style="text-align: right; font-size: 0.7rem; color: #0d9488; font-weight: 700; margin-bottom: -4px;">build <span id="pbBuildTag">2026-10-16-r4</span></div>
+														<p class="text-muted" style="font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
+															No API key? Build your course plan here &rarr; hit <strong>Generate & Copy Prompt</strong> below &rarr; paste it into <strong>ChatGPT, Claude, Gemini…</strong> &rarr; open the <strong>Import JSON</strong> tab to paste the model's answer. Categories, difficulties, types, points and time limits are created automatically.
+														</p>
+														<!-- Toolbar -->
+														<div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 12px; background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);">
+															<button type="button" class="btn btn-primary" onclick="addCategoryNode()" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(13,148,136,0.4)';" onmouseout="this.style.transform='none';this.style.boxShadow='0 2px 8px rgba(13,148,136,0.3)';" style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); border: none; color: #fff; font-weight: 700; padding: 10px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(13,148,136,0.3); transition: transform 0.15s ease, box-shadow 0.15s ease;">
+																<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; vertical-align: -2px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+																Add Category
+															</button>
+															<button type="button" class="btn btn-secondary" onclick="loadPromptBuilderTemplate()">
+																<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+																Load Template
+															</button>
+															<button type="button" class="btn btn-secondary" onclick="clearPromptBuilder()">
+																<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+																Clear All
+															</button>
+														</div>
+
+														<div id="promptBuilderStats" class="text-muted" style="font-size: 0.85rem; margin-bottom: 10px;">Aucune structure — ajoutez une catégorie.</div>
+														<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+															<label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">Langue
+																<select id="pbLanguage" style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px;">
+																	<option value="fr">Français</option>
+																	<option value="en">English</option>
+																	<option value="ar">Arabe</option>
+																</select>
+															</label>
+															<label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; flex: 1; min-width: 220px;">Instruction / contexte
+																<input id="pbExtra" type="text" placeholder="ex : niveau collège, français académique…" style="flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
+															</label>
+														</div>
+														<div id="promptBuilderAttach" class="prompt-builder-attach"></div>
+														<div id="promptBuilderTree" class="prompt-builder-tree">
+															<div style="text-align: center; padding: 40px 20px; color: #94a3b8;">Chargement du Prompt Builder…<br /><small>Si ce message persiste, rechargez la page (Ctrl+F5).</small></div>
+														</div>
+														<div id="promptBuilderOutputWrap" style="display: none; margin-top: 16px;">
+															<label style="font-weight: 700; font-size: 0.9rem;">📋 Prompt généré — copiez-collez dans ChatGPT / Claude</label>
+															<textarea id="promptBuilderOutput" rows="14" readonly style="width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #6ee7b7; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #f0fdf4;"></textarea>
+															<div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
+																<button type="button" class="btn btn-secondary" onclick="generateAndCopyPrompt()">↻ Régénérer & copier</button>
+																<button type="button" class="btn btn-secondary" onclick="downloadPromptBuilderPrompt()">⬇ Télécharger (.txt)</button>
+																<span id="promptBuilderStatus" class="text-muted" style="font-size: 0.85em;"></span>
+															</div>
+														</div>
+														<p class="text-muted" style="font-size: 0.82rem; margin-top: 12px;">Après génération, ouvrez l'onglet <button type="button" class="btn btn-sm btn-secondary" onclick="switchAIGeneratorTab('import')">📥 Import JSON</button> pour coller la réponse du modèle.</p>
+													</div>
+
+													<!-- Tab 4: Model answer import (paste ChatGPT/Claude JSON here) -->
+													<div id="ai-import-form" class="ai-tab-pane" style="display: none; padding: 24px;">
+														<div id="promptBuilderImportWrap" style="border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px; background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);">
+															<label for="promptBuilderImportInput" style="font-weight: 700; font-size: 0.9rem;">📥 Réponse du modèle — collez le JSON ici puis importez</label>
+															<p class="text-muted" style="font-size: 0.8rem; margin: 4px 0 8px;">Collez la réponse JSON de ChatGPT/Claude (format <code>{"categories": […], "questions": […]}</code>). Les catégories / sous-catégories seront créées automatiquement.</p>
+															<textarea id="promptBuilderImportInput" rows="12" placeholder='Collez ici le JSON du modèle, ex : {"categories": […], "questions": […]}' style="width: 100%; padding: 10px; border: 1px solid #c4b5fd; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #fff;"></textarea>
+															<div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
+																<button type="button" class="btn btn-secondary" onclick="clearPromptBuilderImport()">Effacer</button>
+																<span id="promptBuilderImportStatus" class="text-muted" style="font-size: 0.85em;"></span>
+															</div>
+														</div>
+													</div>
+
+													<!-- Cooldown Progress -->
+													<div id="ai-cooldown-container" class="hidden" style="margin: 0 24px 20px;">
+														<div class="cooldown-bar" style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
+															<div class="cooldown-progress" id="ai-cooldown-progress" style="height: 100%; background: #6366f1; width: 0%;"></div>
+														</div>
+														<small class="text-muted" id="ai-cooldown-text">Please wait...</small>
+													</div>
+
+													<!-- Error Message -->
+													<div id="ai-error-message" class="hidden" style="margin: 0 24px 20px; padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-size: 0.9rem; font-weight: 500;">
+													</div>
+												</div>
+
+												<!-- Preview Section -->
+												<div id="ai-preview-section" class="hidden">
+													<div style="padding: 16px 24px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0;">
+														<div style="display: flex; justify-content: space-between; align-items: center;">
+															<h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: #1e293b;">
+																✨ Generated Questions (<span id="ai-preview-count">0</span>)
+															</h3>
+															<div style="display: flex; gap: 8px;">
+																<button type="button" class="btn btn-sm btn-secondary" onclick="selectAllAIQuestions()">Select All</button>
+																<button type="button" class="btn btn-sm btn-secondary" onclick="deselectAllAIQuestions()">Deselect All</button>
+															</div>
+														</div>
+													</div>
+
+													<!-- Questions Preview List -->
+													<div id="ai-questions-preview" style="padding: 24px;">
+														<!-- Preview cards will be inserted here -->
+													</div>
+												</div>
+
+											<div id="ai-generator-footer" class="ai-generator-footer">
+												<!-- Form Actions Footer -->
+												<div id="ai-form-footer-actions" style="width: 100%;">
+													<button type="button" id="ai-generate-action-btn" class="btn btn-ai-generate btn-lg" onclick="generateQuestionsWithAI()" style="width: 100%;">
+														<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
+														<span>Generate Questions</span>
+													</button>
+												</div>
+												<!-- Builder Footer: Generate & Copy Prompt (same placement/size as Generate Questions) -->
+												<div id="ai-builder-footer-actions" class="hidden" style="width: 100%;">
+													<button type="button" id="ai-builder-generate-btn" class="btn btn-ai-generate btn-lg" onclick="generateAndCopyPrompt()" style="width: 100%;">
+														<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+														<span>Generate & Copy Prompt</span>
+													</button>
+												</div>
+
+												<!-- Import Footer: paste model JSON then import (same placement/size as Generate Questions) -->
+												<div id="ai-import-footer-actions" class="hidden" style="width: 100%;">
+													<button type="button" id="ai-import-json-btn" class="btn btn-ai-generate btn-lg" onclick="importPromptBuilderJSON()" style="width: 100%;">
+														<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+														<span>Import JSON</span>
+													</button>
+												</div>
+
+												<!-- Preview Actions Footer (Hidden by default) -->
+												<div id="ai-preview-footer-actions" class="hidden" style="width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+													<button type="button" class="btn btn-secondary" onclick="resetAIGenerator()">
+														<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M2.5 2v6h6M21.5 22v-6h-6"></path><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"></path></svg>
+														Generate More
+													</button>
+													<div style="display: flex; gap: 8px;">
+														<button type="button" class="btn btn-secondary" onclick="closeAIGeneratorModal()">Cancel</button>
+														<button type="button" id="ai-import-btn" class="btn btn-primary" onclick="importSelectedAIQuestions()">
+															<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+															Import Selected (<span id="ai-selected-count">0</span>)
+														</button>
+													</div>
+												</div>
+											</div>
+						</div>
+					</div>
+
+					<div id="questionBankPane" class="question-bank-pane">
 					<div class="questions-toolbar toolbar">
 						<div class="toolbar-header-group">
 							<h2>Question Management</h2>
@@ -2049,10 +2813,12 @@
 							</button>
 						</div>
 					</div>
+					</div>
 				</section>
 
 				<!-- Subjects Tab (category management nested per subject) -->
 				<section id="subjects" class="tab-content" data-roles="admin,teacher">
+					<div id="subjectsAnalytics" class="teacher-domain-analytics" data-domain="subjects" hidden></div>
 					<div class="category-management-container">
 						<div class="category-band">
 							<!-- Subject Management: one pill per real subject, leftover
@@ -2603,6 +3369,7 @@
 
 				<!-- Exams Tab -->
 				<section id="exams" class="tab-content" data-roles="admin,teacher">
+					<div id="examsAnalytics" class="teacher-domain-analytics" data-domain="exams" hidden></div>
 					<div id="examListPane" class="exam-management-container">
 						<div class="toolbar">
 							<div class="toolbar-header-group">
@@ -2939,6 +3706,7 @@
 
 				<!-- Classes Tab -->
 				<section id="classes" class="tab-content" data-roles="admin,teacher">
+					<div id="classesAnalytics" class="teacher-domain-analytics" data-domain="classes" hidden></div>
 					<div id="classListPane" class="class-management-container">
 						<div class="toolbar">
 							<div class="toolbar-header-group">
@@ -3142,104 +3910,48 @@
 						         in the #addStudentsPickerModal. -->
 						<div class="class-workspace-card class-roster-card">
 							<div class="toolbar roster-main-toolbar">
-								<div class="toolbar-header-group">
-									<h2>Class Roster</h2>
-									<span class="roster-summary-badge" id="assignClassRosterSummary">0 student(s)</span>
-									<!-- Bulk Actions Area (questions identity) -->
-									<div
-										id="bulk-actions-students"
-										class="bulk-actions-container hidden"
-									>
-										<span class="selection-info">
-											<span id="selected-count-students">0</span> selected
-										</span>
-										<button
-											type="button"
-											id="bulkEnableStudentsBtn"
-											class="btn btn-success-soft admin-only-bulk-action"
-											onclick="bulkSetStudentAccounts('active')"
-											title="Activate the selected students' accounts"
-										>
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-											<span>Enable</span>
-										</button>
-										<button
-											type="button"
-											id="bulkDisableStudentsBtn"
-											class="btn btn-warning-soft admin-only-bulk-action"
-											onclick="bulkSetStudentAccounts('disabled')"
-											title="Suspend the selected students' accounts"
-										>
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
-											<span>Disable</span>
-										</button>
-										<button
-											type="button"
-											class="btn btn-outline"
-											onclick="exportSelectedStudents()"
-											title="Export the selected students as CSV"
-										>
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-											<span>Export</span>
-										</button>
-										<button
-											type="button"
-											class="btn btn-danger-soft"
-											onclick="deleteSelectedStudents()"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<polyline points="3 6 5 6 21 6"></polyline>
-												<path
-													d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-												></path>
-											</svg>
-											<span>Delete Selected</span>
-										</button>
-										<div class="divider-vertical"></div>
+								<div class="roster-toolbar-head">
+									<div class="roster-title-block">
+										<h2>Class Roster</h2>
+										<span class="roster-summary-badge" id="assignClassRosterSummary">0 student(s)</span>
 									</div>
+									<label class="roster-mobile-select-all">
+										<input
+											type="checkbox"
+											id="selectAllStudentsMobile"
+											data-bulk-select-all="students"
+											onchange="toggleBulkSelectAllGeneric(this, 'students')"
+										/>
+										<span>Select all</span>
+									</label>
 									<div class="roster-add-actions">
 										<button
 											type="button"
-											class="btn btn-outline"
-											onclick="openAddStudentModal()"
-											title="Add a student without an account (number + name only)"
+											class="mobile-filters-toggle"
+											data-filter-target="#studentRosterFilterControls"
+											onclick="toggleMobileFilters(this)"
+											aria-expanded="false"
 										>
-											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-											<span>Add Student</span>
+											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+											<span class="mobile-filters-toggle-label">Filters</span>
+											<span class="mobile-filters-count hidden">0</span>
+											<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
 										</button>
 										<button
 											type="button"
 											id="addStudentsPickerBtn"
 											class="btn btn-primary"
 											onclick="openAddStudentsPickerModal()"
-											title="Add students from existing user accounts"
+											title="Create a student account, enroll an existing student, or approve a signup"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
 											<span>Add Students</span>
 										</button>
 									</div>
 								</div>
-								<div class="toolbar-controls">
-									<button
-										type="button"
-										class="mobile-filters-toggle"
-										data-filter-target="#studentRosterSortWrap, #rosterCsvActions"
-										onclick="toggleMobileFilters(this)"
-										aria-expanded="false"
-									>
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-										<span class="mobile-filters-toggle-label">Filters</span>
-										<span class="mobile-filters-count hidden">0</span>
-										<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-									</button>
+							<div class="roster-filter-bar">
+								<div class="roster-search">
+									<label class="roster-filter-label sr-only" for="studentRosterSearch">Search roster</label>
 									<div class="search-wrapper">
 										<input
 											type="text"
@@ -3248,63 +3960,133 @@
 											onkeyup="filterStudentRosterTable()"
 										/>
 									</div>
-									<div class="sort-wrapper collapsible-filter-controls">
-										<select id="studentRosterStatusFilter" onchange="filterStudentRosterTable()">
+								</div>
+								<div
+									id="studentRosterFilterControls"
+									class="roster-filter-controls collapsible-filter-controls"
+								>
+									<div class="roster-filter-field">
+										<label class="roster-filter-label" for="studentRosterStatusFilter">Status</label>
+										<select
+											id="studentRosterStatusFilter"
+											class="form-control"
+											onchange="filterStudentRosterTable()"
+										>
 											<option value="all">All Status</option>
 											<option value="active">Active</option>
 											<option value="disabled">Disabled</option>
 											<option value="no-account">No account yet</option>
 										</select>
 									</div>
-									<div class="sort-wrapper collapsible-filter-controls" id="studentRosterSortWrap">
-										<select id="studentRosterSortBy" onchange="sortStudentRoster()">
-											<option value="name">Name</option>
-											<option value="number">Student #</option>
-											<option value="status">Status</option>
-										</select>
-										<button
-											id="sortRosterDirection"
-											class="btn-icon"
-											onclick="toggleRosterSortDirection()"
-											title="Toggle Sort Direction"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
+									<div class="roster-filter-field" id="studentRosterSortWrap">
+										<label class="roster-filter-label" for="studentRosterSortBy">Sort</label>
+										<div class="sort-wrapper">
+											<select
+												id="studentRosterSortBy"
+												class="form-control"
+												onchange="sortStudentRoster()"
 											>
-												<path d="M12 5v14M19 12l-7 7-7-7" />
-											</svg>
-										</button>
+												<option value="name">Name</option>
+												<option value="number">Student #</option>
+												<option value="status">Status</option>
+											</select>
+											<button
+												id="sortRosterDirection"
+												class="btn-icon"
+												onclick="toggleRosterSortDirection()"
+												title="Toggle Sort Direction"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+												>
+													<path d="M12 5v14M19 12l-7 7-7-7" />
+												</svg>
+											</button>
+										</div>
 									</div>
-									<div class="sort-wrapper collapsible-filter-controls" id="rosterCsvActions">
-										<button
-											type="button"
-											class="btn btn-sm btn-outline"
-											onclick="exportStudents()"
-											title="Export roster as CSV"
-										>
-											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-											<span>Export CSV</span>
-										</button>
-										<button
-											type="button"
-											class="btn btn-sm btn-outline"
-											onclick="importStudents()"
-											title="Import roster from CSV"
-										>
-											<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-											<span>Import CSV</span>
-										</button>
+									<div class="roster-filter-io" id="rosterCsvActions">
+											<button
+												type="button"
+												class="btn btn-sm btn-outline"
+												onclick="exportStudents()"
+												title="Export roster as CSV"
+											>
+												<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+												<span>Export CSV</span>
+											</button>
 									</div>
 								</div>
 							</div>
+						</div>
 
-							<!-- Full Roster Table -->
+						<!-- Bulk actions live on their own row so they never collide
+						     with the roster title, filters, or Add buttons. -->
+						<div
+							id="bulk-actions-students"
+							class="bulk-actions-container roster-bulk-bar hidden"
+							role="region"
+							aria-label="Bulk student actions"
+						>
+							<span class="selection-info">
+								<span id="selected-count-students">0</span> selected
+							</span>
+							<div class="roster-bulk-actions">
+								<button
+									type="button"
+									id="bulkEnableStudentsBtn"
+									class="btn btn-success-soft admin-only-bulk-action"
+									onclick="bulkSetStudentAccounts('active')"
+									title="Activate the selected students' accounts"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+									<span>Enable</span>
+								</button>
+								<button
+									type="button"
+									id="bulkDisableStudentsBtn"
+									class="btn btn-warning-soft admin-only-bulk-action"
+									onclick="bulkSetStudentAccounts('disabled')"
+									title="Suspend the selected students' accounts"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+									<span>Disable</span>
+								</button>
+								<button
+									type="button"
+									class="btn btn-outline"
+									onclick="exportSelectedStudents()"
+									title="Export the selected students as CSV"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+									<span>Export</span>
+								</button>
+								<button
+									type="button"
+									class="btn btn-danger-soft"
+									onclick="deleteSelectedStudents()"
+									title="Remove the selected students from the roster"
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+									<span>Delete Selected</span>
+								</button>
+								<button
+									type="button"
+									class="btn btn-ghost"
+									onclick="window.BulkSelect && window.BulkSelect.clear('students')"
+									title="Clear the current selection"
+								>
+									Clear selection
+								</button>
+							</div>
+						</div>
+
+						<!-- Full Roster Table -->
 							<div class="table-container roster-table-container">
 								<table class="data-table roster-table" id="studentRosterTable">
 									<thead>
@@ -3321,7 +4103,6 @@
 											<th data-label="Name">Name</th>
 											<th data-label="Account">Account</th>
 											<th data-label="Status">Status</th>
-											<th style="width: 140px" data-label="Actions">Actions</th>
 										</tr>
 									</thead>
 									<tbody id="selectedStudentsList"></tbody>
@@ -3349,26 +4130,13 @@
 								</div>
 							</div>
 
-							<!-- Footer Save Bar inside Roster card -->
-							<div class="roster-save-bar">
-								<span id="rosterPendingHint" class="roster-pending-hint hidden">
-									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-									<span>Unsaved roster changes — click Save Roster to apply.</span>
-								</span>
-								<button type="button" class="btn btn-secondary" onclick="closeAssignClassStudents()">
-									Back to Classes
-								</button>
-								<button type="button" class="btn btn-primary" id="saveAssignClassStudentsBtn" onclick="saveAssignClassStudents()">
-									<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-									<span>Save Roster</span>
-								</button>
-							</div>
 						</div>
 					</div>
 				</section>
 
 				<!-- Results Tab -->
 				<section id="results" class="tab-content" data-roles="admin,teacher">
+					<div id="resultsAnalytics" class="teacher-domain-analytics" data-domain="results" hidden></div>
 					<div class="dashboard-container results-container">
 						<header class="toolbar results-toolbar">
 							<div class="toolbar-header-group results-toolbar-main">
@@ -3413,76 +4181,6 @@
 								</div>
 							</div>
 						</header>
-
-						<div class="kpi-grid results-kpi-grid" id="resultsKpiGrid">
-							<div class="stat-card blue" data-tooltip="Unique student accounts in the current class scope. Each student is counted once, even with no attempts.">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-										<circle cx="9" cy="7" r="4"></circle>
-										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-students">0</h3>
-									<p>Students</p>
-								</div>
-							</div>
-							<div class="stat-card cyan" data-tooltip="Students with at least one completed exam, training or game activity in the selected period and filters.">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-active">0</h3>
-									<p>Active Students</p>
-								</div>
-							</div>
-							<div class="stat-card indigo" data-tooltip="Mean of formal exam attempts, normalized to /20. Training practice and game scores are excluded.">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-										<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-avg">—</h3>
-									<p>Average Exam Score</p>
-								</div>
-							</div>
-							<div class="stat-card green" data-tooltip="Formal exam attempts scoring at least 10/20. Training and game results never count as certification.">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-										<polyline points="22 4 12 14.01 9 11.01"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-pass-rate">—</h3>
-									<p>Exam Pass Rate</p>
-								</div>
-							</div>
-							<div class="stat-card rose" data-tooltip="Students with two or more exam attempts averaging below 10/20, a decline of 1.5+ points, or no activity in the selected period.">
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-										<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-										<line x1="12" y1="9" x2="12" y2="13"></line>
-										<line x1="12" y1="17" x2="12.01" y2="17"></line>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-results-attention">0</h3>
-									<p>Needs Attention</p>
-								</div>
-							</div>
-						</div>
 
 						<div class="results-filter-shell">
 							<div class="results-filter-top">
@@ -3582,6 +4280,76 @@
 								<span class="results-filter-summary-label">Filtered by</span>
 								<div class="results-filter-chips" id="resultsFilterChips"></div>
 								<button type="button" class="results-filter-clear-all" onclick="clearAllResultFilters()">Clear all</button>
+							</div>
+						</div>
+
+						<div class="kpi-grid results-kpi-grid" id="resultsKpiGrid">
+							<div class="stat-card blue" data-tooltip="Unique student accounts in the current class scope. Each student is counted once, even with no attempts.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+										<circle cx="9" cy="7" r="4"></circle>
+										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-students">0</h3>
+									<p>Students</p>
+								</div>
+							</div>
+							<div class="stat-card cyan" data-tooltip="Students with at least one completed exam, training or game activity in the selected period and filters.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-active">0</h3>
+									<p>Active Students</p>
+								</div>
+							</div>
+							<div class="stat-card indigo" data-tooltip="Mean of formal exam attempts, normalized to /20. Training practice and game scores are excluded.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+										<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-avg">—</h3>
+									<p>Average Exam Score</p>
+								</div>
+							</div>
+							<div class="stat-card green" data-tooltip="Formal exam attempts scoring at least 10/20. Training and game results never count as certification.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+										<polyline points="22 4 12 14.01 9 11.01"></polyline>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-pass-rate">—</h3>
+									<p>Exam Pass Rate</p>
+								</div>
+							</div>
+							<div class="stat-card rose" data-tooltip="Students with two or more exam attempts averaging below 10/20, a decline of 1.5+ points, or no activity in the selected period.">
+								<div class="stat-bar"></div>
+								<div class="stat-icon">
+									<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+										<line x1="12" y1="9" x2="12" y2="13"></line>
+										<line x1="12" y1="17" x2="12.01" y2="17"></line>
+									</svg>
+								</div>
+								<div class="stat-info">
+									<h3 id="kpi-results-attention">0</h3>
+									<p>Needs Attention</p>
+								</div>
 							</div>
 						</div>
 
@@ -3699,6 +4467,7 @@
 
 				<!-- Games Tab -->
 				<section id="games" class="tab-content" data-roles="admin,teacher">
+					<div id="gamesAnalytics" class="teacher-domain-analytics" data-domain="games" hidden></div>
 					<div class="dashboard-container">
 						<div class="dashboard-header">
 							<div class="welcome-text">
@@ -5333,7 +6102,93 @@
 						<div class="form-row">
 							<div class="form-group half">
 								<div class="label-with-action label-stack">
-									<label for="category">Curriculum Objective / Category</label>
+									<label for="questionSubject">Subject / Discipline</label>
+									<button
+										type="button"
+										class="btn-text-action"
+										onclick="toggleInlineSubjectInput()"
+										id="addSubjectToggleBtn"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="12"
+											height="12"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<line x1="12" y1="5" x2="12" y2="19"></line>
+											<line x1="5" y1="12" x2="19" y2="12"></line>
+										</svg>
+										+ New subject
+									</button>
+								</div>
+
+								<div id="subject-select-container">
+									<select
+										id="questionSubject"
+										class="form-control"
+										onchange="onQuestionSubjectChange()"
+									></select>
+								</div>
+
+								<div
+									id="subject-input-container"
+									class="inline-input-wrapper hidden"
+									style="display: none"
+								>
+									<input
+										type="text"
+										id="inlineSubjectInput"
+										class="form-control"
+										placeholder="New subject name..."
+										onkeydown="if (event.key === 'Enter') { event.preventDefault(); saveInlineSubject(); }"
+									/>
+									<button
+										type="button"
+										class="btn-inline-save"
+										onclick="saveInlineSubject()"
+										title="Save"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<polyline points="20 6 9 17 4 12"></polyline>
+										</svg>
+									</button>
+									<button
+										type="button"
+										class="btn-inline-cancel"
+										onclick="toggleInlineSubjectInput()"
+										title="Cancel"
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+										>
+											<line x1="18" y1="6" x2="6" y2="18"></line>
+											<line x1="6" y1="6" x2="18" y2="18"></line>
+										</svg>
+									</button>
+								</div>
+								<small class="text-muted">Modules and lessons are created inside the selected subject.</small>
+							</div>
+
+							<div class="form-group half">
+								<div class="label-with-action label-stack">
+									<label for="category">Module / Lesson / Subcategory</label>
 									<button
 										type="button"
 										class="btn-text-action"
@@ -6000,8 +6855,69 @@
 							<input type="text" id="categoryName" placeholder="e.g. Fractions and decimals / Grammar basics / Addition" required />
 						</div>
 						<div class="form-group">
-							<label for="categorySubject">Subject / Discipline</label>
-							<select id="categorySubject" class="form-control" onchange="populateCategoryParentPicker(currentCategoryId)"></select>
+							<div class="label-with-action label-stack">
+								<label for="categorySubject">Subject / Discipline</label>
+								<button
+									type="button"
+									class="btn-text-action"
+									onclick="toggleCategorySubjectInline()"
+								>
+									+ New subject
+								</button>
+							</div>
+							<div id="categorySubjectSelectContainer">
+								<select id="categorySubject" class="form-control" onchange="populateCategoryParentPicker(currentCategoryId)"></select>
+							</div>
+							<div
+								id="categorySubjectInlineContainer"
+								class="inline-input-wrapper hidden"
+								style="display: none"
+							>
+								<input
+									type="text"
+									id="categoryInlineSubjectInput"
+									class="form-control"
+									placeholder="New subject name..."
+									onkeydown="if (event.key === 'Enter') { event.preventDefault(); saveCategorySubjectInline(); }"
+								/>
+								<button
+									type="button"
+									class="btn-inline-save"
+									onclick="saveCategorySubjectInline()"
+									title="Save"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+								</button>
+								<button
+									type="button"
+									class="btn-inline-cancel"
+									onclick="toggleCategorySubjectInline()"
+									title="Cancel"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+									>
+										<line x1="18" y1="6" x2="6" y2="18"></line>
+										<line x1="6" y1="6" x2="18" y2="18"></line>
+									</svg>
+								</button>
+							</div>
 							<small class="text-muted">Modules, chapters and lessons are organized inside each subject.</small>
 						</div>
 						<div class="form-group">
@@ -7835,7 +8751,7 @@
 								<h3 style="margin: 0; font-size: 1.1rem;">Teacher Access Control</h3>
 							</div>
 							<p class="text-muted" style="margin-bottom: 16px; font-size: 0.9em;">
-								Choose which dashboard tabs and settings teachers can access. Activity Log and Monitoring are always admin-only.
+								Choose which dashboard tabs and settings teachers can access. Monitoring is always admin-only.
 							</p>
 							<div class="teacher-access-grid">
 								<label class="switch-label">
@@ -8520,10 +9436,13 @@
 			</div>
 		</div>
 
-		<!-- Add Students to Class (searchable checklist picker; replaces the
-		     old native multi-select in the two-panel workspace) -->
-		<div id="addStudentsPickerModal" class="modal">
-			<div class="modal-content">
+		<!-- Add Students to Class — tabbed enrollment.
+		     Tab 1 creates a full student account (identity, credentials, access &
+		     role) and adds it to the class immediately.
+		     Tab 2 enrolls existing student accounts and approves pending online
+		     signups (account requests) targeting this class. -->
+		<div id="addStudentsPickerModal" class="modal add-students-modal">
+			<div class="modal-content add-students-modal-content">
 				<div class="modal-header">
 					<div class="modal-header-with-icon">
 						<div class="modal-header-icon icon-blue">
@@ -8531,42 +9450,177 @@
 						</div>
 						<div class="modal-header-text">
 							<h2 id="addStudentsPickerTitle">Add Students</h2>
-							<p class="modal-header-subtitle">
-								Pick student accounts to add to this class roster
-							</p>
+								<p class="modal-header-subtitle">
+									Create a new student account, enroll an existing one, or approve a pending signup.
+								</p>
 						</div>
 					</div>
 					<span class="close" onclick="closeAddStudentsPickerModal()">&times;</span>
 				</div>
 				<div class="modal-body">
-					<div class="picker-toolbar">
-						<div class="filter-field">
-							<label for="studentClassFilter">Origin Class</label>
-							<select id="studentClassFilter" class="form-control" onchange="onStudentClassFilterChange()">
-								<option value="all">All Classes</option>
-							</select>
+					<div class="add-students-tabs" role="tablist" aria-label="Add students mode">
+						<button
+							type="button"
+							id="addStudentsTabNewBtn"
+							class="add-students-tab is-active"
+							role="tab"
+							aria-selected="true"
+							aria-controls="addStudentsNewPanel"
+							onclick="switchAddStudentsTab('new')"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8v6M23 11h-6"></path></svg>
+							<span>Create New</span>
+						</button>
+						<button
+							type="button"
+							id="addStudentsTabExistingBtn"
+							class="add-students-tab"
+							role="tab"
+							aria-selected="false"
+							aria-controls="addStudentsExistingPanel"
+							onclick="switchAddStudentsTab('existing')"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+							<span>Existing &amp; Signups</span>
+							<span id="addStudentsPendingCount" class="add-students-tab-badge hidden">0</span>
+						</button>
+					</div>
+
+					<!-- Create New panel -->
+					<div
+						id="addStudentsNewPanel"
+						class="add-students-panel"
+						role="tabpanel"
+						aria-labelledby="addStudentsTabNewBtn"
+					>
+						<form id="addStudentForm" onsubmit="submitNewStudentForm(event)">
+							<div class="add-students-class-banner">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+								<span>Adding to <strong id="newStudentClassLabel">this class</strong></span>
+							</div>
+
+							<div class="add-students-card">
+								<h4 class="add-students-card-title">Student information</h4>
+								<div class="add-students-grid add-students-grid-identity">
+									<div class="form-group">
+										<label for="newStudentTitle">Title</label>
+										<select id="newStudentTitle" class="form-control">
+											<option value="">—</option>
+											<option value="Mr">Mr</option>
+											<option value="Mme">Mme</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label for="newStudentName">Full name</label>
+										<input type="text" id="newStudentName" class="form-control" required placeholder="e.g. Karim Haddad" autocomplete="off" />
+									</div>
+								</div>
+								<div class="form-group">
+									<label for="newStudentNumber">Student number</label>
+									<input type="text" id="newStudentNumber" class="form-control" required inputmode="numeric" placeholder="e.g. 20260014" autocomplete="off" />
+									<small class="text-muted">Unique within the school — used on results and exports.</small>
+								</div>
+							</div>
+
+							<div class="add-students-card">
+								<h4 class="add-students-card-title">Account credentials</h4>
+								<div class="form-group">
+									<label for="newStudentUsername">Username</label>
+									<input type="text" id="newStudentUsername" class="form-control" required placeholder="e.g. karim.haddad" autocomplete="off" />
+								</div>
+								<div class="form-group">
+									<label for="newStudentPassword">Password</label>
+									<div class="password-input-group">
+										<input type="password" id="newStudentPassword" class="form-control" required minlength="6" placeholder="Minimum 6 characters" autocomplete="new-password" />
+										<button type="button" class="btn btn-sm btn-outline" onclick="toggleNewStudentPassword()" title="Show or hide the password">
+											<span id="newStudentPasswordToggleLabel">Show</span>
+										</button>
+										<button type="button" class="btn btn-sm btn-outline" onclick="generateNewStudentPassword()" title="Generate a random password">
+											Generate
+										</button>
+									</div>
+									<small class="text-muted">Share these credentials with the student after creating the account.</small>
+								</div>
+							</div>
+
+							<div class="add-students-card">
+								<h4 class="add-students-card-title">Access &amp; role</h4>
+								<div class="add-students-grid add-students-grid-2">
+									<div class="form-group">
+										<label for="newStudentRole">Role</label>
+										<select id="newStudentRole" class="form-control" disabled>
+											<option value="student" selected>Student</option>
+										</select>
+									</div>
+									<div class="form-group">
+										<label for="newStudentStatus">Account status</label>
+										<select id="newStudentStatus" class="form-control">
+											<option value="active" selected>Active</option>
+											<option value="disabled">Disabled</option>
+										</select>
+									</div>
+								</div>
+								<p class="add-students-hint">
+									Students get class-bound access to assigned work. Staff roles are managed from Edit User or Settings → Users.
+								</p>
+							</div>
+
+							<div class="add-students-actions">
+								<button type="button" class="btn btn-secondary" onclick="closeAddStudentsPickerModal()">
+									Cancel
+								</button>
+								<button type="submit" class="btn btn-primary" id="createStudentSubmitBtn">
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+									<span>Create &amp; Add Student</span>
+								</button>
+							</div>
+						</form>
+					</div>
+
+					<!-- Existing & Signups panel -->
+					<div
+						id="addStudentsExistingPanel"
+						class="add-students-panel hidden"
+						role="tabpanel"
+						aria-labelledby="addStudentsTabExistingBtn"
+					>
+						<div id="pendingSignupsSection" class="pending-signups-section hidden">
+							<div class="pending-signups-head">
+								<h4>Pending signups</h4>
+								<span class="pending-signups-sub">Students waiting for approval to join this class</span>
+							</div>
+							<div id="pendingSignupsList" class="pending-signups-list"></div>
 						</div>
-						<div class="filter-field picker-search-field">
-							<label for="studentPickerSearch">Search</label>
-							<input type="text" id="studentPickerSearch" class="form-control" placeholder="Search by name, username or number..." oninput="renderStudentPickerList()" />
+
+						<div class="picker-toolbar">
+							<div class="filter-field">
+								<label for="studentClassFilter">Origin class</label>
+								<select id="studentClassFilter" class="form-control" onchange="onStudentClassFilterChange()">
+									<option value="all">All Classes</option>
+								</select>
+							</div>
+							<div class="filter-field picker-search-field">
+								<label for="studentPickerSearch">Search</label>
+								<input type="text" id="studentPickerSearch" class="form-control" placeholder="Search by name, username or number..." oninput="renderStudentPickerList()" />
+							</div>
+						</div>
+						<div id="studentPickerList" class="student-picker-list" aria-label="Available student accounts"></div>
+						<p class="text-muted small picker-helper-text">
+							Enrolling an account assigns it to this class immediately. Disabled accounts keep their status and can be activated from Edit User.
+						</p>
+						<div class="add-students-actions">
+							<button type="button" class="btn btn-ghost" onclick="deselectAllStudentsInPicker()">
+								Deselect all
+							</button>
+							<button type="button" class="btn btn-secondary" onclick="addAllStudentsFromUsers()">
+								Add all
+							</button>
+							<button type="button" class="btn btn-primary" id="addStudentsPickerConfirmBtn" onclick="addStudentFromUserPicker()">
+								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+								<span>Add selected (<span id="addStudentsPickerCount">0</span>)</span>
+							</button>
 						</div>
 					</div>
-					<div id="studentPickerList" class="student-picker-list" aria-label="Available student accounts"></div>
-					<p class="text-muted small picker-helper-text">
-						Students join via signup or are created in Settings → Users. Adding stages rows in the roster — click <strong>Save Roster</strong> to persist.
-					</p>
-				</div>
-				<div class="modal-footer modal-footer--unified">
-					<button type="button" class="btn btn-ghost" onclick="deselectAllStudentsInPicker()">
-						Deselect All
-					</button>
-					<button type="button" class="btn btn-secondary" onclick="addAllStudentsFromUsers()">
-						Add All
-					</button>
-					<button type="button" class="btn btn-primary" id="addStudentsPickerConfirmBtn" onclick="addStudentFromUserPicker()">
-						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
-						<span>Add Selected (<span id="addStudentsPickerCount">0</span>)</span>
-					</button>
 				</div>
 			</div>
 		</div>
@@ -8859,781 +9913,6 @@
 			</div>
 			<div id="actionSheetContent" class="action-sheet-content">
 				<!-- Actions will be dynamically populated here -->
-			</div>
-			<button
-				class="action-sheet-cancel-btn"
-				onclick="MobileActionSheet.close()"
-			>
-				Cancel
-			</button>
-		</div>
-
-		<!-- AI Question Generator Modal -->
-		<div id="aiGeneratorModal" class="modal">
-			<div class="modal-content modal-lg">
-				<div class="modal-header ai-modal-header" style="color: white; border-bottom: none; border-top-left-radius: 12px; border-top-right-radius: 12px; position: relative; overflow: hidden;">
-					<!-- Decorative Background Glow -->
-					<div style="position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%; filter: blur(40px);"></div>
-					
-					<div class="ai-modal-brand">
-						<div class="ai-header-icon-wrapper">
-							<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-						</div>
-						<div class="ai-modal-title-group">
-							<h2>AI Question Generator</h2>
-							<p class="ai-modal-subtitle">Build thoughtful, classroom-ready questions in seconds.</p>
-							<div class="ai-modal-model-row">
-								<span id="ai-active-model-badge" class="active-model-badge">
-									<span class="pulse-dot"></span>
-									<span id="ai-current-model-name">Loading model...</span>
-								</span>
-							</div>
-						</div>
-					</div>
-					<span class="close" onclick="closeAIGeneratorModal()" style="color: white; font-size: 28px; opacity: 0.8; cursor: pointer; transition: opacity 0.2s;">&times;</span>
-				</div>
-				<div class="modal-body" style="padding: 0;">
-					<!-- Tab Navigation -->
-					<div class="ai-modal-tabs" role="tablist" aria-label="Question source">
-						<button class="ai-modal-tab active" role="tab" aria-selected="true" onclick="switchAIGeneratorTab('standard')" id="tab-ai-standard">
-							<span class="ai-tab-icon" aria-hidden="true">✦</span><span><strong>From a topic</strong><small>Create questions from a subject</small></span>
-						</button>
-						<button class="ai-modal-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('document')" id="tab-ai-document">
-							<span class="ai-tab-icon" aria-hidden="true">▤</span><span><strong>From materials</strong><small>Use your uploaded documents</small></span>
-						</button>
-						<button class="ai-modal-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('builder')" id="tab-ai-builder">
-							<span class="ai-tab-icon" aria-hidden="true">🧱</span><span><strong>Prompt Builder</strong><small>ChatGPT / Claude course plan</small></span>
-						</button>
-						<button class="ai-modal-tab" role="tab" aria-selected="false" onclick="switchAIGeneratorTab('import')" id="tab-ai-import">
-							<span class="ai-tab-icon" aria-hidden="true">📥</span><span><strong>Import JSON</strong><small>Réponse du modèle</small></span>
-						</button>
-					</div>
-
-					<!-- Tab Contents -->
-					<div class="ai-tab-containers" style="position: relative;">
-						<!-- Tab 1: Standard Topic-based Generator -->
-						<div id="ai-generator-form" class="ai-tab-pane active" style="padding: 24px;">
-<!-- Option Style: Text (classic) vs Images (manual image builder) -->
-						<div class="form-row ai-option-style-row" style="margin-top: 0;">
-							<div class="form-group" style="flex: 1;">
-								<label style="font-weight: 700; font-size: 1rem;">🎨 Option Style</label>
-								<small class="text-muted ai-style-description">Choose how answer options appear in the generated question.</small>
-								<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 10px;">
-									<div class="ai-option-style" id="ai-option-style" role="group" aria-label="Option style">
-										<button type="button" class="ai-style-btn active" data-style="text" aria-pressed="true" onclick="window.setAIOptionStyle('text')"><span aria-hidden="true">📝</span><span>Text options</span><small>Generate from a topic</small></button>
-										<button type="button" class="ai-style-btn" data-style="image" aria-pressed="false" onclick="window.setAIOptionStyle('image')"><span aria-hidden="true">🖼️</span><span>Image options</span><small>Build one question</small></button>
-									</div>
-									<input type="hidden" id="ai-option-style-value" value="text" />
-									<small class="text-muted" id="ai-option-style-warning"></small>
-								</div>
-							</div>
-						</div>
-
-						<!-- TEXT style fields: classic generation (model + topic + types → text options) -->
-						<div id="ai-text-style-fields">
-						<!-- Topic Input -->
-						<div class="form-group">
-							<label for="ai-topic" style="font-weight: 600; font-size: 1rem;">
-								📝 Topic / Subject
-							</label>
-							<textarea id="ai-topic" rows="2" class="form-control" placeholder="Ex: Windows 10 basics, File management, Internet security..." style="padding: 12px; font-size: 1rem;"></textarea>
-							<small class="text-muted">Describe the topic or subject for your questions</small>
-						</div>
-
-						<!-- AI Model (writes the questions as text) -->
-						<div class="form-row" style="margin-top: 20px;">
-							<div class="form-group" style="flex: 1;">
-								<label for="ai-generator-model-select" style="font-weight: 600;">🤖 AI Model <small class="text-muted">(writes the questions)</small></label>
-								<select id="ai-generator-model-select" class="form-control" style="padding: 10px;" onchange="window.onAIGeneratorModelChange(this)">
-									<option value="">-- Use default (your last selection in Settings) --</option>
-								</select>
-								<small class="text-muted" id="ai-generator-model-hint">Pick a model here, or use your last Settings selection. It writes the question text and the text options.</small>
-							</div>
-						</div>
-
-							<!-- Config Row: Difficulty + Category side by side -->
-							<div class="form-row" style="margin-top: 20px;">
-<div class="form-group half">
-										<label for="ai-difficulty" style="font-weight: 600;">Difficulty</label>
-										<select id="ai-difficulty" class="form-control" style="padding: 10px;">
-										<option value="easy">🟢 Easy</option>
-										<option value="medium" selected>🟡 Medium</option>
-										<option value="hard">🔴 Hard</option>
-										<option value="mixed">🌈 Mixed</option>
-									</select>
-								</div>
-								<div class="form-group half">
-									<label for="ai-category" style="font-weight: 600;">Category</label>
-									<select id="ai-category" class="form-control" style="padding: 10px;" onchange="onAICategoryChange('ai-category', 'ai-subcategory')">
-										<option value="uncategorized">Uncategorized</option>
-									</select>
-								</div>
-							</div>
-
-							<!-- Config Row: Subcategory + Time per question -->
-							<div class="form-row" style="margin-top: 20px;">
-								<div class="form-group half">
-									<label for="ai-subcategory" style="font-weight: 600;">Subcategory</label>
-									<select id="ai-subcategory" class="form-control" style="padding: 10px;">
-										<option value="">—</option>
-									</select>
-									<small class="text-muted">Questions are filed in the deepest level</small>
-								</div>
-								<div class="form-group half">
-									<label for="ai-time-limit" style="font-weight: 600;">⏱ Time per question (sec)</label>
-									<input type="number" id="ai-time-limit" class="form-control" style="padding: 10px;" min="0" max="3600" step="5" value="30" />
-									<small class="text-muted">0 = no time limit</small>
-								</div>
-							</div>
-
-							<!-- Hidden legacy count field for backwards compat -->
-				<!-- Hidden legacy count field for backwards compat -->
-						<input type="hidden" id="ai-count" value="0" />
-
-						<!-- Question Types with Per-Type Steppers -->
-						<div class="form-group" style="margin-top: 20px;">
-							<div class="ai-types-header">
-								<label style="font-weight: 600;">✅ Question Types &amp; Counts</label>
-								<span class="ai-total-badge" id="ai-total-badge-standard">Total: <strong id="ai-total-count-standard">1</strong></span>
-							</div>
-							<small class="text-muted" style="display:block; margin-bottom:12px;">Select types and set how many of each to generate</small>
-
-							<div class="ai-type-grid-v2" id="ai-type-grid-standard">
-
-								<div class="ai-type-card-v2 selected" data-type="multiple-choice" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="multiple-choice" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" checked />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">📝</span>
-										<span class="ai-type-name-v2">MC (Single)</span>
-										<div class="ai-type-stepper" id="stepper-standard-multiple-choice">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice',-1)">−</button>
-											<span class="stepper-val" id="count-standard-multiple-choice">1</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<div class="ai-type-card-v2" data-type="multiple-choice-multi" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="multiple-choice-multi" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">☑️</span>
-										<span class="ai-type-name-v2">MC (Multi)</span>
-										<div class="ai-type-stepper hidden" id="stepper-standard-multiple-choice-multi">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice-multi',-1)">−</button>
-											<span class="stepper-val" id="count-standard-multiple-choice-multi">0</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','multiple-choice-multi',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<div class="ai-type-card-v2" data-type="true-false" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="true-false" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">✅</span>
-										<span class="ai-type-name-v2">True / False</span>
-										<div class="ai-type-stepper hidden" id="stepper-standard-true-false">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','true-false',-1)">−</button>
-											<span class="stepper-val" id="count-standard-true-false">0</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','true-false',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<div class="ai-type-card-v2" data-type="draggable" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="draggable" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">↕️</span>
-										<span class="ai-type-name-v2">Drag &amp; Drop</span>
-										<div class="ai-type-stepper hidden" id="stepper-standard-draggable">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','draggable',-1)">−</button>
-											<span class="stepper-val" id="count-standard-draggable">0</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','draggable',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<div class="ai-type-card-v2" data-type="odd-one-out" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="odd-one-out" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">🔍</span>
-										<span class="ai-type-name-v2">Odd One Out</span>
-										<div class="ai-type-stepper hidden" id="stepper-standard-odd-one-out">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','odd-one-out',-1)">−</button>
-											<span class="stepper-val" id="count-standard-odd-one-out">0</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','odd-one-out',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<div class="ai-type-card-v2" data-type="matching-pairs" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="matching-pairs" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">🔗</span>
-										<span class="ai-type-name-v2">Matching Pairs</span>
-										<div class="ai-type-stepper hidden" id="stepper-standard-matching-pairs">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','matching-pairs',-1)">−</button>
-											<span class="stepper-val" id="count-standard-matching-pairs">0</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','matching-pairs',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<div class="ai-type-card-v2" data-type="fill-blank" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="fill-blank" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">✏️</span>
-										<span class="ai-type-name-v2">Fill in Blank</span>
-										<div class="ai-type-stepper hidden" id="stepper-standard-fill-blank">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','fill-blank',-1)">−</button>
-											<span class="stepper-val" id="count-standard-fill-blank">0</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','fill-blank',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<div class="ai-type-card-v2 code-type-card" data-type="code" data-tab="standard">
-									<input type="checkbox" name="ai-question-type" value="code" class="ai-type-check" onchange="onAITypeToggle(this,'standard')" />
-									<div class="ai-type-card-inner">
-										<span class="ai-type-icon-v2">💻</span>
-										<span class="ai-type-name-v2">Code</span>
-										<div class="ai-type-stepper hidden" id="stepper-standard-code">
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','code',-1)">−</button>
-											<span class="stepper-val" id="count-standard-code">0</span>
-											<button type="button" class="stepper-btn" onclick="adjustTypeCount('standard','code',1)">+</button>
-										</div>
-									</div>
-								</div>
-
-								<!-- Code Answer Mode Panel for Standard (Moved Inside Grid) -->
-								<div class="ai-code-mode-panel" id="ai-standard-code-options" style="display:none;">
-									<div class="ai-code-mode-header">
-										<span class="ai-code-mode-icon" aria-hidden="true">&lt;/&gt;</span>
-										<div class="ai-code-mode-copy">
-											<label class="ai-code-mode-label">Code Formats Selection</label>
-											<div class="ai-code-mode-help">Match the format counts to the Code total.</div>
-										</div>
-									</div>
-									<div class="ai-code-formats-grid">
-										<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','multiple-choice')">
-											<span class="ai-type-name-v2">Multiple Choice</span>
-											<div class="ai-type-stepper ai-code-format-stepper">
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','multiple-choice',-1)">&minus;</button>
-												<span class="stepper-val" id="count-standard-code-multiple-choice">0</span>
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','multiple-choice',1)">+</button>
-											</div>
-										</div>
-										<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','fill-blank')">
-											<span class="ai-type-name-v2">Fill Blank</span>
-											<div class="ai-type-stepper ai-code-format-stepper">
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','fill-blank',-1)">&minus;</button>
-												<span class="stepper-val" id="count-standard-code-fill-blank">0</span>
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','fill-blank',1)">+</button>
-											</div>
-										</div>
-										<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','odd-one-out')">
-											<span class="ai-type-name-v2">Odd One Out</span>
-											<div class="ai-type-stepper ai-code-format-stepper">
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','odd-one-out',-1)">&minus;</button>
-												<span class="stepper-val" id="count-standard-code-odd-one-out">0</span>
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','odd-one-out',1)">+</button>
-											</div>
-										</div>
-										<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','draggable')">
-											<span class="ai-type-name-v2">Ordering</span>
-											<div class="ai-type-stepper ai-code-format-stepper">
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','draggable',-1)">&minus;</button>
-												<span class="stepper-val" id="count-standard-code-draggable">0</span>
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','draggable',1)">+</button>
-											</div>
-										</div>
-										<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('standard','matching-pairs')">
-											<span class="ai-type-name-v2">Matching Pairs</span>
-											<div class="ai-type-stepper ai-code-format-stepper">
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','matching-pairs',-1)">&minus;</button>
-												<span class="stepper-val" id="count-standard-code-matching-pairs">0</span>
-												<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('standard','matching-pairs',1)">+</button>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
-						</div><!-- /#ai-text-style-fields -->
-
-						<!-- IMAGE style builder: one manually-authored question with picture options -->
-						<div id="ai-image-style-builder" data-hidden="1" style="margin-top: 20px;">
-							<div class="ai-image-builder-head">
-								<div style="flex: 1;">
-										<label style="font-weight: 700; font-size: 1rem;">🖼️ Question with image options</label>
-									<small class="text-muted" style="display: block; margin-top: 4px;">Build one question manually: type the question text, add options and describe the picture for each, mark the correct one, pick the Image Model, then hit Generate.</small>
-								</div>
-								<button type="button" class="btn btn-primary-outline" id="ai-image-create-btn" onclick="window.createAIImageQuestion()" style="padding: 10px 16px; white-space: nowrap;">➕ Create question with image options</button>
-							</div>
-
-							<div id="ai-image-builder-panel" style="display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #f8fafc;">
-								<div class="form-group">
-									<label for="ai-image-question-text" style="font-weight: 600;">📝 Question</label>
-									<textarea id="ai-image-question-text" rows="2" class="form-control" placeholder="Type the question text, e.g. &quot;Which image shows a wireless router?&quot;" style="padding: 12px; font-size: 1rem;"></textarea>
-								</div>
-
-								<div class="form-group" style="margin-top: 16px;">
-									<label style="font-weight: 600;">🖼️ Options <small class="text-muted">(describe what each option image should show — click the radio or the row to mark the correct answer)</small></label>
-									<div id="ai-image-options-list"></div>
-									<button type="button" class="btn btn-secondary" id="ai-image-add-option" onclick="window.addAIImageOption()" style="margin-top: 12px;">➕ Add option</button>
-								</div>
-
-								<div class="form-group" style="margin-top: 16px;">
-									<label for="ai-image-model-select" style="font-weight: 600;">🤖 Image Model <small class="text-muted">(renders the option pictures)</small></label>
-									<select id="ai-image-model-select" class="form-control" style="padding: 10px;" onchange="window.onAIImageModelChange(this)">
-										<option value="">-- Select an image model --</option>
-									</select>
-									<small class="text-muted" id="ai-image-model-hint"></small>
-								</div>
-							</div>
-						</div>
-
-						<!-- Points per question + Language -->
-						<div class="form-row ai-common-question-settings" style="margin-top: 20px;">
-							<div class="form-group half">
-								<label for="ai-points" style="font-weight: 600;">Points per Question</label>
-								<input type="number" id="ai-points" class="form-control" style="padding: 10px;" min="1" max="100" step="1" value="1" />
-							</div>
-							<div class="form-group half">
-								<label for="ai-language" style="font-weight: 600;">Language</label>
-								<input type="text" id="ai-language" class="form-control" style="padding: 10px;" placeholder="Ex: French, English, Arabic..." value="French" />
-							</div>
-						</div>
-					</div>
-
-						<!-- Tab 2: Document RAG Generator -->
-						<div id="ai-document-form" class="ai-tab-pane" style="display: none; padding: 24px;">
-							<div class="document-generator-content">
-								<!-- Zone d'upload -->
-								<div class="upload-zone" id="uploadZone" style="margin-bottom: 24px;">
-									<div class="upload-icon">📁</div>
-									<h3 style="margin-top: 10px;">Upload Materials</h3>
-									<p class="text-muted">Drag & drop files or click to select</p>
-									<input type="file" id="documentFileInput" multiple accept=".pdf,.docx,.xlsx,.pptx,.md,.html,.txt" style="display: none;">
-									<button type="button" class="btn btn-secondary" id="btnSelectFiles" style="margin-top: 10px; padding: 8px 16px;">
-										Select Files
-									</button>
-									<div class="supported-formats" style="margin-top: 20px; padding: 12px; background: white; border-radius: 8px; border-left: 4px solid #17a2b8;">
-										<small style="color: #64748b;">
-											<strong>Supported:</strong> PDF, Word, Excel, PowerPoint, MD, HTML, TXT
-										</small>
-									</div>
-								</div>
-
-								<!-- Liste des fichiers uploadés -->
-								<div id="uploadedFilesList" class="uploaded-files-list" style="display: none; margin-bottom: 24px;">
-									<h4 style="margin-bottom: 12px; font-size: 1rem; font-weight: 600;">📎 Selected Files</h4>
-									<div id="filesContainer"></div>
-								</div>
-
-								<!-- Configuration de génération RAG -->
-								<div id="generationConfig" style="display: none;">
-									<hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;">
-									
-									<h4 style="margin-bottom: 20px; font-weight: 700; color: #1e293b; font-size: 1rem;">⚙️ Generation Settings</h4>
-									
-									<!-- Settings Row 1 -->
-									<div class="form-row" style="margin-top: 20px;">
-										<div class="form-group half">
-											<label for="docQuestionCount" style="font-weight: 600;">Number of Questions</label>
-											<select id="docQuestionCount" class="form-control" style="padding: 10px;">
-												<option value="1">1 question</option>
-												<option value="3">3 questions</option>
-												<option value="5" selected>5 questions</option>
-												<option value="10">10 questions</option>
-												<option value="15">15 questions</option>
-												<option value="20">20 questions</option>
-											</select>
-										</div>
-										<div class="form-group half">
-											<label for="docDifficulty" style="font-weight: 600;">Difficulty</label>
-											<select id="docDifficulty" class="form-control" style="padding: 10px;">
-												<option value="easy">Easy</option>
-												<option value="medium" selected>Medium</option>
-												<option value="hard">Hard</option>
-												<option value="mixed">Mixed</option>
-											</select>
-										</div>
-									</div>
-
-									<!-- Settings Row 2 -->
-									<div class="form-row" style="margin-top: 20px;">
-										<div class="form-group half">
-											<label for="docCategory" style="font-weight: 600;">Category</label>
-											<select id="docCategory" class="form-control" style="padding: 10px;" onchange="onAICategoryChange('docCategory', 'docSubcategory')">
-												<option value="uncategorized">Uncategorized</option>
-											</select>
-										</div>
-										<div class="form-group half">
-											<label for="docPoints" style="font-weight: 600;">Points per Question</label>
-											<select id="docPoints" class="form-control" style="padding: 10px;">
-												<option value="1" selected>1 point</option>
-												<option value="2">2 points</option>
-												<option value="5">5 points</option>
-												<option value="10">10 points</option>
-											</select>
-										</div>
-									</div>
-
-									<!-- Settings Row 3: Subcategory + Time -->
-									<div class="form-row" style="margin-top: 20px;">
-										<div class="form-group half">
-											<label for="docSubcategory" style="font-weight: 600;">Subcategory</label>
-											<select id="docSubcategory" class="form-control" style="padding: 10px;">
-												<option value="">—</option>
-											</select>
-											<small class="text-muted">Questions are filed in the deepest level</small>
-										</div>
-										<div class="form-group half">
-											<label for="docTimeLimit" style="font-weight: 600;">⏱ Time per question (sec)</label>
-											<input type="number" id="docTimeLimit" class="form-control" style="padding: 10px;" min="0" max="3600" step="5" value="30" />
-											<small class="text-muted">0 = no time limit</small>
-										</div>
-									</div>
-
-									<div class="form-group" style="margin-top: 20px;">
-					<div class="ai-types-header">
-						<label style="font-weight: 600;">✅ Question Types &amp; Counts</label>
-						<span class="ai-total-badge" id="ai-total-badge-document">Total: <strong id="ai-total-count-document">1</strong></span>
-					</div>
-					<small class="text-muted" style="display:block; margin-bottom:12px;">Select types and set how many of each</small>
-					<input type="hidden" id="docQuestionCount" value="0" />
-					<div class="ai-type-grid-v2" id="ai-type-grid-document">
-
-						<div class="ai-type-card-v2 selected" data-type="multiple-choice" data-tab="document">
-							<input type="checkbox" name="docQuestionType" value="multiple-choice" class="ai-type-check" onchange="onAITypeToggle(this,'document')" checked />
-							<div class="ai-type-card-inner">
-								<span class="ai-type-icon-v2">📝</span>
-								<span class="ai-type-name-v2">MC (Single)</span>
-								<div class="ai-type-stepper" id="stepper-document-multiple-choice">
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice',-1)">−</button>
-									<span class="stepper-val" id="count-document-multiple-choice">1</span>
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice',1)">+</button>
-								</div>
-							</div>
-						</div>
-
-						<div class="ai-type-card-v2" data-type="multiple-choice-multi" data-tab="document">
-							<input type="checkbox" name="docQuestionType" value="multiple-choice-multi" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
-							<div class="ai-type-card-inner">
-								<span class="ai-type-icon-v2">☑️</span>
-								<span class="ai-type-name-v2">MC (Multi)</span>
-								<div class="ai-type-stepper hidden" id="stepper-document-multiple-choice-multi">
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice-multi',-1)">−</button>
-									<span class="stepper-val" id="count-document-multiple-choice-multi">0</span>
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','multiple-choice-multi',1)">+</button>
-								</div>
-							</div>
-						</div>
-
-						<div class="ai-type-card-v2" data-type="draggable" data-tab="document">
-							<input type="checkbox" name="docQuestionType" value="draggable" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
-							<div class="ai-type-card-inner">
-								<span class="ai-type-icon-v2">↕️</span>
-								<span class="ai-type-name-v2">Drag &amp; Drop</span>
-								<div class="ai-type-stepper hidden" id="stepper-document-draggable">
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','draggable',-1)">−</button>
-									<span class="stepper-val" id="count-document-draggable">0</span>
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','draggable',1)">+</button>
-								</div>
-							</div>
-						</div>
-
-						<div class="ai-type-card-v2" data-type="odd-one-out" data-tab="document">
-							<input type="checkbox" name="docQuestionType" value="odd-one-out" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
-							<div class="ai-type-card-inner">
-								<span class="ai-type-icon-v2">🔍</span>
-								<span class="ai-type-name-v2">Odd One Out</span>
-								<div class="ai-type-stepper hidden" id="stepper-document-odd-one-out">
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','odd-one-out',-1)">−</button>
-									<span class="stepper-val" id="count-document-odd-one-out">0</span>
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','odd-one-out',1)">+</button>
-								</div>
-							</div>
-						</div>
-
-						<div class="ai-type-card-v2" data-type="matching-pairs" data-tab="document">
-							<input type="checkbox" name="docQuestionType" value="matching-pairs" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
-							<div class="ai-type-card-inner">
-								<span class="ai-type-icon-v2">🔗</span>
-								<span class="ai-type-name-v2">Matching Pairs</span>
-								<div class="ai-type-stepper hidden" id="stepper-document-matching-pairs">
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','matching-pairs',-1)">−</button>
-									<span class="stepper-val" id="count-document-matching-pairs">0</span>
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','matching-pairs',1)">+</button>
-								</div>
-							</div>
-						</div>
-
-						<div class="ai-type-card-v2" data-type="fill-blank" data-tab="document">
-							<input type="checkbox" name="docQuestionType" value="fill-blank" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
-							<div class="ai-type-card-inner">
-								<span class="ai-type-icon-v2">✏️</span>
-								<span class="ai-type-name-v2">Fill in Blank</span>
-								<div class="ai-type-stepper hidden" id="stepper-document-fill-blank">
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','fill-blank',-1)">−</button>
-									<span class="stepper-val" id="count-document-fill-blank">0</span>
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','fill-blank',1)">+</button>
-								</div>
-							</div>
-						</div>
-
-						<div class="ai-type-card-v2 code-type-card" data-type="code" data-tab="document">
-							<input type="checkbox" name="docQuestionType" value="code" class="ai-type-check" onchange="onAITypeToggle(this,'document')" />
-							<div class="ai-type-card-inner">
-								<span class="ai-type-icon-v2">💻</span>
-								<span class="ai-type-name-v2">Code</span>
-								<div class="ai-type-stepper hidden" id="stepper-document-code">
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','code',-1)">−</button>
-									<span class="stepper-val" id="count-document-code">0</span>
-									<button type="button" class="stepper-btn" onclick="adjustTypeCount('document','code',1)">+</button>
-								</div>
-							</div>
-						</div>
-
-						<!-- Code Answer Mode Panel for Document (Moved Inside Grid) -->
-						<div class="ai-code-mode-panel" id="ai-document-code-options" style="display:none;">
-							<div class="ai-code-mode-header">
-								<span class="ai-code-mode-icon" aria-hidden="true">&lt;/&gt;</span>
-								<div class="ai-code-mode-copy">
-									<label class="ai-code-mode-label">Code Formats Selection</label>
-									<div class="ai-code-mode-help">Match the format counts to the Code total.</div>
-								</div>
-							</div>
-							<div class="ai-code-formats-grid">
-								<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','multiple-choice')">
-									<span class="ai-type-name-v2">Multiple Choice</span>
-									<div class="ai-type-stepper ai-code-format-stepper">
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','multiple-choice',-1)">&minus;</button>
-										<span class="stepper-val" id="count-document-code-multiple-choice">0</span>
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','multiple-choice',1)">+</button>
-									</div>
-								</div>
-								<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','fill-blank')">
-									<span class="ai-type-name-v2">Fill Blank</span>
-									<div class="ai-type-stepper ai-code-format-stepper">
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','fill-blank',-1)">&minus;</button>
-										<span class="stepper-val" id="count-document-code-fill-blank">0</span>
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','fill-blank',1)">+</button>
-									</div>
-								</div>
-								<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','odd-one-out')">
-									<span class="ai-type-name-v2">Odd One Out</span>
-									<div class="ai-type-stepper ai-code-format-stepper">
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','odd-one-out',-1)">&minus;</button>
-										<span class="stepper-val" id="count-document-code-odd-one-out">0</span>
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','odd-one-out',1)">+</button>
-									</div>
-								</div>
-								<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','draggable')">
-									<span class="ai-type-name-v2">Ordering</span>
-									<div class="ai-type-stepper ai-code-format-stepper">
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','draggable',-1)">&minus;</button>
-										<span class="stepper-val" id="count-document-code-draggable">0</span>
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','draggable',1)">+</button>
-									</div>
-								</div>
-								<div class="ai-type-card-v2 ai-code-format-card" onclick="toggleCodeSubType('document','matching-pairs')">
-									<span class="ai-type-name-v2">Matching Pairs</span>
-									<div class="ai-type-stepper ai-code-format-stepper">
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','matching-pairs',-1)">&minus;</button>
-										<span class="stepper-val" id="count-document-code-matching-pairs">0</span>
-										<button type="button" class="stepper-btn" onclick="event.stopPropagation(); adjustCodeSubTypeCount('document','matching-pairs',1)">+</button>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-
-									<!-- Mode de génération -->
-									<div class="form-group" style="margin-top: 24px;">
-										<label style="font-weight: 600; display: block; margin-bottom: 12px;">Generation Strategy</label>
-										<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-											<label style="cursor: pointer;">
-												<input type="radio" name="generationMode" value="auto" checked style="display: none;">
-												<div class="strategy-card active" id="strategy-auto" style="padding: 12px; border: 2px solid #8b5cf6; background: #f5f3ff; border-radius: 12px; text-align: center; transition: all 0.2s;">
-													<div style="font-size: 1.2rem; margin-bottom: 4px;">🤖</div>
-													<strong style="display: block; font-size: 0.85rem;">Automatic</strong>
-													<small style="font-size: 0.7rem; color: #6b7280;">Full intelligent analysis</small>
-												</div>
-											</label>
-											<label style="cursor: pointer;">
-												<input type="radio" name="generationMode" value="sections" style="display: none;">
-												<div class="strategy-card" id="strategy-sections" style="padding: 12px; border: 2px solid #e2e8f0; border-radius: 12px; text-align: center; transition: all 0.2s;">
-													<div style="font-size: 1.2rem; margin-bottom: 4px;">📑</div>
-													<strong style="display: block; font-size: 0.85rem;">By Sections</strong>
-													<small style="font-size: 0.7rem; color: #6b7280;">Follow document structure</small>
-												</div>
-											</label>
-										</div>
-									</div>
-								</div>
-
-								<!-- Progression d'extraction -->
-								<div id="extractionProgress" style="display: none; margin-top: 24px;">
-									<div class="progress-container" style="background: #f1f5f9; padding: 20px; border-radius: 12px;">
-										<h4 style="margin-bottom: 12px; font-size: 0.9rem; font-weight: 600;">⚙️ Extracting Content...</h4>
-										<div class="progress-bar" style="height: 10px; background: #cbd5e1; border-radius: 999px; overflow: hidden; position: relative;">
-											<div class="progress-bar-fill" id="extractionProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #6366f1, #a855f7); transition: width 0.3s ease;"></div>
-										</div>
-										<p id="extractionStatus" style="font-size: 0.8rem; margin-top: 10px; text-align: center; color: #64748b; font-weight: 500;">Preparing...</p>
-									</div>
-								</div>
-
-								<!-- Aperçu du contenu extrait -->
-								<div id="extractedPreview" style="display: none; margin-top: 24px;">
-									<hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;">
-									<h4 style="margin-bottom: 12px; font-weight: 600;">👁️ Extracted Preview</h4>
-									<div class="content-preview" id="previewContent" style="max-height: 200px; overflow-y: auto; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; line-height: 1.4; color: #334155;"></div>
-									<div class="content-stats" style="margin-top: 8px; font-size: 0.75rem; color: #64748b; text-align: right; font-weight: 500;">
-										<span id="wordCount">0 words</span> • <span id="charCount">0 characters</span>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-
-						<!-- Tab 3: Prompt Builder (no API key — guided prompt for ChatGPT / Claude) -->
-						<div id="ai-builder-form" class="ai-tab-pane" style="display: none; padding: 24px;">
-							<div style="text-align: right; font-size: 0.7rem; color: #0d9488; font-weight: 700; margin-bottom: -4px;">build <span id="pbBuildTag">2026-10-16-r4</span></div>
-							<p class="text-muted" style="font-size: 0.88rem; line-height: 1.6; margin-bottom: 12px;">
-								No API key? Build your course plan here &rarr; hit <strong>Generate & Copy Prompt</strong> below &rarr; paste it into <strong>ChatGPT, Claude, Gemini…</strong> &rarr; open the <strong>Import JSON</strong> tab to paste the model's answer. Categories, difficulties, types, points and time limits are created automatically.
-							</p>
-							<!-- Toolbar -->
-							<div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; padding: 14px 16px; border: 1px solid #99f6e4; border-radius: 12px; background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);">
-								<button type="button" class="btn btn-primary" onclick="addCategoryNode()" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 16px rgba(13,148,136,0.4)';" onmouseout="this.style.transform='none';this.style.boxShadow='0 2px 8px rgba(13,148,136,0.3)';" style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%); border: none; color: #fff; font-weight: 700; padding: 10px 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(13,148,136,0.3); transition: transform 0.15s ease, box-shadow 0.15s ease;">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; vertical-align: -2px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-									Add Category
-								</button>
-								<button type="button" class="btn btn-secondary" onclick="loadPromptBuilderTemplate()">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-									Load Template
-								</button>
-								<button type="button" class="btn btn-secondary" onclick="clearPromptBuilder()">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-									Clear All
-								</button>
-							</div>
-
-							<div id="promptBuilderStats" class="text-muted" style="font-size: 0.85rem; margin-bottom: 10px;">Aucune structure — ajoutez une catégorie.</div>
-							<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
-								<label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem;">Langue
-									<select id="pbLanguage" style="padding: 6px; border: 1px solid #cbd5e1; border-radius: 6px;">
-										<option value="fr">Français</option>
-										<option value="en">English</option>
-										<option value="ar">Arabe</option>
-									</select>
-								</label>
-								<label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; flex: 1; min-width: 220px;">Instruction / contexte
-									<input id="pbExtra" type="text" placeholder="ex : niveau collège, français académique…" style="flex: 1; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 6px;" />
-								</label>
-							</div>
-							<div id="promptBuilderAttach" class="prompt-builder-attach"></div>
-							<div id="promptBuilderTree" class="prompt-builder-tree">
-								<div style="text-align: center; padding: 40px 20px; color: #94a3b8;">Chargement du Prompt Builder…<br /><small>Si ce message persiste, rechargez la page (Ctrl+F5).</small></div>
-							</div>
-							<div id="promptBuilderOutputWrap" style="display: none; margin-top: 16px;">
-								<label style="font-weight: 700; font-size: 0.9rem;">📋 Prompt généré — copiez-collez dans ChatGPT / Claude</label>
-								<textarea id="promptBuilderOutput" rows="14" readonly style="width: 100%; margin-top: 8px; padding: 10px; border: 1px solid #6ee7b7; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #f0fdf4;"></textarea>
-								<div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
-									<button type="button" class="btn btn-secondary" onclick="generateAndCopyPrompt()">↻ Régénérer & copier</button>
-									<button type="button" class="btn btn-secondary" onclick="downloadPromptBuilderPrompt()">⬇ Télécharger (.txt)</button>
-									<span id="promptBuilderStatus" class="text-muted" style="font-size: 0.85em;"></span>
-								</div>
-							</div>
-							<p class="text-muted" style="font-size: 0.82rem; margin-top: 12px;">Après génération, ouvrez l'onglet <button type="button" class="btn btn-sm btn-secondary" onclick="switchAIGeneratorTab('import')">📥 Import JSON</button> pour coller la réponse du modèle.</p>
-						</div>
-
-						<!-- Tab 4: Model answer import (paste ChatGPT/Claude JSON here) -->
-						<div id="ai-import-form" class="ai-tab-pane" style="display: none; padding: 24px;">
-							<div id="promptBuilderImportWrap" style="border: 1px solid #c4b5fd; border-radius: 12px; padding: 14px; background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);">
-								<label for="promptBuilderImportInput" style="font-weight: 700; font-size: 0.9rem;">📥 Réponse du modèle — collez le JSON ici puis importez</label>
-								<p class="text-muted" style="font-size: 0.8rem; margin: 4px 0 8px;">Collez la réponse JSON de ChatGPT/Claude (format <code>{"categories": […], "questions": […]}</code>). Les catégories / sous-catégories seront créées automatiquement.</p>
-								<textarea id="promptBuilderImportInput" rows="12" placeholder='Collez ici le JSON du modèle, ex : {"categories": […], "questions": […]}' style="width: 100%; padding: 10px; border: 1px solid #c4b5fd; border-radius: 8px; font-family: monospace; font-size: 0.8rem; background: #fff;"></textarea>
-								<div style="display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap;">
-									<button type="button" class="btn btn-secondary" onclick="clearPromptBuilderImport()">Effacer</button>
-									<span id="promptBuilderImportStatus" class="text-muted" style="font-size: 0.85em;"></span>
-								</div>
-							</div>
-						</div>
-
-						<!-- Cooldown Progress -->
-						<div id="ai-cooldown-container" class="hidden" style="margin: 0 24px 20px;">
-							<div class="cooldown-bar" style="height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;">
-								<div class="cooldown-progress" id="ai-cooldown-progress" style="height: 100%; background: #6366f1; width: 0%;"></div>
-							</div>
-							<small class="text-muted" id="ai-cooldown-text">Please wait...</small>
-						</div>
-						
-						<!-- Error Message -->
-						<div id="ai-error-message" class="hidden" style="margin: 0 24px 20px; padding: 12px 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; color: #dc2626; font-size: 0.9rem; font-weight: 500;">
-						</div>
-					</div>
-
-					<!-- Preview Section -->
-					<div id="ai-preview-section" class="hidden">
-						<div style="padding: 16px 24px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; border-top: 1px solid #e2e8f0;">
-							<div style="display: flex; justify-content: space-between; align-items: center;">
-								<h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: #1e293b;">
-									✨ Generated Questions (<span id="ai-preview-count">0</span>)
-								</h3>
-								<div style="display: flex; gap: 8px;">
-									<button type="button" class="btn btn-sm btn-secondary" onclick="selectAllAIQuestions()">Select All</button>
-									<button type="button" class="btn btn-sm btn-secondary" onclick="deselectAllAIQuestions()">Deselect All</button>
-								</div>
-							</div>
-						</div>
-						
-						<!-- Questions Preview List -->
-						<div id="ai-questions-preview" style="padding: 24px;">
-							<!-- Preview cards will be inserted here -->
-						</div>
-					</div>
-				</div>
-
-				<div class="modal-footer" id="ai-generator-footer" style="padding: 16px 24px; background: white; border-top: 1px solid #e2e8f0; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
-					<!-- Form Actions Footer -->
-					<div id="ai-form-footer-actions" style="width: 100%;">
-						<button type="button" id="ai-generate-action-btn" class="btn btn-ai-generate btn-lg" onclick="generateQuestionsWithAI()" style="width: 100%;">
-							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-							<span>Generate Questions</span>
-						</button>
-					</div>
-					<!-- Builder Footer: Generate & Copy Prompt (same placement/size as Generate Questions) -->
-					<div id="ai-builder-footer-actions" class="hidden" style="width: 100%;">
-						<button type="button" id="ai-builder-generate-btn" class="btn btn-ai-generate btn-lg" onclick="generateAndCopyPrompt()" style="width: 100%;">
-							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-							<span>Generate & Copy Prompt</span>
-						</button>
-					</div>
-
-					<!-- Import Footer: paste model JSON then import (same placement/size as Generate Questions) -->
-					<div id="ai-import-footer-actions" class="hidden" style="width: 100%;">
-						<button type="button" id="ai-import-json-btn" class="btn btn-ai-generate btn-lg" onclick="importPromptBuilderJSON()" style="width: 100%;">
-							<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-							<span>Import JSON</span>
-						</button>
-					</div>
-					
-					<!-- Preview Actions Footer (Hidden by default) -->
-					<div id="ai-preview-footer-actions" class="hidden" style="width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
-						<button type="button" class="btn btn-secondary" onclick="resetAIGenerator()">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M2.5 2v6h6M21.5 22v-6h-6"></path><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"></path></svg>
-							Generate More
-						</button>
-						<div style="display: flex; gap: 8px;">
-							<button type="button" class="btn btn-secondary" onclick="closeAIGeneratorModal()">Cancel</button>
-							<button type="button" id="ai-import-btn" class="btn btn-primary" onclick="importSelectedAIQuestions()">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-								Import Selected (<span id="ai-selected-count">0</span>)
-							</button>
-						</div>
-					</div>
-				</div>
 			</div>
 		</div>
 

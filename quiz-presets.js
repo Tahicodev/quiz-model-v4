@@ -37,9 +37,7 @@
 		if (form) form.style.display = 'block';
 		const modal = document.getElementById('quizPresetModal');
 		if (!modal) return;
-		// The modal markup is authored inside a hidden ancestor (#aiGeneratorModal
-		// is display:none until opened), so pull it up to <body> first or it can
-		// never render. Same pattern as openResetDataModal/openQuickStart.
+		// Keep the modal at <body> level so no hidden ancestor can block it.
 		if (modal.parentElement && modal.parentElement !== document.body) {
 			document.body.appendChild(modal);
 		}

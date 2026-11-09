@@ -2297,6 +2297,9 @@ function editQuestionByRow(button) {
 
 // Separate function to populate the form after modal is open
 function populateEditForm(question) {
+	// Scope the subject/category selectors before filling anything else.
+	window.prepareQuestionFormSubjects?.();
+
 	// Fill the form with question data
 	const questionElement = document.getElementById('question');
 	if (questionElement) {
@@ -2323,6 +2326,11 @@ function populateEditForm(question) {
 		timeLimitElement.value =
 			Number(question.time_limit ?? question.timeLimit ?? 0) || 0;
 	}
+
+	// Select the subject that owns this question's category, then the category.
+	window.setQuestionFormCategory?.(
+		question.category_id || question.categoryId || question.category
+	);
 
 	// Populate the options list with option data if available
 	if (question.optionData && question.optionData.length) {
@@ -4676,6 +4684,10 @@ function openQuestionFormModal(questionToEdit = null) {
 	document.getElementById('multiple-answers-list').innerHTML = '';
 	document.getElementById('options').dataset.optionData = '';
 
+	// Subject → module/lesson cascade: the teacher picks the subject first so
+	// the category list below only offers modules that live inside it.
+	window.prepareQuestionFormSubjects?.();
+
 	// Reset custom dropdowns
 	const imageWrapper = document.getElementById('image-answer-select-wrapper');
 	if (imageWrapper) {
@@ -6587,17 +6599,15 @@ window.refreshAIConfigLists = refreshAIConfigLists;
 function saveAISettings() {}
 
 
-// Open AI Generator Modal
+// Open AI Generator page
 // `prefill` (optional): { topic, categoryId | categoryName } — used by the
 // Courses tab "Generate questions from this lesson" shortcut so the teacher
 // lands on the lesson's own branch instead of picking it again by hand.
 function openAIGeneratorModal(prefill) {
 	const seed = prefill && typeof prefill === 'object' ? prefill : null;
-	const modal = document.getElementById('aiGeneratorModal');
-	if (!modal) return;
-	modal.inert = false;
-	modal.removeAttribute('inert');
-	modal._aiReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+	const page = document.getElementById('aiGeneratorPage');
+	if (!page) return;
+	page._aiReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 	
 	// Check if AI is configured — either a server-side model (shared or
 	// personal, selected in Settings → AI Generation) or the legacy local key.
@@ -6641,7 +6651,7 @@ function openAIGeneratorModal(prefill) {
 		}
 	}
 
-	// Every modal open starts on the Text style (classic generation), so the
+	// Every visit starts on the Text style (classic generation), so the
 	// two-picker confusion is avoided until the teacher explicitly asks for
 	// the manual Images builder.
 	window.setAIOptionStyle('text');
@@ -6653,68 +6663,61 @@ function openAIGeneratorModal(prefill) {
 			populateAIGeneratorModelSelect();
 		});
 	
-	// Show modal
-	promoteAIGeneratorModal(modal);
-	modal.classList.add('is-open');
-	modal.setAttribute('aria-hidden', 'false');
-	modal.setAttribute('aria-modal', 'true');
-	modal.setAttribute('role', 'dialog');
-	document.documentElement.classList.add('modal-open');
-	document.body.classList.add('modal-open');
+	// The generator is a detail page inside the Questions tab (same pattern as
+	// Exam Analysis), so make sure that tab is visible before revealing it.
+	if (!document.getElementById('questions')?.classList.contains('active')) {
+		const navTab = document.querySelector('.nav-tab[data-tab="questions"]');
+		if (typeof window.openTab === 'function') {
+			window.openTab({ currentTarget: navTab }, 'questions');
+		}
+	}
+	showAIGeneratorPage();
+	try {
+		window.scrollTo({ top: 0, behavior: 'auto' });
+	} catch (_) { /* older browsers */ }
 	setTimeout(() => {
-		document.getElementById('ai-topic')?.focus();
+		document.getElementById('ai-topic')?.focus({ preventScroll: true });
 	}, 10);
 }
 
-// Close AI Generator Modal
-function closeAIGeneratorModal() {
-	const modal = document.getElementById('aiGeneratorModal');
-	if (modal) {
-		const active = document.activeElement;
-		const returnFocus = modal._aiReturnFocus;
-		// Move focus out before marking this subtree hidden to assistive tech.
-		if (active && modal.contains(active)) active.blur();
-		if (returnFocus?.isConnected && !modal.contains(returnFocus)) {
-			try { returnFocus.focus({ preventScroll: true }); } catch (_) { returnFocus.focus(); }
-		}
-		modal.inert = true;
-		modal.setAttribute('inert', '');
-		modal.style.setProperty('display', 'none', 'important');
-		[
-			'position',
-			'inset',
-			'z-index',
-			'opacity',
-			'visibility',
-			'pointer-events',
-		].forEach((property) => modal.style.removeProperty(property));
-		modal.classList.remove('active', 'is-open');
-		modal.setAttribute('aria-hidden', 'true');
-		modal.removeAttribute('aria-modal');
-		modal.removeAttribute('role');
-		document.documentElement.classList.remove('modal-open');
-		document.body.classList.remove('modal-open');
-		modal._aiReturnFocus = null;
-	}
-	aiGeneratedQuestions = [];
-	aiSelectedQuestions.clear();
+function showAIGeneratorPage() {
+	const pane = document.getElementById('questionsAIGeneratorPane');
+	const bank = document.getElementById('questionBankPane');
+	if (bank) bank.classList.add('hidden');
+	if (pane) pane.classList.remove('hidden');
+	document.addEventListener('keydown', onAIGeneratorKeyDown);
 }
 
-function promoteAIGeneratorModal(modal) {
-	if (modal.parentElement !== document.body) {
-		document.body.appendChild(modal);
+// Close the generator page (returns the Questions tab to the bank view)
+function closeAIGeneratorModal() {
+	const page = document.getElementById('aiGeneratorPage');
+	const pane = document.getElementById('questionsAIGeneratorPane');
+	const bank = document.getElementById('questionBankPane');
+
+	if (page) {
+		const active = document.activeElement;
+		const returnFocus = page._aiReturnFocus;
+		if (active && page.contains(active)) active.blur();
+		if (returnFocus?.isConnected && !page.contains(returnFocus)) {
+			try { returnFocus.focus({ preventScroll: true }); } catch (_) { returnFocus.focus(); }
+		}
+		page._aiReturnFocus = null;
 	}
 
-	const profileMenu = document.getElementById('profileMenu');
-	if (profileMenu) profileMenu.classList.remove('active');
+	if (pane) pane.classList.add('hidden');
+	if (bank) bank.classList.remove('hidden');
+	document.removeEventListener('keydown', onAIGeneratorKeyDown);
+	aiGeneratedQuestions = [];
+	aiSelectedQuestions.clear();
+	try {
+		window.scrollTo({ top: 0, behavior: 'smooth' });
+	} catch (_) { /* older browsers */ }
+}
 
-	modal.style.setProperty('display', 'flex', 'important');
-	modal.style.setProperty('position', 'fixed', 'important');
-	modal.style.setProperty('inset', '0', 'important');
-	modal.style.setProperty('z-index', '2147483000', 'important');
-	modal.style.setProperty('opacity', '1', 'important');
-	modal.style.setProperty('visibility', 'visible', 'important');
-	modal.style.setProperty('pointer-events', 'auto', 'important');
+function onAIGeneratorKeyDown(e) {
+	if (e.key === 'Escape') {
+		closeAIGeneratorModal();
+	}
 }
 
 // Populate AI category select (top-level categories only — children go to the
@@ -6912,20 +6915,16 @@ window.switchAIGeneratorTab = function(tab) {
 	currentAITab = tab;
 	
 	// Update Tab UI
-	const tabs = document.querySelectorAll('.ai-modal-tab');
+	const tabs = document.querySelectorAll('.ai-generator-tab');
 	tabs.forEach(t => {
 		t.classList.remove('active');
 		t.setAttribute('aria-selected', 'false');
-		t.style.color = '#64748b';
-		t.style.borderBottomColor = 'transparent';
 	});
 	
 	const activeTab = document.getElementById(`tab-ai-${tab}`);
 	if (activeTab) {
 		activeTab.classList.add('active');
 		activeTab.setAttribute('aria-selected', 'true');
-		activeTab.style.color = '#6366f1';
-		activeTab.style.borderBottomColor = '#6366f1';
 	}
 	
 	// Update Content visibility

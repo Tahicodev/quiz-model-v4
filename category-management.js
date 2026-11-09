@@ -510,6 +510,13 @@ function renderCategorySubjectOptions(selectedId = '') {
 	const select = document.getElementById('categorySubject');
 	if (!select) return;
 	select.innerHTML = '';
+	if (!categorySubjects.length) {
+		const empty = document.createElement('option');
+		empty.value = '';
+		empty.textContent = 'No subjects yet — create one';
+		select.appendChild(empty);
+		return;
+	}
 	for (const subject of categorySubjects) {
 		const option = document.createElement('option');
 		option.value = String(subject.id);
@@ -520,7 +527,205 @@ function renderCategorySubjectOptions(selectedId = '') {
 	legacyOption.value = '__unassigned__';
 	legacyOption.textContent = 'No subject (legacy)';
 	select.appendChild(legacyOption);
-	select.value = selectedId || activeCategorySubjectId || '__unassigned__';
+	select.value =
+		selectedId &&
+		Array.from(select.options).some((option) => option.value === String(selectedId))
+			? String(selectedId)
+			: String(categorySubjects[0].id);
+}
+
+// ── Question form: subject → module/lesson picker ───────────────────────────
+// A question is filed in a subject first and then in one of its modules or
+// lessons. The subject select narrows the category select, and both can be
+// extended inline without leaving the question editor.
+function renderQuestionSubjectOptions(selectedId = '') {
+	const select = document.getElementById('questionSubject');
+	if (!select) return;
+	const previous = selectedId || select.value;
+	select.innerHTML = '';
+	const allOption = document.createElement('option');
+	allOption.value = '';
+	allOption.textContent = categorySubjects.length
+		? 'All subjects'
+		: 'No subjects yet — create one';
+	select.appendChild(allOption);
+	for (const subject of categorySubjects) {
+		const option = document.createElement('option');
+		option.value = String(subject.id);
+		option.textContent = subject.name;
+		select.appendChild(option);
+	}
+	if (
+		previous &&
+		Array.from(select.options).some((option) => option.value === String(previous))
+	) {
+		select.value = String(previous);
+	} else {
+		select.value = '';
+	}
+}
+
+function prepareQuestionFormSubjects() {
+	if (!categorySubjects.length) {
+		const mirror = window.__DI_CONTAINER__?.repo?.getAll_sync?.('subjects');
+		if (Array.isArray(mirror)) categorySubjects = mirror;
+	}
+	const select = document.getElementById('questionSubject');
+	if (!select) return;
+	const preferred =
+		select.value ||
+		(activeCategorySubjectId && activeCategorySubjectId !== '__unassigned__'
+			? String(activeCategorySubjectId)
+			: String(categorySubjects[0]?.id || ''));
+	renderQuestionSubjectOptions(preferred);
+	loadCategoriesIntoSelect('category', select.value);
+}
+
+function onQuestionSubjectChange() {
+	const select = document.getElementById('questionSubject');
+	loadCategoriesIntoSelect('category', String(select?.value || ''));
+}
+
+// Point the question editor at a category (id or legacy name): selects its
+// subject first so the scoped option list actually contains it.
+function setQuestionFormCategory(reference) {
+	if (!reference) return;
+	const wanted = String(reference).toLowerCase();
+	const category = categories.find(
+		(row) =>
+			String(row?.id) === String(reference) ||
+			String(row?.name || '').toLowerCase() === wanted,
+	);
+	if (!category) return;
+	const subjectId = String(category.subject_id || '');
+	const subjectSelect = document.getElementById('questionSubject');
+	if (subjectSelect) renderQuestionSubjectOptions(subjectId);
+	loadCategoriesIntoSelect('category', subjectId);
+	const select = document.getElementById('category');
+	if (select) select.value = String(category.id);
+}
+
+function toggleInlineSubjectInput() {
+	const selectContainer = document.getElementById('subject-select-container');
+	const inputContainer = document.getElementById('subject-input-container');
+	const input = document.getElementById('inlineSubjectInput');
+	const toggleBtn = document.getElementById('addSubjectToggleBtn');
+	if (!inputContainer) return;
+	const showing =
+		inputContainer.style.display !== 'none' &&
+		!inputContainer.classList.contains('hidden');
+	if (!showing) {
+		if (selectContainer) selectContainer.style.display = 'none';
+		inputContainer.style.display = 'flex';
+		inputContainer.classList.remove('hidden');
+		if (toggleBtn) toggleBtn.style.visibility = 'hidden';
+		if (input) {
+			input.value = '';
+			input.focus();
+		}
+	} else {
+		if (selectContainer) selectContainer.style.display = 'block';
+		inputContainer.style.display = 'none';
+		inputContainer.classList.add('hidden');
+		if (toggleBtn) toggleBtn.style.visibility = 'visible';
+	}
+}
+
+async function saveInlineSubject() {
+	const input = document.getElementById('inlineSubjectInput');
+	const name = String(input?.value || '').trim();
+	if (!name) {
+		showToast('Please enter a subject name', 'error');
+		return;
+	}
+	const subject = await createSubjectRecord(name);
+	if (!subject) return;
+	if (input) input.value = '';
+	renderQuestionSubjectOptions(subject.id);
+	onQuestionSubjectChange();
+	toggleInlineSubjectInput();
+	showToast(`Subject "${subject.name}" created — now add a module or lesson for this question.`);
+}
+
+// Create a subject row on the server and mirror it locally. Returns the row or
+// null (with a toast) so both inline creators can share the same contract.
+async function createSubjectRecord(rawName) {
+	const name = String(rawName || '').trim();
+	if (!name) {
+		showToast('Please enter a subject name', 'error');
+		return null;
+	}
+	const existing = categorySubjects.find(
+		(subject) => String(subject.name || '').trim().toLowerCase() === name.toLowerCase(),
+	);
+	if (existing) {
+		showToast(`Subject "${existing.name}" already exists — selected it instead.`, 'warning');
+		return existing;
+	}
+	if (!window.API || typeof window.API.create !== 'function') {
+		showToast('API client is not available.', 'error');
+		return null;
+	}
+	try {
+		const created = await window.API.create('subjects', { name });
+		const subject = {
+			...(created || {}),
+			id: created?.id || `local-${Date.now()}`,
+			name: created?.name || name,
+		};
+		categorySubjects.push(subject);
+		window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', categorySubjects);
+		renderSubjectTabBar();
+		if (typeof logActivity === 'function') {
+			logActivity('category', subject.name, 'created', { kind: 'subject' });
+		}
+		return subject;
+	} catch (err) {
+		showToast(`Could not create subject: ${err?.message || 'server error'}`, 'error');
+		return null;
+	}
+}
+
+// Subject manager inside the category modal (same inline pattern as the
+// question editor) so creating the first subject never requires a detour.
+function toggleCategorySubjectInline() {
+	const selectContainer = document.getElementById('categorySubjectSelectContainer');
+	const inputContainer = document.getElementById('categorySubjectInlineContainer');
+	const input = document.getElementById('categoryInlineSubjectInput');
+	const showing =
+		inputContainer &&
+		inputContainer.style.display !== 'none' &&
+		!inputContainer.classList.contains('hidden');
+	if (!inputContainer) return;
+	if (!showing) {
+		if (selectContainer) selectContainer.style.display = 'none';
+		inputContainer.style.display = 'flex';
+		inputContainer.classList.remove('hidden');
+		if (input) {
+			input.value = '';
+			input.focus();
+		}
+	} else {
+		if (selectContainer) selectContainer.style.display = 'block';
+		inputContainer.style.display = 'none';
+		inputContainer.classList.add('hidden');
+	}
+}
+
+async function saveCategorySubjectInline() {
+	const input = document.getElementById('categoryInlineSubjectInput');
+	const name = String(input?.value || '').trim();
+	if (!name) {
+		showToast('Please enter a subject name', 'error');
+		return;
+	}
+	const subject = await createSubjectRecord(name);
+	if (!subject) return;
+	if (input) input.value = '';
+	renderCategorySubjectOptions(subject.id);
+	populateCategoryParentPicker(currentCategoryId);
+	toggleCategorySubjectInline();
+	showToast(`Subject "${subject.name}" created — this category will be saved inside it.`);
 }
 
 function selectCategorySubject(subjectId) {
@@ -2591,7 +2796,7 @@ function populateCategoryFilter() {
 	}
 }
 
-function createNewCategory() {
+async function createNewCategory() {
 	// Branch scope is the structure of one course: the root is fixed, so "+
 	// Category" always adds a child inside it. Creating a new top-level
 	// structure belongs to the New Course dialog instead.
@@ -2599,19 +2804,13 @@ function createNewCategory() {
 		createCategoryInsideBranch();
 		return;
 	}
-	if (!categorySubjects.length) loadCategorySubjects();
-	if (!categorySubjects.length) {
-		// A category always belongs to a subject, so this entry point (the
-		// quick-start wizard calls it directly) hands over to the subject
-		// creator instead of dead-ending on a toast.
-		showToast('Add a subject first — categories live inside one.', 'error');
-		createNewSubjectFlow();
-		return;
-	}
+	// The subject list is server-owned; a cold cache must not make this button
+	// look like it creates a subject (it is a category entry point). Pull the
+	// list first, then open the category form — the modal itself offers
+	// "+ New subject" when the school still has none.
+	await ensureCategorySubjectsLoaded();
 	if (!activeCategorySubjectId || activeCategorySubjectId === '__unassigned__') {
-		// Legacy bucket (or nothing) selected: a brand-new category belongs in a
-		// real subject, so switch the pill to the first one.
-		selectCategorySubject(String(categorySubjects[0].id));
+		if (categorySubjects[0]) activeCategorySubjectId = String(categorySubjects[0].id);
 	}
 	currentCategoryId = null;
 	document.getElementById('categoryModalTitle').textContent =
@@ -2623,7 +2822,11 @@ function createNewCategory() {
 	renderCategorySubjectOptions(activeCategorySubjectId);
 	document.getElementById('categorySubject').disabled = false;
 	setCategorySubjectFieldVisibility(true);
-	setCategoryModalBranchNotice('');
+	setCategoryModalBranchNotice(
+		categorySubjects.length
+			? ''
+			: 'No subject exists yet — use “+ New subject” above to create one, then save this category inside it.',
+	);
 	const parentSelect = document.getElementById('categoryParent');
 	if (parentSelect) parentSelect.disabled = false;
 	populateCategoryParentPicker(null);
@@ -2631,6 +2834,37 @@ function createNewCategory() {
 	// The create/edit form no longer embeds the question picker — questions
 	// are assigned from the dedicated Assign Questions modal (table action).
 	openCategoryModal();
+}
+
+// Read the subject list from the local mirror, then fall back to the server.
+// Used by the entry points that must never mislabel a category action as a
+// subject action just because the cache was cold.
+async function ensureCategorySubjectsLoaded() {
+	if (categorySubjects.length) return categorySubjects;
+	try {
+		const mirror = window.__DI_CONTAINER__?.repo?.getAll_sync?.('subjects');
+		if (Array.isArray(mirror) && mirror.length) {
+			categorySubjects = mirror;
+			return categorySubjects;
+		}
+	} catch (_) {
+		/* fall through to the API */
+	}
+	if (!window.API?.list) return categorySubjects;
+	try {
+		const res = await window.API.list('subjects');
+		const fetched = Array.isArray(res?.data) ? res.data : null;
+		if (fetched) {
+			categorySubjects = fetched;
+			window.__DI_CONTAINER__?.repo?.setAll_sync?.('subjects', fetched);
+			selectFirstKnownSubject();
+			renderSubjectTabBar();
+			syncCategoryBandTitle();
+		}
+	} catch (_) {
+		/* offline: the inline creator will still surface the real error */
+	}
+	return categorySubjects;
 }
 
 function createCategoryInsideBranch() {
@@ -2872,6 +3106,14 @@ async function saveCategoryForm() {
 		return;
 	}
 
+	// A category only exists inside a subject. Legacy rows stay editable, but
+	// creating a fresh module/lesson without one would land in no subject's
+	// outline at all.
+	if (!currentCategoryId && !subjectId) {
+		showToast('Pick a subject first — modules and lessons live inside one.', 'error');
+		return;
+	}
+
 	// Check for duplicate names (excluding current category if editing)
 	const existingCategory = categories.find(
 		(c) =>
@@ -3025,6 +3267,17 @@ async function saveCategoryForm() {
 
 	// NOW save categories and update UI (counts will be correct now)
 	saveCategories();
+	// Keep the new/edited category visible: switch the managed subject when it
+	// lives somewhere else (branch scope keeps its fixed course root).
+	if (
+		subjectId &&
+		categoryScope.mode !== 'branch' &&
+		String(activeCategorySubjectId) !== String(subjectId)
+	) {
+		activeCategorySubjectId = String(subjectId);
+		renderSubjectTabBar();
+		syncCategoryBandTitle();
+	}
 	updateCategoryList();
 	loadCategoriesIntoSelect();
 	loadCategoriesIntoFilters();
@@ -5174,7 +5427,7 @@ function setupCategoryQuestionFilters() {
 }
 
 // Function to load categories into select elements
-function loadCategoriesIntoSelect(selectElementId = 'category') {
+function loadCategoriesIntoSelect(selectElementId = 'category', subjectId) {
 	const selectElement = document.getElementById(selectElementId);
 	if (!selectElement) return;
 
@@ -5190,11 +5443,28 @@ function loadCategoriesIntoSelect(selectElementId = 'category') {
 	uncategorizedOption.textContent = 'Uncategorized';
 	selectElement.appendChild(uncategorizedOption);
 
-	const visibleCategories = categories.filter((category) =>
-		window.Auth?.canAccessItem
-			? window.Auth.canAccessItem('category', category)
-			: true,
-	);
+	const subjectSelect = document.getElementById('questionSubject');
+	const selectedSubject =
+		subjectId !== undefined
+			? String(subjectId || '')
+			: subjectSelect
+				? String(subjectSelect.value || '')
+				: '';
+
+	const visibleCategories = categories.filter((category) => {
+		if (
+			window.Auth?.canAccessItem &&
+			!window.Auth.canAccessItem('category', category)
+		) {
+			return false;
+		}
+		// Scope to the chosen subject. The empty value means "all subjects",
+		// which keeps legacy unfiled categories reachable in the editor.
+		if (selectedSubject) {
+			return String(category?.subject_id || '') === selectedSubject;
+		}
+		return true;
+	});
 
 	// Hierarchical options, deepest level selectable: questions can only be
 	// filed in categories without subcategories — parents are shown (indented)
@@ -7767,22 +8037,38 @@ function toggleInlineCategoryInput() {
 	}
 }
 
-function saveInlineCategory() {
+async function saveInlineCategory() {
 	const nameInput = document.getElementById('inlineCategoryInput');
-	const categoryName = nameInput.value.trim();
+	const categoryName = String(nameInput?.value || '').trim();
 
 	if (!categoryName) {
-		showToast('Please enter a category name', 'error');
+		showToast('Please enter a module or lesson name', 'error');
 		return;
 	}
 
-	// Check duplicates
+	// The module/lesson belongs to the subject selected in the form. Without
+	// one it would disappear from every subject's outline, so ask instead of
+	// silently filing it in "no subject".
+	const subjectSelect = document.getElementById('questionSubject');
+	const subjectId = String(subjectSelect?.value || '');
+	if (!subjectId || subjectId === '__unassigned__') {
+		showToast(
+			'Pick a subject first (or create one with “+ New subject”), then add the module or lesson.',
+			'error',
+		);
+		return;
+	}
+
+	// Check duplicates inside the same subject at the top level.
 	if (
 		categories.some(
-			(c) => String(c.name || '').toLowerCase() === categoryName.toLowerCase(),
+			(c) =>
+				String(c.name || '').toLowerCase() === categoryName.toLowerCase() &&
+				String(c.subject_id || '') === subjectId &&
+				!getCategoryParentId(c),
 		)
 	) {
-		showToast('Category already exists', 'error');
+		showToast('This module already exists in the selected subject', 'error');
 		return;
 	}
 
@@ -7792,18 +8078,52 @@ function saveInlineCategory() {
 			Math.floor(Math.random() * DEFAULT_CATEGORY_COLORS.length)
 		];
 
+	// Server first so the row exists in the subject outline for other devices.
+	let saved = null;
+	if (window.API && typeof window.API.create === 'function') {
+		try {
+			saved = await window.API.create('categories', {
+				name: categoryName,
+				color,
+				subject_id: subjectId,
+			});
+		} catch (err) {
+			showToast(
+				`Could not create module: ${err?.message || 'server error'}`,
+				'error',
+			);
+			return;
+		}
+	}
+
+	const authorId = window.Auth?.getCurrentUser?.()?.id || '';
 	const newCategory = {
-		id: generateUUID(),
-		name: categoryName,
-		color: color,
+		...(saved || {}),
+		id: saved?.id || generateUUID(),
+		name: saved?.name || categoryName,
+		color: saved?.color || color,
 		questionCount: 0,
 		dateCreated: new Date().toISOString(),
+		subject_id: subjectId,
+		parent_id: null,
+		parentId: null,
+		created_by: saved?.created_by || authorId,
+		ownerId: saved?.created_by || authorId,
 	};
 
 	categories.push(newCategory);
 	saveCategories();
+
+	// Show the Subjects tab on the subject that now owns this module.
+	if (String(activeCategorySubjectId) !== subjectId) {
+		activeCategorySubjectId = subjectId;
+		activeLegacyWorkspaceKey = '';
+		categoryScope = { mode: 'subject', rootId: null, courseId: null, courseName: '', rootName: '' };
+		renderSubjectTabBar();
+		syncCategoryBandTitle();
+	}
 	updateCategoryList();
-	loadCategoriesIntoSelect(); // Updates all selects including #category
+	loadCategoriesIntoSelect('category', subjectId); // Updates all selects including #category
 
 	// Select the new category
 	const categorySelect = document.getElementById('category');
@@ -7811,7 +8131,15 @@ function saveInlineCategory() {
 		categorySelect.value = newCategory.id;
 	}
 
-	showToast('Category added!');
+	if (typeof logActivity === 'function') {
+		logActivity('category', newCategory.name, 'created', {
+			id: newCategory.id,
+			subject_id: subjectId,
+			kind: 'category',
+		});
+	}
+
+	showToast('Module / lesson added!');
 	toggleInlineCategoryInput(); // Switch back to select
 }
 
@@ -7951,6 +8279,14 @@ async function deleteSelectedCategories() {
 // Expose to window
 window.toggleInlineCategoryInput = toggleInlineCategoryInput;
 window.saveInlineCategory = saveInlineCategory;
+window.toggleInlineSubjectInput = toggleInlineSubjectInput;
+window.saveInlineSubject = saveInlineSubject;
+window.toggleCategorySubjectInline = toggleCategorySubjectInline;
+window.saveCategorySubjectInline = saveCategorySubjectInline;
+window.onQuestionSubjectChange = onQuestionSubjectChange;
+window.prepareQuestionFormSubjects = prepareQuestionFormSubjects;
+window.setQuestionFormCategory = setQuestionFormCategory;
+window.ensureCategorySubjectsLoaded = ensureCategorySubjectsLoaded;
 window.deleteSelectedCategories = deleteSelectedCategories;
 window.selectCategorySubject = selectCategorySubject;
 window.selectLegacyWorkspaceItem = selectLegacyWorkspaceItem;

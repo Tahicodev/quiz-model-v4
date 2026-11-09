@@ -813,13 +813,22 @@
 			if (!el || typeof el.addEventListener !== 'function') continue;
 			el.addEventListener('click', (event) => {
 				const target = event?.target;
-				if (window.innerWidth > 768 || (target && typeof target.closest === 'function' && target.closest('button, a'))) return;
-				event.stopPropagation();
-				if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
+				// Inner controls own their click: checkbox, row actions, links,
+				// selects. Everything else on the row opens the record.
+				if (target && typeof target.closest === 'function' && target.closest('button, a, input, select, textarea, label')) return;
+				const openDefault = () => {
 					if (row.kind === 'structure') openStructureBranch(row.root.id);
 					else if (row.kind !== 'unlinked' && row.course?.category_id) {
 						openStructureBranch(row.course.category_id, { courseId: row.course.id });
 					} else openCourseDetail(row.course.id);
+				};
+				event.stopPropagation();
+				if (window.innerWidth > 768) {
+					openDefault();
+					return;
+				}
+				if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
+					openDefault();
 					return;
 				}
 				if (row.kind === 'structure') {

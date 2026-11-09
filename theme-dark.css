@@ -1959,6 +1959,72 @@ html[data-theme='dark'] .menu-item:hover {
 html[data-theme='dark'] .menu-item.logout-item:hover {
 	background: rgb(91, 31, 31);
 }
+
+/* Notifications (profile preview + feed) */
+html[data-theme='dark'] .profile-notifications-header {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .profile-notification-item:hover {
+	background: var(--bg-surface-alt);
+}
+html[data-theme='dark'] .profile-notification-title,
+html[data-theme='dark'] .notification-card-title {
+	color: #e2e8f0;
+}
+html[data-theme='dark'] .profile-notification-item.is-unread .profile-notification-title {
+	color: #ffffff;
+}
+html[data-theme='dark'] .profile-notification-meta,
+html[data-theme='dark'] .profile-notification-tags,
+html[data-theme='dark'] .profile-notification-empty,
+html[data-theme='dark'] .notification-card-meta,
+html[data-theme='dark'] .notification-card-desc {
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .notification-tag {
+	background: var(--bg-surface-alt);
+	border-color: var(--border-color);
+	color: var(--text-secondary);
+}
+html[data-theme='dark'] .notification-tag-label {
+	color: var(--text-muted);
+}
+html[data-theme='dark'] .notification-card,
+html[data-theme='dark'] .notifications-empty {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+}
+html[data-theme='dark'] .notification-card:hover {
+	border-color: #3b82f6;
+}
+html[data-theme='dark'] .notification-card.is-unread {
+	background: linear-gradient(90deg, rgba(59, 130, 246, 0.16), var(--bg-surface) 45%);
+	border-left-color: #60a5fa;
+}
+html[data-theme='dark'] .notification-chip {
+	background: var(--bg-surface);
+	border-color: var(--border-color);
+	color: rgb(185, 196, 213);
+}
+html[data-theme='dark'] .notification-chip:hover {
+	border-color: #3b82f6;
+	color: #93c5fd;
+}
+html[data-theme='dark'] .notification-chip.active {
+	background: #2563eb;
+	border-color: #2563eb;
+	color: #ffffff;
+}
+html[data-theme='dark'] .profile-notification-icon,
+html[data-theme='dark'] .notification-card-icon {
+	background: rgba(59, 130, 246, 0.16);
+	color: #93c5fd;
+}
+html[data-theme='dark'] .nav-tab.has-notification {
+	color: #e2e8f0;
+	background: rgba(59, 130, 246, 0.2);
+	box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.28);
+}
 html[data-theme='dark'] .app-header {
 	background: var(--bg-surface);
 }
@@ -3574,6 +3640,41 @@ html[data-theme='dark'] #assignClassStudentsModal.is-open .modal-header,
 html[data-theme='dark'] #assignClassExamsModal.is-open .modal-header {
 	background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-surface) 100%) !important;
 }
+/* Assign Exams card grid: keep the picker on the same dark surface system. */
+html[data-theme='dark'] #assignClassExamsModal .exam-item {
+	background: #16233a;
+	border-color: rgba(148, 163, 184, 0.24);
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-item::before {
+	background: #0f1a2b;
+	border-color: #475569;
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-item:hover {
+	border-color: #3b82f6;
+	box-shadow: 0 4px 14px rgba(59, 130, 246, 0.24);
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-item.disabled-exam {
+	background: rgba(148, 163, 184, 0.08);
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-item.selected {
+	background: rgba(59, 130, 246, 0.18);
+	border-color: #60a5fa;
+	box-shadow: 0 6px 18px rgba(59, 130, 246, 0.22);
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-item.selected::before {
+	background: #3b82f6;
+	border-color: #3b82f6;
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-name {
+	color: #e2e8f0;
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-info {
+	color: #94a3b8;
+}
+html[data-theme='dark'] #assignClassExamsModal .exam-warning {
+	background: rgba(245, 158, 11, 0.16);
+	color: #fbbf24;
+}
 html[data-theme='dark'] #examModal.is-open .exam-filters-container {
 	border: 1px solid var(--border-color);
 	background: var(--bg-surface);
@@ -3591,11 +3692,8 @@ html[data-theme='dark'] #classModal.is-open .class-students-group {
 html[data-theme='dark'] #classModal.is-open .class-exams-group {
 	border: 1px solid var(--border-color) !important;
 }
-html[data-theme='dark'] #aiGeneratorModal.is-open .modal-content {
+html[data-theme='dark'] #aiGeneratorPage {
 	border: 1px solid rgb(66, 103, 148) !important;
-}
-html[data-theme='dark'] #aiGeneratorModal.is-open .ai-header-icon-wrapper {
-	background: rgba(16, 26, 44, 0.16);
 }
 html[data-theme='dark'] body.student-workspace .workspace-tabs-profile-dock .workspace-profile-btn {
 	background: var(--bg-surface);

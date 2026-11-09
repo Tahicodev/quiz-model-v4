@@ -25,12 +25,14 @@ import { ProfileRequestService } from './services/ProfileRequestService.js';
 import { AccountRequestService } from './services/AccountRequestService.js';
 import { GamePresetService } from './services/GamePresetService.js';
 import { NotificationService } from './services/NotificationService.js';
+import { NotificationFeedService } from './services/NotificationFeedService.js';
 import { GamificationService } from './services/GamificationService.js';
 import { TeacherMessageService } from './services/TeacherMessageService.js';
 import { TeacherAssignmentService } from './services/TeacherAssignmentService.js';
 import { DeviceService } from './services/DeviceService.js';
 import { OverviewAnalyticsService } from './services/OverviewAnalyticsService.js';
 import { TeacherOverviewService } from './services/TeacherOverviewService.js';
+import { listPresence } from './realtime/presence.registry.js';
 import { ExamDocumentService } from './services/ExamDocumentService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
@@ -88,6 +90,7 @@ export function createContainer() {
 
     // Full-persistence stores (Phase 2)
     notificationSvc: new NotificationService(repo),
+    notificationFeedSvc: new NotificationFeedService(repo),
     gamificationSvc: new GamificationService(repo),
     profileRequestSvc: new ProfileRequestService(repo),
     accountRequestSvc: new AccountRequestService(repo, null),
@@ -101,7 +104,8 @@ export function createContainer() {
 
     // Teacher-scoped pedagogical analytics for the Teacher Overview tab.
     // Population boundary = the teacher's assigned classes (never school-wide).
-    teacherOverviewSvc: new TeacherOverviewService(repo),
+    // Presence is read from the live socket registry written by the realtime bridge.
+    teacherOverviewSvc: new TeacherOverviewService(repo, { listPresence }),
 
     // Printable exam documents (PDF/DOCX). Read-only over exams and questions:
     // the only thing it writes is its own header slice inside options_json.

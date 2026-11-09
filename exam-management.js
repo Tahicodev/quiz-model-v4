@@ -1703,14 +1703,16 @@ function updateExamList(examsList = exams) {
 				: '';
 
 			return `
-            <tr data-id="${exam.id}">
+            <tr data-id="${exam.id}" class="clickable-exam-row">
                 <td class="checkbox-cell" data-label="Select">
                     <input type="checkbox"
                         class="exam-checkbox"
                         data-id="${exam.id}"
                         onchange="toggleBulkRowSelection(this,'exams')">
                 </td>
-                <td>${safeName}</td>
+                <td><a href="javascript:void(0)" class="exam-name-link" onclick="openExamAnalysis('${
+									exam.id
+								}'); event.stopPropagation();" title="Open exam analysis">${safeName}</a></td>
                 <td>${dateCreated}</td>
                 <td>${questionCount}</td>
                 <td>${duration} min</td>
@@ -1809,10 +1811,19 @@ function updateExamList(examsList = exams) {
 		const row = tbody.querySelector(`tr[data-id="${exam.id}"]`);
 		if (row) {
 			row.addEventListener('click', (e) => {
-				if (window.innerWidth > 768) return;
-				if (e.target.closest('button')) return;
-				if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
+				// Leave controls with their own behavior. The exam name is an
+				// anchor with its own open action.
+				if (e.target.closest('button, input, select, .checkbox-cell, a')) return;
 				e.stopPropagation();
+
+				// Same identity as the Class list: on desktop the whole row is
+				// a drill-down; on mobile the row opens the action sheet.
+				if (window.innerWidth > 768) {
+					if (typeof window.openExamAnalysis === 'function') {
+						window.openExamAnalysis(exam.id);
+					}
+					return;
+				}
 
 				const safeName = escapeHtml(exam.name);
 				MobileActionSheet.open(`Exam: ${safeName}`, [

@@ -165,6 +165,9 @@ beforeAll(async () => {
       // Training attempts (wrapped answers shape).
       mk('R8', 'S1', null, 30, '2026-01-19T10:00:00Z', { userAnswers: { Q1: 'B', Q2: 'A' } }, 'training'),
       mk('R9', 'S2', null, 70, '2026-01-20T10:00:00Z', { userAnswers: { Q1: 'A' } }, 'training'),
+      // Inside the trailing 7-day window for NOW (Feb 1) — T2's class only,
+      // so T1's period metrics are unaffected.
+      mk('R10', 'S3', 'E1', 100, '2026-01-27T10:00:00Z', { Q1: 'A', Q2: 'B' }),
     ],
   });
 
@@ -300,6 +303,8 @@ describe('TeacherOverviewService — scoped KPIs', () => {
       expect(insight.observation).toBeTruthy();
       expect(insight.metric).toBeTruthy();
       expect(insight.link && insight.link.tab).toBeTruthy();
+      // Domain lets each tab show only its own insights.
+      expect(insight.domain).toBeTruthy();
     }
   });
 
@@ -307,6 +312,66 @@ describe('TeacherOverviewService — scoped KPIs', () => {
     expect(data.meta.unavailable.examSchedule).toMatch(/no scheduled date/i);
     expect(data.meta.unavailable.trainingAbandonment).toMatch(/not measurable/i);
     expect(data.meta.unavailable.gameAcademicRanking).toMatch(/never merged/i);
+    expect(data.meta.unavailable.questionDifficulty).toMatch(/authored metadata/i);
+  });
+
+  it('counts certified, failed and never-assessed students separately', () => {
+    const g = data.sections.glance;
+    expect(g.assessedStudents.value).toBe(2);
+    expect(g.certifiedStudents.value).toBe(1); // S1 averages 12.67/20
+    expect(g.failedExamStudents.value).toBe(1); // S2 averages 7/20
+    expect(g.neverAssessedStudents.value).toBe(0);
+    expect(g.notCertifiedStudents.value).toBe(1);
+    expect(g.notCertifiedStudents.failed).toBe(1);
+    expect(g.certificationRate.value).toBe(50);
+  });
+
+  it('exposes student-level pass/fail and attention counts per class', () => {
+    const cls = data.sections.progress.classComparison[0];
+    expect(cls.passCount).toBe(3);
+    expect(cls.failCount).toBe(2);
+    expect(cls.studentsAbove10).toBe(1); // S1
+    expect(cls.studentsBelow10).toBe(1); // S2
+    expect(cls.attention).toEqual({ total: 1, academic: 1, engagement: 0, both: 0 });
+    expect(data.sections.progress.bestClass.classId).toBe('C1');
+    expect(data.sections.attention.byClass).toEqual([
+      { classId: 'C1', className: 'Class One', total: 1, academic: 1, engagement: 0, both: 0 },
+    ]);
+  });
+
+  it('ranks the weakest class over the trailing seven days', () => {
+    const week = data.sections.progress.weekComparison;
+    expect(week.label).toBe('Last 7 days');
+    // T1 has no formal result between Jan 25 and Feb 1 in the seed.
+    expect(week.classes).toEqual([]);
+    expect(week.best).toBeNull();
+    expect(week.weakest).toBeNull();
+  });
+
+  it('analyses the teacher question bank from real answers', () => {
+    const q = data.sections.questions;
+    expect(q.summary.total.value).toBe(3);
+    expect(q.coverage).toMatchObject({
+      categorised: 3,
+      uncategorised: 0,
+      examAssigned: 3,
+      practised: 3,
+      untouched: 0,
+    });
+    expect(q.typeMix).toEqual([{ key: 'mcq', count: 3, pct: 100 }]);
+    expect(q.bySubject.find((s) => s.subjectId === 'MATH')).toMatchObject({
+      count: 2,
+      practised: 2,
+      struggling: 0,
+    });
+    const q1 = q.performance.find((row) => row.questionId === 'Q1');
+    expect(q1.attempts).toBe(5); // R1, R2, R5 + training R8, R9
+    expect(q1.correct).toBe(3);
+    expect(q1.correctRate).toBe(60);
+    expect(q1.examAttempts).toBe(3);
+    expect(q1.trainingAttempts).toBe(2);
+    expect(q.hardestQuestions.map((row) => row.questionId)).toEqual(['Q1']);
+    expect(q.summary.struggling.value).toBe(0);
   });
 });
 
@@ -326,6 +391,10 @@ describe('TeacherOverviewService — filters', () => {
     expect(data.sections.progress.trainingVsExam.training.sample).toBe(0);
     // Courses are narrowed by subject too.
     expect(data.sections.content.courses).toHaveLength(0);
+    // The question bank follows the same subject boundary.
+    expect(data.sections.questions.summary.total.value).toBe(1);
+    expect(data.sections.questions.performance.map((row) => row.questionId)).toEqual(['Q3']);
+    expect(data.sections.glance.assessedStudents.value).toBe(2);
   });
 
   it('narrows to one class and drops the other class entirely', async () => {
@@ -360,7 +429,7 @@ describe('TeacherOverviewService — filters', () => {
     });
     expect(data.meta.scope.classIds).toEqual(['C2']);
     expect(data.sections.glance.totalStudents.value).toBe(1);
-    expect(data.sections.glance.avgExamScore.value).toBe(20); // R7 only
+    expect(data.sections.glance.avgExamScore.value).toBe(20); // R7 + R10, both 20/20
     expect(data.sections.attention.rows.some((r) => r.studentId === 'S1')).toBe(false);
   });
 
@@ -390,5 +459,94 @@ describe('TeacherOverviewService — filters', () => {
     // No results between Jan 26 and Feb 1 in the seed.
     expect(data.sections.glance.avgExamScore.sample).toBe(0);
     expect(data.sections.glance.avgExamScore.value).toBeNull();
+  });
+
+  it('identifies the weakest class from the trailing week', async () => {
+    const data = await svc.getOverview({
+      schoolId: SCHOOL,
+      teacherId: 'T2',
+      filters: FILTERS,
+      now: NOW,
+    });
+    const week = data.sections.progress.weekComparison;
+    expect(week.classes).toHaveLength(1);
+    expect(week.classes[0]).toMatchObject({
+      classId: 'C2',
+      avg20: 20,
+      sample: 1,
+      reliable: false,
+    });
+    expect(week.weakest.classId).toBe('C2');
+    expect(week.best.classId).toBe('C2');
+  });
+});
+
+describe('TeacherOverviewService — live presence', () => {
+  const clients = [
+    { socketId: 'p1', userId: 'S1', schoolId: SCHOOL, role: 'student', kind: 'student' },
+    // A second tab for the same student must not double-count.
+    { socketId: 'p2', userId: 'S1', schoolId: SCHOOL, role: 'student', kind: 'student' },
+    { socketId: 'p3', userId: 'S3', schoolId: SCHOOL, role: 'student', kind: 'student' },
+    { socketId: 'p4', userId: 'T1', schoolId: SCHOOL, role: 'teacher', kind: 'staff' },
+    { socketId: 'p5', userId: 'S9', schoolId: 'other-school', role: 'student', kind: 'student' },
+  ];
+  let presenceSvc;
+
+  beforeAll(() => {
+    presenceSvc = new TeacherOverviewService(new PrismaRepository(prisma), {
+      listPresence: ({ schoolId }) =>
+        clients.filter((client) => !schoolId || client.schoolId === schoolId),
+    });
+  });
+
+  it('counts unique online students in the assigned classes', async () => {
+    const presence = await presenceSvc.getPresence({
+      schoolId: SCHOOL,
+      teacherId: 'T1',
+      now: NOW,
+    });
+    expect(presence.studentsOnline).toBe(1); // S1 in two tabs
+    expect(presence.classesOnline).toBe(1);
+    expect(presence.totalClasses).toBe(1);
+    expect(presence.totalStudents).toBe(2);
+    expect(presence.onlineRate).toBe(50);
+    expect(presence.byClass).toEqual([
+      { classId: 'C1', className: 'Class One', online: 1, total: 2 },
+    ]);
+  });
+
+  it('never widens presence beyond the teacher assignment', async () => {
+    const presence = await presenceSvc.getPresence({
+      schoolId: SCHOOL,
+      teacherId: 'T1',
+      filters: { classIds: ['C2'] },
+      now: NOW,
+    });
+    expect(presence.totalClasses).toBe(0);
+    expect(presence.studentsOnline).toBe(0);
+    expect(presence.byClass).toEqual([]);
+  });
+
+  it('isolates a second teacher to their own online students', async () => {
+    const presence = await presenceSvc.getPresence({
+      schoolId: SCHOOL,
+      teacherId: 'T2',
+      now: NOW,
+    });
+    expect(presence.studentsOnline).toBe(1);
+    expect(presence.byClass).toEqual([
+      { classId: 'C2', className: 'Class Two', online: 1, total: 1 },
+    ]);
+  });
+
+  it('reports an explicit empty presence when no class is assigned', async () => {
+    const presence = await presenceSvc.getPresence({
+      schoolId: SCHOOL,
+      teacherId: 'T3',
+      now: NOW,
+    });
+    expect(presence.totalClasses).toBe(0);
+    expect(presence.byClass).toEqual([]);
+    expect(presence.onlineRate).toBeNull();
   });
 });

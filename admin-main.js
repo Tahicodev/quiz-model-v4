@@ -1378,14 +1378,9 @@ function openTab(event, tabName) {
 		event.currentTarget.classList.add('active');
 	}
 
-	if (
-		tabName === 'activity' &&
-		typeof window.markAdminNotificationsSeen === 'function'
-	) {
-		window.markAdminNotificationsSeen();
-		if (typeof window.loadActivityLog === 'function') {
-			window.loadActivityLog();
-		}
+	if (tabName === 'notifications') {
+		if (window.QuizNotifications?.markSeen) window.QuizNotifications.markSeen();
+		if (window.QuizNotifications?.refresh) window.QuizNotifications.refresh();
 	}
 
 	// Re-render the games list every time the admin opens the Games tab so
@@ -1675,6 +1670,13 @@ window.deleteSelectedQuestions = deleteSelectedQuestions;
 function toggleProfileMenu() {
 	const dropdown = document.querySelector('.user-profile-dropdown');
 	dropdown.classList.toggle('active');
+	if (
+		dropdown.classList.contains('active') &&
+		window.QuizNotifications &&
+		typeof window.QuizNotifications.refreshMenu === 'function'
+	) {
+		window.QuizNotifications.refreshMenu();
+	}
 }
 
 // Close dropdown when clicking outside
@@ -1692,19 +1694,20 @@ window.toggleProfileMenu = toggleProfileMenu;
 window.openSettingsModal = openSettingsModal;
 
 function updateAdminNotifications() {
-	const badge = document.getElementById('adminNotificationBadge');
-	const activityTab = document.querySelector('.nav-tab[data-tab="activity"]');
-	if (!badge || typeof window.getAdminNotificationCount !== 'function') return;
-	const count = window.getAdminNotificationCount();
-	if (count > 0) {
-		badge.textContent = count > 99 ? '99+' : String(count);
-		badge.classList.add('active');
-		if (activityTab) activityTab.classList.add('has-notification');
-	} else {
-		badge.textContent = '';
-		badge.classList.remove('active');
-		if (activityTab) activityTab.classList.remove('has-notification');
+	// The badge now mirrors the server-side, role-scoped feed so its count and
+	// the destination always agree (teachers no longer land on the admin-only
+	// Activity tab). QuizNotifications owns rendering.
+	if (
+		window.QuizNotifications &&
+		typeof window.QuizNotifications.render === 'function'
+	) {
+		window.QuizNotifications.render();
+		return;
 	}
+	const badge = document.getElementById('adminNotificationBadge');
+	if (!badge) return;
+	badge.textContent = '';
+	badge.classList.remove('active');
 }
 
 function goToActivityFromNotification(event) {
@@ -1712,19 +1715,22 @@ function goToActivityFromNotification(event) {
 		event.preventDefault();
 		event.stopPropagation();
 	}
-	const activityTab = document.querySelector('.nav-tab[data-tab="activity"]');
-	if (activityTab) {
-		openTab({ currentTarget: activityTab }, 'activity');
-	} else {
-		openTab(null, 'activity');
+	if (
+		window.QuizNotifications &&
+		typeof window.QuizNotifications.openInbox === 'function'
+	) {
+		window.QuizNotifications.openInbox();
+		return;
 	}
-	if (typeof window.markAdminNotificationsSeen === 'function') {
-		window.markAdminNotificationsSeen();
-	}
-	updateAdminNotifications();
+	openTab(null, 'notifications');
 }
 
 function syncProfileRequestNotifications() {
+	// Pending profile/account requests are a school-wide admin concern; teacher
+	// sessions receive the same requests through the role-scoped feed instead.
+	if (window.Auth && typeof window.Auth.isAdmin === 'function' && !window.Auth.isAdmin()) {
+		return;
+	}
 	const profileRequests = (function () {
 		var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
 		return r

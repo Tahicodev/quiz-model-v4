@@ -13,6 +13,16 @@ describe('course row actions', () => {
 		expect(js).toContain("openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})");
 	});
 
+	it('opens the record from anywhere on the row, not only the title', () => {
+		// Inner controls keep their own click; any other cell opens the course
+		// structure (desktop) or the row action sheet (mobile).
+		expect(js).toContain("target.closest('button, a, input, select, textarea, label')");
+		expect(js).toContain('const openDefault = () => {');
+		expect(js).toContain('if (window.innerWidth > 768) {');
+		expect(js).toContain('openDefault();');
+		expect(css).toContain('#courseList tbody tr[data-row-key] {\n\tcursor: pointer;');
+	});
+
 	it('provides open, document, publish and delete actions in the mobile sheet', () => {
 		const start = js.indexOf('MobileActionSheet.open(`Course:');
 		const end = js.indexOf('\n\t\t\t\t]);', start);

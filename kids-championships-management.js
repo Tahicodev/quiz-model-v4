@@ -94,7 +94,7 @@
 			? '<button class="kcc-btn kcc-btn-reopen" title="Reopen the championship for more plays" onclick="KidsChampionships.reopen(\'' + esc(c.id) + '\')">▶ Reopen</button>'
 			: '<button class="kcc-btn kcc-btn-finish" title="Freeze the podium and end the championship" onclick="KidsChampionships.finish(\'' + esc(c.id) + '\')">🏁 Finish</button>';
 		return '' +
-			'<div class="kids-championship-card ' + (finished ? 'status-finished' : 'status-active') + '">' +
+			'<div class="kids-championship-card ' + (finished ? 'status-finished' : 'status-active') + '" data-championship-id="' + esc(String(c.id || '')) + '">' +
 			'<div class="kcc-top">' +
 			'<div class="kids-championship-logo" aria-hidden="true">' + esc(logo) + '</div>' +
 			'<div class="kids-championship-info">' +
