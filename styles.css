@@ -35136,8 +35136,10 @@ body.arena-modal-open {
 
 .student-workspace .training-modal-header {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
+	gap: 0.5rem 1rem;
 	padding: 0.75rem 1.25rem;
 	border-bottom: 1px solid var(--border-color, #e2e8f0);
 	background: var(--header-bg, #f8fafc);
@@ -35154,6 +35156,272 @@ body.arena-modal-open {
 	padding: 1.75rem;
 	overflow-y: auto;
 	flex: 1;
+}
+
+/* =========================================
+   TRAINING / EXAM ATTEMPT — FULL PAGE VIEW
+   =========================================
+   The attempt is no longer a floating overlay: it takes over the workspace
+   area (tabs and panels are hidden while it runs) and the page itself
+   scrolls, so tall question images and image-option grids never need a
+   cramped inner scrollbar. */
+body.training-page-open .workspace-main,
+body.training-page-open .workspace-header {
+	display: none;
+}
+
+.student-workspace .training-modal.training-page {
+	position: static;
+	inset: auto;
+	display: none;
+	width: 100%;
+	overflow: visible;
+	z-index: auto;
+	padding: 1.25rem 1rem 3rem;
+	background: transparent;
+	-webkit-backdrop-filter: none;
+	backdrop-filter: none;
+}
+
+.student-workspace .training-modal.training-page.active {
+	display: block;
+}
+
+.student-workspace .training-modal.training-page .training-modal-content {
+	width: 100%;
+	max-width: 1080px;
+	/* !important: the shared modal frame near the end of this file
+	   (`.modal .modal-content:has(> .modal-header):has(> .modal-body)`)
+	   has the same specificity but earlier source order loses, so without
+	   this the attempt page is clipped back to a viewport-tall box. */
+	max-height: none !important;
+	margin: 0 auto;
+	border-radius: 18px;
+	overflow: visible !important;
+	box-shadow: 0 18px 45px -24px rgba(15, 23, 42, 0.4);
+}
+
+.student-workspace .training-modal.training-page .training-modal-header {
+	position: sticky;
+	top: 0;
+	z-index: 20;
+	border-radius: 18px 18px 0 0;
+}
+
+.student-workspace .training-modal.training-page .modal-body {
+	flex: 0 0 auto;
+	overflow: visible;
+	padding: 1.5rem 1.75rem 2rem;
+}
+
+/* The page header carries an explicit Back action; the × is redundant there. */
+.student-workspace .training-modal.training-page .training-header-meta {
+	display: none;
+}
+
+.training-page-title-row {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+}
+
+.training-page-title-row h3 {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.training-page-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex-shrink: 0;
+	padding: 0.4rem 0.8rem 0.4rem 0.65rem;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.14);
+	color: inherit;
+	font-size: 0.82rem;
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease,
+		transform 0.15s ease;
+}
+
+.training-page-back:hover {
+	background: rgba(148, 163, 184, 0.26);
+	border-color: #cbd5e1;
+	transform: translateX(-1px);
+}
+
+/* ─── Attempt header student strip ────────────────────────────────────────
+   The workspace's own header (avatar / name / class) is hidden while an
+   attempt runs, so the attempt header repeats who is taking it. */
+.training-student-strip {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	min-width: 0;
+	max-width: 100%;
+	padding: 0.3rem 0.7rem 0.3rem 0.35rem;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.1);
+}
+
+.training-student-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 30px;
+	height: 30px;
+	border-radius: 50%;
+	background: linear-gradient(135deg, #6366f1, #3b82f6);
+	color: #fff;
+	font-size: 0.85rem;
+	font-weight: 700;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.training-student-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 0.05rem;
+	min-width: 0;
+}
+
+.training-student-name {
+	font-size: 0.85rem;
+	font-weight: 700;
+	line-height: 1.2;
+	color: var(--heading-color, #0f172a);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 46vw;
+}
+
+.training-student-class {
+	font-size: 0.7rem;
+	font-weight: 600;
+	line-height: 1.2;
+	color: #64748b;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 46vw;
+}
+
+.training-student-number {
+	flex-shrink: 0;
+	padding: 0.1rem 0.45rem;
+	border-radius: 999px;
+	background: rgba(59, 130, 246, 0.14);
+	color: var(--primary-color, #2563eb);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+}
+
+.training-student-number[hidden] {
+	display: none;
+}
+
+.training-student-mode {
+	flex-shrink: 0;
+	margin-left: 0.15rem;
+	padding: 0.12rem 0.5rem;
+	border-radius: 999px;
+	background: rgba(16, 185, 129, 0.16);
+	color: #047857;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+}
+
+.training-student-mode.is-exam {
+	background: rgba(245, 158, 11, 0.18);
+	color: #b45309;
+}
+
+html[data-theme='dark'] .training-student-strip {
+	background: rgba(148, 163, 184, 0.12);
+	border-color: var(--border-color, #2c3a4d);
+}
+
+html[data-theme='dark'] .training-student-name {
+	color: var(--heading-color, #e2e8f0);
+}
+
+html[data-theme='dark'] .training-student-class {
+	color: var(--text-muted, #94a3b8);
+}
+
+html[data-theme='dark'] .training-student-number {
+	background: rgba(59, 130, 246, 0.22);
+	color: #93c5fd;
+}
+
+html[data-theme='dark'] .training-student-mode {
+	background: rgba(16, 185, 129, 0.2);
+	color: #6ee7b7;
+}
+
+html[data-theme='dark'] .training-student-mode.is-exam {
+	background: rgba(245, 158, 11, 0.22);
+	color: #fcd34d;
+}
+
+html[data-theme='dark'] .question-image-wrap img {
+	background: #0f172a;
+	box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.6);
+}
+
+html[data-theme='dark'] .question-image-hint {
+	color: var(--text-muted, #94a3b8);
+}
+
+html[data-theme='dark'] .question-image-wrap.is-broken::after {
+	border-color: var(--border-color, #2c3a4d);
+	background: rgba(148, 163, 184, 0.06);
+	color: var(--text-muted, #94a3b8);
+}
+
+@media (max-width: 768px) {
+	.student-workspace .training-modal.training-page {
+		padding: 0.75rem 0.6rem 2rem;
+	}
+
+	.student-workspace .training-modal.training-page .training-modal-content {
+		border-radius: 14px;
+	}
+
+	.student-workspace .training-modal.training-page .training-modal-header {
+		border-radius: 14px 14px 0 0;
+	}
+
+	.student-workspace .training-modal.training-page .modal-body {
+		padding: 1rem 0.9rem 1.5rem;
+	}
+
+	.training-student-strip {
+		width: 100%;
+		justify-content: flex-start;
+	}
+
+	.training-student-name,
+	.training-student-class {
+		max-width: 58vw;
+	}
+
+	.training-student-mode {
+		margin-left: auto;
+	}
 }
 
 /* Close-modal-btn (the × button on the training modal header).
@@ -35656,6 +35924,10 @@ body.arena-modal-open {
 	border-color: #3b82f6;
 }
 
+.training-option-image {
+	position: relative;
+}
+
 .training-option-image img {
 	width: 56px;
 	height: 56px;
@@ -35673,14 +35945,52 @@ body.arena-modal-open {
 }
 
 .question-image-wrap {
-	margin: 0.75rem 0;
+	margin: 0.75rem auto;
 	cursor: zoom-in;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	gap: 0.4rem;
+	width: 100%;
 }
 
 .question-image-wrap img {
+	display: block;
 	max-width: 100%;
 	max-height: 300px;
 	border-radius: 8px;
+	object-fit: contain;
+}
+
+.question-image-hint {
+	margin: 0;
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: #64748b;
+	opacity: 0.9;
+}
+
+/* A failed load collapses the <img>, so the frame shows a readable notice
+   instead of an invisible gap. */
+.question-image-wrap.is-broken {
+	cursor: default;
+}
+
+.question-image-wrap.is-broken::after {
+	content: 'Image could not be loaded';
+	display: block;
+	padding: 0.9rem 1.2rem;
+	border: 1px dashed var(--border-color, #cbd5e1);
+	border-radius: 10px;
+	font-size: 0.82rem;
+	color: #64748b;
+	background: rgba(148, 163, 184, 0.08);
+}
+
+.question-image-wrap.is-broken .question-image-hint {
+	display: none;
 }
 
 .training-code-snippet {
@@ -35767,11 +36077,61 @@ body.arena-modal-open {
 	opacity: 0.5;
 }
 
+.draggable-image {
+	position: relative;
+}
+
 .draggable-image img {
 	width: 48px;
 	height: 48px;
 	object-fit: cover;
 	border-radius: 6px;
+}
+
+/* Small corner badge that opens the full-size preview. Kept separate from the
+   image itself so clicking/dragging the picture still selects or reorders the
+   option — the picture is the answer interaction, not a preview trigger. */
+.option-image-zoom {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	z-index: 2;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: 50%;
+	background: rgba(15, 23, 42, 0.66);
+	color: #ffffff;
+	cursor: zoom-in;
+	opacity: 0;
+	pointer-events: none;
+	transition:
+		opacity 0.15s ease,
+		background 0.15s ease,
+		transform 0.15s ease;
+}
+
+.training-option-image:hover .option-image-zoom,
+.draggable-image:hover .option-image-zoom,
+.option-image-container:hover .option-image-zoom,
+.option-image-zoom:focus-visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.option-image-zoom:hover {
+	background: rgba(15, 23, 42, 0.88);
+	transform: scale(1.08);
+}
+
+@media (hover: none) {
+	.option-image-zoom {
+		opacity: 1;
+		pointer-events: auto;
+	}
 }
 
 .fill-blank-wrapper {
@@ -37244,12 +37604,19 @@ body.student-workspace
 	overflow-wrap: anywhere;
 }
 
+.student-workspace .question-image-wrap {
+	gap: 0.45rem;
+}
+
 .student-workspace .question-image-wrap img {
 	width: auto;
 	max-width: 100%;
-	max-height: 220px;
+	max-height: min(340px, 42vh);
 	height: auto;
 	object-fit: contain;
+	border-radius: 10px;
+	background: #fff;
+	box-shadow: 0 6px 18px -12px rgba(15, 23, 42, 0.45);
 }
 
 @media (max-width: 768px) {
@@ -56333,4 +56700,474 @@ body.results-profile-open {
 	.results-filter-clear-all {
 		margin-left: 0;
 	}
+}
+
+/* =========================================
+   IMAGE OPTION CARDS — TRAINING / EXAMS
+   ========================================= */
+
+/* When any option carries an image, switch the answer list from stacked
+   rows to a responsive card grid. The card is the clickable surface; the
+   image is the primary content and the text becomes a caption. */
+.training-options.has-images {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.75rem;
+	align-items: stretch;
+}
+
+.training-options.has-images .training-option-question {
+	grid-column: 1 / -1;
+	margin-bottom: 0.15rem;
+}
+
+.training-options.has-images .training-option {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
+	gap: 0;
+	padding: 0;
+	min-height: 0;
+	overflow: hidden;
+	text-align: left;
+	background: #ffffff;
+	border: 2px solid #e2e8f0;
+	border-radius: 12px;
+}
+
+.training-options.has-images .training-option:hover {
+	border-color: #a5b4fc;
+	background: #ffffff;
+	box-shadow: 0 6px 18px rgba(15, 23, 42, 0.09);
+	transform: translateY(-1px);
+}
+
+.training-options.has-images .training-option.selected {
+	border-color: #3b82f6;
+	background: #eff6ff;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.training-options.has-images .training-option-image {
+	display: block;
+	width: 100%;
+	line-height: 0;
+	background: #f1f5f9;
+}
+
+.training-options.has-images .training-option-image img {
+	display: block;
+	width: 100%;
+	height: 148px;
+	max-width: none;
+	object-fit: cover;
+	border-radius: 0;
+}
+
+.training-options.has-images .training-option-text,
+.training-options.has-images .training-option-label {
+	flex: 0 0 auto;
+	width: 100%;
+	padding: 0.55rem 0.7rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	line-height: 1.35;
+	color: #1e293b;
+}
+
+.training-options.has-images .training-option-multi {
+	position: relative;
+}
+
+.training-options.has-images .training-option-multi input[type='checkbox'] {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 2;
+	width: 18px;
+	height: 18px;
+	margin: 0;
+	accent-color: #2563eb;
+	box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+}
+
+/* =========================================
+   IMAGE OPTION CARDS — GAMES
+   ========================================= */
+
+.game-options.has-images {
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	align-items: stretch;
+}
+
+.game-stage .game-options.has-images .option-btn,
+.game-options.has-images .option-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
+	padding: 0;
+	min-height: 0;
+	overflow: hidden;
+	text-align: left;
+}
+
+.game-options.has-images .option-image-container {
+	width: 100%;
+	height: 138px;
+	flex: 0 0 auto;
+	overflow: hidden;
+	background: #0f172a;
+}
+
+.game-options.has-images .option-image-container:hover {
+	transform: none;
+}
+
+.game-options.has-images .option-image {
+	width: 100%;
+	height: 100%;
+	max-width: none;
+	object-fit: cover;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.game-options.has-images .option-label {
+	flex: 0 0 auto;
+	width: 100%;
+	padding: 0.55rem 0.7rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	line-height: 1.35;
+	text-align: left;
+}
+
+.game-options.has-images .odd-one-option .option-image-container {
+	height: 150px;
+	border-bottom: 0;
+}
+
+/* Draggable image options: same card grid so order questions with pictures
+   stay readable instead of stacking wide image rows. */
+.draggable-container.game-draggable-list.has-images {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.75rem;
+}
+
+.game-draggable-list.has-images .game-draggable-option {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	padding: 0;
+	overflow: hidden;
+	min-height: 0;
+}
+
+.game-draggable-list.has-images .option-image-container {
+	width: 100%;
+	height: 130px;
+	border-right: 0;
+}
+
+.game-draggable-list.has-images .option-image {
+	width: 100%;
+	height: 100%;
+	max-width: none;
+	object-fit: cover;
+}
+
+.game-draggable-list.has-images .option-label {
+	padding: 0.5rem 0.65rem;
+	font-size: 0.85rem;
+}
+
+/* Training order questions render `.draggable-container` directly, so give
+   them the same image-card treatment as the game/odd-one/mcq grids. */
+.draggable-container.has-images {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.75rem;
+	align-items: stretch;
+}
+
+.draggable-container.has-images .training-option-question {
+	grid-column: 1 / -1;
+	margin-bottom: 0;
+}
+
+.draggable-container.has-images .draggable-option {
+	flex-direction: column;
+	align-items: stretch;
+	padding: 0;
+	overflow: hidden;
+	min-height: 0;
+}
+
+.draggable-container.has-images .draggable-image {
+	width: 100%;
+	line-height: 0;
+	background: #f1f5f9;
+}
+
+.draggable-container.has-images .draggable-image img {
+	width: 100%;
+	height: 138px;
+	max-width: none;
+	object-fit: cover;
+	border-radius: 0;
+}
+
+.draggable-container.has-images .draggable-text {
+	padding: 0.55rem 0.7rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	line-height: 1.35;
+	text-align: left;
+}
+
+.game-question-container .question-image-container {
+	cursor: zoom-in;
+}
+
+.game-question-container .question-image-container img {
+	max-height: 240px;
+}
+
+/* =========================================
+   IMAGE OPTION CARDS — LEGACY EXAM RUNTIME
+   ========================================= */
+
+/* script.js renders the exam answer list directly into #options. The
+   `has-images` class is toggled per question, so image questions become a
+   card grid while text-only questions keep the original rows. */
+.options.has-images {
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.75rem;
+	align-items: stretch;
+}
+
+.options.has-images .option-btn,
+.options.has-images .multi-option {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: flex-start;
+	gap: 0;
+	padding: 0;
+	margin-bottom: 0;
+	min-height: 0;
+	overflow: hidden;
+	text-align: left;
+	background: #ffffff;
+	border: 2px solid #e2e8f0;
+	border-radius: 12px;
+}
+
+.options.has-images .option-btn:hover,
+.options.has-images .multi-option:hover {
+	transform: none;
+	border-color: #a5b4fc;
+	background: #ffffff;
+	box-shadow: 0 6px 18px rgba(15, 23, 42, 0.09);
+}
+
+.options.has-images .option-btn.selected {
+	border-color: #3b82f6;
+	background: #eff6ff;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.options.has-images .option-image-container {
+	width: 100%;
+	height: 138px;
+	flex: 0 0 auto;
+	overflow: hidden;
+	background: #f1f5f9;
+}
+
+.options.has-images .option-image-container:hover {
+	transform: none;
+}
+
+.options.has-images .option-image {
+	width: 100%;
+	height: 100%;
+	max-width: none;
+	object-fit: cover;
+	border-radius: 0;
+	box-shadow: none;
+}
+
+.options.has-images .option-label {
+	flex: 0 0 auto;
+	width: 100%;
+	padding: 0.55rem 0.7rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	line-height: 1.35;
+	color: #1e293b;
+}
+
+.options.has-images .multi-option {
+	position: relative;
+}
+
+.options.has-images .multi-option input[type='checkbox'] {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 2;
+	width: 18px;
+	height: 18px;
+	margin: 0;
+	accent-color: #2563eb;
+	box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+}
+
+.options.has-images .multi-option .option-image-container {
+	border-bottom: 0;
+}
+
+/* Odd-one-out and draggable question types render their own nested
+   containers; give them the same card grid and let them span the row. */
+.options.has-images .odd-one-out-container,
+.options.has-images .draggable-container {
+	grid-column: 1 / -1;
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	gap: 0.75rem;
+	margin-bottom: 0;
+}
+
+.options.has-images .odd-one-option,
+.options.has-images .draggable-option {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	padding: 0;
+	min-height: 0;
+	overflow: hidden;
+	background: #ffffff;
+	border: 2px solid #e2e8f0;
+	border-radius: 12px;
+	text-align: left;
+}
+
+.options.has-images .odd-one-option .option-image-container,
+.options.has-images .draggable-option .option-image-container {
+	width: 100%;
+	height: 138px;
+	border: 0;
+}
+
+.options.has-images .odd-one-option .option-label,
+.options.has-images .draggable-option .option-label {
+	width: 100%;
+	padding: 0.55rem 0.7rem;
+	font-size: 0.85rem;
+	font-weight: 600;
+	text-align: left;
+}
+
+.options.has-images .submit-btn,
+.options.has-images .next-question-btn {
+	grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+	.options.has-images {
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		gap: 0.55rem;
+	}
+
+	.options.has-images .odd-one-out-container,
+	.options.has-images .draggable-container {
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		gap: 0.55rem;
+	}
+
+	.options.has-images .option-image-container,
+	.options.has-images .odd-one-option .option-image-container,
+	.options.has-images .draggable-option .option-image-container {
+		height: 112px;
+	}
+
+	.options.has-images .option-label,
+	.options.has-images .odd-one-option .option-label,
+	.options.has-images .draggable-option .option-label {
+		padding: 0.45rem 0.55rem;
+		font-size: 0.8rem;
+	}
+}
+
+@media (max-width: 640px) {
+	.training-options.has-images,
+	.game-options.has-images,
+	.draggable-container.game-draggable-list.has-images,
+	.draggable-container.has-images {
+		grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+		gap: 0.55rem;
+	}
+
+	.training-options.has-images .training-option-image img,
+	.game-options.has-images .option-image-container,
+	.game-options.has-images .odd-one-option .option-image-container,
+	.game-draggable-list.has-images .option-image-container,
+	.draggable-container.has-images .draggable-image img {
+		height: 112px;
+	}
+
+	.training-options.has-images .training-option-text,
+	.training-options.has-images .training-option-label,
+	.game-options.has-images .option-label,
+	.draggable-container.has-images .draggable-text {
+		padding: 0.45rem 0.55rem;
+		font-size: 0.8rem;
+	}
+}
+
+/* ─── Image option cards: dark theme ──────────────────────────────────────
+   The grids above use white surfaces so pictures read cleanly on the default
+   theme. On the dark theme the shared `.training-option` rule would darken
+   the card while the caption keeps its light-theme colour, so both get
+   explicit dark surfaces here. */
+html[data-theme='dark'] .training-options.has-images .training-option,
+html[data-theme='dark'] .options.has-images .option-btn,
+html[data-theme='dark'] .options.has-images .multi-option,
+html[data-theme='dark'] .options.has-images .odd-one-option,
+html[data-theme='dark'] .options.has-images .draggable-option,
+html[data-theme='dark'] .game-options.has-images .option-btn {
+	background: var(--bg-surface, #16202e);
+	border-color: var(--border-color, #2c3a4d);
+}
+
+html[data-theme='dark'] .training-options.has-images .training-option:hover,
+html[data-theme='dark'] .options.has-images .option-btn:hover,
+html[data-theme='dark'] .options.has-images .multi-option:hover {
+	background: var(--bg-surface-alt, #1b2839);
+	border-color: #3b4f6b;
+	box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+html[data-theme='dark'] .training-options.has-images .training-option.selected,
+html[data-theme='dark'] .options.has-images .option-btn.selected {
+	background: rgba(59, 130, 246, 0.18);
+	border-color: #3b82f6;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+}
+
+html[data-theme='dark'] .training-options.has-images .training-option-text,
+html[data-theme='dark'] .training-options.has-images .training-option-label,
+html[data-theme='dark'] .options.has-images .option-label,
+html[data-theme='dark'] .draggable-container.has-images .draggable-text {
+	color: rgb(203, 213, 225);
+}
+
+html[data-theme='dark'] .training-options.has-images .training-option-image,
+html[data-theme='dark'] .options.has-images .option-image-container,
+html[data-theme='dark'] .draggable-container.has-images .draggable-image {
+	background: #0f172a;
 }

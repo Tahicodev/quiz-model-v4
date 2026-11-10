@@ -1253,9 +1253,11 @@ function showQuestion(index) {
 	const isMultiAnswerMode =
 		isMultipleChoiceQuestion && isQuestionMultiAnswer(q);
 
+	const questionImage = q.image || q.media_url || '';
+
 	// Set question text with image if available
-	questionEl.innerHTML = q.image
-		? `<img src="${q.image}" alt="Question illustration"><br>${escapeHtml(
+	questionEl.innerHTML = questionImage
+		? `<img src="${questionImage}" alt="Question illustration"><br>${escapeHtml(
 				questionPrompt,
 			)}`
 		: escapeHtml(questionPrompt);
@@ -1298,10 +1300,10 @@ function showQuestion(index) {
       <div class="question-text">${escapeHtml(questionPrompt)}</div>
     </div>
     ${
-			q.image
+			questionImage
 				? `
-      <div class="question-image-container" onclick="previewImage('${q.image}')">
-        <img src="${q.image}" alt="Question illustration">
+      <div class="question-image-container" onclick="previewImage('${questionImage}')">
+        <img src="${questionImage}" alt="Question illustration">
       </div>
     `
 				: ''
@@ -1343,6 +1345,15 @@ function showQuestion(index) {
 		.map((entry) => String(entry.text || '').trim())
 		.filter(Boolean);
 
+	// Switch the answer list to an image-card grid whenever any option has
+	// a picture. Text-only questions keep the original stacked rows.
+	const hasOptionImages = optionData.some(
+		(entry) => typeof entry === 'object' && Boolean(entry.image),
+	);
+	if (optionsEl) {
+		optionsEl.classList.toggle('has-images', hasOptionImages);
+	}
+
 	// Get the effective question type (delegate to sub-type if it's a code question)
 	const effectiveQuestionType =
 		q.type === 'code' && q.codeAnswerMode ? q.codeAnswerMode : questionType;
@@ -1367,8 +1378,9 @@ function showQuestion(index) {
             ${
 							optionImage
 								? `
-              <div class="option-image-container" onclick="event.stopPropagation(); previewImage('${optionImage}')">
-                <img src="${optionImage}" class="option-image" alt="Option image">
+              <div class="option-image-container">
+                <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
+                ${optionImageZoomBadge(optionImage)}
               </div>
             `
 								: ''
@@ -1406,8 +1418,9 @@ function showQuestion(index) {
             ${
 							optionImage
 								? `
-              <div class="option-image-container" onclick="event.stopPropagation(); previewImage('${optionImage}')">
-                <img src="${optionImage}" class="option-image" alt="Option image">
+              <div class="option-image-container">
+                <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
+                ${optionImageZoomBadge(optionImage)}
               </div>
             `
 								: ''
@@ -1861,11 +1874,12 @@ function showQuestion(index) {
           ${
 						optionImage
 							? `
-            <div class="option-image-container" onclick="event.preventDefault(); previewImage('${optionImage}')">
-              <img src="${optionImage}" class="option-image" alt="Option image">
+            <div class="option-image-container">
+              <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
               <div class="image-overlay">${escapeHtml(
 								optionText || `Image ${i + 1}`,
 							)}</div>
+              ${optionImageZoomBadge(optionImage)}
             </div>
           `
 							: ''
@@ -1903,8 +1917,9 @@ function showQuestion(index) {
           ${
 						optionImage
 							? `
-            <div class="option-image-container" onclick="event.stopPropagation(); previewImage('${optionImage}')">
-              <img src="${optionImage}" class="option-image" alt="Option image">
+            <div class="option-image-container">
+              <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
+              ${optionImageZoomBadge(optionImage)}
             </div>
           `
 							: ''
@@ -4148,6 +4163,13 @@ function ensureLightboxControls() {
 		});
 		lightboxKeyHandlerBound = true;
 	}
+}
+
+// Renders the small corner badge that opens the image lightbox. Kept as a
+// separate control so clicking or dragging the option picture still selects or
+// reorders the option instead of hijacking the click for a preview.
+function optionImageZoomBadge(src) {
+	return `<span class="option-image-zoom" role="button" tabindex="0" title="Preview image" aria-label="Preview image" onclick="event.preventDefault(); event.stopPropagation(); previewImage('${src}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); event.stopPropagation(); previewImage('${src}');}"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"></path></svg></span>`;
 }
 
 function previewImage(src) {

@@ -222,6 +222,9 @@ function hydrateLegacyPayload(data) {
     const decoded = decodeQuestionMetadata(question);
     return {
       ...decoded,
+      // Stimulus image: canonical Prisma column is `media_url`; the legacy
+      // student/admin surfaces read `image`, so expose both.
+      image: decoded.media_url || decoded.image || '',
       question: decoded.question || decoded.text,
       options: parseJson(decoded.options_json, decoded.options || []),
     };
@@ -408,6 +411,7 @@ function hydrateLegacyPayload(data) {
         return {
           ...decoded,
           id: decoded.id,
+          image: decoded.media_url || decoded.image || '',
           question: decoded.question || decoded.text,
           text: decoded.text || decoded.question,
           options: parseJson(decoded.options_json, decoded.options || []),

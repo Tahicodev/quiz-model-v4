@@ -15451,6 +15451,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   // src/shared/schemas/question.schema.js
   var typeValues = Object.values(QUESTION_TYPES);
   var difficultyValues = Object.values(DIFFICULTY);
+  var MEDIA_URL_RE = /^(?:https?:\/\/|\/uploads\/|data:image\/(?:png|jpe?g|gif|webp);base64,)[^\s]+$/i;
+  var mediaUrlSchema = external_exports.string().max(12 * 1024 * 1024, "Image payload is too large").refine((value) => MEDIA_URL_RE.test(value), {
+    message: "Use an http(s), data:image or /uploads/ image URL"
+  });
   var QuestionCreateSchema = external_exports.object({
     category_id: external_exports.string().uuid().optional().nullable(),
     type: external_exports.enum(typeValues),
@@ -15465,7 +15469,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     difficulty: external_exports.enum(difficultyValues).default("medium"),
     tags: external_exports.string().max(500).optional().nullable(),
     // comma-separated
-    media_url: external_exports.string().url().optional().nullable()
+    media_url: mediaUrlSchema.optional().nullable()
   });
   var QuestionUpdateSchema = QuestionCreateSchema.partial();
   var QuestionFilterSchema = external_exports.object({
@@ -18277,17 +18281,46 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     `;
     document.head.appendChild(style);
   }
+  function getActivitySessionActor() {
+    try {
+      const sessionUser = (window.Auth && typeof window.Auth.getCurrentUser === "function" ? window.Auth.getCurrentUser() : null) || window.currentUser || null;
+      if (!sessionUser) return null;
+      let studentIdentity = null;
+      try {
+        studentIdentity = window.Auth && typeof window.Auth.getStudentIdentity === "function" ? window.Auth.getStudentIdentity(sessionUser) : null;
+      } catch (_) {
+        studentIdentity = null;
+      }
+      return {
+        id: sessionUser.id || "",
+        name: sessionUser.name || sessionUser.username || "",
+        username: sessionUser.username || "",
+        role: sessionUser.role || "",
+        studentNumber: sessionUser.studentNumber || "",
+        className: studentIdentity && studentIdentity.class || sessionUser.className || "",
+        classId: sessionUser.classId || ""
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+  window.getActivitySessionActor = getActivitySessionActor;
   window.logActivity = logActivity;
   var ADMIN_NOTIFICATIONS_KEY = "adminNotifications";
   var ADMIN_NOTIFICATIONS_SEEN_KEY = "adminNotificationsSeenAt";
   function addAdminNotification(payload = {}) {
     var r = window.__DI_CONTAINER__ && window.__DI_CONTAINER__.repo;
     var notifications = r ? r.getValue_sync("notifications", []) : JSON.parse(localStorage.getItem(ADMIN_NOTIFICATIONS_KEY) || "[]");
+    var data = payload.data && typeof payload.data === "object" ? { ...payload.data } : {};
+    if (!data.actor) {
+      var actor = typeof getActivitySessionActor === "function" ? getActivitySessionActor() : null;
+      if (actor) data.actor = actor;
+    }
     var entry = {
       id: typeof generateUUID === "function" ? generateUUID() : "" + Date.now(),
       type: payload.type || "activity",
       message: payload.message || "New activity",
-      data: payload.data || {},
+      data,
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     notifications.unshift(entry);
@@ -18918,7 +18951,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (optionsJson !== void 0) out.options_json = optionsJson;
         if (q.explanation != null) out.explanation = String(q.explanation);
         if (q.instruction != null && !out.explanation) out.explanation = String(q.instruction);
-        if (q.media_url && String(q.media_url).trim()) out.media_url = String(q.media_url).trim();
+        if (Object.prototype.hasOwnProperty.call(q, "media_url") && q.media_url === null) {
+          out.media_url = null;
+        } else if (q.media_url && String(q.media_url).trim()) {
+          out.media_url = String(q.media_url).trim();
+        }
         if (q.mediaUrl && String(q.mediaUrl).trim()) out.media_url = String(q.mediaUrl).trim();
         if (q.image && String(q.image).trim() !== "") out.media_url = String(q.image).trim();
         if (q.tags != null) {
@@ -19093,14 +19130,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       collect(data.optionData);
       collect(data.options);
       collect(data.answers);
+      var hasImageDataUrl = typeof data.image === "string" && /^data:image\//i.test(data.image);
+      if (!hasImageDataUrl && typeof data.media_url === "string" && /^data:image\//i.test(data.media_url)) {
+        bucket.push({ key: "media_url", value: data.media_url });
+      }
+      if (hasImageDataUrl) {
+        bucket.push({ key: "image", value: data.image });
+      }
       if (!bucket.length) return Promise.resolve(data);
       var pending = bucket.map(function(item) {
-        return request("POST", "/uploads", { dataUrl: item.image }).then(function(res) {
-          if (res && res.url) item.image = res.url;
+        var field = item.key || "image";
+        var dataUrl = item.value != null ? item.value : item[field];
+        return request("POST", "/uploads", { dataUrl }).then(function(res) {
+          if (res && res.url) item[field] = res.url;
         }).catch(function() {
         });
       });
       return Promise.all(pending).then(function() {
+        bucket.forEach(function(item) {
+          if (item.key && item[item.key]) data[item.key] = item[item.key];
+        });
         return data;
       });
     }
@@ -19813,8 +19862,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         games: true,
         kidsGames: true,
         results: true,
-        // Activity Log and Monitoring are admin-only views, hard-hidden
-        // for teachers in every gate below — no toggle exists for them.
+        // Notifications are always available to teachers — the server
+        // scopes the feed to their own activity, classes and students.
+        notifications: true,
+        // Monitoring is an admin-only view, hard-hidden for teachers in
+        // every gate below — no toggle exists for it.
         activity: false,
         monitoring: false
       },
@@ -19865,6 +19917,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       const mergedTabs = { ...DEFAULT_TEACHER_ACCESS.tabs, ...stored.tabs || {} };
       mergedTabs.activity = false;
       mergedTabs.monitoring = false;
+      mergedTabs.notifications = true;
       const mergedSettingsTabs = {
         ...DEFAULT_TEACHER_ACCESS.settingsTabs,
         ...stored.settingsTabs || {}
@@ -20146,7 +20199,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function syncRecentActivityViewAll() {
       const btn = document.getElementById("recentActivityViewAll");
       if (!btn) return;
-      btn.classList.toggle("role-hidden", !canAccessTab("activity"));
+      btn.classList.toggle("role-hidden", !canAccessTab("notifications"));
     }
     var schoolBrandingCache = { loaded: false, profile: null };
     function applySchoolBranding() {
@@ -24822,7 +24875,8 @@ They will be signed out immediately.`
     const questionType = q.type || (q.isDraggable ? "draggable" : q.answer && q.answer.includes("\u2192") ? "matching-pairs" : "multiple-choice");
     const isMultipleChoiceQuestion = questionType === "multiple-choice";
     const isMultiAnswerMode = isMultipleChoiceQuestion && isQuestionMultiAnswer(q);
-    questionEl.innerHTML = q.image ? `<img src="${q.image}" alt="Question illustration"><br>${escapeHtml(
+    const questionImage = q.image || q.media_url || "";
+    questionEl.innerHTML = questionImage ? `<img src="${questionImage}" alt="Question illustration"><br>${escapeHtml(
       questionPrompt
     )}` : escapeHtml(questionPrompt);
     let typeIndicator = "";
@@ -24850,9 +24904,9 @@ They will be signed out immediately.`
     <div class="question-header">
       <div class="question-text">${escapeHtml(questionPrompt)}</div>
     </div>
-    ${q.image ? `
-      <div class="question-image-container" onclick="previewImage('${q.image}')">
-        <img src="${q.image}" alt="Question illustration">
+    ${questionImage ? `
+      <div class="question-image-container" onclick="previewImage('${questionImage}')">
+        <img src="${questionImage}" alt="Question illustration">
       </div>
     ` : ""}
   `;
@@ -24882,6 +24936,12 @@ They will be signed out immediately.`
     const optionData = extractQuestionOptionData(q);
     q.optionData = optionData;
     q.options = optionData.map((entry) => String(entry.text || "").trim()).filter(Boolean);
+    const hasOptionImages = optionData.some(
+      (entry) => typeof entry === "object" && Boolean(entry.image)
+    );
+    if (optionsEl) {
+      optionsEl.classList.toggle("has-images", hasOptionImages);
+    }
     const effectiveQuestionType = q.type === "code" && q.codeAnswerMode ? q.codeAnswerMode : questionType;
     if (effectiveQuestionType === "draggable") {
       optionsEl.innerHTML = `
@@ -24893,8 +24953,9 @@ They will be signed out immediately.`
         return `
           <div class="draggable-option ${optionImage ? "image-option" : ""} ${isImageOnly ? "image-only" : ""}" draggable="true">
             ${optionImage ? `
-              <div class="option-image-container" onclick="event.stopPropagation(); previewImage('${optionImage}')">
-                <img src="${optionImage}" class="option-image" alt="Option image">
+              <div class="option-image-container">
+                <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
+                ${optionImageZoomBadge(optionImage)}
               </div>
             ` : ""}
             ${!isImageOnly ? `<div class="option-label">${escapeHtml(optionText)}</div>` : ""}
@@ -24915,8 +24976,9 @@ They will be signed out immediately.`
         return `
           <button class="odd-one-option ${optionImage ? "image-option" : ""} ${isImageOnly ? "image-only" : ""}" onclick="selectOption(${i})">
             ${optionImage ? `
-              <div class="option-image-container" onclick="event.stopPropagation(); previewImage('${optionImage}')">
-                <img src="${optionImage}" class="option-image" alt="Option image">
+              <div class="option-image-container">
+                <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
+                ${optionImageZoomBadge(optionImage)}
               </div>
             ` : ""}
             ${!isImageOnly ? `<div class="option-label">${escapeHtml(optionText)}</div>` : ""}
@@ -25230,11 +25292,12 @@ They will be signed out immediately.`
         <label class="multi-option ${optionImage ? "image-option" : ""} ${isImageOnly ? "image-only" : ""}">
           <input type="checkbox" name="option-${currentQuestion}" value="${i}">
           ${optionImage ? `
-            <div class="option-image-container" onclick="event.preventDefault(); previewImage('${optionImage}')">
-              <img src="${optionImage}" class="option-image" alt="Option image">
+            <div class="option-image-container">
+              <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
               <div class="image-overlay">${escapeHtml(
             optionText || `Image ${i + 1}`
           )}</div>
+              ${optionImageZoomBadge(optionImage)}
             </div>
           ` : ""}
           ${!isImageOnly ? `<div class="option-label">${escapeHtml(optionText)}</div>` : ""}
@@ -25249,8 +25312,9 @@ They will be signed out immediately.`
           return `
         <button class="option-btn ${optionImage ? "image-option" : ""} ${isImageOnly ? "image-only" : ""}" onclick="selectOption(${i})">
           ${optionImage ? `
-            <div class="option-image-container" onclick="event.stopPropagation(); previewImage('${optionImage}')">
-              <img src="${optionImage}" class="option-image" alt="Option image">
+            <div class="option-image-container">
+              <img src="${optionImage}" class="option-image" alt="Option image" draggable="false">
+              ${optionImageZoomBadge(optionImage)}
             </div>
           ` : ""}
           ${!isImageOnly ? `<div class="option-label">${escapeHtml(optionText)}</div>` : ""}
@@ -26624,6 +26688,9 @@ They will be signed out immediately.`
       });
       lightboxKeyHandlerBound = true;
     }
+  }
+  function optionImageZoomBadge(src) {
+    return `<span class="option-image-zoom" role="button" tabindex="0" title="Preview image" aria-label="Preview image" onclick="event.preventDefault(); event.stopPropagation(); previewImage('${src}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); event.stopPropagation(); previewImage('${src}');}"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"></path></svg></span>`;
   }
   function previewImage(src) {
     ensureLightboxControls();

@@ -529,7 +529,13 @@
       if (optionsJson !== undefined) out.options_json = optionsJson;
       if (q.explanation != null) out.explanation = String(q.explanation);
       if (q.instruction != null && !out.explanation) out.explanation = String(q.instruction);
-      if (q.media_url && String(q.media_url).trim()) out.media_url = String(q.media_url).trim();
+      // Explicit null/empty media_url clears an existing image when editing.
+      // An absent property is left untouched so partial updates keep it.
+      if (Object.prototype.hasOwnProperty.call(q, 'media_url') && q.media_url === null) {
+        out.media_url = null;
+      } else if (q.media_url && String(q.media_url).trim()) {
+        out.media_url = String(q.media_url).trim();
+      }
       if (q.mediaUrl && String(q.mediaUrl).trim()) out.media_url = String(q.mediaUrl).trim();
       if (q.image && String(q.image).trim() !== '') out.media_url = String(q.image).trim();
       if (q.tags != null) {
@@ -751,15 +757,40 @@
     collect(data.optionData);
     collect(data.options);
     collect(data.answers);
+    // The question's own stimulus image (media_url / legacy image alias) is
+    // a single value rather than an option list. Persist it the same way so a
+    // freshly picked file never lands in the DB as a base64 blob.
+    var hasImageDataUrl =
+      typeof data.image === 'string' && /^data:image\//i.test(data.image);
+    if (
+      !hasImageDataUrl &&
+      typeof data.media_url === 'string' &&
+      /^data:image\//i.test(data.media_url)
+    ) {
+      bucket.push({ key: 'media_url', value: data.media_url });
+    }
+    if (hasImageDataUrl) {
+      bucket.push({ key: 'image', value: data.image });
+    }
     if (!bucket.length) return Promise.resolve(data);
     var pending = bucket.map(function (item) {
-      return request('POST', '/uploads', { dataUrl: item.image })
+      var field = item.key || 'image';
+      var dataUrl = item.value != null ? item.value : item[field];
+      return request('POST', '/uploads', { dataUrl: dataUrl })
         .then(function (res) {
-          if (res && res.url) item.image = res.url;
+          if (res && res.url) item[field] = res.url;
         })
         .catch(function () { /* fallback: keep data: URL */ });
     });
-    return Promise.all(pending).then(function () { return data; });
+    return Promise.all(pending).then(function () {
+      // Propagate uploads back onto the outgoing payload (the bucket entries
+      // are lightweight holders so option entries and single media fields
+      // share one upload loop).
+      bucket.forEach(function (item) {
+        if (item.key && item[item.key]) data[item.key] = item[item.key];
+      });
+      return data;
+    });
   }
 
   // ─── Public API ──────────────────────────────────────────────────────────

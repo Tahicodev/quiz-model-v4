@@ -6738,7 +6738,7 @@
 			isMultipleChoiceQuestion && shouldRenderAsMultiSelect(question, options);
 		const questionSelectionKey = getGameQuestionSelectionKey(question, options);
 		const instruction = String(question?.instruction || '').trim();
-		const image = String(question?.image || '').trim();
+		const image = String(question?.image || question?.media_url || '').trim();
 		const activeSpecialCardId =
 			mode === 'card' ? normalizeSpecialCardId(specialCardId) : '';
 		const fogMode = activeSpecialCardId === 'fog';
@@ -6819,7 +6819,7 @@
 			</div>
 			${
 				image
-					? `<div class="question-image-container"><img src="${escapeHtml(image)}" alt="Question image"></div>`
+					? `<div class="question-image-container" onclick="openTrainingLightbox('${escapeHtml(image)}')"><img src="${escapeHtml(image)}" alt="Question image"></div>`
 					: ''
 			}
 		`;
@@ -6849,8 +6849,11 @@
 						</div>
 				`;
 			} else {
+				const orderHasImages = orderSource.some(
+					(option) => option && String(option.image || '').trim()
+				);
 				body = `
-					<div class="draggable-container game-draggable-list">
+					<div class="draggable-container game-draggable-list ${orderHasImages ? 'has-images' : ''}">
 						${orderSource
 							.map((option) => {
 								const optionValue = String(option?.text || '').trim();
@@ -6861,7 +6864,7 @@
 							<div class="draggable-option game-draggable-option ${optionImage ? 'image-option' : ''} ${option?.isImageOnly ? 'image-only' : ''}" draggable="${answered ? 'false' : 'true'}" data-value="${encodeDataValue(optionValue)}">
 								${
 									optionImage
-										? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}"></div>`
+										? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}" draggable="false"></div>`
 										: ''
 								}
 								${showLabel ? `<div class="option-label">${escapeHtml(optionValue)}</div>` : ''}
@@ -7009,8 +7012,11 @@
 			</div>
 		`;
 		} else if (questionType === 'odd-one-out' && options.length) {
+			const oddHasImages = options.some(
+				(option) => option && String(option.image || '').trim()
+			);
 			body = `
-				<div class="game-options odd-one-out-container">
+				<div class="game-options odd-one-out-container ${oddHasImages ? 'has-images' : ''}">
 					${options
 						.map((option) => {
 							const optionValue = String(option?.text || '').trim();
@@ -7021,7 +7027,7 @@
 						<button type="button" class="option-btn odd-one-option ${optionImage ? 'image-option' : ''} ${option?.isImageOnly ? 'image-only' : ''}" data-action="${actions.optionAction}" data-game-id="${game.id}" data-answer="${escapeHtml(optionValue)}" aria-pressed="false" ${answered ? 'disabled' : ''}>
 							${
 								optionImage
-									? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}"></div>`
+									? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}" draggable="false"></div>`
 									: ''
 							}
 							${showLabel ? `<div class="option-label">${escapeHtml(optionValue)}</div>` : ''}
@@ -7038,6 +7044,9 @@
 			`;
 		} else if (options.length) {
 			const isMultiSelect = isMultiSelectQuestion;
+			const hasOptionImages = options.some(
+				(option) => option && String(option.image || '').trim()
+			);
 			const selectedMultiValues = isMultiSelect
 				? getSavedMultiSelectValues(game.id, questionSelectionKey)
 				: [];
@@ -7045,7 +7054,9 @@
 				selectedMultiValues.map((value) => normalizeAnswerToken(value)),
 			);
 			body = `
-				<div class="game-options ${isMultiSelect ? 'multi-select' : ''}" ${
+				<div class="game-options ${isMultiSelect ? 'multi-select' : ''} ${
+					hasOptionImages ? 'has-images' : ''
+				}" ${
 					isMultiSelect
 						? `data-multi-select="true" data-question-key="${escapeHtml(
 								questionSelectionKey,
@@ -7076,7 +7087,7 @@
 						} ${answered ? 'disabled' : ''}>
 							${
 								optionImage
-									? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}"></div>`
+									? `<div class="option-image-container"><img src="${escapeHtml(optionImage)}" class="option-image" alt="${escapeHtml(optionValue || 'Option image')}" draggable="false"></div>`
 									: ''
 							}
 							${showLabel ? `<div class="option-label">${escapeHtml(optionValue)}</div>` : ''}
@@ -15960,6 +15971,112 @@
 		});
 	}
 
+	// Resolve the name / class / number shown in the attempt's header strip.
+	// `getStudentContext` resolves the identity from Auth (or the role-scoped
+	// cache); the class name is looked up through the repo because API user
+	// rows carry `class_id` rather than a display name.
+	function resolveTrainingStudentInfo() {
+		const context = getStudentContext() || {};
+		const user = context.user || {};
+		const identity = context.identity || {};
+		const repo = window.__DI_CONTAINER__?.repo;
+		const name = String(
+			identity.name || user.name || user.username || 'Student',
+		).trim();
+		let className = String(identity.class || user.className || '').trim();
+		if (!className && String(user.className || '').trim()) {
+			className = String(user.className).trim();
+		}
+		if (!className) {
+			const classId = String(
+				user.class_id || user.classId || identity.classId || '',
+			).trim();
+			if (classId && repo && typeof repo.getAll_sync === 'function') {
+				const row = (repo.getAll_sync('classes') || []).find(
+					(entry) => String(entry?.id || '') === classId,
+				);
+				if (row?.name) className = String(row.name).trim();
+			}
+		}
+		if (!className && context.classRecord?.name && identity.classId) {
+			className = String(context.classRecord.name).trim();
+		}
+		// `identity.numero` falls back to a legacy "1"; only surface a real
+		// number stamped on the account.
+		const number = String(user.numero || user.studentNumber || '').trim();
+		return { name: name || 'Student', className, number };
+	}
+
+	function renderTrainingStudentStrip() {
+		const strip = byId('trainingStudentStrip');
+		if (!strip) return;
+		const info = resolveTrainingStudentInfo();
+		const nameEl = byId('trainingStudentName');
+		const classEl = byId('trainingStudentClass');
+		const numberEl = byId('trainingStudentNumber');
+		const avatarEl = byId('trainingStudentAvatar');
+		const modeEl = byId('trainingStudentMode');
+		if (nameEl) nameEl.textContent = info.name;
+		if (classEl) classEl.textContent = info.className || 'Class';
+		if (numberEl) {
+			const number = info.number.replace(/^#+\s*/, '');
+			numberEl.textContent = number ? `#${number}` : '';
+			numberEl.hidden = !number;
+		}
+		if (avatarEl) {
+			avatarEl.textContent = (info.name.charAt(0) || 'S').toUpperCase();
+		}
+		if (modeEl) {
+			modeEl.textContent =
+				trainingState && trainingState.mode === 'exam' ? 'Exam' : 'Training';
+			modeEl.classList.toggle(
+				'is-exam',
+				Boolean(trainingState && trainingState.mode === 'exam'),
+			);
+		}
+	}
+
+	// ── Full-page attempt surface ───────────────────────────────────────────
+	// Training tests and exams run as a full workspace page instead of a
+	// floating modal: the workspace tabs/panels are hidden while the attempt
+	// is active and the page's Back button restores them. This gives long
+	// question images and image-option grids the full viewport width.
+	function openTrainingSurface() {
+		const modal = byId('studentTrainingModal');
+		const main = byId('studentWorkspaceMain');
+		trainingState.returnScrollY = window.scrollY || 0;
+		renderTrainingStudentStrip();
+		if (modal) {
+			modal.hidden = false;
+			modal.classList.add('training-page');
+			modal.classList.add('active');
+		}
+		if (main) main.classList.add('training-page-open');
+		document.body.classList.add('training-page-open');
+		try {
+			window.scrollTo({ top: 0, behavior: 'auto' });
+		} catch (_) {
+			window.scrollTo(0, 0);
+		}
+	}
+
+	function closeTrainingSurface() {
+		const modal = byId('studentTrainingModal');
+		const main = byId('studentWorkspaceMain');
+		if (modal) {
+			modal.classList.remove('active');
+			modal.classList.remove('training-page');
+		}
+		if (main) main.classList.remove('training-page-open');
+		document.body.classList.remove('training-page-open');
+		const targetY = Number(trainingState.returnScrollY) || 0;
+		try {
+			window.scrollTo({ top: targetY, behavior: 'auto' });
+		} catch (_) {
+			window.scrollTo(0, targetY);
+		}
+	}
+
 	// ── Public API ──────────────────────────────────────────────────────────
 	// `practice` (optional): { questions: [...], label: string } — serve an
 	// explicit question set instead of the local question bank. Used by the
@@ -16089,8 +16206,7 @@
 		if (trainingState.mode === 'training') state.trainingAccuracyCache = null;
 		clearTrainingStorage();
 
-		const modal = byId('studentTrainingModal');
-		if (modal) modal.classList.add('active');
+		openTrainingSurface();
 		startTrainingTimer(trainingState.timeLimitSec || 0);
 		renderTrainingQuestion();
 	};
@@ -16176,15 +16292,13 @@
 		};
 
 		clearTrainingStorage();
-		const modal = byId('studentTrainingModal');
-		if (modal) modal.classList.add('active');
+		openTrainingSurface();
 		startTrainingTimer(trainingState.timeLimitSec || 0);
 		renderTrainingQuestion();
 	}
 
 	window.closeTrainingModal = function () {
-		const modal = byId('studentTrainingModal');
-		if (modal) modal.classList.remove('active');
+		closeTrainingSurface();
 		// Closing the modal mid-test counts the attempt as finished: the
 		// result is saved with whatever was answered so far, and the next
 		// start begins a brand-new session with reshuffled questions.
@@ -16296,6 +16410,18 @@
 		return false;
 	}
 
+	// Renders an option image inside its clickable card. The picture itself must
+	// NOT open the lightbox: clicking/dragging the image is how the student
+	// answers, so the click has to bubble up to the option button/label. A small
+	// dedicated zoom badge (which stops propagation) still offers a full-size
+	// preview without stealing the answer interaction.
+	function renderTrainingOptionImage(src, wrapperClass, wrapperTag) {
+		const tag = wrapperTag || 'span';
+		const safeSrc = escapeHtml(src);
+		const zoomBadge = `<span class="option-image-zoom" role="button" tabindex="0" title="Preview image" aria-label="Preview image" onclick="event.preventDefault(); event.stopPropagation(); openTrainingLightbox('${safeSrc}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); event.stopPropagation(); openTrainingLightbox('${safeSrc}');}"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"></path></svg></span>`;
+		return `<${tag} class="${wrapperClass}"><img src="${safeSrc}" alt="option image" draggable="false"/>${zoomBadge}</${tag}>`;
+	}
+
 	function renderTrainingMcq(q, options, forceMulti) {
 		const idx = trainingState.currentIndex;
 		// Auto-detect multi-select from `allowMultipleAnswers` or the answer
@@ -16311,6 +16437,9 @@
 				)
 			: new Set();
 		const selectedSingle = !isMulti ? currentAnswer : '';
+		const hasOptionImages = options.some(
+			(opt) => opt && String(opt.image || '').trim()
+		);
 
 		const buttons = options
 			.map((opt, i) => {
@@ -16332,7 +16461,7 @@
 						<input type="checkbox" value="${escapeHtml(text)}" data-option-text="${escapeHtml(text)}" ${checked ? 'checked' : ''}/>
 						${
 							hasImage
-								? `<span class="training-option-image" onclick="event.preventDefault(); event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option image"/></span>`
+								? renderTrainingOptionImage(opt.image, 'training-option-image')
 								: ''
 						}
 						${isImageOnly ? '' : `<span class="training-option-label">${escapeHtml(text)}</span>`}
@@ -16349,7 +16478,7 @@
 				<button type="button" class="training-option ${checked ? 'selected' : ''}" data-option-text="${escapeHtml(text)}">
 					${
 						hasImage
-							? `<span class="training-option-image" onclick="event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option image"/></span>`
+							? renderTrainingOptionImage(opt.image, 'training-option-image')
 							: ''
 					}
 					${isImageOnly ? '' : `<span class="training-option-text">${escapeHtml(text)}</span>`}
@@ -16358,7 +16487,7 @@
 			.join('');
 
 		return `
-			<div class="training-options ${isMulti ? 'is-multi' : 'is-single'}" data-multi="${isMulti}" data-render-text="${isMulti ? 'true' : 'false'}">
+			<div class="training-options ${isMulti ? 'is-multi' : 'is-single'} ${hasOptionImages ? 'has-images' : ''}" data-multi="${isMulti}" data-render-text="${isMulti ? 'true' : 'false'}">
 				${
 					q.text || q.question
 						? `<div class="training-option-question">${escapeHtml(q.text || q.question || '')}</div>`
@@ -16383,6 +16512,9 @@
 		const idx = trainingState.currentIndex;
 		const currentAnswer = trainingState.userAnswers[idx] || '';
 		const questionText = escapeHtml(q.text || q.question || '');
+		const hasOptionImages = options.some(
+			(opt) => opt && String(opt.image || '').trim()
+		);
 		const buttons = options
 			.map((opt) => {
 				const text = opt.text;
@@ -16393,7 +16525,7 @@
 				<button type="button" class="training-option odd-one ${checked ? 'selected' : ''}" data-option-text="${escapeHtml(text)}">
 					${
 						hasImage
-							? `<span class="training-option-image" onclick="event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option image"/></span>`
+							? renderTrainingOptionImage(opt.image, 'training-option-image')
 							: ''
 					}
 					${isImageOnly ? '' : `<span class="training-option-text">${escapeHtml(text)}</span>`}
@@ -16401,7 +16533,7 @@
 			})
 			.join('');
 		return `
-			<div class="training-options odd-one-grid" data-render-text="false">
+			<div class="training-options odd-one-grid ${hasOptionImages ? 'has-images' : ''}" data-render-text="false">
 				${questionText ? `<div class="training-option-question">${questionText}</div>` : ''}
 				${buttons}
 			</div>
@@ -16436,15 +16568,18 @@
 				<div class="draggable-option ${hasImage ? 'has-image' : ''} ${isImageOnly ? 'image-only' : ''}" draggable="true">
 					${
 						hasImage
-							? `<div class="draggable-image" onclick="event.stopPropagation(); openTrainingLightbox('${escapeHtml(opt.image)}')"><img src="${escapeHtml(opt.image)}" alt="option"/></div>`
+							? renderTrainingOptionImage(opt.image, 'draggable-image', 'div')
 							: ''
 					}
 					${isImageOnly ? '' : `<div class="draggable-text">${escapeHtml(opt.text)}</div>`}
 				</div>`;
 			})
 			.join('');
+		const hasOptionImages = orderedOptions.some(
+			(opt) => opt && String(opt.image || '').trim(),
+		);
 		return `
-			<div class="draggable-container" data-render-text="false">
+			<div class="draggable-container ${hasOptionImages ? 'has-images' : ''}" data-render-text="false">
 				${q.text || q.question ? `<div class="training-option-question">${escapeHtml(q.text || q.question || '')}</div>` : ''}
 				${items}
 			</div>`;
@@ -17272,6 +17407,28 @@
 		// The top `<h3 class="question-text">` is hidden because the
 		// widget already shows the text in its own styled block.
 
+		// Stimulus image: the canonical server column is `media_url`, while
+		// legacy caches use `image` / `mediaUrl`. Render whichever exists in a
+		// centred, zoomable frame; a failed load degrades to a readable notice
+		// instead of an invisible gap.
+		const questionImage = String(
+			q.image || q.media_url || q.mediaUrl || '',
+		).trim();
+		const questionImageHtml = questionImage
+			? `
+					<figure class="question-image-wrap" data-question-image>
+						<img
+							src="${escapeHtml(questionImage)}"
+							alt="Question image"
+							loading="eager"
+							decoding="async"
+							onclick="openTrainingLightbox('${escapeHtml(questionImage)}')"
+							onerror="this.closest('.question-image-wrap').classList.add('is-broken'); this.remove();"
+						/>
+						<figcaption class="question-image-hint">Click to enlarge</figcaption>
+					</figure>`
+			: '';
+
 		container.innerHTML = `
 			<div class="training-container">
 				<div class="training-header">
@@ -17285,13 +17442,7 @@
 				</div>
 
 				<div class="training-question-card">
-					${
-						q.image
-							? `<div class="question-image-wrap" onclick="openTrainingLightbox('${escapeHtml(q.image)}')"><img src="${escapeHtml(q.image)}" alt="Question image"/></div>`
-							: q.media_url
-								? `<div class="question-image-wrap" onclick="openTrainingLightbox('${escapeHtml(q.media_url)}')"><img src="${escapeHtml(q.media_url)}" alt="Question media"/></div>`
-								: ''
-					}
+					${questionImageHtml}
 					${
 						q.instruction
 							? `<div class="question-instruction">${escapeHtml(q.instruction)}</div>`

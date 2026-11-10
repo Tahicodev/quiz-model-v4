@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
-		<link rel="stylesheet" href="styles.css?v=2026-11-06-course-views" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-10-training-page5" />
 		<link
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -23,7 +23,7 @@
 			window.APP_PORTAL = 'student';
 		</script>
 		<!-- Legacy Bridge — must load synchronously -->
-		<script src="legacy-bridge.js?v=2026-11-04-round6"></script>
+		<script src="legacy-bridge.js?v=2026-11-09-question-media1"></script>
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -136,14 +136,14 @@
 		</script>
 		<script src="utils.js" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
-		<script src="api-client.js?v=2026-11-04-round6" defer></script>
+		<script src="api-client.js?v=2026-11-09-question-media1" defer></script>
 		<script src="auth.js?v=2026-11-03-subjects1" defer></script>
 		<script src="vendor/socket.io.min.js" defer></script>
 		<script src="realtime-client.js?v=2026-10-24-r4" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="legacy-auth-bridge.js?v=2026-11-04-round6" defer></script>
 		<script
-			src="student-workspace.js?v=2026-11-02-training-time-warning"
+			src="student-workspace.js?v=2026-11-10-training-strip1"
 			defer
 		></script>
 		<script
@@ -286,7 +286,7 @@
 				</div>
 			</header>
 
-			<main class="workspace-main">
+			<main class="workspace-main" id="studentWorkspaceMain">
 				<section class="workspace-tabs" id="studentWorkspaceTabs">
 					<button
 						type="button"
@@ -1581,12 +1581,53 @@
 		<div id="studentTrainingModal" class="modal training-modal">
 			<div class="modal-content training-modal-content">
 				<div class="modal-header training-modal-header">
-					<h3 id="trainingModalTitle">Training Practice Test</h3>
+					<div class="training-page-title-row">
+						<button
+							type="button"
+							class="training-page-back"
+							onclick="closeTrainingModal()"
+							aria-label="Back to workspace"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+							<span>Back</span>
+						</button>
+						<h3 id="trainingModalTitle">Training Practice Test</h3>
+					</div>
+					<div
+						class="training-student-strip"
+						id="trainingStudentStrip"
+						aria-label="Student taking this attempt"
+					>
+						<div
+							class="training-student-avatar"
+							id="trainingStudentAvatar"
+							aria-hidden="true"
+						>
+							S
+						</div>
+						<div class="training-student-meta">
+							<span class="training-student-name" id="trainingStudentName"
+								>Student</span
+							>
+							<span class="training-student-class" id="trainingStudentClass"
+								>Class</span
+							>
+						</div>
+						<span
+							class="training-student-number"
+							id="trainingStudentNumber"
+							hidden
+						></span>
+						<span class="training-student-mode" id="trainingStudentMode"
+							>Training</span
+						>
+					</div>
 					<div class="training-header-meta">
 						<button
 							type="button"
 							class="close-modal-btn"
 							onclick="closeTrainingModal()"
+							aria-label="Close"
 						>
 							&times;
 						</button>

@@ -252,6 +252,9 @@ function renderUsageCell(question) {
 
 // Define createQuestionRow function
 function createQuestionRow(question, index) {
+	// Server rows expose the stimulus image as `media_url`; the table and
+	// editor read the legacy `image` alias.
+	if (!question.image && question.media_url) question.image = question.media_url;
 	const row = document.createElement('tr');
 	row.className = 'question-table-row';
 	row.setAttribute('data-id', question.id || ''); // Add unique ID for highlighting feature
@@ -1638,6 +1641,9 @@ async function addOrUpdateQuestion() {
 			answer: answer,
 			explanation: explanation,
 			image: currentImageData,
+			// Explicit null lets the mapper clear an existing image on edit;
+			// omit semantics would leave the old media_url in place.
+			media_url: currentImageData || null,
 			isDraggable: isDraggable,
 			type: selectedType,
 			allowMultipleAnswers: allowMultipleAnswers,
@@ -1738,6 +1744,16 @@ async function addOrUpdateQuestion() {
 				try {
 					const saved = await window.API.create('questions', questionObj);
 					if (saved && saved.id) questionObj.id = saved.id;
+					// Keep the local cache aligned with what the server stored
+					// (the API client has already swapped data URLs for
+					// /uploads paths, and the server returns the canonical row).
+					const savedMedia = String(
+						saved?.media_url || saved?.image || questionObj.image || ''
+					).trim();
+					if (savedMedia) {
+						questionObj.image = savedMedia;
+						questionObj.media_url = savedMedia;
+					}
 				} catch (apiErr) {
 					console.warn('[questions] API create failed:', apiErr);
 					showToast(
@@ -1786,7 +1802,17 @@ async function addOrUpdateQuestion() {
 			// ── Persist edit to the backend BEFORE the in-memory patch ─────────
 			if (window.API && typeof window.API.update === 'function' && questionObj.id) {
 				try {
-					await window.API.update('questions', questionObj.id, questionObj);
+					const saved = await window.API.update(
+						'questions',
+						questionObj.id,
+						questionObj
+					);
+					const savedMedia = String(
+						saved?.media_url || saved?.image || questionObj.image || ''
+					).trim();
+					// Explicit empty media must clear the local alias too.
+					questionObj.image = savedMedia;
+					questionObj.media_url = savedMedia;
 				} catch (apiErr) {
 					console.warn('[questions] API update failed:', apiErr);
 					showToast(
@@ -2822,19 +2848,15 @@ function populateEditForm(question) {
 	}
 
 
-	// Handle image preview
-	if (question.image) {
-		currentImageData = question.image;
-		const previewContainer = document.querySelector('.image-preview-container');
-		const previewImage = document.getElementById('image-preview');
-		previewImage.src = question.image;
-		previewContainer.classList.remove('hidden');
+	// Question stimulus image. Server rows carry `media_url`; the legacy
+	// editor/cache alias is `image`. Accept either so an edit never drops it.
+	const mediaSource = String(
+		question.image || question.media_url || question.mediaUrl || ''
+	).trim();
+	if (typeof setQuestionMediaPreview === 'function') {
+		setQuestionMediaPreview(mediaSource, { keepStatus: false });
 	} else {
-		currentImageData = '';
-		const previewContainer = document.querySelector('.image-preview-container');
-		if (previewContainer) {
-			previewContainer.classList.add('hidden');
-		}
+		currentImageData = mediaSource;
 	}
 
 	// Update UI to show we're editing
@@ -3970,6 +3992,29 @@ function addOptionToDraggableContainer(option) {
 	}
 }
 
+// Keep the Image Options tab honest about how many image options are queued.
+function updateOptionImageStatus(optionData = []) {
+	const imageCount = (Array.isArray(optionData) ? optionData : []).filter(
+		(entry) => entry && String(entry.image || '').trim()
+	).length;
+	const tab = document.getElementById('image-options-tab');
+	if (tab) tab.classList.toggle('has-image-options', imageCount > 0);
+	const list = document.getElementById('selected-options-list');
+	if (list) list.classList.toggle('has-image-options', imageCount > 0);
+	const status = document.getElementById('optionImageStatus');
+	if (!status) return;
+	if (imageCount > 0) {
+		status.textContent = `${imageCount} image option${
+			imageCount === 1 ? '' : 's'
+		} added. Students see these as clickable image cards.`;
+		status.classList.add('is-ready');
+	} else {
+		status.textContent =
+			'No image options yet. Add an image, then choose the correct one below.';
+		status.classList.remove('is-ready');
+	}
+}
+
 // Function to populate the options list from a comma-separated string or JSON data
 function populateOptionsList(optionsData) {
 	const optionsList = document.getElementById('selected-options-list');
@@ -4058,6 +4103,7 @@ function populateOptionsList(optionsData) {
 	});
 
 	// Update the select dropdown after populating options
+	updateOptionImageStatus(options);
 	updateOptionsField();
 }
 
@@ -4099,16 +4145,14 @@ function clearQuestionForm() {
 	const codeAnswerMode = document.getElementById('code-answer-mode');
 	if (codeAnswerMode) codeAnswerMode.value = 'multiple-choice';
 
-	// Reset image
-	currentImageData = '';
-	const imagePreview = document.getElementById('image-preview');
-	if (imagePreview) imagePreview.src = '';
-	const imagePreviewContainer = document.querySelector(
-		'.image-preview-container'
-	);
-	if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-	const imageUpload = document.getElementById('image-upload');
-	if (imageUpload) imageUpload.value = '';
+	// Reset the question stimulus image (dropzone + legacy hidden state).
+	if (typeof removeImage === 'function') {
+		removeImage();
+	} else {
+		currentImageData = '';
+		const imageUpload = document.getElementById('image-upload');
+		if (imageUpload) imageUpload.value = '';
+	}
 
 	// Reset option image
 	removeOptionImage();
@@ -4493,45 +4537,125 @@ function clearErrorMessages() {
 	document.querySelectorAll('.error-message').forEach((el) => el.remove());
 }
 
-// Function to handle question image upload
-function handleQuestionImageUpload(event) {
-	const file = event.target.files[0];
-	if (!file) return;
+// ── Question stimulus image ────────────────────────────────────────────────
+// The editor keeps the picked file as a data URL in `currentImageData`; the
+// API client uploads it to /uploads and swaps it for a stable URL when the
+// question is saved. Preview state is centralised here so the dropzone, clear
+// flow and edit population all behave identically.
+const QUESTION_MEDIA_MAX_BYTES = 8 * 1024 * 1024;
+const QUESTION_MEDIA_TYPES = /^image\/(png|jpe?g|gif|webp)$/i;
 
-	if (!file.type.match('image.*')) {
-		showToast('Please select an image file');
+function getQuestionMediaEls() {
+	return {
+		dropzone: document.getElementById('questionMediaDropzone'),
+		empty: document.getElementById('questionMediaEmpty'),
+		previewWrap: document.getElementById('questionMediaPreviewWrap'),
+		preview: document.getElementById('questionImagePreview'),
+		uploading: document.getElementById('questionMediaUploading'),
+		status: document.getElementById('questionMediaStatus'),
+		input: document.getElementById('questionImageInput'),
+	};
+}
+
+function setQuestionMediaStatus(message, tone = '') {
+	const { status } = getQuestionMediaEls();
+	if (!status) return;
+	status.textContent = message || '';
+	status.classList.remove('is-error', 'is-ready');
+	if (tone === 'error') status.classList.add('is-error');
+	if (tone === 'ready') status.classList.add('is-ready');
+}
+
+function setQuestionMediaPreview(src, options = {}) {
+	const els = getQuestionMediaEls();
+	currentImageData = src || '';
+	const hasImage = Boolean(currentImageData);
+	if (els.empty) els.empty.classList.toggle('hidden', hasImage);
+	if (els.previewWrap) els.previewWrap.classList.toggle('hidden', !hasImage);
+	if (els.preview) {
+		if (hasImage) els.preview.src = currentImageData;
+		else els.preview.removeAttribute('src');
+	}
+	if (els.uploading) els.uploading.classList.add('hidden');
+	if (els.dropzone) els.dropzone.classList.toggle('has-image', hasImage);
+	if (els.input && !hasImage) els.input.value = '';
+	if (!options.keepStatus) {
+		if (hasImage) {
+			setQuestionMediaStatus(
+				'Image ready. It will be saved with the question.',
+				'ready'
+			);
+		} else {
+			setQuestionMediaStatus('');
+		}
+	}
+}
+
+function handleQuestionMediaFile(file) {
+	if (!file) return;
+	if (!QUESTION_MEDIA_TYPES.test(String(file.type || ''))) {
+		setQuestionMediaStatus(
+			'Unsupported file. Use a PNG, JPG, GIF or WebP image.',
+			'error'
+		);
+		return;
+	}
+	if (file.size > QUESTION_MEDIA_MAX_BYTES) {
+		setQuestionMediaStatus(
+			'This image is larger than 8 MB. Please choose a smaller one.',
+			'error'
+		);
 		return;
 	}
 
+	const { uploading } = getQuestionMediaEls();
+	if (uploading) uploading.classList.remove('hidden');
+	setQuestionMediaStatus('Preparing image…');
+
 	const reader = new FileReader();
 	reader.onload = function (e) {
-		currentImageData = e.target.result;
-		const previewImage = document.getElementById('image-preview');
-		const previewContainer = document.querySelector(
-			'.question-image-preview-container'
-		);
-		if (previewImage) {
-			previewImage.src = currentImageData;
-		}
-		if (previewContainer) {
-			previewContainer.classList.remove('hidden');
-		}
+		setQuestionMediaPreview(e.target.result);
+	};
+	reader.onerror = function () {
+		if (uploading) uploading.classList.add('hidden');
+		setQuestionMediaStatus('Could not read that image. Try another file.', 'error');
 	};
 	reader.readAsDataURL(file);
 }
 
+function handleQuestionImageUpload(event) {
+	const file = event?.target?.files?.[0];
+	handleQuestionMediaFile(file);
+	// Allow picking the same file again (e.g. after Replace).
+	if (event?.target) event.target.value = '';
+}
+
+function onQuestionMediaDragOver(event) {
+	event.preventDefault();
+	event.stopPropagation();
+	if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+	document.getElementById('questionMediaDropzone')?.classList.add('drag-over');
+}
+
+function onQuestionMediaDragLeave(event) {
+	event.preventDefault();
+	event.stopPropagation();
+	document.getElementById('questionMediaDropzone')?.classList.remove('drag-over');
+}
+
+function onQuestionMediaDrop(event) {
+	event.preventDefault();
+	event.stopPropagation();
+	document.getElementById('questionMediaDropzone')?.classList.remove('drag-over');
+	const file = event.dataTransfer?.files?.[0];
+	handleQuestionMediaFile(file);
+}
+
 // Function to remove question image
 function removeImage() {
-	currentImageData = '';
-	const imageUpload = document.getElementById('image');
-	const imagePreview = document.getElementById('image-preview');
-	const previewContainer = document.querySelector(
-		'.question-image-preview-container'
-	);
-
-	if (imageUpload) imageUpload.value = '';
-	if (imagePreview) imagePreview.src = '';
-	if (previewContainer) previewContainer.classList.add('hidden');
+	setQuestionMediaPreview('');
+	const { input } = getQuestionMediaEls();
+	if (input) input.value = '';
 }
 
 // Function to update the hidden options field and populate select dropdowns
@@ -4566,6 +4690,8 @@ function updateOptionsField() {
 		};
 	});
 	optionData = normalizeOptionDataForStorage(optionData);
+
+	updateOptionImageStatus(optionData);
 
 	// Update the options field value (comma-separated text)
 	const optionsField = document.getElementById('options');
@@ -4979,7 +5105,25 @@ function populateMultipleAnswersCheckboxes(options, answers) {
 function handleOptionImages(input) {
 	if (!input.files || input.files.length === 0) return;
 
-	const files = Array.from(input.files);
+	// Keep the editor aligned with the upload endpoint contract: an option
+	// image is a real raster file up to 8 MB. Anything else would only fail
+	// at save time, so reject it early with a clear message.
+	const files = Array.from(input.files).filter((file) => {
+		if (!QUESTION_MEDIA_TYPES.test(String(file.type || ''))) {
+			showToast('Option images must be PNG, JPG, GIF or WebP', 'error');
+			return false;
+		}
+		if (file.size > QUESTION_MEDIA_MAX_BYTES) {
+			showToast('Each option image must be 8 MB or smaller', 'error');
+			return false;
+		}
+		return true;
+	});
+	if (!files.length) {
+		input.value = '';
+		return;
+	}
+
 	const optionsField = document.getElementById('options');
 	let currentData = [];
 

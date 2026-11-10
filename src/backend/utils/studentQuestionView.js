@@ -95,6 +95,9 @@ export function toStudentPracticeView(question) {
 	} = decoded;
 	return {
 		...rest,
+		// Keep the legacy `image` alias in sync with the canonical column so
+		// training/exam/game renderers show the stimulus image.
+		image: decoded.media_url || decoded.image || '',
 		question: decoded.question || decoded.text,
 		options: parseJson(decoded.options_json, decoded.options || []),
 	};

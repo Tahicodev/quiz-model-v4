@@ -344,15 +344,45 @@
               if (table === 'questions') {
                 rows = rows.map(function (question) {
                   var categoryId = question.category_id || question.categoryId || question.category || '';
+                  var options = Array.isArray(question.options)
+                    ? question.options
+                    : (function () {
+                        try { return JSON.parse(question.options_json || '[]'); } catch (_) { return []; }
+                      })();
+                  // Normalize rich option nodes ({text,image}) into the
+                  // `optionData` shape the legacy editor reads, so image
+                  // options survive a hard refresh / DB bootstrap.
+                  var optionData = (Array.isArray(options) ? options : []).map(function (entry, index) {
+                    if (entry && typeof entry === 'object') {
+                      var text = String(entry.text != null ? entry.text : entry.label || entry.value || '').trim();
+                      var image = String(entry.image != null ? entry.image : entry.imageUrl || entry.src || '').trim();
+                      return {
+                        text: text || (image ? 'image-' + (entry.number || index + 1) : ''),
+                        image: image,
+                        isImageOnly: Boolean(entry.isImageOnly) || (Boolean(image) && !text),
+                        id: entry.id != null ? String(entry.id) : 'opt_' + (index + 1),
+                        number: entry.number != null ? String(entry.number) : String(index + 1),
+                      };
+                    }
+                    return {
+                      text: String(entry == null ? '' : entry).trim(),
+                      image: '',
+                      isImageOnly: false,
+                      id: 'opt_' + (index + 1),
+                      number: String(index + 1),
+                    };
+                  }).filter(function (entry) { return entry.text || entry.image; });
+                  // Server rows use `media_url`; the legacy workspace/editor
+                  // reads `image`. Expose both so no reload loses the image.
+                  var mediaUrl = String(question.media_url || question.image || '').trim();
                   return Object.assign({}, question, {
                     question: question.question || question.text || '',
                     category: categoryId,
                     categoryId: categoryId,
-                    options: Array.isArray(question.options)
-                      ? question.options
-                      : (function () {
-                          try { return JSON.parse(question.options_json || '[]'); } catch (_) { return []; }
-                        })(),
+                    image: mediaUrl,
+                    media_url: question.media_url || mediaUrl,
+                    options: options,
+                    optionData: optionData,
                   });
                 });
               } else if (table === 'categories') {
