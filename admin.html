@@ -40,7 +40,7 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-10-training-page5" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-10-resources3" />
 		<link rel="stylesheet" href="admin.css?v=2026-11-09-question-media1" />
 		<link rel="stylesheet" href="theme.css?v=2026-11-09-aipage1" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-11-09-notifmeta1" />
@@ -148,10 +148,10 @@
 		<!-- Admin page scripts -->
 		<script src="bulk-selection.js?v=2026-11-08-roster1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-11-09-subjectpick1" defer></script>
-		<script src="questions-management.js?v=2026-11-09-question-media1" defer></script>
+		<script src="category-management.js?v=2026-11-10-attempts2" defer></script>
+		<script src="questions-management.js?v=2026-11-10-aiimage1" defer></script>
 		<script src="exam-management.js?v=2026-11-08-examrow1" defer></script>
-		<script src="courses-management.js?v=2026-11-09-rowclick1" defer></script>
+		<script src="courses-management.js?v=2026-11-10-resources3" defer></script>
 		<script src="class-management.js?v=2026-11-08-roster1" defer></script>
 		<script src="results-management.js?v=2026-11-08-results-unified12" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
@@ -2132,34 +2132,106 @@
 													</div><!-- /#ai-text-style-fields -->
 
 													<!-- IMAGE style builder: one manually-authored question with picture options -->
-													<div id="ai-image-style-builder" data-hidden="1" style="margin-top: 20px;">
+													<div id="ai-image-style-builder" data-hidden="1" class="ai-image-builder">
 														<div class="ai-image-builder-head">
-															<div style="flex: 1;">
-																	<label style="font-weight: 700; font-size: 1rem;">🖼️ Question with image options</label>
-																<small class="text-muted" style="display: block; margin-top: 4px;">Build one question manually: type the question text, add options and describe the picture for each, mark the correct one, pick the Image Model, then hit Generate.</small>
+															<div class="ai-image-builder-head-copy">
+																<label class="ai-image-builder-title">🖼️ Question with image options</label>
+																<small class="text-muted">Build one question at a time: write the question text, optionally attach a picture to the question, describe each answer picture, mark the correct one, then pick the Image Model and hit Generate.</small>
 															</div>
-															<button type="button" class="btn btn-primary-outline" id="ai-image-create-btn" onclick="window.createAIImageQuestion()" style="padding: 10px 16px; white-space: nowrap;">➕ Create question with image options</button>
+															<button type="button" class="btn btn-primary-outline ai-image-create-btn" id="ai-image-create-btn" onclick="window.createAIImageQuestion()">➕ Create question with image options</button>
 														</div>
 
-														<div id="ai-image-builder-panel" style="display: none; margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #f8fafc;">
-															<div class="form-group">
-																<label for="ai-image-question-text" style="font-weight: 600;">📝 Question</label>
-																<textarea id="ai-image-question-text" rows="2" class="form-control" placeholder="Type the question text, e.g. &quot;Which image shows a wireless router?&quot;" style="padding: 12px; font-size: 1rem;"></textarea>
-															</div>
+														<div id="ai-image-builder-panel" class="ai-image-builder-panel" hidden>
+															<!-- Step 1 — question text -->
+															<section class="ai-img-step">
+																<header class="ai-img-step-head">
+																	<span class="ai-img-step-badge" aria-hidden="true">1</span>
+																	<div class="ai-img-step-copy">
+																		<h4 class="ai-img-step-title">Question text</h4>
+																		<p class="ai-img-step-hint">The wording students read before looking at the pictures.</p>
+																	</div>
+																</header>
+																<textarea id="ai-image-question-text" rows="2" class="form-control ai-image-question-text" placeholder="e.g. Which image shows a wireless router?"></textarea>
+															</section>
 
-															<div class="form-group" style="margin-top: 16px;">
-																<label style="font-weight: 600;">🖼️ Options <small class="text-muted">(describe what each option image should show — click the radio or the row to mark the correct answer)</small></label>
-																<div id="ai-image-options-list"></div>
-																<button type="button" class="btn btn-secondary" id="ai-image-add-option" onclick="window.addAIImageOption()" style="margin-top: 12px;">➕ Add option</button>
-															</div>
+															<!-- Step 2 — question image (optional stimulus picture) -->
+															<section class="ai-img-step">
+																<header class="ai-img-step-head">
+																	<span class="ai-img-step-badge" aria-hidden="true">2</span>
+																	<div class="ai-img-step-copy">
+																		<h4 class="ai-img-step-title">Question image <span class="ai-img-optional">Optional</span></h4>
+																		<p class="ai-img-step-hint">A picture that sits with the question text — a diagram, a photo or a map. Upload one you already have, or describe it and let the Image Model draw it.</p>
+																	</div>
+																</header>
 
-															<div class="form-group" style="margin-top: 16px;">
-																<label for="ai-image-model-select" style="font-weight: 600;">🤖 Image Model <small class="text-muted">(renders the option pictures)</small></label>
-																<select id="ai-image-model-select" class="form-control" style="padding: 10px;" onchange="window.onAIImageModelChange(this)">
+																<div class="ai-img-source-toggle" role="group" aria-label="Question image source">
+																	<button type="button" class="ai-img-source-btn is-active" data-source="none" aria-pressed="true" onclick="window.setAIImageQuestionImageSource('none')">🚫 No image</button>
+																	<button type="button" class="ai-img-source-btn" data-source="upload" aria-pressed="false" onclick="window.setAIImageQuestionImageSource('upload')">📁 Upload image</button>
+																	<button type="button" class="ai-img-source-btn" data-source="ai" aria-pressed="false" onclick="window.setAIImageQuestionImageSource('ai')">✨ Describe with AI</button>
+																</div>
+
+																<div class="ai-img-source-pane" id="ai-question-image-pane-none">
+																	<p class="ai-img-pane-note">The question will show text only. Pick another option above to add a picture.</p>
+																</div>
+
+																<div class="ai-img-source-pane" id="ai-question-image-pane-upload" hidden>
+																	<div
+																		id="ai-question-image-dropzone"
+																		class="ai-img-dropzone"
+																		onclick="document.getElementById('ai-question-image-input')?.click()"
+																		ondragover="window.onAIImageQuestionImageDragOver(event)"
+																		ondragleave="window.onAIImageQuestionImageDragLeave(event)"
+																		ondrop="window.onAIImageQuestionImageDrop(event)"
+																	>
+																		<input type="file" id="ai-question-image-input" class="ai-img-file-input" accept="image/png,image/jpeg,image/gif,image/webp" onchange="window.onAIImageQuestionImageUpload(event)" />
+																		<div class="ai-img-dropzone-empty" id="ai-question-image-empty">
+																			<span class="ai-img-dropzone-icon" aria-hidden="true">🖼️</span>
+																			<span class="ai-img-dropzone-title">Drop an image here, or click to browse</span>
+																			<span class="ai-img-dropzone-sub">PNG, JPG, GIF or WebP · up to 8 MB</span>
+																		</div>
+																		<div class="ai-img-dropzone-preview" id="ai-question-image-preview-wrap" hidden>
+																			<img id="ai-question-image-preview" alt="Question image preview" />
+																		</div>
+																	</div>
+																	<div class="ai-img-dropzone-actions">
+																		<small class="ai-img-status" id="ai-question-image-status"></small>
+																		<button type="button" class="btn btn-secondary ai-img-remove-btn" id="ai-question-image-remove" hidden onclick="window.removeAIImageQuestionImage()">🗑️ Remove image</button>
+																	</div>
+																</div>
+
+																<div class="ai-img-source-pane" id="ai-question-image-pane-ai" hidden>
+																	<textarea id="ai-question-image-prompt" rows="3" class="form-control ai-image-question-text" placeholder="Describe the picture to draw, e.g. &quot;a labelled diagram of a wireless router with three antennas on a plain white background&quot;"></textarea>
+																	<p class="ai-img-pane-note">The Image Model below renders this into a real picture and attaches it to the question. Keep it to one clear subject.</p>
+																</div>
+															</section>
+
+															<!-- Step 3 — answer options -->
+															<section class="ai-img-step">
+																<header class="ai-img-step-head">
+																	<span class="ai-img-step-badge" aria-hidden="true">3</span>
+																	<div class="ai-img-step-copy">
+																		<h4 class="ai-img-step-title">Answer options</h4>
+																		<p class="ai-img-step-hint">Describe the picture for each option, then click a row (or its radio) to mark the one correct answer.</p>
+																	</div>
+																</header>
+																<div id="ai-image-options-list" class="ai-image-options-list"></div>
+																<button type="button" class="btn btn-secondary" id="ai-image-add-option" onclick="window.addAIImageOption()">➕ Add option</button>
+															</section>
+
+															<!-- Step 4 — image model -->
+															<section class="ai-img-step">
+																<header class="ai-img-step-head">
+																	<span class="ai-img-step-badge" aria-hidden="true">4</span>
+																	<div class="ai-img-step-copy">
+																		<h4 class="ai-img-step-title">Image Model</h4>
+																		<p class="ai-img-step-hint">The model that draws every picture in this question — the question image and each option.</p>
+																	</div>
+																</header>
+																<select id="ai-image-model-select" class="form-control ai-image-model-select" onchange="window.onAIImageModelChange(this)">
 																	<option value="">-- Select an image model --</option>
 																</select>
 																<small class="text-muted" id="ai-image-model-hint"></small>
-															</div>
+															</section>
 														</div>
 													</div>
 
@@ -2886,6 +2958,29 @@
 												</svg>
 												<span>New Course</span>
 											</button>
+											<button
+												id="course-documents-btn"
+												class="btn"
+												type="button"
+												title="Every generated document: course booklets, prep sheets, exercises and exams"
+												onclick="openGeneratedDocumentsLibrary()"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+												>
+													<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+													<path d="M14 2v6h6"></path>
+													<path d="M8 13h8"></path>
+													<path d="M8 17h5"></path>
+												</svg>
+												<span>Documents</span>
+											</button>
 											<div
 												id="bulk-actions-courses"
 												class="bulk-actions-container hidden"
@@ -3151,7 +3246,7 @@
 										<th>Name</th>
 										<th>Description</th>
 										<th>Questions</th>
-										<th>Training</th>
+										<th title="Enable training for a category and cap its attempts">Training</th>
 										<th class="owner-col">By</th>
 										<th>Date Created</th>
 										<th>Actions</th>
@@ -7043,7 +7138,7 @@
 								<input type="checkbox" id="categoryTraining" />
 								<span>Use in training mode</span>
 							</label>
-							<small class="text-muted" style="display: block; margin-left: 24px;">Checked categories feed training mode (instead of Uncategorized only).</small>
+							<small class="text-muted" style="display: block; margin-left: 24px;">Checked categories feed training mode. The number sets the maximum attempts for this category and its lessons (blank inherits the parent, 0 = unlimited).</small>
 						</div>
 
 						<!-- Question assignment now lives in its own modal (Assign
@@ -8446,7 +8541,7 @@
 									>
 								</div>
 
-								<p class="text-muted" style="margin-top: 10px; font-size: 0.88em;">When enabled, uncategorized training questions are pushed to all connected student devices on the interval above.</p>
+								<p class="text-muted" style="margin-top: 10px; font-size: 0.88em;">When enabled, questions from training-enabled categories are pushed to all connected student devices on the interval above.</p>
 							</div>
 						</div>
 

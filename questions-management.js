@@ -7263,12 +7263,162 @@ async function generateQuestionsViaServer({ topic, typeCounts, difficulty, point
 	return questions;
 }
 
+// ── Question image (stimulus picture) for the image-options builder ─────────
+// Besides the per-option pictures, a question may carry ONE picture of its
+// own — the stimulus image shown above the options. The teacher either uploads
+// a file locally (kept as a data URL, uploaded to /uploads by the API client at
+// save time) or describes it so the Image Model draws it. State is centralised
+// here so the source toggle, panes, preview and reset always agree.
+const AI_QUESTION_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const AI_QUESTION_IMAGE_TYPES = /^image\/(png|jpe?g|gif|webp)$/i;
+
+let aiQuestionImageSource = 'none';
+let aiQuestionImageDataUrl = '';
+
+function getAIQuestionImageEls() {
+	return {
+		toggle: document.querySelectorAll('.ai-img-source-btn'),
+		panes: {
+			none: document.getElementById('ai-question-image-pane-none'),
+			upload: document.getElementById('ai-question-image-pane-upload'),
+			ai: document.getElementById('ai-question-image-pane-ai'),
+		},
+		dropzone: document.getElementById('ai-question-image-dropzone'),
+		empty: document.getElementById('ai-question-image-empty'),
+		previewWrap: document.getElementById('ai-question-image-preview-wrap'),
+		preview: document.getElementById('ai-question-image-preview'),
+		input: document.getElementById('ai-question-image-input'),
+		status: document.getElementById('ai-question-image-status'),
+		remove: document.getElementById('ai-question-image-remove'),
+		prompt: document.getElementById('ai-question-image-prompt'),
+	};
+}
+
+function setAIQuestionImageStatus(message, tone = '') {
+	const { status } = getAIQuestionImageEls();
+	if (!status) return;
+	status.textContent = message || '';
+	status.classList.remove('is-error', 'is-ready');
+	if (tone === 'error') status.classList.add('is-error');
+	if (tone === 'ready') status.classList.add('is-ready');
+}
+
+// Mirror the picked file (if any) into the dropzone preview + remove button.
+function syncAIQuestionImagePreview() {
+	const els = getAIQuestionImageEls();
+	const hasImage = Boolean(aiQuestionImageDataUrl);
+	if (els.empty) els.empty.hidden = hasImage;
+	if (els.previewWrap) els.previewWrap.hidden = !hasImage;
+	if (els.preview) {
+		if (hasImage) els.preview.src = aiQuestionImageDataUrl;
+		else els.preview.removeAttribute('src');
+	}
+	if (els.dropzone) els.dropzone.classList.toggle('has-image', hasImage);
+	if (els.remove) els.remove.hidden = !hasImage;
+}
+
+// Switch between "No image" / "Upload image" / "Describe with AI".
+window.setAIImageQuestionImageSource = function(source) {
+	const next = ['none', 'upload', 'ai'].includes(source) ? source : 'none';
+	aiQuestionImageSource = next;
+	const els = getAIQuestionImageEls();
+	els.toggle.forEach((btn) => {
+		const active = btn.dataset.source === next;
+		btn.classList.toggle('is-active', active);
+		btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+	});
+	Object.entries(els.panes).forEach(([key, pane]) => {
+		if (pane) pane.hidden = key !== next;
+	});
+	if (next === 'upload' && aiQuestionImageDataUrl) {
+		setAIQuestionImageStatus('Image ready. It will be attached to the question.', 'ready');
+	}
+	if (next === 'ai') els.prompt?.focus();
+};
+
+function handleAIQuestionImageFile(file) {
+	if (!file) return;
+	if (!AI_QUESTION_IMAGE_TYPES.test(String(file.type || ''))) {
+		setAIQuestionImageStatus('Unsupported file. Use a PNG, JPG, GIF or WebP image.', 'error');
+		return;
+	}
+	if (file.size > AI_QUESTION_IMAGE_MAX_BYTES) {
+		setAIQuestionImageStatus('This image is larger than 8 MB. Please choose a smaller one.', 'error');
+		return;
+	}
+	setAIQuestionImageStatus('Preparing image...');
+	const reader = new FileReader();
+	reader.onload = function (e) {
+		aiQuestionImageDataUrl = String(e?.target?.result || '');
+		syncAIQuestionImagePreview();
+		setAIQuestionImageStatus('Image ready. It will be attached to the question.', 'ready');
+	};
+	reader.onerror = function () {
+		setAIQuestionImageStatus('Could not read that image. Try another file.', 'error');
+	};
+	reader.readAsDataURL(file);
+}
+
+window.onAIImageQuestionImageUpload = function(event) {
+	const file = event?.target?.files?.[0];
+	handleAIQuestionImageFile(file);
+	// Allow picking the same file again later.
+	if (event?.target) event.target.value = '';
+};
+
+window.onAIImageQuestionImageDragOver = function(event) {
+	event.preventDefault();
+	event.stopPropagation();
+	if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+	getAIQuestionImageEls().dropzone?.classList.add('drag-over');
+};
+
+window.onAIImageQuestionImageDragLeave = function(event) {
+	event.preventDefault();
+	event.stopPropagation();
+	getAIQuestionImageEls().dropzone?.classList.remove('drag-over');
+};
+
+window.onAIImageQuestionImageDrop = function(event) {
+	event.preventDefault();
+	event.stopPropagation();
+	getAIQuestionImageEls().dropzone?.classList.remove('drag-over');
+	handleAIQuestionImageFile(event.dataTransfer?.files?.[0]);
+};
+
+window.removeAIImageQuestionImage = function() {
+	aiQuestionImageDataUrl = '';
+	const { input } = getAIQuestionImageEls();
+	if (input) input.value = '';
+	setAIQuestionImageStatus('');
+	syncAIQuestionImagePreview();
+};
+
 // Read + validate the manual image builder (Images option style). Throws a
 // readable message when a required field is missing.
 function buildImageQuestionFromBuilder() {
 	const questionText = document.getElementById('ai-image-question-text')?.value?.trim() || '';
 	if (!questionText) throw new Error('Please enter the question text.');
 	if (questionText.length > 8000) throw new Error('The question text is too long (max 8000 characters).');
+
+	// Question image (optional): either a locally uploaded file or a prompt the
+	// Image Model renders, mirroring the per-option descriptions.
+	let questionImagePrompt = '';
+	let questionImageDataUrl = '';
+	if (aiQuestionImageSource === 'upload') {
+		questionImageDataUrl = aiQuestionImageDataUrl;
+		if (!questionImageDataUrl) {
+			throw new Error('Choose the question image to upload, or switch the image source.');
+		}
+	} else if (aiQuestionImageSource === 'ai') {
+		questionImagePrompt = document.getElementById('ai-question-image-prompt')?.value?.trim() || '';
+		if (!questionImagePrompt) {
+			throw new Error('Describe the question image to draw, or switch to "No image".');
+		}
+		if (questionImagePrompt.length > 2000) {
+			throw new Error('The question image description is too long (max 2000 characters).');
+		}
+	}
 
 	const items = Array.from(document.querySelectorAll('#ai-image-options-list .ai-image-option-item'));
 	if (items.length < 2) {
@@ -7301,17 +7451,19 @@ function buildImageQuestionFromBuilder() {
 		throw new Error('The selected Image Model is no longer available — pick it again.');
 	}
 
-	return { questionText, options, answer, imageConfigId };
+	return { questionText, options, answer, imageConfigId, questionImagePrompt, questionImageDataUrl };
 }
 
 // Render one manually-authored question (Images style): the server crafts the
-// draft and turns each option description into a real uploaded picture.
-async function generateImageQuestionViaServer({ questionText, options, answer, imageConfigId, points, difficulty, language }) {
+// draft, turns each option description into a real uploaded picture and, when
+// asked, draws the question's own stimulus image with the same model.
+async function generateImageQuestionViaServer({ questionText, options, answer, imageConfigId, questionImagePrompt, points, difficulty, language }) {
 	const res = await window.API.raw('POST', '/ai/generate/image-question', {
 		imageConfigId,
 		questionText,
 		options,
 		answer,
+		...(questionImagePrompt ? { questionImagePrompt } : {}),
 		points,
 		difficulty,
 		language,
@@ -7330,11 +7482,18 @@ async function generateImageQuestionViaServer({ questionText, options, answer, i
 window.createAIImageQuestion = function() {
 	const panel = document.getElementById('ai-image-builder-panel');
 	if (!panel) return;
-	if (panel.style.display !== 'none') {
-		panel.style.display = 'none';
+	if (!panel.hidden) {
+		panel.hidden = true;
 		return;
 	}
-	panel.style.display = 'block';
+	panel.hidden = false;
+	// A fresh builder starts with the first two option rows ready so the
+	// teacher can type straight away.
+	const list = document.getElementById('ai-image-options-list');
+	if (list && !list.querySelector('.ai-image-option-item')) {
+		window.addAIImageOption();
+		window.addAIImageOption();
+	}
 	const question = document.getElementById('ai-image-question-text');
 	if (question) question.focus();
 };
@@ -7378,11 +7537,19 @@ window.removeAIImageOption = function(btn) {
 // Re-open the builder to a blank state (used when the modal is reset).
 function resetAIImageBuilder() {
 	const panel = document.getElementById('ai-image-builder-panel');
-	if (panel) panel.style.display = 'none';
+	if (panel) panel.hidden = true;
 	const question = document.getElementById('ai-image-question-text');
 	if (question) question.value = '';
 	const list = document.getElementById('ai-image-options-list');
 	if (list) list.innerHTML = '';
+	const prompt = document.getElementById('ai-question-image-prompt');
+	if (prompt) prompt.value = '';
+	aiQuestionImageDataUrl = '';
+	const { input } = getAIQuestionImageEls();
+	if (input) input.value = '';
+	setAIQuestionImageStatus('');
+	syncAIQuestionImagePreview();
+	window.setAIImageQuestionImageSource('none');
 }
 
 window.generateQuestionsWithAI = async function() {
@@ -7414,11 +7581,18 @@ window.generateQuestionsWithAI = async function() {
 				options: built.options,
 				answer: built.answer,
 				imageConfigId: built.imageConfigId,
+				questionImagePrompt: built.questionImagePrompt,
 				points,
 				difficulty: document.getElementById('ai-difficulty')?.value || 'medium',
 				language,
 			});
 			if (questions && questions.length > 0) {
+				// A locally uploaded question image stays a data URL until save;
+				// the API client uploads it to /uploads then. Only attach it when
+				// the server did not already draw a question image from a prompt.
+				if (built.questionImageDataUrl) {
+					questions.forEach((q) => { if (!q.image) q.image = built.questionImageDataUrl; });
+				}
 				questions.forEach((q) => { q.points = points; });
 				const imgTime = readAITimeLimit('standard');
 				if (imgTime > 0) questions.forEach((q) => { q.time_limit = imgTime; q.timeLimit = imgTime; });
@@ -7790,6 +7964,12 @@ function createPreviewCard(question, index) {
 			<span style="margin-left: auto; font-size: 0.85rem; color: var(--text-muted);">Q${index + 1}</span>
 		</div>
 		<div class="ai-preview-question">${escapeHtml(question.question).replace(/&#x20;/gi, ' ')}</div>
+		${(() => {
+			const stimulus = String(question.image || question.media_url || '').trim();
+			return stimulus
+				? `<div class="ai-preview-question-image"><img src="${escapeHtml(stimulus)}" alt="Question image" /></div>`
+				: '';
+		})()}
 		${question.codeSnippet ? `
 			<div class="code-snippet-block" style="margin: 12px 0;">
 				<div class="code-snippet-header">
@@ -8899,7 +9079,7 @@ function updateAIOptionStyleWarning() {
 	if (!warn) return;
 	const style = getAIOptionStyle();
 	warn.textContent = style === 'image'
-		? 'Build one question: type the question text, add options and describe the image for each one, then pick an Image Model below.'
+		? 'Build one question: type the question text, optionally attach a picture to the question, describe the image for each option, then pick an Image Model below.'
 		: '';
 }
 

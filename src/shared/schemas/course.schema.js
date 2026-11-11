@@ -109,6 +109,9 @@ export const LessonCreateSchema = z.object({
   // PrepSheetDataSchema in AIService before it is ever handed to this method;
   // clients only trigger generation through the dedicated endpoint.
   prep_sheet:  z.record(z.string(), z.unknown()).nullish(),
+  // Server-populated AI exercise (situation-problem + worked solution). Same
+  // rules as prep_sheet: only the dedicated exercise endpoint writes it.
+  exercise:    z.record(z.string(), z.unknown()).nullish(),
 });
 
 export const LessonUpdateSchema = LessonCreateSchema.partial();
@@ -211,4 +214,40 @@ export const PrepSheetDataSchema = z.object({
     (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? [v] : []),
     z.array(PrepSheetSessionSchema).min(1).max(30),
   ),
+});
+
+// ── Lesson exercises (situation-problem + worked solution) ───────────────────
+// An exercise is NOT a question: it is a realistic situation the student must
+// analyse and solve by applying the lesson's knowledge, and it always ships
+// with a full correction. POST /courses/:id/lessons/:lessonId/exercise
+export const ExerciseGenerateSchema = z.object({
+  configId:   z.union([z.string(), z.coerce.number().int()]).optional(),
+  language:   z.string().max(40).default('French'),
+  difficulty: z.enum(['easy', 'medium', 'hard']).default('medium'),
+  force:      z.boolean().default(false),
+});
+
+const ExerciseTaskSchema = z.object({
+  prompt: maybeText(),
+  points: intOf(1),
+});
+
+export const ExerciseDataSchema = z.object({
+  title:       maybeText('Exercice'),
+  generatedAt: z.string().optional().transform((v) => v || new Date().toISOString()),
+  language:    maybeText('French'),
+  difficulty:  maybeText('medium'),
+  // The real-life situation / scenario that frames the problem.
+  situation:   maybeText(),
+  // Data the student is given (values, statements, table rows, constraints).
+  givenData:   stringList,
+  // The tasks the student solves by applying the lesson knowledge.
+  tasks: z.preprocess(
+    (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? [v] : []),
+    z.array(ExerciseTaskSchema).min(1).max(12),
+  ),
+  // The worked correction: ordered solution steps, then the final answer.
+  solutionSteps:   stringList,
+  finalAnswer:     maybeText(),
+  keyCompetencies: stringList,
 });

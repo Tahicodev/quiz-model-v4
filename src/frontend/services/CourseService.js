@@ -35,9 +35,10 @@ export class CourseService {
   }
 
   // SQLite has no Json column type on this Prisma version, so JSON payloads
-  // (course document identity, lesson prep sheets) live in TEXT columns.
-  // (De)serialize here so routes and the admin UI keep exchanging objects.
-  static #JSON_FIELDS = ['document_header', 'prep_sheet'];
+  // (course document identity, lesson prep sheets, exercises) live in TEXT
+  // columns. (De)serialize here so routes and the admin UI keep exchanging
+  // objects.
+  static #JSON_FIELDS = ['document_header', 'prep_sheet', 'exercise'];
 
   #serializeJsonFields(values) {
     if (!values) return values;
@@ -444,8 +445,9 @@ export class CourseService {
     const { data: lessons } = await this.#repo.getAll('lessons', {
       filters: { course_id: courseId }, orderBy: 'order_index', direction: 'asc', limit: 1000,
     });
-    // Prep sheets are a teacher tool; keep them out of student payloads.
-    const studentLessons = (lessons || []).map(({ prep_sheet: _drop, ...rest }) => rest);
+    // Prep sheets and exercises (which ship with the worked correction) are
+    // teacher tools; keep them out of student payloads.
+    const studentLessons = (lessons || []).map(({ prep_sheet: _drop, exercise: _dropExercise, ...rest }) => rest);
     const { data: categories } = course.category_id
       ? await this.#repo.getAll('categories', { filters: { school_id: course.school_id }, limit: 100000 })
       : { data: [] };
@@ -573,7 +575,7 @@ export class CourseService {
     const lesson = await this.#repo.getById('lessons', lessonId);
     if (!lesson) throw new NotFoundError('Lesson');
     await this.getForStudent(lesson.course_id, user); // visibility gate (published + assigned)
-    const { prep_sheet: _drop, ...rest } = lesson;
+    const { prep_sheet: _drop, exercise: _dropExercise, ...rest } = lesson;
     return rest;
   }
 

@@ -25,6 +25,10 @@
 	let currentView = { level: 'course', chapterId: null, lessonId: null };
 	let categoryEntryById = new Map();
 	let fullLessonById = new Map();
+	// Narrowing filters for the course list: the catalogue is already scoped
+	// to the student's own published/assigned courses, so these only slice it
+	// by the teacher or subject the course was published under.
+	let courseFilters = { teacher: '', subject: '' };
 
 	function esc(value) {
 		return String(value ?? '')
@@ -537,7 +541,14 @@
 			grid.innerHTML = panelNote('Loading your courses…');
 			try {
 				const res = await A.raw('GET', '/courses/student');
-				coursesCache = res && Array.isArray(res.data) ? res.data : [];
+				// Defence in depth: an administrator-authored test course must
+				// never surface in My Courses (the route already drops it).
+				coursesCache = (res && Array.isArray(res.data) ? res.data : []).filter(
+					(course) => {
+						const role = String(course?.author_role || '').trim().toLowerCase();
+						return !role || role === 'teacher';
+					},
+				);
 			} catch (err) {
 				console.warn('[student-courses] load failed:', err);
 				grid.innerHTML = panelNote('Could not load your courses right now.');
@@ -547,10 +558,110 @@
 		renderList();
 	}
 
+	// ── Course filters (teacher / subject) ───────────────────────────────────
+	function courseFilterValue(course, field) {
+		return String(
+			field === 'teacher' ? course?.teacher_name : course?.subject_name,
+		).trim();
+	}
+
+	function uniqueCourseLabels(courses, field) {
+		return [
+			...new Set(
+				(courses || [])
+					.map((course) => courseFilterValue(course, field))
+					.filter(Boolean),
+			),
+		].sort((left, right) =>
+			left.localeCompare(right, undefined, { sensitivity: 'base' }),
+		);
+	}
+
+	function getVisibleCourses() {
+		return (coursesCache || []).filter((course) => {
+			if (
+				courseFilters.teacher &&
+				courseFilterValue(course, 'teacher') !== courseFilters.teacher
+			) {
+				return false;
+			}
+			if (
+				courseFilters.subject &&
+				courseFilterValue(course, 'subject') !== courseFilters.subject
+			) {
+				return false;
+			}
+			return true;
+		});
+	}
+
+	function renderFilterBar() {
+		const container = document.getElementById('studentCourseFilters');
+		if (!container) return;
+		const courses = coursesCache || [];
+		const teachers = uniqueCourseLabels(courses, 'teacher');
+		// Drop a stale teacher selection before deriving the subject list.
+		if (courseFilters.teacher && !teachers.includes(courseFilters.teacher)) {
+			courseFilters.teacher = '';
+		}
+		const teacherScoped = courses.filter(
+			(course) =>
+				!courseFilters.teacher ||
+				courseFilterValue(course, 'teacher') === courseFilters.teacher,
+		);
+		const subjects = uniqueCourseLabels(teacherScoped, 'subject');
+		if (courseFilters.subject && !subjects.includes(courseFilters.subject)) {
+			courseFilters.subject = '';
+		}
+		if (!teachers.length && !subjects.length) {
+			container.innerHTML = '';
+			return;
+		}
+		const makeSelect = (field, label, items, allLabel) => `
+			<label class="student-filter">
+				<span class="student-filter-label">${esc(label)}</span>
+				<select data-course-filter="${field}">
+					<option value="">${esc(allLabel)}</option>
+					${items
+						.map(
+							(item) =>
+								`<option value="${esc(item)}"${
+									item === courseFilters[field] ? ' selected' : ''
+								}>${esc(item)}</option>`,
+						)
+						.join('')}
+				</select>
+			</label>
+		`;
+		container.innerHTML = `
+			<div class="student-filter-fields">
+				${makeSelect('teacher', 'Teacher', teachers, 'All teachers')}
+				${makeSelect('subject', 'Subject', subjects, 'All subjects')}
+			</div>
+			<button type="button" class="student-filter-reset" data-course-filter-reset>Reset</button>
+		`;
+		if (container.dataset.courseFilterBound !== 'true') {
+			container.dataset.courseFilterBound = 'true';
+			container.addEventListener('change', (event) => {
+				const select = event.target.closest('select[data-course-filter]');
+				if (!select) return;
+				courseFilters[select.getAttribute('data-course-filter')] =
+					select.value || '';
+				renderList();
+			});
+			container.addEventListener('click', (event) => {
+				if (!event.target.closest('[data-course-filter-reset]')) return;
+				courseFilters = { teacher: '', subject: '' };
+				renderList();
+			});
+		}
+	}
+
 	function renderList() {
 		const grid = document.getElementById('studentCourseGrid');
 		const reader = document.getElementById('studentCourseReader');
 		if (!grid) return;
+		renderFilterBar();
 		if (reader) {
 			reader.style.display = 'none';
 			reader.innerHTML = '';
@@ -563,9 +674,19 @@
 			);
 			return;
 		}
-		grid.innerHTML = coursesCache
-			.map(
-				(course, index) =>
+		const visibleCourses = getVisibleCourses();
+		if (!visibleCourses.length) {
+			grid.innerHTML = panelNote(
+				'No courses match the current filters. Try removing a filter.',
+			);
+			return;
+		}
+		grid.innerHTML = visibleCourses
+			.map((course, index) => {
+				const tags = [course.subject_name, course.teacher_name]
+					.map((value) => String(value || '').trim())
+					.filter(Boolean);
+				return (
 					`<div class="exam-card course-student-card" data-course-id="${esc(course.id)}" role="button" tabindex="0" ` +
 					`data-course-tone="${index % 4}" aria-label="Open course: ${esc(course.name)}" ` +
 					`onclick="StudentCourses.openCourse('${esc(course.id)}')" ` +
@@ -573,10 +694,14 @@
 					`<div class="course-student-card-top"><span class="course-student-icon" aria-hidden="true">✦</span><span class="course-student-kicker">Learning path</span></div>` +
 					`<div class="course-student-copy"><h3>${esc(course.name)}</h3>` +
 					(course.description ? `<p class="course-student-desc">${esc(course.description)}</p>` : '') +
+					(tags.length
+						? `<p class="course-student-tags">${tags.map((value) => `<span>${esc(value)}</span>`).join('')}</p>`
+						: '') +
 					`</div><div class="course-student-footer"><span class="course-student-meta"><span class="course-student-meta-icon" aria-hidden="true">▤</span>${Number(course.lesson_count) || 0} ${(Number(course.lesson_count) || 0) === 1 ? 'section' : 'sections'}</span>` +
 					`<span class="course-student-action">Open course <span aria-hidden="true">→</span></span></div>` +
-					'</div>',
-			)
+					'</div>'
+				);
+			})
 			.join('');
 	}
 

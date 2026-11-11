@@ -19,7 +19,7 @@ import { AppError, ForbiddenError, NotFoundError, ValidationError } from '../../
 import {
   CourseGenerateSchema, CourseAssignSchema, CourseReorderSchema,
   LessonContentGenerateSchema, CourseWithStructureSchema,
-  PrepSheetGenerateSchema,
+  PrepSheetGenerateSchema, ExerciseGenerateSchema,
 } from '../../shared/schemas/course.schema.js';
 import { CourseDocumentSchema } from '../../shared/schemas/courseDocument.schema.js';
 import {
@@ -30,6 +30,7 @@ import { getContainer } from '../container.js';
 import { toStudentPracticeView } from '../utils/studentQuestionView.js';
 import { renderCourseDocument } from '../services/courseDocumentRenderer.js';
 import { renderPrepSheet, PREP_SHEET_EXPORT_SCHEMA } from '../services/prepSheetRenderer.js';
+import { renderExercise, EXERCISE_EXPORT_SCHEMA } from '../services/exerciseRenderer.js';
 import {
   buildCourseImportSections,
   detectCourseDocumentOutline,
@@ -44,9 +45,9 @@ router.use(requireAuth, enforceTenant);
 const MANAGE_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
 const STUDENT_ROLES = [ROLES.STUDENT, ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER];
 
-// The prep-sheet routes read the lesson via repo.getById (raw row), where
-// prep_sheet is a JSON string; normalize it back to an object or null.
-function hydratePrepSheet(raw) {
+// The prep-sheet / exercise routes read the lesson via repo.getById (raw row),
+// where those columns are JSON strings; normalize them back to an object or null.
+function parseJsonField(raw) {
   if (!raw) return null;
   if (typeof raw === 'object') return raw;
   try {
@@ -56,6 +57,7 @@ function hydratePrepSheet(raw) {
     return null;
   }
 }
+const hydratePrepSheet = parseJsonField;
 
 function assertCourseOwnership(course, user) {
   if (!course) return;
@@ -111,14 +113,63 @@ router.get('/student', requireRole([ROLES.STUDENT]), async (req, res, next) => {
   try {
     const { courseSvc, repo } = getContainer();
     const courses = await courseSvc.listForStudent(req.user);
+    // Resolve the names once per unique id: students never receive the full
+    // staff/subject tables, but the workspace filter bars need labels.
+    const authorById = new Map();
+    const subjectNameById = new Map();
+    const resolveAuthor = async (id) => {
+      const key = String(id || '').trim();
+      if (!key) return { name: '', role: '' };
+      if (authorById.has(key)) return authorById.get(key);
+      let info = { name: '', role: '' };
+      try {
+        const row = await repo.getById('users', key);
+        const role = String(row?.role || '').trim();
+        // A school administrator authoring a course is not a teacher to the
+        // student, so only teacher accounts contribute a teacher label.
+        info = {
+          name: role === ROLES.TEACHER ? String(row?.name || '').trim() : '',
+          role,
+        };
+      } catch (_) {
+        info = { name: '', role: '' };
+      }
+      authorById.set(key, info);
+      return info;
+    };
+    const resolveSubjectName = async (id) => {
+      const key = String(id || '').trim();
+      if (!key) return '';
+      if (subjectNameById.has(key)) return subjectNameById.get(key);
+      let name = '';
+      try {
+        const row = await repo.getById('subjects', key);
+        name = String(row?.name || '').trim();
+      } catch (_) {
+        name = '';
+      }
+      subjectNameById.set(key, name);
+      return name;
+    };
     // Lesson counts drive the card CTA ("3 lessons") and the empty state.
     const withCounts = [];
     for (const course of courses || []) {
+      const author = await resolveAuthor(course.created_by);
+      // Administrator test courses are not part of the student catalogue —
+      // drop the course and its lessons instead of exposing them.
+      if (author.role && author.role !== ROLES.TEACHER) continue;
       const { total: lessonCount } = await repo.getAll('lessons', {
         filters: { course_id: course.id },
         limit: 1,
       });
-      withCounts.push({ ...course, lesson_count: lessonCount });
+      const subjectName = await resolveSubjectName(course.subject_id);
+      withCounts.push({
+        ...course,
+        lesson_count: lessonCount,
+        teacher_name: author.name,
+        author_role: author.role,
+        subject_name: subjectName,
+      });
     }
     res.json({ data: withCounts, total: withCounts.length });
   } catch (err) { next(err); }
@@ -188,19 +239,31 @@ router.get('/', requireRole(MANAGE_ROLES), async (req, res, next) => {
     );
     const enriched = [];
     for (const course of data) {
-      const [{ total: lessonCount }, { data: links }] = await Promise.all([
-        repo.getAll('lessons', { filters: { course_id: course.id }, limit: 1 }),
+      const [
+        { total: lessonCount, data: courseLessons },
+        { data: links },
+        { total: documentCount },
+      ] = await Promise.all([
+        repo.getAll('lessons', { filters: { course_id: course.id }, limit: 100000 }),
         repo.getAll('course_classes', { filters: { course_id: course.id }, limit: 500 }),
+        repo.getAll('generated_documents', { filters: { course_id: course.id }, limit: 1 }),
       ]);
       const classNames = [];
       for (const link of links) {
         const cls = await repo.getById('classes', link.class_id);
         if (cls) classNames.push(cls.name);
       }
+      // Row-menu flags: "Prep Sheets" / "Exercises" can open their viewer only
+      // when the course already holds at least one generated item.
+      const prepSheets = (courseLessons || []).filter((lesson) => lesson.prep_sheet).length;
+      const exercises = (courseLessons || []).filter((lesson) => lesson.exercise).length;
       enriched.push({
         ...course,
         lesson_count: lessonCount,
         class_names: classNames,
+        prep_sheets: prepSheets,
+        exercises,
+        documents: documentCount,
         category_path: course.category_id ? await buildCategoryPath(course.category_id) : null,
       });
     }
@@ -581,7 +644,7 @@ router.post('/:id/documents/export', requireRole(MANAGE_ROLES), async (req, res,
   try {
     const parsed = CourseDocumentSchema.safeParse(req.body || {});
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-    const { courseSvc } = getContainer();
+    const { courseSvc, genDocSvc } = getContainer();
     const course = await courseSvc.getById(req.params.id);
     assertCourseOwnership(course, req.user);
     const full = await courseSvc.getWithLessons(req.params.id, req.schoolId);
@@ -591,6 +654,22 @@ router.post('/:id/documents/export', requireRole(MANAGE_ROLES), async (req, res,
       category_levels: await buildCourseCategoryLevels(lesson.category_id, course.category_id),
     })));
     const rendered = await renderCourseDocument(full, parsed.data);
+    // Keep a copy in the documents library, then stream the same bytes.
+    await genDocSvc.saveDocument({
+      schoolId: req.schoolId,
+      userId: req.user.id,
+      kind: 'course',
+      title: `${full.name} — ${parsed.data.format.toUpperCase()}`,
+      courseId: full.id,
+      format: parsed.data.format,
+      extension: rendered.extension,
+      buffer: rendered.buffer,
+      meta: {
+        templateId: parsed.data.templateId,
+        includeCover: parsed.data.includeCover,
+        lessonCount: (full.lessons || []).length,
+      },
+    });
     const safeName = String(full.name || 'course')
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -807,7 +886,7 @@ router.post('/:courseId/lessons/:lessonId/prep-sheet/export', requireRole(MANAGE
   try {
     const parsed = PREP_SHEET_EXPORT_SCHEMA.safeParse(req.body || {});
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-    const { courseSvc, repo } = getContainer();
+    const { courseSvc, repo, genDocSvc } = getContainer();
 
     const course = await courseSvc.getById(req.params.courseId);
     assertCourseOwnership(course, req.user);
@@ -829,6 +908,18 @@ router.post('/:courseId/lessons/:lessonId/prep-sheet/export', requireRole(MANAGE
       lessonTitle: lesson.title,
     };
     const rendered = await renderPrepSheet(sheet, headerInfo, parsed.data.format);
+    await genDocSvc.saveDocument({
+      schoolId: req.schoolId,
+      userId: req.user.id,
+      kind: 'prep-sheet',
+      title: `Fiche de préparation — ${lesson.title} (${parsed.data.format.toUpperCase()})`,
+      courseId: course.id,
+      lessonId: lesson.id,
+      format: parsed.data.format,
+      extension: rendered.extension,
+      buffer: rendered.buffer,
+      meta: { sessionCount: Array.isArray(sheet.sessions) ? sheet.sessions.length : 0 },
+    });
     const safeBase = String(lesson.title || 'prep-sheet')
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -836,6 +927,108 @@ router.post('/:courseId/lessons/:lessonId/prep-sheet/export', requireRole(MANAGE
       .replace(/^-|-$/g, '')
       .toLowerCase() || 'prep-sheet';
     const filename = `fiche-prep-${safeBase}.${rendered.extension}`;
+    res.setHeader('Content-Type', rendered.mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Length', String(rendered.buffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(rendered.buffer);
+  } catch (err) { next(err); }
+});
+
+/**
+ * POST /:courseId/lessons/:lessonId/exercise — AI writes a situation-problem
+ * EXERCISE (not a question): a realistic scenario, the data the student is
+ * given, tasks that apply the lesson knowledge and a full worked correction.
+ * Stored on the lesson; without `force` an existing exercise is returned as-is.
+ */
+router.post('/:courseId/lessons/:lessonId/exercise', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const parsed = ExerciseGenerateSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.flatten().fieldErrors);
+    }
+    const params = parsed.data;
+    const { courseSvc, aiSvc, repo } = getContainer();
+
+    const course = await courseSvc.getById(req.params.courseId);
+    assertCourseOwnership(course, req.user);
+    const lesson = await repo.getById('lessons', req.params.lessonId);
+    if (!lesson || String(lesson.course_id) !== String(course.id)) throw new NotFoundError('Lesson');
+
+    const saved = parseJsonField(lesson.exercise);
+    if (saved && !params.force) {
+      return res.json({ exercise: saved, regenerated: false });
+    }
+
+    const categoryPath = lesson.category_id
+      ? await buildCategoryPath(lesson.category_id)
+      : course.name;
+    const config = await resolveGenerationConfig(req, params);
+    const exercise = await aiSvc.generateLessonExercise({
+      config,
+      language: params.language,
+      difficulty: params.difficulty,
+      lesson: { ...lesson, course_name: course.name },
+      categoryPath,
+    });
+    await courseSvc.updateLesson(lesson.id, { exercise }, req.user);
+    res.json({ exercise, regenerated: true });
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
+    const detail = err && err.message ? String(err.message) : 'The AI provider call failed — check your connection, key and model, then try again.';
+    next(new AppError('AI_PROVIDER_ERROR', detail, 502));
+  }
+});
+
+/**
+ * POST /:courseId/lessons/:lessonId/exercise/export — renders the SAVED
+ * exercise (student copy + correction) to .docx/.pdf, files a copy in the
+ * documents library and streams it. 422 when the lesson has no exercise yet.
+ */
+router.post('/:courseId/lessons/:lessonId/exercise/export', requireRole(MANAGE_ROLES), async (req, res, next) => {
+  try {
+    const parsed = EXERCISE_EXPORT_SCHEMA.safeParse(req.body || {});
+    if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
+    const { courseSvc, repo, genDocSvc } = getContainer();
+
+    const course = await courseSvc.getById(req.params.courseId);
+    assertCourseOwnership(course, req.user);
+    const lesson = await repo.getById('lessons', req.params.lessonId);
+    if (!lesson || String(lesson.course_id) !== String(course.id)) throw new NotFoundError('Lesson');
+    const exercise = parseJsonField(lesson.exercise);
+    if (!exercise) {
+      throw new ValidationError({ exercise: ['Generate the exercise before exporting.'] });
+    }
+
+    const identity = course.document_header && typeof course.document_header === 'object' ? course.document_header : {};
+    const headerInfo = {
+      ...identity,
+      teacherName: identity.teacherName || req.user.username,
+      subject: identity.subject || course.name,
+      courseName: course.name,
+      lessonTitle: lesson.title,
+      categoryPath: lesson.category_id ? await buildCategoryPath(lesson.category_id) : null,
+    };
+    const rendered = await renderExercise(exercise, headerInfo, parsed.data.format);
+    await genDocSvc.saveDocument({
+      schoolId: req.schoolId,
+      userId: req.user.id,
+      kind: 'exercise',
+      title: `Exercice — ${exercise.title || lesson.title} (${parsed.data.format.toUpperCase()})`,
+      courseId: course.id,
+      lessonId: lesson.id,
+      format: parsed.data.format,
+      extension: rendered.extension,
+      buffer: rendered.buffer,
+      meta: { difficulty: exercise.difficulty || null, lessonTitle: lesson.title },
+    });
+    const safeBase = String(lesson.title || 'exercise')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase() || 'exercise';
+    const filename = `exercice-${safeBase}.${rendered.extension}`;
     res.setHeader('Content-Type', rendered.mime);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
     res.setHeader('Content-Length', String(rendered.buffer.length));

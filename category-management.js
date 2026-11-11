@@ -23,10 +23,15 @@ let categoryDebounceTimer;
 // survives bootstrap syncs and works across admin/teacher browsers — the
 // same pattern as the teacherClassAssignments mirror. Public visibility so
 // student devices can resolve the training pool too.
-// Resolution: explicit entry wins; otherwise Uncategorized defaults to
-// enabled (legacy behavior), every other category to disabled.
+// Resolution: explicit entry wins; otherwise the nearest enabled ancestor
+// applies. Uncategorized is only a holding bucket for unassigned questions
+// and is never a training category.
 const CATEGORY_TRAINING_KEY = 'categoryTrainingMap';
 let categoryTrainingMapCache = null;
+// Per-category training attempt limits ({ [categoryId]: nonNegativeInt }).
+// `0` = unlimited; a missing entry inherits the nearest ancestor's limit.
+const CATEGORY_ATTEMPT_LIMITS_KEY = 'categoryAttemptLimits';
+let categoryAttemptLimitsCache = null;
 
 function readCategoryTrainingMapFromRepo() {
 	try {
@@ -1374,8 +1379,9 @@ function isTrainingCategory(categoryOrId) {
 		}
 		id = getCategoryParentId(getCategoryById(id));
 	}
-	// Legacy default: only Uncategorized feeds training until configured.
-	return originalId === 'uncategorized';
+	// Legacy default: Uncategorized is never a training category any more
+	// (it is only a holding bucket for unassigned questions).
+	return false;
 }
 
 function getQuestionTrainingCategoryId(question) {
@@ -1391,16 +1397,25 @@ function isTrainingQuestion(question) {
 }
 
 // Training pool for pushes / exports: questions whose category is enabled.
-// Legacy fallback (no map configured yet AND pool empty): first 50 questions.
+// Uncategorized questions are excluded (never training content). Legacy
+// fallback (no map configured yet AND pool empty): first 50 assigned
+// questions.
 function getTrainingQuestions(allQuestions) {
 	const list = Array.isArray(allQuestions) ? allQuestions : [];
-	const pool = list.filter(isTrainingQuestion);
+	const pool = list.filter(
+		(question) =>
+			getQuestionTrainingCategoryId(question) !== 'uncategorized' &&
+			isTrainingQuestion(question),
+	);
 	if (pool.length) return pool;
 	if (!hasCategoryTrainingMap() && list.length) {
-		console.log(
-			'No training-enabled categories found, sending first 50 questions (legacy fallback).',
+		const assigned = list.filter(
+			(question) => getQuestionTrainingCategoryId(question) !== 'uncategorized',
 		);
-		return list.slice(0, 50);
+		console.log(
+			'No training-enabled categories found, sending first 50 assigned questions (legacy fallback).',
+		);
+		return assigned.slice(0, 50);
 	}
 	return pool;
 }
@@ -1474,10 +1489,138 @@ async function toggleCategoryTraining(checkbox) {
 window.addEventListener('quiz:bootstrap-ready', () => {
 	try {
 		categoryTrainingMapCache = readCategoryTrainingMapFromRepo() || {};
+		categoryAttemptLimitsCache =
+			readCategoryAttemptLimitsMapFromRepo() || {};
 	} catch (_) {
 		/* ignore */
 	}
 });
+
+// ── Training attempt limits ───────────────────────────────────────────────
+// Stored in a public settings row so student devices can enforce the limit
+// and teachers keep the configuration across bootstrap syncs. Blank inputs
+// inherit the nearest ancestor ("course" limits cover every lesson); `0`
+// means unlimited.
+function readCategoryAttemptLimitsMapFromRepo() {
+	try {
+		const repo = window.__DI_CONTAINER__?.repo;
+		if (!repo) return null;
+		let rows = [];
+		if (typeof repo.getAll_sync === 'function') {
+			const all = repo.getAll_sync('settings') || [];
+			rows = Array.isArray(all) ? all : all.settings || [];
+		} else if (typeof repo.getValue_sync === 'function') {
+			rows = repo.getValue_sync('settings', {}).settings || [];
+		}
+		const row = (Array.isArray(rows) ? rows : []).find(
+			(entry) => entry && entry.key === CATEGORY_ATTEMPT_LIMITS_KEY,
+		);
+		if (row?.value) {
+			const parsed = JSON.parse(row.value);
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+				return parsed;
+			}
+		}
+	} catch (_) {
+		/* ignore */
+	}
+	return null;
+}
+
+function getCategoryAttemptLimitsMap() {
+	if (categoryAttemptLimitsCache) return categoryAttemptLimitsCache;
+	const stored = readCategoryAttemptLimitsMapFromRepo();
+	categoryAttemptLimitsCache = stored || {};
+	return categoryAttemptLimitsCache;
+}
+
+function getCategoryAttemptLimitExplicit(categoryId) {
+	const map = getCategoryAttemptLimitsMap();
+	const key = String(categoryId || '');
+	if (!Object.prototype.hasOwnProperty.call(map, key)) return null;
+	const value = Number(map[key]);
+	return Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
+}
+
+function getCategoryAttemptLimit(categoryId) {
+	const map = getCategoryAttemptLimitsMap();
+	let current = String(categoryId || '');
+	const seen = new Set();
+	while (current && !seen.has(current)) {
+		seen.add(current);
+		if (Object.prototype.hasOwnProperty.call(map, current)) {
+			const value = Number(map[current]);
+			if (Number.isFinite(value) && value >= 0) {
+				return Math.floor(value);
+			}
+		}
+		current = getCategoryParentId(getCategoryById(current));
+	}
+	return null;
+}
+
+async function setCategoryAttemptLimit(categoryId, rawValue) {
+	const id = String(categoryId || '');
+	if (!id) return false;
+	const map = { ...getCategoryAttemptLimitsMap() };
+	const text = String(rawValue ?? '').trim();
+	if (!text) {
+		delete map[id];
+	} else {
+		const limit = Number(text);
+		if (!Number.isFinite(limit) || limit < 0) return false;
+		map[id] = Math.floor(limit);
+	}
+	categoryAttemptLimitsCache = map;
+	if (window.API && typeof window.API.update === 'function') {
+		try {
+			await window.API.update('settings', CATEGORY_ATTEMPT_LIMITS_KEY, {
+				key: CATEGORY_ATTEMPT_LIMITS_KEY,
+				value: JSON.stringify(map),
+				visibility: 'public',
+			});
+		} catch (err) {
+			console.warn('[categories] attempt limit save failed:', err);
+			showToast(
+				'Attempt limit saved locally, but the server sync failed: ' +
+					(err?.message || 'network error'),
+				'warning',
+			);
+		}
+	}
+	return true;
+}
+
+async function setCategoryAttemptLimitFromInput(input) {
+	const id = String(input?.dataset?.attemptsId || '');
+	if (!id) return;
+	const raw = String(input.value ?? '').trim();
+	if (raw) {
+		const parsed = Number(raw);
+		if (!Number.isFinite(parsed) || parsed < 0) {
+			showToast('Attempt limit must be 0 (unlimited) or more.', 'warning');
+			input.value = getCategoryAttemptLimitExplicit(id) ?? '';
+			return;
+		}
+	}
+	const saved = await setCategoryAttemptLimit(id, raw);
+	if (!saved) return;
+	const explicit = getCategoryAttemptLimitExplicit(id);
+	const effective = getCategoryAttemptLimit(id);
+	input.value = explicit === null ? '' : String(explicit);
+	input.placeholder = effective === null ? '∞' : String(effective);
+	input.title = explicit === null
+		? `Inherits ${effective === null ? 'unlimited attempts' : `${effective} attempt${effective === 1 ? '' : 's'}`}. Enter 0 for unlimited or a number to override.`
+		: explicit === 0
+			? 'Unlimited attempts for this category and its lessons.'
+			: `${explicit} attempt${explicit === 1 ? '' : 's'} maximum for this category and its lessons.`;
+	showToast(
+		raw
+			? `Attempt limit set to ${Number(raw) === 0 ? 'unlimited' : raw}`
+			: 'Attempt limit now inherits from the parent category',
+		'success',
+	);
+}
 
 // ============================================
 // QUICK CATEGORY CREATION MODAL
@@ -5623,14 +5766,37 @@ function categoryTrainingCellHtml(category) {
 		String(category.id),
 	);
 	const effectiveTraining = isTrainingCategory(category.id);
+	const isSystemCategory =
+		category.isSystem || String(category.id) === 'uncategorized';
+	const explicitLimit = getCategoryAttemptLimitExplicit(category.id);
+	const effectiveLimit = getCategoryAttemptLimit(category.id);
+	const attemptsTitle = explicitLimit === null
+		? `Blank inherits ${effectiveLimit === null ? 'no limit' : `${effectiveLimit} attempt${effectiveLimit === 1 ? '' : 's'}`} from the parent. Enter 0 for unlimited, or a number to override.`
+		: explicitLimit === 0
+			? 'Unlimited attempts for this category and its lessons.'
+			: `${explicitLimit} attempt${explicitLimit === 1 ? '' : 's'} max for this category and its lessons.`;
 	return `
-            <td class="training-cell" data-label="Training">
+            <td class="training-cell" data-label="Training · Attempts">
                 <input type="checkbox"
                     class="training-checkbox"
                     data-id="${category.id}"
                     ${effectiveTraining ? 'checked' : ''}
                     onchange="toggleCategoryTraining(this)"
                     title="${explicitTraining ? 'Use this category in training mode' : effectiveTraining ? 'Enabled via a parent category \u2014 uncheck to exclude this subcategory' : 'Use this category in training mode'}">
+                ${
+					isSystemCategory
+						? ''
+						: `<input type="number"
+                    class="training-attempts-input"
+                    data-attempts-id="${category.id}"
+                    min="0"
+                    step="1"
+                    inputmode="numeric"
+                    value="${explicitLimit === null ? '' : explicitLimit}"
+                    placeholder="${effectiveLimit === null ? '∞' : effectiveLimit}"
+                    onchange="setCategoryAttemptLimitFromInput(this)"
+                    title="${attemptsTitle}">`
+				}
             </td>`;
 }
 

@@ -145,6 +145,52 @@ describe('ImageGenService', () => {
       expect(readdirSync(dir)).toHaveLength(4);
     });
 
+    it('renders the question stimulus image alongside the option images', async () => {
+      // The manual builder can attach a picture to the question itself, either
+      // as a prompt rendered by the model or as a locally uploaded file.
+      process.env.AI_IMAGE_FAKE = '1';
+      const draft = {
+        ...draftSingle,
+        questionImagePrompt: 'a labelled diagram of a wireless router',
+        options: [
+          { label: 'Option 1', image: 'a white router with three antennas' },
+          { label: 'Option 2', image: 'a coffee mug on a desk' },
+        ],
+        answer: 'Option 1',
+      };
+      const { questions, note } = await svc.render({
+        config: { provider: 'openai', model_id: 'gpt-image-1', api_key: 'sk-test' },
+        questions: [draft],
+      });
+
+      const q = questions[0];
+      expect(q.imageMode).toBe(true);
+      expect(q.options).toHaveLength(2);
+      expect(q.answer).toBe('image-1');
+      expect(q.image).toMatch(/^\/uploads\/[a-f0-9]+\.png$/);
+      expect(q.questionImagePrompt).toBe('a labelled diagram of a wireless router');
+      // 2 option images + 1 question image, all persisted, zero orphans.
+      expect(readdirSync(dir)).toHaveLength(3);
+      expect(note).toContain('Auto-generated 3 option image(s)');
+    });
+
+    it('counts the question image against the AI_IMAGE_MAX_TOTAL budget', async () => {
+      process.env.AI_IMAGE_FAKE = '1';
+      process.env.AI_IMAGE_MAX_TOTAL = '4';
+      const draft = {
+        ...draftSingle,
+        questionImagePrompt: 'a labelled diagram',
+        options: draftSingle.options, // 4 options + 1 question image = 5 > 4
+      };
+      await expect(
+        svc.render({
+          config: { provider: 'openai', model_id: 'gpt-5-mini', api_key: 'sk-test' },
+          questions: [{ ...draft, requireImages: true }],
+        }),
+      ).rejects.toThrow(/only 4 remain/);
+      expect(readdirSync(dir)).toHaveLength(0); // nothing persisted on failure
+    });
+
     it('uses the original image model when AIService auto-paired an image-only model', async () => {
       process.env.AI_IMAGE_FAKE = '1';
       const { questions, note } = await svc.render({

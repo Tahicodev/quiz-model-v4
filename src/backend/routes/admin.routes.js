@@ -343,7 +343,7 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
 			throw new ForbiddenError('Type RESET to confirm the data reset.');
 		}
 
-		const { repo, auditSvc } = getContainer();
+		const { repo, auditSvc, genDocSvc } = getContainer();
 		const schoolId = req.schoolId;
 		const deleted = {};
 
@@ -365,6 +365,8 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
 		};
 
 		// Child → parent FK order.
+		// Generated documents live on disk too: purge their files with the rows.
+		deleted.generated_documents = await genDocSvc.purgeSchool(schoolId).catch(() => 0);
 		await wipe('results');
 		await wipe('game_sessions');
 		await wipe('tournament_entries');

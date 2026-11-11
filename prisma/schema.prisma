@@ -376,6 +376,10 @@ model Lesson {
   // per-session detail). Stored as a JSON string (SQLite has no Json type);
   // the service layer (de)serializes it so the API exchanges objects.
   prep_sheet   String?
+  // AI-generated practice EXERCISE — a situation-problem the student solves by
+  // applying the lesson's knowledge, with the worked solution. Distinct from
+  // questions (no question bank, no grading); JSON string like prep_sheet.
+  exercise     String?
   order_index  Int      @default(0)
   ai_generated Boolean  @default(false)
   created_at   DateTime @default(now())
@@ -403,6 +407,37 @@ model CourseClass {
   @@unique([course_id, class_id])
   @@index([course_id])
   @@index([class_id])
+}
+
+// ─── Generated Documents ─────────────────────────────────────────────────────
+// Registry of every document the app renders to disk: course booklets, lesson
+// prep sheets, exercises (with solutions) and exam papers. The bytes live under
+// uploads/generated/<kind>/<scope>/ (served at /uploads and included in the
+// backup ZIP); this table keeps the metadata + path so teachers can browse,
+// re-download and delete them. Plain scalar keys (no Prisma relations) keep the
+// registry independent of the content tables it points at.
+model GeneratedDocument {
+  id         String   @id @default(uuid())
+  school_id  String
+  created_by String
+  kind       String // course | prep-sheet | exercise | exam
+  title      String
+  course_id  String?
+  lesson_id  String?
+  exam_id    String?
+  format     String // pdf | docx
+  file_name  String
+  // Path relative to uploadsDir, e.g. "generated/prep-sheet/<courseId>/<file>.pdf"
+  rel_path   String
+  // Public path served by express.static, e.g. "/uploads/generated/..."
+  url        String
+  size_bytes Int      @default(0)
+  meta_json  String? // small JSON blob (lesson title, counts, ...)
+  created_at DateTime @default(now())
+
+  @@index([school_id])
+  @@index([course_id])
+  @@index([kind])
 }
 
 // ─── Active Exam Sessions ────────────────────────────────────────────────────

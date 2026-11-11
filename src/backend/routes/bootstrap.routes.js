@@ -673,6 +673,82 @@ router.get('/', async (req, res, next) => {
         games: (data.games || []).length,
         tournaments: (data.tournaments || []).length,
       };
+      // Resolve human-readable teacher/subject names for the student filter
+      // bars. The roster delivered to a student only contains their own
+      // class, so authored rows would otherwise show raw UUIDs. Names are
+      // stamped server-side and never include staff contact details.
+      let teacherNameById = new Map();
+      let subjectNameById = new Map();
+      const roleById = new Map();
+      let authorIsTeacher = () => true;
+      try {
+        const [{ data: staffRows }, { data: subjectRows }] = await Promise.all([
+          repo.getAll('users', {
+            filters: { school_id: req.schoolId },
+            limit: 100000,
+          }),
+          repo.getAll('subjects', {
+            filters: { school_id: req.schoolId },
+            limit: 100000,
+          }),
+        ]);
+        for (const row of staffRows || []) {
+          roleById.set(String(row.id), String(row.role || '').trim());
+        }
+        teacherNameById = new Map(
+          (staffRows || [])
+            // A school administrator (or any non-teacher) is not a teacher to
+            // the student: only real teacher accounts may surface in the
+            // teacher filter / teacher labels.
+            .filter((row) => String(row.role || '').trim() === ROLES.TEACHER)
+            .map((row) => [
+              String(row.id),
+              String(row.name || row.username || '').trim(),
+            ]),
+        );
+        // Unknown/legacy authors (no row, no role) stay visible so imports
+        // that predate author stamping don't silently disappear.
+        authorIsTeacher = (id) => {
+          const key = String(id || '').trim();
+          if (!key) return true;
+          const role = roleById.get(key);
+          return !role || role === ROLES.TEACHER;
+        };
+        // Administrator test subjects are not part of the student catalogue.
+        subjectNameById = new Map(
+          (subjectRows || [])
+            .filter((row) => authorIsTeacher(row.created_by))
+            .map((row) => [
+              String(row.id),
+              String(row.name || '').trim(),
+            ]),
+        );
+      } catch (enrichErr) {
+        logger.warn({ err: enrichErr }, 'Bootstrap: filter name enrichment failed');
+      }
+      const stampFilterNames = (row) => {
+        if (!row || typeof row !== 'object') return row;
+        const teacherId = String(
+          row.created_by || row.creator_id || row.ownerId || '',
+        ).trim();
+        const subjectId = String(row.subject_id || '').trim();
+        const allowed = authorIsTeacher(teacherId);
+        return {
+          ...row,
+          // Exposed so the student workspace can drop administrator test
+          // content from its teacher/subject/lesson filters as well.
+          author_role: roleById.get(teacherId) || '',
+          teacher_name: allowed
+            ? row.teacher_name || teacherNameById.get(teacherId) || ''
+            : '',
+          subject_name: allowed
+            ? row.subject_name || subjectNameById.get(subjectId) || ''
+            : '',
+        };
+      };
+      data.categories = (data.categories || []).map(stampFilterNames);
+      data.exams = (data.exams || []).map(stampFilterNames);
+
       const assignedClassesByExam = new Map();
       for (const link of data.exam_classes || []) {
         const examId = String(link.exam_id || '').trim();

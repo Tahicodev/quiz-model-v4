@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
-		<link rel="stylesheet" href="styles.css?v=2026-11-10-training-page5" />
+		<link rel="stylesheet" href="styles.css?v=2026-11-11-attemptheader1" />
 		<link
 			rel="stylesheet"
 			href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -143,11 +143,11 @@
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
 		<script src="legacy-auth-bridge.js?v=2026-11-04-round6" defer></script>
 		<script
-			src="student-workspace.js?v=2026-11-10-training-strip1"
+			src="student-workspace.js?v=2026-11-11-attemptheader1"
 			defer
 		></script>
 		<script
-			src="student-courses.js?v=2026-11-06-course-views"
+			src="student-courses.js?v=2026-11-10-attempt1"
 			defer
 		></script>
 	</head>
@@ -410,6 +410,11 @@
 									</button>
 								</div>
 							</div>
+							<div
+								id="studentExamFilters"
+								class="student-filter-bar"
+								aria-label="Filter exams"
+							></div>
 							<div class="exam-card-grid" id="studentExamGrid"></div>
 						</div>
 
@@ -451,15 +456,6 @@
 									<h2>My Training</h2>
 									<p>Review your practice sessions and keep improving</p>
 								</div>
-								<div class="panel-filters">
-									<button
-										id="clearLegacyTrainingAttempts"
-										class="workspace-btn"
-										type="button"
-									>
-										Clear old general-training attempts
-									</button>
-								</div>
 							</div>
 							<div class="training-subtabs" role="tablist" aria-label="Training sections">
 								<button
@@ -495,6 +491,11 @@
 								tabindex="0"
 								data-training-panel="categories"
 							>
+								<div
+									id="studentTrainingFilters"
+									class="student-filter-bar"
+									aria-label="Filter training categories"
+								></div>
 								<div id="studentTrainingRulesCard"></div>
 								<div class="training-category-section">
 									<div class="training-category-heading">
@@ -538,8 +539,13 @@
 											Refresh
 									</button>
 								</div>
-							</div>
-							<div class="exam-card-grid course-student-grid" id="studentCourseGrid"></div>
+</div>
+								<div
+									id="studentCourseFilters"
+									class="student-filter-bar"
+									aria-label="Filter courses by teacher or subject"
+								></div>
+								<div class="exam-card-grid course-student-grid" id="studentCourseGrid"></div>
 							<div id="studentCourseReader" style="display: none"></div>
 						</div>
 					</div>
@@ -782,6 +788,11 @@
 												Games
 											</button>
 										</div>
+										<div
+											class="student-filter-bar student-filter-bar--inline"
+											id="studentResultsExtraFilters"
+											aria-label="Filter results by subject, teacher or course"
+										></div>
 									</div>
 									<div
 										id="studentResultsSummary"
@@ -1578,21 +1589,16 @@
 				</div>
 			</div>
 		</div>
-		<div id="studentTrainingModal" class="modal training-modal">
+		<div
+			id="studentTrainingModal"
+			class="modal training-modal"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="trainingModalTitle"
+			aria-hidden="true"
+		>
 			<div class="modal-content training-modal-content">
 				<div class="modal-header training-modal-header">
-					<div class="training-page-title-row">
-						<button
-							type="button"
-							class="training-page-back"
-							onclick="closeTrainingModal()"
-							aria-label="Back to workspace"
-						>
-							<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-							<span>Back</span>
-						</button>
-						<h3 id="trainingModalTitle">Training Practice Test</h3>
-					</div>
 					<div
 						class="training-student-strip"
 						id="trainingStudentStrip"
@@ -1622,6 +1628,9 @@
 							>Training</span
 						>
 					</div>
+					<div class="training-page-title-row">
+						<h3 id="trainingModalTitle">Training Practice Test</h3>
+					</div>
 					<div class="training-header-meta">
 						<button
 							type="button"
@@ -1631,6 +1640,32 @@
 						>
 							&times;
 						</button>
+					</div>
+					<div
+						class="training-context-meta"
+						id="trainingContextMeta"
+						aria-label="Category, school, school year, subject and teacher"
+					>
+						<span class="training-context-chip training-context-chip--category">
+							<span class="training-context-label">Category</span>
+							<span class="training-context-value" id="trainingContextCategory">—</span>
+						</span>
+						<span class="training-context-chip">
+							<span class="training-context-label">School</span>
+							<span class="training-context-value" id="trainingContextSchool">—</span>
+						</span>
+						<span class="training-context-chip">
+							<span class="training-context-label">Year</span>
+							<span class="training-context-value" id="trainingContextYear">—</span>
+						</span>
+						<span class="training-context-chip">
+							<span class="training-context-label">Subject</span>
+							<span class="training-context-value" id="trainingContextSubject">—</span>
+						</span>
+						<span class="training-context-chip">
+							<span class="training-context-label">Teacher</span>
+							<span class="training-context-value" id="trainingContextTeacher">—</span>
+						</span>
 					</div>
 				</div>
 				<div

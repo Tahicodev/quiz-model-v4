@@ -247,11 +247,16 @@ router.post('/models/refresh', requireRole(AI_ROLES), async (req, res, next) => 
  * Build ONE manually-authored question (Images option style). The teacher
  * writes the question text and describes the picture for every option; the
  * chosen Image Model renders those descriptions into real uploaded images.
- * No LLM text generation happens — only the image provider is called.
+ * An optional `questionImagePrompt` describes a picture that belongs to the
+ * question itself (a stimulus image shown above the options) and is rendered
+ * with the same model. No LLM text generation happens — only the image
+ * provider is called.
  */
 const ImageQuestionSchema = z.object({
   imageConfigId: z.string().max(100),
   questionText: z.string().min(1).max(8000),
+  // Optional: teacher's description of the QUESTION picture (stimulus image).
+  questionImagePrompt: z.string().max(2000).optional().nullable(),
   options: z.array(
     z.object({
       label: z.string().max(200),
@@ -283,7 +288,9 @@ router.post('/generate/image-question', requireRole(AI_ROLES), async (req, res, 
     }
 
     // Craft a single multiple-choice draft: the option "image" field holds the
-    // teacher's description, which render() turns into a real picture.
+    // teacher's description, which render() turns into a real picture. The
+    // optional questionImagePrompt becomes the question's own stimulus image.
+    const questionImagePrompt = String(params.questionImagePrompt || '').trim();
     const draft = {
       type: 'multiple-choice',
       question: params.questionText,
@@ -291,6 +298,7 @@ router.post('/generate/image-question', requireRole(AI_ROLES), async (req, res, 
       answer: params.answer,
       imageMode: true,
       requireImages: true,
+      ...(questionImagePrompt ? { questionImagePrompt } : {}),
       difficulty: params.difficulty,
       points: params.points,
       explanation: '',

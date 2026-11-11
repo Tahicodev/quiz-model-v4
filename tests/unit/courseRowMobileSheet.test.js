@@ -40,6 +40,67 @@ describe('course row actions', () => {
 		expect(css).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*?#courseList tbody td:nth-child\(8\)\s*\{\s*display:\s*none !important;/);
 	});
 
+	it('offers prep sheets, exercises and the documents library in both row menus', () => {
+		// Desktop popover: one Resources button per row + the menu entries.
+		expect(js).toContain('course-action-resources');
+		expect(js).toContain('window.openCourseResourcesMenu = function');
+		expect(js).toContain("label: 'Prep Sheets'");
+		expect(js).toContain("label: 'Exercises (with solutions)'");
+		expect(js).toContain("label: 'Generated documents'");
+		expect(js).toContain('window.openCourseResource = async function');
+		expect(js).toContain('window.openGeneratedDocumentsLibrary = async function');
+
+		// Mobile sheet mirrors the same three destinations, with counts.
+		const start = js.indexOf('MobileActionSheet.open(`Course:');
+		const end = js.indexOf('\n\t\t\t\t]);', start);
+		const actions = js.slice(start, end);
+		expect(actions).toContain('label: `Prep Sheets');
+		expect(actions).toContain('label: `Exercises');
+		expect(actions).toContain('label: `Generated documents');
+		expect(actions).toContain("window.openCourseResource('prep-sheets', course.id)");
+		expect(actions).toContain("window.openCourseResource('exercises', course.id)");
+		expect(actions).toContain('window.openGeneratedDocumentsLibrary(course.id)');
+
+		// The courses toolbar also exposes the library.
+		expect(adminHtml).toContain('id="course-documents-btn"');
+		expect(adminHtml).toContain('onclick="openGeneratedDocumentsLibrary()"');
+	});
+
+	it('shows live progress for the AI level / prep-sheet / exercise batches', () => {
+		expect(js).toContain('function courseProgressHtml(state)');
+		expect(js).toContain('role="progressbar"');
+		expect(js).toContain('aria-valuenow=');
+		expect(js).toContain('window.cancelCourseJob = function');
+		expect(js).toContain('id="courseProgressHost"');
+		expect(js).toContain('id="resourceJobHost"');
+		expect(js).toContain('class="course-progress-cancel"');
+		expect(css).toContain('.course-progress-track');
+		expect(css).toContain('.course-progress-chip.is-failed');
+	});
+
+	it('renders an exercise as a situation-problem with a collapsible correction', () => {
+		expect(js).toContain('function exercisePreviewHtml(exercise)');
+		expect(js).toContain('exercise.situation');
+		expect(js).toContain('exercise.givenData');
+		expect(js).toContain('exercise.solutionSteps');
+		expect(js).toContain('exercise.finalAnswer');
+		expect(js).toContain('exercise-solution');
+		expect(js).toContain('window.openLessonExercise = function');
+		expect(js).toContain('lesson-action-exercise');
+		expect(css).toContain('.exercise-solution');
+	});
+
+	it('lists generated documents with their in-app path and actions', () => {
+		expect(js).toContain('function renderGeneratedDocsBody()');
+		expect(js).toContain('Path in the app');
+		expect(js).toContain('/generated-documents?');
+		expect(js).toContain('window.generatedDocsDownload = async function');
+		expect(js).toContain('window.generatedDocsDelete = async function');
+		expect(js).toContain('generated-docs-kind kind-');
+		expect(css).toContain('.generated-docs-path code');
+		expect(css).toContain('.generated-docs-table');
+	});
+
 	it('generates lesson content sequentially for every course level', () => {
 		expect(js).toContain('data-generate-all-levels');
 		expect(js).toMatch(/for \(const lesson of lessons\)/);
@@ -203,5 +264,26 @@ describe('course row actions', () => {
 		expect(studentJs).toContain('buildLessonOutline(lessons)');
 		expect(studentJs).toContain('renderLessonOutlineNode(node, depth = 0)');
 		expect(studentJs).toContain('lesson.parent_lesson_id');
+	});
+});
+
+describe('training attempts stepper', () => {
+	it('pins the stepper box with an id-qualified selector', () => {
+		// `input[type='number'] { width: 100% }` lives in the class bucket and
+		// outranks a lone `.training-attempts-input`, which used to stretch the
+		// field across its cell in the stacked (card) layouts.
+		expect(css).toMatch(/input\[type='number'\]/);
+		expect(css).toMatch(/#categoryList \.training-attempts-input \{\s*width: 3\.4em;\s*min-width: 0;\s*max-width: 4\.6em;\s*\}/);
+	});
+
+	it('keeps the touch-sized stepper compact instead of full width on mobile', () => {
+		expect(css).toMatch(/#categoryList \.training-attempts-input \{\s*margin-left: 0;\s*width: 3\.8em;\s*max-width: 5\.4em;/);
+		expect(css).not.toMatch(/\.training-attempts-input \{\s*margin-left: 0;\s*width: 3\.8em;\s*max-width: none;/);
+	});
+});
+
+describe('resource studio status badge', () => {
+	it('never wraps or shrinks the Generated / Not generated pill', () => {
+		expect(css).toMatch(/\.resource-item-status \{[^}]*flex: none;[^}]*white-space: nowrap;/);
 	});
 });

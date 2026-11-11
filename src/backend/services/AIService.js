@@ -15,7 +15,7 @@
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { ValidationError, AppError } from '../../shared/errors.js';
-import { PrepSheetDataSchema } from '../../shared/schemas/course.schema.js';
+import { PrepSheetDataSchema, ExerciseDataSchema } from '../../shared/schemas/course.schema.js';
 import { QUESTION_TYPES, DIFFICULTY } from '../../shared/constants.js';
 import { lessonSectionLabels } from '../../shared/lessonSections.js';
 
@@ -669,6 +669,77 @@ RULES:
 3. planRows durations are strings like "10 min"; they must sum to that session's estimatedMinutes.
 4. No "sessions" field with fewer than 1 entry; typical chapters need 2-6 sessions.
 5. Do not wrap values in objects where arrays are expected; lists of strings stay plain strings (one idea per entry).`;
+  }
+
+  /**
+   * Generate one practice EXERCISE for a lesson: a realistic situation the
+   * student must solve by applying the lesson knowledge, shipped with a full
+   * worked correction. Distinct from questions — no options, no grading: the
+   * model returns the situation, the given data, the tasks and the solution,
+   * normalized by the tolerant ExerciseDataSchema.
+   */
+  async generateLessonExercise({ config, language = 'French', difficulty = 'medium', lesson, categoryPath = '' }) {
+    if (!config?.model_id) throw new ValidationError({ model_id: ['No model selected'] });
+    const prompt = this.buildLessonExercisePrompt({ language, difficulty, lesson, categoryPath });
+    let lastError = null;
+    // One retry: models occasionally emit one stray comma or unescaped quote.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const raw = await this.#callProvider(config, prompt);
+      try {
+        const parsed = ExerciseDataSchema.parse(this.#parseJsonObject(raw));
+        parsed.title = String(parsed.title || lesson?.title || 'Exercice').slice(0, 300);
+        parsed.language = language;
+        parsed.difficulty = difficulty;
+        parsed.generatedAt = new Date().toISOString();
+        return parsed;
+      } catch (err) {
+        lastError = err;
+        logger?.warn?.({ err: err?.message }, 'exercise: model returned unparseable JSON, retrying');
+      }
+    }
+    throw new AppError(
+      'AI_PROVIDER_ERROR',
+      'The model did not return a valid exercise JSON after two attempts — try again or pick a stronger model.',
+      502,
+    );
+  }
+
+  buildLessonExercisePrompt({ language = 'French', difficulty = 'medium', lesson, categoryPath = '' }) {
+    const content = String(lesson?.content || '').slice(0, 24000);
+    return `You are an expert teacher and assessment designer. Write ONE practice EXERCISE (a situation-problem) that lets a student apply the knowledge taught in the lesson below.
+
+LESSON TITLE: ${lesson?.title || ''}
+LESSON SUMMARY: ${lesson?.summary || '(none)'}
+POSITION IN THE COURSE STRUCTURE: ${categoryPath || '(none)'}
+DIFFICULTY: ${difficulty}
+LESSON CONTENT (Markdown — the source of the knowledge to apply, do not invent facts beyond it):
+"""
+${content || '(no written content — build the exercise from the title and summary only)'}
+"""
+
+WHAT AN EXERCISE IS (critical): it is a SITUATION-PROBLEM, not a quiz question.
+- Frame a realistic, meaningful scenario (school, family, shop, sports, science lab, community, ...) in which the student must use the lesson's knowledge and reasoning to solve a concrete problem.
+- The student applies what they learned; the answer must NOT be a definition or a memorised fact.
+- Provide every figure the student needs inside "givenData" — the student never needs an external document.
+- Then ask 2 to 4 graded tasks that build up (understand -> apply -> justify), in order.
+- Always give the complete correction: the reasoning steps in order, then the final answer.
+
+OUTPUT FORMAT — reply with ONE valid JSON object and NOTHING else (no markdown fences, no commentary):
+{
+  "title": "short exercise title",
+  "situation": "the realistic situation / scenario, 3-6 sentences, ending with the problem to solve",
+  "givenData": ["a value, statement or constraint the student is given", ...],
+  "tasks": [{ "prompt": "what the student must do (question or instruction)", "points": 2 }, ...],
+  "solutionSteps": ["step 1 of the reasoning, with the intermediate result", ...],
+  "finalAnswer": "the final result, clearly stated",
+  "keyCompetencies": ["competency the student practises", ...]
+}
+
+RULES:
+1. Language of every value: ${language}. Keep standard JSON (double quotes, no trailing commas, no comments).
+2. Never invent knowledge missing from the material; invent only plausible DATA for the situation (numbers, names, units), never fake lesson facts.
+3. 2 to 4 tasks; "points" is a small positive integer; solutionSteps must actually solve every task.
+4. Keep every list entry a plain string (one idea per entry); only "tasks" holds objects.`;
   }
 
   /** Server-side provider call with per-provider request shapes + timeout. */

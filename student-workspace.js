@@ -11,6 +11,20 @@
 		accuracySource: 'all',
 		accuracyMastery: 'all',
 		accuracyShowAll: false,
+		schoolProfile: undefined,
+		trainingFilters: { subject: '', teacher: '', course: '', lesson: '' },
+		examFilters: { subject: '', teacher: '', course: '', lesson: '' },
+		resultsExtraFilters: { subject: '', teacher: '', course: '', lesson: '' },
+		filterTaxonomy: {
+			ready: false,
+			loading: false,
+			courses: [],
+			courseById: new Map(),
+			lessonsByCourse: new Map(),
+			catToCourse: new Map(),
+			catToLesson: new Map(),
+			request: null,
+		},
 		trainingAccuracyCache: null,
 		trainingAccuracyRequest: null,
 		workspaceTab: 'overview',
@@ -1385,7 +1399,40 @@
 				if (!result || typeof result !== 'object') return false;
 				if (result.gameId) return false;
 				const mode = String(result.mode || '').toLowerCase();
-				if (mode && mode !== 'training') return false;
+					if (mode && mode !== 'training') return false;
+					// Legacy "general training" rows carried neither a category
+					// nor an exam. That Uncategorized flow has been removed, so
+					// those rows no longer surface anywhere in the workspace.
+					const metadata = parseTrainingResultMetadata(result);
+					const hasLearningContext = Boolean(
+						metadata.categoryId ||
+							metadata.categoryTitle ||
+							metadata.courseTitle ||
+							metadata.lessonTitle,
+					);
+					// Older category attempts predate `trainingContext` but
+					// persisted their category labels on `categories`.
+					const legacyCategories = Array.isArray(result.categories)
+						? result.categories.filter(Boolean)
+						: String(result.categories || '')
+								.split(',')
+								.map((label) => label.trim())
+								.filter(Boolean);
+					const examRef = String(
+						result.examId || result.exam_id || '',
+					).trim();
+					// `training-practice` was the synthetic id assigned to the
+					// removed general-training flow, so it does not count as a
+					// real exam context.
+					const hasExamContext =
+						Boolean(examRef) && examRef !== 'training-practice';
+					if (
+						!hasLearningContext &&
+						!legacyCategories.length &&
+						!hasExamContext
+					) {
+						return false;
+					}
 				const resultUserId = String(
 					result.userId || result.user_id || '',
 				).trim();
@@ -1450,6 +1497,7 @@
 					courseTitle: metadata.courseTitle || '',
 					categoryId: metadata.categoryId || '',
 					categoryTitle: metadata.categoryTitle || '',
+					lessonTitle: metadata.lessonTitle || '',
 					isCategoryTraining:
 						metadata.rankedCategoryQuiz === true ||
 						(Boolean(metadata.categoryId) &&
@@ -1598,7 +1646,9 @@
 				const category = byId.get(id);
 				return {
 					id,
-					name: category?.name || 'Uncategorized',
+					name: category?.name || 'Category',
+					subjectName: String(category?.subject_name || '').trim(),
+					teacherName: String(category?.teacher_name || '').trim(),
 					questions: categoryQuestions,
 				};
 			}).sort((a, b) => a.name.localeCompare(b.name));
@@ -1607,10 +1657,17 @@
 		function renderTrainingCategoryCards(trainingResults = []) {
 			const container = byId('studentTrainingCategories');
 			if (!container) return;
-			const categories = getTrainingCategoryOptions();
+			const allCategories = getTrainingCategoryOptions();
+			const categories = allCategories.filter((category) =>
+				categoryMatchesStudentFilters(
+					category.id,
+					state.trainingFilters,
+				),
+			);
 			if (!categories.length) {
-				container.innerHTML =
-					'<div class="empty-state">No categories are currently available for training.</div>';
+				container.innerHTML = allCategories.length
+					? '<div class="empty-state">No training categories match the current filters.</div>'
+					: '<div class="empty-state">No categories are currently available for training.</div>';
 				return;
 			}
 			container.innerHTML = categories
@@ -1622,6 +1679,12 @@
 					const best = grades.length ? Math.max(...grades) : null;
 					const latest = attempts[0];
 					const attemptLabel = `${attempts.length} ${attempts.length === 1 ? 'attempt' : 'attempts'}`;
+					const gate = getTrainingAttemptGate(category.id, trainingResults);
+					const limitReached = gate.limit > 0 && gate.used >= gate.limit;
+					const progressLabel =
+						gate.limit > 0
+							? `${gate.used}/${gate.limit} attempts`
+							: attemptLabel;
 					return `
 						<article class="training-category-card" data-training-category-card="${escapeHtml(category.id)}">
 							<div class="training-category-card-top">
@@ -1629,8 +1692,19 @@
 								<span class="training-category-count">${category.questions.length} questions</span>
 							</div>
 							<h4>${escapeHtml(category.name)}</h4>
+							${
+								category.subjectName || category.teacherName
+									? `<div class="training-category-meta">${[
+											category.subjectName,
+											category.teacherName,
+										]
+											.filter(Boolean)
+											.map((value) => escapeHtml(value))
+											.join(' · ')}</div>`
+									: ''
+							}
 							<div class="training-category-progress">
-								<span>${attemptLabel}</span>
+								<span>${progressLabel}</span>
 								<span>${best === null ? 'No score yet' : `Best ${formatGrade20(best)}`}</span>
 							</div>
 							<div class="training-category-latest">${
@@ -1638,11 +1712,15 @@
 									? `Latest ${formatGrade20(latest.grade)} · ${latest.date ? new Date(latest.date).toLocaleDateString() : 'date unavailable'}`
 									: 'Your attempts will appear here.'
 							}</div>
-							<button type="button" class="workspace-btn primary small" data-start-category-training="${escapeHtml(category.id)}">Start category quiz</button>
+							<button type="button" class="workspace-btn primary small" data-start-category-training="${escapeHtml(category.id)}"${limitReached ? ' disabled' : ''}>${
+								limitReached
+									? 'Attempt limit reached'
+									: 'Start category quiz'
+							}</button>
 							<div class="training-category-leaderboard" data-training-category-leaderboard="${escapeHtml(category.id)}">
 								<div class="training-category-leaderboard-title">Class top 10</div>
 								<div class="training-leaderboard-head"><span>#</span><span>Student</span><span>Score</span><span>Time</span></div>
-								<div class="training-category-leaderboard-body">Loading class results…</div>
+								<div class="training-category-leaderboard-body">Loading class results...</div>
 							</div>
 						</article>
 					`;
@@ -1688,15 +1766,12 @@
 						target.textContent = 'No class results yet.';
 						return;
 					}
-					const myStats = summary.mine || {};
-					const mine = target.closest('.training-category-card')?.querySelector('.training-category-progress');
-					if (mine) {
-						const attemptCount = Number(myStats.attempts) || 0;
-						mine.innerHTML = `
-							<span>${attemptCount} ${attemptCount === 1 ? 'attempt' : 'attempts'}${Number.isFinite(Number(myStats.latestScore)) ? ` · Last ${formatGrade20(myStats.latestScore)}` : ''}</span>
-							<span>${Number.isFinite(Number(myStats.bestScore)) ? `Best ${formatGrade20(myStats.bestScore)}` : 'No score yet'}</span>
-						`;
-					}
+					// The card's attempts/best line is computed from the
+					// student's own local results (their true total). The
+					// server's `mine` block only counts attempts whose
+					// question set still matches the category exactly, so it
+					// under-reports older attempts and must not overwrite the
+					// local figures — it is used for the class leaderboard.
 					const leaderboard = Array.isArray(summary.leaderboard) ? summary.leaderboard : [];
 					if (!leaderboard.length) {
 						target.textContent = 'No class results yet.';
@@ -2526,6 +2601,7 @@
 		if (!grid) return;
 
 		const filtered = exams.filter((exam) => {
+			if (!examMatchesStudentFilters(exam, state.examFilters)) return false;
 			const completed = resultsMap.has(exam.id);
 			if (state.filter === 'completed') return completed;
 			if (state.filter === 'available') return !completed;
@@ -2533,8 +2609,9 @@
 		});
 
 		if (filtered.length === 0) {
-			grid.innerHTML =
-				'<div class="empty-state">No exams found for this filter.</div>';
+			grid.innerHTML = exams.length
+				? '<div class="empty-state">No exams match the current filters.</div>'
+				: '<div class="empty-state">No exams found for this filter.</div>';
 			return;
 		}
 
@@ -2576,13 +2653,17 @@
 		const container = byId('studentPerformanceList');
 		if (!container) return;
 
-		if (exams.length === 0) {
-			container.innerHTML =
-				'<div class="empty-state">No exams assigned yet.</div>';
+		const filteredExams = exams.filter((exam) =>
+			examMatchesStudentFilters(exam, state.examFilters),
+		);
+		if (filteredExams.length === 0) {
+			container.innerHTML = exams.length
+				? '<div class="empty-state">No exam progress matches the current filters.</div>'
+				: '<div class="empty-state">No exams assigned yet.</div>';
 			return;
 		}
 
-		container.innerHTML = exams
+		container.innerHTML = filteredExams
 			.map((exam) => {
 				const result = resultsMap.get(exam.id);
 				const percent = result?.totalQuestions
@@ -2687,66 +2768,172 @@
 			</div>
 		`;
 
-		const attemptsRows = trainingResults
-			.slice(0, 6)
-			.map((result, index) => {
-				const total = Number(result.totalQuestions || 0);
-				const score = Number(result.score || 0);
-				const grade = Number.isFinite(Number(result.grade))
-					? Number(result.grade)
-					: grade20(score, total);
-				const percent = Math.round((grade / 20) * 100);
-				const attemptNumber = trainingResults.length - index;
-				const attemptClass =
-					grade >= 10
-						? 'performance-attempt--strong'
-						: grade >= 8
-							? 'performance-attempt--ok'
-							: 'performance-attempt--weak';
-				// Category this attempt was drawn from + time spent on it.
-				const attemptCategories = Array.isArray(result.categories)
-					? result.categories.filter(Boolean)
-					: [];
-				const categoryChips = attemptCategories.length
-					? `<div class="performance-attempt-cats">${attemptCategories
-							.map(
-								(label) =>
-									`<span class="performance-attempt-cat">${escapeHtml(label)}</span>`,
-							)
-							.join('')}</div>`
+		// Group attempts by lesson so the panel reads as "one row per lesson,
+		// expand to see every attempt" instead of a flat "Attempt N" list.
+		const lessonGroups = new Map();
+		trainingResults.forEach((result) => {
+			const lessonName =
+				String(
+					result.lessonTitle ||
+						result.categoryTitle ||
+						result.title ||
+						'Training',
+				).trim() || 'Training';
+			const key = String(
+				result.categoryId ||
+					`${result.courseTitle || ''}::${lessonName}`,
+			)
+				.trim()
+				.toLowerCase();
+			if (!lessonGroups.has(key)) {
+				lessonGroups.set(key, {
+					key,
+					name: lessonName,
+					categoryId: String(result.categoryId || '').trim(),
+					courseTitle: String(result.courseTitle || '').trim(),
+					attempts: [],
+				});
+			}
+			lessonGroups.get(key).attempts.push(result);
+		});
+		const lessonRows = Array.from(lessonGroups.values()).sort(
+			(left, right) =>
+				new Date(right.attempts[0]?.date || 0).getTime() -
+				new Date(left.attempts[0]?.date || 0).getTime(),
+		);
+
+		const lessonTableRows = lessonRows
+			.map((group) => {
+				const attempts = group.attempts;
+				const latest = attempts[0] || {};
+				const grades = attempts
+					.map((item) => Number(item.grade))
+					.filter((value) => Number.isFinite(value));
+				const best = grades.length ? Math.max(...grades) : null;
+				const latestPassed = latest.passed === true;
+				const latestTime = Math.max(0, Number(latest.timeSpent) || 0);
+				const subject = group.categoryId
+					? getCategorySubjectLabel(group.categoryId)
 					: '';
-				const timeSpent = Math.max(0, Number(result.timeSpent) || 0);
-				const timeLabel = timeSpent > 0 ? formatDuration(timeSpent * 1000) : '—';
-				const timeInfo = `<div class="performance-attempt-time">${escapeHtml(timeLabel)}</div>`;
+				const teacher = group.categoryId
+					? getCategoryTeacherLabel(group.categoryId)
+					: '';
+				const metaParts = [
+					group.courseTitle,
+					subject,
+					teacher,
+				].filter(Boolean);
+				const detailRows = attempts
+					.map((attempt, index) => {
+						const grade = Number(attempt.grade);
+						const passedAttempt = attempt.passed === true;
+						const time = Math.max(0, Number(attempt.timeSpent) || 0);
+						return `
+							<tr>
+								<td class="training-progress-attempt-no">#${attempts.length - index}</td>
+								<td>${attempt.date ? escapeHtml(new Date(attempt.date).toLocaleString()) : '—'}</td>
+								<td class="training-progress-metric">${Number.isFinite(grade) ? formatGrade20(grade) : '—'}</td>
+								<td><span class="training-progress-status ${passedAttempt ? 'is-passed' : 'is-failed'}">${passedAttempt ? 'Passed' : 'Not passed'}</span></td>
+								<td class="training-progress-muted">${time > 0 ? escapeHtml(formatDuration(time * 1000)) : '—'}</td>
+							</tr>`;
+					})
+					.join('');
 				return `
-					<div class="performance-row performance-attempt ${attemptClass}">
-						<div class="performance-attempt-label">
-							<span class="performance-attempt-badge">#${attemptNumber}</span>
-							<div>
-								<div class="performance-title">Attempt ${attemptNumber}</div>
-								<div class="performance-subtitle">${
-									result.date ? new Date(result.date).toLocaleString() : ''
-								}</div>
-								${categoryChips}
+					<tr class="training-progress-lesson" data-lesson-key="${escapeHtml(group.key)}" tabindex="0" role="button" aria-expanded="false">
+						<td>
+							<div class="training-progress-lesson-cell">
+								<span class="training-progress-caret" aria-hidden="true">▸</span>
+								<span class="training-progress-lesson-text">
+									<span class="training-progress-lesson-title">${escapeHtml(group.name)}</span>
+									${
+										metaParts.length
+											? `<span class="training-progress-lesson-sub">${metaParts
+													.map((value) => escapeHtml(value))
+													.join(' · ')}</span>`
+											: ''
+									}
+								</span>
 							</div>
-						</div>
-						<div class="performance-metric">
-							<span>${formatGrade20(grade)}</span>
-							<div class="performance-bar"><span style="width: ${percent}%"></span></div>
-							${timeInfo}
-						</div>
-					</div>
-				`;
+						</td>
+						<td class="training-progress-metric">${attempts.length}</td>
+						<td class="training-progress-metric">${Number.isFinite(Number(latest.grade)) ? formatGrade20(latest.grade) : '—'}</td>
+						<td class="training-progress-metric">${best === null ? '—' : formatGrade20(best)}</td>
+						<td class="training-progress-muted">${latest.date ? escapeHtml(new Date(latest.date).toLocaleDateString()) : '—'}</td>
+						<td class="training-progress-muted">${latestTime > 0 ? escapeHtml(formatDuration(latestTime * 1000)) : '—'}</td>
+						<td><span class="training-progress-status ${latestPassed ? 'is-passed' : 'is-failed'}">${latestPassed ? 'Passed' : 'Not passed'}</span></td>
+					</tr>
+					<tr class="training-progress-detail" data-lesson-detail="${escapeHtml(group.key)}" hidden>
+						<td colspan="7">
+							<table class="training-progress-attempts">
+								<thead>
+									<tr>
+										<th scope="col">Attempt</th>
+										<th scope="col">Date &amp; time</th>
+										<th scope="col">Score</th>
+										<th scope="col">Status</th>
+										<th scope="col">Time</th>
+									</tr>
+								</thead>
+								<tbody>${detailRows}</tbody>
+							</table>
+						</td>
+					</tr>`;
 			})
 			.join('');
 
-		const attemptsBlock = attemptsRows
-			? `<div class="training-attempts-block">${attemptsRows}</div>`
+		const attemptsBlock = lessonTableRows
+			? `<div class="training-progress-table-wrap">
+					<table class="training-progress-table">
+						<thead>
+							<tr>
+								<th scope="col">Lesson</th>
+								<th scope="col">Attempts</th>
+								<th scope="col">Last</th>
+								<th scope="col">Best</th>
+								<th scope="col">Last try</th>
+								<th scope="col">Time</th>
+								<th scope="col">Status</th>
+							</tr>
+						</thead>
+						<tbody>${lessonTableRows}</tbody>
+					</table>
+				</div>`
 			: '';
 
-		window.safeSetHTML
-			? window.safeSetHTML(container, summaryRows + attemptsBlock, true)
-			: (container.innerHTML = summaryRows + attemptsBlock);
+		if (window.safeSetHTML) {
+			window.safeSetHTML(container, summaryRows + attemptsBlock, true);
+		} else {
+			container.innerHTML = summaryRows + attemptsBlock;
+		}
+
+		if (container.dataset.trainingProgressBound !== 'true') {
+			container.dataset.trainingProgressBound = 'true';
+			const toggleLessonRow = (row) => {
+				const key = row.getAttribute('data-lesson-key') || '';
+				const detail = container.querySelector(
+					`tr.training-progress-detail[data-lesson-detail="${cssEscape(key)}"]`,
+				);
+				if (!detail) return;
+				const willOpen = detail.hasAttribute('hidden');
+				if (willOpen) detail.removeAttribute('hidden');
+				else detail.setAttribute('hidden', '');
+				row.classList.toggle('is-open', willOpen);
+				row.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+			};
+			container.addEventListener('click', (event) => {
+				const row = event.target.closest('tr.training-progress-lesson');
+				if (row) toggleLessonRow(row);
+			});
+			container.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+					return;
+				}
+				const row = event.target.closest('tr.training-progress-lesson');
+				if (!row) return;
+				event.preventDefault();
+				toggleLessonRow(row);
+			});
+		}
 	}
 
 	function renderMessages(context) {
@@ -3003,6 +3190,12 @@
 		const trainingResults = getTrainingResults(context.identity, context.user?.id);
 		const examResults = collectExamResults(context.identity);
 		const gameResults = getGameResults(context);
+		const examsById = new Map(
+			getAssignedExams(context.classRecord).map((exam) => [
+				String(exam.id),
+				exam,
+			]),
+		);
 		const categoryAttemptCounts = new Map();
 		trainingResults.forEach((result) => {
 			if (!result.isCategoryTraining) return;
@@ -3024,31 +3217,59 @@
 			result.categoryAttemptKey = key;
 		});
 		const allResults = [
-			...trainingResults.map((r) => ({
-				type: r.title || 'Training',
-				score: formatGrade20(r.grade),
-				// /20 grade with comma decimals — pass strictly above 10
-				passed: Number(r.grade) >= 10,
-				date: r.date,
-				kind: 'training',
-				courseTitle: r.courseTitle,
-				categoryTitle: r.categoryTitle,
-				isCategoryTraining: r.isCategoryTraining,
-				categoryAttemptCount: r.isCategoryTraining
-					? categoryAttemptCounts.get(r.categoryAttemptKey)?.attempts || 0
-					: 0,
-				categoryPassedAttemptCount: r.isCategoryTraining
-					? categoryAttemptCounts.get(r.categoryAttemptKey)?.passed || 0
-					: 0,
-				timeSpent: r.timeSpent,
-			})),
-			...examResults.map((r) => ({
-				type: r.examName || 'Exam',
-				score: formatGrade20(r.grade20),
-				passed: Number(r.grade20) >= 10,
-				date: r.date,
-				kind: 'exam',
-			})),
+			...trainingResults.map((r) => {
+				const course = findFilterCourseByName(r.courseTitle || '');
+				return {
+					type: r.title || 'Training',
+					score: formatGrade20(r.grade),
+					// /20 grade with comma decimals — pass strictly above 10
+					passed: Number(r.grade) >= 10,
+					date: r.date,
+					kind: 'training',
+					courseTitle: r.courseTitle,
+					categoryTitle: r.categoryTitle,
+					lessonTitle: r.lessonTitle,
+					categoryId: r.categoryId,
+					// Human context for the grouped results table.
+					subject:
+						(r.categoryId ? getCategorySubjectLabel(r.categoryId) : '') ||
+						String(course?.subject_name || '').trim(),
+					teacher:
+						(r.categoryId ? getCategoryTeacherLabel(r.categoryId) : '') ||
+						String(course?.teacher_name || '').trim(),
+					filterMeta: getTrainingResultFilterMeta(r),
+					isCategoryTraining: r.isCategoryTraining,
+					categoryAttemptCount: r.isCategoryTraining
+						? categoryAttemptCounts.get(r.categoryAttemptKey)?.attempts || 0
+						: 0,
+					categoryPassedAttemptCount: r.isCategoryTraining
+						? categoryAttemptCounts.get(r.categoryAttemptKey)?.passed || 0
+						: 0,
+					timeSpent: r.timeSpent,
+				};
+			}),
+			...examResults.map((r) => {
+				const exam = examsById.get(String(r.examId || ''));
+				const meta = getExamFilterMeta(exam);
+				return {
+					type: r.examName || 'Exam',
+					score: formatGrade20(r.grade20),
+					passed: Number(r.grade20) >= 10,
+					date: r.date,
+					kind: 'exam',
+					examId: r.examId || '',
+					// Exams carry no direct subject; derive it from the categories
+					// their questions belong to (stamped names win when present).
+					subject:
+						String(exam?.subject_name || '').trim() ||
+						getSubjectLabelForKeys(meta.subjectKeys),
+					teacher:
+						String(exam?.teacher_name || '').trim() ||
+						getTeacherLabelForKeys(meta.teacherKeys),
+					timeSpent: r.timeSpent,
+					filterMeta: meta,
+				};
+			}),
 			...gameResults.map((r) => ({ ...r, kind: 'game' })),
 		];
 
@@ -3081,6 +3302,9 @@
 	}
 
 	function resultMatchesFilters(result, typeFilter, statusFilter) {
+		if (!resultMatchesStudentFilters(result, state.resultsExtraFilters)) {
+			return false;
+		}
 		if (typeFilter && typeFilter !== 'all' && result.kind !== typeFilter) {
 			return false;
 		}
@@ -3149,7 +3373,7 @@
 
 		if (!filtered.length) {
 			container.innerHTML =
-				'<div class="empty-state">No results match this filter. Try another filter.</div>';
+				'<div class="empty-state">No results match the current filters. Try removing a filter.</div>';
 			renderQuestionAccuracy(context);
 			return;
 		}
@@ -3160,56 +3384,260 @@
 			game: 'Game',
 		};
 
-		container.innerHTML = filtered
-			.map((result) => {
-				const kind = result.kind || 'training';
-				const details = [
-					result.courseTitle,
-					result.categoryTitle,
-					Number(result.timeSpent) > 0
-						? formatDuration(Number(result.timeSpent) * 1000)
-						: '',
-				]
-					.filter(Boolean)
-					.map((value) => `<span>${escapeHtml(value)}</span>`)
+		const groups = buildResultGroups(filtered);
+		const bodyRows = groups
+			.map((group) => {
+				const latest = group.attempts[0] || {};
+				const display = getResultGroupDisplay(group);
+				const graded = group.kind === 'training' || group.kind === 'exam';
+				const latestPassed = latest.passed === true;
+				const latestTime = Math.max(0, Number(latest.timeSpent) || 0);
+				const best = getBestResultAttempt(group.attempts);
+				const statusHtml = graded
+					? `<span class="training-progress-status ${
+							latestPassed ? 'is-passed' : 'is-failed'
+						}">${latestPassed ? 'Passed' : 'Not passed'}</span>`
+					: '<span class="results-status-neutral">—</span>';
+				const detailRows = group.attempts
+					.map((attempt, index) => {
+						const attemptGraded =
+							group.kind === 'training' || group.kind === 'exam';
+						const attemptPassed = attempt.passed === true;
+						const attemptTime = Math.max(0, Number(attempt.timeSpent) || 0);
+						return `
+							<tr>
+								<td class="results-attempt-no">#${group.attempts.length - index}</td>
+								<td>${attempt.date ? escapeHtml(new Date(attempt.date).toLocaleString()) : '—'}</td>
+								<td class="results-metric">${escapeHtml(attempt.score || '—')}</td>
+								<td>${
+									attemptGraded
+										? `<span class="training-progress-status ${
+												attemptPassed ? 'is-passed' : 'is-failed'
+											}">${attemptPassed ? 'Passed' : 'Not passed'}</span>`
+										: '<span class="results-status-neutral">—</span>'
+								}</td>
+								<td class="results-muted">${
+									attemptTime > 0
+										? escapeHtml(formatDuration(attemptTime * 1000))
+										: '—'
+								}</td>
+							</tr>`;
+					})
 					.join('');
-				const categoryAttempts = result.isCategoryTraining
-					? Number(result.categoryAttemptCount) || 0
-					: 0;
-				const categoryPassed = result.isCategoryTraining
-					? Number(result.categoryPassedAttemptCount) || 0
-					: 0;
-				const categoryProgress = result.isCategoryTraining
-					? `<span class="result-category-progress" role="group" aria-label="${categoryAttempts} category attempt${categoryAttempts === 1 ? '' : 's'}, ${categoryPassed} passed">
-							<span class="result-category-attempts">
-								<span class="result-category-count">${categoryAttempts}</span>
-								<span class="result-category-label">category attempt${categoryAttempts === 1 ? '' : 's'}</span>
-							</span>
-							<span class="result-category-passed ${categoryPassed > 0 ? 'has-passes' : 'no-passes'}">
-								<span class="result-category-status-dot" aria-hidden="true"></span>
-								${categoryPassed} passed
-							</span>
-						</span>`
-					: '';
 				return `
-					<div class="result-row">
-						<div class="result-main">
-							<div class="result-title-row">
-								<span class="result-kind result-kind--${kind}">${kindLabels[kind] || kind}</span>
-								<div class="result-title">${escapeHtml(result.courseTitle ? `${result.courseTitle} — ${result.type}` : result.type)}</div>
+					<tr class="results-group" data-result-group="${escapeHtml(group.key)}" tabindex="0" role="button" aria-expanded="false">
+						<td>
+							<div class="results-group-cell">
+								<span class="results-group-caret" aria-hidden="true">▸</span>
+								<span class="results-group-text">
+									<span class="results-group-title">${escapeHtml(display.name)}</span>
+									${
+										display.meta.length
+											? `<span class="results-group-sub">${display.meta
+													.map((value) => escapeHtml(value))
+													.join(' · ')}</span>`
+											: ''
+									}
+								</span>
 							</div>
-							<div class="result-subtitle">${
-								result.date ? new Date(result.date).toLocaleString() : ''
-							}</div>
-							${details || categoryProgress ? `<div class="result-details">${details}${categoryProgress}</div>` : ''}
-						</div>
-						<div class="result-score ${result.scoreTone}">${escapeHtml(result.score)}</div>
-					</div>
-				`;
+						</td>
+						<td><span class="result-kind result-kind--${group.kind}">${kindLabels[group.kind] || group.kind}</span></td>
+						<td class="results-metric">${group.attempts.length}</td>
+						<td class="results-metric">${best ? escapeHtml(best.score) : '—'}</td>
+						<td class="results-muted">${latest.date ? escapeHtml(new Date(latest.date).toLocaleDateString()) : '—'}</td>
+						<td class="results-muted">${latestTime > 0 ? escapeHtml(formatDuration(latestTime * 1000)) : '—'}</td>
+						<td>${statusHtml}</td>
+					</tr>
+					<tr class="results-detail" data-result-detail="${escapeHtml(group.key)}" hidden>
+						<td colspan="7">
+							<table class="results-attempts">
+								<thead>
+									<tr>
+										<th scope="col">#</th>
+										<th scope="col">Date &amp; time</th>
+										<th scope="col">Score</th>
+										<th scope="col">Status</th>
+										<th scope="col">Time</th>
+									</tr>
+								</thead>
+								<tbody>${detailRows}</tbody>
+							</table>
+						</td>
+					</tr>`;
 			})
 			.join('');
 
+		container.innerHTML = `
+			<div class="results-table-wrap">
+				<table class="results-table">
+					<thead>
+						<tr>
+							<th scope="col">Title</th>
+							<th scope="col">Type</th>
+							<th scope="col">Attempts</th>
+							<th scope="col">Best</th>
+							<th scope="col">Last try</th>
+							<th scope="col">Time</th>
+							<th scope="col">Status</th>
+						</tr>
+					</thead>
+					<tbody>${bodyRows}</tbody>
+				</table>
+			</div>
+		`;
+
+		if (container.dataset.resultsBound !== 'true') {
+			container.dataset.resultsBound = 'true';
+			const toggleGroup = (row) => {
+				const key = row.getAttribute('data-result-group') || '';
+				const detail = container.querySelector(
+					`tr.results-detail[data-result-detail="${cssEscape(key)}"]`,
+				);
+				if (!detail) return;
+				const willOpen = detail.hasAttribute('hidden');
+				if (willOpen) detail.removeAttribute('hidden');
+				else detail.setAttribute('hidden', '');
+				row.classList.toggle('is-open', willOpen);
+				row.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+			};
+			container.addEventListener('click', (event) => {
+				const row = event.target.closest('tr.results-group');
+				if (!row) return;
+				toggleGroup(row);
+			});
+			container.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter' && event.key !== ' ') return;
+				const row = event.target.closest('tr.results-group');
+				if (!row) return;
+				event.preventDefault();
+				toggleGroup(row);
+			});
+		}
+
 		renderQuestionAccuracy(context);
+	}
+
+	// Group results into lesson / exam / game buckets so the list reads like
+	// the Training Progress table: one row per subject of study, with each
+	// individual attempt available on expand.
+	function getResultGroupKey(result) {
+		const kind = result?.kind || 'training';
+		if (kind === 'training') {
+			const key = String(
+				result.categoryId ||
+					`${result.courseTitle || ''}::${
+						result.lessonTitle || result.categoryTitle || result.type || ''
+					}`,
+			)
+				.trim()
+				.toLowerCase();
+			return `training::${key || 'training'}`;
+		}
+		if (kind === 'exam') {
+			return `exam::${String(result.examId || result.type || '')
+				.trim()
+				.toLowerCase()}`;
+		}
+		return `game::${String(result.type || result.id || '')
+			.trim()
+			.toLowerCase()}`;
+	}
+
+	function getResultGroupDisplay(group) {
+		const latest = group.attempts[0] || {};
+		if (group.kind === 'training') {
+			return {
+				name:
+					String(
+						latest.lessonTitle ||
+							latest.categoryTitle ||
+							latest.type ||
+							'Training',
+					).trim() || 'Training',
+				meta: [latest.courseTitle, latest.subject, latest.teacher].filter(
+					Boolean,
+				),
+			};
+		}
+		if (group.kind === 'exam') {
+			return {
+				name: String(latest.type || 'Exam').trim() || 'Exam',
+				meta: [latest.subject, latest.teacher].filter(Boolean),
+			};
+		}
+		return {
+			name: String(latest.type || 'Game').trim() || 'Game',
+			meta: [],
+		};
+	}
+
+	// Numeric comparison value for the "Best" column. Training/exam scores are
+	// already /20; game summaries may be "score / total" (compare by %) or a
+	// plain points count.
+	function resultScoreNumber(result) {
+		const text = String(result?.score || '');
+		const ratio = text.match(
+			/(-?\d+(?:\.\d+)?)\s*\/\s*(-?\d+(?:\.\d+)?)/,
+		);
+		if (ratio) {
+			const value = Number(ratio[1]);
+			const total = Number(ratio[2]);
+			if (result.kind === 'training' || result.kind === 'exam') {
+				return Number.isFinite(value) ? value : NaN;
+			}
+			return total > 0 ? (value / total) * 100 : NaN;
+		}
+		const numbers = [
+			...text.matchAll(/-?\d+(?:\.\d+)?/g),
+		].map((match) => Number(match[0]));
+		if (!numbers.length) return NaN;
+		// Game summaries read "Rank 2 - 45 pts": the trailing number is the
+		// score, the leading one the rank (lower is better, so never compare it).
+		return result.kind === 'game'
+			? numbers[numbers.length - 1]
+			: numbers[0];
+	}
+
+	function getBestResultAttempt(attempts) {
+		let best = null;
+		let bestValue = -Infinity;
+		(attempts || []).forEach((attempt) => {
+			const value = resultScoreNumber(attempt);
+			if (!Number.isFinite(value)) return;
+			if (!best || value > bestValue) {
+				best = attempt;
+				bestValue = value;
+			}
+		});
+		return best;
+	}
+
+	function buildResultGroups(results) {
+		const byKey = new Map();
+		(results || []).forEach((result) => {
+			const key = getResultGroupKey(result);
+			if (!byKey.has(key)) {
+				byKey.set(key, {
+					key,
+					kind: result.kind || 'training',
+					attempts: [],
+				});
+			}
+			byKey.get(key).attempts.push(result);
+		});
+		const groups = [...byKey.values()];
+		groups.forEach((group) => {
+			group.attempts.sort(
+				(left, right) =>
+					new Date(right.date || 0) - new Date(left.date || 0),
+			);
+		});
+		groups.sort(
+			(left, right) =>
+				new Date(right.attempts[0]?.date || 0) -
+				new Date(left.attempts[0]?.date || 0),
+		);
+		return groups;
 	}
 
 	// ── Per-question accuracy ───────────────────────────────────────────────
@@ -3789,10 +4217,725 @@
 
 	function getCategoriesStore() {
 		try {
-			return window.__DI_CONTAINER__.repo.getAll_sync('categories');
+			return window.__DI_CONTAINER__.repo
+				.getAll_sync('categories')
+				.filter(isTeacherAuthoredRow);
 		} catch (e) {
 			return [];
 		}
+	}
+
+	// ── Student filters (subject / teacher / course / lesson) ───────────────
+	// Training, Exams and Results share one taxonomy. Categories carry the
+	// teacher/subject names stamped by the bootstrap endpoint; courses come
+	// from the student-safe `/courses/student` catalogue and are mapped onto
+	// the category tree through `course.category_id`.
+	const STUDENT_FILTER_CONTAINERS = {
+		training: 'studentTrainingFilters',
+		exams: 'studentExamFilters',
+		results: 'studentResultsExtraFilters',
+	};
+	const STUDENT_FILTER_STATE_KEYS = {
+		training: 'trainingFilters',
+		exams: 'examFilters',
+		results: 'resultsExtraFilters',
+	};
+
+	function readRepoTable(name) {
+		try {
+			const rows = window.__DI_CONTAINER__?.repo?.getAll_sync(name);
+			return Array.isArray(rows) ? rows : [];
+		} catch (_) {
+			return [];
+		}
+	}
+
+	function getFilterState(scope) {
+		const key = STUDENT_FILTER_STATE_KEYS[scope];
+		if (!key) return { subject: '', teacher: '', course: '', lesson: '' };
+		if (!state[key] || typeof state[key] !== 'object') {
+			state[key] = { subject: '', teacher: '', course: '', lesson: '' };
+		}
+		return state[key];
+	}
+
+	function getFilterCategory(categoryRef) {
+		const key = String(categoryRef || '').trim();
+		if (!key) return null;
+		const categories = readRepoTable('categories').filter(isTeacherAuthoredRow);
+		return (
+			categories.find((row) => String(row.id) === key) ||
+			categories.find(
+				(row) =>
+					String(row.name || '').trim().toLowerCase() === key.toLowerCase(),
+			) ||
+			null
+		);
+	}
+
+	function getFilterCategoryChain(categoryRef) {
+		const chain = [];
+		const seen = new Set();
+		let current = getFilterCategory(categoryRef);
+		while (current && !seen.has(String(current.id))) {
+			seen.add(String(current.id));
+			chain.push(current);
+			const parentRef =
+				current.parent_id ?? current.parentId ?? current.parent ?? '';
+			current = getFilterCategory(parentRef);
+		}
+		return chain;
+	}
+
+	function getFilterCategorySubtree(categoryRef) {
+		const root = getFilterCategory(categoryRef);
+		const ids = new Set();
+		if (!root) return ids;
+		const childrenByParent = new Map();
+		readRepoTable('categories').forEach((row) => {
+			const parent = String(
+				row.parent_id ?? row.parentId ?? row.parent ?? '',
+			).trim();
+			if (!parent) return;
+			if (!childrenByParent.has(parent)) childrenByParent.set(parent, []);
+			childrenByParent.get(parent).push(String(row.id));
+		});
+		const stack = [String(root.id)];
+		while (stack.length) {
+			const id = stack.pop();
+			if (!id || ids.has(id)) continue;
+			ids.add(id);
+			(childrenByParent.get(id) || []).forEach((child) => stack.push(child));
+		}
+		return ids;
+	}
+
+	function getFilterCourses() {
+		const courses = Array.isArray(state.filterTaxonomy.courses)
+			? state.filterTaxonomy.courses
+			: [];
+		return courses.filter(isTeacherAuthoredRow);
+	}
+
+	function getFilterCourseForCategory(categoryRef) {
+		const courses = getFilterCourses();
+		const taxonomy = state.filterTaxonomy;
+		if (
+			!taxonomy.courseByRoot ||
+			taxonomy.courseByRootSize !== courses.length
+		) {
+			taxonomy.courseByRoot = new Map(
+				courses
+					.filter((course) => course?.category_id)
+					.map((course) => [String(course.category_id), course]),
+			);
+			taxonomy.courseByRootSize = courses.length;
+		}
+		const seen = new Set();
+		let current = getFilterCategory(categoryRef);
+		while (current && !seen.has(String(current.id))) {
+			seen.add(String(current.id));
+			const course = taxonomy.courseByRoot.get(String(current.id));
+			if (course) return course;
+			current = getFilterCategory(
+				current.parent_id ?? current.parentId ?? current.parent ?? '',
+			);
+		}
+		return null;
+	}
+
+	function findFilterCourseByName(name) {
+		const key = String(name || '').trim().toLowerCase();
+		if (!key) return null;
+		return (
+			getFilterCourses().find(
+				(course) => String(course.name || '').trim().toLowerCase() === key,
+			) || null
+		);
+	}
+
+	function findFilterCategoryByName(name) {
+		const key = String(name || '').trim().toLowerCase();
+		if (!key) return null;
+		return (
+			readRepoTable('categories')
+				.filter(isTeacherAuthoredRow)
+				.find(
+					(row) => String(row.name || '').trim().toLowerCase() === key,
+				) || null
+		);
+	}
+
+	// Only real teacher accounts own student-visible catalogue content. The
+	// bootstrap stamps `author_role` on categories/exams (and the courses route
+	// on courses); a missing role means a legacy/unattributed row and stays
+	// visible, while an explicit non-teacher role (e.g. the school
+	// administrator's test content) is filtered out of every filter surface.
+	function isTeacherAuthoredRow(row) {
+		const role = String(row?.author_role ?? row?.authorRole ?? '')
+			.trim()
+			.toLowerCase();
+		return !role || role === 'teacher';
+	}
+
+	function filterSubjectKey(row) {
+		const id = String(row?.subject_id ?? row?.subjectId ?? '').trim();
+		if (id) return `id:${id}`;
+		const name = String(row?.subject_name ?? row?.subjectName ?? '').trim();
+		return name ? `name:${name.toLowerCase()}` : '';
+	}
+
+	function filterSubjectLabel(row) {
+		if (!isTeacherAuthoredRow(row)) return '';
+		return String(row?.subject_name ?? row?.subjectName ?? '').trim();
+	}
+
+	function filterTeacherKey(row) {
+		if (!isTeacherAuthoredRow(row)) return '';
+		const id = String(
+			row?.created_by ?? row?.creator_id ?? row?.ownerId ?? '',
+		).trim();
+		if (id) return `id:${id}`;
+		const name = String(row?.teacher_name ?? row?.teacherName ?? '').trim();
+		return name ? `name:${name.toLowerCase()}` : '';
+	}
+
+	function filterTeacherLabel(row) {
+		if (!isTeacherAuthoredRow(row)) return '';
+		return String(row?.teacher_name ?? row?.teacherName ?? '').trim();
+	}
+
+	function getCategoryDeepLabel(categoryId, labelFor) {
+		const chain = getFilterCategoryChain(categoryId);
+		for (const row of chain) {
+			const label = String(labelFor(row) || '').trim();
+			if (label) return label;
+		}
+		return '';
+	}
+
+	function getCategorySubjectLabel(categoryId) {
+		return getCategoryDeepLabel(categoryId, filterSubjectLabel);
+	}
+
+	function getCategoryTeacherLabel(categoryId) {
+		return getCategoryDeepLabel(categoryId, filterTeacherLabel);
+	}
+
+	// Resolve a human label from a set of matcher keys. Exams expose no direct
+	// subject field, so their subject/teacher is derived from the categories
+	// their questions belong to.
+	function findLabelByKeys(keys, keyFor, labelFor) {
+		if (!keys || !keys.size) return '';
+		for (const row of readRepoTable('categories')) {
+			if (!keys.has(keyFor(row))) continue;
+			const label = String(labelFor(row) || '').trim();
+			if (label) return label;
+		}
+		return '';
+	}
+
+	function getSubjectLabelForKeys(keys) {
+		return findLabelByKeys(keys, filterSubjectKey, filterSubjectLabel);
+	}
+
+	function getTeacherLabelForKeys(keys) {
+		return findLabelByKeys(keys, filterTeacherKey, filterTeacherLabel);
+	}
+
+	function emptyFilterMeta() {
+		return {
+			subjectKeys: new Set(),
+			teacherKeys: new Set(),
+			courseKeys: new Set(),
+			lessonKeys: new Set(),
+		};
+	}
+
+	function mergeFilterMeta(target, source) {
+		if (!source) return target;
+		source.subjectKeys.forEach((value) => target.subjectKeys.add(value));
+		source.teacherKeys.forEach((value) => target.teacherKeys.add(value));
+		source.courseKeys.forEach((value) => target.courseKeys.add(value));
+		source.lessonKeys.forEach((value) => target.lessonKeys.add(value));
+		return target;
+	}
+
+	function getCategoryFilterMeta(categoryRef) {
+		const meta = emptyFilterMeta();
+		const category = getFilterCategory(categoryRef);
+		if (!category) return meta;
+		getFilterCategoryChain(category.id).forEach((row) => {
+			const subjectKey = filterSubjectKey(row);
+			if (subjectKey) meta.subjectKeys.add(subjectKey);
+			const teacherKey = filterTeacherKey(row);
+			if (teacherKey) meta.teacherKeys.add(teacherKey);
+			meta.lessonKeys.add(`id:${String(row.id)}`);
+		});
+		getFilterCategorySubtree(category.id).forEach((id) =>
+			meta.lessonKeys.add(`id:${id}`),
+		);
+		const course = getFilterCourseForCategory(category.id);
+		if (course) {
+			meta.courseKeys.add(`id:${String(course.id)}`);
+			const subjectKey = filterSubjectKey(course);
+			if (subjectKey) meta.subjectKeys.add(subjectKey);
+			const teacherKey = filterTeacherKey(course);
+			if (teacherKey) meta.teacherKeys.add(teacherKey);
+		}
+		return meta;
+	}
+
+	function getExamFilterMeta(exam) {
+		const meta = emptyFilterMeta();
+		if (!exam) return meta;
+		const teacherKey = filterTeacherKey(exam);
+		if (teacherKey) meta.teacherKeys.add(teacherKey);
+		const questionIds = new Set(
+			(Array.isArray(exam.questions) ? exam.questions : [])
+				.map((value) => String(value?.id ?? value ?? ''))
+				.filter(Boolean),
+		);
+		if (!questionIds.size) return meta;
+		const seen = new Set();
+		readRepoTable('questions').forEach((question) => {
+			if (!questionIds.has(String(question.id))) return;
+			const category = getFilterCategory(
+				question.categoryId ??
+					question.category_id ??
+					question.category ??
+					'',
+			);
+			if (!category || seen.has(String(category.id))) return;
+			seen.add(String(category.id));
+			mergeFilterMeta(meta, getCategoryFilterMeta(category.id));
+		});
+		return meta;
+	}
+
+	function getTrainingResultFilterMeta(result) {
+		const meta = emptyFilterMeta();
+		if (!result) return meta;
+		const category = getFilterCategory(
+			result.categoryId || result.category_id || '',
+		);
+		if (category) mergeFilterMeta(meta, getCategoryFilterMeta(category.id));
+		const course = findFilterCourseByName(result.courseTitle || '');
+		if (course) {
+			meta.courseKeys.add(`id:${String(course.id)}`);
+			const subjectKey = filterSubjectKey(course);
+			if (subjectKey) meta.subjectKeys.add(subjectKey);
+			const teacherKey = filterTeacherKey(course);
+			if (teacherKey) meta.teacherKeys.add(teacherKey);
+		}
+		const lesson = findFilterCategoryByName(result.lessonTitle || '');
+		if (lesson) mergeFilterMeta(meta, getCategoryFilterMeta(lesson.id));
+		if (!category && result.categoryTitle) {
+			const titled = findFilterCategoryByName(result.categoryTitle);
+			if (titled) mergeFilterMeta(meta, getCategoryFilterMeta(titled.id));
+		}
+		if (!category && !result.categoryTitle) {
+			const legacyLabels = Array.isArray(result.categories)
+				? result.categories
+				: [];
+			for (const label of legacyLabels) {
+				const match = findFilterCategoryByName(label);
+				if (match) {
+					mergeFilterMeta(meta, getCategoryFilterMeta(match.id));
+					break;
+				}
+			}
+		}
+		return meta;
+	}
+
+	function filterMetaMatches(meta, filters) {
+		const active = filters || {};
+		if (active.subject && !meta.subjectKeys.has(active.subject)) return false;
+		if (active.teacher && !meta.teacherKeys.has(active.teacher)) return false;
+		if (active.course && !meta.courseKeys.has(active.course)) return false;
+		if (active.lesson && !meta.lessonKeys.has(active.lesson)) return false;
+		return true;
+	}
+
+	function categoryMatchesStudentFilters(categoryRef, filters) {
+		return filterMetaMatches(getCategoryFilterMeta(categoryRef), filters);
+	}
+
+	function examMatchesStudentFilters(exam, filters) {
+		return filterMetaMatches(getExamFilterMeta(exam), filters);
+	}
+
+	function resultMatchesStudentFilters(result, filters) {
+		const meta = result?.filterMeta || getTrainingResultFilterMeta(result);
+		return filterMetaMatches(meta, filters);
+	}
+
+	function isTrainingResultVisibleWithFilters(result) {
+		return resultMatchesStudentFilters(result, state.trainingFilters);
+	}
+
+	function getFilterCategoryPath(categoryRef) {
+		return getFilterCategoryChain(categoryRef)
+			.map((row) => String(row.name || '').trim())
+			.filter(Boolean)
+			.reverse()
+			.join(' / ');
+	}
+
+	// Builds the cascading option catalogue for the student filter bars:
+	// teacher → subject → course → lesson. Every option carries the keys its
+	// matcher understands, so a selected parent narrows the children to
+	// options that can actually yield results.
+	function buildStudentFilterOptions() {
+		const subjects = new Map();
+		const teachers = new Map();
+		const lessons = new Map();
+		const courses = new Map();
+		const addTeacher = (row) => {
+			const key = filterTeacherKey(row);
+			const label = filterTeacherLabel(row);
+			if (key && label && !teachers.has(key)) {
+				teachers.set(key, { value: key, label });
+			}
+		};
+		const addSubject = (row) => {
+			const key = filterSubjectKey(row);
+			const label = filterSubjectLabel(row);
+			if (!key || !label) return;
+			let entry = subjects.get(key);
+			if (!entry) {
+				entry = { value: key, label, teacherKeys: new Set() };
+				subjects.set(key, entry);
+			}
+			const teacherKey = filterTeacherKey(row);
+			if (teacherKey && filterTeacherLabel(row)) {
+				entry.teacherKeys.add(teacherKey);
+			}
+		};
+		readRepoTable('categories').forEach((category) => {
+			if (!category?.id || String(category.id) === 'uncategorized') return;
+			// Administrator test categories are not part of the student's
+			// lesson catalogue.
+			if (!isTeacherAuthoredRow(category)) return;
+			// Walk the chain so a leaf lesson still contributes its inherited
+			// subject/teacher (the matcher builds keys the same way).
+			const chain = getFilterCategoryChain(category.id);
+			const subjectKeys = new Set();
+			const teacherKeys = new Set();
+			chain.forEach((row) => {
+				if (!isTeacherAuthoredRow(row)) return;
+				addSubject(row);
+				addTeacher(row);
+				const subjectKey = filterSubjectKey(row);
+				if (subjectKey) subjectKeys.add(subjectKey);
+				const teacherKey = filterTeacherKey(row);
+				if (teacherKey && filterTeacherLabel(row)) teacherKeys.add(teacherKey);
+			});
+			// A subject inherited from one ancestor belongs to every teacher
+			// named anywhere on the chain, so the cascade stays coherent.
+			subjectKeys.forEach((subjectKey) => {
+				const entry = subjects.get(subjectKey);
+				if (!entry) return;
+				teacherKeys.forEach((teacherKey) => entry.teacherKeys.add(teacherKey));
+			});
+			const lessonKey = `id:${String(category.id)}`;
+			if (lessons.has(lessonKey)) return;
+			const course = getFilterCourseForCategory(category.id);
+			const meta = getCategoryFilterMeta(category.id);
+			lessons.set(lessonKey, {
+				value: lessonKey,
+				label: String(category.name || 'Lesson').trim() || 'Lesson',
+				path: getFilterCategoryPath(category.id),
+				courseId: course ? `id:${String(course.id)}` : '',
+				subjectKeys: meta.subjectKeys,
+				teacherKeys: meta.teacherKeys,
+				courseKeys: meta.courseKeys,
+			});
+		});
+		getFilterCourses().forEach((course) => {
+			if (!course?.id) return;
+			addSubject(course);
+			addTeacher(course);
+			const key = `id:${String(course.id)}`;
+			if (courses.has(key)) return;
+			const subjectKey = filterSubjectKey(course);
+			const teacherKey = filterTeacherKey(course);
+			courses.set(key, {
+				value: key,
+				label: String(course.name || '').trim() || 'Course',
+				subjectKeys: new Set(subjectKey ? [subjectKey] : []),
+				teacherKeys: new Set(
+					teacherKey && filterTeacherLabel(course) ? [teacherKey] : [],
+				),
+				courseKeys: new Set([key]),
+			});
+		});
+		readRepoTable('exams').forEach((exam) => {
+			if (!isTeacherAuthoredRow(exam)) return;
+			addTeacher(exam);
+			// Exam-derived subjects travel on the exam's questions' categories,
+			// which the category pass above already registered — but stamp the
+			// exam's own teacher/subject when the row carries them directly.
+			if (exam?.subject_name) addSubject(exam);
+		});
+		const sortByLabel = (left, right) =>
+			left.label.localeCompare(right.label, undefined, {
+				sensitivity: 'base',
+			});
+		return {
+			subjects: [...subjects.values()].sort(sortByLabel),
+			teachers: [...teachers.values()].sort(sortByLabel),
+			courses: [...courses.values()].sort(sortByLabel),
+			lessons: [...lessons.values()].sort(sortByLabel),
+		};
+	}
+
+	// Cascade helpers: each level only offers options reachable from the
+	// selections above it (teacher → subject → course → lesson).
+	function getCascadedSubjectOptions(options, filters) {
+		if (!filters?.teacher) return options.subjects;
+		return options.subjects.filter((subject) =>
+			subject.teacherKeys.has(filters.teacher),
+		);
+	}
+
+	function getCascadedCourseOptions(options, filters) {
+		return options.courses.filter((course) => {
+			if (filters?.teacher && !course.teacherKeys.has(filters.teacher)) {
+				return false;
+			}
+			if (filters?.subject && !course.subjectKeys.has(filters.subject)) {
+				return false;
+			}
+			return true;
+		});
+	}
+
+	function getCascadedLessonOptions(options, filters) {
+		return options.lessons.filter((lesson) => {
+			if (filters?.teacher && !lesson.teacherKeys.has(filters.teacher)) {
+				return false;
+			}
+			if (filters?.subject && !lesson.subjectKeys.has(filters.subject)) {
+				return false;
+			}
+			// Lessons without a bound course stay available under the course
+			// filter — they are still trainable categories.
+			if (
+				filters?.course &&
+				lesson.courseId &&
+				lesson.courseId !== filters.course
+			) {
+				return false;
+			}
+			return true;
+		});
+	}
+
+	// Drop any selection that a parent change made unreachable, walking the
+	// cascade top-down so the remaining filters stay consistent.
+	function pruneStudentFilterSelections(scope) {
+		const filters = getFilterState(scope);
+		const options = buildStudentFilterOptions();
+		if (
+			filters.teacher &&
+			!options.teachers.some((option) => option.value === filters.teacher)
+		) {
+			filters.teacher = '';
+		}
+		if (
+			filters.subject &&
+			!getCascadedSubjectOptions(options, filters).some(
+				(option) => option.value === filters.subject,
+			)
+		) {
+			filters.subject = '';
+		}
+		if (
+			filters.course &&
+			!getCascadedCourseOptions(options, filters).some(
+				(option) => option.value === filters.course,
+			)
+		) {
+			filters.course = '';
+		}
+		if (
+			filters.lesson &&
+			!getCascadedLessonOptions(options, filters).some(
+				(option) => option.value === filters.lesson,
+			)
+		) {
+			filters.lesson = '';
+		}
+		return filters;
+	}
+
+	function renderStudentFilterBar(scope) {
+		const containerId = STUDENT_FILTER_CONTAINERS[scope];
+		const container = byId(containerId);
+		if (!container) return;
+		const filters = getFilterState(scope);
+		const options = buildStudentFilterOptions();
+		const subjectOptions = getCascadedSubjectOptions(options, filters);
+		const courseOptions = getCascadedCourseOptions(options, filters);
+		const lessonOptions = getCascadedLessonOptions(options, filters);
+		const makeSelect = (field, label, items, allLabel) => {
+			const current = String(filters[field] || '');
+			return `
+				<label class="student-filter">
+					<span class="student-filter-label">${escapeHtml(label)}</span>
+					<select data-student-filter="${field}">
+						<option value="">${escapeHtml(allLabel)}</option>
+						${items
+							.map(
+								(item) =>
+									`<option value="${escapeHtml(item.value)}"${
+										item.value === current ? ' selected' : ''
+									}>${escapeHtml(item.label)}</option>`,
+							)
+							.join('')}
+					</select>
+				</label>
+			`;
+		};
+		container.innerHTML = `
+			<div class="student-filter-fields">
+				${makeSelect('teacher', 'Teacher', options.teachers, 'All teachers')}
+				${makeSelect('subject', 'Subject', subjectOptions, 'All subjects')}
+				${makeSelect('course', 'Course', courseOptions, 'All courses')}
+				${makeSelect('lesson', 'Lesson', lessonOptions, 'All lessons')}
+			</div>
+			<button type="button" class="student-filter-reset" data-student-filter-reset>Reset</button>
+		`;
+		if (container.dataset.studentFilterBound !== 'true') {
+			container.dataset.studentFilterBound = 'true';
+			container.addEventListener('change', (event) => {
+				const select = event.target.closest('select[data-student-filter]');
+				if (!select) return;
+				const field = select.getAttribute('data-student-filter');
+				const target = getFilterState(scope);
+				const nextValue = select.value || '';
+				if (target[field] === nextValue) return;
+				target[field] = nextValue;
+				pruneStudentFilterSelections(scope);
+				applyStudentFilterChange(scope);
+			});
+			container.addEventListener('click', (event) => {
+				const reset = event.target.closest('[data-student-filter-reset]');
+				if (!reset) return;
+				const target = getFilterState(scope);
+				target.subject = '';
+				target.teacher = '';
+				target.course = '';
+				target.lesson = '';
+				applyStudentFilterChange(scope);
+			});
+		}
+	}
+
+	function applyStudentFilterChange(scope) {
+		const context = getStudentContext();
+		if (!context) return;
+		try {
+			if (scope === 'training') {
+				const results = getTrainingResults(
+					context.identity,
+					context.user?.id,
+				);
+				renderTrainingCards(results);
+				renderTrainingPerformanceList(
+					results.filter(isTrainingResultVisibleWithFilters),
+				);
+				renderStudentFilterBar('training');
+			} else if (scope === 'exams') {
+				const exams = getAssignedExams(context.classRecord);
+				const resultsMap = buildResultsMap(
+					collectExamResults(context.identity),
+				);
+				renderExamCards(exams, resultsMap);
+				renderStudentFilterBar('exams');
+			} else if (scope === 'results') {
+				renderResultsList(context);
+				renderStudentFilterBar('results');
+			}
+		} catch (error) {
+			console.warn('Could not apply student filters:', error);
+		}
+	}
+
+	function renderStudentFilterBars() {
+		Object.keys(STUDENT_FILTER_CONTAINERS).forEach((scope) => {
+			try {
+				renderStudentFilterBar(scope);
+			} catch (_) {
+				/* one missing tab must not break the other filter bars */
+			}
+		});
+	}
+
+	function ensureFilterCourseCatalog() {
+		const taxonomy = state.filterTaxonomy;
+		if (taxonomy.ready) return Promise.resolve(taxonomy.courses);
+		if (taxonomy.loading) {
+			return taxonomy.request || Promise.resolve(taxonomy.courses);
+		}
+		if (!window.API || typeof window.API.raw !== 'function') {
+			taxonomy.ready = true;
+			return Promise.resolve(taxonomy.courses);
+		}
+		taxonomy.loading = true;
+		taxonomy.request = window.API.raw('GET', '/courses/student')
+			.then((response) => {
+				taxonomy.courses = (Array.isArray(response?.data) ? response.data : []).filter(
+					isTeacherAuthoredRow,
+				);
+				taxonomy.courseById = new Map(
+					taxonomy.courses.map((course) => [String(course.id), course]),
+				);
+				taxonomy.ready = true;
+				return taxonomy.courses;
+			})
+			.catch((error) => {
+				taxonomy.ready = true;
+				taxonomy.courses = [];
+				try {
+					console.warn(
+						'Course filter catalogue unavailable:',
+						error?.message || error,
+					);
+				} catch (_) {
+					/* logging must never break rendering */
+				}
+				return taxonomy.courses;
+			})
+			.finally(() => {
+				taxonomy.loading = false;
+				taxonomy.request = null;
+				const context = getStudentContext();
+				if (!context) return;
+				try {
+					const results = getTrainingResults(
+						context.identity,
+						context.user?.id,
+					);
+					renderTrainingCards(results);
+					renderTrainingPerformanceList(
+						results.filter(isTrainingResultVisibleWithFilters),
+					);
+					const exams = getAssignedExams(context.classRecord);
+					const resultsMap = buildResultsMap(
+						collectExamResults(context.identity),
+					);
+					renderExamCards(exams, resultsMap);
+					renderPerformanceList(exams, resultsMap);
+					renderResultsList(context);
+					renderStudentFilterBars();
+				} catch (_) {
+					/* keep the already-rendered catalogue usable */
+				}
+			});
+		return taxonomy.request;
 	}
 
 	function buildCategoryMap() {
@@ -8582,6 +9725,28 @@
 	// is cached in state.kidsSchoolPrimaire (fetched once per load).
 	let kidsSectionToken = 0;
 	let kidsPrimairePromise = null;
+	let schoolProfilePromise = null;
+
+	function loadSchoolProfile() {
+		if (state.schoolProfile !== undefined) {
+			return Promise.resolve(state.schoolProfile);
+		}
+		if (!schoolProfilePromise) {
+			schoolProfilePromise = (async () => {
+				try {
+					if (!window.API?.raw) return null;
+					return await window.API.raw('GET', '/school/profile/full');
+				} catch (_) {
+					return null;
+				}
+			})().then((profile) => {
+				state.schoolProfile = profile || null;
+				schoolProfilePromise = null;
+				return state.schoolProfile;
+			});
+		}
+		return schoolProfilePromise;
+	}
 
 	function ensureKidsPrimaireStatus() {
 		if (state.kidsSchoolPrimaire !== undefined) {
@@ -8590,8 +9755,7 @@
 		if (!kidsPrimairePromise) {
 			kidsPrimairePromise = (async () => {
 				try {
-					if (!window.API?.raw) return false;
-					const profile = await window.API.raw('GET', '/school/profile/full');
+					const profile = await loadSchoolProfile();
 					return String(profile?.school_type || '').toLowerCase() === 'primaire';
 				} catch (_) {
 					return false;
@@ -12122,16 +13286,23 @@
 		renderExamCards(exams, resultsMap);
 		renderPerformanceList(exams, resultsMap);
 		renderTrainingCards(trainingResults);
-		renderTrainingPerformanceList(trainingResults);
+		renderTrainingPerformanceList(
+			trainingResults.filter(isTrainingResultVisibleWithFilters),
+		);
 		renderMessages(context);
 		renderAssignments(exams, resultsMap);
 		renderResultsList(context);
+		renderStudentFilterBars();
 		renderProfileSection(context);
 		renderGamesPanel(context);
 		renderGameStage(context);
 		renderGamificationUI(context);
 		applyWorkspaceTabVisibility();
 		startGameTicker(context);
+		// Courses are a student-safe catalogue and populate the Course/Lesson
+		// filter options once available; the bars render immediately with the
+		// category-derived options and refresh when this resolves.
+		ensureFilterCourseCatalog();
 	}
 
 	function getTournamentModeDisplay(mode) {
@@ -14153,42 +15324,8 @@
 	}
 
 	function attachLegacyTrainingCleanup() {
-		const button = byId('clearLegacyTrainingAttempts');
-		if (!button || button.dataset.bound === 'true') return;
-		button.dataset.bound = 'true';
-		button.addEventListener('click', async () => {
-			if (!window.API || typeof window.API.raw !== 'function') {
-				showToast('Cannot clear training attempts while offline.', 'error');
-				return;
-			}
-			const confirmed = window.confirm(
-				'Delete your old general-training attempts? Category quizzes and course practice results will be kept.',
-			);
-			if (!confirmed) return;
-			button.disabled = true;
-			try {
-				const response = await window.API.raw('DELETE', '/results/training/legacy');
-				const deleted = Number(response?.deleted) || 0;
-				showToast(
-					deleted
-						? `Removed ${deleted} old general-training attempt${deleted === 1 ? '' : 's'}.`
-						: 'No old general-training attempts to remove.',
-					'success',
-				);
-				if (typeof window.__legacyBridgeBootstrap === 'function') {
-					await window.__legacyBridgeBootstrap();
-				}
-				renderWorkspace();
-			} catch (error) {
-				console.error('[training] Could not clear old attempts:', error);
-				showToast(
-					error?.message || 'Could not clear old training attempts. Please try again.',
-					'error',
-				);
-			} finally {
-				button.disabled = false;
-			}
-		});
+		// Legacy cleanup control removed from the Training tab; kept as a no-op
+		// so older cached markup or callers cannot throw.
 	}
 
 	// ── Results subtabs (My Results / Question Accuracy) ────────────────────
@@ -15606,7 +16743,9 @@
 		timerHandle: null,
 		timeLimitSec: 0,
 		overallTimeWarning: false,
+		overallTimeExpired: false,
 		questionTimeWarning: false,
+		questionTimeExpired: false,
 	};
 
 	// ── 20-point grading scale ─────────────────────────────────────────────
@@ -15797,14 +16936,34 @@
 		const modalContent = document.querySelector(
 			'#studentTrainingModal .training-modal-content',
 		);
-		if (!modalContent) return;
-		modalContent.classList.toggle(
-			'time-warning',
-			Boolean(
-				trainingState.overallTimeWarning ||
-					trainingState.questionTimeWarning,
-			),
+		const stage = byId('studentTrainingStage');
+		const expired = Boolean(
+			trainingState.overallTimeExpired || trainingState.questionTimeExpired,
 		);
+		const warning = Boolean(
+			trainingState.overallTimeWarning ||
+				trainingState.questionTimeWarning ||
+				expired,
+		);
+		if (modalContent) {
+			modalContent.classList.toggle('time-warning', warning);
+			modalContent.classList.toggle('time-expired', expired);
+		}
+		if (stage) {
+			stage.classList.toggle('is-time-warning', warning && !expired);
+			stage.classList.toggle('is-time-expired', expired);
+		}
+	}
+
+	// Force a visible red flash the moment the attempt clock reaches zero,
+	// then let the caller submit. `finishTrainingTest` clears the state so the
+	// results view never keeps blinking.
+	function markTrainingTimeExpired() {
+		trainingState.overallTimeWarning = false;
+		trainingState.overallTimeExpired = true;
+		trainingState.questionTimeWarning = false;
+		trainingState.questionTimeExpired = false;
+		syncTrainingModalTimeWarning();
 	}
 
 	function updateTrainingStripTimeDisplay() {
@@ -15852,6 +17011,7 @@
 	function startTrainingTimer(limitSec) {
 		stopTrainingTimer();
 		trainingState.timeLimitSec = Math.max(0, Number(limitSec) || 0);
+		trainingState.overallTimeExpired = false;
 		const startedAt = trainingState.startTime || Date.now();
 		const tick = () => {
 			updateTrainingStripTimeDisplay();
@@ -15867,7 +17027,11 @@
 				}
 				if (remaining <= 0) {
 					stopTrainingTimer();
-					if (typeof window.nextTrainingQuestion === 'function') {
+					markTrainingTimeExpired();
+					// Hold the red flash briefly so the student sees the timeout
+					// before the results view replaces the question.
+					setTimeout(() => {
+						if (!trainingState.active || trainingState.completed) return;
 						if (
 							trainingState.currentIndex <
 							trainingState.questions.length - 1
@@ -15875,7 +17039,7 @@
 							trainingState.currentIndex = trainingState.questions.length - 1;
 						}
 						finishTrainingTest();
-					}
+					}, 900);
 				}
 			}
 		};
@@ -15904,8 +17068,9 @@
 	// ── Training categories ───────────────────────────────────────────────
 	// Which categories feed training mode. Mirrors the admin resolution in
 	// category-management.js: explicit `categoryTrainingMap` settings-row
-	// entries win, otherwise Uncategorized defaults to enabled (legacy).
-	// When no map exists at all (legacy data), every question is eligible.
+	// entries win; when no map exists at all (legacy data), every assigned
+	// category is eligible. Uncategorized is only the bucket for questions
+	// that were never assigned to a category/course.
 	function getStudentTrainingMap() {
 		try {
 			const repo = window.__DI_CONTAINER__?.repo;
@@ -15934,8 +17099,11 @@
 
 	function isStudentTrainingCategory(categoryId) {
 		const originalId = String(categoryId || 'uncategorized');
+		// Uncategorized is a holding bucket for questions not yet assigned to a
+		// course; it is never offered as training content.
+		if (originalId === 'uncategorized') return false;
 		const map = getStudentTrainingMap();
-		if (!map) return true; // legacy: no map configured → everything eligible
+		if (!map) return true; // legacy: no map configured → everything else eligible
 		// Nearest explicit entry wins — walk up through parents so a teacher
 		// enabling "Math" covers "Addition"/"Subtraction" (mirrors the admin
 		// resolution in category-management.js).
@@ -15958,17 +17126,262 @@
 			}
 			current = parent;
 		}
-		return originalId === 'uncategorized';
+		return false;
 	}
 
 	function filterStudentTrainingQuestions(questionList) {
 		const list = Array.isArray(questionList) ? questionList : [];
 		const map = getStudentTrainingMap();
-		if (!map) return list;
 		return list.filter((q) => {
 			const raw = q?.category ?? q?.categoryId ?? q?.category_id ?? '';
-			return isStudentTrainingCategory(String(raw).trim() || 'uncategorized');
+			const key = String(raw).trim();
+			if (!key || key === 'uncategorized') return false;
+			return map ? isStudentTrainingCategory(key) : true;
 		});
+	}
+
+	// ── Attempt limits ────────────────────────────────────────────────────
+	// Teachers set a maximum number of training attempts per category /
+	// lesson / course in the categories table. The map is stored in a public
+	// settings row (same pattern as `categoryTrainingMap`) and resolves with
+	// nearest-ancestor inheritance: a value on a course covers all of its
+	// lessons until a lesson overrides it. `0` means unlimited.
+	function getStudentSettingsObject(key) {
+		try {
+			const repo = window.__DI_CONTAINER__?.repo;
+			if (!repo || typeof repo.getAll_sync !== 'function') return null;
+			const rows = repo.getAll_sync('settings') || [];
+			const row = (Array.isArray(rows) ? rows : []).find(
+				(entry) => entry && entry.key === key,
+			);
+			if (!row?.value) return null;
+			const parsed = JSON.parse(row.value);
+			return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+				? parsed
+				: null;
+		} catch (_) {
+			return null;
+		}
+	}
+
+	function getStudentAttemptLimitsMap() {
+		return getStudentSettingsObject('categoryAttemptLimits');
+	}
+
+	function getStudentCategoryParentId(categoryId) {
+		const key = String(categoryId || '').trim();
+		if (!key) return '';
+		try {
+			const rows = readRepoTable('categories');
+			const row = rows.find((entry) => String(entry.id) === key);
+			return String(
+				row?.parent_id ?? row?.parentId ?? row?.parent ?? '',
+			).trim();
+		} catch (_) {
+			return '';
+		}
+	}
+
+	function getStudentAttemptLimitRule(categoryId) {
+		const map = getStudentAttemptLimitsMap();
+		if (!map) return null;
+		let current = String(categoryId || '').trim();
+		const seen = new Set();
+		while (current && !seen.has(current)) {
+			seen.add(current);
+			if (Object.prototype.hasOwnProperty.call(map, current)) {
+				const raw = map[current];
+				if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+					const limit = Number(raw);
+					if (Number.isFinite(limit) && limit >= 0) {
+						return { limit: Math.floor(limit), categoryId: current };
+					}
+				}
+			}
+			current = getStudentCategoryParentId(current);
+		}
+		return null;
+	}
+
+	function countStudentTrainingAttemptsForLimit(limitCategoryId, precomputedResults) {
+		const ids = getFilterCategorySubtree(limitCategoryId);
+		if (!ids.size) ids.add(String(limitCategoryId));
+		let results = precomputedResults;
+		if (!Array.isArray(results)) {
+			const context = getStudentContext();
+			if (!context) return 0;
+			results = getTrainingResults(context.identity, context.user?.id);
+		}
+		return results.filter((result) =>
+			ids.has(String(result.categoryId || '')),
+		).length;
+	}
+
+	function getTrainingAttemptGate(categoryId, precomputedResults) {
+		const rule = getStudentAttemptLimitRule(categoryId);
+		if (!rule || !(rule.limit > 0)) {
+			return { allowed: true, used: 0, limit: 0, rule };
+		}
+		const used = countStudentTrainingAttemptsForLimit(
+			rule.categoryId,
+			precomputedResults,
+		);
+		return {
+			allowed: used < rule.limit,
+			used,
+			limit: rule.limit,
+			rule,
+		};
+	}
+
+	function getExamSubjectLabel(exam) {
+		if (!exam) return '';
+		const questionIds = new Set(
+			(Array.isArray(exam.questions) ? exam.questions : [])
+				.map((value) => String(value?.id ?? value ?? ''))
+				.filter(Boolean),
+		);
+		if (!questionIds.size) return '';
+		for (const question of readRepoTable('questions')) {
+			if (!questionIds.has(String(question.id))) continue;
+			const category = getFilterCategory(
+				question.categoryId ??
+					question.category_id ??
+					question.category ??
+					'',
+			);
+			if (!category) continue;
+			const label = getCategorySubjectLabel(category.id);
+			if (label) return label;
+		}
+		return '';
+	}
+
+	// Fill the attempt header chips (school, school year, subject, teacher).
+	// School/year come from the cached public profile; subject/teacher are
+	// resolved through the same category/course/exam taxonomy as the filters.
+	// Synchronous school profile from the hydrated cache, so the header chips
+	// paint on the first frame instead of waiting on the network round trip.
+	function getCachedSchoolProfile() {
+		if (state.schoolProfile && typeof state.schoolProfile === 'object') {
+			return state.schoolProfile;
+		}
+		const rows = readRepoTable('schools');
+		return rows.length ? rows[0] : null;
+	}
+
+	// Resolve the category shown in the attempt header. Category/lesson
+	// practice carries the name directly; exam-based attempts fall back to the
+	// category of the first categorised question so the chip still names the
+	// topic.
+	function resolveTrainingCategoryLabel(session) {
+		const practiceContext = session?.practiceContext || {};
+		const direct = String(practiceContext.categoryTitle || '').trim();
+		if (direct) return direct;
+		const categoryId = String(practiceContext.categoryId || '').trim();
+		if (categoryId) {
+			const name = String(getFilterCategory(categoryId)?.name || '').trim();
+			if (name) return name;
+		}
+		const examId = String(session?.examId || '').trim();
+		if (!examId) return '';
+		const exam = readRepoTable('exams').find((row) => String(row.id) === examId);
+		const questionIds = new Set(
+			(Array.isArray(exam?.questions) ? exam.questions : [])
+				.map((value) => String(value?.id ?? value ?? ''))
+				.filter(Boolean),
+		);
+		if (!questionIds.size) return '';
+		for (const question of readRepoTable('questions')) {
+			if (!questionIds.has(String(question.id))) continue;
+			const category = getFilterCategory(
+				question.categoryId ?? question.category_id ?? question.category ?? '',
+			);
+			const name = String(category?.name || '').trim();
+			if (name) return name;
+		}
+		return '';
+	}
+
+	// Resolve the subject/teacher for the running attempt from every available
+	// source: the category tree (leaf → root), the bound course, then the exam.
+	function resolveTrainingContextLabels(source) {
+		const session = source || trainingState || {};
+		const practiceContext = session.practiceContext || {};
+		const categoryId = String(practiceContext.categoryId || '').trim();
+		const category = resolveTrainingCategoryLabel(session);
+		let subject = categoryId ? getCategorySubjectLabel(categoryId) : '';
+		let teacher = categoryId ? getCategoryTeacherLabel(categoryId) : '';
+		let course = findFilterCourseByName(practiceContext.courseTitle || '');
+		if (!course && categoryId) {
+			course = getFilterCourseForCategory(categoryId);
+		}
+		if (course) {
+			subject = subject || filterSubjectLabel(course);
+			teacher = teacher || filterTeacherLabel(course);
+		}
+		if (!subject || !teacher) {
+			const examId = String(session.examId || '').trim();
+			const exam = examId
+				? readRepoTable('exams').find((row) => String(row.id) === examId)
+				: null;
+			if (exam) {
+				teacher = teacher || filterTeacherLabel(exam);
+				subject = subject || getExamSubjectLabel(exam);
+			}
+		}
+		return { category, subject, teacher };
+	}
+
+	function applyTrainingContextLabels(labels) {
+		const categoryEl = byId('trainingContextCategory');
+		const subjectEl = byId('trainingContextSubject');
+		const teacherEl = byId('trainingContextTeacher');
+		if (categoryEl) categoryEl.textContent = labels?.category || '—';
+		if (subjectEl) subjectEl.textContent = labels?.subject || '—';
+		if (teacherEl) teacherEl.textContent = labels?.teacher || '—';
+	}
+
+	function applyTrainingContextSchool(profile) {
+		const schoolEl = byId('trainingContextSchool');
+		const yearEl = byId('trainingContextYear');
+		if (schoolEl) {
+			schoolEl.textContent = String(profile?.name || '').trim() || '—';
+		}
+		if (yearEl) {
+			yearEl.textContent = String(profile?.school_year || '').trim() || '—';
+		}
+	}
+
+	function updateTrainingContextMeta(source) {
+		applyTrainingContextLabels(resolveTrainingContextLabels(source));
+
+		const cachedProfile = getCachedSchoolProfile();
+		if (cachedProfile) applyTrainingContextSchool(cachedProfile);
+		loadSchoolProfile()
+			.then((profile) => {
+				if (profile) applyTrainingContextSchool(profile);
+			})
+			.catch(() => {
+				/* chips keep the cached / placeholder values */
+			});
+
+		// Course- and exam-derived labels need the student course catalogue;
+		// refresh the chips once it arrives so they stop showing placeholders.
+		const current = resolveTrainingContextLabels(source);
+		if (!current.category || !current.subject || !current.teacher) {
+			ensureFilterCourseCatalog()
+				.then(() => {
+					if (!trainingState || !trainingState.active) return;
+					const next = resolveTrainingContextLabels(source);
+					if (next.category || next.subject || next.teacher) {
+						applyTrainingContextLabels(next);
+					}
+				})
+				.catch(() => {
+					/* labels stay as resolved from the category tree */
+				});
+		}
 	}
 
 	// Resolve the name / class / number shown in the attempt's header strip.
@@ -16036,45 +17449,41 @@
 		}
 	}
 
-	// ── Full-page attempt surface ───────────────────────────────────────────
-	// Training tests and exams run as a full workspace page instead of a
-	// floating modal: the workspace tabs/panels are hidden while the attempt
-	// is active and the page's Back button restores them. This gives long
-	// question images and image-option grids the full viewport width.
+	// ── Centered attempt modal ──────────────────────────────────────────────
+	// Training tests and exams open in the workspace modal, centered in the
+	// viewport. The workspace stays visible (dimmed) behind it and body scroll
+	// is locked while the attempt is open; the attempt body scrolls inside the
+	// modal so long question images never push the actions off-screen.
 	function openTrainingSurface() {
 		const modal = byId('studentTrainingModal');
-		const main = byId('studentWorkspaceMain');
-		trainingState.returnScrollY = window.scrollY || 0;
 		renderTrainingStudentStrip();
 		if (modal) {
 			modal.hidden = false;
-			modal.classList.add('training-page');
+			modal.classList.remove('training-page');
 			modal.classList.add('active');
+			modal.setAttribute('aria-hidden', 'false');
 		}
-		if (main) main.classList.add('training-page-open');
-		document.body.classList.add('training-page-open');
-		try {
-			window.scrollTo({ top: 0, behavior: 'auto' });
-		} catch (_) {
-			window.scrollTo(0, 0);
-		}
+		document.body.classList.add('training-modal-open');
 	}
 
 	function closeTrainingSurface() {
 		const modal = byId('studentTrainingModal');
-		const main = byId('studentWorkspaceMain');
 		if (modal) {
 			modal.classList.remove('active');
 			modal.classList.remove('training-page');
+			modal.classList.remove('time-warning', 'time-expired');
+			modal.hidden = true;
+			modal.setAttribute('aria-hidden', 'true');
 		}
-		if (main) main.classList.remove('training-page-open');
-		document.body.classList.remove('training-page-open');
-		const targetY = Number(trainingState.returnScrollY) || 0;
-		try {
-			window.scrollTo({ top: targetY, behavior: 'auto' });
-		} catch (_) {
-			window.scrollTo(0, targetY);
+		document.body.classList.remove('training-modal-open');
+		const stage = byId('studentTrainingStage');
+		if (stage) {
+			stage.classList.remove('is-time-warning', 'is-time-expired');
 		}
+		trainingState.overallTimeWarning = false;
+		trainingState.overallTimeExpired = false;
+		trainingState.questionTimeWarning = false;
+		trainingState.questionTimeExpired = false;
 	}
 
 	// ── Public API ──────────────────────────────────────────────────────────
@@ -16092,6 +17501,21 @@
 			showToast('No practice questions in this lesson yet.', 'warning');
 			return;
 		}
+		// Attempt limits are enforced at the single entry point every training
+		// surface funnels through (category cards, course lessons, exams).
+		const gateCategoryId = String(practiceSet?.categoryId || '').trim();
+		if (gateCategoryId) {
+			const gate = getTrainingAttemptGate(gateCategoryId);
+			if (!gate.allowed) {
+				showToast(
+					`You have used all ${gate.limit} allowed attempt${gate.limit === 1 ? '' : 's'} for this ${
+						practiceSet?.lessonTitle ? 'lesson' : 'course'
+					}. Ask your teacher to reset the limit.`,
+					'warning',
+				);
+				return;
+			}
+		}
 		let questions = practiceSet
 			? [...practiceSet.questions]
 			: window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
@@ -16103,14 +17527,22 @@
 			// (Exam-based training below keeps the exam's own question set.)
 			questions = filterStudentTrainingQuestions(questions);
 		}
+		let trainingExam = null;
 		if (examId && !practiceSet) {
 			const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
-			const exam = exams.find((e) => e.id === examId);
-			if (exam) {
-				trainingExamName = exam.name || exam.title || trainingExamName;
+			trainingExam = exams.find((e) => e.id === examId) || null;
+			if (trainingExam) {
+				trainingExamName =
+					trainingExam.name || trainingExam.title || trainingExamName;
 			}
-			if (exam && Array.isArray(exam.questions) && exam.questions.length > 0) {
-				questions = questions.filter((q) => exam.questions.includes(q.id));
+			if (
+				trainingExam &&
+				Array.isArray(trainingExam.questions) &&
+				trainingExam.questions.length > 0
+			) {
+				questions = questions.filter((q) =>
+					trainingExam.questions.includes(q.id),
+				);
 			}
 		}
 		if (!questions.length) {
@@ -16130,7 +17562,7 @@
 		// preset. Ordering, corrections gate, penalty and pass mark all
 		// come from the resolved rules (fixed order + no corrections when
 		// the preset says so).
-		const examPreset = examId ? getExamPresetInfo(exam) : null;
+		const examPreset = examId ? getExamPresetInfo(trainingExam) : null;
 		const presetSource = examPreset || getTrainingPresetRules();
 		const rules = buildAttemptRules(presetSource);
 		const ordered = rules.shuffleQuestions
@@ -16171,7 +17603,9 @@
 			timerHandle: null,
 			timeLimitSec: 0,
 			overallTimeWarning: false,
+			overallTimeExpired: false,
 			questionTimeWarning: false,
+			questionTimeExpired: false,
 		};
 
 		// Time limit precedence: per-question budgets → preset time limit →
@@ -16206,6 +17640,7 @@
 		if (trainingState.mode === 'training') state.trainingAccuracyCache = null;
 		clearTrainingStorage();
 
+		updateTrainingContextMeta(trainingState);
 		openTrainingSurface();
 		startTrainingTimer(trainingState.timeLimitSec || 0);
 		renderTrainingQuestion();
@@ -16276,7 +17711,9 @@
 			questionOptions: ordered.map(getTrainingOptionsForQuestion),
 			timerHandle: null,
 			overallTimeWarning: false,
+			overallTimeExpired: false,
 			questionTimeWarning: false,
+			questionTimeExpired: false,
 			// `timeLimit` is stored in seconds; `duration` is in minutes.
 			// Personalized-time presets override both with the sum of the
 			// assigned questions' own time budgets; a fixed preset time limit
@@ -16292,6 +17729,7 @@
 		};
 
 		clearTrainingStorage();
+		updateTrainingContextMeta(trainingState);
 		openTrainingSurface();
 		startTrainingTimer(trainingState.timeLimitSec || 0);
 		renderTrainingQuestion();
@@ -16873,12 +18311,23 @@
 			syncTrainingModalTimeWarning();
 			if (remaining <= 0) {
 				stopPerQuestionTimer();
-				// Auto-advance: record current state and move on.
-				try {
-					if (typeof window.nextTrainingQuestion === 'function') {
-						window.nextTrainingQuestion();
-					}
-				} catch (_) {}
+				// Flash the question area red for a moment before the auto
+				// advance, so an expired per-question timer is unmistakable.
+				const expiredIndex = trainingState.currentIndex;
+				trainingState.questionTimeExpired = true;
+				syncTrainingModalTimeWarning();
+				setTimeout(() => {
+					trainingState.questionTimeExpired = false;
+					syncTrainingModalTimeWarning();
+					if (!trainingState.active || trainingState.completed) return;
+					// The student may have navigated during the flash.
+					if (trainingState.currentIndex !== expiredIndex) return;
+					try {
+						if (typeof window.nextTrainingQuestion === 'function') {
+							window.nextTrainingQuestion();
+						}
+					} catch (_) {}
+				}, 700);
 			}
 		};
 		tick();
@@ -17318,12 +18767,17 @@
 
 		const q = trainingState.questions[trainingState.currentIndex];
 		if (!q) return;
-		const modalTitle = byId('trainingModalTitle');
+const modalTitle = byId('trainingModalTitle');
 		if (modalTitle) {
 			// `examName` carries the label of whatever opened the runner: the
-			// exam's own name, "Lesson: …" for course practice, or the generic
-			// training heading for free practice.
-			modalTitle.textContent = trainingState.examName || 'Training Practice Test';
+			// exam's own name, "Lesson: ..." for course practice, or the generic
+			// training heading for free practice. Category practice prefixes the
+			// name with "Category: ", which the header badge already conveys, so
+			// the title drops it to avoid repeating the chip.
+			const titleText = trainingState.examName || 'Training Practice Test';
+			modalTitle.textContent = trainingState.practiceContext?.categoryId
+				? titleText.replace(/^category:\s*/i, '')
+				: titleText;
 		}
 
 		const total = trainingState.questions.length;
@@ -17456,8 +18910,8 @@
 				<div class="training-actions training-actions--primary">
 					${
 						trainingState.currentIndex > 0
-							? `<button type="button" class="workspace-btn ghost" onclick="prevTrainingQuestion()">Previous</button>`
-							: '<div></div>'
+							? `<button type="button" class="workspace-btn ghost training-prev-btn" onclick="prevTrainingQuestion()">Previous</button>`
+							: ''
 					}
 					<button
 						type="button"
@@ -17636,6 +19090,9 @@
 	function finishTrainingTest() {
 		stopTrainingTimer();
 		stopPerQuestionTimer();
+		trainingState.overallTimeExpired = false;
+		trainingState.questionTimeExpired = false;
+		syncTrainingModalTimeWarning();
 		trainingState.endTime = Date.now();
 		trainingState.completed = true;
 
@@ -18482,6 +19939,26 @@
 		// and re-resolve for the new session.
 		state.kidsSchoolPrimaire = undefined;
 		kidsPrimairePromise = null;
+		state.schoolProfile = undefined;
+		schoolProfilePromise = null;
+		state.trainingFilters = { subject: '', teacher: '', course: '', lesson: '' };
+		state.examFilters = { subject: '', teacher: '', course: '', lesson: '' };
+		state.resultsExtraFilters = {
+			subject: '',
+			teacher: '',
+			course: '',
+			lesson: '',
+		};
+		state.filterTaxonomy = {
+			ready: false,
+			loading: false,
+			courses: [],
+			courseById: new Map(),
+			lessonsByCourse: new Map(),
+			catToCourse: new Map(),
+			catToLesson: new Map(),
+			request: null,
+		};
 		renderWorkspace();
 		ensureKidsPrimaireStatus().then(() => refreshKidsModePanels());
 		continuePendingLoginRedirect();

@@ -20,6 +20,11 @@
 	let aiConfigsCache = null;
 	let courseBatchGenerating = false;
 	let prepSheetBatchGenerating = false;
+	// Shared state of the last/current course batch (levels, prep sheets,
+	// exercises). Re-mounted after every render so the panel survives re-renders.
+	let courseJobState = null;
+	let resourcesMenuEl = null;
+	let resourceState = null;
 	let publishAfterAssignCourseId = null;
 	let courseDetailMode = 'view';
 	let selectedCourseConfigId = '';
@@ -696,6 +701,8 @@
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></button>' +
 			`<button class="exam-action-btn course-action-document" aria-label="Create course document" title="Create course document" onclick="createCourseDocument('${id}')">` +
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg></button>' +
+			`<button class="exam-action-btn course-action-resources" title="Prep sheets, exercises & documents" aria-label="Prep sheets, exercises and documents" aria-haspopup="menu" aria-expanded="false" onclick="openCourseResourcesMenu('${id}', this)">` +
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5 9-5z"></path><path d="m3 12 9 5 9-5"></path><path d="m3 17 9 5 9-5"></path></svg></button>' +
 			`<button class="exam-action-btn course-action-publish" title="${published ? 'Unpublish' : 'Publish'}" aria-label="${published ? 'Unpublish' : 'Publish'}" onclick="toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')">` +
 			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg></button>' +
 			`<button class="exam-action-btn exam-delete-btn" title="Delete course" aria-label="Delete course" onclick="deleteCourseConfirm('${id}')">` +
@@ -884,6 +891,21 @@
 						label: 'Edit structure',
 						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
 						onClick: () => openStructureBranch(course.category_id, { courseId: course.id }),
+					},
+					{
+						label: `Prep Sheets${Number(course.prep_sheets) ? ` (${Number(course.prep_sheets)})` : ''}`,
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h5"></path></svg>',
+						onClick: () => window.openCourseResource('prep-sheets', course.id),
+					},
+					{
+						label: `Exercises${Number(course.exercises) ? ` (${Number(course.exercises)})` : ''}`,
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+						onClick: () => window.openCourseResource('exercises', course.id),
+					},
+					{
+						label: `Generated documents${Number(course.documents) ? ` (${Number(course.documents)})` : ''}`,
+						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5 9-5z"></path><path d="m3 12 9 5 9-5"></path><path d="m3 17 9 5 9-5"></path></svg>',
+						onClick: () => window.openGeneratedDocumentsLibrary(course.id),
 					},
 					{
 						label: 'Create course document',
@@ -1942,14 +1964,17 @@
 	};
 
 	// ── Detail view ──────────────────────────────────────────────────────────
-	window.openCourseDetail = async function (courseId) {
+	window.openCourseDetail = async function (courseId, options = {}) {
 		const A = api();
 		if (!A) return;
 		await ensureAiConfigs();
+		const previousId = currentCourse?.id;
 		try {
 			currentCourse = await A.raw('GET', `/courses/${encodeURIComponent(courseId)}`);
 			loadCollapsedCourseCategories(currentCourse.id);
-			courseDetailMode = 'view';
+			courseDetailMode = options && options.mode === 'edit' ? 'edit' : 'view';
+			// A fresh course starts with a clean batch-progress panel.
+			if (!previousId || String(previousId) !== String(currentCourse.id)) courseJobState = null;
 		} catch (err) {
 			toast('Could not open course: ' + (err?.message || 'error'), 'error');
 			return;
@@ -2345,7 +2370,7 @@
 					`<div class="launchpad-card launchpad-lessons">` +
 						`<div class="launchpad-header"><span class="launchpad-icon">📖</span><div><h4>Course Material & Lessons</h4><small>${(course.lessons || []).length} lesson unit(s) · Interactive student reader & exports</small></div></div>` +
 						`<div class="launchpad-actions">` +
-							(course.lessons?.length ? `<button type="button" class="btn btn-sm btn-primary" onclick="confirmGenerateAllCourseLessons()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path></svg> Generate All Lessons (AI)</button>` : '') +
+							(course.lessons?.length ? `<button type="button" class="btn btn-sm btn-primary" data-generate-all-levels onclick="confirmGenerateAllCourseLessons()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path></svg> Generate All Lessons (AI)</button>` : '') +
 							`<button type="button" class="btn btn-sm" onclick="createCourseDocument()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg> Export PDF / Word</button>` +
 							`<button type="button" class="btn btn-sm" onclick="openAssignClassesModal()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg> Send to Students</button>` +
 						`</div>` +
@@ -2367,13 +2392,18 @@
 				? '<button type="button" class="course-tree-bulk-toggle" onclick="setCourseCategoriesCollapsed(true)">Collapse all</button><button type="button" class="course-tree-bulk-toggle" onclick="setCourseCategoriesCollapsed(false)">Expand all</button>'
 				: '') +
 			'<span id="courseBatchStatus" class="course-batch-status" aria-live="polite"></span>' +
-			(course.lessons?.length
-				? '<button type="button" class="btn btn-primary btn-sm" data-generate-all-levels onclick="confirmGenerateAllCourseLessons()">Generate all levels with AI</button>'
-				: '') +
-			(course.lessons?.length
-				? '<button type="button" class="btn btn-sm" data-prep-sheets-all onclick="generateAllPrepSheets()">Prep Sheets</button>'
-				: '') +
-			'</div></div>' +
+(course.lessons?.length
+					? '<button type="button" class="btn btn-primary btn-sm" data-generate-all-levels onclick="confirmGenerateAllCourseLessons()">Generate all levels with AI</button>'
+					: '') +
+				(course.lessons?.length
+					? '<button type="button" class="btn btn-sm course-action-prep-sheets" data-prep-sheets-all onclick="openCourseResource(\'prep-sheets\', currentCourse.id)">Prep Sheets</button>'
+					: '') +
+				(course.lessons?.length
+					? '<button type="button" class="btn btn-sm course-action-exercises" onclick="openCourseResource(\'exercises\', currentCourse.id)">Exercises</button>'
+					: '') +
+				'<button type="button" class="btn btn-sm course-action-documents" onclick="openGeneratedDocumentsLibrary(currentCourse.id)">Documents</button>' +
+				'</div></div>' +
+				'<div id="courseProgressHost" class="course-progress-host" aria-live="polite"></div>' +
 			`<div class="course-tree">${structureHtml}</div></section>` +
 			'<h3 style="margin:8px 0;">Lessons</h3>' +
 			`<div id="courseLessonsWrap">${lessonsHtml || '<div class="text-muted">No lessons yet.</div>'}</div>`);
@@ -2392,6 +2422,7 @@
 				openMobileLessonActions(row.dataset.lessonId);
 			});
 		});
+		mountCourseProgress();
 	};
 
 	window.confirmGenerateAllCourseLessons = function () {
@@ -2526,7 +2557,7 @@
 		}
 	};
 
-	window.generateAllCourseLessons = async function () {
+window.generateAllCourseLessons = async function () {
 		const A = api();
 		if (!A || !currentCourse?.lessons?.length) return;
 		if (courseBatchGenerating) return;
@@ -2537,29 +2568,56 @@
 		courseBatchGenerating = true;
 		const courseId = currentCourse.id;
 		const lessons = [...currentCourse.lessons];
-		let completed = 0;
+		const state = {
+			key: 'levels',
+			label: 'Generating lesson content with AI',
+			courseId,
+			total: lessons.length,
+			processed: 0,
+			done: 0,
+			skipped: 0,
+			failed: 0,
+			failedNames: [],
+			current: '',
+			running: true,
+			cancelled: false,
+			error: '',
+		};
+		courseJobState = state;
+		mountCourseProgress();
 		const button = document.querySelector('[data-generate-all-levels]');
 		if (button) {
 			button.disabled = true;
-			button.textContent = 'Generating levels…';
+			button.textContent = 'Generating levels...';
 		}
 		try {
 			for (const lesson of lessons) {
-				const updated = await A.raw(
-					'POST',
-					`/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lesson.id)}/generate-content`,
-					{ configId, language: 'French', includeQuestions: true },
-				);
-				if (updated) Object.assign(lesson, updated);
-				completed += 1;
-				const status = document.getElementById('courseBatchStatus');
-				if (status) status.textContent = `${completed} of ${lessons.length} complete`;
+				if (state.cancelled) break;
+				state.current = lesson.title || 'Lesson';
+				mountCourseProgress();
+				try {
+					const updated = await A.raw(
+						'POST',
+						`/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lesson.id)}/generate-content`,
+						{ configId, language: 'French', includeQuestions: true },
+					);
+					if (updated) Object.assign(lesson, updated);
+					state.done += 1;
+				} catch (err) {
+					state.failed += 1;
+					state.failedNames.push(lesson.title || 'Lesson');
+					state.error = err?.message || 'error';
+				}
+				state.processed += 1;
+				mountCourseProgress();
 			}
-			toast(`Generated AI content for all ${completed} course levels.`);
-		} catch (err) {
-			toast(`Generated ${completed} of ${lessons.length} levels. Stopped at "${lessons[completed]?.title || 'lesson'}": ${err?.message || 'error'}`, 'error');
+			const tail = state.failed ? ` ${state.failed} failed (${state.failedNames.slice(0, 3).join(', ')}${state.failedNames.length > 3 ? '...' : ''}).` : '';
+			toast(`Generated AI content for ${state.done} of ${lessons.length} course levels.${tail}`, state.failed ? 'error' : 'success');
 		} finally {
+			state.running = false;
+			state.current = '';
 			courseBatchGenerating = false;
+			mountCourseProgress();
 			if (String(currentCourse?.id) === String(courseId)) renderCourseDetail();
 		}
 	};
@@ -2639,6 +2697,7 @@
 			'<div class="lesson-card-actions">' +
 			`<button type="button" class="btn btn-ai-generate btn-sm" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate content via AI</button>` +
 			`<button type="button" class="btn btn-sm lesson-action-prep" onclick="openLessonPrepSheet('${esc(lesson.id)}')">Prep Sheet</button>` +
+			`<button type="button" class="btn btn-sm lesson-action-exercise" onclick="openLessonExercise('${esc(lesson.id)}')">Exercise</button>` +
 			`<button type="button" class="btn btn-sm lesson-action-questions" onclick="generateQuestionsFromLesson('${esc(lesson.id)}')">Generate questions</button>` +
 			`<button type="button" class="btn btn-sm lesson-action-preview" onclick="previewLesson('${esc(lesson.id)}')">Preview</button>` +
 			`<button type="button" class="btn btn-primary btn-sm" onclick="saveLesson('${esc(lesson.id)}')">Save</button>` +
@@ -3552,7 +3611,7 @@
 
 	// Course-wide batch: sequential per-lesson calls (short requests, visible
 	// progress); `force` off so lessons that already have a sheet are skipped.
-	window.generateAllPrepSheets = async function () {
+window.generateAllPrepSheets = async function () {
 		const A = api();
 		if (!A || !currentCourse?.lessons?.length) return toast('This course has no lessons.', 'error');
 		if (prepSheetBatchGenerating) return;
@@ -3561,15 +3620,30 @@
 		prepSheetBatchGenerating = true;
 		const courseId = currentCourse.id;
 		const lessons = [...currentCourse.lessons];
+		const state = {
+			key: 'prep-sheets',
+			label: 'Generating preparation sheets',
+			courseId,
+			total: lessons.length,
+			processed: 0,
+			done: 0,
+			skipped: 0,
+			failed: 0,
+			failedNames: [],
+			current: '',
+			running: true,
+			cancelled: false,
+			error: '',
+		};
+		courseJobState = state;
+		mountCourseProgress();
 		const button = document.querySelector('[data-prep-sheets-all]');
-		if (button) { button.disabled = true; button.textContent = 'Generating sheets…'; }
-		let done = 0;
-		let skipped = 0;
-		const failures = [];
+		if (button) { button.disabled = true; button.textContent = 'Generating sheets...'; }
 		try {
-			for (const [i, lesson] of lessons.entries()) {
-				const status = document.getElementById('courseBatchStatus');
-				if (status) status.textContent = `Generating ${i + 1} / ${lessons.length} — done: ${done}, failed: ${failures.length}`;
+			for (const lesson of lessons) {
+				if (state.cancelled) break;
+				state.current = lesson.title || 'Lesson';
+				mountCourseProgress();
 				try {
 					const result = await A.raw(
 						'POST',
@@ -3578,16 +3652,23 @@
 					);
 					if (result?.sheet) {
 						lesson.prep_sheet = result.sheet;
-						if (result.regenerated) done += 1; else skipped += 1;
+						if (result.regenerated) state.done += 1; else state.skipped += 1;
 					}
 				} catch (err) {
-					failures.push(lesson.title || 'Lesson');
+					state.failed += 1;
+					state.failedNames.push(lesson.title || 'Lesson');
+					state.error = err?.message || 'error';
 				}
+				state.processed += 1;
+				mountCourseProgress();
 			}
-			const summary = `Prep sheets: ${done} generated, ${skipped} already existed${failures.length ? `, ${failures.length} failed (${failures.slice(0, 3).join(', ')}${failures.length > 3 ? '…' : ''})` : ''}.`;
-			toast(summary, failures.length ? 'error' : 'success');
+			const summary = `Prep sheets: ${state.done} generated, ${state.skipped} already existed${state.failed ? `, ${state.failed} failed (${state.failedNames.slice(0, 3).join(', ')}${state.failedNames.length > 3 ? '...' : ''})` : ''}.`;
+			toast(summary, state.failed ? 'error' : 'success');
 		} finally {
+			state.running = false;
+			state.current = '';
 			prepSheetBatchGenerating = false;
+			mountCourseProgress();
 			if (String(currentCourse?.id) === String(courseId)) renderCourseDetail();
 		}
 	};
@@ -3893,6 +3974,927 @@
 			categoryId: String(categoryId),
 			categoryName: cat ? cat.name : '',
 		});
+	};
+
+	// ═════════════════════════════════════════════════════════════════════════
+	// COURSE RESOURCES — prep sheets, exercises (with solutions) and the
+	// library of documents the app saved on disk. Everything below is
+	// self-contained: these surfaces work from the row menu as well as from the
+	// course workspace, so they never depend on the detail pane being rendered.
+	// ═════════════════════════════════════════════════════════════════════════
+
+	// ── Formatting + small helpers ───────────────────────────────────────────
+
+	function fmtBytes(bytes) {
+		const n = Number(bytes) || 0;
+		if (n < 1024) return `${n} B`;
+		if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+		return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+	}
+
+	function fmtDateTime(value) {
+		try {
+			if (!value) return '—';
+			return new Date(value).toLocaleString(undefined, {
+				year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+			});
+		} catch (_) {
+			return '—';
+		}
+	}
+
+	function saveBlob(blob, fileName) {
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+		anchor.href = url;
+		anchor.download = fileName || 'document';
+		document.body.appendChild(anchor);
+		anchor.click();
+		anchor.remove();
+		setTimeout(() => URL.revokeObjectURL(url), 1000);
+	}
+
+	// Values printed inside single-quoted inline handlers: esc() covers the HTML
+	// side, this covers the JS string side (apostrophes, backslashes).
+	function jsAttr(value) {
+		return esc(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+	}
+
+	function copyToClipboard(text) {
+		const value = String(text || '');
+		if (navigator.clipboard && navigator.clipboard.writeText) {
+			return navigator.clipboard.writeText(value).then(
+				() => toast('Path copied.'),
+				() => toast('Could not copy the path.', 'error'),
+			);
+		}
+		try {
+			const input = document.createElement('textarea');
+			input.value = value;
+			input.style.position = 'fixed';
+			input.style.opacity = '0';
+			document.body.appendChild(input);
+			input.select();
+			document.execCommand('copy');
+			input.remove();
+			toast('Path copied.');
+		} catch (_) {
+			toast('Could not copy the path.', 'error');
+		}
+		return null;
+	}
+
+	const RESOURCE_KINDS = Object.freeze({
+		'prep-sheets': {
+			label: 'Prep Sheets',
+			item: 'prep_sheet',
+			ready: 'Sheet ready',
+			missing: 'Not generated',
+			hint: 'The preparation sheet plans the session(s) for a lesson.',
+		},
+		exercises: {
+			label: 'Exercises (with solutions)',
+			item: 'exercise',
+			ready: 'Exercise ready',
+			missing: 'Not generated',
+			hint: 'An exercise is a situation-problem the student solves by applying the lesson — it always ships with the full worked correction. It is not a quiz question.',
+		},
+	});
+
+	function resourceItemFor(lesson, kind) {
+		const meta = RESOURCE_KINDS[kind] || RESOURCE_KINDS['prep-sheets'];
+		const item = lesson ? lesson[meta.item] : null;
+		return item && typeof item === 'object' ? item : null;
+	}
+
+	// ── Unified batch progress (levels, prep sheets, exercises) ──────────────
+
+	function courseProgressHtml(state) {
+		if (!state) return '';
+		const total = Math.max(Number(state.total) || 0, 0);
+		const processed = Math.min(Math.max(Number(state.processed) || 0, 0), total || 0);
+		const pct = total ? Math.round((processed / total) * 100) : 0;
+		const chips = [];
+		if (state.done) chips.push(`<span class="course-progress-chip is-done">${state.done} done</span>`);
+		if (state.skipped) chips.push(`<span class="course-progress-chip is-skipped">${state.skipped} already there</span>`);
+		if (state.failed) chips.push(`<span class="course-progress-chip is-failed">${state.failed} failed</span>`);
+		if (state.cancelled) chips.push('<span class="course-progress-chip is-cancelled">stopped</span>');
+		return (
+			`<div class="course-progress${state.running ? ' is-running' : ' is-finished'}" role="group" aria-label="${esc(state.label || 'Generation progress')}">` +
+				'<div class="course-progress-head">' +
+					`<span class="course-progress-label">${esc(state.label || 'Generating…')}</span>` +
+					`<span class="course-progress-count">${processed} / ${total}</span>` +
+				'</div>' +
+				`<div class="course-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${processed}" aria-label="${esc(state.label || 'Generation progress')}">` +
+					`<span class="course-progress-fill" style="width:${pct}%"></span>` +
+				'</div>' +
+				'<div class="course-progress-meta">' +
+					(state.running && state.current ? `<span class="course-progress-current">Generating: ${esc(state.current)}</span>` : '') +
+					chips.join('') +
+					(state.running ? '<button type="button" class="course-progress-cancel" onclick="cancelCourseJob()">Cancel</button>' : '') +
+				'</div>' +
+			'</div>'
+		);
+	}
+
+	function mountCourseProgress() {
+		const html = courseJobState ? courseProgressHtml(courseJobState) : '';
+		const detailHost = document.getElementById('courseProgressHost');
+		// A job may belong to another course (started from the resources modal for
+		// a row other than the open one) — never paint it in the wrong detail pane.
+		const sameDetailCourse =
+			!courseJobState ||
+			!courseJobState.courseId ||
+			String(courseJobState.courseId) === String(currentCourse?.id || '');
+		if (detailHost) detailHost.innerHTML = sameDetailCourse ? html : '';
+		const modalHost = document.getElementById('resourceJobHost');
+		if (modalHost) modalHost.innerHTML = html;
+	}
+
+	window.cancelCourseJob = function () {
+		if (!courseJobState || !courseJobState.running) return;
+		courseJobState.cancelled = true;
+		courseJobState.current = 'Stopping after the current lesson…';
+		mountCourseProgress();
+	};
+
+	// ── Row "Resources" menu ─────────────────────────────────────────────────
+
+	function resourcesDocClick(event) {
+		if (!resourcesMenuEl) return;
+		if (resourcesMenuEl.contains(event.target)) return;
+		closeCourseResourcesMenu();
+	}
+
+	function resourcesKeyDown(event) {
+		if (event.key === 'Escape') closeCourseResourcesMenu();
+	}
+
+	function closeCourseResourcesMenu() {
+		if (resourcesMenuEl && resourcesMenuEl.parentNode) resourcesMenuEl.parentNode.removeChild(resourcesMenuEl);
+		resourcesMenuEl = null;
+		document.querySelectorAll('.course-action-resources[aria-expanded="true"]')
+			.forEach((button) => button.setAttribute('aria-expanded', 'false'));
+		document.removeEventListener('click', resourcesDocClick, true);
+		document.removeEventListener('keydown', resourcesKeyDown, true);
+	}
+
+	window.courseResourcesAction = function (kind, courseId) {
+		closeCourseResourcesMenu();
+		if (kind === 'documents') return window.openGeneratedDocumentsLibrary(courseId);
+		if (kind === 'course-document') return window.createCourseDocument(courseId);
+		return window.openCourseResource(kind, courseId);
+	};
+
+	window.openCourseResourcesMenu = function (courseId, anchor) {
+		const course = coursesCache.find((item) => String(item.id) === String(courseId));
+		if (!course) return toast('Course not found — refresh the list.', 'error');
+		const alreadyOpen = resourcesMenuEl && resourcesMenuEl.dataset.courseId === String(courseId);
+		closeCourseResourcesMenu();
+		if (alreadyOpen) return;
+
+		const lessonTotal = Number(course.lesson_count) || 0;
+		const items = [
+			{
+				kind: 'prep-sheets',
+				label: 'Prep Sheets',
+				hint: 'Session planning sheets',
+				count: Number(course.prep_sheets) || 0,
+				total: lessonTotal,
+			},
+			{
+				kind: 'exercises',
+				label: 'Exercises (with solutions)',
+				hint: 'Situation-problems + worked correction',
+				count: Number(course.exercises) || 0,
+				total: lessonTotal,
+			},
+			{
+				kind: 'documents',
+				label: 'Generated documents',
+				hint: 'Saved PDF / Word files with their path',
+				count: Number(course.documents) || 0,
+				total: null,
+			},
+			{
+				kind: 'course-document',
+				label: 'Create course document',
+				hint: 'Full course booklet (PDF or Word)',
+				count: null,
+				total: null,
+			},
+		];
+
+		const menu = document.createElement('div');
+		menu.className = 'course-resources-menu';
+		menu.setAttribute('role', 'menu');
+		menu.dataset.courseId = String(course.id);
+		menu.innerHTML =
+			`<div class="course-resources-head"><strong>${esc(course.name || 'Course')}</strong>` +
+			`<small>${lessonTotal} lesson${lessonTotal === 1 ? '' : 's'}</small></div>` +
+			items.map((item) => {
+				const badge = item.total
+					? `<span class="course-resources-badge${item.count >= item.total ? ' is-complete' : ''}">${item.count}/${item.total}</span>`
+					: item.count
+						? `<span class="course-resources-badge">${item.count}</span>`
+						: '';
+				return (
+					`<button type="button" role="menuitem" class="course-resources-item" onclick="courseResourcesAction('${item.kind}','${jsAttr(course.id)}')">` +
+						'<span class="course-resources-item-main">' +
+							`<strong>${esc(item.label)}</strong><small>${esc(item.hint)}</small>` +
+						'</span>' + badge +
+					'</button>'
+				);
+			}).join('');
+		document.body.appendChild(menu);
+		resourcesMenuEl = menu;
+
+		const rect = anchor && typeof anchor.getBoundingClientRect === 'function'
+			? anchor.getBoundingClientRect()
+			: { right: window.innerWidth - 16, bottom: 80 };
+		const menuRect = menu.getBoundingClientRect();
+		const top = Math.min(Math.max(rect.bottom + 6, 8), Math.max(window.innerHeight - menuRect.height - 12, 8));
+		const left = Math.min(Math.max(rect.right - menuRect.width, 8), window.innerWidth - menuRect.width - 8);
+		menu.style.top = `${top}px`;
+		menu.style.left = `${left}px`;
+		if (anchor && typeof anchor.setAttribute === 'function') anchor.setAttribute('aria-expanded', 'true');
+
+		setTimeout(() => {
+			document.addEventListener('click', resourcesDocClick, true);
+			document.addEventListener('keydown', resourcesKeyDown, true);
+		}, 0);
+	};
+
+	// ── Resource studio (prep sheets / exercises) ────────────────────────────
+
+	function resourceModelSelectHtml() {
+		const rows = aiConfigsCache || [];
+		if (!rows.length) {
+			return '<div class="form-group"><label>AI model</label><div class="text-muted">No AI models configured — add one in Settings → AI Generation.</div></div>';
+		}
+		if (!resourceState.configId) resourceState.configId = String(rows[0].id);
+		const options = rows.map((config) =>
+			`<option value="${esc(config.id)}" ${String(config.id) === String(resourceState.configId) ? 'selected' : ''}>${esc(config.name || config.model_id)} (${esc(config.provider || 'ai')})</option>`,
+		).join('');
+		return `<div class="form-group"><label for="resourceModelSelect">AI model</label><select id="resourceModelSelect" onchange="resourceSetOption('configId', this.value)">${options}</select></div>`;
+	}
+
+	window.resourceSetOption = function (key, value) {
+		if (!resourceState) return;
+		resourceState[key] = value;
+		if (key === 'configId') selectedCourseConfigId = value;
+	};
+
+	function resourceRowHtml(lesson, index, kind) {
+		const meta = RESOURCE_KINDS[kind] || RESOURCE_KINDS['prep-sheets'];
+		const item = resourceItemFor(lesson, kind);
+		const open = String(resourceState.previewId) === String(lesson.id);
+		const id = esc(lesson.id);
+		return (
+			`<div class="resource-item${item ? ' is-generated' : ' is-missing'}${open ? ' is-open' : ''}" data-resource-lesson="${id}">` +
+				'<div class="resource-item-head">' +
+					`<span class="resource-item-index">${index + 1}</span>` +
+					'<div class="resource-item-main">' +
+						`<strong>${esc(lesson.title || 'Lesson')}</strong>` +
+						(lesson.summary ? `<small>${esc(lesson.summary)}</small>` : '') +
+					'</div>' +
+					`<span class="resource-item-status ${item ? 'is-done' : 'is-missing'}">${item ? meta.ready : meta.missing}</span>` +
+					'<div class="resource-item-actions">' +
+						(item ? `<button type="button" class="btn btn-sm" onclick="resourceTogglePreview('${id}')">${open ? 'Hide' : 'View'}</button>` : '') +
+						(item
+							? `<button type="button" class="btn btn-sm" onclick="resourceGenerate('${id}', true)">Regenerate</button>` +
+								`<button type="button" class="btn btn-sm course-doc-export" onclick="resourceExport('${id}','docx')">Word</button>` +
+								`<button type="button" class="btn btn-sm course-doc-export" onclick="resourceExport('${id}','pdf')">PDF</button>`
+							: `<button type="button" class="btn btn-sm btn-primary" onclick="resourceGenerate('${id}', false)">Generate</button>`) +
+					'</div>' +
+				'</div>' +
+				(open
+					? `<div class="resource-item-preview">${kind === 'exercises' ? exercisePreviewHtml(item) : prepSheetPreviewHtml(item, lesson)}</div>`
+					: '') +
+			'</div>'
+		);
+	}
+
+	function renderResourceModal() {
+		const state = resourceState;
+		if (!state) return;
+		const course = state.course || {};
+		const lessons = Array.isArray(course.lessons) ? course.lessons : [];
+		const kind = state.kind;
+		const meta = RESOURCE_KINDS[kind] || RESOURCE_KINDS['prep-sheets'];
+		const isExercise = kind === 'exercises';
+		const ready = lessons.filter((lesson) => resourceItemFor(lesson, kind)).length;
+		const total = lessons.length;
+		const pct = total ? Math.round((ready / total) * 100) : 0;
+		const missing = Math.max(total - ready, 0);
+
+		const body =
+			'<div class="resource-summary">' +
+				`<div class="resource-summary-head"><strong>${ready} of ${total}</strong> lesson${total === 1 ? '' : 's'} ${isExercise ? 'have a worked exercise' : 'have a preparation sheet'}</div>` +
+				`<div class="resource-summary-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${ready}" aria-label="${esc(meta.label)} completion">` +
+					`<span style="width:${pct}%"></span>` +
+				'</div>' +
+				`<small>${esc(meta.hint)}</small>` +
+			'</div>' +
+			'<div id="resourceJobHost" class="course-progress-host"></div>' +
+			'<div class="resource-controls">' +
+				resourceModelSelectHtml() +
+				`<div class="form-group"><label for="resourceLanguage">Language</label>` +
+					`<select id="resourceLanguage" onchange="resourceSetOption('language', this.value)">` +
+						`<option value="French" ${state.language === 'French' ? 'selected' : ''}>French</option>` +
+						`<option value="English" ${state.language === 'English' ? 'selected' : ''}>English</option>` +
+					'</select></div>' +
+				(isExercise
+					? `<div class="form-group"><label for="resourceDifficulty">Difficulty</label>` +
+						`<select id="resourceDifficulty" onchange="resourceSetOption('difficulty', this.value)">` +
+							['easy', 'medium', 'hard'].map((level) =>
+								`<option value="${level}" ${state.difficulty === level ? 'selected' : ''}>${level[0].toUpperCase() + level.slice(1)}</option>`,
+							).join('') +
+						'</select></div>'
+					: '') +
+				(total && !missing ? '<span class="resource-all-ready">Every lesson is ready.</span>' : '') +
+			'</div>' +
+			'<div class="resource-list">' +
+				(lessons.length
+					? lessons.map((lesson, index) => resourceRowHtml(lesson, index, kind)).join('')
+					: '<div class="course-generator-hint">This course has no lessons yet. Add lessons in Edit content first, then come back here.</div>') +
+			'</div>';
+
+		const footer =
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseResourcesModal\')">Close</button>' +
+			'<span id="resourceStatus" class="course-batch-status" aria-live="polite"></span>' +
+			`<button type="button" class="btn" onclick="openGeneratedDocumentsLibrary('${jsAttr(course.id || '')}')">Documents</button>` +
+			(lessons.length
+				? `<button type="button" class="btn btn-primary" onclick="resourceGenerateAll(${missing ? 'false' : 'true'})"${state.busy ? ' disabled' : ''}>${missing ? `Generate all missing (${missing})` : 'Regenerate all'}</button>`
+				: '');
+
+		openModal(
+			'courseResourcesModal',
+			`${meta.label} · ${course.name || 'Course'}`,
+			body,
+			footer,
+			'course-document-modal course-resources-modal',
+		);
+		mountCourseProgress();
+		setResourceStatus(state.status || '');
+	}
+
+	function setResourceStatus(text) {
+		if (resourceState) resourceState.status = text || '';
+		const el = document.getElementById('resourceStatus');
+		if (el) el.textContent = text || '';
+	}
+
+	async function fetchCourseForResources(courseId) {
+		const A = api();
+		if (!A) return null;
+		if (currentCourse && String(currentCourse.id) === String(courseId)) return currentCourse;
+		const cached = coursesCache.find((course) => String(course.id) === String(courseId));
+		if (cached && Array.isArray(cached.lessons)) return cached;
+		try {
+			return await A.raw('GET', `/courses/${encodeURIComponent(courseId)}`);
+		} catch (err) {
+			toast('Could not load the course: ' + (err?.message || 'error'), 'error');
+			return null;
+		}
+	}
+
+	window.openCourseResource = async function (kind, courseId) {
+		const type = kind === 'exercises' ? 'exercises' : 'prep-sheets';
+		const id = String(courseId || currentCourse?.id || '');
+		if (!id) return toast('Open a course first.', 'error');
+		await ensureAiConfigs();
+		const course = await fetchCourseForResources(id);
+		if (!course) return null;
+		const alreadyHas = (course.lessons || []).some((lesson) => resourceItemFor(lesson, type));
+		// First click with nothing generated: land the teacher in Edit content,
+		// which is where lessons (and their AI buttons) live.
+		if (!alreadyHas && (String(currentCourse?.id || '') !== id || workspaceView !== 'detail')) {
+			await window.openCourseDetail(id, { mode: 'edit' });
+		} else if (!alreadyHas && courseDetailMode !== 'edit') {
+			courseDetailMode = 'edit';
+			if (String(currentCourse?.id || '') === id) renderCourseDetail();
+		}
+		const fresh = currentCourse && String(currentCourse.id) === id ? currentCourse : course;
+		resourceState = {
+			kind: type,
+			course: fresh,
+			previewId: '',
+			configId: selectedCourseConfigId || (aiConfigsCache?.[0]?.id ? String(aiConfigsCache[0].id) : ''),
+			language: 'French',
+			difficulty: 'medium',
+			status: '',
+			busy: false,
+		};
+		renderResourceModal();
+		return fresh;
+	};
+
+	window.resourceTogglePreview = function (lessonId) {
+		if (!resourceState) return;
+		resourceState.previewId = String(resourceState.previewId) === String(lessonId) ? '' : String(lessonId);
+		renderResourceModal();
+	};
+
+	async function generateResourceItem(course, kind, lesson, force, options) {
+		const A = api();
+		if (!A) return null;
+		const base = `/courses/${encodeURIComponent(course.id)}/lessons/${encodeURIComponent(lesson.id)}`;
+		if (kind === 'exercises') {
+			const result = await A.raw('POST', `${base}/exercise`, {
+				configId: options.configId,
+				language: options.language,
+				difficulty: options.difficulty,
+				force: Boolean(force),
+			});
+			if (result?.exercise) lesson.exercise = result.exercise;
+			return result;
+		}
+		const result = await A.raw('POST', `${base}/prep-sheet`, {
+			configId: options.configId,
+			language: options.language,
+			sessionMinutes: 55,
+			force: Boolean(force),
+		});
+		if (result?.sheet) lesson.prep_sheet = result.sheet;
+		return result;
+	}
+
+	window.resourceGenerate = async function (lessonId, force) {
+		const state = resourceState;
+		const A = api();
+		if (!state || !A) return;
+		if (state.busy) return;
+		const lesson = (state.course.lessons || []).find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return toast('Lesson not found in this course.', 'error');
+		if (!state.configId) return toast('Pick an AI model first.', 'error');
+		state.busy = true;
+		setResourceStatus(force ? 'Regenerating…' : 'Generating…');
+		try {
+			const result = await generateResourceItem(state.course, state.kind, lesson, force, {
+				configId: state.configId,
+				language: state.language,
+				difficulty: state.difficulty,
+			});
+			state.busy = false;
+			state.previewId = String(lesson.id);
+			state.status = result && result.regenerated === false ? 'Already existed — reused the saved version.' : 'Generated.';
+			renderResourceModal();
+			toast(state.kind === 'exercises' ? 'Exercise generated with its solution.' : 'Preparation sheet generated.');
+		} catch (err) {
+			state.busy = false;
+			setResourceStatus(`Generation failed: ${err?.message || 'error'}`);
+			toast('Could not generate: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	window.resourceGenerateAll = async function (force) {
+		const state = resourceState;
+		const A = api();
+		if (!state || !A) return;
+		if (courseJobState && courseJobState.running) return toast('A generation is already running.', 'error');
+		if (!state.configId) return toast('Pick an AI model first.', 'error');
+		const lessons = (state.course.lessons || []).filter((lesson) => force || !resourceItemFor(lesson, state.kind));
+		if (!lessons.length) return toast('Nothing to generate — every lesson already has this content.');
+		const job = {
+			key: state.kind,
+			label: state.kind === 'exercises' ? 'Generating exercises with solutions' : 'Generating preparation sheets',
+			courseId: state.course.id,
+			total: lessons.length,
+			processed: 0,
+			done: 0,
+			skipped: 0,
+			failed: 0,
+			failedNames: [],
+			current: '',
+			running: true,
+			cancelled: false,
+			error: '',
+		};
+		courseJobState = job;
+		state.busy = true;
+		mountCourseProgress();
+		setResourceStatus('');
+		try {
+			for (const lesson of lessons) {
+				if (job.cancelled) break;
+				job.current = lesson.title || 'Lesson';
+				mountCourseProgress();
+				try {
+					const result = await generateResourceItem(state.course, state.kind, lesson, force, {
+						configId: state.configId,
+						language: state.language,
+						difficulty: state.difficulty,
+					});
+					if (result && result.regenerated === false) job.skipped += 1;
+					else job.done += 1;
+				} catch (err) {
+					job.failed += 1;
+					job.failedNames.push(lesson.title || 'Lesson');
+					job.error = err?.message || 'error';
+				}
+				job.processed += 1;
+				mountCourseProgress();
+			}
+			const noun = state.kind === 'exercises' ? 'Exercises' : 'Prep sheets';
+			const tail = job.failed
+				? `, ${job.failed} failed (${job.failedNames.slice(0, 3).join(', ')}${job.failedNames.length > 3 ? '...' : ''})`
+				: '';
+			toast(`${noun}: ${job.done} generated, ${job.skipped} already there${tail}.`, job.failed ? 'error' : 'success');
+		} finally {
+			job.running = false;
+			job.current = '';
+			state.busy = false;
+			mountCourseProgress();
+			// The teacher may have closed the studio mid-run — only repaint it if
+			// it is still mounted (re-opening would resurrect a dismissed modal).
+			if (document.getElementById('courseResourcesModal')) renderResourceModal();
+		}
+	};
+
+	async function downloadCourseItem(kind, courseId, lessonId, format) {
+		const A = api();
+		if (!A) return null;
+		const base = `/courses/${encodeURIComponent(courseId)}/lessons/${encodeURIComponent(lessonId)}`;
+		const path = kind === 'exercises' ? `${base}/exercise/export` : `${base}/prep-sheet/export`;
+		const result = await A.blob('POST', path, { format });
+		const fallback = kind === 'exercises' ? `exercice.${format}` : `fiche-prep.${format}`;
+		saveBlob(result.blob, result.filename || fallback);
+		return result.filename || fallback;
+	}
+
+	window.resourceExport = async function (lessonId, format) {
+		const state = resourceState;
+		if (!state) return;
+		setResourceStatus(`Preparing ${String(format).toUpperCase()}…`);
+		try {
+			const name = await downloadCourseItem(state.kind, state.course.id, lessonId, format);
+			setResourceStatus(`${String(format).toUpperCase()} saved: ${name}`);
+			toast(`${String(format).toUpperCase()} file saved and added to the documents library.`);
+		} catch (err) {
+			setResourceStatus(`Export failed: ${err?.message || 'error'}`);
+			toast('Could not export: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	// ── Exercise preview (student view + collapsible correction) ─────────────
+
+	function exercisePreviewHtml(exercise) {
+		if (!exercise || typeof exercise !== 'object') {
+			return '<div class="course-generator-hint">No exercise generated for this lesson yet.</div>';
+		}
+		const given = Array.isArray(exercise.givenData) ? exercise.givenData.filter(Boolean) : [];
+		const tasks = Array.isArray(exercise.tasks) ? exercise.tasks : [];
+		const steps = Array.isArray(exercise.solutionSteps) ? exercise.solutionSteps.filter(Boolean) : [];
+		const competencies = Array.isArray(exercise.keyCompetencies) ? exercise.keyCompetencies.filter(Boolean) : [];
+		const difficulty = String(exercise.difficulty || 'medium');
+		return (
+			'<div class="exercise-preview">' +
+				`<div class="exercise-preview-head"><h4>${esc(exercise.title || 'Exercise')}</h4>` +
+					`<span class="prep-sheet-sub">Situation-problem · ${esc(difficulty)} · ${esc(exercise.language || 'French')}</span></div>` +
+				'<h5 class="prep-sheet-section">The situation</h5>' +
+				`<p>${esc(exercise.situation || '—')}</p>` +
+				(given.length
+					? '<h5>Given data</h5><ul class="exercise-list">' + given.map((row) => `<li>${esc(row)}</li>`).join('') + '</ul>'
+					: '') +
+				(tasks.length
+					? '<h5>Tasks</h5><ol class="exercise-list">' +
+						tasks.map((task) => {
+							const prompt = typeof task === 'string' ? task : task?.prompt || '';
+							const points = task && typeof task === 'object' && task.points ? ` <em>(${esc(task.points)} pts)</em>` : '';
+							return `<li>${esc(prompt)}${points}</li>`;
+						}).join('') +
+					'</ol>'
+					: '') +
+				'<details class="exercise-solution">' +
+					'<summary>Show the worked solution (teacher / correction)</summary>' +
+					(steps.length
+						? '<h5>Solution steps</h5><ol class="exercise-list">' + steps.map((step) => `<li>${esc(step)}</li>`).join('') + '</ol>'
+						: '') +
+					(exercise.finalAnswer
+						? `<h5>Final answer</h5><p class="exercise-final">${esc(exercise.finalAnswer)}</p>`
+						: '') +
+					(competencies.length
+						? '<h5>Key competencies</h5><ul class="exercise-list">' + competencies.map((row) => `<li>${esc(row)}</li>`).join('') + '</ul>'
+						: '') +
+				'</details>' +
+			'</div>'
+		);
+	}
+
+	// ── Single-lesson exercise modal (lesson card button) ────────────────────
+
+	function exerciseControlsHtml(lesson, exercise) {
+		const rows = aiConfigsCache || [];
+		const current = selectedCourseConfigId || (rows[0] ? String(rows[0].id) : '');
+		const modelSelect = rows.length
+			? '<div class="form-group"><label for="exerciseModelSelect">AI model</label><select id="exerciseModelSelect">' +
+				rows.map((config) =>
+					`<option value="${esc(config.id)}" ${String(config.id) === String(current) ? 'selected' : ''}>${esc(config.name || config.model_id)} (${esc(config.provider || 'ai')})</option>`,
+				).join('') + '</select></div>'
+			: '<div class="form-group"><label>AI model</label><div class="text-muted">No AI models configured — add one in Settings → AI Generation.</div></div>';
+		const language = String(exercise?.language || 'French');
+		const difficulty = String(exercise?.difficulty || 'medium');
+		return (
+			'<div class="prep-sheet-controls">' +
+				(exercise
+					? ''
+					: '<p>The AI builds a <strong>situation-problem</strong> from this lesson: a realistic scenario, the data the student receives, graded tasks that apply the lesson, then the full worked correction.</p>') +
+				'<div class="prep-sheet-fields">' +
+					modelSelect +
+					`<div class="form-group"><label for="exerciseLanguage">Language</label><select id="exerciseLanguage">` +
+						`<option value="French" ${/french|français/i.test(language) ? 'selected' : ''}>French</option>` +
+						`<option value="English" ${/english|anglais/i.test(language) ? 'selected' : ''}>English</option>` +
+					'</select></div>' +
+					`<div class="form-group"><label for="exerciseDifficulty">Difficulty</label><select id="exerciseDifficulty">` +
+						['easy', 'medium', 'hard'].map((level) =>
+							`<option value="${level}" ${difficulty === level ? 'selected' : ''}>${level[0].toUpperCase() + level.slice(1)}</option>`,
+						).join('') +
+					'</select></div>' +
+				'</div>' +
+				(lesson && !String(lesson.content || '').trim()
+					? '<div class="course-generator-hint">This lesson has no content yet — the exercise will be based on its title and summary.</div>'
+					: '') +
+			'</div>'
+		);
+	}
+
+	function openExerciseModal(lesson, exercise) {
+		const footer =
+			'<button type="button" class="btn" onclick="closeCourseModal(\'courseExerciseModal\')">Close</button>' +
+			'<span id="exerciseStatus" class="course-batch-status" aria-live="polite"></span>' +
+			(exercise
+				? `<button type="button" class="btn" onclick="regenerateLessonExercise('${esc(lesson.id)}')">Regenerate</button>` +
+					`<button type="button" class="btn course-doc-export" onclick="exportLessonExercise('${esc(lesson.id)}','docx')">Export Word</button>` +
+					`<button type="button" class="btn course-doc-export" onclick="exportLessonExercise('${esc(lesson.id)}','pdf')">Export PDF</button>`
+				: `<button type="button" class="btn btn-primary" onclick="runLessonExercise('${esc(lesson.id)}', false)">Generate exercise</button>`);
+		return openModal(
+			'courseExerciseModal',
+			`Exercise · ${lesson.title || 'Lesson'}`,
+			exerciseControlsHtml(lesson, exercise) + exercisePreviewHtml(exercise),
+			footer,
+			'course-document-modal exercise-modal',
+		);
+	}
+
+	window.openLessonExercise = function (lessonId) {
+		const lesson = (currentCourse?.lessons || []).find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return toast('Lesson not found in this course.', 'error');
+		openExerciseModal(lesson, resourceItemFor(lesson, 'exercises'));
+	};
+
+	window.runLessonExercise = async function (lessonId, force) {
+		const A = api();
+		if (!A || !currentCourse) return null;
+		const lesson = (currentCourse.lessons || []).find((item) => String(item.id) === String(lessonId));
+		if (!lesson) return null;
+		const configId = document.getElementById('exerciseModelSelect')?.value || selectedConfigId(document.getElementById('courseDetailPane'));
+		if (!configId) return toast('Pick an AI model first.', 'error');
+		const language = document.getElementById('exerciseLanguage')?.value || 'French';
+		const difficulty = document.getElementById('exerciseDifficulty')?.value || 'medium';
+		const status = document.getElementById('exerciseStatus');
+		const buttons = document.querySelectorAll('#courseExerciseModal [data-exercise-action], #courseExerciseModal .btn-primary, #courseExerciseModal .btn');
+		buttons.forEach((button) => { button.disabled = true; });
+		if (status) status.textContent = force ? 'Regenerating the exercise…' : 'Building the situation, tasks and correction…';
+		try {
+			const result = await generateResourceItem(currentCourse, 'exercises', lesson, force, { configId, language, difficulty });
+			if (result?.exercise) lesson.exercise = result.exercise;
+			window.closeCourseModal('courseExerciseModal');
+			openExerciseModal(lesson, lesson.exercise);
+			if (result?.regenerated) toast('Exercise generated with its solution.');
+			return lesson.exercise;
+		} catch (err) {
+			if (status) status.textContent = `Generation failed: ${err?.message || 'error'}`;
+			toast('Could not generate the exercise: ' + (err?.message || 'error'), 'error');
+			buttons.forEach((button) => { button.disabled = false; });
+			return null;
+		}
+	};
+
+	window.regenerateLessonExercise = function (lessonId) {
+		if (!window.confirm('Regenerate this exercise? The current version and its solution will be replaced (costs tokens).')) return;
+		return window.runLessonExercise(lessonId, true);
+	};
+
+	window.exportLessonExercise = async function (lessonId, format) {
+		if (!currentCourse) return;
+		const status = document.getElementById('exerciseStatus');
+		const buttons = document.querySelectorAll('#courseExerciseModal .course-doc-export');
+		buttons.forEach((button) => { button.disabled = true; });
+		if (status) status.textContent = `Preparing ${String(format).toUpperCase()}…`;
+		try {
+			const name = await downloadCourseItem('exercises', currentCourse.id, lessonId, format);
+			if (status) status.textContent = `${String(format).toUpperCase()} saved: ${name}`;
+			toast(`${String(format).toUpperCase()} exercise downloaded.`);
+		} catch (err) {
+			if (status) status.textContent = `Could not export: ${err?.message || 'error'}`;
+			toast(`Could not export the exercise: ${err?.message || 'error'}`, 'error');
+		} finally {
+			buttons.forEach((button) => { button.disabled = false; });
+		}
+	};
+
+	// ── Generated documents library ──────────────────────────────────────────
+
+	const DOC_KIND_META = Object.freeze({
+		course: { short: 'Course', long: 'Course document' },
+		'prep-sheet': { short: 'Prep sheet', long: 'Lesson preparation sheet' },
+		exercise: { short: 'Exercise', long: 'Exercise + correction' },
+		exam: { short: 'Exam', long: 'Exam paper' },
+	});
+
+	let docsLibraryState = null;
+
+	function docKindMeta(kind) {
+		return DOC_KIND_META[String(kind || '')] || { short: 'Document', long: 'Document' };
+	}
+
+	function visibleDocsRows() {
+		const state = docsLibraryState;
+		if (!state) return [];
+		const search = String(state.search || '').trim().toLowerCase();
+		return (state.rows || []).filter((row) => {
+			if (state.kind && String(row.kind || '') !== state.kind) return false;
+			if (!search) return true;
+			return (
+				String(row.title || '').toLowerCase().includes(search) ||
+				String(row.file_name || '').toLowerCase().includes(search) ||
+				String(docKindMeta(row.kind).long).toLowerCase().includes(search)
+			);
+		});
+	}
+
+	function renderGeneratedDocsBody() {
+		const host = document.getElementById('generatedDocsBody');
+		const state = docsLibraryState;
+		if (!host || !state) return;
+		if (state.loading) {
+			host.innerHTML = '<div class="generated-docs-empty"><span class="generated-docs-spinner" aria-hidden="true"></span>Loading documents…</div>';
+			return;
+		}
+		if (state.error) {
+			host.innerHTML = `<div class="generated-docs-empty is-error">${esc(state.error)}<br><button type="button" class="btn btn-sm" onclick="refreshGeneratedDocuments()">Try again</button></div>`;
+			return;
+		}
+		const rows = visibleDocsRows();
+		const counts = state.rows.reduce((acc, row) => {
+			acc[row.kind] = (acc[row.kind] || 0) + 1;
+			return acc;
+		}, {});
+		const filters = [
+			{ key: '', label: `All (${state.rows.length})` },
+			...Object.keys(DOC_KIND_META).map((kind) => ({
+				key: kind,
+				label: `${docKindMeta(kind).short} (${counts[kind] || 0})`,
+			})),
+		];
+		const filterHtml = filters
+			.filter((filter) => filter.key === '' || counts[filter.key] || state.kind === filter.key)
+			.map((filter) =>
+				`<button type="button" class="generated-docs-chip${state.kind === filter.key ? ' is-active' : ''}" onclick="docsSetKind('${filter.key}')">${esc(filter.label)}</button>`,
+			).join('');
+		const rowsHtml = rows.length
+			? rows.map((row) => {
+				const meta = docKindMeta(row.kind);
+				const size = fmtBytes(row.size_bytes);
+				return (
+					'<tr>' +
+						`<td><span class="generated-docs-kind kind-${esc(row.kind || 'other')}">${esc(meta.short)}</span></td>` +
+						`<td><div class="generated-docs-title"><strong>${esc(row.title || row.file_name)}</strong>` +
+							`<small>${esc(row.file_name || '')}</small></div></td>` +
+						`<td><span class="generated-docs-format">${esc(String(row.format || '').toUpperCase() || '—')}</span></td>` +
+						`<td>${esc(size)}</td>` +
+						`<td>${esc(fmtDateTime(row.created_at))}</td>` +
+						`<td><div class="generated-docs-path"><code>${esc(row.url || '')}</code>` +
+							`<button type="button" class="generated-docs-icon" title="Open in a new tab" aria-label="Open in a new tab" onclick="window.open('${jsAttr(row.url || '')}', '_blank', 'noopener')">↗</button>` +
+							`<button type="button" class="generated-docs-icon" title="Copy path" aria-label="Copy path" onclick="copyToClipboard('${jsAttr(row.url || '')}')">⧉</button>` +
+						'</div></td>' +
+						'<td><div class="generated-docs-actions">' +
+							`<button type="button" class="btn btn-sm" onclick="generatedDocsDownload('${jsAttr(row.id)}','${jsAttr(row.file_name || '')}')">Download</button>` +
+							`<button type="button" class="btn btn-sm btn-danger-soft" onclick="generatedDocsDelete('${jsAttr(row.id)}')">Delete</button>` +
+						'</div></td>' +
+					'</tr>'
+				);
+			}).join('')
+			: '<tr><td colspan="7" class="generated-docs-empty-cell">' +
+				(state.rows.length
+					? 'No document matches these filters.'
+					: 'No documents yet. Export a course, a prep sheet or an exercise and it will appear here with its path.') +
+				'</td></tr>';
+
+		host.innerHTML =
+			'<div class="generated-docs-toolbar">' +
+				`<div class="generated-docs-filters" role="group" aria-label="Document kind">${filterHtml}</div>` +
+				'<div class="generated-docs-search"><input type="text" id="generatedDocsSearch" placeholder="Search title or file…" ' +
+					`value="${esc(state.search || '')}" oninput="docsSetSearch(this.value)" aria-label="Search generated documents"></div>` +
+			'</div>' +
+			(state.courseName ? `<p class="generated-docs-scope">Course: <strong>${esc(state.courseName)}</strong></p>` : '') +
+			'<div class="generated-docs-table-wrap"><table class="generated-docs-table"><thead><tr>' +
+				'<th>Kind</th><th>Document</th><th>Format</th><th>Size</th><th>Created</th><th>Path in the app</th><th>Actions</th>' +
+			'</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+	}
+
+	async function refreshGeneratedDocuments() {
+		const state = docsLibraryState;
+		const A = api();
+		if (!state || !A) return;
+		state.loading = true;
+		state.error = '';
+		renderGeneratedDocsBody();
+		const params = [];
+		if (state.courseId) params.push(`courseId=${encodeURIComponent(state.courseId)}`);
+		params.push('limit=200');
+		try {
+			const res = await A.raw('GET', `/generated-documents?${params.join('&')}`);
+			state.rows = Array.isArray(res?.data) ? res.data : [];
+			state.total = Number(res?.total) || state.rows.length;
+			state.loading = false;
+		} catch (err) {
+			state.rows = [];
+			state.loading = false;
+			state.error = 'Could not load the documents: ' + (err?.message || 'network error');
+		}
+		renderGeneratedDocsBody();
+	}
+
+	window.refreshGeneratedDocuments = refreshGeneratedDocuments;
+
+	window.openGeneratedDocumentsLibrary = async function (courseId) {
+		const A = api();
+		if (!A) return;
+		const id = courseId ? String(courseId) : '';
+		const cached = id ? coursesCache.find((course) => String(course.id) === id) : null;
+		docsLibraryState = {
+			courseId: id,
+			courseName: cached?.name || (id && currentCourse && String(currentCourse.id) === id ? currentCourse.name : ''),
+			kind: '',
+			search: '',
+			rows: [],
+			total: 0,
+			loading: true,
+			error: '',
+		};
+		openModal(
+			'generatedDocsModal',
+			id ? `Generated documents · ${docsLibraryState.courseName || 'Course'}` : 'Generated documents',
+			'<div id="generatedDocsBody"></div>',
+			'<button type="button" class="btn" onclick="closeCourseModal(\'generatedDocsModal\')">Close</button>' +
+				'<button type="button" class="btn" onclick="refreshGeneratedDocuments()">Refresh</button>',
+			'course-document-modal generated-docs-modal',
+		);
+		await refreshGeneratedDocuments();
+	};
+
+	window.docsSetKind = function (kind) {
+		if (!docsLibraryState) return;
+		docsLibraryState.kind = String(kind || '');
+		renderGeneratedDocsBody();
+	};
+
+	window.docsSetSearch = function (value) {
+		if (!docsLibraryState) return;
+		docsLibraryState.search = String(value || '');
+		const input = document.getElementById('generatedDocsSearch');
+		const caret = input && typeof input.selectionStart === 'number' ? input.selectionStart : null;
+		renderGeneratedDocsBody();
+		if (caret != null) {
+			const next = document.getElementById('generatedDocsSearch');
+			if (next) {
+				next.focus();
+				try { next.setSelectionRange(caret, caret); } catch (_) { /* type not supported */ }
+			}
+		}
+	};
+
+	window.generatedDocsDownload = async function (id, fileName) {
+		const A = api();
+		if (!A) return;
+		try {
+			const result = await A.blob('GET', `/generated-documents/${encodeURIComponent(id)}/download`);
+			saveBlob(result.blob, result.filename || fileName || 'document');
+			toast('Download started.');
+		} catch (err) {
+			toast('Could not download the document: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	window.generatedDocsDelete = async function (id) {
+		const state = docsLibraryState;
+		const row = state?.rows?.find((item) => String(item.id) === String(id));
+		const title = row?.title || row?.file_name || 'this document';
+		if (!window.confirm(`Delete "${title}" from the library and from disk? This cannot be undone.`)) return;
+		const A = api();
+		if (!A) return;
+		try {
+			await A.raw('DELETE', `/generated-documents/${encodeURIComponent(id)}`);
+			if (docsLibraryState) {
+				docsLibraryState.rows = docsLibraryState.rows.filter((item) => String(item.id) !== String(id));
+				renderGeneratedDocsBody();
+			}
+			toast('Document deleted.');
+		} catch (err) {
+			toast('Could not delete the document: ' + (err?.message || 'error'), 'error');
+		}
 	};
 
 	window.CoursesManagement = {

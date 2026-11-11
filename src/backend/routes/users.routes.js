@@ -44,8 +44,11 @@ export async function getTeacherClassIds(schoolId, teacherId) {
 
 /**
  * Inverse index: which teachers teach a class. Students only ever see
- * content authored by these teachers (or by admins) — never another
- * teacher's games, questions, exams or tournaments.
+ * content authored by these teachers — never an administrator's, never
+ * another teacher's games, questions, exams or tournaments. The class
+ * assignment map is keyed by user id, so a school administrator who was
+ * used to try the teacher flow can end up in it; resolve the ids against
+ * the staff roster and keep only real teacher accounts.
  */
 export async function getClassTeacherIds(schoolId, classId) {
   const target = String(classId || '').trim();
@@ -55,15 +58,32 @@ export async function getClassTeacherIds(schoolId, classId) {
     filters: { school_id: schoolId, key: 'teacherClassAssignments' },
     limit: 1,
   });
+  let assignedIds = [];
   try {
     const map = JSON.parse(data[0]?.value || '{}') || {};
-    return Object.keys(map).filter((teacherId) =>
+    assignedIds = Object.keys(map).filter((teacherId) =>
       (Array.isArray(map[teacherId]) ? map[teacherId] : [])
         .map(String)
         .includes(target),
     );
   } catch {
     return [];
+  }
+  if (!assignedIds.length) return [];
+  try {
+    const { data: staffRows } = await repo.getAll('users', {
+      filters: { school_id: schoolId },
+      limit: 100000,
+    });
+    const teacherIds = new Set(
+      (staffRows || [])
+        .filter((row) => String(row.role || '').trim() === ROLES.TEACHER)
+        .map((row) => String(row.id)),
+    );
+    return assignedIds.filter((id) => teacherIds.has(String(id)));
+  } catch {
+    // Roster outage: keep the raw assignments rather than hiding content.
+    return assignedIds;
   }
 }
 

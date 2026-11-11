@@ -34,6 +34,7 @@ import { OverviewAnalyticsService } from './services/OverviewAnalyticsService.js
 import { TeacherOverviewService } from './services/TeacherOverviewService.js';
 import { listPresence } from './realtime/presence.registry.js';
 import { ExamDocumentService } from './services/ExamDocumentService.js';
+import { GeneratedDocumentService } from './services/GeneratedDocumentService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
 import { QuestionService } from '../frontend/services/QuestionService.js';
@@ -110,6 +111,10 @@ export function createContainer() {
     // Printable exam documents (PDF/DOCX). Read-only over exams and questions:
     // the only thing it writes is its own header slice inside options_json.
     examDocSvc: new ExamDocumentService(repo),
+
+    // Registry + on-disk store for every document the app renders for teachers
+    // (course booklets, prep sheets, exercises with solutions, exams).
+    genDocSvc: new GeneratedDocumentService(repo, { logger }),
   });
 
   return _container;

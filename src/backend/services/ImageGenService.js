@@ -24,6 +24,12 @@
  * exact format manual image questions use, so training / exams / games all
  * render them identically with zero extra work.
  *
+ * A draft may ALSO carry `questionImagePrompt`: the description of a picture
+ * that belongs to the question itself (a stimulus image shown above the
+ * options). It is rendered with the same model and attached to the question as
+ * `image: "/uploads/<file>"`, which the API client persists as the question's
+ * `media_url`.
+ *
  * STRICT policy (no placeholders): image options are only produced when the
  * selected provider can generate images AND every option image was actually
  * generated. If the provider cannot generate images, an option fails, or the
@@ -158,9 +164,13 @@ export class ImageGenService {
 
     const rendered = [];
     for (const draft of imageDrafts) {
-      const expected = (draft.options || []).length;
+      // An optional QUESTION image (stimulus picture) is rendered with the same
+      // model, on top of the option pictures: `questionImagePrompt` holds the
+      // teacher's description of what the question picture should show.
+      const questionPrompt = String(draft.questionImagePrompt || '').trim();
+      const expected = (draft.options || []).length + (questionPrompt ? 1 : 0);
       if (expected > budget && draft.requireImages) {
-        throw new Error(`This question needs ${expected} option images, but only ${budget} remain in the configured image-generation limit.`);
+        throw new Error(`This question needs ${expected} image(s), but only ${budget} remain in the configured image-generation limit.`);
       }
       if (expected > budget) {
         fellBack += 1;
@@ -168,12 +178,18 @@ export class ImageGenService {
         continue;
       }
 
-      // Generate all option images for this question first.
+      // Generate all option images for this question first, then the question
+      // image — nothing is persisted until every requested picture succeeded,
+      // so a failed question never leaves orphan files behind.
       let buffers = [];
+      let questionBuffer = null;
       try {
         buffers = await this.#runPool(draft.options, concurrency, async (option) => {
           return this.#generateImage({ provider, apiKey, model: imageModel }, String(option.image || '').trim());
         });
+        if (questionPrompt) {
+          questionBuffer = await this.#generateImage({ provider, apiKey, model: imageModel }, questionPrompt);
+        }
       } catch (err) {
         this._logger.warn('Image option generation failed, falling back to text', {
           provider,
@@ -195,14 +211,19 @@ export class ImageGenService {
         const url = this.#saveImage(buffer, mime);
         return { text: `image-${oIdx + 1}`, image: url, isImageOnly: true };
       });
+      const questionImageUrl = questionBuffer
+        ? this.#saveImage(questionBuffer.buffer, questionBuffer.mime)
+        : '';
 
-      generated += options.length;
-      budget -= options.length;
+      const used = options.length + (questionImageUrl ? 1 : 0);
+      generated += used;
+      budget -= used;
       rendered.push({
         ...draft,
         imageMode: true,
         options,
         answer: this.#remapAnswer(draft, options),
+        ...(questionImageUrl ? { image: questionImageUrl } : {}),
       });
     }
 
@@ -223,8 +244,9 @@ export class ImageGenService {
     const labels = (draft.options || [])
       .map((o, i) => String(o.label || o.text || `image-${i + 1}`).trim())
       .filter(Boolean);
+    const { questionImagePrompt: _qip, ...rest } = draft;
     return {
-      ...draft,
+      ...rest,
       imageMode: false,
       options: labels,
       answer: this.#remapToLabels(draft, labels),
