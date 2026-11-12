@@ -19,6 +19,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { installRowActions } from './helpers/rowActions.js';
 
 const ROOT = process.cwd();
 let ctx;
@@ -165,6 +166,8 @@ beforeAll(() => {
   };
   sandbox.globalThis = sandbox;
   ctx = vm.createContext(sandbox);
+  // The row templates paint through the shared row-action bar.
+  installRowActions(ctx);
   vm.runInContext(
     readFileSync(path.join(ROOT, 'classroom-devices.js'), 'utf8'),
     ctx,

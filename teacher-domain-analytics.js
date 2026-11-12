@@ -307,7 +307,7 @@
 	// existing workflows never move; analytics loads only when requested.
 
 	function activeView(tab) {
-		return state.views[tab] === 'analytics' ? 'analytics' : 'manage';
+		return state.views[tab] === 'manage' ? 'manage' : 'analytics';
 	}
 
 	function setupSection(tab) {
@@ -322,13 +322,13 @@
 		switcher.setAttribute('role', 'tablist');
 		switcher.setAttribute('aria-label', `${TITLES[tab]?.title || tab} views`);
 		switcher.innerHTML = `
-			<button type="button" class="teacher-domain-switch__btn" id="tda-${tab}-manage" data-tda-view="manage" role="tab" aria-controls="tda-${tab}-manage-pane" aria-selected="true">
-				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
-				Manage
-			</button>
-			<button type="button" class="teacher-domain-switch__btn" id="tda-${tab}-analytics" data-tda-view="analytics" role="tab" aria-controls="tda-${tab}-analytics-pane" aria-selected="false">
+			<button type="button" class="teacher-domain-switch__btn" id="tda-${tab}-analytics" data-tda-view="analytics" role="tab" aria-controls="tda-${tab}-analytics-pane" aria-selected="true">
 				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>
 				Analytics
+			</button>
+			<button type="button" class="teacher-domain-switch__btn" id="tda-${tab}-manage" data-tda-view="manage" role="tab" aria-controls="tda-${tab}-manage-pane" aria-selected="false">
+				<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+				Manage
 			</button>`;
 
 		const manage = document.createElement('div');
@@ -380,6 +380,8 @@
 		});
 		views.manage.hidden = next !== 'manage';
 		views.analytics.hidden = next !== 'analytics';
+		const host = document.getElementById(HOSTS[tab]);
+		if (host) host.hidden = next !== 'analytics';
 	}
 
 	function showView(tab, view) {
@@ -1290,7 +1292,7 @@
 			// must not be applied to a hidden pane.
 			if (isTeacherSession() && HOSTS[tabName]) {
 				setupSection(tabName);
-				if (!event && activeView(tabName) === 'analytics') applyView(tabName, 'manage');
+				if (!event && activeView(tabName) === 'manage') applyView(tabName, 'analytics');
 			}
 			const result = original.apply(this, arguments);
 			if (isTeacherSession() && HOSTS[tabName] && activeView(tabName) === 'analytics') {
@@ -1304,11 +1306,12 @@
 
 	function renderActiveDomain() {
 		if (!isTeacherSession()) return;
+		const hasOverview = window.TeacherOverview && typeof window.TeacherOverview.getFilters === 'function';
 		Object.keys(HOSTS).forEach((tab) => {
 			const section = document.getElementById(tab);
 			if (!section || !section.classList.contains('active')) return;
 			setupSection(tab);
-			if (activeView(tab) === 'analytics') render(tab, false);
+			if (hasOverview && activeView(tab) === 'analytics') render(tab, false);
 		});
 	}
 

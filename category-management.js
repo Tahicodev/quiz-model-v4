@@ -424,17 +424,55 @@ function syncStructureBreadcrumb() {
 	const text = document.getElementById('structureBreadcrumbText');
 	const back = document.getElementById('structureBackBtn');
 	const subject = getSubjectDisplayName(activeCategorySubjectId);
+	const subjectId = activeCategorySubjectId || '';
 	if (text) {
+		let segments;
 		if (categoryScope.mode === 'branch') {
 			// Subject › Course › Structure. A branch opened from a structure row has
 			// no course yet, so that segment is dropped instead of printing a
 			// placeholder.
-			text.textContent = [subject || 'Subjects', categoryScope.courseName, categoryScope.rootName]
-				.filter(Boolean)
-				.join(' › ');
+			segments = [
+				{
+					label: subject || 'Subjects',
+					click: subjectId ? `selectCategorySubject('${escapeHtml(String(subjectId))}')` : null,
+				},
+				...(categoryScope.courseName
+					? [{
+						label: categoryScope.courseName,
+						click: categoryScope.courseId
+							? `openCourseDetail('${escapeHtml(String(categoryScope.courseId))}')`
+							: null,
+					}]
+					: []),
+				{
+					label: categoryScope.rootName,
+					click: categoryScope.rootId
+						? `openStructureBranch('${escapeHtml(String(categoryScope.rootId))}', ${categoryScope.courseId ? `{courseId:'${escapeHtml(String(categoryScope.courseId))}'}` : '{}'})`
+						: null,
+				},
+			].filter(Boolean);
 		} else {
-			text.textContent = `${subject || 'Subjects'} › All categories`;
+			segments = [
+				{
+					label: subject || 'Subjects',
+					click: subjectId ? `selectCategorySubject('${escapeHtml(String(subjectId))}')` : null,
+				},
+				{ label: 'All categories', click: null },
+			];
 		}
+		text.innerHTML = segments
+			.map((seg, i) => {
+				// Clickable segments are real buttons: they get keyboard focus,
+				// the Enter/Space keys and a proper focus ring for free. The
+				// current location is plain text.
+				const isLast = i === segments.length - 1;
+				if (isLast || !seg.click) {
+					return `<span class="breadcrumb-segment breadcrumb-segment-last" title="${escapeHtml(String(seg.label))}">${escapeHtml(String(seg.label))}</span>` +
+						(i < segments.length - 1 ? '<span class="breadcrumb-divider" aria-hidden="true">›</span>' : '');
+				}
+				return `<button type="button" class="breadcrumb-segment" title="${escapeHtml(String(seg.label))}" onclick="${seg.click}">${escapeHtml(String(seg.label))}</button>` +
+					'<span class="breadcrumb-divider" aria-hidden="true">›</span>';
+			}).join('');
 	}
 	if (back) back.hidden = categoryScope.mode !== 'branch';
 }
@@ -5775,55 +5813,254 @@ function categoryTrainingCellHtml(category) {
 		: explicitLimit === 0
 			? 'Unlimited attempts for this category and its lessons.'
 			: `${explicitLimit} attempt${explicitLimit === 1 ? '' : 's'} max for this category and its lessons.`;
+	const trainingTitle = explicitTraining
+		? 'Use this category in training mode'
+		: effectiveTraining
+			? 'Enabled via a parent category \u2014 uncheck to exclude this subcategory'
+			: 'Use this category in training mode';
+	// A visible "max" label makes the number column self-explanatory (the
+	// column header only says "Training"), and the stepper buttons remove
+	// the need to aim at a 2.6em input.
+	const limitLabel = explicitLimit === null
+		? `inherits ${effectiveLimit === null ? '∞' : effectiveLimit}`
+		: String(explicitLimit);
 	return `
             <td class="training-cell" data-label="Training · Attempts">
-                <input type="checkbox"
-                    class="training-checkbox"
-                    data-id="${category.id}"
-                    ${effectiveTraining ? 'checked' : ''}
-                    onchange="toggleCategoryTraining(this)"
-                    title="${explicitTraining ? 'Use this category in training mode' : effectiveTraining ? 'Enabled via a parent category \u2014 uncheck to exclude this subcategory' : 'Use this category in training mode'}">
+                <label class="training-toggle" title="${trainingTitle}">
+                    <input type="checkbox"
+                        class="training-checkbox"
+                        data-id="${category.id}"
+                        ${effectiveTraining ? 'checked' : ''}
+                        onchange="toggleCategoryTraining(this)"
+                        aria-label="Use this category in training mode">
+                    <span class="training-toggle-track" aria-hidden="true"><span class="training-toggle-thumb"></span></span>
+                </label>
                 ${
 					isSystemCategory
-						? ''
-						: `<input type="number"
-                    class="training-attempts-input"
-                    data-attempts-id="${category.id}"
-                    min="0"
-                    step="1"
-                    inputmode="numeric"
-                    value="${explicitLimit === null ? '' : explicitLimit}"
-                    placeholder="${effectiveLimit === null ? '∞' : effectiveLimit}"
-                    onchange="setCategoryAttemptLimitFromInput(this)"
-                    title="${attemptsTitle}">`
+						? '<span class="training-attempts-none" title="Unlimited attempts — the Uncategorized pool is not limited">∞</span>'
+						: `<span class="training-attempts">
+                            <span class="training-attempts-label">max</span>
+                            <span class="training-attempts-stepper">
+                                <button type="button" class="training-attempts-btn" data-attempts-step="-1" data-attempts-id="${category.id}" onclick="stepCategoryAttemptLimit(this)" aria-label="One attempt fewer" title="One attempt fewer">&minus;</button>
+                                <input type="number"
+                                    class="training-attempts-input"
+                                    data-attempts-id="${category.id}"
+                                    min="0"
+                                    step="1"
+                                    inputmode="numeric"
+                                    value="${explicitLimit === null ? '' : explicitLimit}"
+                                    placeholder="${effectiveLimit === null ? '∞' : effectiveLimit}"
+                                    onchange="setCategoryAttemptLimitFromInput(this)"
+                                    aria-label="Maximum attempts (0 = unlimited, blank = inherit)"
+                                    title="${attemptsTitle}">
+                                <button type="button" class="training-attempts-btn" data-attempts-step="1" data-attempts-id="${category.id}" onclick="stepCategoryAttemptLimit(this)" aria-label="One attempt more" title="One attempt more">+</button>
+                            </span>
+                            <span class="training-attempts-state${explicitLimit === null ? ' is-inherited' : ''}" title="${escapeHtml(limitLabel)}">${escapeHtml(limitLabel)}</span>
+                        </span>`
 				}
             </td>`;
 }
 
-// Up/down reorder buttons: swap within the direct sibling group only (never
-// cross into another category or subject) — see moveCategorySibling.
-function categoryReorderBtnsHtml(category) {
-	if (category.isSystem || String(category.id) === 'uncategorized')
-		return '';
-	const siblings = getOrderedCategorySiblings(category.id);
-	if (siblings.length < 2) return '';
-	const idx = siblings.findIndex(
-		(c) => String(c.id) === String(category.id),
+// Nudge the attempt limit with the stepper buttons. The value goes through
+// the same save path as the input, so the server, the cache and the
+// placeholder stay in sync.
+async function stepCategoryAttemptLimit(button) {
+	const id = String(button?.dataset?.attemptsId || '');
+	const step = Number(button?.dataset?.attemptsStep || 0);
+	if (!id || !step) return;
+	const explicit = getCategoryAttemptLimitExplicit(id);
+	const effective = getCategoryAttemptLimit(id);
+	const base = explicit !== null ? explicit : effective !== null ? effective : 1;
+	const next = Math.max(0, base + step);
+	const input = document.querySelector(
+		`.training-attempts-input[data-attempts-id="${CSS.escape(id)}"]`,
 	);
-	if (idx < 0) return '';
-	const upDisabled = idx === 0 ? ' disabled' : '';
-	const downDisabled = idx === siblings.length - 1 ? ' disabled' : '';
-	return `
-                    <button type="button" class="exam-action-btn exam-move-up-btn"${upDisabled} onclick="moveCategorySibling(event, '${category.id}', -1)" title="Move up in this group">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="18 15 12 9 6 15"></polyline>
-                        </svg>
-                    </button>
-                    <button type="button" class="exam-action-btn exam-move-down-btn"${downDisabled} onclick="moveCategorySibling(event, '${category.id}', 1)" title="Move down in this group">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                    </button>`;
+	if (input) {
+		input.value = String(next);
+		await setCategoryAttemptLimitFromInput(input);
+		return;
+	}
+	await setCategoryAttemptLimit(id, String(next));
+}
+
+// Icons for the category row actions (shared by the row bar and the action
+// sheet; the CSS scales them to the right size for each surface).
+const CATEGORY_ACTION_ICONS = {
+	addQuestion:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<line x1="12" y1="5" x2="12" y2="19"></line>' +
+		'<line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+	assignQuestions:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M9 11l3 3L22 4"></path>' +
+		'<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+	move:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M5 9l-3 3 3 3"></path>' +
+		'<path d="M9 5l3-3 3 3"></path>' +
+		'<path d="M15 19l-3 3-3-3"></path>' +
+		'<path d="M19 9l3 3-3 3"></path>' +
+		'<path d="M2 12h20"></path>' +
+		'<path d="M12 2v20"></path></svg>',
+	moveUp:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<polyline points="18 15 12 9 6 15"></polyline></svg>',
+	moveDown:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<polyline points="6 9 12 15 18 9"></polyline></svg>',
+	createCourse:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>' +
+		'<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
+	edit:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>' +
+		'<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+	remove:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M3 6h18"></path>' +
+		'<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>' +
+		'<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+};
+
+// Actions offered on a category row.
+//
+// The desktop row keeps four icon buttons — move into another category, the
+// sibling up/down pair and delete — and everything else (add question, create
+// course content, edit) lands in the "…" popover.
+//
+// `desktop: 'none'` keeps an action out of the desktop row entirely (the
+// mobile action sheet still offers it), `mobile: false` keeps it out of the
+// mobile sheet (the up/down arrows stay as inline icons on the phone).
+function categoryRowActions(category) {
+	const id = category.id;
+	const isSystem = !!category.isSystem;
+	const actions = [];
+
+	// ── The three that stay on the row ──────────────────────────────────
+	// Always the same three, so a row never collapses to two buttons.
+
+	// Add a question to this category.
+	actions.push({
+		key: 'add-question',
+		label: 'Add Question',
+		title: 'Add question to this category',
+		hint: 'Create a question and file it here',
+		cls: 'exam-add-question-btn',
+		icon: CATEGORY_ACTION_ICONS.addQuestion,
+		onclick: `openAddQuestionToCategoryModal('${id}')`,
+		run: () => openAddQuestionToCategoryModal(id),
+		desktop: 'visible',
+	});
+
+	// Edit the category (name, color, parent, options).
+	if (!isSystem) {
+		actions.push({
+			key: 'edit',
+			label: 'Edit Category',
+			title: 'Edit',
+			hint: 'Name, color, parent and options',
+			cls: 'exam-edit-btn',
+			icon: CATEGORY_ACTION_ICONS.edit,
+			onclick: `editCategory('${id}')`,
+			run: () => editCategory(id),
+			desktop: 'visible',
+		});
+	}
+
+	// Delete the category (its questions move to Uncategorized).
+	if (!isSystem) {
+		actions.push({
+			key: 'delete',
+			label: 'Delete Category',
+			title: 'Delete',
+			hint: 'Remove the category (its questions move to Uncategorized)',
+			cls: 'exam-delete-btn',
+			icon: CATEGORY_ACTION_ICONS.remove,
+			onclick: `deleteCategory('${id}')`,
+			run: () => deleteCategory(id),
+			variant: 'danger',
+			tone: 'danger',
+			desktop: 'visible',
+		});
+	}
+
+	// ── The "…" menu ─────────────────────────────────────────────────────
+
+	// Assign the existing question bank to this category (phone sheet only:
+	// on the desktop the Questions tab is the place to file questions).
+	actions.push({
+		key: 'assign-questions',
+		label: 'Assign Questions',
+		title: 'Assign questions to this category',
+		hint: 'Pick questions from the bank',
+		cls: 'exam-assign-btn',
+		icon: CATEGORY_ACTION_ICONS.assignQuestions,
+		onclick: `openAssignCategoryQuestions('${id}')`,
+		run: () => openAssignCategoryQuestions(id),
+		desktop: 'none',
+	});
+
+	// Move into another category.
+	if (!isSystem && id !== 'uncategorized' && !isBranchRoot(id)) {
+		actions.push({
+			key: 'move',
+			label: 'Move into another category',
+			title: 'Move into another category',
+			hint: 'Re-parent this category',
+			cls: 'exam-move-btn',
+			icon: CATEGORY_ACTION_ICONS.move,
+			onclick: `startCategoryMove(event, '${id}')`,
+			run: () => startCategoryMove(null, id),
+			desktop: 'overflow',
+		});
+	}
+
+	// Sibling reorder pair (only when the category has a sibling to swap with).
+	const siblings = isSystem ? [] : getOrderedCategorySiblings(id);
+	const idx = siblings.findIndex((c) => String(c.id) === String(id));
+	if (idx >= 0 && siblings.length > 1) {
+		actions.push({
+			key: 'move-up',
+			label: 'Move up in this group',
+			title: 'Move up in this group',
+			hint: 'Swap with the previous sibling',
+			cls: 'exam-move-up-btn',
+			icon: CATEGORY_ACTION_ICONS.moveUp,
+			onclick: `moveCategorySibling(event, '${id}', -1)`,
+			run: () => moveCategorySibling(null, id, -1),
+			disabled: idx === 0,
+			desktop: 'overflow',
+		});
+		actions.push({
+			key: 'move-down',
+			label: 'Move down in this group',
+			title: 'Move down in this group',
+			hint: 'Swap with the next sibling',
+			cls: 'exam-move-down-btn',
+			icon: CATEGORY_ACTION_ICONS.moveDown,
+			onclick: `moveCategorySibling(event, '${id}', 1)`,
+			run: () => moveCategorySibling(null, id, 1),
+			disabled: idx === siblings.length - 1,
+			desktop: 'overflow',
+		});
+	}
+
+	if (!isSystem) {
+		actions.push({
+			key: 'create-course',
+			label: 'Create Course',
+			title: 'Create course content from this category',
+			hint: 'Turn this category into a course outline',
+			cls: 'exam-course-btn',
+			icon: CATEGORY_ACTION_ICONS.createCourse,
+			onclick: `openCourseFromCategory('${id}')`,
+			run: () => openCourseFromCategory(id),
+			desktop: 'overflow',
+		});
+	}
+
+	return actions;
 }
 
 function categoryActionsCellHtml(category, assignable, rowCtx) {
@@ -5841,56 +6078,14 @@ function categoryActionsCellHtml(category, assignable, rowCtx) {
                 </div>
             </td>`;
 	}
-	const moveButtonHtml =
-		!category.isSystem && category.id !== 'uncategorized' && !isBranchRoot(category.id)
-			? `<button class="exam-action-btn exam-move-btn" onclick="startCategoryMove(event,'${category.id}')" title="Move into another category">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M5 9l-3 3 3 3"></path>
-                            <path d="M9 5l3-3 3 3"></path>
-                            <path d="M15 19l-3 3-3-3"></path>
-                            <path d="M19 9l3 3-3 3"></path>
-                            <path d="M2 12h20"></path>
-                            <path d="M12 2v20"></path>
-                        </svg>
-                    </button>`
-			: '';
+	const systemPlaceholder = category.isSystem
+		? `<span class="no-actions" title="System category">\u2014</span>`
+		: '';
 	return `
     <td class="actions-cell">
                 <div class="exam-actions">
-                    <button class="exam-action-btn exam-add-question-btn" onclick="openAddQuestionToCategoryModal('${category.id}')" title="Add question to ${escapeHtml(category.name)}">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                    </button>
-                    ${moveButtonHtml}${categoryReorderBtnsHtml(category)}
-                    ${
-											category.isSystem
-												? `
-                        <span class="no-actions" title="System category">\u2014</span>
-                    `
-												: `
-                        <button class="exam-action-btn exam-course-btn" onclick="openCourseFromCategory('${category.id}')" title="Create course content from this category">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                            </svg>
-                        </button>
-                        <button class="exam-action-btn exam-edit-btn" onclick="editCategory('${category.id}')" title="Edit">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                        </button>
-                        <button class="exam-action-btn exam-delete-btn" onclick="deleteCategory('${category.id}')" title="Delete">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 6h18"></path>
-                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path>
-                                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                            </svg>
-                        </button>
-                    `
-										}
+                    ${window.RowActions.render(categoryRowActions(category))}
+                    ${systemPlaceholder}
                 </div>
             </td>`;
 }
@@ -6090,43 +6285,10 @@ function updateCategoryList(categoriesList = categories) {
 				if (e.target.closest('button')) return;
 				if (e.target.closest('.checkbox-cell') || e.target.type === 'checkbox') return;
 				e.stopPropagation();
-				MobileActionSheet.open(`Category: ${escapeHtml(category.name)}`, [
-					{
-						label: 'Add Question',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
-						onClick: () => openAddQuestionToCategoryModal(category.id),
-					},
-					{
-						label: 'Assign Questions',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
-						onClick: () => openAssignCategoryQuestions(category.id),
-					},
-					...(!category.isSystem
-						? [
-								{
-									label: 'Move',
-									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"></path><path d="M9 5l3-3 3 3"></path><path d="M15 19l-3 3-3-3"></path><path d="M19 9l3 3-3 3"></path><path d="M2 12h20"></path><path d="M12 2v20"></path></svg>',
-									onClick: () => startCategoryMove(null, category.id),
-								},
-								{
-									label: 'Create Course',
-									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>',
-									onClick: () => openCourseFromCategory(category.id),
-								},
-								{
-									label: 'Edit Category',
-									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
-									onClick: () => editCategory(category.id),
-								},
-								{
-									label: 'Delete Category',
-									icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-									variant: 'danger',
-									onClick: () => deleteCategory(category.id),
-								},
-							]
-						: []),
-				]);
+				MobileActionSheet.open(
+					`Category: ${escapeHtml(category.name)}`,
+					window.RowActions.sheetItems(categoryRowActions(category)),
+				);
 			}
 		});
 

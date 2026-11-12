@@ -1,5 +1,17 @@
 // Settings Management
 
+// The app's one typeface. The stylesheet owns this stack (styles.css
+// `:root` → `--font-sans`); settings only layers a deliberate override on
+// top of it, so every screen keeps the same face.
+const APP_FONT_STACK =
+	"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+
+// The historical default. It was persisted into localStorage and the
+// settings table before the app had a single typeface, so it must not be
+// treated as a deliberate user choice — otherwise the override would keep
+// re-introducing a second font across the app.
+const LEGACY_FONT_STACK = "'Segoe UI', system-ui";
+
 // Default settings object
 const DEFAULT_SETTINGS = {
 	totalQuestions: 5,
@@ -10,7 +22,7 @@ const DEFAULT_SETTINGS = {
 	backgroundColor: '#f8fafc',
 	textColor: '#1e293b',
 	inputFocusColor: '#3b82f6',
-	fontFamily: "'Segoe UI', system-ui",
+	fontFamily: APP_FONT_STACK,
 	welcomeTitle: 'Welcome to the Quiz',
 	welcomeMessage: 'Test your knowledge with our interactive quiz!',
 	// Realtime settings
@@ -153,7 +165,15 @@ function applySettings() {
 		root.style.setProperty('--text-main', currentSettings.textColor);
 	}
 	root.style.setProperty('--border-focus', currentSettings.inputFocusColor);
-	root.style.setProperty('--font-sans', currentSettings.fontFamily);
+	// The typeface: the stylesheet's stack is the app default. A stored
+	// override only wins when it is a deliberate choice — the legacy default
+	// is ignored so a stale setting cannot reintroduce a second font.
+	const chosenFont = String(currentSettings.fontFamily || '').trim();
+	if (chosenFont && chosenFont !== LEGACY_FONT_STACK && chosenFont !== APP_FONT_STACK) {
+		root.style.setProperty('--font-sans', chosenFont);
+	} else {
+		root.style.removeProperty('--font-sans');
+	}
 
 	const welcomeTitleNodes = document.querySelectorAll(
 		'#welcome-title, .welcome-title, .welcome-page h1, [data-setting="welcomeTitle"]',

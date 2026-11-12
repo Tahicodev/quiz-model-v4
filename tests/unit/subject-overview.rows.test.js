@@ -22,6 +22,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { installRowActions } from './helpers/rowActions.js';
 
 const ROOT = process.cwd();
 let ctx;
@@ -185,6 +186,8 @@ beforeAll(() => {
 	// The mirror is a live array reference: fill it before the script loads so
 	// `categories` resolves to the same rows the specs mutate.
 	state.categoryRows.push(...CATEGORY_FIXTURES);
+	// The row templates paint through the shared row-action bar.
+	installRowActions(ctx);
 	const src = readFileSync(path.join(ROOT, 'courses-management.js'), 'utf8');
 	vm.runInContext(src, ctx, { filename: 'courses-management.js' });
 });
@@ -220,7 +223,9 @@ describe('merged courses + structures rows', () => {
 		expect(html).toContain('data-row-key="course-nolink"');
 		expect(html).toContain('data-row-key="course-dangling"');
 		expect(html).toContain('No structure');
-		expect(html).toContain('linkStructure(\'course-dangling\')');
+		// The row actions go through the shared helper, which escapes the
+		// inline handler's quotes.
+		expect(html).toContain('linkStructure(&#039;course-dangling&#039;)');
 
 		// Nothing from the other pills leaks into this one.
 		expect(html).not.toContain('Vocabulaire CM1');

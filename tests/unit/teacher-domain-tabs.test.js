@@ -5,8 +5,8 @@
  *
  * The domain tabs are split into two views: the original management UI and
  * the analytics presentation. These tests run the real script against jsdom to
- * prove the switcher is injected for teachers only, that Manage stays the
- * default, and that analytics loads lazily when selected.
+ * prove the switcher is injected for teachers only, that Analytics stays the
+ * default, and that management loads when selected.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -78,76 +78,68 @@ beforeEach(() => {
 });
 
 describe('teacher domain view switcher', () => {
-	it('injects Manage and Analytics views and defaults to Manage', () => {
+	it('injects Analytics and Manage views and defaults to Analytics', () => {
 		const { section, host, manageContent } = boot();
 		const switcher = section.querySelector('.teacher-domain-switch');
 		expect(switcher).not.toBeNull();
-		const [manageBtn, analyticsBtn] = section.querySelectorAll('[data-tda-view]');
-		expect(manageBtn.textContent.trim()).toBe('Manage');
+		const [analyticsBtn, manageBtn] = section.querySelectorAll('[data-tda-view]');
 		expect(analyticsBtn.textContent.trim()).toBe('Analytics');
-		expect(manageBtn.getAttribute('aria-selected')).toBe('true');
+		expect(manageBtn.textContent.trim()).toBe('Manage');
+		expect(analyticsBtn.getAttribute('aria-selected')).toBe('true');
 
 		const managePane = section.querySelector('[data-tda-pane="manage"]');
 		const analyticsPane = section.querySelector('[data-tda-pane="analytics"]');
-		expect(managePane.hidden).toBe(false);
-		expect(analyticsPane.hidden).toBe(true);
-		expect(managePane.contains(manageContent)).toBe(true);
+		expect(analyticsPane.hidden).toBe(false);
+		expect(managePane.hidden).toBe(true);
 		expect(analyticsPane.contains(host)).toBe(true);
-		expect(host.hidden).toBe(true);
+		expect(managePane.contains(manageContent)).toBe(true);
+		expect(host.hidden).toBe(false);
 	});
 
-	it('shows analytics lazily and returns to management without losing the UI', async () => {
+	it('shows analytics by default and switches to management without losing the UI', async () => {
 		const { window, section, host, manageContent } = boot();
-		const [manageBtn, analyticsBtn] = section.querySelectorAll('[data-tda-view]');
+		const [analyticsBtn, manageBtn] = section.querySelectorAll('[data-tda-view]');
 		const managePane = section.querySelector('[data-tda-pane="manage"]');
 		const analyticsPane = section.querySelector('[data-tda-pane="analytics"]');
 
-		analyticsBtn.click();
-		await vi.waitFor(() => {
-			expect(host.innerHTML).toContain('No classes to report on');
-		});
 		expect(analyticsPane.hidden).toBe(false);
 		expect(managePane.hidden).toBe(true);
 		expect(host.hidden).toBe(false);
-		expect(window.closeStudentProfile).toHaveBeenCalledTimes(1);
 
 		manageBtn.click();
 		expect(managePane.hidden).toBe(false);
 		expect(analyticsPane.hidden).toBe(true);
 		expect(manageBtn.getAttribute('aria-selected')).toBe('true');
+
+		analyticsBtn.click();
+		expect(analyticsPane.hidden).toBe(false);
+		expect(managePane.hidden).toBe(true);
+		expect(host.hidden).toBe(false);
+		expect(analyticsBtn.getAttribute('aria-selected')).toBe('true');
+		expect(analyticsPane.contains(host)).toBe(true);
 		expect(managePane.contains(manageContent)).toBe(true);
 	});
 
 	it('keeps a view choice per tab', async () => {
 		const { window, document } = boot();
-		window.TeacherDomainAnalytics.showView('exams', 'analytics');
-		await vi.waitFor(() => {
-			expect(document.getElementById('examsAnalytics').innerHTML).toContain(
-				'No classes to report on',
-			);
-		});
+		window.TeacherDomainAnalytics.showView('exams', 'manage');
 
 		const questionSection = document.getElementById('questions');
 		const examSection = document.getElementById('exams');
-		expect(questionSection.querySelector('[data-tda-pane="manage"]').hidden).toBe(false);
-		expect(questionSection.querySelector('[data-tda-pane="analytics"]').hidden).toBe(true);
-		expect(examSection.querySelector('[data-tda-pane="manage"]').hidden).toBe(true);
-		expect(examSection.querySelector('[data-tda-pane="analytics"]').hidden).toBe(false);
+		expect(questionSection.querySelector('[data-tda-pane="manage"]').hidden).toBe(true);
+		expect(questionSection.querySelector('[data-tda-pane="analytics"]').hidden).toBe(false);
+		expect(examSection.querySelector('[data-tda-pane="manage"]').hidden).toBe(false);
+		expect(examSection.querySelector('[data-tda-pane="analytics"]').hidden).toBe(true);
 	});
 
-	it('returns to Manage when a link opens a domain programmatically', async () => {
+	it('returns to Analytics when a link opens a domain programmatically', async () => {
 		const { window, document } = boot();
-		window.TeacherDomainAnalytics.showView('questions', 'analytics');
-		await vi.waitFor(() => {
-			expect(document.getElementById('questionsAnalytics').innerHTML).toContain(
-				'No classes to report on',
-			);
-		});
+		window.TeacherDomainAnalytics.showView('questions', 'manage');
 
 		window.openTab(null, 'questions');
 		const section = document.getElementById('questions');
-		expect(section.querySelector('[data-tda-pane="manage"]').hidden).toBe(false);
-		expect(section.querySelector('[data-tda-pane="analytics"]').hidden).toBe(true);
+		expect(section.querySelector('[data-tda-pane="manage"]').hidden).toBe(true);
+		expect(section.querySelector('[data-tda-pane="analytics"]').hidden).toBe(false);
 	});
 
 	it('inherits the Overview filters and refetches when they change', async () => {

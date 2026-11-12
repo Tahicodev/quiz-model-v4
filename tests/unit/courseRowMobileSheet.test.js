@@ -121,12 +121,6 @@ describe('course row actions', () => {
 		expect(js).toContain('questionCountForCategoryBranch(category.id, counts, list, tree)');
 	});
 
-	it('styles toolbar actions with distinct purpose-based colors', () => {
-		expect(css).toContain('.course-detail-actions .course-action-publish');
-		expect(css).toContain('.course-detail-actions .course-action-assign');
-		expect(css).toContain('.course-detail-actions .course-action-add');
-	});
-
 	it('offers generate and copy-prompt actions for lessons on desktop and mobile', () => {
 		expect(js).toContain('window.openLessonAIActions = function');
 		expect(js).toContain("label: 'Generate lesson with AI'");
@@ -138,9 +132,11 @@ describe('course row actions', () => {
 	});
 
 	it('offers PDF and Word course documents with templates and header layouts', () => {
-		expect(js).toContain('course-action-document');
+		// The row button that duplicated the Resources menu entry is gone —
+		// "Create course document" is reachable from the Resources popover.
+		expect(js).not.toContain('exam-action-btn course-action-document');
+		expect(js).toContain("kind: 'course-document'");
 		expect(js).toContain('window.createCourseDocument = async function');
-		expect(js).toContain('title="Create course document" onclick="createCourseDocument');
 		expect(js).toContain('window.exportCourseDocument = async function (format)');
 		expect(js).not.toContain("onclick=\"exportCourseDocument('html')\"");
 		expect(js).toContain("onclick=\"exportCourseDocument('pdf')\"");
@@ -149,6 +145,24 @@ describe('course row actions', () => {
 		expect(js).toContain('courseDocIncludeContents');
 		expect(js).toContain('window.copyAllCourseAIPrompt = async function');
 		expect(js).toContain('window.saveAllCourseAIResult = async function');
+	});
+
+	it('keeps the course row at three buttons, without redundant ones', () => {
+		// The row follows the shared rule: three buttons on the row, the rest
+		// behind the "…" menu. "Create course document" and "Edit structure"
+		// were both duplicates: the first is offered by the Resources popover,
+		// the second by the clickable course title (which opens the very same
+		// structure view).
+		const row = js.slice(js.indexOf('function courseRowActions(course)'));
+		const buttons = row.slice(0, row.indexOf('function unlinkedRowActions'));
+		expect((buttons.match(/desktop: 'visible'/g) || []).length).toBe(3);
+		expect((buttons.match(/desktop: 'overflow'/g) || []).length).toBe(1);
+		expect(buttons).toContain('course-action-resources');
+		expect(buttons).toContain('course-action-publish');
+		expect(buttons).toContain('exam-delete-btn');
+		expect(buttons).not.toContain('course-action-document');
+		expect(buttons).not.toContain('course-action-structure');
+		expect(buttons).toContain('window.RowActions.render');
 	});
 
 	it('offers a reviewed DOCX/PDF course import flow', () => {
@@ -233,16 +247,14 @@ describe('course row actions', () => {
 		expect(css).not.toContain('.lesson-parent-field');
 	});
 
-	it('keeps course actions beside Back to courses while browsing a structure', () => {
-		expect(adminHtml).toContain('id="structureCourseActions"');
-		expect(adminHtml).toContain('class="structure-course-actions"');
-		expect(js).toContain('function renderStructureCourseActions()');
-		expect(js).toContain('View course');
-		expect(js).toContain('renameStructureCourse');
-		expect(js).toContain('sendStructureCourseToStudents');
-		expect(js).toContain('Create document');
-		expect(js).toContain('renderStructureCourseActions();');
-		expect(css).toContain('.structure-course-actions');
+	it('removes structureCourseActions from the structure pane header, keeping only Back to courses aligned right', () => {
+		expect(adminHtml).not.toContain('id="structureCourseActions"');
+		expect(adminHtml).not.toContain('class="structure-course-actions"');
+		expect(js).not.toContain('function renderStructureCourseActions()');
+		expect(adminHtml).toContain('id="structureBackBtn"');
+		expect(adminHtml).toContain('Back to courses');
+		expect(css).not.toContain('.structure-course-actions');
+		expect(css).toContain('.structure-header-actions');
 	});
 
 	it('styles teacher course documents, lesson cards, and toolbar for dark mode', () => {
@@ -273,7 +285,7 @@ describe('training attempts stepper', () => {
 		// outranks a lone `.training-attempts-input`, which used to stretch the
 		// field across its cell in the stacked (card) layouts.
 		expect(css).toMatch(/input\[type='number'\]/);
-		expect(css).toMatch(/#categoryList \.training-attempts-input \{\s*width: 3\.4em;\s*min-width: 0;\s*max-width: 4\.6em;\s*\}/);
+		expect(css).toMatch(/#categoryList \.training-attempts-input \{\s*width: 2\.6em;\s*min-width: 0;\s*max-width: 3\.4em;\s*margin-left: 5px;\s*\}/);
 	});
 
 	it('keeps the touch-sized stepper compact instead of full width on mobile', () => {

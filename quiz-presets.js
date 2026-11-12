@@ -90,7 +90,7 @@
 		document.getElementById('preset-textColor-text').value = '#1e293b';
 		document.getElementById('preset-inputFocusColor').value = '#3b82f6';
 		document.getElementById('preset-inputFocusColor-text').value = '#3b82f6';
-		document.getElementById('preset-fontFamily').value = "'Segoe UI', system-ui";
+		document.getElementById('preset-fontFamily').value = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 				document.getElementById('preset-passingScore').value = 50;
 		document.getElementById('preset-welcomeTitle').value = '';
 		document.getElementById('preset-welcomeMessage').value = '';
@@ -185,7 +185,7 @@
 					backgroundColor: '#f8fafc',
 					textColor: '#1e293b',
 					inputFocusColor: '#3b82f6',
-					fontFamily: "'Segoe UI', system-ui",
+					fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
 					passingScore: 50,
 					welcomeTitle: 'Quick Quiz',
 					welcomeMessage: 'Good luck!',
@@ -307,7 +307,7 @@
 		const backgroundColor = document.getElementById('preset-backgroundColor')?.value || '#f8fafc';
 		const textColor = document.getElementById('preset-textColor')?.value || '#1e293b';
 		const inputFocusColor = document.getElementById('preset-inputFocusColor')?.value || '#3b82f6';
-		const fontFamily = document.getElementById('preset-fontFamily')?.value || "'Segoe UI', system-ui";
+		const fontFamily = document.getElementById('preset-fontFamily')?.value || "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 		const passingScore = parseInt(document.getElementById('preset-passingScore')?.value) || 50;
 		const welcomeTitle = document.getElementById('preset-welcomeTitle')?.value || '';
 		const welcomeMessage = document.getElementById('preset-welcomeMessage')?.value || '';
@@ -415,7 +415,7 @@
 		document.getElementById('preset-textColor-text').value = preset.textColor || '#1e293b';
 		document.getElementById('preset-inputFocusColor').value = preset.inputFocusColor || '#3b82f6';
 		document.getElementById('preset-inputFocusColor-text').value = preset.inputFocusColor || '#3b82f6';
-		document.getElementById('preset-fontFamily').value = preset.fontFamily || "'Segoe UI', system-ui";
+		document.getElementById('preset-fontFamily').value = preset.fontFamily || "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 		document.getElementById('preset-passingScore').value = preset.passingScore || 50;
 
 		// Optional fields

@@ -25627,7 +25627,7 @@ They will be signed out immediately.`
         backgroundColor: "#f8fafc",
         textColor: "#1e293b",
         inputFocusColor: "#3b82f6",
-        fontFamily: "'Segoe UI', system-ui",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
         welcomeTitle: "Welcome to the Quiz",
         welcomeMessage: "Test your knowledge with our interactive quiz!"
       };
@@ -25680,7 +25680,7 @@ They will be signed out immediately.`
         backgroundColor: "#f8fafc",
         textColor: "#1e293b",
         inputFocusColor: "#3b82f6",
-        fontFamily: "'Segoe UI', system-ui",
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
         welcomeTitle: "Welcome to the Quiz",
         welcomeMessage: "Test your knowledge with our interactive quiz!"
       };
@@ -26331,7 +26331,7 @@ They will be signed out immediately.`
       "--background-color": settingsToUse.backgroundColor || "#f8fafc",
       "--text-color": settingsToUse.textColor || "#1e293b",
       "--input-focus-color": settingsToUse.inputFocusColor || "#3b82f6",
-      "--font-family": settingsToUse.fontFamily || "'Segoe UI', system-ui"
+      "--font-family": settingsToUse.fontFamily || "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
     };
     Object.entries(styles2).forEach(([property, value]) => {
       document.documentElement.style.setProperty(property, value);
@@ -26922,7 +26922,7 @@ They will be signed out immediately.`
     );
     document.documentElement.style.setProperty(
       "--font-family",
-      savedSettings.fontFamily || "'Segoe UI', system-ui"
+      savedSettings.fontFamily || "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
     );
     const welcomeTitle = document.querySelector(".welcome-title");
     if (welcomeTitle) {

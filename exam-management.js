@@ -1643,6 +1643,159 @@ function examHasValidQuestions(exam) {
 	return exam.questions.some((questionIndex) => allQuestions[questionIndex]);
 }
 
+// Icons for the exam row actions (shared by the row bar and the action
+// sheet; the CSS scales them to the right size for each surface).
+const EXAM_ACTION_ICONS = {
+	edit:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>' +
+		'<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+	assignQuestions:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M9 11l3 3L22 4"></path>' +
+		'<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+	assignClasses:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>' +
+		'<circle cx="9" cy="7" r="4"></circle>' +
+		'<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>' +
+		'<path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+	analysis:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<line x1="12" y1="20" x2="12" y2="10"></line>' +
+		'<line x1="18" y1="20" x2="18" y2="4"></line>' +
+		'<line x1="6" y1="20" x2="6" y2="16"></line></svg>',
+	documents:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>' +
+		'<polyline points="14 2 14 8 20 8"></polyline>' +
+		'<line x1="8" y1="13" x2="16" y2="13"></line>' +
+		'<line x1="8" y1="17" x2="13" y2="17"></line></svg>',
+	push:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M22 2L11 13"></path>' +
+		'<path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>',
+	stop:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>',
+	remove:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<polyline points="3 6 5 6 21 6"></polyline>' +
+		'<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+};
+
+// Actions offered on an exam row.
+//
+// • `desktop` decides where the action lives on the desktop row:
+//   'visible' (default) keeps it as an icon button, 'overflow' puts it in the
+//   "…" menu, 'none' keeps it out of the row entirely.
+// • The exam title (and the row itself) already opens the analysis panel, so
+//   the analysis action is offered on mobile only — the desktop row would show
+//   a second button doing exactly the same thing as the title.
+//
+// `RowActions.render` shows the first three actions on the row and moves the
+// rest into the "…" popover, which is styled like the course Resources menu.
+// The three that stay on the row are always the same three — edit, assign
+// questions, assign classes — so the row never collapses to two buttons.
+function examRowActions(exam) {
+	const id = exam.id;
+	return [
+		{
+			key: 'edit',
+			label: 'Edit Exam',
+			title: 'Edit',
+			hint: 'Questions, duration, settings',
+			cls: 'exam-edit-btn',
+			icon: EXAM_ACTION_ICONS.edit,
+			onclick: `editExam('${id}')`,
+			run: () => editExam(id),
+			desktop: 'visible',
+		},
+		{
+			key: 'assign-questions',
+			label: 'Assign Questions',
+			title: 'Assign Questions',
+			hint: 'Pick the questions of this exam',
+			cls: 'exam-assign-btn',
+			icon: EXAM_ACTION_ICONS.assignQuestions,
+			onclick: `openAssignExamQuestions('${id}')`,
+			run: () => openAssignExamQuestions(id),
+			desktop: 'visible',
+		},
+		{
+			key: 'assign-classes',
+			label: 'Assign to Classes',
+			title: 'Assign to Classes',
+			hint: 'Give this exam to a class',
+			cls: 'exam-classes-btn',
+			icon: EXAM_ACTION_ICONS.assignClasses,
+			onclick: `openAssignExamClasses('${id}')`,
+			run: () => openAssignExamClasses(id),
+			desktop: 'visible',
+		},
+		{
+			key: 'analysis',
+			label: 'Analysis (per-question accuracy)',
+			title: 'Analysis',
+			hint: 'Per-question accuracy and class results',
+			cls: 'exam-analysis-btn',
+			icon: EXAM_ACTION_ICONS.analysis,
+			onclick: `openExamAnalysis('${id}')`,
+			run: () => openExamAnalysis(id),
+			desktop: 'none',
+		},
+		{
+			key: 'documents',
+			label: 'Exam Documents',
+			title: 'Exam Documents (PDF, Word, Print)',
+			hint: 'Paper, Word and print versions',
+			cls: 'exam-doc-btn',
+			icon: EXAM_ACTION_ICONS.documents,
+			onclick: `openExamDocuments('${id}')`,
+			run: () => openExamDocuments(id),
+			desktop: 'overflow',
+		},
+		{
+			key: 'push',
+			label: 'Push to Devices',
+			title: 'Push to Devices',
+			hint: 'Send the exam to the class devices',
+			cls: 'exam-push-btn',
+			icon: EXAM_ACTION_ICONS.push,
+			onclick: `pushExamToDevices('${id}')`,
+			run: () => pushExamToDevices(id),
+			variant: 'primary',
+			tone: 'success',
+			desktop: 'overflow',
+		},
+		{
+			key: 'stop',
+			label: 'Stop Exam on Devices',
+			title: 'Stop Exam on Devices',
+			hint: 'End the running session',
+			cls: 'exam-stop-btn',
+			icon: EXAM_ACTION_ICONS.stop,
+			onclick: `stopExamOnDevices('${id}')`,
+			run: () => stopExamOnDevices(id),
+			variant: 'danger',
+			tone: 'danger',
+			desktop: 'overflow',
+		},
+		{
+			key: 'delete',
+			label: 'Delete Exam',
+			title: 'Delete',
+			hint: 'Remove the exam and its results',
+			cls: 'exam-delete-btn',
+			icon: EXAM_ACTION_ICONS.remove,
+			onclick: `deleteExam('${id}')`,
+			run: () => deleteExam(id),
+			variant: 'danger',
+			tone: 'danger',
+			desktop: 'overflow',
+		},	];
+}
+
 // Update exam list table
 function updateExamList(examsList = exams) {
 	const tbody = document.querySelector('#examList tbody');
@@ -1719,74 +1872,7 @@ function updateExamList(examsList = exams) {
                 <td class="owner-col" data-label="By">${ownerBadgeHtml}</td>
                 <td class="actions-cell">
                     <div class="exam-actions">
-                        <button class="exam-action-btn exam-edit-btn" onclick="editExam('${
-													exam.id
-												}')" title="Edit">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                        </button>
-						<button class="exam-action-btn exam-assign-btn" onclick="openAssignExamQuestions('${
-							exam.id
-						}')" title="Assign Questions">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M9 11l3 3L22 4"></path>
-								<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-							</svg>
-						</button>
-						<button class="exam-action-btn exam-classes-btn" onclick="openAssignExamClasses('${
-							exam.id
-						}')" title="Assign to Classes">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-								<circle cx="9" cy="7" r="4"></circle>
-								<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-								<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-							</svg>
-						</button>
-						<button class="exam-action-btn exam-analysis-btn" onclick="openExamAnalysis('${
-							exam.id
-						}')" title="Analysis (per-question accuracy)">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<line x1="12" y1="20" x2="12" y2="10"></line>
-								<line x1="18" y1="20" x2="18" y2="4"></line>
-								<line x1="6" y1="20" x2="6" y2="16"></line>
-							</svg>
-						</button>
-						<button class="exam-action-btn exam-doc-btn" onclick="openExamDocuments('${
-							exam.id
-						}')" title="Exam Documents (PDF, Word, Print)">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-								<polyline points="14 2 14 8 20 8"></polyline>
-								<line x1="8" y1="13" x2="16" y2="13"></line>
-								<line x1="8" y1="17" x2="13" y2="17"></line>
-							</svg>
-						</button>
-						<button class="exam-action-btn exam-push-btn" onclick="pushExamToDevices('${
-							exam.id
-						}')" title="Push to Devices" style="background: #10b981; color: white;">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path d="M22 2L11 13"></path>
-								<path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
-							</svg>
-						</button>
-						<button class="exam-action-btn exam-stop-btn" onclick="stopExamOnDevices('${
-							exam.id
-						}')" title="Stop Exam on Devices" style="background: #ef4444; color: white;">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-							</svg>
-						</button>
-						<button class="exam-action-btn exam-delete-btn" onclick="deleteExam('${
-							exam.id
-						}')" title="Delete">
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<polyline points="3 6 5 6 21 6"></polyline>
-								<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-							</svg>
-						</button>
+                        ${window.RowActions.render(examRowActions(exam))}
 					</div>
 				</td>
             </tr>
@@ -1826,54 +1912,10 @@ function updateExamList(examsList = exams) {
 				}
 
 				const safeName = escapeHtml(exam.name);
-				MobileActionSheet.open(`Exam: ${safeName}`, [
-					{
-						label: 'Edit Exam',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
-						onClick: () => editExam(exam.id),
-					},
-					{
-						label: 'Assign Questions',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
-						onClick: () => openAssignExamQuestions(exam.id),
-					},
-					{
-						label: 'Assign to Classes',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
-						onClick: () => openAssignExamClasses(exam.id),
-					},
-					{
-						label: 'Analysis (per-question accuracy)',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>',
-						onClick: () => openExamAnalysis(exam.id),
-					},
-					{
-						// The desktop row has a dedicated button for this; on mobile the
-						// sheet is the only way in, so it has to be listed here too.
-						label: 'Exam Documents (PDF, Word, Print)',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="13" y2="17"></line></svg>',
-						onClick: () => openExamDocuments(exam.id),
-					},
-					{
-						label: 'Push to Devices',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>',
-						onClick: () => pushExamToDevices(exam.id),
-						variant: 'primary',
-					},
-					{
-						label: 'Stop Exam on Devices',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>',
-						onClick: () => stopExamOnDevices(exam.id),
-						variant: 'danger',
-					},
-					{
-						label: 'Delete Exam',
-						icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-						variant: 'danger',
-						onClick: () => deleteExam(exam.id),
-					},
-				]);
-			});
+				MobileActionSheet.open(
+					`Exam: ${safeName}`,
+					window.RowActions.sheetItems(examRowActions(exam)),
+				);			});
 		}
 	});
 
@@ -2027,7 +2069,7 @@ async function saveExamForm() {
 					backgroundColor: presetSnapshot.backgroundColor || '#f8fafc',
 					textColor: presetSnapshot.textColor || '#1e293b',
 					inputFocusColor: presetSnapshot.inputFocusColor || '#3b82f6',
-					fontFamily: presetSnapshot.fontFamily || "'Segoe UI', system-ui",
+					fontFamily: presetSnapshot.fontFamily || "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
 					welcomeTitle: presetSnapshot.welcomeTitle || '',
 					welcomeMessage: presetSnapshot.welcomeMessage || '',
 				}
@@ -3742,7 +3784,7 @@ function createExamPackage(examId) {
 			fontFamily:
 				presetSettings.fontFamily ||
 				appSettings.fontFamily ||
-				"'Segoe UI', system-ui",
+				"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
 			welcomeTitle: presetSettings.welcomeTitle || exam.name,
 			welcomeMessage:
 				presetSettings.welcomeMessage ||
@@ -3854,7 +3896,7 @@ function createTrainingPackage() {
 			fontFamily:
 				presetSettings.fontFamily ||
 				appSettings.fontFamily ||
-				"'Segoe UI', system-ui",
+				"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
 			welcomeTitle:
 				presetSettings.welcomeTitle ||
 				appSettings.welcomeTitle ||

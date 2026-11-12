@@ -30,10 +30,16 @@
 	--space-lg: 24px;
 	--space-xl: 32px;
 
-	/* Typography */
+	/* Typography — one sans family and one mono family for the whole app.
+	   Every screen (admin, students, modals, print) reads these two
+	   variables, so a screen can never drift onto a different typeface.
+	   Inter is the UI face; the mono stack is for code, paths and IDs. */
 	--font-sans:
-		'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-		Arial, sans-serif;
+		'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+		'Helvetica Neue', Arial, sans-serif;
+	--font-mono:
+		ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas,
+		'Liberation Mono', 'Courier New', monospace;
 	--text-xs: 0.75rem; /* 12px */
 	--text-sm: 0.875rem; /* 14px */
 	--text-base: 1rem; /* 16px */
@@ -286,7 +292,7 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	cursor: pointer;
 }
 
-/* The Training column only ever holds a checkbox plus a 1–3 digit attempts
+/* The Training column only ever holds a toggle plus a 1–3 digit attempts
    stepper, so it stays as narrow as that content and lets the input shrink
    instead of forcing a fixed column width. */
 #categoryList .training-cell {
@@ -301,22 +307,179 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 	accent-color: #10b981;
 }
 
-/* Compact underline-free stepper that hugs its value (1–3 digits or ∞) so the
-   column never grows past the checkbox + input pair. Native spinners are
-   hidden; ArrowUp / ArrowDown still step the value. */
-.training-attempts-input {
-	box-sizing: border-box;
-	width: 3.4em;
-	min-width: 0;
-	max-width: 4.6em;
-	margin-left: 4px;
-	padding: 3px 4px;
+/* ── Training toggle ────────────────────────────────────────────────────────
+   A real switch instead of a bare checkbox: the track and the thumb are
+   styled, the native checkbox stays in the DOM (so the existing
+   `toggleCategoryTraining(this)` handler and the form semantics keep
+   working) and only the visual shell is hidden. */
+.training-toggle {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: middle;
+	cursor: pointer;
+}
+
+.training-toggle .training-checkbox {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: 0;
+	padding: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.training-toggle-track {
+	position: relative;
+	display: inline-block;
+	width: 30px;
+	height: 17px;
+	border-radius: 999px;
+	background: rgba(100, 116, 139, 0.32);
+	box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.14);
+	transition: background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.training-toggle-thumb {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 13px;
+	height: 13px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+	transition: transform 0.16s ease;
+}
+
+.training-toggle .training-checkbox:checked + .training-toggle-track {
+	background: linear-gradient(135deg, #10b981, #059669);
+	box-shadow: inset 0 1px 2px rgba(5, 150, 105, 0.3);
+}
+
+.training-toggle .training-checkbox:checked + .training-toggle-track .training-toggle-thumb {
+	transform: translateX(13px);
+}
+
+.training-toggle .training-checkbox:focus-visible + .training-toggle-track {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+
+/* ── Attempts stepper ───────────────────────────────────────────────────────
+   "max" label + −/value/+ group + the resolved state. The three parts stay
+   on one line so the column never grows, and the stepper buttons make the
+   value reachable without aiming at a 2.6em input. */
+.training-attempts {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: 6px;
+	vertical-align: middle;
+}
+
+.training-attempts-label {
+	color: var(--text-muted, #94a3b8);
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.training-attempts-stepper {
+	display: inline-flex;
+	align-items: center;
 	border: 1px solid var(--border-color, #e2e8f0);
 	border-radius: 7px;
 	background: var(--bg-surface, #fff);
+	overflow: hidden;
+}
+
+.training-attempts-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 19px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	background: var(--bg-surface-alt, #f1f5f9);
+	color: var(--text-secondary, #475569);
+	font-size: 0.85rem;
+	font-weight: 800;
+	line-height: 1;
+	cursor: pointer;
+	transition: background 0.14s ease, color 0.14s ease;
+}
+
+.training-attempts-btn:hover {
+	background: rgba(16, 185, 129, 0.16);
+	color: #047857;
+}
+
+.training-attempts-btn:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: -2px;
+}
+
+/* The input sits between the two stepper buttons. */
+.training-attempts-stepper .training-attempts-input {
+	width: 2.5em;
+	min-width: 0;
+	max-width: 3.2em;
+	margin: 0;
+	padding: 2px 4px;
+	border: 0;
+	border-right: 1px solid var(--border-color, #e2e8f0);
+	border-left: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 0;
+	background: transparent;
+	text-align: center;
+}
+
+.training-attempts-state {
+	color: var(--text-secondary, #475569);
+	font-size: 0.7rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+}
+
+.training-attempts-state.is-inherited {
+	color: var(--text-muted, #94a3b8);
+	font-weight: 600;
+}
+
+.training-attempts-none {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	margin-left: 6px;
+	border-radius: 7px;
+	background: var(--bg-surface-alt, #f1f5f9);
+	color: var(--text-muted, #94a3b8);
+	font-size: 0.78rem;
+	font-weight: 800;
+}
+
+/* Compact underline-free stepper that hugs its value (1–3 digits or ∞) so the
+   column never grows past the checkbox + input pair. Native spinners are
+   hidden; ArrowUp / ArrowDown still step the value. Polished: tighter padding
+   and width so it only fits the number, aligned with the table row height. */
+.training-attempts-input {
+	box-sizing: border-box;
+	width: 2.6em;
+	min-width: 0;
+	max-width: 3.4em;
+	margin-left: 5px;
+	padding: 1px 5px;
+	border: 1px solid var(--border-color, #e2e8f0);
+	border-radius: 6px;
+	background: var(--bg-surface, #fff);
 	color: var(--text-color, #1e293b);
-	font-size: 0.74rem;
-	line-height: 1.15;
+	font-size: 0.7rem;
+	line-height: 1;
 	font-variant-numeric: tabular-nums;
 	text-align: center;
 	vertical-align: middle;
@@ -328,13 +491,20 @@ NOTE: column 1 is the bulk checkbox cell, so Teacher is nth-child(5). */
 /* The generic `input[type='number'] { width: 100% }` rule outranks a lone
    class selector (attribute selectors live in the class bucket), so the
    stepper's own box metrics are re-declared with an id-qualified selector —
-   without it the field stretches to fill its cell on narrow (card) layouts. */
+   without it the field stretches to fill its cell on narrow (card) layouts.
+   The input now lives inside the −/value/+ group, so it loses its own
+   margin and border. */
 #categoryList .training-attempts-input {
-	width: 3.4em;
+	width: 2.6em;
 	min-width: 0;
-	max-width: 4.6em;
+	max-width: 3.4em;
+	margin-left: 5px;
 }
-
+#categoryList .training-attempts-stepper .training-attempts-input {
+	width: 2.5em;
+	max-width: 3.2em;
+	margin-left: 0;
+}
 .training-attempts-input::-webkit-outer-spin-button,
 .training-attempts-input::-webkit-inner-spin-button {
 	-webkit-appearance: none;
@@ -371,6 +541,59 @@ html[data-theme='dark'] .training-attempts-input:focus,
 html[data-theme='dark'] .training-attempts-input:focus-visible {
 	border-color: #60a5fa;
 	box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.22);
+}
+
+/* Dark theme: the training switch keeps its emerald fill, the off state
+   darkens so the toggle still reads as a switch. */
+html[data-theme='dark'] .training-toggle-track {
+	background: rgba(100, 116, 139, 0.42);
+	box-shadow: inset 0 1px 2px rgba(2, 6, 23, 0.4);
+}
+
+html[data-theme='dark'] .training-toggle .training-checkbox:checked + .training-toggle-track {
+	background: linear-gradient(135deg, #10b981, #059669);
+}
+
+html[data-theme='dark'] .training-attempts-stepper {
+	border-color: rgba(148, 163, 184, 0.26);
+	background: #16202e;
+}
+
+html[data-theme='dark'] .training-attempts-stepper .training-attempts-input {
+	border-right-color: rgba(148, 163, 184, 0.26);
+	border-left-color: rgba(148, 163, 184, 0.26);
+	color: #e2e8f0;
+}
+
+html[data-theme='dark'] .training-attempts-btn {
+	background: rgba(148, 163, 184, 0.12);
+	color: #cbd5e1;
+}
+
+html[data-theme='dark'] .training-attempts-btn:hover {
+	background: rgba(16, 185, 129, 0.2);
+	color: #6ee7b7;
+}
+
+/* Keep the training toggle + attempts stepper on one line inside the
+   category table cell, vertically centered, so the column never wraps or
+   stretches past its content. */
+.training-cell {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		white-space: nowrap;
+		vertical-align: middle;
+}
+
+/* Table-cell adaptation: the input hugs its value without forcing the cell
+   to grow. The id-qualified selector beats the generic input[width] rule. */
+#categoryList .training-cell .training-attempts-input {
+	margin-left: 6px;
+}
+
+html[data-theme='dark'] .training-cell {
+	color: var(--text-color, #e2e8f0);
 }
 
 .category-checkbox:disabled {
@@ -633,7 +856,7 @@ html[data-theme='dark'] .training-attempts-input:focus-visible {
 /* ============================= */
 
 .student-workspace {
-	font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+	font-family: var(--font-sans);
 	background:
 		radial-gradient(
 			circle at 10% 8%,
@@ -8096,7 +8319,7 @@ h2 {
 }
 
 .temp-password-value {
-	font-family: var(--font-mono, monospace);
+	font-family: var(--font-mono);
 	font-size: 1.15rem;
 	font-weight: 700;
 	letter-spacing: 1px;
@@ -11509,9 +11732,7 @@ html[data-theme='dark'] .exam-analysis-modal .modal-footer {
 }
 
 .code-snippet-block code {
-	font-family:
-		'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'SF Mono', 'Consolas',
-		'Monaco', monospace;
+	font-family: var(--font-mono);
 	font-size: 13.5px;
 	line-height: 1.7;
 	white-space: pre;
@@ -11575,8 +11796,7 @@ html[data-theme='dark'] .exam-analysis-modal .modal-footer {
 }
 
 textarea.code-editor {
-	font-family:
-		'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace !important;
+	font-family: var(--font-mono) !important;
 	background: #1e1e2e !important;
 	color: #cdd6f4 !important;
 	border: 1px solid #313244 !important;
@@ -13427,7 +13647,7 @@ textarea:focus {
 body.student-workspace {
 	background: var(--arena-canvas) !important;
 	color: var(--arena-ink);
-	font-family: 'Space Grotesk', Inter, system-ui, sans-serif;
+	font-family: var(--font-sans);
 }
 
 body.student-workspace .workspace-shell {
@@ -21767,7 +21987,7 @@ body.mobile-action-sheet-open {
 	background: rgba(59, 130, 246, 0.15);
 	padding: 2px 6px;
 	border-radius: var(--radius-sm);
-	font-family: monospace;
+	font-family: var(--font-mono);
 	font-weight: 600;
 }
 
@@ -24711,7 +24931,7 @@ input[type='range']::-moz-range-thumb {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.8rem;
 	font-weight: 700;
 	flex: 0 0 auto;
@@ -25179,7 +25399,7 @@ input[type='range']::-moz-range-thumb {
 	background: white;
 	border: 2px solid #e0e0e0;
 	border-radius: 8px;
-	font-family: 'Courier New', monospace;
+	font-family: var(--font-mono);
 	font-size: 13px;
 	line-height: 1.6;
 	color: #333;
@@ -25498,7 +25718,7 @@ tr[data-id],
 	color: #dc2626;
 	text-align: center;
 	margin: 10px 0;
-	font-family: 'Courier New', monospace;
+	font-family: var(--font-mono);
 }
 
 .turn-indicator {
@@ -36003,6 +36223,26 @@ html[data-theme='dark'] .student-filter-reset {
 		font-size: 0.8rem;
 		padding: 4px 5px;
 	}
+	#categoryList .training-attempts-stepper .training-attempts-input {
+		width: 3.4em;
+		max-width: 4.6em;
+	}
+	.training-attempts-btn {
+		width: 26px;
+		height: 30px;
+		font-size: 1rem;
+	}
+	.training-toggle-track {
+		width: 38px;
+		height: 22px;
+	}
+	.training-toggle-thumb {
+		width: 16px;
+		height: 16px;
+	}
+	.training-toggle .training-checkbox:checked + .training-toggle-track .training-toggle-thumb {
+		transform: translateX(16px);
+	}
 }
 
 /* Close-modal-btn (the × button on the training modal header).
@@ -36587,14 +36827,14 @@ html[data-theme='dark'] .student-filter-reset {
 	color: #cbd5e1;
 	padding: 0.4rem 0.75rem;
 	font-size: 0.8rem;
-	font-family: monospace;
+	font-family: var(--font-mono);
 }
 
 .training-code-snippet pre {
 	margin: 0;
 	padding: 1rem;
 	overflow-x: auto;
-	font-family: 'Courier New', monospace;
+	font-family: var(--font-mono);
 	font-size: 0.85rem;
 	white-space: pre-wrap;
 }
@@ -46151,15 +46391,17 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 		display: none !important;
 	}
 
-	/* Training pill keeps its switch inline */
+	/* Training card cell: the toggle + the attempts stepper sit side by
+	   side in a soft pill, so the teacher can flip the switch and set the
+	   cap without leaving the row. */
 	#categoryList tbody tr td.training-cell {
 		display: inline-flex !important;
 		width: auto !important;
 		align-items: center !important;
 		justify-content: flex-start !important;
-		gap: 8px !important;
+		gap: 10px !important;
 		margin: 6px 6px 0 0 !important;
-		padding: 4px 11px 4px 9px !important;
+		padding: 5px 12px 5px 10px !important;
 		border-radius: 999px !important;
 		color: var(--success) !important;
 		border-color: rgba(16, 185, 129, 0.32) !important;
@@ -46168,14 +46410,8 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 			rgba(16, 185, 129, 0.1) !important;
 	}
 	#categoryList tbody tr td.training-cell::before {
-		content: '' !important;
-		display: inline-block !important;
-		width: 7px !important;
-		height: 7px !important;
-		margin: 0 !important;
-		border-radius: 50% !important;
-		background: currentColor !important;
-		box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16) !important;
+		content: none !important;
+		display: none !important;
 	}
 
 	/* ── Results: hero stays stacked, meta flows as one badge line ── */
@@ -47854,12 +48090,17 @@ html[data-theme='dark'] #assignClassExamsModal.is-open .modal-body .search-wrapp
 	.tab-content #categoryList tbody tr > td:nth-child(7)::before {
 		content: 'Created' !important;
 	}
+	/* Stacked card layout: the toggle and the stepper sit on one line under
+	   the "Training" label — the card is narrow, so they stay together
+	   rather than stacking into three rows. */
 	.tab-content #categoryList tbody tr td.training-cell {
-		display: flex !important;
+		display: inline-flex !important;
 		width: auto !important;
-		flex-direction: column !important;
-		align-items: flex-start !important;
-		gap: 4px !important;
+		flex-direction: row !important;
+		align-items: center !important;
+		justify-content: flex-start !important;
+		flex-wrap: wrap !important;
+		gap: 10px !important;
 		margin: 0 !important;
 		padding: 0 !important;
 		border: 0 !important;
@@ -50269,53 +50510,72 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	opacity: 0.8;
 }
 
-.course-detail-heading,
-.course-detail-controls,
-.course-detail-actions {
+/* The course-detail header: a compact back button, the identity block
+   (eyebrow / title / badges) and the action cluster on the right. The
+   cluster wraps under the title on narrow screens instead of squeezing
+   the title into a narrow column. */
+.course-detail-header-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 14px 18px;
+}
+
+.course-detail-leading {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 14px;
+}
+
+.course-detail-title-group {
+	display: grid;
+	flex: 1 1 auto;
+	gap: 5px;
+	min-width: 0;
+}
+
+.course-detail-trailing {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 10px;
+	justify-content: flex-end;
 }
 
-.course-detail-heading {
-	align-items: flex-start;
-	justify-content: flex-start;
-	flex-wrap: nowrap;
-	gap: 14px;
-}
-
-.course-detail-heading > .course-detail-back {
+/* Icon-only back button: it keeps the identity block wide on the row.
+   The label lives in the tooltip / aria-label. */
+.course-detail-header-row > .course-detail-back {
 	display: inline-flex;
 	flex: none;
 	align-items: center;
 	justify-content: center;
-	gap: 7px;
-	min-height: 40px;
-	margin-top: 1px;
+	width: 38px;
+	height: 38px;
+	padding: 0;
 	border: 1px solid var(--border-color, #dbe3ef);
-	border-radius: 11px;
-	padding: 8px 13px;
+	border-radius: 50%;
 	background: var(--bg-surface, #fff);
 	color: var(--text-secondary, #475569);
-	font-weight: 700;
-	white-space: nowrap;
-	transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+	cursor: pointer;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+	transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
 
-.course-detail-heading > .course-detail-back svg {
+.course-detail-header-row > .course-detail-back svg {
 	flex: none;
 	opacity: 0.8;
 }
 
-.course-detail-heading > .course-detail-back:hover {
+.course-detail-header-row > .course-detail-back:hover {
 	transform: translateX(-2px);
 	border-color: rgba(99, 102, 241, 0.42);
 	background: rgba(99, 102, 241, 0.06);
 	color: var(--primary-color, #4338ca);
+	box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
 }
 
-.course-detail-title {
+.course-detail-title-group {
 	display: grid;
 	flex: 1 1 auto;
 	gap: 5px;
@@ -50330,7 +50590,7 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	text-transform: uppercase;
 }
 
-.course-detail-title h2 {
+.course-detail-title-group h2 {
 	margin: 0;
 	overflow-wrap: anywhere;
 	color: var(--text-primary, #0f172a);
@@ -50346,6 +50606,23 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	align-items: center;
 	gap: 8px;
 	margin-top: 1px;
+}
+
+
+/* The structure / link button keeps the tinted family of the other
+   course actions and matches the mode switch height, so the cluster
+   reads as one group. */
+.course-detail-header-row .course-detail-structure,
+.course-detail-header-row .course-detail-link {
+	min-height: 40px;
+	padding: 8px 14px;
+	border-radius: 11px;
+}
+
+.course-detail-header-row .course-detail-structure:focus-visible,
+.course-detail-header-row .course-detail-link:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
 }
 
 .course-detail-badges .status-badge {
@@ -50419,6 +50696,38 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	opacity: 1;
 }
 
+.course-detail-structure,
+.course-detail-link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 34px;
+	border: 1px solid var(--border-color, rgba(99, 102, 241, 0.26));
+	border-radius: 9px;
+	padding: 6px 11px;
+	background: rgba(99, 102, 241, 0.09);
+	color: #4338ca;
+	font-weight: 700;
+	white-space: nowrap;
+	transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.course-detail-structure svg,
+.course-detail-link svg {
+	flex: none;
+	opacity: 0.85;
+}
+
+.course-detail-structure:hover,
+.course-detail-link:hover {
+	transform: translateY(-1px);
+	border-color: rgba(99, 102, 241, 0.42);
+	background: rgba(99, 102, 241, 0.14);
+	color: var(--primary-color, #4338ca);
+	box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
+}
+
 .course-name-link {
 	border: 0;
 	padding: 0;
@@ -50490,98 +50799,6 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	text-transform: uppercase;
 }
 
-.course-detail-actions {
-	justify-content: flex-end;
-	align-items: center;
-	gap: 6px;
-	margin-left: auto;
-	padding: 5px;
-	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.28));
-	border-radius: 13px;
-	background: var(--bg-surface-alt, rgba(148, 163, 184, 0.07));
-	box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.035);
-}
-
-.course-detail-actions .btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	min-height: 34px;
-	border: 1px solid transparent;
-	border-radius: 9px;
-	padding: 6px 11px;
-	background: transparent;
-	color: var(--text-secondary, #475569);
-	font-weight: 700;
-	white-space: nowrap;
-	transition:
-		transform 0.15s ease,
-		background 0.15s ease,
-		border-color 0.15s ease,
-		color 0.15s ease,
-		box-shadow 0.15s ease;
-}
-
-.course-detail-actions .btn svg {
-	flex: none;
-	opacity: 0.82;
-}
-
-.course-detail-actions .btn:hover svg {
-	opacity: 1;
-}
-
-.course-detail-actions .btn:hover {
-	transform: translateY(-1px);
-	border-color: var(--border-color, rgba(148, 163, 184, 0.38));
-	background: var(--bg-surface, #fff);
-	color: var(--text-primary, #1e293b);
-	box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
-}
-
-.course-detail-action-divider {
-	width: 1px;
-	height: 20px;
-	margin: 0 2px;
-	background: var(--border-color, rgba(148, 163, 184, 0.38));
-}
-
-/* Purpose tints only — the shared .btn base above keeps every action the same
-   size and shape, so the toolbar reads as one strip instead of a paint box.
-   The palette mirrors the structure workspace toolbar. */
-.course-detail-actions .course-action-structure,
-.course-detail-actions .course-action-link,
-.course-detail-actions .course-action-add {
-	border-color: rgba(99, 102, 241, 0.26);
-	background: rgba(99, 102, 241, 0.09);
-	color: #4338ca;
-}
-
-.course-detail-actions .course-action-publish {
-	border-color: rgba(16, 185, 129, 0.24);
-	background: rgba(16, 185, 129, 0.09);
-	color: #047857;
-}
-
-.course-detail-actions .course-action-unpublish {
-	border-color: rgba(245, 158, 11, 0.3);
-	background: rgba(245, 158, 11, 0.1);
-	color: #b45309;
-}
-
-.course-detail-actions .course-action-assign {
-	border-color: rgba(14, 165, 233, 0.24);
-	background: rgba(14, 165, 233, 0.08);
-	color: #0369a1;
-}
-
-.course-detail-actions .course-action-document {
-	border-color: rgba(168, 85, 247, 0.24);
-	background: rgba(168, 85, 247, 0.08);
-	color: #7e22ce;
-}
-
 .course-detail-toolbar :focus-visible,
 .lesson-card :focus-visible {
 	outline: 3px solid rgba(99, 102, 241, 0.42);
@@ -50608,11 +50825,6 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		width: 100%;
 		flex-wrap: wrap;
 	}
-
-	.course-detail-actions {
-		justify-content: flex-start;
-		width: 100%;
-	}
 }
 
 @media (max-width: 768px) {
@@ -50620,6 +50832,17 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		gap: 14px;
 		padding: 14px;
 		border-radius: 16px;
+	}
+
+	/* The header stacks: identity block on top, actions below. */
+	.course-detail-header-row {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 12px;
+	}
+
+	.course-detail-trailing {
+		justify-content: flex-start;
+		gap: 8px;
 	}
 
 	.course-detail-heading {
@@ -50639,22 +50862,15 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		flex: 1 1 0;
 	}
 
+	.course-detail-header-row .course-detail-structure,
+	.course-detail-header-row .course-detail-link {
+		flex: 1 1 auto;
+		justify-content: center;
+	}
+
 	.course-model-control {
 		flex-basis: 100%;
 		max-width: none;
-	}
-
-	.course-detail-actions {
-		justify-content: flex-start;
-		width: 100%;
-	}
-
-	.course-detail-actions .btn {
-		flex: 1 1 150px;
-	}
-
-	.course-detail-action-divider {
-		display: none;
 	}
 }
 
@@ -51314,15 +51530,9 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	color: #6d28d9;
 }
 
-.course-detail-actions .course-action-import {
-	border: 1px solid rgba(8, 145, 178, 0.2);
-	background: #ecfeff;
-	color: #0e7490;
-}
-
 #coursePromptModal textarea {
 	min-height: 220px;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.82rem;
 	line-height: 1.5;
 }
@@ -51330,15 +51540,9 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 #courseAIResultModal textarea {
 	width: 100%;
 	min-height: 260px;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.86rem;
 	line-height: 1.55;
-}
-
-.course-detail-actions .btn:disabled {
-	transform: none;
-	box-shadow: none;
-	opacity: 0.6;
 }
 
 .course-structure-tools {
@@ -51496,19 +51700,6 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		max-width: none;
 	}
 
-	.course-detail-actions {
-		justify-content: flex-start;
-		width: 100%;
-	}
-
-	.course-detail-actions .btn {
-		flex: 1 1 auto;
-	}
-
-	.course-detail-actions .btn:hover {
-		transform: none;
-	}
-
 	.course-tree-row {
 		align-items: flex-start;
 		padding-top: 12px;
@@ -51614,7 +51805,7 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 
 .lesson-card textarea {
 	width: 100%;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.88rem;
 	line-height: 1.5;
 	padding: 12px;
@@ -51800,7 +51991,7 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	background: rgba(15, 23, 42, 0.07);
 	border-radius: 5px;
 	padding: 1px 6px;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.86em;
 }
 
@@ -54077,6 +54268,31 @@ html[data-theme='dark'] .course-student-tags > span {
 	white-space: nowrap;
 }
 
+.breadcrumb-segment {
+	cursor: pointer;
+	color: var(--primary-color, #6366f1);
+	font-weight: 700;
+	transition: color 0.15s ease, text-decoration 0.15s ease;
+}
+
+.breadcrumb-segment:hover {
+	color: var(--primary-hover, #4f46e5);
+	text-decoration: underline;
+}
+
+.breadcrumb-segment-last {
+	cursor: default;
+	color: var(--text-secondary, #475569);
+	font-weight: 700;
+}
+
+.breadcrumb-divider {
+	color: var(--text-muted, #94a3b8);
+	font-size: 0.75rem;
+	pointer-events: none;
+	user-select: none;
+}
+
 #structureBackBtn {
 	display: inline-flex;
 	align-items: center;
@@ -54116,120 +54332,6 @@ html[data-theme='dark'] .course-student-tags > span {
 	justify-content: flex-end;
 	gap: 10px;
 	margin-left: auto;
-}
-
-.structure-course-actions {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 6px;
-	padding: 5px;
-	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.28));
-	border-radius: 13px;
-	background: var(--bg-surface-alt, rgba(148, 163, 184, 0.07));
-	box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.035);
-}
-
-.structure-course-actions[hidden] {
-	display: none;
-}
-
-.structure-course-actions .btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	min-height: 34px;
-	padding: 6px 11px;
-	border: 1px solid transparent;
-	border-radius: 9px;
-	background: transparent;
-	color: var(--text-secondary, #475569);
-	font-weight: 700;
-	white-space: nowrap;
-	transition:
-		transform 0.15s ease,
-		background 0.15s ease,
-		border-color 0.15s ease,
-		color 0.15s ease,
-		box-shadow 0.15s ease;
-}
-
-.structure-course-actions .btn svg {
-	display: block;
-	flex: none;
-	opacity: 0.82;
-}
-
-.structure-course-actions .btn > span {
-	display: inline-block;
-	margin-left: 1px;
-}
-
-.structure-course-actions .btn.is-publish,
-.structure-course-actions .btn.is-unpublish {
-	gap: 9px;
-	padding-inline: 12px;
-}
-
-.structure-course-actions .btn:hover {
-	transform: translateY(-1px);
-	border-color: var(--border-color, rgba(148, 163, 184, 0.38));
-	background: var(--bg-surface, #fff);
-	color: var(--text-primary, #1e293b);
-	box-shadow: 0 3px 10px rgba(15, 23, 42, 0.1);
-}
-
-.structure-course-actions .btn:hover svg {
-	opacity: 1;
-}
-
-.structure-course-actions .btn.is-view {
-	border-color: transparent;
-	background: linear-gradient(135deg, #4f46e5, #4338ca);
-	color: #fff;
-	box-shadow: 0 3px 10px rgba(49, 46, 129, 0.24);
-}
-
-.structure-course-actions .btn.is-view:hover {
-	border-color: transparent;
-	background: linear-gradient(135deg, #4338ca, #3730a3);
-	color: #fff;
-}
-
-.structure-course-actions .btn.is-rename {
-	color: #475569;
-}
-
-.structure-course-actions .btn.is-publish {
-	background: rgba(16, 185, 129, 0.09);
-	border-color: rgba(16, 185, 129, 0.24);
-	color: #047857;
-}
-
-.structure-course-actions .btn.is-unpublish {
-	background: rgba(245, 158, 11, 0.1);
-	border-color: rgba(245, 158, 11, 0.3);
-	color: #b45309;
-}
-
-.structure-course-actions .btn.is-assign {
-	background: rgba(14, 165, 233, 0.08);
-	border-color: rgba(14, 165, 233, 0.24);
-	color: #0369a1;
-}
-
-.structure-course-actions .btn.is-document {
-	background: rgba(168, 85, 247, 0.08);
-	border-color: rgba(168, 85, 247, 0.24);
-	color: #7e22ce;
-}
-
-.structure-action-divider {
-	width: 1px;
-	height: 20px;
-	margin: 0 2px;
-	background: var(--border-color, rgba(148, 163, 184, 0.38));
 }
 
 .structure-branch-note {
@@ -54335,18 +54437,8 @@ html[data-theme='dark'] .course-student-tags > span {
 		min-height: 40px;
 	}
 
-	.structure-header-actions,
-	.structure-course-actions {
+	.structure-header-actions {
 		width: 100%;
-	}
-
-	.structure-course-actions .btn {
-		flex: 1 1 calc(50% - 8px);
-		justify-content: center;
-	}
-
-	.structure-action-divider {
-		display: none;
 	}
 
 	.course-kind-chip {
@@ -58784,6 +58876,37 @@ html[data-theme='dark'] #studentTrainingModal #studentTrainingStage.is-time-warn
 	font-weight: 700;
 }
 
+/* A menu entry keeps the tint of the icon button it replaces, so the
+   "…" menu reads like the row it came from. */
+.course-resources-item.exam-add-question-btn {
+	color: #6366f1;
+}
+
+.course-resources-item.exam-move-btn {
+	color: #0284c7;
+}
+
+.course-resources-item.exam-move-up-btn {
+	color: #059669;
+}
+
+.course-resources-item.exam-move-down-btn {
+	color: #b45309;
+}
+
+.course-resources-item.exam-course-btn {
+	color: #4338ca;
+}
+
+.course-resources-item.exam-copy-btn {
+	color: #047857;
+}
+
+.course-resources-item:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
 .course-resources-badge.is-complete {
 	background: rgba(16, 185, 129, 0.16);
 	color: #047857;
@@ -59218,6 +59341,107 @@ html[data-theme='dark'] #studentTrainingModal #studentTrainingStage.is-time-warn
 	white-space: nowrap;
 }
 
+/* Row actions: the two buttons get their own accents so the eye scans
+   left to right: Download (neutral, solid) then Delete (soft danger). */
+.generated-docs-actions .btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 30px;
+	padding: 4px 10px;
+	border-radius: 8px;
+	font-size: 0.76rem;
+	font-weight: 700;
+	white-space: nowrap;
+	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+		transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.generated-docs-actions .btn svg {
+	flex: none;
+}
+
+.generated-docs-actions .generated-docs-download {
+	border: 1px solid rgba(37, 99, 235, 0.24);
+	background: rgba(37, 99, 235, 0.08);
+	color: #1d4ed8;
+}
+
+.generated-docs-actions .generated-docs-download:hover {
+	transform: translateY(-1px);
+	border-color: rgba(37, 99, 235, 0.45);
+	background: rgba(37, 99, 235, 0.15);
+	box-shadow: 0 3px 9px rgba(37, 99, 235, 0.16);
+}
+
+.generated-docs-actions .generated-docs-delete {
+	border: 1px solid rgba(220, 38, 38, 0.26);
+	background: rgba(239, 68, 68, 0.08);
+	color: #b91c1c;
+}
+
+.generated-docs-actions .generated-docs-delete:hover {
+	transform: translateY(-1px);
+	border-color: rgba(220, 38, 38, 0.45);
+	background: rgba(239, 68, 68, 0.16);
+	box-shadow: 0 3px 9px rgba(220, 38, 38, 0.14);
+}
+
+/* The path cell: the code block stays readable and the two icon buttons
+   get a hover + focus treatment of their own. */
+.generated-docs-path code {
+	flex: 1 1 auto;
+}
+
+.generated-docs-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.generated-docs-icon svg {
+	width: 13px;
+	height: 13px;
+}
+
+.generated-docs-icon:hover {
+	background: rgba(99, 102, 241, 0.12);
+	border-color: rgba(99, 102, 241, 0.4);
+	color: var(--primary-color, #4338ca);
+}
+
+.generated-docs-icon:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 1px;
+}
+
+/* "Copied" feedback on the copy button. */
+.generated-docs-icon.is-copied {
+	border-color: rgba(16, 185, 129, 0.5);
+	background: rgba(16, 185, 129, 0.14);
+	color: #047857;
+}
+
+/* The modal footer: Close (secondary) and Refresh (primary). */
+.generated-docs-footer-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 38px;
+	padding: 7px 16px;
+	border-radius: 10px;
+	font-weight: 700;
+}
+
+.generated-docs-footer-btn svg {
+	flex: none;
+}
+
+.generated-docs-retry {
+	margin-top: 10px;
+}
+
 .generated-docs-empty {
 	display: flex;
 	align-items: center;
@@ -59423,6 +59647,42 @@ html[data-theme='dark'] .generated-docs-kind.kind-course { background: rgba(59, 
 html[data-theme='dark'] .generated-docs-kind.kind-prep-sheet { background: rgba(139, 92, 246, 0.22); color: #c4b5fd; }
 html[data-theme='dark'] .generated-docs-kind.kind-exercise { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
 html[data-theme='dark'] .generated-docs-kind.kind-exam { background: rgba(245, 158, 11, 0.22); color: #fcd34d; }
+
+/* Generated-documents modal: the row actions and the icon buttons keep
+   their accents in dark mode instead of going flat. */
+html[data-theme='dark'] .generated-docs-actions .generated-docs-download {
+	border-color: rgba(96, 165, 250, 0.36);
+	background: rgba(59, 130, 246, 0.16);
+	color: #93c5fd;
+}
+
+html[data-theme='dark'] .generated-docs-actions .generated-docs-download:hover {
+	border-color: rgba(96, 165, 250, 0.55);
+	background: rgba(59, 130, 246, 0.26);
+}
+
+html[data-theme='dark'] .generated-docs-actions .generated-docs-delete {
+	border-color: rgba(248, 113, 113, 0.36);
+	background: rgba(239, 68, 68, 0.16);
+	color: #fca5a5;
+}
+
+html[data-theme='dark'] .generated-docs-actions .generated-docs-delete:hover {
+	border-color: rgba(248, 113, 113, 0.55);
+	background: rgba(239, 68, 68, 0.26);
+}
+
+html[data-theme='dark'] .generated-docs-icon:hover {
+	background: rgba(99, 102, 241, 0.22);
+	border-color: rgba(129, 140, 248, 0.5);
+	color: #c7d2fe;
+}
+
+html[data-theme='dark'] .generated-docs-icon.is-copied {
+	border-color: rgba(52, 211, 153, 0.55);
+	background: rgba(16, 185, 129, 0.2);
+	color: #6ee7b7;
+}
 
 @media (prefers-reduced-motion: reduce) {
 	.course-progress.is-running .course-progress-fill::after,

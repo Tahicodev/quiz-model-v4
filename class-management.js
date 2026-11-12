@@ -2263,46 +2263,123 @@ async function openClassDeleteAction() {
 	}
 }
 
+// Icons for the class row actions (shared by the row bar and the action
+// sheet; the CSS scales them to the right size for each surface).
+const CLASS_ACTION_ICONS = {
+	students:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>' +
+		'<circle cx="9" cy="7" r="4"></circle>' +
+		'<path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>' +
+		'<path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+	assignExams:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>' +
+		'<polyline points="14 2 14 8 20 8"></polyline>' +
+		'<line x1="16" y1="13" x2="8" y2="13"></line>' +
+		'<line x1="16" y1="17" x2="8" y2="17"></line></svg>',
+	games:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<rect x="2" y="6" width="20" height="12" rx="4"></rect>' +
+		'<line x1="6" y1="10" x2="6" y2="14"></line>' +
+		'<line x1="10" y1="10" x2="10" y2="14"></line>' +
+		'<line x1="14" y1="10" x2="14" y2="14"></line>' +
+		'<line x1="18" y1="10" x2="18" y2="14"></line></svg>',
+	edit:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>' +
+		'<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
+	remove:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
+		'<polyline points="3 6 5 6 21 6"></polyline>' +
+		'<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+};
+
+// Actions offered on a class row.
+//
+// The class name is already a link to the roster (openAssignClassStudents)
+// and the desktop row click opens the same page, so the "Manage Students"
+// icon button was a third way to reach it: it stays in the mobile sheet (the
+// only way in on a phone, where the sheet is the row's whole interface) but
+// is no longer repeated on the desktop row.
+//
+// The desktop row keeps four icon buttons — Assign Exams, Add Game, Edit,
+// Delete — and anything beyond that lands in the "…" popover.
+function classRowActions(cls) {
+	const id = cls.id;
+	return [
+		{
+			key: 'students',
+			label: 'Manage Students',
+			title: 'Manage Students',
+			hint: 'Roster and enrollment',
+			cls: 'exam-classes-btn',
+			icon: CLASS_ACTION_ICONS.students,
+			onclick: `openAssignClassStudents('${id}')`,
+			run: () => openAssignClassStudents(id),
+			desktop: 'none',
+		},
+		{
+			key: 'games',
+			label: 'Add Game',
+			title: 'Add Game',
+			hint: 'Attach a game to this class',
+			cls: 'exam-classes-btn',
+			icon: CLASS_ACTION_ICONS.games,
+			onclick: `openClassGamesModal('${id}')`,
+			run: () => {
+				if (typeof window.openClassGamesModal === 'function') {
+					window.openClassGamesModal(id);
+				}
+			},
+			desktop: 'visible',
+		},
+		{
+			key: 'assign-exams',
+			label: 'Assign Exams',
+			title: 'Assign Exams',
+			hint: 'Give exams to this class',
+			cls: 'exam-assign-btn',
+			icon: CLASS_ACTION_ICONS.assignExams,
+			onclick: `openAssignClassExams('${id}')`,
+			run: () => openAssignClassExams(id),
+			desktop: 'visible',
+		},
+		{
+			key: 'edit',
+			label: 'Edit Class',
+			title: 'Edit',
+			hint: 'Name, teacher and options',
+			cls: 'exam-edit-btn',
+			icon: CLASS_ACTION_ICONS.edit,
+			onclick: `editClass('${id}')`,
+			run: () => editClass(id),
+			desktop: 'visible',
+		},
+		{
+			key: 'delete',
+			label: 'Delete Class',
+			title: 'Delete',
+			hint: 'Remove the class and its roster',
+			cls: 'exam-delete-btn',
+			icon: CLASS_ACTION_ICONS.remove,
+			onclick: `deleteClass('${id}')`,
+			run: () => deleteClass(id),
+			variant: 'danger',
+			tone: 'danger',
+			desktop: 'overflow',
+		},
+	];
+}
+
 // Mobile action sheet for a class row (mirrors the roster's student sheet).
 function openClassActionSheet(classId) {
 	const classData = classes.find((c) => String(c.id) === String(classId));
 	if (!classData) return;
-	const actions = [
-		{
-			label: 'Manage Students',
-			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
-			onClick: () => openAssignClassStudents(classId),
-		},
-		{
-			label: 'Assign Exams',
-			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>',
-			onClick: () => openAssignClassExams(classId),
-		},
-		{
-			label: 'Games',
-			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="4"></rect><line x1="6" y1="10" x2="6" y2="14"></line><line x1="10" y1="10" x2="10" y2="14"></line><line x1="14" y1="10" x2="14" y2="14"></line><line x1="18" y1="10" x2="18" y2="14"></line></svg>',
-			onClick: () => {
-				if (typeof window.openClassGamesModal === 'function') {
-					window.openClassGamesModal(classId);
-				}
-			},
-		},
-		{
-			label: 'Edit Class',
-			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>',
-			onClick: () => editClass(classId),
-		},
-		{
-			label: 'Delete Class',
-			icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
-			variant: 'danger',
-			onClick: () => deleteClass(classId),
-		},
-	];
 	if (window.MobileActionSheet) {
 		window.MobileActionSheet.open(
 			`Class: ${escapeHtml(classData.name)}`,
-			actions,
+			window.RowActions.sheetItems(classRowActions(classData)),
 		);
 	}
 }
@@ -2871,53 +2948,7 @@ function updateClassList(classesList = classes) {
             <td class="owner-col" data-label="By">${window.TeacherFilter ? window.TeacherFilter.ownerBadge(cls) : ''}</td>
             <td class="actions-cell" data-label="Actions">
                 <div class="exam-actions">
-                    <button class="exam-action-btn exam-classes-btn" onclick="openClassGamesModal('${
-											cls.id
-										}')" title="Add Game">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="6" width="20" height="12" rx="4"></rect>
-                            <line x1="6" y1="10" x2="6" y2="14"></line>
-                            <line x1="10" y1="10" x2="10" y2="14"></line>
-                            <line x1="14" y1="10" x2="14" y2="14"></line>
-                            <line x1="18" y1="10" x2="18" y2="14"></line>
-                        </svg>
-                    </button>
-                    <button class="exam-action-btn exam-assign-btn" onclick="openAssignClassStudents('${
-											cls.id
-										}')" title="Manage Students">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                    </button>
-                    <button class="exam-action-btn exam-classes-btn" onclick="openAssignClassExams('${
-											cls.id
-										}')" title="Assign Exams">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="16" y1="13" x2="8" y2="13"></line>
-                            <line x1="16" y1="17" x2="8" y2="17"></line>
-                        </svg>
-                    </button>
-                    <button class="exam-action-btn exam-edit-btn" onclick="editClass('${
-											cls.id
-										}')" title="Edit">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                        </svg>
-                    </button>
-                    <button class="exam-action-btn exam-delete-btn" onclick="deleteClass('${
-											cls.id
-										}')" title="Delete">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                    </button>
+                    ${window.RowActions.render(classRowActions(cls))}
                 </div>
             </td>
         `;

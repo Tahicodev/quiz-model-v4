@@ -19,6 +19,7 @@ import { describe, it, expect, afterEach, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { installRowActions } from './helpers/rowActions.js';
 
 const ROOT = process.cwd();
 let ctx;
@@ -197,6 +198,8 @@ beforeAll(() => {
   };
   sandbox.globalThis = sandbox;
   ctx = vm.createContext(sandbox);
+  // The row templates paint through the shared row-action bar.
+  installRowActions(ctx);
   const src = readFileSync(path.join(ROOT, 'category-management.js'), 'utf8');
   vm.runInContext(src, ctx, { filename: 'category-management.js' });
 

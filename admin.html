@@ -40,11 +40,17 @@
 				}
 			})();
 		</script>
-		<link rel="stylesheet" href="styles.css?v=2026-11-10-resources3" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-09-question-media1" />
-		<link rel="stylesheet" href="theme.css?v=2026-11-09-aipage1" />
-		<link rel="stylesheet" href="theme-dark.css?v=2026-11-09-notifmeta1" />
-		<link rel="stylesheet" href="teacher-analytics.css?v=2026-11-09-tabs-right1" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			rel="stylesheet"
+			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+		/>
+		<link rel="stylesheet" href="styles.css?v=2026-11-12-polish1" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-12-polish1" />
+		<link rel="stylesheet" href="theme.css?v=2026-11-12-polish1" />
+		<link rel="stylesheet" href="theme-dark.css?v=2026-11-12-polish1" />
+		<link rel="stylesheet" href="teacher-analytics.css?v=2026-11-12-polish1" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -134,10 +140,11 @@
 
 			<!-- Load shared utilities first -->
 		<script src="utils.js?v=2026-10-26-catgame1" defer></script>
+		<script src="row-actions.js?v=2026-11-12-polish1" defer></script>
 		<script src="api-client.js?v=2026-11-09-question-media1" defer></script>
 		<script src="auth.js?v=2026-11-09-notifications2" defer></script>
 		<script src="games-core.js?v=2026-09-09-realtime-r6" defer></script>
-		<script src="settings.js?v=2026-11-09-notifications2" defer></script>
+		<script src="settings.js?v=2026-11-12-polish1" defer></script>
 
 		<!-- Socket.IO for realtime communication -->
 		<script src="vendor/socket.io.min.js" defer></script>
@@ -148,11 +155,11 @@
 		<!-- Admin page scripts -->
 		<script src="bulk-selection.js?v=2026-11-08-roster1" defer></script>
 		<script src="teacher-filter.js?v=2026-10-08-r1" defer></script>
-		<script src="category-management.js?v=2026-11-10-attempts2" defer></script>
+		<script src="category-management.js?v=2026-11-12-polish1" defer></script>
 		<script src="questions-management.js?v=2026-11-10-aiimage1" defer></script>
-		<script src="exam-management.js?v=2026-11-08-examrow1" defer></script>
-		<script src="courses-management.js?v=2026-11-10-resources3" defer></script>
-		<script src="class-management.js?v=2026-11-08-roster1" defer></script>
+		<script src="exam-management.js?v=2026-11-12-polish1" defer></script>
+		<script src="courses-management.js?v=2026-11-12-polish1" defer></script>
+		<script src="class-management.js?v=2026-11-12-polish1" defer></script>
 		<script src="results-management.js?v=2026-11-08-results-unified12" defer></script>
 		<script src="exam-analysis.js?v=2026-10-09-r1" defer></script>
 		<script src="exam-documents.js?v=2026-10-29-ultra1" defer></script>
@@ -160,10 +167,10 @@
 		<script src="teacher-analytics.js?v=2026-11-08-overview1" defer></script>
 		<script src="teacher-overview.js?v=2026-11-08-analytics2" defer></script>
 		<script src="global-search.js?v=2026-11-09-notifications2" defer></script>
-		<script src="realtime-settings.js?v=2026-10-24-r5" defer></script>
+		<script src="realtime-settings.js?v=2026-11-12-polish1" defer></script>
 		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
-		<script src="classroom-devices.js?v=2026-11-09-teacher-sessions" defer></script>
-		<script src="quiz-presets.js?v=2026-09-24-r4" defer></script>
+		<script src="classroom-devices.js?v=2026-11-12-polish1" defer></script>
+		<script src="quiz-presets.js?v=2026-11-12-polish1" defer></script>
 		<script src="games-management.js?v=2026-10-26-catgame1" defer></script>
 		<script src="kids-games-management.js?v=2026-10-31-kidsdel1" defer></script>
 		<script src="kids-default-games.js?v=2026-10-31-kidsseed1" defer></script>
@@ -175,7 +182,7 @@
 		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
 		<script src="admin-main.js?v=2026-11-09-notifications2" defer></script>
 		<script src="notifications.js?v=2026-11-09-notifmeta1" defer></script>
-		<script src="teacher-domain-analytics.js?v=2026-11-08-domain3" defer></script>
+		<script src="teacher-domain-analytics.js?v=2026-11-12-polish1" defer></script>
 		<script src="modal-layout.js?v=2026-09-28-r1" defer></script>
 			<script src="legacy-auth-bridge.js?v=2026-11-04-round6" defer></script>
 			<!-- PDF.js pour extraction PDF -->
@@ -445,21 +452,6 @@
 							</svg>
 							Overview
 						</button>
-						<button class="nav-tab" data-tab="questions" data-roles="admin,teacher" onclick="openTab(event, 'questions')">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-							>
-								<circle cx="12" cy="12" r="10"></circle>
-								<polygon points="10 8 16 12 10 16 10 8"></polygon>
-							</svg>
-							Questions
-						</button>
 						<button class="nav-tab" data-tab="subjects" data-roles="admin,teacher" onclick="openTab(event, 'subjects'); if(window.SubjectsManagement) window.SubjectsManagement.refresh()">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -476,6 +468,21 @@
 								<line x1="7" y1="7" x2="7.01" y2="7"></line>
 							</svg>
 							Subjects
+						</button>
+						<button class="nav-tab" data-tab="questions" data-roles="admin,teacher" onclick="openTab(event, 'questions')">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+							>
+								<circle cx="12" cy="12" r="10"></circle>
+								<polygon points="10 8 16 12 10 16 10 8"></polygon>
+							</svg>
+							Questions
 						</button>
 						<button class="nav-tab" data-tab="exams" data-roles="admin,teacher" onclick="openTab(event, 'exams')">
 							<svg
@@ -2940,7 +2947,7 @@
 											<h2 id="coursePaneTitle">Courses & Curriculum Outlines</h2>
 											<button
 												id="add-course-btn"
-												class="btn btn-primary"
+												class="btn btn-primary toolbar-cta"
 												onclick="openCourseGeneratorModal()"
 											>
 												<svg
@@ -2951,6 +2958,9 @@
 													fill="none"
 													stroke="currentColor"
 													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													aria-hidden="true"
 												>
 													<path d="M12 2L2 7l10 5 10-5-10-5z"></path>
 													<path d="M2 17l10 5 10-5"></path>
@@ -2960,7 +2970,7 @@
 											</button>
 											<button
 												id="course-documents-btn"
-												class="btn"
+												class="btn btn-secondary toolbar-cta"
 												type="button"
 												title="Every generated document: course booklets, prep sheets, exercises and exams"
 												onclick="openGeneratedDocumentsLibrary()"
@@ -2973,6 +2983,9 @@
 													fill="none"
 													stroke="currentColor"
 													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													aria-hidden="true"
 												>
 													<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
 													<path d="M14 2v6h6"></path>
@@ -3112,13 +3125,6 @@
 													<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg>
 													<span>Back to courses</span>
 												</button>
-												<div
-													id="structureCourseActions"
-													class="structure-course-actions"
-													role="group"
-													aria-label="Course actions"
-													hidden
-												></div>
 											</div>
 										</div>
 								<div class="toolbar category-toolbar">
@@ -7813,7 +7819,7 @@
 									</div>
 									<div class="form-group" style="margin-bottom: 0;">
 										<label for="preset-fontFamily">Font Family</label>
-										<input type="text" id="preset-fontFamily" class="form-control" value="'Segoe UI', system-ui" style="padding: 10px;" />
+										<input type="text" id="preset-fontFamily" class="form-control" value="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" style="padding: 10px;" />
 										<small class="text-muted">Enter valid CSS font-family string</small>
 									</div>
 								</div>

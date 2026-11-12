@@ -9,12 +9,7 @@
 	min-height: 100vh;
 	background: #f5f7fb;
 	color: #1f2937;
-	font-family:
-		system-ui,
-		-apple-system,
-		'Segoe UI',
-		Roboto,
-		sans-serif;
+	font-family: var(--font-sans);
 }
 
 /* ── Server monitoring ───────────────────────────────────────────────────── */
@@ -1445,7 +1440,7 @@
 	word-break: break-all;
 }
 .sw-mono {
-	font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.82rem;
 }
 
@@ -1524,7 +1519,7 @@
 	font-weight: 700;
 	color: #166534;
 	margin-bottom: 0.75rem;
-	font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+	font-family: var(--font-mono);
 	word-break: break-all;
 }
 
@@ -1577,7 +1572,7 @@
 	min-width: 80px;
 }
 .sw-url-addr {
-	font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.82rem;
 }
 
@@ -1607,7 +1602,7 @@
 	background: #0f172a;
 	color: #e2e8f0;
 	border-radius: 0.5rem;
-	font-family: 'SF Mono', SFMono-Regular, ui-monospace, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.8rem;
 	overflow-x: auto;
 	white-space: pre-wrap;
@@ -2664,7 +2659,7 @@ html[data-lobby-page] .app-container {
 	width: 100%;
 	min-height: 180px;
 	resize: vertical;
-	font-family: Consolas, Monaco, monospace;
+	font-family: var(--font-mono);
 	font-size: 0.78rem;
 	line-height: 1.5;
 color: #0f172a;
@@ -4127,7 +4122,7 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-pub-pin { flex: 1; min-width: 240px; }
 .kids-pub-pin-label { font-size: .8rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: #047857; }
 .kids-pub-pin-code {
-	font-family: "Courier New", monospace; font-size: 2.6rem; font-weight: 800; letter-spacing: .3em;
+	font-family: var(--font-mono); font-size: 2.6rem; font-weight: 800; letter-spacing: .3em;
 	color: #065f46; line-height: 1.1; margin: 4px 0;
 }
 .kids-pub-pin-url a { color: #047857; font-size: .86rem; word-break: break-all; }
@@ -4640,7 +4635,7 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	font-weight: 800;
 	letter-spacing: 0.35em;
 	text-indent: 0.35em;
-	font-family: 'Courier New', monospace;
+	font-family: var(--font-mono);
 }
 .kids-pin-hint { font-size: 0.72rem; opacity: 0.8; margin: 2px 0 10px; }
 .kids-pin-qr { min-width: 0; min-height: 24px; text-align: center; }
@@ -4902,6 +4897,22 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 
 #devices tr.device-card.is-expanded .device-expand-btn svg {
 	transform: rotate(180deg);
+}
+
+/* "Bloquer" and "Oublier" are two different results: one locks the machine
+   out, the other forgets it. They used to share the red delete tint, which
+   made them look like the same action — the block button now has its own
+   (amber) tint so the two read apart. */
+#devices .device-block-btn {
+	background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.15));
+	color: #d97706;
+}
+
+#devices .device-block-btn:hover {
+	background: linear-gradient(135deg, #f59e0b, #d97706);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
 }
 
 #devices .device-assign {
@@ -6006,6 +6017,63 @@ html[data-theme='dark'] #exportUserModal .form-actions {
    after this file)
    ════════════════════════════════════════════════════════════════════════ */
 
+/* ════════════════════════════════════════════════════════════════════════
+   TOOLBAR CALLS TO ACTION — the primary/secondary pair that sits next to
+   a section title. Same anatomy everywhere: an icon, a label, a clear
+   hover, a visible focus ring.
+   ════════════════════════════════════════════════════════════════════════ */
+.toolbar-cta {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 38px;
+	padding: 8px 14px;
+	border-radius: 10px;
+	font-size: 0.86rem;
+	font-weight: 700;
+	white-space: nowrap;
+	transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease,
+		border-color 0.15s ease, color 0.15s ease;
+}
+
+.toolbar-cta svg {
+	flex: none;
+}
+
+/* Secondary (Documents): a tinted outline that still reads as an action. */
+.toolbar-cta.btn-secondary {
+	border-color: rgba(99, 102, 241, 0.28);
+	background: rgba(99, 102, 241, 0.08);
+	color: var(--primary-color, #4338ca);
+}
+
+.toolbar-cta.btn-secondary:hover {
+	transform: translateY(-1px);
+	border-color: rgba(99, 102, 241, 0.45);
+	background: rgba(99, 102, 241, 0.14);
+	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.16);
+}
+
+/* Primary (New Course): the filled call to action. */
+.toolbar-cta.btn-primary {
+	border: 1px solid transparent;
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	box-shadow: 0 3px 10px rgba(79, 70, 229, 0.28);
+}
+
+.toolbar-cta.btn-primary:hover {
+	transform: translateY(-1px);
+	background: linear-gradient(135deg, #4f46e5, #4338ca);
+	box-shadow: 0 6px 16px rgba(79, 70, 229, 0.34);
+}
+
+.toolbar-cta:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+
 /* ── Subject Management: label + subject tabs ─────────────────────────── */
 #subjects .subject-tab-bar-wrap {
 	padding: 1rem 1.1rem;
@@ -6649,6 +6717,70 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	box-shadow: none;
 }
 
+/* Row action overflow ("…") ─────────────────────────────────────────────────
+   Every manage-section table caps its row at four icon buttons and puts the
+   rest behind a "…" trigger. The trigger reuses the course "Resources"
+   button (same tint, same class) and the popover reuses the course Resources
+   menu (.course-resources-menu / .course-resources-item), so all the row
+   menus look the same across the manage section. */
+
+td .exam-actions .exam-action-btn.course-action-resources {
+	background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(79, 70, 229, 0.15));
+	color: #6366f1;
+}
+td .exam-actions .exam-action-btn.course-action-resources:hover {
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+/* Open state (the course Resources menu and the shared "…" popover): the
+   same solid fill as the hover state, so the open button reads as active. */
+td .exam-actions .exam-action-btn.course-action-resources.is-open {
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+}
+
+/* The overflow entries live in a hidden holder next to the trigger: the
+   popover copies them out of it when opened, so re-rendering a list never
+   leaves a stale menu behind. */
+.row-action-overflow[hidden] {
+	display: none !important;
+}
+
+/* The popover itself: a course-resources-menu with a slightly wider column
+   (the entries carry an icon and a hint line). */
+.row-action-menu {
+	min-width: 260px;
+}
+
+.row-action-item-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 22px;
+	height: 22px;
+	color: var(--text-muted, #64748b);
+}
+
+.row-action-item-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.course-resources-item.row-action-danger {
+	color: #dc2626;
+}
+
+.course-resources-item.row-action-primary {
+	color: #2563eb;
+}
+
+.course-resources-item.row-action-success {
+	color: #059669;
+}
+
 /* Mobile viewport: only the up/down reorder buttons stay as inline icons.
    Every other row action (add question, move-into, course, edit, delete and
    the system "—" placeholder) is reached through the tap action-sheet, so it
@@ -6662,6 +6794,15 @@ td .exam-actions .exam-action-btn.exam-move-down-btn:disabled {
 	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.exam-edit-btn,
 	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.exam-delete-btn,
 	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .no-actions {
+		display: none !important;
+	}
+
+	/* The "…" trigger belongs to the desktop row: on a phone the action
+	   sheet already carries every action, so the trigger would only add a
+	   second way in. */
+	.tab-content #categoryList tbody tr > td.actions-cell .exam-actions .exam-action-btn.row-action-more,
+	.tab-content #classList tbody tr > td.actions-cell .exam-actions .exam-action-btn.row-action-more,
+	#courseList tbody tr > td.actions-cell .exam-actions .exam-action-btn.row-action-more {
 		display: none !important;
 	}
 }

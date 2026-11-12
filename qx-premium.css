@@ -196,7 +196,7 @@
 #quickCategoryModal .modal-header h2,
 #categoryAssignmentModal .modal-header h2,
 #studentProfileModal .modal-header h2 {
-	font-family: 'Space Grotesk', var(--font-sans);
+	font-family: var(--font-sans);
 	font-size: 1.25rem;
 	font-weight: 700;
 	letter-spacing: -0.01em;
@@ -511,7 +511,7 @@
 #subjects .toolbar h2,
 #exams .toolbar h2,
 #classes .toolbar h2 {
-	font-family: 'Space Grotesk', var(--font-sans);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	letter-spacing: -0.02em;
 	color: var(--text-main);
@@ -587,7 +587,7 @@
 .game-admin-panel .panel-header h3,
 .tournament-studio-panel h3,
 .tournament-studio-panel h4 {
-	font-family: 'Space Grotesk', var(--font-sans);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	letter-spacing: -0.01em;
 	color: var(--text-main);
@@ -647,7 +647,7 @@
 	font-weight: 700;
 }
 .workspace-brand h1 {
-	font-family: 'Space Grotesk', var(--font-sans);
+	font-family: var(--font-sans);
 	letter-spacing: -0.02em;
 }
 
@@ -677,7 +677,7 @@
 }
 .hero-card:hover::after { opacity: 1; }
 .hero-card .hero-value {
-	font-family: 'Space Grotesk', var(--font-sans);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	background: var(--qx-grad-text);
 	-webkit-background-clip: text;
@@ -707,7 +707,7 @@
 }
 .workspace-panel:hover { box-shadow: var(--qx-sh-2); }
 .workspace-panel .panel-header h2 {
-	font-family: 'Space Grotesk', var(--font-sans);
+	font-family: var(--font-sans);
 	font-weight: 700;
 	letter-spacing: -0.01em;
 }

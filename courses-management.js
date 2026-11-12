@@ -574,7 +574,6 @@
 					const owner = courseOwningBranch(branchRootId);
 					if (!owner) return;
 					workspaceBranchCourseId = String(owner.id);
-					renderStructureCourseActions();
 				})
 				.catch(() => { /* the branch still browses without course actions */ });
 		}
@@ -588,7 +587,6 @@
 			courseName: String(options.courseName || course?.name || ''),
 		});
 		renderWorkspacePanes();
-		renderStructureCourseActions();
 	};
 
 	window.closeStructureBranch = function () {
@@ -600,50 +598,6 @@
 		renderCourseList();
 		renderWorkspacePanes();
 	};
-
-	/** Course actions available while browsing a course's structure. */
-	function structureActionCourse() {
-		let id = String(workspaceBranchCourseId || '');
-		if (!id && workspaceView === 'branch' && workspaceBranchRootId) {
-			const inferred = courseOwningBranch(workspaceBranchRootId);
-			if (inferred) {
-				workspaceBranchCourseId = String(inferred.id);
-				id = workspaceBranchCourseId;
-			}
-		}
-		if (!id) return null;
-		if (currentCourse && String(currentCourse.id) === id) return currentCourse;
-		return coursesCache.find((course) => String(course.id) === id) || null;
-	}
-
-	function renderStructureCourseActions() {
-		const host = document.getElementById('structureCourseActions');
-		if (!host) return;
-		const course = structureActionCourse();
-		if (!course) {
-			host.hidden = true;
-			host.innerHTML = '';
-			return;
-		}
-		const id = esc(course.id);
-		const published = course.status === 'published';
-		const icon = {
-			view: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
-			rename: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>',
-			publish: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
-			unpublish: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18.4 5.6a9 9 0 1 0 0 12.8"></path><path d="M3 3l18 18"></path></svg>',
-			assign: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>',
-			document: '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>',
-		};
-		host.hidden = false;
-		host.innerHTML =
-			`<button type="button" class="btn btn-sm btn-primary structure-action is-view" title="Open the course workspace" onclick="openCourseDetail('${id}')">${icon.view}<span>View course</span></button>` +
-			'<span class="structure-action-divider" aria-hidden="true"></span>' +
-			`<button type="button" class="btn btn-sm structure-action is-rename" title="Rename this course" onclick="renameStructureCourse('${id}')">${icon.rename}<span>Rename</span></button>` +
-			`<button type="button" class="btn btn-sm structure-action ${published ? 'is-unpublish' : 'is-publish'}" title="${published ? 'Move this course back to draft' : 'Publish this course for students'}" onclick="toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')">${published ? icon.unpublish : icon.publish}<span>${published ? 'Unpublish' : 'Publish'}</span></button>` +
-			`<button type="button" class="btn btn-sm structure-action is-assign" title="Send this course to your students" onclick="sendStructureCourseToStudents('${id}')">${icon.assign}<span>Send to students</span></button>` +
-			`<button type="button" class="btn btn-sm structure-action is-document" title="Export this course as a PDF or Word document" onclick="createCourseDocument('${id}')">${icon.document}<span>Create document</span></button>`;
-	}
 
 	async function ensureStructureCourse(courseId) {
 		const id = String(courseId || '');
@@ -677,50 +631,159 @@
 	}
 
 	function structureRowActions(root) {
-		const id = esc(root.id);
+		const id = String(root.id || '');
 		return (
 			'<div class="exam-actions">' +
-			`<button class="exam-action-btn course-action-create" title="Create a course on this structure" aria-label="Create a course on this structure" onclick="createCourseOnBranch('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg></button>' +
-			`<button class="exam-action-btn course-action-structure" title="Edit structure" aria-label="Edit structure" onclick="openStructureBranch('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></button>' +
-			`<button class="exam-action-btn course-action-generate" title="Generate outline with AI" aria-label="Generate outline with AI" onclick="openCourseFromCategory('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"></path></svg></button>' +
+			window.RowActions.render([
+				{
+					key: 'create-course',
+					label: 'Create Course',
+					title: 'Create a course on this structure',
+					hint: 'Turn this outline into a course',
+					cls: 'course-action-create',
+					icon: COURSE_ACTION_ICONS.create,
+					onclick: `createCourseOnBranch('${id}')`,
+					run: () => createCourseOnBranch(root.id),
+					desktop: 'visible',
+				},
+				{
+					key: 'generate',
+					label: 'Generate Outline with AI',
+					title: 'Generate outline with AI',
+					hint: 'Draft the outline with the AI assistant',
+					cls: 'course-action-generate',
+					icon: COURSE_ACTION_ICONS.generate,
+					onclick: `openCourseFromCategory('${id}')`,
+					run: () => openCourseFromCategory(root.id),
+					desktop: 'visible',
+				},
+			]) +
 			'</div>'
 		);
 	}
 
+	// Icons for the course row actions (the row bar and the action sheet).
+	const COURSE_ACTION_ICONS = {
+		view:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path><circle cx="12" cy="12" r="3"></circle></svg>',
+		publish:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg>',
+		unpublish:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+		resources:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 9 5-9 5-9-5 9-5z"></path><path d="m3 12 9 5 9-5"></path><path d="m3 17 9 5 9-5"></path></svg>',
+		remove:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+		create:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>',
+		generate:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4z"></path></svg>',
+		link:
+			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>',
+};
+	// Course row actions.
+	//
+	// Three buttons on the row, the rest behind the "…" menu:
+	//   • Open course  → the course workspace (openCourseDetail)
+	//   • Resources    → the prep-sheets / exercises / documents popover
+	//   • Publish      → publish or unpublish
+	//   • Delete       → inside the "…" menu
+	//
+	// Two buttons used to sit here as well and both were duplicates:
+	// "Create course document" (already offered by the Resources popover) and
+	// "Edit structure" (the clickable course title opens the very same
+	// structure view, as does the row itself).
 	function courseRowActions(course) {
-		const id = esc(course.id);
+		// The raw id: RowActions.render escapes the onclick attribute itself.
+		const id = String(course.id || '');
 		const published = course.status === 'published';
 		return (
 			'<div class="exam-actions">' +
-			`<button class="exam-action-btn exam-edit-btn" title="Open course" aria-label="Open course" onclick="openCourseDetail('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>' +
-			`<button class="exam-action-btn course-action-structure" title="Edit structure" aria-label="Edit structure" onclick="openStructureBranch('${esc(course.category_id)}', {courseId:'${id}'})">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 21v-6h6v6"></path></svg></button>' +
-			`<button class="exam-action-btn course-action-document" aria-label="Create course document" title="Create course document" onclick="createCourseDocument('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8M8 17h8"></path></svg></button>' +
-			`<button class="exam-action-btn course-action-resources" title="Prep sheets, exercises & documents" aria-label="Prep sheets, exercises and documents" aria-haspopup="menu" aria-expanded="false" onclick="openCourseResourcesMenu('${id}', this)">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 9 5-9 5-9-5 9-5z"></path><path d="m3 12 9 5 9-5"></path><path d="m3 17 9 5 9-5"></path></svg></button>' +
-			`<button class="exam-action-btn course-action-publish" title="${published ? 'Unpublish' : 'Publish'}" aria-label="${published ? 'Unpublish' : 'Publish'}" onclick="toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></svg></button>' +
-			`<button class="exam-action-btn exam-delete-btn" title="Delete course" aria-label="Delete course" onclick="deleteCourseConfirm('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>' +
+			window.RowActions.render([
+				{
+					key: 'open',
+					label: 'Open Course',
+					title: 'Open course',
+					hint: 'Open the course workspace',
+					cls: 'exam-edit-btn',
+					icon: COURSE_ACTION_ICONS.view,
+					onclick: `openCourseDetail('${id}')`,
+					run: () => openCourseDetail(course.id),
+					desktop: 'visible',
+				},
+				{
+					key: 'resources',
+					label: 'Prep Sheets, Exercises & Documents',
+					title: 'Prep sheets, exercises & documents',
+					hint: 'Session planning, exercises and saved files',
+					cls: 'course-action-resources',
+					icon: COURSE_ACTION_ICONS.resources,
+					// The Resources popover is its own menu (it carries the
+					// per-resource progress badges), so it keeps its own
+					// aria-haspopup / aria-expanded wiring.
+					attrs: ' aria-haspopup="menu" aria-expanded="false"',
+					onclick: `openCourseResourcesMenu('${id}', this)`,
+					run: () => window.openCourseResourcesMenu?.(course.id),
+					desktop: 'visible',
+				},
+				{
+					key: 'publish',
+					label: published ? 'Unpublish Course' : 'Publish Course',
+					title: published ? 'Unpublish' : 'Publish',
+					hint: published ? 'Move this course back to draft' : 'Publish this course for students',
+					cls: 'course-action-publish',
+					icon: published ? COURSE_ACTION_ICONS.unpublish : COURSE_ACTION_ICONS.publish,
+					onclick: `toggleCoursePublish('${id}','${published ? 'unpublish' : 'publish'}')`,
+					run: () => toggleCoursePublish(course.id, published ? 'unpublish' : 'publish'),
+					desktop: 'visible',
+				},
+				{
+					key: 'delete',
+					label: 'Delete Course',
+					title: 'Delete',
+					hint: 'Remove the course and its lessons',
+					cls: 'exam-delete-btn',
+					icon: COURSE_ACTION_ICONS.remove,
+					onclick: `deleteCourseConfirm('${id}')`,
+					run: () => deleteCourseConfirm(course.id),
+					variant: 'danger',
+					tone: 'danger',
+					desktop: 'overflow',
+				},
+			]) +
 			'</div>'
 		);
 	}
-
 	function unlinkedRowActions(course) {
-		const id = esc(course.id);
+		const id = String(course.id || '');
 		return (
 			'<div class="exam-actions">' +
-			`<button class="exam-action-btn course-action-link" title="Link a structure" aria-label="Link a structure" onclick="linkStructure('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></button>' +
-			`<button class="exam-action-btn exam-edit-btn" title="Open course" aria-label="Open course" onclick="openCourseDetail('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>' +
-			`<button class="exam-action-btn exam-delete-btn" title="Delete course" aria-label="Delete course" onclick="deleteCourseConfirm('${id}')">` +
-			'<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>' +
+			window.RowActions.render([
+				{
+					key: 'link',
+					label: 'Link a Structure',
+					title: 'Link a structure',
+					hint: 'Attach an outline to this course',
+					cls: 'course-action-link',
+					icon: COURSE_ACTION_ICONS.link,
+					onclick: `linkStructure('${id}')`,
+					run: () => linkStructure(course.id),
+					desktop: 'visible',
+				},
+				{
+					key: 'delete',
+					label: 'Delete Course',
+					title: 'Delete',
+					hint: 'Remove the course and its lessons',
+					cls: 'exam-delete-btn',
+					icon: COURSE_ACTION_ICONS.remove,
+					onclick: `deleteCourseConfirm('${id}')`,
+					run: () => deleteCourseConfirm(course.id),
+					variant: 'danger',
+					tone: 'danger',
+					desktop: 'visible',
+				},
+			]) +
 			'</div>'
 		);
 	}
@@ -826,7 +889,13 @@
 				const openDefault = () => {
 					if (row.kind === 'structure') openStructureBranch(row.root.id);
 					else if (row.kind !== 'unlinked' && row.course?.category_id) {
-						openStructureBranch(row.course.category_id, { courseId: row.course.id });
+						// In the subjects tab, opening a course goes to its content
+						// (course detail) instead of the structure branch view.
+						if (typeof categoryScope !== 'undefined' && categoryScope.mode === 'subject') {
+							openCourseDetail(row.course.id);
+						} else {
+							openStructureBranch(row.course.category_id, { courseId: row.course.id });
+						}
 					} else openCourseDetail(row.course.id);
 				};
 				event.stopPropagation();
@@ -931,7 +1000,6 @@
 			});
 		}
 		try { window.BulkSelect?.restore('courses'); } catch (_) { /* bulk helper not loaded */ }
-		renderStructureCourseActions();
 	};
 
 	async function loadCourses(quiet) {
@@ -2303,7 +2371,7 @@
 					return (
 						`<div class="course-tree-row" data-category-id="${esc(category.id)}"${lesson ? ` data-lesson-id="${esc(lesson.id)}"` : ''} style="--course-depth:${depth};">` +
 						`<div class="course-tree-category">${toggle}<span class="course-tree-level">${level}</span>` +
-						`<strong>${esc(category.name)}</strong><span class="course-tree-count">${qCount} question${qCount === 1 ? '' : 's'}</span></div>` +
+						`<strong class="course-tree-category-name" title="Open outline for ${esc(category.name)}">${esc(category.name)}</strong><span class="course-tree-count" onclick="event.stopPropagation(); questionsFilterByCategoryName(event, '${esc(category.name)}')" title="View questions for ${esc(category.name)}">${qCount} question${qCount === 1 ? '' : 's'}</span></div>` +
 						`<div class="course-tree-actions">${lessonLabel}${generateBtn}${generateQuestionsBtn}</div>` +
 						'</div>'
 					);
@@ -2332,9 +2400,10 @@
 
 		pane.innerHTML =
 			'<div class="course-detail-toolbar" role="region" aria-label="Course workspace">' +
-			'<div class="course-detail-heading">' +
-				`<button type="button" class="btn course-detail-back" title="Back to all courses" onclick="closeCourseDetail()">${toolbarIcons.back}<span>All courses</span></button>` +
-				'<div class="course-detail-title">' +
+			'<div class="course-detail-header-row">' +
+			'<div class="course-detail-leading">' +
+				`<button type="button" class="course-detail-back" title="Back to all courses" aria-label="Back to all courses" onclick="closeCourseDetail()">${toolbarIcons.back}</button>` +
+				'<div class="course-detail-title-group">' +
 					'<span class="course-detail-eyebrow">Course workspace</span>' +
 					`<h2>${esc(course.name)}</h2>` +
 					'<div class="course-detail-badges">' +
@@ -2344,26 +2413,17 @@
 					'</div>' +
 				'</div>' +
 			'</div>' +
-			`<div class="course-detail-controls">` +
-				'<div class="course-detail-tools">' +
-					`<div class="course-detail-mode" role="group" aria-label="Course mode">` +
-						`<button type="button" class="btn ${courseDetailMode === 'view' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'view'}" onclick="setCourseDetailMode('view')">${toolbarIcons.view}<span>View course</span></button>` +
-						`<button type="button" class="btn ${courseDetailMode === 'edit' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'edit'}" onclick="setCourseDetailMode('edit')">${toolbarIcons.edit}<span>Edit content</span></button>` +
-					'</div>' +
-					(courseDetailMode === 'edit' ? '<div class="course-model-control">' + modelSelectHtml(selectedCourseConfigId, 'courseModelSelect') + '</div>' : '') +
+			'<div class="course-detail-trailing">' +
+				'<div class="course-detail-mode" role="group" aria-label="Course mode">' +
+				`<button type="button" class="btn ${courseDetailMode === 'view' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'view'}" onclick="setCourseDetailMode('view')">${toolbarIcons.view}<span>View course</span></button>` +
+				`<button type="button" class="btn ${courseDetailMode === 'edit' ? 'active' : ''}" aria-pressed="${courseDetailMode === 'edit'}" onclick="setCourseDetailMode('edit')">${toolbarIcons.edit}<span>Edit content</span></button>` +
 				'</div>' +
-				'<div class="course-detail-actions" role="group" aria-label="Course actions">' +
-					(course.category_id
-						? `<button type="button" class="btn course-action-structure" title="Edit the module and chapter structure" onclick="openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})">${toolbarIcons.structure}<span>Edit structure</span></button>`
-						: `<button type="button" class="btn course-action-link" title="Link a category branch to this course" onclick="linkStructure('${esc(course.id)}')">${toolbarIcons.link}<span>Link a structure</span></button>`) +
-					`<button type="button" class="btn course-action-rename" title="Rename this course" onclick="renameCoursePrompt()">${toolbarIcons.rename}<span>Rename</span></button>` +
-					`<button type="button" class="btn ${published ? 'course-action-unpublish' : 'course-action-publish'}" title="${published ? 'Move this course back to draft' : 'Publish this course for students'}" onclick="toggleCoursePublish('${esc(course.id)}','${published ? 'unpublish' : 'publish'}')">${published ? toolbarIcons.unpublish : toolbarIcons.publish}<span>${published ? 'Unpublish' : 'Publish'}</span></button>` +
-					`<button type="button" class="btn course-action-assign" title="Send this course to your students" onclick="openAssignClassesModal()">${toolbarIcons.assign}<span>Send to students</span></button>` +
-					(courseDetailMode === 'edit' ? `<button type="button" class="btn course-action-add" title="Add a lesson to this course" onclick="addLessonManual()">${toolbarIcons.add}<span>Add lesson</span></button>` : '') +
-					'<span class="course-detail-action-divider" aria-hidden="true"></span>' +
-					`<button type="button" class="btn course-action-document" title="Create course document" onclick="createCourseDocument()">${toolbarIcons.document}<span>Create document</span></button>` +
-				'</div>' +
-			'</div></div>' +
+				(course.category_id
+					? `<button type="button" class="btn course-detail-structure" title="Edit module and chapter structure" onclick="openStructureBranch('${esc(course.category_id)}', {courseId:'${esc(course.id)}'})">${toolbarIcons.structure}<span>Edit structure</span></button>`
+					: `<button type="button" class="btn course-detail-link" title="Link a category branch to this course" onclick="linkStructure('${esc(course.id)}')">${toolbarIcons.link}<span>Link structure</span></button>`) +
+				(courseDetailMode === 'edit' ? '<div class="course-model-control">' + modelSelectHtml(selectedCourseConfigId, 'courseModelSelect') + '</div>' : '') +
+			'</div>' +
+			'</div>' +
 			(courseDetailMode === 'view'
 				? renderTeacherCourseDocument(course, branchRows)
 				: `<div class="course-command-launchpad">` +
@@ -4020,29 +4080,71 @@ window.generateAllPrepSheets = async function () {
 		return esc(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 	}
 
-	function copyToClipboard(text) {
+	// Copy text to the clipboard.
+	//
+	// The Clipboard API is only available in a secure context (https, or
+	// localhost) — over a plain-HTTP LAN address `navigator.clipboard` is
+	// undefined, so the textarea + execCommand fallback is the only way. The
+	// fallback is also used when the API exists but rejects (permissions,
+	// a lost user gesture), which is why both paths are tried in order.
+	async function copyToClipboard(text, button) {
 		const value = String(text || '');
-		if (navigator.clipboard && navigator.clipboard.writeText) {
-			return navigator.clipboard.writeText(value).then(
-				() => toast('Path copied.'),
-				() => toast('Could not copy the path.', 'error'),
-			);
+		if (!value) {
+			toast('Nothing to copy.', 'warning');
+			return false;
 		}
-		try {
-			const input = document.createElement('textarea');
-			input.value = value;
-			input.style.position = 'fixed';
-			input.style.opacity = '0';
-			document.body.appendChild(input);
-			input.select();
-			document.execCommand('copy');
-			input.remove();
-			toast('Path copied.');
-		} catch (_) {
-			toast('Could not copy the path.', 'error');
+		const viaApi = async () => {
+			if (!navigator.clipboard || !navigator.clipboard.writeText) return false;
+			try {
+				await navigator.clipboard.writeText(value);
+				return true;
+			} catch (_) {
+				return false;
+			}
+		};
+		const viaFallback = () => {
+			try {
+				const helper = document.createElement('textarea');
+				helper.value = value;
+				helper.setAttribute('readonly', '');
+				helper.style.position = 'fixed';
+				helper.style.top = '0';
+				helper.style.left = '0';
+				helper.style.opacity = '0';
+				helper.style.pointerEvents = 'none';
+				document.body.appendChild(helper);
+				helper.select();
+				helper.setSelectionRange(0, value.length);
+				const ok = document.execCommand('copy');
+				helper.remove();
+				return !!ok;
+			} catch (_) {
+				return false;
+			}
+		};
+
+		const ok = (await viaApi()) || viaFallback();
+		if (ok) {
+			toast('Copied to clipboard.');
+			if (button) {
+				const original = button.getAttribute('data-label') || button.textContent;
+				button.setAttribute('data-label', original);
+				button.textContent = '✓';
+				button.classList.add('is-copied');
+				setTimeout(() => {
+					button.textContent = original;
+					button.classList.remove('is-copied');
+				}, 1400);
+			}
+			return true;
 		}
-		return null;
+		toast('Copy failed — the path is selected, copy it manually.', 'warning');
+		return false;
 	}
+	// The generated-documents table calls it from an inline onclick, which
+	// resolves in the global scope — expose it (the helper is private to
+	// this module's closure).
+	window.copyToClipboard = copyToClipboard;
 
 	const RESOURCE_KINDS = Object.freeze({
 		'prep-sheets': {
@@ -4133,7 +4235,12 @@ window.generateAllPrepSheets = async function () {
 	function closeCourseResourcesMenu() {
 		if (resourcesMenuEl && resourcesMenuEl.parentNode) resourcesMenuEl.parentNode.removeChild(resourcesMenuEl);
 		resourcesMenuEl = null;
-		document.querySelectorAll('.course-action-resources[aria-expanded="true"]')
+		// Scoped to the courses table: the shared row-action "…" trigger
+		// (.row-action-more) carries the same .course-action-resources class for
+		// styling, and resetting its aria-expanded here would fight with the
+		// popover it owns.
+		document
+			.querySelectorAll('#courseList .course-action-resources[aria-expanded="true"]:not(.row-action-more)')
 			.forEach((button) => button.setAttribute('aria-expanded', 'false'));
 		document.removeEventListener('click', resourcesDocClick, true);
 		document.removeEventListener('keydown', resourcesKeyDown, true);
@@ -4733,7 +4840,7 @@ window.generateAllPrepSheets = async function () {
 			return;
 		}
 		if (state.error) {
-			host.innerHTML = `<div class="generated-docs-empty is-error">${esc(state.error)}<br><button type="button" class="btn btn-sm" onclick="refreshGeneratedDocuments()">Try again</button></div>`;
+			host.innerHTML = `<div class="generated-docs-empty is-error">${esc(state.error)}<br><button type="button" class="btn btn-sm btn-primary generated-docs-retry" onclick="refreshGeneratedDocuments()">Try again</button></div>`;
 			return;
 		}
 		const rows = visibleDocsRows();
@@ -4765,13 +4872,13 @@ window.generateAllPrepSheets = async function () {
 						`<td><span class="generated-docs-format">${esc(String(row.format || '').toUpperCase() || '—')}</span></td>` +
 						`<td>${esc(size)}</td>` +
 						`<td>${esc(fmtDateTime(row.created_at))}</td>` +
-						`<td><div class="generated-docs-path"><code>${esc(row.url || '')}</code>` +
-							`<button type="button" class="generated-docs-icon" title="Open in a new tab" aria-label="Open in a new tab" onclick="window.open('${jsAttr(row.url || '')}', '_blank', 'noopener')">↗</button>` +
-							`<button type="button" class="generated-docs-icon" title="Copy path" aria-label="Copy path" onclick="copyToClipboard('${jsAttr(row.url || '')}')">⧉</button>` +
+						`<td><div class="generated-docs-path"><code title="${esc(row.url || '')}">${esc(row.url || '')}</code>` +
+							`<button type="button" class="generated-docs-icon" title="Open in a new tab" aria-label="Open in a new tab" onclick="window.open('${jsAttr(row.url || '')}', '_blank', 'noopener')"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"></path><path d="M8 7h9v9"></path></svg></button>` +
+							`<button type="button" class="generated-docs-icon" title="Copy path" aria-label="Copy path" onclick="copyToClipboard('${jsAttr(row.url || '')}', this)"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>` +
 						'</div></td>' +
 						'<td><div class="generated-docs-actions">' +
-							`<button type="button" class="btn btn-sm" onclick="generatedDocsDownload('${jsAttr(row.id)}','${jsAttr(row.file_name || '')}')">Download</button>` +
-							`<button type="button" class="btn btn-sm btn-danger-soft" onclick="generatedDocsDelete('${jsAttr(row.id)}')">Delete</button>` +
+							`<button type="button" class="btn btn-sm btn-secondary generated-docs-download" onclick="generatedDocsDownload('${jsAttr(row.id)}','${jsAttr(row.file_name || '')}')"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>Download</button>` +
+							`<button type="button" class="btn btn-sm btn-danger-soft generated-docs-delete" onclick="generatedDocsDelete('${jsAttr(row.id)}')"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Delete</button>` +
 						'</div></td>' +
 					'</tr>'
 				);
@@ -4838,8 +4945,8 @@ window.generateAllPrepSheets = async function () {
 			'generatedDocsModal',
 			id ? `Generated documents · ${docsLibraryState.courseName || 'Course'}` : 'Generated documents',
 			'<div id="generatedDocsBody"></div>',
-			'<button type="button" class="btn" onclick="closeCourseModal(\'generatedDocsModal\')">Close</button>' +
-				'<button type="button" class="btn" onclick="refreshGeneratedDocuments()">Refresh</button>',
+			'<button type="button" class="btn btn-secondary generated-docs-footer-btn" onclick="closeCourseModal(\'generatedDocsModal\')">Close</button>' +
+				'<button type="button" class="btn btn-primary generated-docs-footer-btn" onclick="refreshGeneratedDocuments()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><polyline points="21 3 21 9 15 9"></polyline></svg>Refresh</button>',
 			'course-document-modal generated-docs-modal',
 		);
 		await refreshGeneratedDocuments();

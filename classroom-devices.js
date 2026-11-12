@@ -660,6 +660,84 @@
 		);
 	}
 
+	// Actions offered on a device row.
+	//
+	// Three buttons on the row (sessions · block/allow · rename), the rest
+	// behind the "…" menu.
+	function deviceRowActions(d, id, blocked, staffRow, expanded) {
+		var actions = [];
+
+		if (canViewSessions()) {
+			actions.push({
+				key: 'sessions',
+				label: expanded ? 'Hide Sessions' : 'Show Sessions',
+				title: expanded ? 'Hide sessions' : 'Show sessions',
+				hint: 'Live sign-in sessions on this machine',
+				cls: 'device-expand-btn',
+				icon: ICONS.sessions,
+				onclick: "window.ClassroomDevices.toggleSessions('" + id + "')",
+				run: function () {
+					toggleSessions(id);
+				},
+				attrs: ' aria-expanded="' + (expanded ? 'true' : 'false') + '"',
+				desktop: 'visible',
+			});
+		}
+
+		// Blocking is a student-exam control — never offered on staff rows.
+		if (!staffRow) {
+			actions.push({
+				key: blocked ? 'allow' : 'block',
+				label: blocked ? 'Autoriser' : 'Bloquer',
+				title: blocked ? 'Autoriser' : 'Bloquer',
+				hint: blocked ? 'Let the machine sign in again' : 'Stop the machine signing in',
+				cls: blocked ? 'exam-copy-btn' : 'device-block-btn',
+				icon: blocked ? ICONS.allow : ICONS.block,
+				onclick:
+					"window.ClassroomDevices.setStatus('" + id + "','" +
+					(blocked ? 'allowed' : 'blocked') + "')",
+				run: function () {
+					setStatus(id, blocked ? 'allowed' : 'blocked');
+				},
+				tone: blocked ? 'success' : 'danger',
+				desktop: 'visible',
+			});
+		}
+
+		actions.push({
+			key: 'rename',
+			label: 'Renommer',
+			title: 'Renommer',
+			hint: 'Give the machine a new name',
+			cls: 'exam-edit-btn',
+			icon: ICONS.rename,
+			onclick: "window.ClassroomDevices.rename('" + id + "')",
+			run: function () {
+				rename(id);
+			},
+			desktop: 'visible',
+		});
+
+		actions.push({
+			key: 'forget',
+			label: 'Oublier',
+			title: 'Oublier',
+			hint: 'Remove the machine from the list',
+			cls: 'exam-delete-btn',
+			icon: ICONS.forget,
+			onclick: "window.ClassroomDevices.forget('" + id + "')",
+			run: function () {
+				forget(id);
+			},
+			variant: 'danger',
+			tone: 'danger',
+			// A staff row has one action less, so "Oublier" only moves into the
+			// "…" menu when the row really carries more than three actions.
+			desktop: actions.length >= 3 ? 'overflow' : 'visible',
+		});
+
+		return actions;
+	}
 	// Desktop structure: the 8-column machine table, each machine followed by
 	// a colspan sub-row that holds its sessions panel.
 	function renderTableRows(rows) {
@@ -717,25 +795,7 @@
 					'</span></td>' +
 					'<td data-label="Last seen">' + relativeTime(d.last_seen) + '</td>' +
 					'<td class="actions-cell device-cell-actions" data-label="Actions"><div class="exam-actions">' +
-					(canViewSessions()
-						? '<button type="button" class="exam-action-btn device-expand-btn" aria-expanded="' + (expanded ? 'true' : 'false') + '" aria-label="' +
-							(expanded ? 'Hide sessions' : 'Show sessions') + '" title="' +
-							(expanded ? 'Hide sessions' : 'Show sessions') +
-							'" onclick="window.ClassroomDevices.toggleSessions(\'' + id + '\')">' +
-							'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>' +
-							'</button>'
-						: '') +
-					(staffRow
-						? ''
-						: (blocked
-							? '<button type="button" class="exam-action-btn exam-copy-btn" title="Autoriser" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'allowed\')">' + ICONS.allow + '</button>'
-							: '<button type="button" class="exam-action-btn exam-delete-btn" title="Bloquer" onclick="window.ClassroomDevices.setStatus(\'' + id + '\',\'blocked\')">' + ICONS.block + '</button>')) +
-					'<button type="button" class="exam-action-btn exam-edit-btn" title="Renommer" onclick="window.ClassroomDevices.rename(\'' +
-					id +
-					'\')">' + ICONS.rename + '</button>' +
-					'<button type="button" class="exam-action-btn exam-delete-btn" title="Oublier" onclick="window.ClassroomDevices.forget(\'' +
-					id +
-					'\')">' + ICONS.forget + '</button>' +
+					window.RowActions.render(deviceRowActions(d, id, blocked, staffRow, expanded)) +
 					'</div></td>' +
 					'</tr>' +
 					sessionSubRowHtml(d)
