@@ -98,10 +98,23 @@ export function isRefreshTokenLive(token, nowMs = Date.now()) {
 export class AuthService {
   #repo;
   #lastIp = null;
+  #securityEventSvc = null;
 
   /** @param {import('../../frontend/infrastructure/IStorageRepository.js').IStorageRepository} repo */
-  constructor(repo) {
+  constructor(repo, { securityEventSvc = null } = {}) {
     this.#repo = repo;
+    this.#securityEventSvc = securityEventSvc;
+  }
+
+  /**
+   * Best-effort durable security trail. Never throws — a failed write must
+   * not break the authentication flow it is describing.
+   */
+  async #recordSecurity(input) {
+    if (!this.#securityEventSvc) return;
+    try {
+      await this.#securityEventSvc.record(input);
+    } catch (_) { /* the trail is best-effort */ }
   }
 
   /**
@@ -152,11 +165,28 @@ export class AuthService {
     const user = users[0];
     if (!user) {
       securityLog('login_failure', { username, reason: 'unknown_user', ip });
+      await this.#recordSecurity({
+        type: 'login_failure',
+        username,
+        reason: 'unknown_user',
+        schoolId: resolvedSchoolId || null,
+        ip,
+        userAgent,
+      });
       throw new UnauthorizedError('Invalid username or password');
     }
 
     if (user.status !== 'active') {
       securityLog('login_failure', { userId: user.id, reason: `status:${user.status}`, ip });
+      await this.#recordSecurity({
+        type: 'login_failure',
+        username,
+        userId: user.id,
+        schoolId: user.school_id || null,
+        reason: `status:${user.status}`,
+        ip,
+        userAgent,
+      });
       throw new ForbiddenError('Your account is not active. Contact your administrator.');
     }
 
@@ -194,6 +224,15 @@ export class AuthService {
 
     if (!matches) {
       securityLog('login_failure', { userId: user.id, reason: 'bad_password', ip });
+      await this.#recordSecurity({
+        type: 'login_failure',
+        username,
+        userId: user.id,
+        schoolId: user.school_id || null,
+        reason: 'bad_password',
+        ip,
+        userAgent,
+      });
       throw new UnauthorizedError('Invalid username or password');
     }
 
@@ -252,6 +291,15 @@ export class AuthService {
     const accessToken = this.#signAccess(safeUser, { sid: issued.id });
 
     securityLog('login_success', { userId: user.id, ip });
+    await this.#recordSecurity({
+      type: 'login_success',
+      username: user.username,
+      userId: user.id,
+      schoolId: user.school_id || null,
+      ip,
+      userAgent,
+      meta: { role: user.role },
+    });
     return { user: safeUser, accessToken, refreshToken: issued.raw };
   }
 
@@ -557,6 +605,19 @@ export class AuthService {
     });
     if (tokens[0]) {
       await this.#repo.update('refresh_tokens', tokens[0].id, { revoked: true });
+      // Durable sign-out trail: a logout is a traceability event. The
+      // refresh-token row carries no organization, so resolve it from the
+      // account.
+      const owner = await this.#repo.getById('users', tokens[0].user_id);
+      await this.#recordSecurity({
+        type: 'logout',
+        userId: tokens[0].user_id,
+        schoolId: owner?.school_id || null,
+        username: owner?.username || null,
+        reason: 'user_signed_out',
+        ip: tokens[0].ip_address || null,
+        userAgent: tokens[0].user_agent || null,
+      });
     }
   }
 
@@ -571,7 +632,16 @@ export class AuthService {
     if (!user) throw new NotFoundError('User');
 
     const matches = await bcrypt.compare(oldPassword, user.password_hash);
-    if (!matches) throw new ValidationError({ oldPassword: ['Current password is incorrect'] });
+    if (!matches) {
+      await this.#recordSecurity({
+        type: 'password_change',
+        userId,
+        schoolId: user.school_id || null,
+        username: user.username || null,
+        reason: 'wrong_current_password',
+      });
+      throw new ValidationError({ oldPassword: ['Current password is incorrect'] });
+    }
 
     const passwordHash = await bcrypt.hash(newPassword, config.bcryptRounds);
     await this.#repo.update('users', userId, { password_hash: passwordHash });
@@ -583,6 +653,14 @@ export class AuthService {
     for (const t of tokens) {
       await this.#repo.update('refresh_tokens', t.id, { revoked: true });
     }
+
+    await this.#recordSecurity({
+      type: 'password_change',
+      userId,
+      schoolId: user.school_id || null,
+      username: user.username || null,
+      reason: 'password_changed',
+    });
 
     logger.info({ userId }, 'Password changed; all sessions revoked');
   }

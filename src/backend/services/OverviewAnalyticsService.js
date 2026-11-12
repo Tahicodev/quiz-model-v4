@@ -87,6 +87,11 @@ export function resolvePeriodWindow(periodKey, now, academicWindow, customFrom, 
       const start = new Date(d.getTime() - 30 * 86400000);
       return { key: '30d', label: 'Last 30 days', start, end: d };
     }
+    case '90d': {
+      // Quarterly window — the admin console's medium-range comparison.
+      const start = new Date(d.getTime() - 90 * 86400000);
+      return { key: '90d', label: 'Last 90 days', start, end: d };
+    }
     case 'week': {
       // Current week, Monday 00:00 UTC → now (teacher Overview).
       const day = d.getUTCDay() || 7;

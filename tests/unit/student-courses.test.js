@@ -62,7 +62,9 @@ describe('student course structure', () => {
 		// Course view: course name, aggregated goals and one chapter card.
 		expect(reader.querySelector('.course-document-cover h1').textContent).toBe('Module 1');
 		expect(reader.querySelector('.course-outline-grid').textContent).toContain('1- vocabulaire de base');
+		// Chapter cards now carry their ordinal so students see the order.
 		expect(reader.querySelector('.course-outline-level').textContent).toBe('Chapter');
+		expect(reader.querySelector('.course-outline-number').textContent).toBe('1');
 		expect(reader.querySelector('.course-highlights').textContent).toContain('Identifier le vocabulaire de base');
 		expect(reader.querySelector('.course-highlights').textContent).toContain('Information');
 

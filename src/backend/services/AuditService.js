@@ -26,8 +26,24 @@ export class AuditService {
    * @param {object|null} [input.diff]      { before, after } for updates
    * @param {string|null} [input.ip]
    * @param {string|null} [input.userAgent]
+   * @param {'success'|'denied'|'error'} [input.outcome]
+   *        How the action ENDED. Defaults to success — an action that was
+   *        recorded is an action that completed. A refusal must say so.
+   * @param {'info'|'warning'|'critical'} [input.severity]
+   *        How URGENT the event is. Defaults to info.
    */
-  async log({ schoolId, actorId, entityType, entityId, action, diff = null, ip = null, userAgent = null }) {
+  async log({
+    schoolId,
+    actorId,
+    entityType,
+    entityId,
+    action,
+    diff = null,
+    ip = null,
+    userAgent = null,
+    outcome = 'success',
+    severity = 'info',
+  }) {
     try {
       return await this.#repo.create('audit_logs', {
         school_id: schoolId,
@@ -38,6 +54,8 @@ export class AuditService {
         diff_json: diff ? JSON.stringify(diff) : null,
         ip_address: ip || null,
         user_agent: userAgent || null,
+        outcome,
+        severity,
       });
     } catch (err) {
       // Audit failure must NEVER crash the main operation.

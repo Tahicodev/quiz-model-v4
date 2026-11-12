@@ -184,6 +184,15 @@
 					cb.checked = selectAllState.checked;
 					cb.indeterminate = selectAllState.indeterminate;
 				});
+			// Let the owning module refresh any extra bulk actions it owns
+			// (e.g. the categories' training toggle) against the new selection.
+			if (typeof window.onBulkSelectionChange === 'function') {
+				try {
+					window.onBulkSelectionChange(tableId, checkedBoxes);
+				} catch (e) {
+					console.error(`[bulk] onBulkSelectionChange(${tableId}) failed:`, e);
+				}
+			}
 		} catch (e) {
 			console.error(`[bulk] updateBar(${tableId}) failed:`, e);
 		}

@@ -197,17 +197,44 @@
 		visit(root);
 	}
 
-	function renderHighlights(node, title) {
+	/** Learning goals panel: the objectives and key concepts of a course or a
+	 *  chapter, collapsible so long lists stay tidy. */
+	function renderHighlights(node, title, { maxItems = 4 } = {}) {
 		const objectives = Array.isArray(node?.objectives) ? node.objectives : [];
-		const keyConcepts = Array.isArray(node?.key_concepts) ? node.key_concepts : [];
+		const keyConcepts = Array.isArray(node?.key_concepts)
+			? node.key_concepts
+			: Array.isArray(node?.keyConcepts)
+				? node.keyConcepts
+				: [];
 		if (!objectives.length && !keyConcepts.length) return '';
 		const column = (heading, items, tone) =>
-			`<div class="course-highlights-col course-highlights-col--${tone}"><h3>${esc(heading)}</h3><ul>` +
+			`<div class="course-highlights-col course-highlights-col--${tone}">` +
+			`<h3>${esc(heading)}</h3>` +
+			`<ul class="course-highlights-list${items.length > maxItems ? ' course-highlights-list--truncated' : ''}">` +
 			items.map((item) => `<li>${esc(item)}</li>`).join('') +
 			'</ul></div>';
+		// The whole section is one toggle: collapsed it shows the first few
+		// entries of each column, expanded it reveals every objective and key
+		// concept. The button states what clicking it will do.
+		const hiddenCount =
+			Math.max(0, objectives.length - maxItems) +
+			Math.max(0, keyConcepts.length - maxItems);
+		const expandable = hiddenCount > 0;
 		return (
-			`<section class="course-highlights"><div class="course-highlights-head">` +
-			`<span class="course-highlights-kicker">Learning goals</span><h2>${esc(title)}</h2></div>` +
+			`<section class="course-highlights" id="course-highlights-${esc(node.id)}" data-expanded="false">` +
+			`<div class="course-highlights-head">` +
+			`<div class="course-highlights-headings">` +
+			`<span class="course-highlights-kicker">Learning goals</span><h2>${esc(title)}</h2>` +
+			`</div>` +
+			(expandable
+				? `<button type="button" class="course-highlights-toggle" aria-expanded="false" ` +
+					`data-collapsed-label="Show all ${hiddenCount}" data-expanded-label="Show fewer" ` +
+					`onclick="StudentCourses.toggleHighlights('${esc(node.id)}', this)">` +
+					`<span class="course-highlights-toggle-label">Show all ${hiddenCount}</span>` +
+					`<span class="course-highlights-toggle-icon" aria-hidden="true">▾</span>` +
+					`</button>`
+				: '') +
+			`</div>` +
 			`<div class="course-highlights-grid">` +
 			(objectives.length ? column('Objectives', objectives, 'objectives') : '') +
 			(keyConcepts.length ? column('Key concepts', keyConcepts, 'concepts') : '') +
@@ -215,13 +242,38 @@
 		);
 	}
 
-	function renderChapterCard(node, depth) {
-		const level = categoryLevelLabel(node, depth);
+	/** Expand / collapse a Learning goals section so the student can read every
+	 *  objective and key concept, or fold the long lists away again. */
+	function toggleHighlights(nodeId, button) {
+		const section = document.getElementById(`course-highlights-${nodeId}`);
+		if (!section) return;
+		const expanded = section.dataset.expanded === 'true';
+		section.dataset.expanded = expanded ? 'false' : 'true';
+		button.setAttribute('aria-expanded', String(!expanded));
+		const label = button.querySelector('.course-highlights-toggle-label');
+		const icon = button.querySelector('.course-highlights-toggle-icon');
+		if (label) {
+			label.textContent = expanded
+				? button.dataset.collapsedLabel || 'Show all'
+				: button.dataset.expandedLabel || 'Show fewer';
+		}
+		if (icon) icon.textContent = expanded ? '▾' : '▴';
+	}
+
+	function renderChapterCard(node, depth, number) {
+		// The outline card names the structural level (Module / Chapter / Axis)
+		// and carries its ordinal in the outline, so the numbering matches the
+		// order of the teacher's category structure.
+		const level =
+			depth === 0 ? 'Module' : depth === 1 ? 'Chapter' : 'Axis';
 		const count = countLessons(node);
 		const goals = Array.isArray(node.objectives) ? node.objectives.length : 0;
 		return (
 			`<button type="button" class="course-outline-card" onclick="StudentCourses.openChapter('${esc(node.id)}')">` +
+			`<span class="course-outline-head">` +
+			`<span class="course-outline-number" aria-hidden="true">${number}</span>` +
 			`<span class="course-outline-level">${esc(level)}</span>` +
+			`</span>` +
 			`<strong class="course-outline-name">${esc(node.name)}</strong>` +
 			`<span class="course-outline-meta">${count} lesson${count === 1 ? '' : 's'}` +
 			(goals ? ` · ${goals} goal${goals === 1 ? '' : 's'}` : '') +
@@ -254,14 +306,21 @@
 		return lines.join('\n').replace(/^\s*\n/, '');
 	}
 
-	function renderLessonCard(lesson, kicker, { compact = false } = {}) {
+	function renderLessonCard(lesson, kicker, { compact = false, number = 0 } = {}) {
 		const summary = String(lesson?.summary || '').trim();
 		const title = String(lesson?.title || 'Lesson');
 		const kickerText = String(kicker || '').trim();
 		const showKicker = kickerText && normalizedLessonTitle(kickerText) !== normalizedLessonTitle(title);
+		const head =
+			(number || showKicker)
+				? `<span class="course-lesson-head">` +
+					(number ? `<span class="course-lesson-number" aria-hidden="true">${number}</span>` : '') +
+					(showKicker ? `<span class="course-lesson-kicker">${esc(kickerText)}</span>` : '') +
+					`</span>`
+				: '';
 		return (
 			`<article class="course-lesson-card${compact ? ' course-lesson-card--compact' : ''}">` +
-			(showKicker ? `<span class="course-lesson-kicker">${esc(kickerText)}</span>` : '') +
+			head +
 			`<h3>${esc(title)}</h3>` +
 			(summary ? `<p class="course-lesson-summary">${esc(summary)}</p>` : '') +
 			`<div class="course-lesson-actions"><button type="button" class="workspace-btn primary" onclick="StudentCourses.openLesson('${esc(lesson?.id)}')">Read lesson</button></div>` +
@@ -302,27 +361,47 @@
 				.filter(Boolean)
 				.join('\n\n');
 		const total = countLessons(root);
-		const outlineCards = [
-			...chapters.map((child) => {
-				// A leaf chapter (no nesting) is really a lesson container: show
-				// its lessons directly instead of an extra click through a card.
-				if (!(child.children || []).length) {
-					const leafLessons = lessonsUnder(child);
-					if (leafLessons.length) {
-						return leafLessons
-							.map((lesson) => renderLessonCard(lesson, child.name, { compact: true }))
-							.join('');
-					}
-				}
-				return renderChapterCard(child, 1);
-			}),
-			...rootLessons.map((lesson) => renderLessonCard(lesson, root.name, { compact: true })),
-		].join('');
+		// The outline lists the chapters in the order of the course structure
+		// (the same order the teacher sees in the category list), and each
+		// chapter card carries its ordinal. A chapter that only holds lessons
+		// still gets its card, so the numbering never skips a chapter.
+		const outlineCards = chapters
+			.map((child, index) => {
+				const card = renderChapterCard(child, 1, index + 1);
+				if ((child.children || []).length) return card;
+				// A leaf chapter is really a lesson container: show its lessons
+				// right below the card instead of an extra click through it.
+				// Their numbers match the chapter view, so a lesson carries the
+				// same badge wherever it is listed.
+				const leafLessons = lessonsUnder(child);
+				if (!leafLessons.length) return card;
+				return (
+					card +
+					leafLessons
+						.map((lesson, i) =>
+							renderLessonCard(lesson, child.name, { compact: true, number: i + 1 }),
+						)
+						.join('')
+				);
+			})
+			.join('');
+		const rootLessonsHtml = rootLessons.length
+			? `<div class="course-outline-group">` +
+				`<h3 class="course-outline-group-title">Module lessons</h3>` +
+				`<div class="course-lesson-grid">${rootLessons
+					.map((lesson, index) =>
+						renderLessonCard(lesson, root.name, { compact: true, number: index + 1 }),
+					)
+					.join('')}</div>` +
+				`</div>`
+			: '';
 		const unlinkedBlock = unlinked.length
 			? `<section class="course-view-section"><div class="course-view-heading"><h2>Additional content</h2>` +
 				`<span>${unlinked.length} lesson${unlinked.length === 1 ? '' : 's'}</span></div>` +
 				`<div class="course-lesson-grid">${unlinked
-					.map((lesson) => renderLessonCard(lesson, 'Course', { compact: true }))
+					.map((lesson, index) =>
+						renderLessonCard(lesson, 'Course', { compact: true, number: index + 1 }),
+					)
 					.join('')}</div></section>`
 			: '';
 		return (
@@ -337,6 +416,7 @@
 			(outlineCards
 				? `<div class="course-outline-grid">${outlineCards}</div>`
 				: panelNote('This course has no lessons yet — your teacher is still preparing it.')) +
+			rootLessonsHtml +
 			`</section>${unlinkedBlock}</article>`
 		);
 	}
@@ -345,12 +425,14 @@
 		const node = entry.node;
 		const pathNames = entry.path.map((item) => item.name);
 		const chapterLessons = lessonsUnder(node);
+		let lessonNumber = 0;
 		const cards = chapterLessons
 			.map((lesson) => {
 				const category = categoryEntryById.get(String(lesson.category_id));
 				const kicker =
 					category && String(category.node.id) !== String(node.id) ? category.node.name : '';
-				return renderLessonCard(lesson, kicker);
+				lessonNumber += 1;
+				return renderLessonCard(lesson, kicker, { number: lessonNumber });
 			})
 			.join('');
 		return (
@@ -519,9 +601,9 @@
 			`<h${headingLevel}>${esc(lesson.title || 'Lesson')}</h${headingLevel}></div>` +
 			`<section class="course-document-lesson">` +
 			(lesson.summary ? `<p class="course-lesson-summary">${esc(lesson.summary)}</p>` : '') +
-(lesson.content
-					? `<div class="course-md">${renderMarkdown(stripDuplicateLessonHeading(lesson.content, lesson.title))}</div>`
-					: '<p class="course-student-desc">The teacher has not written this lesson yet — check back soon.</p>') +
+			(lesson.content
+				? `<div class="course-md">${renderMarkdown(stripDuplicateLessonHeading(lesson.content, lesson.title))}</div>`
+				: '<p class="course-student-desc">The teacher has not written this lesson yet — check back soon.</p>') +
 			`<div class="course-lesson-actions"><button type="button" class="workspace-btn primary" onclick="StudentCourses.practice('${esc(lesson.id)}', this)">Practice this section</button></div>` +
 			`</section>${node.children.length ? `<ol>${node.children.map((child) => renderLessonOutlineNode(child, depth + 1)).join('')}</ol>` : ''}</li>`
 		);
@@ -634,11 +716,20 @@
 			</label>
 		`;
 		container.innerHTML = `
+			<div class="student-filter-bar__head">
+				<span class="student-filter-bar__icon" aria-hidden="true">
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+				</span>
+				<span class="student-filter-bar__title">Filter courses</span>
+			</div>
 			<div class="student-filter-fields">
 				${makeSelect('teacher', 'Teacher', teachers, 'All teachers')}
 				${makeSelect('subject', 'Subject', subjects, 'All subjects')}
+				<button type="button" class="student-filter-reset" data-course-filter-reset>
+					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+					Reset
+				</button>
 			</div>
-			<button type="button" class="student-filter-reset" data-course-filter-reset>Reset</button>
 		`;
 		if (container.dataset.courseFilterBound !== 'true') {
 			container.dataset.courseFilterBound = 'true';
@@ -910,6 +1001,7 @@
 		backToList,
 		practice,
 		renderMarkdown,
+		toggleHighlights,
 	};
 
 	// First paint when the DOM is ready so switching to the tab feels instant;

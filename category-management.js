@@ -424,55 +424,19 @@ function syncStructureBreadcrumb() {
 	const text = document.getElementById('structureBreadcrumbText');
 	const back = document.getElementById('structureBackBtn');
 	const subject = getSubjectDisplayName(activeCategorySubjectId);
-	const subjectId = activeCategorySubjectId || '';
 	if (text) {
-		let segments;
+		// Plain, read-only location text — the breadcrumb only says where the
+		// structure pane currently is, it never navigates.
 		if (categoryScope.mode === 'branch') {
 			// Subject › Course › Structure. A branch opened from a structure row has
 			// no course yet, so that segment is dropped instead of printing a
 			// placeholder.
-			segments = [
-				{
-					label: subject || 'Subjects',
-					click: subjectId ? `selectCategorySubject('${escapeHtml(String(subjectId))}')` : null,
-				},
-				...(categoryScope.courseName
-					? [{
-						label: categoryScope.courseName,
-						click: categoryScope.courseId
-							? `openCourseDetail('${escapeHtml(String(categoryScope.courseId))}')`
-							: null,
-					}]
-					: []),
-				{
-					label: categoryScope.rootName,
-					click: categoryScope.rootId
-						? `openStructureBranch('${escapeHtml(String(categoryScope.rootId))}', ${categoryScope.courseId ? `{courseId:'${escapeHtml(String(categoryScope.courseId))}'}` : '{}'})`
-						: null,
-				},
-			].filter(Boolean);
+			text.textContent = [subject || 'Subjects', categoryScope.courseName, categoryScope.rootName]
+				.filter(Boolean)
+				.join(' › ');
 		} else {
-			segments = [
-				{
-					label: subject || 'Subjects',
-					click: subjectId ? `selectCategorySubject('${escapeHtml(String(subjectId))}')` : null,
-				},
-				{ label: 'All categories', click: null },
-			];
+			text.textContent = `${subject || 'Subjects'} › All categories`;
 		}
-		text.innerHTML = segments
-			.map((seg, i) => {
-				// Clickable segments are real buttons: they get keyboard focus,
-				// the Enter/Space keys and a proper focus ring for free. The
-				// current location is plain text.
-				const isLast = i === segments.length - 1;
-				if (isLast || !seg.click) {
-					return `<span class="breadcrumb-segment breadcrumb-segment-last" title="${escapeHtml(String(seg.label))}">${escapeHtml(String(seg.label))}</span>` +
-						(i < segments.length - 1 ? '<span class="breadcrumb-divider" aria-hidden="true">›</span>' : '');
-				}
-				return `<button type="button" class="breadcrumb-segment" title="${escapeHtml(String(seg.label))}" onclick="${seg.click}">${escapeHtml(String(seg.label))}</button>` +
-					'<span class="breadcrumb-divider" aria-hidden="true">›</span>';
-			}).join('');
 	}
 	if (back) back.hidden = categoryScope.mode !== 'branch';
 }
@@ -1483,6 +1447,46 @@ async function setCategoryTraining(categoryId, enabled) {
 		logActivity('category', id, enabled ? 'training enabled' : 'training disabled', {
 			id,
 		});
+	}
+	return true;
+}
+
+// Write several training flags in one go. The map is persisted once (the
+// setting holds the whole map), which keeps a bulk toggle from firing one
+// server write per selected category.
+async function setTrainingForCategories(entries) {
+	const list = (entries || []).filter((entry) => entry && entry.id);
+	if (!list.length) return false;
+	const map = { ...getCategoryTrainingMap() };
+	for (const entry of list) {
+		map[String(entry.id)] = entry.enabled === true;
+	}
+	categoryTrainingMapCache = map;
+	if (window.API && typeof window.API.update === 'function') {
+		try {
+			await window.API.update('settings', CATEGORY_TRAINING_KEY, {
+				key: CATEGORY_TRAINING_KEY,
+				value: JSON.stringify(map),
+				visibility: 'public',
+			});
+		} catch (err) {
+			console.warn('[categories] training map server save failed:', err);
+			showToast(
+				'Training flag saved locally, but the server sync failed: ' +
+					(err?.message || 'network error'),
+				'warning',
+			);
+		}
+	}
+	for (const entry of list) {
+		if (typeof logActivity === 'function') {
+			logActivity(
+				'category',
+				entry.id,
+				entry.enabled ? 'training enabled' : 'training disabled',
+				{ id: entry.id },
+			);
+		}
 	}
 	return true;
 }
@@ -5820,9 +5824,11 @@ function categoryTrainingCellHtml(category) {
 			: 'Use this category in training mode';
 	// A visible "max" label makes the number column self-explanatory (the
 	// column header only says "Training"), and the stepper buttons remove
-	// the need to aim at a 2.6em input.
+	// the need to aim at a 2.6em input. When the limit is inherited the
+	// effective value is shown by the input placeholder alone — no
+	// "inherits ∞" label cluttering the row.
 	const limitLabel = explicitLimit === null
-		? `inherits ${effectiveLimit === null ? '∞' : effectiveLimit}`
+		? ''
 		: String(explicitLimit);
 	return `
             <td class="training-cell" data-label="Training · Attempts">
@@ -5855,7 +5861,7 @@ function categoryTrainingCellHtml(category) {
                                     title="${attemptsTitle}">
                                 <button type="button" class="training-attempts-btn" data-attempts-step="1" data-attempts-id="${category.id}" onclick="stepCategoryAttemptLimit(this)" aria-label="One attempt more" title="One attempt more">+</button>
                             </span>
-                            <span class="training-attempts-state${explicitLimit === null ? ' is-inherited' : ''}" title="${escapeHtml(limitLabel)}">${escapeHtml(limitLabel)}</span>
+                            <span class="training-attempts-state${explicitLimit === null ? ' is-inherited' : ''}" title="${escapeHtml(attemptsTitle)}">${escapeHtml(limitLabel)}</span>
                         </span>`
 				}
             </td>`;
@@ -8607,6 +8613,83 @@ async function deleteSelectedCategories() {
 // Expose to window
 window.toggleInlineCategoryInput = toggleInlineCategoryInput;
 window.saveInlineCategory = saveInlineCategory;
+
+// Bulk "Training" toggle — flips the training switch of every selected
+// category in one go. System categories and the Uncategorized pool are
+// skipped (they are not toggleable).
+//
+// The button mirrors the row switches: when every selected category is
+// already in training mode it offers to disable them, otherwise it offers
+// to enable them. Clicking it writes the new flag for every selected
+// category, so each row switch ends up in the same state as the button.
+function bulkTrainingTargets() {
+	const ids = window.BulkSelect
+		? window.BulkSelect.getSelectedIds('categories')
+		: [];
+	return ids
+		.map((id) => String(id || ''))
+		.filter((id) => {
+			if (!id || id === 'uncategorized') return false;
+			const cat = getCategoryById(id);
+			return cat && !cat.isSystem && !cat.isDefault;
+		});
+}
+
+// Reflect the current selection in the bulk training button (label + switch
+// state), so it always says what clicking it will do.
+function syncBulkTrainingToggle() {
+	const btn = document.getElementById('bulk-disable-training-btn');
+	if (!btn) return;
+	const label = btn.querySelector('.bulk-training-toggle-label');
+	const targets = bulkTrainingTargets();
+	const enabledCount = targets.filter((id) => isTrainingCategory(id)).length;
+	const allEnabled = targets.length > 0 && enabledCount === targets.length;
+	const anyEnabled = enabledCount > 0;
+	btn.setAttribute('aria-pressed', String(allEnabled));
+	btn.dataset.state = allEnabled ? 'on' : anyEnabled ? 'mixed' : 'off';
+	btn.disabled = targets.length === 0;
+	if (label) {
+		label.textContent = allEnabled ? 'Disable Training' : 'Enable Training';
+	}
+	btn.title = allEnabled
+		? 'Turn training off for the selected categories'
+		: 'Turn training on for the selected categories';
+}
+
+async function toggleTrainingForSelected() {
+	const targets = bulkTrainingTargets();
+	if (!targets.length) {
+		showToast('Select at least one category first', 'error');
+		return;
+	}
+	const allEnabled = targets.every((id) => isTrainingCategory(id));
+	const enable = !allEnabled;
+	// Only write the categories whose switch actually changes: a category that
+	// already shows the wanted state keeps its current (possibly inherited)
+	// flag instead of being pinned with an explicit entry.
+	const changes = targets
+		.filter((id) => isTrainingCategory(id) !== enable)
+		.map((id) => ({ id, enabled: enable }));
+	if (!changes.length) {
+		syncBulkTrainingToggle();
+		return;
+	}
+	await setTrainingForCategories(changes);
+	updateCategoryList();
+	syncBulkTrainingToggle();
+	const verb = enable ? 'Enabled' : 'Disabled';
+	showToast(`${verb} training for ${pluralCount(changes.length, 'category', 'categories')}`);
+}
+window.toggleTrainingForSelected = toggleTrainingForSelected;
+window.syncBulkTrainingToggle = syncBulkTrainingToggle;
+
+// Keep the bulk training button in sync with the current selection. The
+// shared bulk helper owns the selection state, so it calls back here after
+// every selection change.
+window.onBulkSelectionChange = function (tableId) {
+	if (tableId !== 'categories') return;
+	syncBulkTrainingToggle();
+};
 window.toggleInlineSubjectInput = toggleInlineSubjectInput;
 window.saveInlineSubject = saveInlineSubject;
 window.toggleCategorySubjectInline = toggleCategorySubjectInline;

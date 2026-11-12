@@ -554,6 +554,87 @@ html[data-theme='dark'] .training-toggle .training-checkbox:checked + .training-
 	background: linear-gradient(135deg, #10b981, #059669);
 }
 
+/* ── Bulk training toggle ────────────────────────────────────────────────
+   The bulk bar carries one switch that drives the training switch of every
+   selected category. Its state mirrors the selection: off when nothing
+   selected is in training mode, on when all of them are, mixed in between. */
+.bulk-training-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.bulk-training-toggle-track {
+	position: relative;
+	display: inline-block;
+	flex: none;
+	width: 32px;
+	height: 18px;
+	border-radius: 999px;
+	background: rgba(100, 116, 139, 0.32);
+	box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.14);
+	transition: background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.bulk-training-toggle-thumb {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.28);
+	transition: transform 0.16s ease;
+}
+
+.bulk-training-toggle[data-state='on'] .bulk-training-toggle-track {
+	background: linear-gradient(135deg, #10b981, #059669);
+	box-shadow: inset 0 1px 2px rgba(5, 150, 105, 0.3);
+}
+
+.bulk-training-toggle[data-state='on'] .bulk-training-toggle-thumb {
+	transform: translateX(14px);
+}
+
+/* Mixed selection: the thumb sits in the middle so the button reads as
+   "partly on" instead of claiming a full state. */
+.bulk-training-toggle[data-state='mixed'] .bulk-training-toggle-track {
+	background: linear-gradient(135deg, #f59e0b, #d97706);
+	box-shadow: inset 0 1px 2px rgba(180, 83, 9, 0.28);
+}
+
+.bulk-training-toggle[data-state='mixed'] .bulk-training-toggle-thumb {
+	transform: translateX(7px);
+}
+
+.bulk-training-toggle:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+
+.bulk-training-toggle:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+.bulk-training-toggle-label {
+	white-space: nowrap;
+}
+
+html[data-theme='dark'] .bulk-training-toggle-track {
+	background: rgba(100, 116, 139, 0.42);
+	box-shadow: inset 0 1px 2px rgba(2, 6, 23, 0.4);
+}
+
+html[data-theme='dark'] .bulk-training-toggle[data-state='on'] .bulk-training-toggle-track {
+	background: linear-gradient(135deg, #10b981, #059669);
+}
+
+html[data-theme='dark'] .bulk-training-toggle[data-state='mixed'] .bulk-training-toggle-track {
+	background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
 html[data-theme='dark'] .training-attempts-stepper {
 	border-color: rgba(148, 163, 184, 0.26);
 	background: #16202e;
@@ -13836,6 +13917,42 @@ body.student-workspace .panel-filters {
 	flex-wrap: wrap;
 }
 
+/* The My Courses filter bar lives in the panel header, on the right next to
+   the Refresh chip, so it lines up with the grid below instead of taking a
+   full row of its own on the left. */
+body.student-workspace .workspace-panel[data-workspace-section="courses"] .panel-header {
+	justify-content: flex-start;
+}
+
+body.student-workspace .workspace-panel[data-workspace-section="courses"] .panel-filters {
+	margin-left: auto;
+}
+
+body.student-workspace .workspace-panel[data-workspace-section="courses"] .student-filter-bar--compact {
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: 0.55rem;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+}
+
+body.student-workspace .workspace-panel[data-workspace-section="courses"] .student-filter-bar--compact .student-filter-bar__head {
+	margin-bottom: 0;
+	flex: none;
+}
+
+body.student-workspace .workspace-panel[data-workspace-section="courses"] .student-filter-bar--compact .student-filter-fields {
+	flex: 0 1 auto;
+	flex-wrap: nowrap;
+}
+
+body.student-workspace .workspace-panel[data-workspace-section="courses"] .student-filter-bar--compact .student-filter {
+	flex: 0 0 auto;
+}
+
 body.student-workspace .filter-chip {
 	min-height: 31px;
 	padding: 0 11px;
@@ -17847,6 +17964,14 @@ html[data-theme='dark'] #aiGeneratorPage .ai-style-btn.active {
 	background: rgba(107, 114, 128, 0.1);
 	color: #4b5563;
 	border: 1px solid rgba(107, 114, 128, 0.2);
+	padding: 6px 12px;
+	font-size: 13px;
+	border-radius: 6px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
 }
 
 .btn-secondary-soft:hover {
@@ -35859,18 +35984,6 @@ body.training-modal-open {
 	overscroll-behavior: none;
 }
 
-.training-page-title-row {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	min-width: 0;
-}
-
-.training-page-title-row h3 {
-	min-width: 0;
-	overflow-wrap: anywhere;
-}
-
 /* ─── Attempt header student strip ────────────────────────────────────────
    The workspace's own header (avatar / name / class) is hidden while an
    attempt runs, so the attempt header repeats who is taking it. */
@@ -36007,16 +36120,9 @@ html[data-theme='dark'] .question-image-wrap.is-broken::after {
 	color: var(--text-muted, #94a3b8);
 }
 
-/* ─── Attempt header: student left, title right ──────────────────────────── */
+/* ─── Attempt header: student left, close right ──────────────────────────── */
 .training-student-strip {
 	order: 1;
-}
-
-.training-page-title-row {
-	order: 2;
-	margin-left: auto;
-	justify-content: flex-end;
-	text-align: right;
 }
 
 .training-header-meta {
@@ -36086,11 +36192,42 @@ html[data-theme='dark'] .training-context-value {
 	align-items: flex-end;
 	gap: 0.55rem;
 	margin: 0.85rem 0 1rem;
+	padding: 0.7rem 0.85rem;
+	border: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
+	border-radius: 14px;
+	background: var(--bg-surface, #fff);
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .student-filter-bar--inline {
 	flex: 1 1 100%;
 	margin: 0.35rem 0 0;
+}
+
+.student-filter-bar__head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 0.55rem;
+}
+
+.student-filter-bar__icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 8px;
+	background: rgba(99, 102, 241, 0.1);
+	color: #4f46e5;
+}
+
+.student-filter-bar__title {
+	font-size: 0.68rem;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-secondary, #64748b);
 }
 
 .student-filter-fields {
@@ -36135,7 +36272,7 @@ html[data-theme='dark'] .training-category-meta {
 
 .student-filter select {
 	width: 100%;
-	padding: 0.42rem 0.6rem;
+	padding: 0.5rem 0.7rem;
 	border: 1px solid var(--border-color, #e2e8f0);
 	border-radius: 10px;
 	background: var(--bg-surface, #fff);
@@ -36144,6 +36281,7 @@ html[data-theme='dark'] .training-category-meta {
 	font-weight: 500;
 	line-height: 1.2;
 	cursor: pointer;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .student-filter select:focus {
@@ -36153,19 +36291,27 @@ html[data-theme='dark'] .training-category-meta {
 }
 
 .student-filter-reset {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	align-self: flex-end;
-	padding: 0.42rem 0.7rem;
+	min-height: 38px;
+	padding: 0 14px;
 	border: 1px solid var(--border-color, #e2e8f0);
 	border-radius: 10px;
-	background: rgba(148, 163, 184, 0.1);
-	color: inherit;
-	font-size: 0.78rem;
+	background: var(--bg-surface, #fff);
+	color: var(--text-secondary, #475569);
+	font-size: 0.8rem;
 	font-weight: 600;
 	cursor: pointer;
+	transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .student-filter-reset:hover {
-	background: rgba(148, 163, 184, 0.22);
+	transform: translateY(-1px);
+	border-color: rgba(99, 102, 241, 0.4);
+	background: rgba(99, 102, 241, 0.06);
+	color: var(--primary-color, #4338ca);
 }
 
 .student-filter-reset[hidden] {
@@ -36202,11 +36348,6 @@ html[data-theme='dark'] .student-filter-reset {
 	.training-student-name,
 	.training-student-class {
 		max-width: 52vw;
-	}
-
-	.training-page-title-row {
-		flex-basis: 100%;
-		justify-content: flex-end;
 	}
 
 	.student-filter {
@@ -52578,22 +52719,23 @@ html[data-theme='dark'] .course-student-tags > span {
 }
 
 .course-outline-card {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 18px;
-	border: 1px solid rgba(15, 23, 42, 0.1);
-	border-radius: 14px;
-	background: var(--card-bg, #fff);
-	color: inherit;
-	font: inherit;
-	text-align: left;
-	cursor: pointer;
-	transition:
-		transform 0.18s ease,
-		border-color 0.18s ease,
-		box-shadow 0.18s ease;
-}
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		padding: 18px;
+		border: 1px solid rgba(15, 23, 42, 0.1);
+		border-radius: 14px;
+		background: var(--card-bg, #fff);
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		position: relative;
+		transition:
+			transform 0.18s ease,
+			border-color 0.18s ease,
+			box-shadow 0.18s ease;
+	}
 
 .course-outline-card:hover {
 	transform: translateY(-2px);
@@ -52614,6 +52756,64 @@ html[data-theme='dark'] .course-student-tags > span {
 	font-weight: 800;
 	letter-spacing: 0.11em;
 	text-transform: uppercase;
+}
+
+.course-outline-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.course-outline-number {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	background: linear-gradient(135deg, #6366f1, #4f46e5);
+	color: #fff;
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.02em;
+	border-radius: 8px;
+	box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+}
+
+.course-outline-level {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 3px 9px;
+	background: rgba(99, 102, 241, 0.1);
+	color: #4f46e5;
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	border-radius: 999px;
+	white-space: nowrap;
+}
+
+/* Lessons that belong directly to the module (no chapter) get their own
+   labelled group so their numbering never mixes with the chapter numbers. */
+.course-outline-group {
+	grid-column: 1 / -1;
+	margin-top: 4px;
+}
+
+.course-outline-group-title {
+	margin: 0 0 10px;
+	font-size: 0.8rem;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--text-secondary, #64748b);
+}
+
+.course-outline-group .course-lesson-grid {
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
 }
 
 .course-outline-name {
@@ -52645,6 +52845,15 @@ html[data-theme='dark'] .course-student-tags > span {
 	background: var(--card-bg, #fff);
 }
 
+/* The lesson number and its kicker share one header row so the badge never
+   lands on top of the chapter name. */
+.course-lesson-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
 .course-lesson-card--compact {
 	background: rgba(99, 102, 241, 0.04);
 }
@@ -52674,10 +52883,6 @@ html[data-theme='dark'] .course-student-tags > span {
 	background: linear-gradient(140deg, rgba(99, 102, 241, 0.08), rgba(255, 255, 255, 0));
 }
 
-.course-highlights-head {
-	margin-bottom: 16px;
-}
-
 .course-highlights-head h2 {
 	margin: 6px 0 0;
 	font-size: 1.15rem;
@@ -52702,6 +52907,63 @@ html[data-theme='dark'] .course-student-tags > span {
 	color: var(--text-secondary, #64748b);
 	font-size: 0.9rem;
 	line-height: 1.55;
+}
+
+.course-highlights-list--truncated li:nth-child(n + 5) {
+	display: none;
+}
+
+/* The Learning goals panel is one toggle: collapsed it shows the first few
+   entries, expanded it reveals the whole list. */
+.course-highlights[data-expanded='true'] .course-highlights-list--truncated li:nth-child(n + 5) {
+	display: list-item;
+}
+
+.course-highlights-head {
+	margin-bottom: 16px;
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.course-highlights-headings {
+	min-width: 0;
+}
+
+.course-highlights-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	margin-top: 4px;
+	padding: 6px 12px;
+	border: 1px solid rgba(99, 102, 241, 0.24);
+	border-radius: 999px;
+	background: rgba(99, 102, 241, 0.08);
+	color: #4f46e5;
+	font-size: 0.74rem;
+	font-weight: 700;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.course-highlights-toggle:hover {
+	background: rgba(99, 102, 241, 0.16);
+	border-color: rgba(99, 102, 241, 0.4);
+	transform: translateY(-1px);
+}
+
+.course-highlights-toggle:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+
+.course-highlights-toggle-icon {
+	font-size: 0.7rem;
+	line-height: 1;
 }
 
 .course-highlights-col--objectives {
@@ -54266,31 +54528,6 @@ html[data-theme='dark'] .course-student-tags > span {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.breadcrumb-segment {
-	cursor: pointer;
-	color: var(--primary-color, #6366f1);
-	font-weight: 700;
-	transition: color 0.15s ease, text-decoration 0.15s ease;
-}
-
-.breadcrumb-segment:hover {
-	color: var(--primary-hover, #4f46e5);
-	text-decoration: underline;
-}
-
-.breadcrumb-segment-last {
-	cursor: default;
-	color: var(--text-secondary, #475569);
-	font-weight: 700;
-}
-
-.breadcrumb-divider {
-	color: var(--text-muted, #94a3b8);
-	font-size: 0.75rem;
-	pointer-events: none;
-	user-select: none;
 }
 
 #structureBackBtn {
@@ -58326,13 +58563,13 @@ html[data-theme='dark'] .student-workspace .results-attempts td {
 	margin: auto;
 }
 
-/* ── Header layout: student + title + close, chips on their own row ─────── */
+/* ── Header layout: student + close, chips on their own row ──────────────── */
 #studentTrainingModal .training-modal-header {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, auto) auto;
+	grid-template-columns: minmax(0, 1fr) auto;
 	grid-template-areas:
-		'student title close'
-		'context context context';
+		'student close'
+		'context context';
 	align-items: center;
 	gap: 0.55rem 0.85rem;
 	padding: 0.8rem 1rem;
@@ -58352,28 +58589,6 @@ html[data-theme='dark'] .student-workspace .results-attempts td {
 	justify-self: start;
 	min-width: 0;
 	max-width: 100%;
-}
-
-#studentTrainingModal .training-page-title-row {
-	grid-area: title;
-	order: initial;
-	justify-self: end;
-	justify-content: flex-end;
-	margin-left: 0;
-	text-align: right;
-	min-width: 0;
-	max-width: 100%;
-}
-
-#studentTrainingModal .training-page-title-row h3 {
-	margin: 0;
-	font-size: clamp(0.98rem, 2.4vw, 1.16rem);
-	font-weight: 700;
-	line-height: 1.25;
-	color: var(--heading-color, #0f172a);
-	min-width: 0;
-	max-width: min(48ch, 100%);
-	overflow-wrap: anywhere;
 }
 
 #studentTrainingModal .training-header-meta {
@@ -58401,6 +58616,38 @@ html[data-theme='dark'] .student-workspace .results-attempts td {
 
 #studentTrainingModal .training-context-value {
 	max-width: min(46vw, 220px);
+}
+
+/* The attempt name (exam / lesson / practice title) is the primary badge of
+   the attempt, so it leads the chip row and carries the accent. */
+#studentTrainingModal .training-context-chip--attempt {
+	border-color: rgba(16, 185, 129, 0.38);
+	background: rgba(16, 185, 129, 0.1);
+}
+
+#studentTrainingModal .training-context-chip--attempt .training-context-label {
+	color: #047857;
+}
+
+#studentTrainingModal
+	.training-context-chip--attempt
+	.training-context-value {
+	max-width: min(60vw, 320px);
+	font-weight: 700;
+}
+
+html[data-theme='dark']
+	#studentTrainingModal
+	.training-context-chip--attempt {
+	border-color: rgba(52, 211, 153, 0.42);
+	background: rgba(16, 185, 129, 0.16);
+}
+
+html[data-theme='dark']
+	#studentTrainingModal
+	.training-context-chip--attempt
+	.training-context-label {
+	color: #6ee7b7;
 }
 
 /* The category is the identifying detail of the attempt, so it carries a
@@ -58527,12 +58774,6 @@ html[data-theme='dark'] #studentTrainingModal .training-modal-header {
 	border-bottom-color: var(--border-color, #2c3a4d);
 }
 
-/* The shared heading token is not defined on this surface, so the light
-   fallback would paint the title dark-on-dark in dark mode. */
-html[data-theme='dark'] #studentTrainingModal .training-page-title-row h3 {
-	color: var(--heading-color, #e2e8f0);
-}
-
 html[data-theme='dark'] #studentTrainingModal .training-actions--primary {
 	background: linear-gradient(
 		180deg,
@@ -58551,15 +58792,8 @@ html[data-theme='dark'] #studentTrainingModal #studentTrainingStage.is-time-warn
 		grid-template-columns: minmax(0, 1fr) auto;
 		grid-template-areas:
 			'student close'
-			'title title'
 			'context context';
 		gap: 0.45rem 0.6rem;
-	}
-
-	#studentTrainingModal .training-page-title-row {
-		justify-self: stretch;
-		justify-content: flex-start;
-		text-align: left;
 	}
 }
 
@@ -58620,12 +58854,6 @@ html[data-theme='dark'] #studentTrainingModal #studentTrainingStage.is-time-warn
 
 	#studentTrainingModal .training-actions--primary .workspace-btn {
 		flex: 1 1 auto;
-	}
-}
-
-@media (max-width: 380px) {
-	#studentTrainingModal .training-page-title-row h3 {
-		font-size: 0.94rem;
 	}
 }
 

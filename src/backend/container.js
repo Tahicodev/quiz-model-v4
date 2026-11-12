@@ -32,6 +32,12 @@ import { TeacherAssignmentService } from './services/TeacherAssignmentService.js
 import { DeviceService } from './services/DeviceService.js';
 import { OverviewAnalyticsService } from './services/OverviewAnalyticsService.js';
 import { TeacherOverviewService } from './services/TeacherOverviewService.js';
+import { RoleService } from './services/RoleService.js';
+import { SecurityEventService } from './services/SecurityEventService.js';
+import { PlatformAnalyticsService } from './services/PlatformAnalyticsService.js';
+import { AuditQueryService } from './services/AuditQueryService.js';
+import { SystemHealthService } from './services/SystemHealthService.js';
+import { AdminActionService } from './services/AdminActionService.js';
 import { listPresence } from './realtime/presence.registry.js';
 import { ExamDocumentService } from './services/ExamDocumentService.js';
 import { GeneratedDocumentService } from './services/GeneratedDocumentService.js';
@@ -61,14 +67,31 @@ export function createContainer() {
   // Instantiate into locals so dependent services receive their dependencies.
   const gameSvc = new GameService(repo);
   const tournamentSvc = new TournamentService(repo, gameSvc); // depends on gameSvc
+  // Governance services are created first: AuthService writes the durable
+  // security trail, so it needs the service instance at construction time.
+  const roleSvc = new RoleService(repo);
+  const securityEventSvc = new SecurityEventService(repo);
+  const auditSvc = new AuditService(repo);
+  // Platform read model for the Admin control center. Aggregates across
+  // organizations at platform scope, inside one organization at school scope.
+  const platformAnalyticsSvc = new PlatformAnalyticsService(repo);
+  const auditQuerySvc = new AuditQueryService(repo);
+  const systemHealthSvc = new SystemHealthService(repo);
+  // Administrative writes. Needs the audit + security writers, so it is
+  // created after them.
+  const adminActionSvc = new AdminActionService(repo, {
+    auditSvc,
+    securityEventSvc,
+    logger,
+  });
 
   _container = Object.freeze({
     repo,
 
     // Backend-specific
-    authSvc: new AuthService(repo),
+    authSvc: new AuthService(repo, { securityEventSvc }),
     userSvc: new UserService(repo, logger),
-    auditSvc: new AuditService(repo),
+    auditSvc,
 
     // AI
     aiSvc:  new AIService(repo, logger),
@@ -107,6 +130,27 @@ export function createContainer() {
     // Population boundary = the teacher's assigned classes (never school-wide).
     // Presence is read from the live socket registry written by the realtime bridge.
     teacherOverviewSvc: new TeacherOverviewService(repo, { listPresence }),
+
+    // Admin platform governance: role catalog + per-user permission overrides.
+    roleSvc,
+
+    // Durable authentication / access-control trail. AuditService records
+    // administrative actions; this records who tried to get in and whether
+    // they succeeded.
+    securityEventSvc,
+
+    // Platform-wide read model behind the Admin control center.
+    platformAnalyticsSvc,
+
+    // Searchable audit trail (administrative actions + security events).
+    auditQuerySvc,
+
+    // Operational read model: availability, latency, database, storage.
+    systemHealthSvc,
+
+    // Administrative writes for the control center (status transitions, role
+    // changes, permission overrides). Every action is audit-logged.
+    adminActionSvc,
 
     // Printable exam documents (PDF/DOCX). Read-only over exams and questions:
     // the only thing it writes is its own header slice inside options_json.

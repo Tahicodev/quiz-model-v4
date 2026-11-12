@@ -40,6 +40,7 @@ import devicesRoutes from '../../../src/backend/routes/devices.routes.js';
 import teacherOverviewRoutes from '../../../src/backend/routes/teacher-overview.routes.js';
 import kidsChampionshipRoutes from '../../../src/backend/routes/kids-championships.routes.js';
 import kidsRoutes from '../../../src/backend/routes/kids.routes.js';
+import consoleRoutes from '../../../src/backend/routes/console.routes.js';
 
 // Container (needed for route handlers)
 import { createContainer } from '../../../src/backend/container.js';
@@ -84,6 +85,7 @@ app.use('/api/v1/kids/championships', kidsChampionshipRoutes);
 app.use('/api/v1/kids', kidsRoutes);
 app.use('/api/v1/devices', devicesRoutes);
 app.use('/api/v1/teacher-overview', teacherOverviewRoutes);
+app.use('/api/v1/console', consoleRoutes);
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

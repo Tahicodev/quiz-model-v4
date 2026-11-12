@@ -256,11 +256,23 @@ router.get('/:id/sessions', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async
 // next login succeeds immediately without waiting out the activity window.
 router.delete('/:id/sessions', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
   try {
-    const { userSvc, authSvc, auditSvc } = getContainer();
+    const { userSvc, authSvc, auditSvc, securityEventSvc } = getContainer();
     const target = await userSvc.getById(req.params.id);
     if (!target || target.school_id !== req.schoolId) return next(new NotFoundError('User'));
     const { revoked } = await authSvc.revokeUserSessions(target.id);
     await auditSvc.log({ schoolId: req.schoolId, actorId: req.user.id, entityType: 'user', entityId: target.id, action: 'revoke-sessions', ip: req.ip });
+    // Durable security trail: an administrator forcibly ending someone's
+    // sessions is exactly the kind of event an audit needs to keep.
+    await securityEventSvc.record({
+      type: 'session_revoked',
+      userId: target.id,
+      schoolId: target.school_id,
+      username: target.username,
+      reason: 'revoked_by_administrator',
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      meta: { revoked, actorId: req.user.id },
+    });
     res.json({ revoked });
   } catch (err) { next(err); }
 });

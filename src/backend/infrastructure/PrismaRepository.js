@@ -54,6 +54,11 @@ const MODEL_MAP = {
 	kidsQuestProgress: 'kidQuestProgress',
 	kidsChampionships: 'kidsChampionship',
 	kidsChampionshipScores: 'kidsChampionshipScore',
+	// Admin platform governance
+	security_events: 'securityEvent',
+	roles: 'role',
+	role_permissions: 'rolePermission',
+	user_permission_overrides: 'userPermissionOverride',
 	// NOTE: Prisma camelCases "AIConfig" to "aIConfig" on the client delegate.
 	ai_configs: 'aIConfig',
 };

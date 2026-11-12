@@ -533,6 +533,11 @@
 									<p>Lessons your teachers shared with your class — read them, then practice</p>
 								</div>
 								<div class="panel-filters">
+									<div
+										id="studentCourseFilters"
+										class="student-filter-bar student-filter-bar--compact"
+										aria-label="Filter courses by teacher or subject"
+									></div>
 									<button
 											class="filter-chip"
 											type="button"
@@ -542,11 +547,6 @@
 									</button>
 								</div>
 </div>
-								<div
-									id="studentCourseFilters"
-									class="student-filter-bar"
-									aria-label="Filter courses by teacher or subject"
-								></div>
 								<div class="exam-card-grid course-student-grid" id="studentCourseGrid"></div>
 							<div id="studentCourseReader" style="display: none"></div>
 						</div>
@@ -1596,7 +1596,7 @@
 			class="modal training-modal"
 			role="dialog"
 			aria-modal="true"
-			aria-labelledby="trainingModalTitle"
+			aria-label="Training practice test"
 			aria-hidden="true"
 		>
 			<div class="modal-content training-modal-content">
@@ -1630,9 +1630,6 @@
 							>Training</span
 						>
 					</div>
-					<div class="training-page-title-row">
-						<h3 id="trainingModalTitle">Training Practice Test</h3>
-					</div>
 					<div class="training-header-meta">
 						<button
 							type="button"
@@ -1646,8 +1643,12 @@
 					<div
 						class="training-context-meta"
 						id="trainingContextMeta"
-						aria-label="Category, school, school year, subject and teacher"
+						aria-label="Attempt, category, school, school year, subject and teacher"
 					>
+						<span class="training-context-chip training-context-chip--attempt">
+							<span class="training-context-label">Attempt</span>
+							<span class="training-context-value" id="trainingModalTitle">Training Practice Test</span>
+						</span>
 						<span class="training-context-chip training-context-chip--category">
 							<span class="training-context-label">Category</span>
 							<span class="training-context-value" id="trainingContextCategory">—</span>

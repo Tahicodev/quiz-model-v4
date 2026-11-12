@@ -28,6 +28,14 @@ model School {
   email        String?
   logo_url     String? // base64 data-URL school logo
   school_year  String? // e.g. "2025-2026" — set in the school info panel
+  // Organization lifecycle. `plan` describes what an org is entitled to;
+  // `status` describes whether it may currently operate:
+  //   active   — fully operational
+  //   pending  — provisioned, awaiting activation (no login until activated)
+  //   suspended — access revoked by the platform operator
+  status           String    @default("active")
+  suspended_at     DateTime?
+  suspended_reason String?
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
@@ -59,6 +67,10 @@ model School {
   kidsChampionships  KidsChampionship[]
   devices            Device[]
   courses            Course[]
+  securityEvents     SecurityEvent[]
+  permissionOverrides UserPermissionOverride[]
+
+  @@index([status])
 }
 
 // ─── School Year Archives ────────────────────────────────────────────────────
@@ -127,6 +139,8 @@ model User {
   kidQuestProgress         KidQuestProgress[]  @relation("KidQuestProgressUser")
   createdKidsChampionships KidsChampionship[]  @relation("KidsChampionshipCreator")
   devices                  Device[]            @relation("DeviceAssignedUser")
+  securityEvents           SecurityEvent[]
+  permissionOverrides      UserPermissionOverride[]
 
   @@unique([school_id, username])
   @@index([school_id])
@@ -643,6 +657,10 @@ model Setting {
 }
 
 // ─── Audit Log ───────────────────────────────────────────────────────────────
+// Append-only trail of administrative actions. `action` says WHAT happened,
+// `outcome` says HOW IT ENDED and `severity` says HOW URGENT it is — the
+// three are independent and must never be conflated (a denied action is still
+// an action worth recording).
 model AuditLog {
   id          String   @id @default(uuid())
   school_id   String
@@ -653,6 +671,10 @@ model AuditLog {
   diff_json   String? // { before: {}, after: {} } for updates
   ip_address  String?
   user_agent  String?
+  // outcome: success | denied | error
+  outcome     String   @default("success")
+  // severity: info | warning | critical
+  severity    String   @default("info")
   occurred_at DateTime @default(now())
 
   school School @relation(fields: [school_id], references: [id], onDelete: Cascade)
@@ -662,6 +684,103 @@ model AuditLog {
   @@index([actor_id])
   @@index([entity_type, entity_id])
   @@index([occurred_at])
+  @@index([occurred_at, entity_type])
+  @@index([severity, occurred_at])
+}
+
+// ─── Security Events ────────────────────────────────────────────────────────
+// Durable record of authentication and access-control events. Separate from
+// AuditLog because it has a different lifecycle: it survives across
+// organizations (school_id may be NULL when a login attempt names a username
+// that does not exist anywhere), it is append-only, and it is the source for
+// "failed login attempts" and "suspicious activity" reporting.
+//
+// NEVER store passwords, tokens or secrets here.
+model SecurityEvent {
+  id          String   @id @default(uuid())
+  school_id   String?  // NULL when the attempt did not resolve to an organization
+  user_id     String?  // NULL when the attempt did not resolve to an account
+  username    String?  // the attempted username (present on failures)
+  event_type  String   // login_success | login_failure | logout | password_change | password_reset | session_revoked | access_denied
+  outcome     String   @default("success") // success | denied | error
+  severity    String   @default("info")    // info | warning | critical
+  reason      String?  // short reason code (unknown_user, bad_password, status:suspended)
+  ip_address  String?
+  user_agent  String?
+  meta_json   String?  // small JSON blob — never secrets
+  occurred_at DateTime @default(now())
+
+  school School? @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([school_id, occurred_at])
+  @@index([event_type, occurred_at])
+  @@index([user_id, occurred_at])
+  @@index([severity, occurred_at])
+}
+
+// ─── Roles & Permissions ────────────────────────────────────────────────────
+// The role catalog is seeded from src/shared/permissions.js so the console can
+// SHOW the real permission set instead of a hardcoded list. The code map stays
+// the enforcement default; these tables make it visible and auditable, and
+// carry per-user grants/denies.
+model Role {
+  id          String   @id // 'super_admin' | 'admin' | 'teacher' | 'student'
+  key         String   @unique
+  label       String
+  scope       String   // platform | school | class | none
+  description String?
+  is_system   Boolean  @default(true)
+  // Whether an operator may assign this role to an account.
+  is_assignable Boolean @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  permissions RolePermission[]
+  overrides   UserPermissionOverride[]
+
+  @@index([scope])
+}
+
+model RolePermission {
+  id         String   @id @default(uuid())
+  role_id    String
+  permission String
+  // allow = the role carries it; deny = the role explicitly lacks it.
+  effect     String   @default("allow")
+  created_at DateTime @default(now())
+
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission])
+  @@index([permission])
+}
+
+// A single permission granted to, or denied from, ONE user — optionally
+// limited to one organization. `scope_key` is the organization id or '*'
+// (every scope); it exists because SQLite treats NULLs as distinct in a
+// unique index, which would allow duplicate global overrides.
+model UserPermissionOverride {
+  id         String   @id @default(uuid())
+  user_id    String
+  school_id  String?
+  role_id    String?
+  scope_key  String   @default("*")
+  permission String
+  // grant = adds the permission; deny = removes it.
+  effect     String   @default("grant")
+  reason     String?
+  granted_by String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user   User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  school School? @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  role   Role?   @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, scope_key, permission])
+  @@index([user_id])
+  @@index([permission])
 }
 
 // ─── Profile & Account Requests ─────────────────────────────────────────────

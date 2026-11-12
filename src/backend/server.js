@@ -201,6 +201,7 @@ import accountRequestRoutes from './routes/account-requests.routes.js';
 import gamePresetRoutes from './routes/game-presets.routes.js';
 import uploadsRoutes from './routes/uploads.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import consoleRoutes from './routes/console.routes.js';
 import notificationRoutes from './routes/notifications.routes.js';
 import gamificationRoutes from './routes/gamification.routes.js';
 import teacherMessageRoutes from './routes/teacher-messages.routes.js';
@@ -227,6 +228,9 @@ const studentWorkspaceHtmlPath = resolve(
 	__dirname,
 	'../../student-workspace.html',
 );
+// The Admin control center — a standalone SPA, separate from the combined
+// teacher + school-admin page served at /admin.html.
+const consoleHtmlPath = resolve(__dirname, '../../console.html');
 
 // Read entry HTML on each request in development so an already-running local
 // server cannot keep serving a stale page after a layout or cache-bust change.
@@ -273,6 +277,12 @@ app.get('/admin.html', (req, res) => {
 
 app.get('/student-workspace.html', (req, res) => {
 	sendEntryHtml(res, studentWorkspaceHtmlPath);
+});
+
+// Admin control center. `/console` is the canonical URL; `/console/` and
+// `/console.html` are accepted so a bookmark of either shape works.
+app.get(['/console', '/console/', '/console.html'], (req, res) => {
+	sendEntryHtml(res, consoleHtmlPath);
 });
 
 // ── Kids player pages (no login, plan §5.4) ─────────────────────────────
@@ -340,6 +350,7 @@ app.use('/api/v1/account-requests', authLimiter, accountRequestRoutes);
 app.use('/api/v1/game-presets', gamePresetRoutes);
 app.use('/api/v1/uploads', uploadsRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/console', consoleRoutes);
 app.use('/api/v1/teacher-overview', teacherOverviewRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/gamification', gamificationRoutes);
@@ -446,6 +457,17 @@ const httpServer = tlsOpts ? https.createServer(tlsOpts, app) : http.createServe
 		// the login gate, so a restart can never leave a stale "already
 		// signed in" wall behind. No wipe, no forced re-login on reload
 		// (including --watch restarts during development).
+
+		// Mirror the permission catalog into the Role/RolePermission tables so
+		// the admin console can show the real permission set. Idempotent — a
+		// failure here must not stop the server from booting.
+		try {
+			const { roleSvc } = container;
+			const seeded = await roleSvc.ensureSeeded();
+			logger.info(seeded, 'Role catalog synced');
+		} catch (seedErr) {
+			logger.warn({ err: seedErr }, 'Role catalog sync failed — continuing with the code map');
+		}
 
 		await initSocketServer(httpServer, {
 			gameService: gameSvc,

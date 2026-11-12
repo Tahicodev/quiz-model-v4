@@ -394,3 +394,88 @@ export function __resetServerMetrics() {
 	requests.length = 0;
 	logs.length = 0;
 }
+
+/**
+ * Latency percentiles and a status-code breakdown for a time window.
+ *
+ * `getServerMetrics` exposes a MEAN response time; a mean hides the tail that
+ * actually hurts. The console reports p50/p95/p99 so a slow endpoint cannot
+ * hide behind a fast average.
+ *
+ * The window is process-local: the buffers reset on restart, so no historical
+ * uptime can be derived from them.
+ *
+ * @param {number} minutes
+ * @returns {{ window:{minutes:number,since:string,until:string},
+ *             sample:number, p50:number|null, p95:number|null, p99:number|null,
+ *             average:number|null, max:number|null,
+ *             statuses:Array<{bucket:string,count:number}>,
+ *             errors:number, errorRatePercent:number|null,
+ *             availabilityPercent:number|null }}
+ */
+export function getLatencyStats(minutes = 60) {
+	const requested = Number(minutes);
+	const safeMinutes = Number.isFinite(requested)
+		? Math.min(24 * 60, Math.max(1, requested))
+		: 60;
+	const now = Date.now();
+	const since = now - Math.min(safeMinutes * 60 * 1000, MAX_WINDOW_MS);
+	const inWindow = requests.filter((event) => withinWindow(event, since));
+
+	const sample = inWindow.length;
+	if (!sample) {
+		return {
+			window: { minutes: safeMinutes, since: new Date(since).toISOString(), until: new Date(now).toISOString() },
+			sample: 0,
+			p50: null,
+			p95: null,
+			p99: null,
+			average: null,
+			max: null,
+			statuses: [],
+			errors: 0,
+			serverErrors: 0,
+			errorRatePercent: null,
+			serverErrorRatePercent: null,
+			availabilityPercent: null,
+		};
+	}
+
+	const durations = inWindow.map((event) => event.ms).sort((a, b) => a - b);
+	const percentile = (p) => {
+		if (!durations.length) return null;
+		const index = Math.min(durations.length - 1, Math.max(0, Math.ceil((p / 100) * durations.length) - 1));
+		return durations[index];
+	};
+	const errors = inWindow.filter((event) => event.status >= 400).length;
+	const serverErrors = inWindow.filter((event) => event.status >= 500).length;
+
+	const buckets = new Map();
+	for (const event of inWindow) {
+		const key =
+			event.status >= 500 ? '5xx' : event.status >= 400 ? '4xx' : event.status >= 300 ? '3xx' : '2xx';
+		buckets.set(key, (buckets.get(key) || 0) + 1);
+	}
+
+	return {
+		window: { minutes: safeMinutes, since: new Date(since).toISOString(), until: new Date(now).toISOString() },
+		sample,
+		p50: percentile(50),
+		p95: percentile(95),
+		p99: percentile(99),
+		average: Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length),
+		max: durations[durations.length - 1],
+		statuses: [...buckets.entries()]
+			.map(([bucket, count]) => ({ bucket, count }))
+			.sort((a, b) => a.bucket.localeCompare(b.bucket)),
+		errors,
+		serverErrors,
+		// Availability counts SERVER failures only: a 4xx means the client
+		// sent something the server refused — the service was up and
+		// answering. Conflating the two would make a burst of bad tokens
+		// look like an outage.
+		errorRatePercent: Math.round((errors / sample) * 1000) / 10,
+		serverErrorRatePercent: Math.round((serverErrors / sample) * 1000) / 10,
+		availabilityPercent: Math.round((1 - serverErrors / sample) * 1000) / 10,
+	};
+}

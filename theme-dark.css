@@ -4657,6 +4657,15 @@ html[data-theme='dark'] .course-highlights-col--objectives {
 html[data-theme='dark'] .course-highlights-col--concepts {
 	border-left-color: rgba(52, 211, 153, 0.45);
 }
+html[data-theme='dark'] .course-highlights-toggle {
+	border-color: rgba(129, 140, 248, 0.4);
+	background: rgba(99, 102, 241, 0.18);
+	color: #c7d2fe;
+}
+html[data-theme='dark'] .course-highlights-toggle:hover {
+	background: rgba(99, 102, 241, 0.28);
+	border-color: rgba(129, 140, 248, 0.6);
+}
 html[data-theme='dark'] .course-document-view {
 	border-color: rgba(129, 140, 248, 0.26);
 	background: linear-gradient(160deg, #111c2f, #0f172a);
@@ -6583,22 +6592,6 @@ html[data-theme='dark'] .structure-breadcrumb {
 
 html[data-theme='dark'] .structure-breadcrumb svg {
 	color: #a5b4fc;
-}
-
-html[data-theme='dark'] .breadcrumb-segment {
-	color: #a5b4fc;
-}
-
-html[data-theme='dark'] .breadcrumb-segment:hover {
-	color: #c7d2fe;
-}
-
-html[data-theme='dark'] .breadcrumb-segment-last {
-	color: #94a3b8;
-}
-
-html[data-theme='dark'] .breadcrumb-divider {
-	color: #64748b;
 }
 
 html[data-theme='dark'] .structure-branch-note {
