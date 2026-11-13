@@ -195,22 +195,41 @@ export const requireScope = (scopes = []) => {
  * The access token lives up to 15 minutes, so a suspension would otherwise
  * take that long to take effect. Used on the console's sensitive routes.
  */
-export const requireActiveAccount = async (req, res, next) => {
-  try {
-    if (!req.user?.id) throw new UnauthorizedError('Authentication required');
-    const { prisma } = await import('../prisma.js');
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, status: true, role: true, school_id: true },
-    });
-    if (!user) throw new UnauthorizedError('Account no longer exists');
-    if (user.status !== 'active') throw new ForbiddenError('Account is not active');
-    // The token may carry a stale role/school after an administrative change.
-    req.user = { ...req.user, role: user.role, school_id: user.school_id };
-    next();
-  } catch (error) {
-    next(error);
-  }
+export const requireActiveAccount = (options = {}) => {
+  const { allowSuspendedOrganization = false } = options;
+  return async (req, res, next) => {
+    try {
+      if (!req.user?.id) throw new UnauthorizedError('Authentication required');
+      const { prisma } = await import('../prisma.js');
+      const user = await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { id: true, status: true, role: true, school_id: true },
+      });
+      if (!user) throw new UnauthorizedError('Account no longer exists');
+      if (user.status !== 'active') throw new ForbiddenError('Account is not active');
+
+      // A suspended organization stops every session of its accounts, not
+      // just new sign-ins. The exception is the organization-management
+      // routes: an organization administrator must be able to restore their
+      // own organization, otherwise a single-organization (offline)
+      // installation would be bricked by its own suspension.
+      if (!allowSuspendedOrganization) {
+        const organization = await prisma.school.findUnique({
+          where: { id: user.school_id },
+          select: { id: true, status: true },
+        });
+        if (organization && organization.status === 'suspended') {
+          throw new ForbiddenError('This organization is suspended');
+        }
+      }
+
+      // The token may carry a stale role/school after an administrative change.
+      req.user = { ...req.user, role: user.role, school_id: user.school_id };
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
 };
 
 /**

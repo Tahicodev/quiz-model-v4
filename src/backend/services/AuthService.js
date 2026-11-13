@@ -190,6 +190,30 @@ export class AuthService {
       throw new ForbiddenError('Your account is not active. Contact your administrator.');
     }
 
+    // The ORGANIZATION must be allowed to operate. A suspended organization
+    // refuses every sign-in regardless of its accounts' own status — and
+    // re-activating the organization restores access without touching a
+    // single account.
+    const organization = await this.#repo.modelFor('schools').findUnique({
+      where: { id: user.school_id },
+      select: { id: true, status: true, name: true },
+    });
+    if (organization && organization.status === 'suspended') {
+      securityLog('login_failure', { userId: user.id, reason: 'organization_suspended', ip });
+      await this.#recordSecurity({
+        type: 'login_failure',
+        username,
+        userId: user.id,
+        schoolId: user.school_id || null,
+        reason: 'organization_suspended',
+        ip,
+        userAgent,
+      });
+      throw new ForbiddenError(
+        'This organization is suspended. Contact the platform operator.',
+      );
+    }
+
     // Support three hash generations:
     //   1. bcrypt ($2a$/$2b$/...)                                  — proper SaaS
     //   2. legacy "simple-<signed-int>" from auth.js simpleHash    — local-only
@@ -342,6 +366,15 @@ export class AuthService {
     const user = await this.#repo.getById('users', stored.user_id);
     if (!user || user.status !== 'active') {
       throw new UnauthorizedError('User no longer active');
+    }
+
+    // A suspended organization stops every session, not just new sign-ins.
+    const organization = await this.#repo.modelFor('schools').findUnique({
+      where: { id: user.school_id },
+      select: { id: true, status: true },
+    });
+    if (organization && organization.status === 'suspended') {
+      throw new UnauthorizedError('Organization suspended');
     }
 
     // Rotate: revoke the consumed token and issue a fresh one.

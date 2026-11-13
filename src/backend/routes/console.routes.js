@@ -26,16 +26,15 @@ import {
 } from '../middleware/permission.js';
 import { getContainer } from '../container.js';
 import { prisma } from '../prisma.js';
+import { config } from '../config.js';
 import { ROLES } from '../../shared/constants.js';
 import { ROLE_LABELS, PERMISSION_INDEX } from '../../shared/permissions.js';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../shared/errors.js';
 
 const router = Router();
 
-// Every console route requires a valid token, a resolved scope and an active
-// account. `requireActiveAccount` re-reads the account so a suspension takes
-// effect immediately instead of at the end of the access-token lifetime.
-router.use(requireAuth, resolveScope, requireActiveAccount);
+// Every console route requires a valid token and a resolved scope.
+router.use(requireAuth, resolveScope);
 
 // The console is for platform and organization administrators only. Teachers
 // keep the teacher session; students keep the student workspace.
@@ -44,6 +43,87 @@ router.use(
 		allow: ['school.console'],
 	}),
 );
+
+/**
+ * Organization management stays reachable while the caller's OWN organization
+ * is suspended.
+ *
+ * Suspending an organization blocks every sign-in from it — which is the
+ * point. But an organization administrator must still be able to REACTIVATE
+ * it: on a single-organization (offline) installation there is no other
+ * operator, so locking them out of the only way back would brick the whole
+ * installation.
+ *
+ * The routes below are therefore guarded with `allowSuspendedOrganization`.
+ * They remain protected by the permission check and by the service-level
+ * scope check, so an administrator still only reaches their own organization.
+ */
+const organizationAdmin = Router();
+organizationAdmin.use(requireActiveAccount({ allowSuspendedOrganization: true }));
+
+organizationAdmin.get(
+	'/organizations/:id',
+	requirePermission('platform.organizations.read', { allow: ['school.profile.read'] }),
+	async (req, res, next) => {
+		try {
+			const { platformAnalyticsSvc } = getContainer();
+			const data = await platformAnalyticsSvc.getOrganizationDetail({
+				schoolId: req.params.id,
+				scope: req.scope,
+			});
+			if (!data) return next(new NotFoundError('Organization'));
+			return res.json({ data });
+		} catch (err) {
+			return next(err);
+		}
+	},
+);
+
+organizationAdmin.patch(
+	'/organizations/:id',
+	requirePermission('platform.organizations.status', { allow: ['school.profile.manage'] }),
+	async (req, res, next) => {
+		try {
+			const { adminActionSvc } = getContainer();
+			const schoolId = req.params.id;
+			const { status, reason, profile } = req.body || {};
+
+			let result = null;
+			if (status) {
+				result = await adminActionSvc.setOrganizationStatus({
+					schoolId,
+					status,
+					reason: reason || null,
+					actor: req.user,
+					scope: req.scope,
+					ip: req.ip,
+					userAgent: req.headers['user-agent'],
+				});
+			}
+			if (profile && typeof profile === 'object') {
+				result = await adminActionSvc.updateOrganizationProfile({
+					schoolId,
+					patch: profile,
+					actor: req.user,
+					scope: req.scope,
+					ip: req.ip,
+					userAgent: req.headers['user-agent'],
+				});
+			}
+			if (!result) {
+				throw new ValidationError({ body: ['Provide a status or a profile to update'] });
+			}
+			return res.json({ data: result });
+		} catch (err) {
+			return next(err);
+		}
+	},
+);
+
+router.use(organizationAdmin);
+
+// Everything else requires a fully active account AND an active organization.
+router.use(requireActiveAccount());
 
 // ── Session & scope ─────────────────────────────────────────────────────────
 // The shell needs to know who the caller is, what scope they operate in and
@@ -104,6 +184,25 @@ router.get('/session', async (req, res, next) => {
 				isPlatform: req.scope.isPlatform,
 				schoolId: req.scope.schoolId,
 				organization,
+			},
+			/**
+			 * The deployment topology. It is NOT a permission: an offline
+			 * installation can still have a super administrator for its own
+			 * box, and a SaaS deployment still has organization
+			 * administrators scoped to their own tenant.
+			 */
+			deployment: {
+				mode: config.deploymentMode,
+				isOffline: config.isOffline,
+				isSaaS: config.isSaaS,
+				label:
+					config.isOffline
+						? 'Local installation'
+						: 'Multi-tenant platform',
+				description: config.isOffline
+					? 'This server is the whole platform. Administration is limited to the organizations hosted here, and no feature requires internet access.'
+					: 'This server is one node of a multi-tenant platform. Platform administrators reach every organization; organization administrators reach only their own.',
+				dbProvider: config.dbProvider,
 			},
 			permissions,
 		});
@@ -337,21 +436,6 @@ function buildRange(from, to) {
 
 // ── Detail views ───────────────────────────────────────────────────────────
 
-/** One organization's administrative detail. */
-router.get('/organizations/:id', requirePermission('platform.organizations.read', { allow: ['school.profile.read'] }), async (req, res, next) => {
-	try {
-		const { platformAnalyticsSvc } = getContainer();
-		const data = await platformAnalyticsSvc.getOrganizationDetail({
-			schoolId: req.params.id,
-			scope: req.scope,
-		});
-		if (!data) return next(new NotFoundError('Organization'));
-		return res.json({ data });
-	} catch (err) {
-		return next(err);
-	}
-});
-
 /** One account's administrative detail. */
 router.get('/users/:id', requirePermission('platform.users.read', { allow: ['school.users.read'] }), async (req, res, next) => {
 	try {
@@ -368,47 +452,6 @@ router.get('/users/:id', requirePermission('platform.users.read', { allow: ['sch
 });
 
 // ── Administrative actions ─────────────────────────────────────────────────
-
-/**
- * Change an organization's lifecycle status, or edit its profile.
- * Body: { status?, reason?, profile?: { name?, school_type?, … } }
- */
-router.patch('/organizations/:id', requirePermission('platform.organizations.status', { allow: ['school.profile.manage'] }), async (req, res, next) => {
-	try {
-		const { adminActionSvc } = getContainer();
-		const schoolId = req.params.id;
-		const { status, reason, profile } = req.body || {};
-
-		let result = null;
-		if (status) {
-			result = await adminActionSvc.setOrganizationStatus({
-				schoolId,
-				status,
-				reason: reason || null,
-				actor: req.user,
-				scope: req.scope,
-				ip: req.ip,
-				userAgent: req.headers['user-agent'],
-			});
-		}
-		if (profile && typeof profile === 'object') {
-			result = await adminActionSvc.updateOrganizationProfile({
-				schoolId,
-				patch: profile,
-				actor: req.user,
-				scope: req.scope,
-				ip: req.ip,
-				userAgent: req.headers['user-agent'],
-			});
-		}
-		if (!result) {
-			throw new ValidationError({ body: ['Provide a status or a profile to update'] });
-		}
-		return res.json({ data: result });
-	} catch (err) {
-		return next(err);
-	}
-});
 
 /**
  * Change an account's status or role.

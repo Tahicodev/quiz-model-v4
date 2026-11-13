@@ -58,10 +58,16 @@ export class AdminActionService {
 	/**
 	 * Change an organization's lifecycle status.
 	 *
-	 * Suspending an organization must actually stop it operating, so every
-	 * account in it is suspended too and its refresh tokens are revoked.
-	 * Reactivating restores the ACCOUNTS it suspended (a flag would be
-	 * cleaner, but the account status is the only state the auth layer reads).
+	 * Suspending an organization does NOT change its accounts' status. The
+	 * organization status is the gate: the auth layer refuses a sign-in from
+	 * a suspended organization, and re-activating the organization restores
+	 * access immediately.
+	 *
+	 * Cascading into the accounts would be destructive and unrecoverable:
+	 * it destroys the information of WHICH accounts were already suspended
+	 * before the organization was, and on a single-organization installation
+	 * it would lock the administrator out of the only way back — the
+	 * organization itself could never be re-activated.
 	 */
 	async setOrganizationStatus({ schoolId, status, reason = null, actor, scope, ip = null, userAgent = null }) {
 		if (!ORGANIZATION_STATUSES.includes(status)) {
@@ -73,7 +79,7 @@ export class AdminActionService {
 
 		const previousStatus = school.status;
 		if (previousStatus === status) {
-			return { school, changed: false };
+			return { school, changed: false, affectedAccounts: 0 };
 		}
 
 		const suspended = status === 'suspended';
@@ -86,18 +92,9 @@ export class AdminActionService {
 			},
 		});
 
-		// A suspended organization must not be able to sign in.
-		const accounts = await this.users.findMany({
-			where: { school_id: schoolId },
-			select: { id: true, status: true, role: true },
-		});
-		let affectedAccounts = 0;
-		for (const account of accounts) {
-			const nextStatus = suspended ? 'suspended' : 'active';
-			if (account.status === nextStatus) continue;
-			await this.users.update({ where: { id: account.id }, data: { status: nextStatus } });
-			affectedAccounts += 1;
-		}
+		// The accounts themselves are untouched — only their organization
+		// changed. Count them so the audit trail can report the blast radius.
+		const affectedAccounts = await this.users.count({ where: { school_id: schoolId } });
 
 		await this.#audit({
 			schoolId,

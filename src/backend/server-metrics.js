@@ -58,6 +58,7 @@ export function recordRequest({
 	user,
 	role,
 	userId,
+	schoolId,
 	ip,
 }) {
 	// `user` may be a username string or a req.user-like object.
@@ -83,6 +84,9 @@ export function recordRequest({
 			user: label || 'anonymous',
 			role: roleLabel || '',
 			userId: idLabel || '',
+			// The organization the request belongs to. The monitoring view is
+			// scoped by it so an administrator only sees their own traffic.
+			schoolId: schoolId ? String(schoolId) : '',
 			ip: trunc(ip || '', 60),
 		},
 		MAX_REQUESTS,
@@ -243,13 +247,21 @@ export function getServerMetrics(minutes = 60, options = {}) {
 		minutes = options.minutes;
 	}
 	userFilter = String(options?.user ?? '').trim().slice(0, 80);
+	// Organization scope. A platform operator may pass null to see every
+	// organization; an organization administrator is pinned to their own by
+	// the caller and can never widen it here.
+	const schoolFilter = options?.schoolId ? String(options.schoolId) : null;
 	const requestedMinutes = Number(minutes);
 	const safeMinutes = Number.isFinite(requestedMinutes)
 		? Math.min(24 * 60, Math.max(1, requestedMinutes))
 		: 60;
 	const now = Date.now();
 	const since = now - Math.min(safeMinutes * 60 * 1000, MAX_WINDOW_MS);
-	const inWindowRequests = requests.filter((event) => withinWindow(event, since));
+	const inWindowRequests = requests.filter(
+		(event) =>
+			withinWindow(event, since) &&
+			(schoolFilter === null || event.schoolId === schoolFilter),
+	);
 	const inWindowLogs = logs.filter((event) => withinWindow(event, since));
 	// Distinct users in the (unfiltered) window — feeds the User filter datalist.
 	const userCountsAll = new Map();
@@ -345,7 +357,7 @@ export function getServerMetrics(minutes = 60, options = {}) {
 			since: new Date(since).toISOString(),
 			until: new Date(now).toISOString(),
 		},
-		filter: { user: userFilter },
+		filter: { user: userFilter, schoolId: schoolFilter },
 		users: topUsers(userCountsAll, 100),
 		summary: {
 			apiCalls: windowRequests.length,

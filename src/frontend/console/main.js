@@ -110,6 +110,9 @@ async function boot() {
 		session,
 		organization: session.scope?.organization || null,
 		isPlatform: Boolean(session.scope?.isPlatform),
+		/** Deployment topology (offline | saas). A topology, never a privilege. */
+		deployment: session.deployment || {},
+		isOffline: Boolean(session.deployment?.isOffline),
 		getState,
 		setPeriod,
 		rerender: () => renderPage(shell, context, currentRoute),

@@ -10,7 +10,7 @@ export class SessionService {
   #repo;
   constructor(repo) { this.#repo = repo; }
 
-  async createSession({ examId, userId, durationMinutes }) {
+  async createSession({ examId, userId, durationMinutes, schoolId = null }) {
     if (typeof this.#repo.startSession === 'function') {
       return this.#repo.startSession(examId, durationMinutes);
     }
@@ -27,6 +27,11 @@ export class SessionService {
     return this.#repo.create('exam_sessions', {
       exam_id:                examId,
       user_id:                userId,
+      // The session belongs to an organization. The REST route derives it from
+      // the signed token and passes it in; without it the row could not be
+      // written (school_id is NOT NULL) and the attempt could not be graded
+      // later, because the result inherits the session's organization.
+      ...(schoolId ? { school_id: schoolId } : {}),
       status:                 SESSION_STATUS.ACTIVE,
       answers_json:           '{}',
       current_question_index: 0,

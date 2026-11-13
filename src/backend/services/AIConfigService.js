@@ -21,8 +21,17 @@ import { ROLES } from '../../shared/constants.js';
 const PROVIDERS = ['openrouter', 'openai', 'anthropic', 'google', 'deepseek', 'custom'];
 
 function encryptionKey() {
-  // Dedicated secret preferred; fall back to the JWT secret (already long).
-  const secret = process.env.AI_KEY_SECRET || process.env.JWT_SECRET || 'quiz-app-dev-secret';
+  // A dedicated secret is preferred; the JWT secret is the fallback because it
+  // is already required to be 64+ characters. There is deliberately NO literal
+  // fallback: a published default encryption key would let anyone who read
+  // the source decrypt every stored AI provider key. If neither secret is
+  // available the service refuses to work rather than using a weak key.
+  const secret = process.env.AI_KEY_SECRET || process.env.JWT_SECRET;
+  if (!secret || String(secret).length < 32) {
+    throw new Error(
+      'AI key encryption requires AI_KEY_SECRET or JWT_SECRET (at least 32 characters).',
+    );
+  }
   return crypto.createHash('sha256').update(String(secret), 'utf8').digest();
 }
 

@@ -80,18 +80,26 @@ export function renderShell(root, { session, navItems, canAny, onNavigate }) {
 	const user = session.user;
 	const isPlatform = Boolean(session.scope?.isPlatform);
 	const organization = session.scope?.organization;
+	const deployment = session.deployment || {};
+	const isOffline = Boolean(deployment.isOffline);
+
+	// On an offline installation this server IS the platform, so the scope is
+	// labelled "Local installation" rather than "Platform scope" — and an
+	// organization administrator of that installation is still scoped to their
+	// own organization. Deployment mode is a topology, never a privilege.
+	const scopeLabel = isOffline
+		? 'Local installation'
+		: isPlatform
+			? 'Platform scope'
+			: organization?.name
+				? organization.name
+				: 'Organization scope';
 
 	const visibleNav = navItems.filter((item) => {
 		if (!item.permission) return true;
 		const required = Array.isArray(item.permission) ? item.permission : [item.permission];
 		return canAny(required);
 	});
-
-	const scopeLabel = isPlatform
-		? 'Platform scope'
-		: organization?.name
-			? organization.name
-			: 'Organization scope';
 
 	root.innerHTML = `
 		<aside class="ac-sidebar" id="ac-sidebar">
@@ -100,7 +108,11 @@ export function renderShell(root, { session, navItems, canAny, onNavigate }) {
 				<div class="ac-sidebar__titles">
 					<p class="ac-sidebar__title">Control Center</p>
 					<p class="ac-sidebar__subtitle">${esc(
-						isPlatform ? 'All organizations' : organization?.name || 'Organization',
+						isOffline
+							? 'This installation'
+							: isPlatform
+								? 'All organizations'
+								: organization?.name || 'Organization',
 					)}</p>
 				</div>
 			</div>
@@ -138,7 +150,7 @@ export function renderShell(root, { session, navItems, canAny, onNavigate }) {
 					<p class="ac-header__description" id="ac-page-description"></p>
 				</div>
 				<div class="ac-header__actions">
-					<span class="ac-scope${isPlatform ? ' ac-scope--platform' : ''}" title="The slice of the platform this session can reach">
+					<span class="ac-scope${isPlatform && !isOffline ? ' ac-scope--platform' : ''}" title="The slice of the platform this session can reach">
 						<span class="ac-scope__dot"></span>${esc(scopeLabel)}
 					</span>
 					<div class="ac-search">

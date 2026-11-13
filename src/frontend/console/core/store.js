@@ -16,6 +16,21 @@ const state = {
 	session: null,
 	/** @type {Set<string>} */
 	permissions: new Set(),
+	/**
+	 * The deployment topology reported by the server. It is a topology, not a
+	 * permission: it decides how the console LABELS its scope and which
+	 * platform-wide framing is used, never what the caller may reach.
+	 * @type {{mode:string, isOffline:boolean, isSaaS:boolean, label:string,
+	 *         description:string, dbProvider:string}}
+	 */
+	deployment: {
+		mode: 'saas',
+		isOffline: false,
+		isSaaS: true,
+		label: 'Multi-tenant platform',
+		description: '',
+		dbProvider: 'sqlite',
+	},
 	/** Selected organization when the platform scope is narrowed. */
 	targetSchoolId: null,
 	/** Active period key (7d | 30d | 90d | academicYear | custom). */
@@ -94,8 +109,28 @@ export async function loadSession() {
 	const data = await api.get('console/session');
 	state.session = data;
 	state.permissions = new Set(Array.isArray(data.permissions) ? data.permissions : []);
+	if (data.deployment) state.deployment = { ...state.deployment, ...data.deployment };
 	emit();
 	return data;
+}
+
+/** The deployment topology reported by the server. */
+export function deployment() {
+	return state.deployment;
+}
+
+/** Is this an offline / LAN installation? */
+export function isOffline() {
+	return Boolean(state.deployment?.isOffline);
+}
+
+/**
+ * The word the console uses for the set of organizations it is looking at.
+ * On an offline installation the server IS the platform, so the wording is
+ * "this installation" rather than "the platform".
+ */
+export function scopeNoun() {
+	return isOffline() ? 'this installation' : 'the platform';
 }
 
 export function reset() {

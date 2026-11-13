@@ -80,7 +80,7 @@ export const overviewPage = {
 		if (isPlatform) {
 			kpis.push(
 				stat({
-					label: 'Organizations',
+					label: ctx.isOffline ? 'Organizations on this server' : 'Organizations',
 					value: formatNumber(glance.organizations.total),
 					note: `${glance.organizations.active} active · ${glance.organizations.pending} pending · ${glance.organizations.suspended} suspended`,
 					tone: 'primary',

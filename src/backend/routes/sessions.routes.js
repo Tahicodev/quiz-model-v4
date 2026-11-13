@@ -72,6 +72,10 @@ router.post('/', validate(SessionCreateSchema), async (req, res, next) => {
       examId: exam_id,
       userId: req.user.id,
       durationMinutes: duration,
+      // The session belongs to the caller's organization. The signed token is
+      // the only source of truth for it — a body field could move a session
+      // into another tenant.
+      schoolId: req.schoolId,
     });
     res.status(201).json(session);
   } catch (err) { next(err); }

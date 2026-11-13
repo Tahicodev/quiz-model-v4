@@ -81,6 +81,60 @@ export const settingsPage = {
 			</div>
 
 			<div class="ac-section">
+				<h2 class="ac-section__title">Deployment</h2>
+				<p class="ac-section__hint">Where this installation runs. It describes the topology, never a privilege.</p>
+			</div>
+			<section class="ac-panel">
+				<div class="ac-panel__header">
+					<div class="ac-panel__titles">
+						<h3 class="ac-panel__title">${esc(ctx.deployment?.label || 'Deployment')}</h3>
+						<p class="ac-panel__subtitle">${esc(ctx.deployment?.description || '')}</p>
+					</div>
+					<div class="ac-panel__actions">
+						<span class="ac-badge ${
+							ctx.isOffline ? 'ac-badge--info' : 'ac-badge--violet'
+						}">${esc(ctx.deployment?.mode || 'saas')}</span>
+					</div>
+				</div>
+				<div class="ac-panel__body">
+					<div class="ac-defs">
+						<div class="ac-defs__item">
+							<p class="ac-defs__term">Deployment mode</p>
+							<p class="ac-defs__desc">${esc(ctx.deployment?.mode || '—')}</p>
+						</div>
+						<div class="ac-defs__item">
+							<p class="ac-defs__term">Database provider</p>
+							<p class="ac-defs__desc">${esc(ctx.deployment?.dbProvider || '—')}</p>
+						</div>
+						<div class="ac-defs__item">
+							<p class="ac-defs__term">Your role</p>
+							<p class="ac-defs__desc">${esc(ctx.session.user.roleLabel)}</p>
+						</div>
+						<div class="ac-defs__item">
+							<p class="ac-defs__term">Your scope</p>
+							<p class="ac-defs__desc">${
+								ctx.isPlatform
+									? ctx.isOffline
+										? 'Every organization on this installation'
+										: 'Every organization on the platform'
+									: ctx.organization?.name || 'Your organization'
+							}</p>
+						</div>
+					</div>
+					<div class="ac-alert ac-alert--info" style="margin-top:16px">
+						<div class="ac-alert__body">
+							<p class="ac-alert__title">Deployment mode and role are separate</p>
+							<p class="ac-alert__text">${
+								ctx.isOffline
+									? 'On an offline installation this server is the whole platform, so administration covers the organizations hosted here and no feature requires internet access. An organization administrator still sees only their own organization, and a super administrator administers this installation.'
+									: 'On a multi-tenant platform a super administrator reaches every organization while an organization administrator reaches only their own. Switching deployment mode never changes what a given role may reach.'
+							}</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<div class="ac-section">
 				<h2 class="ac-section__title">This session</h2>
 				<p class="ac-section__hint">What this administrator is, and what they can reach.</p>
 			</div>

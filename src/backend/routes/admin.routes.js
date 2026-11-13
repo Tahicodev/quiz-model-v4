@@ -49,11 +49,9 @@ const router = Router();
 router.use(requireAuth, enforceTenant);
 
 const adminOnly = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
-const monitoringAccess = requireRole([
-	ROLES.ADMIN,
-	ROLES.SUPER_ADMIN,
-	ROLES.TEACHER,
-]);
+// The monitoring view carries usernames, roles and source addresses of every
+// user on the platform — it is an administrator surface, not a teacher one.
+const monitoringAccess = requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]);
 
 // ── Setup diagnostics (Settings → Setup wizard) ─────────────────────────────
 // Read-only: helps the admin prepare this PC to serve up to ~20 classroom
@@ -296,9 +294,26 @@ router.post('/setup/network-profile', adminOnly, async (req, res, next) => {
  * Optional `user` substring filter matches username / user id / role / IP.
  * The collector is intentionally in-memory: it is diagnostic, bounded, and
  * reset when the server restarts rather than becoming an audit datastore.
+ *
+ * SCOPE
+ * ─────
+ * Administrators only — a teacher has no legitimate need for the server-wide
+ * request log, and the log carries usernames, roles and source addresses of
+ * every user on the platform.
+ *
+ * An organization administrator sees ONLY their own organization's traffic.
+ * A platform administrator sees every organization. The scope is derived from
+ * the signed token, never from a query parameter.
  */
 router.get('/metrics', monitoringAccess, (req, res) => {
-	res.json({ data: getServerMetrics(req.query.minutes, { user: req.query.user }) });
+	const isPlatform = req.user.role === ROLES.SUPER_ADMIN;
+	const schoolId = isPlatform ? null : req.schoolId;
+	res.json({
+		data: getServerMetrics(req.query.minutes, {
+			user: req.query.user,
+			schoolId,
+		}),
+	});
 });
 
 // Same defaults prisma/seed.js installs on a fresh database.

@@ -94,6 +94,10 @@ app.use((req, res, next) => {
 				user: req.user,
 				userId: req.user?.id,
 				role: req.user?.role,
+				// The organization the call belongs to. The monitoring view is
+				// scoped by it, so an administrator never sees another
+				// organization's traffic.
+				schoolId: req.user?.school_id || null,
 				ip: req.ip,
 			});
 		}
@@ -220,6 +224,12 @@ import devicesRoutes from './routes/devices.routes.js';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import {
+	PUBLIC_DIRECTORIES,
+	PUBLIC_ROOT_FILES,
+	PUBLIC_VENDOR_FILES,
+	isBlockedPath,
+} from './staticAssets.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const indexHtmlPath = resolve(__dirname, '../../index.html');
@@ -243,7 +253,10 @@ function injectAppConfig(html) {
 		'</head>',
 		`<script>
 window.APP_CONFIG = ${JSON.stringify({
-			mode: 'saas',
+			// `mode` is the legacy contract ('saas' | 'local').
+			mode: config.mode,
+			// `deploymentMode` is the explicit topology ('saas' | 'offline').
+			deploymentMode: config.deploymentMode,
 			apiUrl: '/api/v1',
 			socketUrl: '/',
 		})};
@@ -363,7 +376,7 @@ app.use('/api/v1/kids/championships', kidsChampionshipsRoutes);
 app.use('/api/v1/kids', kidsRoutes);
 app.use('/api/v1/devices', devicesRoutes);
 
-// ── Static Files (built frontend bundle + dev SPA sources) ───────────────
+// ── Static Files (built frontend bundle + explicitly approved assets) ──────
 // Disable caching for HTML/JS entry points so dev edits reach the browser
 // immediately — express.static's default ETag/If-None-Match cache was holding
 // onto stale bundles in the dev browser.
@@ -382,14 +395,66 @@ const noCacheOpts = {
 		}
 	},
 };
-app.use(express.static('public', noCacheOpts));
+
+// Security net: refuse anything that looks like a database, an environment
+// file, a key, a backup or source — BEFORE any static mount can answer.
+// The allow-lists below are the primary control; this is the second line.
+app.use((req, res, next) => {
+	if (isBlockedPath(req.path)) {
+		logger.warn({ path: req.path, ip: req.ip }, 'Blocked static request');
+		return res.status(404).json({ code: 'NOT_FOUND', message: 'Not found' });
+	}
+	return next();
+});
+
+// The built bundle + the whole Kids player live in public/.
+for (const dir of PUBLIC_DIRECTORIES) {
+	app.use(express.static(dir, noCacheOpts));
+}
+
 // User-uploaded images (question/media options) live in appRoot/uploads and
 // are served at /uploads — relative URLs stored in `options_json`, so they
 // survive LAN/deploy without a CDN. Long cache: filenames are content-unique.
 fs.mkdirSync(config.uploadsDir, { recursive: true });
 app.use('/uploads', express.static(config.uploadsDir, { maxAge: '7d', immutable: true }));
-// Serve root-level dev files (admin.html, admin.css, styles.css)
-app.use(express.static('./', noCacheOpts));
+
+// ── Static allow-list guard ────────────────────────────────────────────────
+// Everything below this point is a STATIC ASSET. Only the files on the
+// allow-list may be served; anything else is a 404.
+//
+// This replaces the previous `express.static('./')`, which published the whole
+// project tree — including prisma/dev.db (the live database), the Prisma
+// schema, the migration history and the backend source — to anyone who could
+// reach the server.
+app.use((req, res, next) => {
+	const segments = req.path.split('/').filter(Boolean);
+
+	// A root-level file: only the explicitly approved ones.
+	if (segments.length === 1) {
+		if (PUBLIC_ROOT_FILES.has(segments[0])) return next();
+		return res.status(404).json({ code: 'NOT_FOUND', message: 'Not found' });
+	}
+
+	// The vendored browser libraries: only the listed files. The offline npm
+	// bundle (315 tarballs) and the bundled mkcert binary are excluded.
+	if (segments[0] === 'vendor') {
+		if (segments.length === 2 && PUBLIC_VENDOR_FILES.has(segments[1])) return next();
+		return res.status(404).json({ code: 'NOT_FOUND', message: 'Not found' });
+	}
+
+	// Any deeper path is not a static asset. The only multi-segment static
+	// trees (public/, uploads/, vendor/) are mounted above this guard, so
+	// reaching here means the file is not one of ours — src/, scripts/,
+	// prisma/, node_modules/, tests/, docs/, old files/ and every other
+	// project directory stay private.
+	return res.status(404).json({ code: 'NOT_FOUND', message: 'Not found' });
+});
+
+// The vendored browser libraries (socket.io, pdf, docx, xlsx, mammoth…).
+app.use('/vendor', express.static('vendor', { ...noCacheOpts, index: false }));
+
+// Root-level legacy scripts and stylesheets — only the approved ones.
+app.use(express.static('./', { ...noCacheOpts, index: false }));
 
 // ── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {

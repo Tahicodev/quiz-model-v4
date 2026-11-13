@@ -75,7 +75,41 @@ const TEACHER_WRITABLE_TABLES = new Set([
 // containing any of these, they are silently dropped (the other keys still go
 // through). This matches the existing UI policy: only admins rotate the
 // adminSecret and recoveryCode.
-const TEACHER_BLOCKED_SETTINGS_KEYS = new Set(['adminSecret', 'recoveryCode', 'teacherAccess']);
+//
+// SECURITY: every `system.*` key is blocked as well. `system.recovery_code_hash`
+// holds the bcrypt hash of the organization's account-recovery code; a teacher
+// who could overwrite it would mint a recovery ticket and reset an
+// administrator's password — a full privilege escalation. `system.*` is the
+// server's own namespace and is never teacher-writable.
+const TEACHER_BLOCKED_SETTINGS_KEYS = new Set([
+  'adminSecret',
+  'recoveryCode',
+  'teacherAccess',
+]);
+
+/**
+ * May a teacher write this settings key?
+ *
+ * Two rules, both about authority rather than about a fixed list of names:
+ *   1. The server's own `system.` namespace is never teacher-writable.
+ *      `system.recovery_code_hash` holds the bcrypt hash of the recovery
+ *      code; a teacher who could overwrite it would mint a recovery ticket
+ *      and reset an administrator's password — a full privilege escalation.
+ *   2. The key must not already live at an ADMIN or SYSTEM visibility tier.
+ *      The REST settings endpoint enforces that tier rule; the bulk endpoint
+ *      has to enforce it too, or it becomes a way around it.
+ *
+ * @param {unknown} key
+ * @param {'public'|'teacher'|'admin'|'system'|null|undefined} existingVisibility
+ */
+function teacherMayWriteSetting(key, existingVisibility) {
+  const name = String(key ?? '');
+  if (TEACHER_BLOCKED_SETTINGS_KEYS.has(name)) return false;
+  if (name.startsWith('system.')) return false;
+  if (existingVisibility === 'admin' || existingVisibility === 'system') return false;
+  return true;
+}
+
 // Only stable, complete collections may request deletion reconciliation.
 const SNAPSHOT_TABLES = new Set(['categories', 'questions', 'exams', 'results']);
 
@@ -1209,9 +1243,37 @@ router.post('/:table', async (req, res, next) => {
 
     // Per-key filter for teachers on the settings table: silently drop
     // admin-only keys so a teacher-signed-in user cannot overwrite them.
+    //
+    // The filter is ASYNC because it has to read the existing visibility tier
+    // of each key — a key that already lives at the admin or system tier is
+    // off-limits whatever the teacher sends.
     if (table === 'settings' && req._bulkActorRole === ROLES.TEACHER && Array.isArray(items)) {
       const before = items.length;
-      items = items.filter((it) => it && !TEACHER_BLOCKED_SETTINGS_KEYS.has(String(it.key)));
+      let existingByKey = new Map();
+      try {
+        const settingsModel = repo.modelFor('settings');
+        const keys = items.map((it) => String(it?.key ?? '')).filter(Boolean);
+        if (keys.length) {
+          const rows = await settingsModel.findMany({
+            where: { school_id: req.schoolId, key: { in: keys } },
+            select: { key: true, visibility: true },
+          });
+          existingByKey = new Map(rows.map((row) => [row.key, row.visibility]));
+        }
+      } catch (err) {
+        // If the tier cannot be read, fail CLOSED: drop every settings write
+        // rather than let an unknown tier through.
+        logger.warn('bulk.routes: could not read settings visibility tiers — blocking teacher writes', {
+          actorId: req.user?.id,
+          err: err?.message,
+        });
+        items = [];
+      }
+      items = items.filter((it) => it && teacherMayWriteSetting(it.key, existingByKey.get(String(it.key))));
+      // A teacher may never change a visibility tier.
+      for (const it of items) {
+        if (it && typeof it === 'object') delete it.visibility;
+      }
       if (items.length !== before) {
         logger.warn('bulk.routes: teacher write dropped admin-only setting keys', {
           actorId: req.user?.id,

@@ -171,7 +171,9 @@
 				return true;
 			}
 			if (user.role === 'admin' || user.role === 'super_admin') {
-				window.location.href = 'admin.html';
+				// Administrators land in the control center. The classroom
+				// surface (admin.html) stays one click away from there.
+				window.location.href = 'console';
 				return true;
 			}
 			return false;
@@ -329,7 +331,7 @@
 				}
 				window.location.href = 'student-workspace.html';
 			} else if (user.role === 'admin' || user.role === 'super_admin') {
-				window.location.href = 'admin.html';
+				window.location.href = 'console';
 			} else {
 				updateExamEntryAvailability();
 			}

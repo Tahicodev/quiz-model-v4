@@ -32,8 +32,12 @@ RUN rm -f .env && \
 
 # Generate the Prisma client (downloads engines into the image — needs network
 # once at BUILD time; afterwards the image is fully self-contained) and build
-# the frontend bundles.
-RUN npx prisma generate && (npm run build || true)
+# BOTH frontend bundles: the student bundle and the Admin control center.
+# A failed build must fail the image — a missing bundle would ship a broken
+# entry point that only fails at runtime, in front of a user.
+RUN npx prisma generate && \
+    npm run build && \
+    npm run build:console
 
 EXPOSE 3000
 
@@ -41,4 +45,9 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
   CMD node -e "fetch('http://localhost:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
 # Migrate + seed on every start (both idempotent), then boot the server.
+#
+# The seed creates the administrator account only when it does not exist and
+# never resets an existing password. On a fresh volume it prints a ONE-TIME
+# administrator password to the container log:
+#     docker compose logs app
 CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && node src/backend/server.js"]

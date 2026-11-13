@@ -104,8 +104,12 @@ goto waitloop
 echo.
 echo  ==================================================
 echo    Quiz App is running!
-echo    Login : admin    Password : admin123
 echo    URL   : http://localhost:3000
+echo    Admin : http://localhost:3000/console
+echo.
+echo    There is no default password. Use the one you
+echo    chose during setup, or the one-time password
+echo    printed by the database seed.
 echo  ==================================================
 echo.
 start http://localhost:3000

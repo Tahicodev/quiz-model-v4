@@ -11,7 +11,13 @@
 	const PROFILE_REQUESTS_KEY = 'quizProfileRequests';
 	const ACCOUNT_REQUESTS_KEY = 'quizAccountRequests';
 	const PENDING_IMPORTS_KEY = 'quizPendingImports';
-	const DEFAULT_RECOVERY_CODE = 'QuizAdminRecovery2024';
+	// The legacy recovery code is a CLIENT-SIDE fallback for installations
+	// that never configured a server-side recovery code. It used to be a
+	// hard-coded literal in the source — anyone who read the repository could
+	// unlock any administrator account. It is now generated once per browser
+	// profile and stored with the other local state, so it is unique per
+	// installation and never published.
+	const RECOVERY_CODE_KEY = 'quizRecoveryCode';
 	const RECOVERY_UNLOCK_TTL_MS = 1000 * 60 * 15;
 
 	const ROLE_ADMIN = 'admin';
@@ -218,6 +224,40 @@
 		return simpleHash(text);
 	}
 
+	/**
+	 * The installation's legacy (client-side) recovery code.
+	 *
+	 * It used to be the literal 'QuizAdminRecovery2024' in this file, which
+	 * meant anyone who could read the source could unlock any administrator
+	 * account on any installation. It is now generated once per browser
+	 * profile and kept with the other local state, so it is unique per
+	 * installation and never published.
+	 */
+	function generateRecoveryCode() {
+		const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+		const bytes = new Uint8Array(10);
+		if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+			crypto.getRandomValues(bytes);
+		} else {
+			for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+		}
+		let out = '';
+		for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+		return `${out.slice(0, 5)}-${out.slice(5)}`;
+	}
+
+	function getInstallationRecoveryCode() {
+		try {
+			const existing = String(localStorage.getItem(RECOVERY_CODE_KEY) || '').trim();
+			if (existing) return existing;
+			const generated = generateRecoveryCode();
+			localStorage.setItem(RECOVERY_CODE_KEY, generated);
+			return generated;
+		} catch (e) {
+			return '';
+		}
+	}
+
 	async function verifyRecoveryCodeValue(code) {
 		const entered = String(code || '').trim();
 		if (!entered) return false;
@@ -227,7 +267,9 @@
 			{},
 		);
 		const savedHash = String(settings.recoveryCodeHash || '').trim();
-		const defaultHash = await hashPassword(DEFAULT_RECOVERY_CODE);
+		const installationCode = getInstallationRecoveryCode();
+		if (!installationCode) return false;
+		const defaultHash = await hashPassword(installationCode);
 		if (savedHash && enteredHash === savedHash) return true;
 		return enteredHash === defaultHash;
 	}
@@ -480,6 +522,29 @@
 		return users.find((u) => u.id === id);
 	}
 
+	/**
+	 * A one-time bootstrap password for the local administrator account.
+	 *
+	 * The legacy surface used to create the account with the literal
+	 * 'admin123', which is published in this repository and in every
+	 * installer banner — a published default password on a school LAN. The
+	 * password is now generated randomly on first run and shown once to the
+	 * operator. The SERVER remains the authority: the real administrator
+	 * account is created by the backend with a bcrypt hash.
+	 */
+	function generateBootstrapPassword() {
+		const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%';
+		const bytes = new Uint8Array(16);
+		if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+			crypto.getRandomValues(bytes);
+		} else {
+			for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+		}
+		let out = '';
+		for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+		return out;
+	}
+
 	async function ensureDefaultAdmin() {
 		const users = getUsers();
 		const hasAdmin = users.some((u) => u.role === ROLE_ADMIN);
@@ -492,7 +557,7 @@
 					changed = true;
 				}
 				if (!String(user.passwordHash || '').trim()) {
-					user.passwordHash = await hashPassword('admin123');
+					user.passwordHash = await hashPassword(generateBootstrapPassword());
 					user.updatedAt = new Date().toISOString();
 					changed = true;
 				}
@@ -508,7 +573,7 @@
 			status: 'active',
 		});
 
-		admin.passwordHash = await hashPassword('admin123');
+		admin.passwordHash = await hashPassword(generateBootstrapPassword());
 		admin.createdAt = new Date().toISOString();
 		admin.updatedAt = admin.createdAt;
 

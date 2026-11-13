@@ -167,7 +167,7 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-echo  [7/9] Seeding database  ^(creates admin / admin123^)...
+echo  [7/9] Seeding database  ^(creates the administrator account^)...
 call npx prisma db seed
 if errorlevel 1 (
   echo  [7/9] [WARN] Seeding failed — you can re-run:  npx prisma db seed
@@ -199,8 +199,12 @@ for /f "delims=" %%i in ('node scripts\lan-ip.mjs') do set LANIP=%%i
 echo.
 echo  ==================================================
 echo    [9/9] Installation complete!
-echo
-echo    Login : admin    Password : admin123
+echo.
+echo    There is no default password. If you did not set
+echo    BOOTSTRAP_ADMIN_PASSWORD during setup, the one-time
+echo    password printed by the seed above is the only one.
+echo    Change it right after the first sign-in.
+echo    Admin console: http://localhost:3000/console
 if "!HTTPS_ON!"=="1" (
   echo    On this PC: https://localhost:3000
   echo    Students  : https://!LANIP!:3000

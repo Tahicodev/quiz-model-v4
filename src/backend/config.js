@@ -7,6 +7,7 @@
  */
 
 import dotenv from 'dotenv';
+import { DEPLOYMENT_MODES } from '../shared/constants.js';
 
 // Load .env in non-production environments.
 if (process.env.NODE_ENV !== 'production') {
@@ -37,8 +38,59 @@ function parseIntOrDefault(key, fallback) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-// SaaS is the only supported runtime mode.
-const MODE = 'saas';
+/**
+ * Resolve the deployment mode.
+ *
+ * Precedence (first match wins):
+ *   1. DEPLOYMENT_MODE — 'offline' | 'saas' ('local' is accepted as an
+ *      alias of 'offline' so the older APP_MODE spelling keeps working).
+ *   2. APP_MODE        — the historical key, same values.
+ *   3. DB_PROVIDER     — 'postgresql' implies saas, 'sqlite' implies offline.
+ *   4. default         — 'saas', the behaviour the application has always
+ *      had when nothing was configured.
+ *
+ * An unrecognised value is a startup error: silently guessing the topology
+ * of a deployment is how the wrong thing ends up exposed.
+ */
+function resolveDeploymentMode() {
+  const raw = String(process.env.DEPLOYMENT_MODE || process.env.APP_MODE || '')
+    .trim()
+    .toLowerCase();
+
+  if (raw) {
+    if (raw === DEPLOYMENT_MODES.OFFLINE || raw === 'local') {
+      return DEPLOYMENT_MODES.OFFLINE;
+    }
+    if (raw === DEPLOYMENT_MODES.SAAS) {
+      return DEPLOYMENT_MODES.SAAS;
+    }
+    throw new Error(
+      `Unknown deployment mode "${raw}". Use DEPLOYMENT_MODE=offline or DEPLOYMENT_MODE=saas.`,
+    );
+  }
+
+  const provider = String(process.env.DB_PROVIDER || '').trim().toLowerCase();
+  if (provider === 'postgresql' || provider === 'postgres' || provider === 'pg') {
+    return DEPLOYMENT_MODES.SAAS;
+  }
+  if (provider === 'sqlite') {
+    return DEPLOYMENT_MODES.OFFLINE;
+  }
+  return DEPLOYMENT_MODES.SAAS;
+}
+
+const DEPLOYMENT_MODE = resolveDeploymentMode();
+
+// The database provider is NOT selected by an env var at runtime — Prisma
+// bakes the provider into the generated client and the migration history is
+// written for one provider. This check turns a cryptic Prisma error at the
+// first query into a clear message at boot.
+const DB_PROVIDER = String(process.env.DB_PROVIDER || 'sqlite').trim().toLowerCase();
+if (DB_PROVIDER !== 'sqlite' && DB_PROVIDER !== 'postgresql') {
+  throw new Error(
+    `Unknown DB_PROVIDER "${DB_PROVIDER}". Supported: sqlite, postgresql.`,
+  );
+}
 const jwtSecret = requireEnv(
   'JWT_SECRET',
   'JWT_SECRET is required. Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
@@ -51,16 +103,28 @@ if (jwtSecret.length < 64) {
 }
 
 export const config = Object.freeze({
-  // ── Mode ──────────────────────────────────────────────────────────────────
-  // Retained as a frozen constant so existing log lines / health checks keep a
-  // stable shape. The application no longer branches on this value.
-  mode: MODE,
-  isSaaS: true,
-  isLocal: false,
+  // ── Deployment mode ──────────────────────────────────────────────────────
+  /**
+   * WHERE this installation runs. It is a topology, never a privilege:
+   * `isOffline` removes no permission and `isSaaS` grants none. It selects
+   * the infrastructure that may be used and the way the administration
+   * surface is labelled.
+   */
+  deploymentMode: DEPLOYMENT_MODE,
+  isOffline: DEPLOYMENT_MODE === DEPLOYMENT_MODES.OFFLINE,
+  isSaaS: DEPLOYMENT_MODE === DEPLOYMENT_MODES.SAAS,
+
+  /**
+   * The legacy contract consumed by the front end (APP_CONFIG.mode). Kept so
+   * the existing pages keep working: 'local' for an offline installation,
+   * 'saas' for a cloud deployment.
+   */
+  mode: DEPLOYMENT_MODE === DEPLOYMENT_MODES.SAAS ? 'saas' : 'local',
+  isLocal: DEPLOYMENT_MODE === DEPLOYMENT_MODES.OFFLINE,
 
   // ── Database ──────────────────────────────────────────────────────────────
-  // provider is informational (Prisma reads its own env); kept here for logging.
-  dbProvider: (process.env.DB_PROVIDER || 'sqlite').toLowerCase(),
+  /** The provider the generated Prisma client was built for. */
+  dbProvider: DB_PROVIDER,
   databaseUrl: requireEnv('DATABASE_URL', 'DATABASE_URL is required.'),
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -73,6 +137,22 @@ export const config = Object.freeze({
   port: parseIntOrDefault('PORT', 3000),
   nodeEnv: process.env.NODE_ENV || 'development',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+
+  /**
+   * Whether the refresh cookie may carry the `Secure` attribute.
+   *
+   * The attribute means "only ever send this over HTTPS". Setting it while
+   * the server speaks plain HTTP makes the browser DROP the cookie — which
+   * silently breaks every session on a school LAN that runs without TLS.
+   *
+   * So it follows the actual transport:
+   *   - TLS enabled on this server            → secure
+   *   - a reverse proxy terminates TLS          → set COOKIE_SECURE=true
+   *   - plain HTTP on a LAN                    → not secure
+   */
+  cookieSecure:
+    /^(1|true|yes)$/i.test(process.env.TLS_ENABLED || '') ||
+    /^(1|true|yes)$/i.test(process.env.COOKIE_SECURE || ''),
 
   // ── TLS (optional HTTPS) ──────────────────────────────────────────────────
   // Enable with TLS_ENABLED=1 and certs generated by:

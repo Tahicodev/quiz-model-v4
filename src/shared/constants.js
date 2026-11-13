@@ -11,6 +11,27 @@ export const ROLES = Object.freeze({
   STUDENT:     'student',
 });
 
+/**
+ * Deployment mode — WHERE this installation runs. It is NOT a role and it
+ * never grants a privilege: it only describes the topology and the
+ * infrastructure that may be used.
+ *
+ *   OFFLINE — a school installation on its own machine/LAN. This server IS
+ *             the platform. No internet is required, no multi-instance
+ *             infrastructure is used, and the administration is about the
+ *             organizations hosted on this machine.
+ *   SAAS    — a cloud deployment. The server is one node of a multi-tenant
+ *             product; platform operators reach every organization.
+ *
+ * The two are deliberately orthogonal: an OFFLINE install can still have a
+ * super administrator for its own installation, and a SAAS deployment still
+ * has organization administrators scoped to their own tenant.
+ */
+export const DEPLOYMENT_MODES = Object.freeze({
+  OFFLINE: 'offline',
+  SAAS: 'saas',
+});
+
 export const QUESTION_TYPES = Object.freeze({
   MCQ:        'mcq',
   TRUE_FALSE: 'true-false',

@@ -55,7 +55,11 @@ export const organizationsPage = {
 				<div class="ac-panel__header">
 					<div class="ac-panel__titles">
 						<h3 class="ac-panel__title">Organizations</h3>
-						<p class="ac-panel__subtitle">Active users are measured over the last 30 days from real sign-ins, attempts and content creation.</p>
+						<p class="ac-panel__subtitle">${
+							ctx.isOffline
+								? 'Every organization hosted on this installation. Active users are measured over the last 30 days from real sign-ins, attempts and content creation.'
+								: 'Every organization on the platform. Active users are measured over the last 30 days from real sign-ins, attempts and content creation.'
+						}</p>
 					</div>
 				</div>
 				<div class="ac-panel__body ac-panel__body--flush" data-ac-org-body>

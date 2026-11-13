@@ -14940,6 +14940,10 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     // Teacher / content author
     STUDENT: "student"
   });
+  var DEPLOYMENT_MODES = Object.freeze({
+    OFFLINE: "offline",
+    SAAS: "saas"
+  });
   var QUESTION_TYPES = Object.freeze({
     MCQ: "mcq",
     TRUE_FALSE: "true-false",
@@ -19211,7 +19215,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     const PROFILE_REQUESTS_KEY = "quizProfileRequests";
     const ACCOUNT_REQUESTS_KEY = "quizAccountRequests";
     const PENDING_IMPORTS_KEY = "quizPendingImports";
-    const DEFAULT_RECOVERY_CODE = "QuizAdminRecovery2024";
+    const RECOVERY_CODE_KEY = "quizRecoveryCode";
     const RECOVERY_UNLOCK_TTL_MS = 1e3 * 60 * 15;
     const ROLE_ADMIN = "admin";
     const ROLE_TEACHER = "teacher";
@@ -19363,6 +19367,29 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       return simpleHash(text);
     }
+    function generateRecoveryCode() {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const bytes = new Uint8Array(10);
+      if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+        crypto.getRandomValues(bytes);
+      } else {
+        for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      let out = "";
+      for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+      return `${out.slice(0, 5)}-${out.slice(5)}`;
+    }
+    function getInstallationRecoveryCode() {
+      try {
+        const existing = String(localStorage.getItem(RECOVERY_CODE_KEY) || "").trim();
+        if (existing) return existing;
+        const generated = generateRecoveryCode();
+        localStorage.setItem(RECOVERY_CODE_KEY, generated);
+        return generated;
+      } catch (e) {
+        return "";
+      }
+    }
     async function verifyRecoveryCodeValue(code) {
       const entered = String(code || "").trim();
       if (!entered) return false;
@@ -19372,7 +19399,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         {}
       );
       const savedHash = String(settings.recoveryCodeHash || "").trim();
-      const defaultHash = await hashPassword(DEFAULT_RECOVERY_CODE);
+      const installationCode = getInstallationRecoveryCode();
+      if (!installationCode) return false;
+      const defaultHash = await hashPassword(installationCode);
       if (savedHash && enteredHash === savedHash) return true;
       return enteredHash === defaultHash;
     }
@@ -19580,6 +19609,18 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     function getUserById(users, id) {
       return users.find((u) => u.id === id);
     }
+    function generateBootstrapPassword() {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#%";
+      const bytes = new Uint8Array(16);
+      if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+        crypto.getRandomValues(bytes);
+      } else {
+        for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+      }
+      let out = "";
+      for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+      return out;
+    }
     async function ensureDefaultAdmin() {
       const users = getUsers();
       const hasAdmin = users.some((u) => u.role === ROLE_ADMIN);
@@ -19592,7 +19633,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
             changed = true;
           }
           if (!String(user.passwordHash || "").trim()) {
-            user.passwordHash = await hashPassword("admin123");
+            user.passwordHash = await hashPassword(generateBootstrapPassword());
             user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
             changed = true;
           }
@@ -19606,7 +19647,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         role: ROLE_ADMIN,
         status: "active"
       });
-      admin.passwordHash = await hashPassword("admin123");
+      admin.passwordHash = await hashPassword(generateBootstrapPassword());
       admin.createdAt = (/* @__PURE__ */ new Date()).toISOString();
       admin.updatedAt = admin.createdAt;
       users.push(admin);
@@ -28668,7 +28709,7 @@ They will be signed out immediately.`
         return true;
       }
       if (user.role === "admin" || user.role === "super_admin") {
-        window.location.href = "admin.html";
+        window.location.href = "console";
         return true;
       }
       return false;
@@ -28805,7 +28846,7 @@ They will be signed out immediately.`
         }
         window.location.href = "student-workspace.html";
       } else if (user.role === "admin" || user.role === "super_admin") {
-        window.location.href = "admin.html";
+        window.location.href = "console";
       } else {
         updateExamEntryAvailability();
       }

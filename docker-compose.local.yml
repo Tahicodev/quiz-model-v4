@@ -6,6 +6,14 @@
 #
 # Offline: put quiz-app-v4-image.tar next to this folder -> docker-start loads it.
 # Internet: docker-start builds the image automatically the first time.
+#
+# This is the OFFLINE / LAN deployment: the server IS the platform. The
+# administration console at /console covers the organizations hosted on this
+# machine. Nothing here requires internet access at runtime.
+#
+# The migration history inside the named volume is seeded from the image on
+# first creation, so `migrate deploy` finds it; later image updates do NOT
+# refresh it — re-run the migrations after an upgrade that adds one.
 
 services:
   app:
@@ -15,23 +23,36 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
+      # Every device on the school LAN reaches the platform at this address.
       - "3000:3000"
     environment:
       NODE_ENV:           production
-      APP_MODE:           local
+      # ── Deployment mode ──────────────────────────────────────────────────
+      # 'offline' → this server is the whole platform (a school installation)
+      # 'saas'    → this server is one node of a multi-tenant product
+      DEPLOYMENT_MODE:   ${DEPLOYMENT_MODE:-offline}
       DB_PROVIDER:        sqlite
       DATABASE_URL:       "file:./dev.db"
-      JWT_SECRET:         ${JWT_SECRET}
+      JWT_SECRET:         ${JWT_SECRET:?set JWT_SECRET in .env (64+ hex characters)}
       JWT_ACCESS_EXPIRES: 15m
       JWT_REFRESH_EXPIRES: 7d
       BCRYPT_ROUNDS:      12
+      # The LAN runs plain HTTP, so the refresh cookie must NOT carry the
+      # `Secure` attribute — the browser would refuse to send it back and
+      # every session would end on the first reload.
+      COOKIE_SECURE:      ${COOKIE_SECURE:-false}
       PORT:               3000
-      CORS_ORIGIN:        http://localhost:3000
+      CORS_ORIGIN:        ${CORS_ORIGIN:-http://localhost:3000}
       LOG_LEVEL:          info
-      DEFAULT_SCHOOL_ID:  local
-      QUIZ_ADMIN_SECRET:  ${QUIZ_ADMIN_SECRET}
+      DEFAULT_SCHOOL_ID:  ${DEFAULT_SCHOOL_ID:-local}
+      # First-run administrator. When empty, the seed prints a one-time
+      # password in the container logs:  docker compose -f docker-compose.local.yml logs app
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     volumes:
       - quiz-data:/app/prisma
+      # Uploaded images and generated documents must survive a recreate.
+      - quiz-uploads:/app/uploads
 
 volumes:
   quiz-data:
+  quiz-uploads:

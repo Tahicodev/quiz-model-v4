@@ -15,6 +15,7 @@ import { LoginSchema, ChangePasswordSchema } from '../../shared/schemas/user.sch
 import { ROLES } from '../../shared/constants.js';
 import { requireRole } from '../middleware/role.js';
 import { getContainer } from '../container.js';
+import { config } from '../config.js';
 import { getTeacherClassIds } from './users.routes.js';
 
 const router = Router();
@@ -68,7 +69,12 @@ const refreshLimiter = (process.env.NODE_ENV === 'test' || process.env.RATE_LIMI
 const REFRESH_COOKIE_BASE = 'refreshToken';
 const REFRESH_COOKIE_OPTIONS = {
 	httpOnly: true,
-	secure: process.env.NODE_ENV === 'production',
+	// `Secure` means "only over HTTPS". Deriving it from NODE_ENV alone broke
+	// every session on a school LAN that runs the server over plain HTTP —
+	// the browser silently refused to send the cookie back. It now follows the
+	// actual transport (config.cookieSecure), which a TLS-terminating reverse
+	// proxy can opt into with COOKIE_SECURE=true.
+	secure: config.cookieSecure,
 	sameSite: 'strict',
 	maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 	path: '/api/v1/auth',
