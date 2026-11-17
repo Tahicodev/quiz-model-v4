@@ -161,12 +161,15 @@ export class TeacherOverviewService {
    * @param {Date}   [p.now]
    */
   async getOverview({ schoolId, teacherId, filters = {}, now = new Date() }) {
+    const isGlobal = !teacherId;
     const [school, teacherRow, classRows, subjectRows, categoryRows] = await Promise.all([
       this.#m.school.findUnique({ where: { id: schoolId }, select: { school_year: true } }),
-      this.#m.user.findFirst({
-        where: { id: String(teacherId), school_id: schoolId, role: 'teacher' },
-        select: { id: true, name: true, title: true, username: true, subjects_json: true },
-      }),
+      teacherId
+        ? this.#m.user.findFirst({
+            where: { id: String(teacherId), school_id: schoolId, role: 'teacher' },
+            select: { id: true, name: true, title: true, username: true, subjects_json: true },
+          })
+        : Promise.resolve({ id: 'admin', name: 'School-wide', title: 'Administrator', username: 'admin', subjects_json: '[]' }),
       this.#m.class.findMany({
         where: { school_id: schoolId },
         select: { id: true, name: true },
@@ -191,10 +194,12 @@ export class TeacherOverviewService {
       });
     }
 
-    const assignedClassIds = await this.#teacherClassIds(schoolId, teacherId);
-    const classIdSet = new Set(assignedClassIds);
+    const assignedClassIds = teacherId ? await this.#teacherClassIds(schoolId, teacherId) : null;
+    const classIdSet = assignedClassIds ? new Set(assignedClassIds) : null;
     const requestedClassIds = Array.isArray(filters.classIds) ? filters.classIds.filter(Boolean) : [];
-    const allowedClasses = classRows.filter((c) => classIdSet.has(String(c.id)));
+    const allowedClasses = classIdSet
+      ? classRows.filter((c) => classIdSet.has(String(c.id)))
+      : classRows;
     const selectedClasses = requestedClassIds.length
       ? allowedClasses.filter((c) => requestedClassIds.includes(String(c.id)))
       : allowedClasses;
@@ -223,7 +228,9 @@ export class TeacherOverviewService {
         classes: allowedClasses,
         message: allowedClasses.length
           ? 'No class matches the selected filter.'
-          : 'No class has been assigned to your account yet. Ask an administrator to assign your classes.',
+          : isGlobal
+            ? 'No class exists in this school yet. Create a class to unlock analytics.'
+            : 'No class has been assigned to your account yet. Ask an administrator to assign your classes.',
       });
     }
 
@@ -359,7 +366,7 @@ export class TeacherOverviewService {
 
     // ── courses, lessons, class assignment ────────────────────────────────
     const courses = await this.#m.course.findMany({
-      where: { school_id: schoolId, created_by: String(teacherId) },
+      where: isGlobal ? { school_id: schoolId } : { school_id: schoolId, created_by: String(teacherId) },
       select: { id: true, name: true, status: true, subject_id: true, category_id: true, created_at: true },
       orderBy: { created_at: 'desc' },
     });
@@ -427,7 +434,7 @@ export class TeacherOverviewService {
     // exams they created. A teacher who adopts a shared exam still gets question
     // analytics for it instead of an empty bank.
     let teacherQuestions = await this.#m.question.findMany({
-      where: { school_id: schoolId, created_by: String(teacherId) },
+      where: isGlobal ? { school_id: schoolId } : { school_id: schoolId, created_by: String(teacherId) },
       select: {
         id: true,
         text: true,
@@ -441,7 +448,7 @@ export class TeacherOverviewService {
       take: MAX_RESULT_ROWS,
     });
     const myExamQuestionRows = await this.#m.examQuestion.findMany({
-      where: { exam: { school_id: schoolId, creator_id: String(teacherId) } },
+      where: isGlobal ? { exam: { school_id: schoolId } } : { exam: { school_id: schoolId, creator_id: String(teacherId) } },
       select: { question_id: true },
       take: MAX_RESULT_ROWS,
     });
@@ -461,7 +468,7 @@ export class TeacherOverviewService {
       });
       teacherQuestions = teacherQuestions.concat(adoptedQuestions).slice(0, MAX_RESULT_ROWS);
     }
-    const scopeCategoryIds = new Set(categoryRows.filter((c) => String(c.created_by || '') === String(teacherId)).map((c) => String(c.id)));
+    const scopeCategoryIds = new Set((isGlobal ? categoryRows : categoryRows.filter((c) => String(c.created_by || '') === String(teacherId))).map((c) => String(c.id)));
     for (const set of courseCategoryIds.values()) set.forEach((id) => scopeCategoryIds.add(id));
     teacherQuestions.forEach((q) => {
       if (q.category_id) scopeCategoryIds.add(String(q.category_id));
@@ -613,21 +620,24 @@ export class TeacherOverviewService {
     // Active tournaments relevant to the teacher (created by them or joined by
     // their students). Tournament rows carry no class link.
     const activeTournamentRows = await this.#m.tournament.findMany({
-      where: {
-        school_id: schoolId,
-        status: { in: ['open', 'active'] },
-        OR: [
-          { creator_id: String(teacherId) },
-          { id: { in: [...new Set([...tournamentIds, ...kidsTournamentIds])] } },
-        ],
-      },
+      where: isGlobal
+        ? { school_id: schoolId, status: { in: ['open', 'active'] } }
+        : {
+            school_id: schoolId,
+            status: { in: ['open', 'active'] },
+            OR: [
+              { creator_id: String(teacherId) },
+              { id: { in: [...new Set([...tournamentIds, ...kidsTournamentIds])] } },
+            ],
+          },
       select: { id: true },
     });
     const activeTournamentIds = new Set(activeTournamentRows.map((t) => String(t.id)));
 
     const ctx = {
       schoolId,
-      teacherId: String(teacherId),
+      teacherId: String(teacherId || 'admin'),
+      isGlobal,
       now,
       window,
       prev,
@@ -687,11 +697,9 @@ export class TeacherOverviewService {
       const subject = subjectById.get(sid);
       if (subject) subjectRefs.set(sid, String(subject.name));
     };
-    subjectRows
-      .filter((s) => String(s.created_by || '') === ctx.teacherId)
+    (isGlobal ? subjectRows : subjectRows.filter((s) => String(s.created_by || '') === ctx.teacherId))
       .forEach((s) => addSubjectRef(s.id));
-    categoryRows
-      .filter((c) => String(c.created_by || '') === ctx.teacherId)
+    (isGlobal ? categoryRows : categoryRows.filter((c) => String(c.created_by || '') === ctx.teacherId))
       .forEach((c) => addSubjectRef(c.subject_id));
     courses.forEach((c) => addSubjectRef(c.subject_id));
     for (const meta of examSubjects.values()) addSubjectRef(meta.subjectId);
@@ -867,14 +875,20 @@ export class TeacherOverviewService {
    * registry and never inferred from last_login or result timestamps.
    */
   async getPresence({ schoolId, teacherId, filters = {}, now = new Date() }) {
-    const assignedClassIds = await this.#teacherClassIds(schoolId, teacherId);
-    const allowedClasses = assignedClassIds.length
-      ? await this.#m.class.findMany({
-          where: { school_id: schoolId, id: { in: assignedClassIds } },
+    const assignedClassIds = teacherId ? await this.#teacherClassIds(schoolId, teacherId) : null;
+    const allowedClasses = assignedClassIds
+      ? (assignedClassIds.length
+          ? await this.#m.class.findMany({
+              where: { school_id: schoolId, id: { in: assignedClassIds } },
+              select: { id: true, name: true },
+              orderBy: { name: 'asc' },
+            })
+          : [])
+      : await this.#m.class.findMany({
+          where: { school_id: schoolId },
           select: { id: true, name: true },
           orderBy: { name: 'asc' },
-        })
-      : [];
+        });
     const requested = Array.isArray(filters.classIds)
       ? filters.classIds.map(String).filter(Boolean)
       : [];

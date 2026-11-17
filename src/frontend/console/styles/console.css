@@ -453,7 +453,7 @@ body {
 	align-items: center;
 }
 
-.ac-search svg {
+.ac-search > svg {
 	position: absolute;
 	left: 9px;
 	color: var(--ac-text-subtle);
@@ -462,13 +462,60 @@ body {
 
 .ac-search input {
 	width: 210px;
-	padding: 7px 10px 7px 30px;
+	padding: 7px 30px 7px 30px;
 	border: 1px solid var(--ac-border);
 	border-radius: var(--ac-radius-sm);
 	background: var(--ac-surface-2);
 	color: var(--ac-text);
 	font: inherit;
 	font-size: 13px;
+}
+
+/*
+ * The clear "×" inside the search field.
+ *
+ * A native `type="search"` clear button is an OS-drawn glyph the theme
+ * cannot reach — in a dark theme it is a bright blob on a dark field. The
+ * shell renders its own button instead: a small round target that appears
+ * only while there is something to clear.
+ */
+.ac-search__clear {
+	position: absolute;
+	right: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--ac-text-subtle);
+	cursor: pointer;
+	transition: background 0.14s ease, color 0.14s ease;
+}
+
+.ac-search__clear:hover {
+	background: var(--ac-surface-3);
+	color: var(--ac-text);
+}
+
+.ac-search__clear:focus-visible {
+	outline: 2px solid var(--ac-brand);
+	outline-offset: 1px;
+}
+
+.ac-search__clear[hidden] {
+	display: none;
+}
+
+.ac-search__clear svg {
+	position: static;
+	left: auto;
+	pointer-events: none;
 }
 
 .ac-search input:focus {
@@ -840,9 +887,14 @@ button.ac-kpi:hover {
 	padding-top: 2px;
 }
 
-/* Push the trailing control to the right edge of the row. */
+/* Push the trailing control to the right edge of the row. It is a flex row
+   itself so the in-page Back button and the Refresh button sit on one line,
+   evenly spaced, whatever order they are inserted in. */
 .ac-toolbar__push {
 	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
 .ac-toolbar .ac-field {
@@ -2082,6 +2134,14 @@ button.ac-kpi:hover {
 	gap: 10px;
 }
 
+/* A lone quick action — "Add an account" on the Users & Access hub — must
+   be a button, not a full-width banner. The grid gives each tile a fair
+   share of the row; with one tile that share is the whole row, so cap it. */
+.ac-quick-actions > .ac-quick-action:only-child {
+	width: min(260px, 100%);
+	justify-self: start;
+}
+
 .ac-quick-action {
 	display: flex;
 	align-items: center;
@@ -2204,7 +2264,15 @@ button.ac-kpi:hover {
 
 /* The in-page Back button — rendered into the page's own toolbar, next to
    Refresh, NOT in the console header. Offered only when there is somewhere
-   to go. */
+   to go, and styled as the Refresh button's twin: same height, same chrome,
+   a little air between the two. */
+.ac-back-btn {
+	flex: none;
+	margin-right: 2px;
+	padding: 7px 12px;
+	white-space: nowrap;
+}
+
 .ac-back-btn .ac-back-btn__label {
 	margin-left: 6px;
 }

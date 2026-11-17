@@ -203,6 +203,7 @@ function boot(opts = {}) {
 	}
 	const document = {
 		getElementById: (id) => hosts[id] || null,
+		querySelector: () => null,
 		addEventListener() {},
 		body: { contains: () => true },
 	};
@@ -297,10 +298,11 @@ describe('teacher domain analytics', () => {
 		expect(html).toContain('Games insight.');
 	});
 
-	it('never renders domain analytics for an admin session', async () => {
+	it('renders school-wide domain analytics for an admin session', async () => {
 		const { hosts, window } = boot({ admin: true });
 		await window.TeacherDomainAnalytics.render('results', true);
-		expect(hosts.resultsAnalytics.innerHTML).toBe('');
-		expect(hosts.resultsAnalytics.hidden).toBe(true);
+		expect(hosts.resultsAnalytics.innerHTML).toContain('Results analytics');
+		expect(hosts.resultsAnalytics.innerHTML).toContain('Intervention list');
+		expect(hosts.resultsAnalytics.hidden).toBe(false);
 	});
 });

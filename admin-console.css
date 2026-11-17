@@ -1,0 +1,619 @@
+/*
+ * admin-console.css
+ * Design token sheet + component library for the admin school-wide overview.
+ * The visual language mirrors the platform console (/console); every selector
+ * is prefixed with `.ac-` so it cannot collide with styles.css / admin.css.
+ *
+ * Loaded via: <link rel="stylesheet" href="admin-console.css" />
+ */
+
+/* ─── Design Tokens ──────────────────────────────────────────────────────── */
+:root {
+	--ac-bg: #f8fafc;
+	--ac-surface: #ffffff;
+	--ac-surface-2: #f1f5f9;
+	--ac-border: #e2e8f0;
+	--ac-border-2: #cbd5e1;
+	--ac-text: #0f172a;
+	--ac-text-2: #475569;
+	--ac-text-3: #94a3b8;
+	--ac-radius: 12px;
+	--ac-radius-sm: 8px;
+	--ac-radius-xs: 6px;
+	--ac-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+	--ac-shadow-md: 0 4px 12px 0 rgb(0 0 0 / 0.1), 0 2px 6px -2px rgb(0 0 0 / 0.06);
+
+	/* Accent palette */
+	--ac-blue: #3b82f6;
+	--ac-blue-bg: #eff6ff;
+	--ac-blue-border: #bfdbfe;
+	--ac-green: #22c55e;
+	--ac-green-bg: #f0fdf4;
+	--ac-green-border: #bbf7d0;
+	--ac-purple: #a855f7;
+	--ac-purple-bg: #faf5ff;
+	--ac-purple-border: #e9d5ff;
+	--ac-amber: #f59e0b;
+	--ac-amber-bg: #fffbeb;
+	--ac-amber-border: #fde68a;
+	--ac-red: #ef4444;
+	--ac-red-bg: #fef2f2;
+	--ac-red-border: #fecaca;
+
+	/* KPI chip active */
+	--ac-chip-active-bg: #1d4ed8;
+	--ac-chip-active-text: #ffffff;
+	--ac-chip-bg: #f1f5f9;
+	--ac-chip-text: #334155;
+	--ac-chip-border: #e2e8f0;
+}
+
+/* ─── Layout container ───────────────────────────────────────────────────── */
+#adminConsoleOverview {
+	background: var(--ac-bg);
+	border-radius: var(--ac-radius);
+	padding: 0 0 32px;
+	contain: layout style;
+}
+
+/* ─── Toolbar ────────────────────────────────────────────────────────────── */
+.ac-toolbar {
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	padding: 14px 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 20px;
+}
+
+.ac-toolbar__row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.ac-toolbar__filters {
+	gap: 10px;
+}
+
+.ac-toolbar__actions {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+/* Scope badge */
+.ac-scope {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--ac-text-2);
+	background: var(--ac-surface-2);
+	border: 1px solid var(--ac-border);
+	border-radius: 20px;
+	padding: 4px 12px;
+	white-space: nowrap;
+}
+
+.ac-scope--platform .ac-scope__dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--ac-green);
+	flex-shrink: 0;
+	animation: ac-pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes ac-pulse-dot {
+	0%, 100% { opacity: 1; transform: scale(1); }
+	50% { opacity: 0.65; transform: scale(0.8); }
+}
+
+/* Period chips */
+.ac-chip-group {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+
+.ac-chip {
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--ac-chip-text);
+	background: var(--ac-chip-bg);
+	border: 1px solid var(--ac-chip-border);
+	border-radius: 20px;
+	padding: 4px 12px;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+	white-space: nowrap;
+}
+
+.ac-chip:hover {
+	background: #e2e8f0;
+	border-color: #94a3b8;
+}
+
+.ac-chip.is-active {
+	background: var(--ac-chip-active-bg);
+	color: var(--ac-chip-active-text);
+	border-color: var(--ac-chip-active-bg);
+}
+
+/* ─── Section title ─────────────────────────────────────────────────────── */
+.ac-section-title {
+	font-size: 0.8125rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--ac-text-2);
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	margin: 0 0 14px;
+}
+
+.ac-section-title svg {
+	opacity: 0.65;
+	flex-shrink: 0;
+}
+
+/* ─── Grids ──────────────────────────────────────────────────────────────── */
+.ac-grid {
+	display: grid;
+	gap: 14px;
+}
+
+.ac-grid--pulse {
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.ac-grid--kpi {
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+/* ─── Live Pulse Section ─────────────────────────────────────────────────── */
+.ac-pulse-section {
+	margin-bottom: 20px;
+}
+
+.ac-pulse-card {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	padding: 16px 20px;
+	box-shadow: var(--ac-shadow);
+	transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ac-pulse-card:hover {
+	transform: translateY(-1px);
+	box-shadow: var(--ac-shadow-md);
+}
+
+.ac-pulse-card__icon {
+	width: 44px;
+	height: 44px;
+	border-radius: var(--ac-radius-sm);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.ac-pulse-card.pulse-blue { border-left: 3px solid var(--ac-blue); }
+.ac-pulse-card.pulse-blue .ac-pulse-card__icon { background: var(--ac-blue-bg); color: var(--ac-blue); }
+
+.ac-pulse-card.pulse-green { border-left: 3px solid var(--ac-green); }
+.ac-pulse-card.pulse-green .ac-pulse-card__icon { background: var(--ac-green-bg); color: var(--ac-green); }
+
+.ac-pulse-card.pulse-purple { border-left: 3px solid var(--ac-purple); }
+.ac-pulse-card.pulse-purple .ac-pulse-card__icon { background: var(--ac-purple-bg); color: var(--ac-purple); }
+
+.ac-pulse-card.pulse-amber { border-left: 3px solid var(--ac-amber); }
+.ac-pulse-card.pulse-amber .ac-pulse-card__icon { background: var(--ac-amber-bg); color: var(--ac-amber); }
+
+.ac-pulse-card__content {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.ac-pulse-card__value {
+	font-size: 1.75rem;
+	font-weight: 800;
+	color: var(--ac-text);
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+}
+
+.ac-pulse-card__label {
+	font-size: 0.75rem;
+	color: var(--ac-text-2);
+	font-weight: 500;
+}
+
+/* ─── Executive KPI Cards ────────────────────────────────────────────────── */
+.ac-kpi {
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	padding: 20px;
+	box-shadow: var(--ac-shadow);
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ac-kpi:hover {
+	transform: translateY(-1px);
+	box-shadow: var(--ac-shadow-md);
+}
+
+.ac-kpi__label {
+	font-size: 0.6875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--ac-text-3);
+}
+
+.ac-kpi__value {
+	font-size: 2rem;
+	font-weight: 800;
+	color: var(--ac-text);
+	line-height: 1.1;
+	font-variant-numeric: tabular-nums;
+}
+
+.ac-kpi__value small {
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--ac-text-2);
+}
+
+.ac-kpi__meta {
+	font-size: 0.6875rem;
+	color: var(--ac-text-3);
+	line-height: 1.4;
+}
+
+/* ─── Workbench ──────────────────────────────────────────────────────────── */
+.ac-workbench {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	margin-top: 20px;
+}
+
+.ac-workbench__panel {
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	box-shadow: var(--ac-shadow);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.ac-workbench__panel--wide {
+	grid-column: 1 / -1;
+}
+
+.ac-workbench__head {
+	padding: 16px 20px;
+	border-bottom: 1px solid var(--ac-border);
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.ac-workbench__title {
+	font-size: 0.875rem;
+	font-weight: 700;
+	color: var(--ac-text);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 2px;
+}
+
+.ac-workbench__title svg {
+	opacity: 0.6;
+	flex-shrink: 0;
+}
+
+.ac-workbench__subtitle {
+	font-size: 0.75rem;
+	color: var(--ac-text-2);
+	margin: 0;
+}
+
+.ac-workbench__body {
+	padding: 16px 20px;
+	flex: 1;
+	overflow: auto;
+}
+
+.ac-workbench__body--flush {
+	padding: 0;
+}
+
+/* ─── AC Table ───────────────────────────────────────────────────────────── */
+.ac-table-container {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.ac-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.8125rem;
+}
+
+.ac-table thead th {
+	padding: 10px 14px;
+	text-align: left;
+	font-size: 0.6875rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--ac-text-3);
+	background: var(--ac-surface-2);
+	border-bottom: 1px solid var(--ac-border);
+	white-space: nowrap;
+}
+
+.ac-table tbody td {
+	padding: 11px 14px;
+	color: var(--ac-text-2);
+	border-bottom: 1px solid var(--ac-border);
+	vertical-align: middle;
+}
+
+.ac-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.ac-table tbody tr:hover td {
+	background: var(--ac-surface-2);
+}
+
+.ac-table .ac-table__name {
+	font-weight: 600;
+	color: var(--ac-text);
+}
+
+.ac-table .ac-table__badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	border-radius: 20px;
+	padding: 2px 8px;
+}
+
+.ac-table .ac-table__badge--active {
+	background: var(--ac-green-bg);
+	color: #15803d;
+	border: 1px solid var(--ac-green-border);
+}
+
+.ac-table .ac-table__badge--inactive {
+	background: var(--ac-surface-2);
+	color: var(--ac-text-3);
+	border: 1px solid var(--ac-border);
+}
+
+.ac-table .ac-table__score {
+	font-weight: 700;
+	color: var(--ac-text);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Empty state row */
+.ac-table__empty td {
+	text-align: center;
+	padding: 32px 20px;
+	color: var(--ac-text-3);
+	font-size: 0.8125rem;
+}
+
+/* ─── Attention + Ranking lists ──────────────────────────────────────────── */
+.ac-list-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ac-list-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 10px 14px;
+	border-radius: var(--ac-radius-xs);
+	background: var(--ac-surface-2);
+	border: 1px solid var(--ac-border);
+	font-size: 0.8125rem;
+}
+
+.ac-list-item--alert {
+	background: var(--ac-red-bg);
+	border-color: var(--ac-red-border);
+}
+
+.ac-list-item__name {
+	font-weight: 600;
+	color: var(--ac-text);
+}
+
+.ac-list-item__meta {
+	font-size: 0.6875rem;
+	color: var(--ac-text-3);
+	margin-top: 1px;
+}
+
+.ac-list-item__badge {
+	flex-shrink: 0;
+	font-size: 0.6875rem;
+	font-weight: 700;
+	border-radius: 20px;
+	padding: 2px 9px;
+	border: 1px solid transparent;
+}
+
+.ac-list-item__badge--danger {
+	background: var(--ac-red-bg);
+	color: #dc2626;
+	border-color: var(--ac-red-border);
+}
+
+.ac-list-item__badge--ok {
+	background: var(--ac-green-bg);
+	color: #15803d;
+	border-color: var(--ac-green-border);
+}
+
+.ac-list-item__badge--warn {
+	background: var(--ac-amber-bg);
+	color: #92400e;
+	border-color: var(--ac-amber-border);
+}
+
+.ac-list-item__rank {
+	font-size: 0.75rem;
+	font-weight: 800;
+	color: var(--ac-text-3);
+	min-width: 22px;
+}
+
+.ac-list-item__rank--gold { color: #d97706; }
+.ac-list-item__rank--silver { color: #64748b; }
+.ac-list-item__rank--bronze { color: #92400e; }
+
+/* Sub headings inside panels */
+.ac-sub-heading {
+	font-size: 0.75rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--ac-text-2);
+	margin: 0 0 10px;
+}
+
+.ac-sub-heading.text-danger { color: #dc2626; }
+
+.ac-attention-section,
+.ac-ranking-section {
+	flex: 1;
+}
+
+/* ─── Score distribution / certification split ───────────────────────────── */
+.ac-split-box {
+	flex: 1;
+	border-radius: var(--ac-radius-xs);
+	padding: 12px 16px;
+	text-align: center;
+	border: 1px solid transparent;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ac-split-box .split-label {
+	font-size: 0.6875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.ac-split-box .split-value {
+	font-size: 1.5rem;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+}
+
+.ac-split-box.split-certified {
+	background: var(--ac-green-bg);
+	border-color: var(--ac-green-border);
+	color: #15803d;
+}
+
+.ac-split-box.split-pending {
+	background: var(--ac-amber-bg);
+	border-color: var(--ac-amber-border);
+	color: #92400e;
+}
+
+/* ─── Mini-stat grid (games panel) ──────────────────────────────────────── */
+.ac-mini-stat-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 10px;
+}
+
+.ac-mini-stat {
+	background: var(--ac-surface-2);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius-xs);
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+
+.ac-mini-stat__val {
+	font-size: 1.375rem;
+	font-weight: 800;
+	color: var(--ac-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.ac-mini-stat__lbl {
+	font-size: 0.6875rem;
+	color: var(--ac-text-3);
+	text-align: center;
+}
+
+/* ─── Responsive adjustments ─────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+	.ac-workbench {
+		grid-template-columns: 1fr;
+	}
+	.ac-workbench__panel--wide {
+		grid-column: 1;
+	}
+}
+
+@media (max-width: 640px) {
+	.ac-grid--pulse {
+		grid-template-columns: 1fr 1fr;
+	}
+	.ac-grid--kpi {
+		grid-template-columns: 1fr 1fr;
+	}
+	.ac-toolbar__actions {
+		margin-left: 0;
+	}
+}
+
+/* ─── Utility helpers (scoped to ac) ─────────────────────────────────────── */
+.ac-text-muted { color: var(--ac-text-3); }
+.ac-text-sm { font-size: 0.75rem; }
+.ac-mt { margin-top: 14px; }
+

@@ -594,22 +594,86 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
  */
 router.get('/overview', adminOnly, async (req, res, next) => {
   try {
-    const { overviewAnalyticsSvc } = getContainer();
+    const { teacherOverviewSvc, overviewAnalyticsSvc } = getContainer();
     const q = req.query || {};
-    const data = await overviewAnalyticsSvc.getSchoolOverview({
+    const filters = {
+      academicYear: q.academicYear,
+      period: q.period,
+      from: q.from,
+      to: q.to,
+      classIds: q.classId ? [q.classId] : (q.classIds ? String(q.classIds).split(',').map((s) => s.trim()).filter(Boolean) : []),
+      subjectIds: q.subjectId ? [q.subjectId] : (q.subjectIds ? String(q.subjectIds).split(',').map((s) => s.trim()).filter(Boolean) : []),
+    };
+
+    const [globalBundle, schoolOverview] = await Promise.all([
+      teacherOverviewSvc.getOverview({
+        schoolId: req.schoolId,
+        teacherId: q.teacherId || null,
+        filters,
+      }),
+      overviewAnalyticsSvc.getSchoolOverview({
+        schoolId: req.schoolId,
+        filters: {
+          academicYear: q.academicYear,
+          period: q.period,
+          from: q.from,
+          to: q.to,
+          teacherId: q.teacherId,
+          classId: q.classId,
+          studentId: q.studentId,
+          categoryId: q.categoryId,
+          mode: q.mode,
+        },
+      }).catch(() => null),
+    ]);
+
+    if (schoolOverview?.sections) {
+      if (schoolOverview.sections.glance) {
+        globalBundle.sections.glance = { ...(globalBundle.sections.glance || {}), ...schoolOverview.sections.glance };
+      }
+      if (schoolOverview.sections.content) {
+        globalBundle.sections.content = { ...(globalBundle.sections.content || {}), ...schoolOverview.sections.content };
+      }
+      if (schoolOverview.sections.achievement) {
+        globalBundle.sections.achievement = schoolOverview.sections.achievement;
+      }
+      if (schoolOverview.sections.engagement) {
+        globalBundle.sections.engagement = { ...(globalBundle.sections.engagement || {}), ...schoolOverview.sections.engagement };
+      }
+      if (schoolOverview.sections.teacherInsights) {
+        globalBundle.sections.teacherInsights = schoolOverview.sections.teacherInsights;
+        globalBundle.sections.teacherActivity = schoolOverview.sections.teacherInsights.teacherActivity || [];
+        globalBundle.sections.teacherPerformance = schoolOverview.sections.teacherInsights.teacherPerformance || [];
+        globalBundle.sections.classesNeedingAttention = schoolOverview.sections.teacherInsights.classesNeedingAttention || [];
+      }
+    }
+    // The teacher-overview meta describes its own scope shape; the school
+    // overview's scope (period label, academic year, teacher/class/mode) is
+    // what the admin toolbar renders, so keep it alongside under a distinct
+    // key instead of overwriting the teacher meta.
+    globalBundle.meta = globalBundle.meta || {};
+    globalBundle.meta.schoolScope = schoolOverview?.meta?.scope || null;
+    globalBundle.meta.schoolThresholds = schoolOverview?.meta?.thresholds || null;
+
+    res.json({ data: globalBundle });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/presence', adminOnly, async (req, res, next) => {
+  try {
+    const { teacherOverviewSvc } = getContainer();
+    const q = req.query || {};
+    const classIds = q.classIds
+      ? String(q.classIds).split(',').map((p) => p.trim()).filter(Boolean)
+      : [];
+    const data = await teacherOverviewSvc.getPresence({
       schoolId: req.schoolId,
-      filters: {
-        academicYear: q.academicYear,
-        period: q.period,
-        from: q.from,
-        to: q.to,
-        teacherId: q.teacherId,
-        classId: q.classId,
-        studentId: q.studentId,
-        categoryId: q.categoryId,
-        mode: q.mode,
-      },
+      teacherId: null,
+      filters: { classIds },
     });
+    res.set('Cache-Control', 'no-store');
     res.json({ data });
   } catch (err) {
     next(err);

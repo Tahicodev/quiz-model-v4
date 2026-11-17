@@ -117,17 +117,26 @@ export function renderShell(root, { session, navItems, canAny, onNavigate }) {
 				</div>
 			</div>
 			<nav class="ac-nav" aria-label="Console sections">
-				${visibleNav
-					.map(
-						(item) => `
+				${(() => {
+					let lastGroup = null;
+					return visibleNav
+						.map((item) => {
+							const group = item.group || null;
+							const label =
+								group && group !== lastGroup
+									? `<p class="ac-nav__group-label">${esc(group)}</p>`
+									: '';
+							lastGroup = group;
+							return `${label}
 					<button type="button" class="ac-nav__item" data-ac-nav="${esc(item.id)}" data-ac-path="${esc(
 							item.path,
 						)}">
 						${ICONS[item.icon] || ICONS.overview}
 						<span class="ac-nav__label">${esc(item.title)}</span>
-					</button>`,
-					)
-					.join('')}
+					</button>`;
+						})
+						.join('');
+				})()}
 			</nav>
 			<div class="ac-sidebar__footer">
 				<div class="ac-user">

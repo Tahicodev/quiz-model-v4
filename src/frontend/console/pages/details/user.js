@@ -515,12 +515,50 @@ function bindActions(host, ctx, userId, account, data) {
 			});
 			// The generator: a readable, strong password — every class
 			// represented, no ambiguous characters (no 0/O, 1/l/I), drawn from
-			// the platform's own randomness.
-			modal.root.querySelector('#ac-generate-password').addEventListener('click', () => {
-				const input = modal.root.querySelector('#ac-new-password');
-				input.value = generatePassword(14);
+			// the platform's own randomness. Once generated, the button
+			// becomes "Copy": the next click puts the password on the
+			// clipboard instead of quietly replacing it with a new one.
+			const input = modal.root.querySelector('#ac-new-password');
+			const action = modal.root.querySelector('#ac-generate-password');
+			let generated = '';
+			const setAction = (mode) => {
+				action.dataset.mode = mode;
+				action.textContent = mode === 'copy' ? 'Copy' : 'Generate';
+				action.title =
+					mode === 'copy' ? 'Copy the generated password' : 'Generate a strong password';
+			};
+			setAction('generate');
+
+			action.addEventListener('click', async () => {
+				if (action.dataset.mode === 'copy') {
+					try {
+						await navigator.clipboard.writeText(input.value);
+						toast('Password copied to the clipboard.', 'success');
+					} catch {
+						// A LAN install runs on plain http, where the async
+						// clipboard API is unavailable. Fall back to the
+						// selection + copy command, which works everywhere.
+						input.focus();
+						input.select();
+						try {
+							document.execCommand('copy');
+							toast('Password copied to the clipboard.', 'success');
+						} catch {
+							toast('The password is selected — press Ctrl+C to copy it.', 'error');
+						}
+					}
+					return;
+				}
+				generated = generatePassword(14);
+				input.value = generated;
 				input.focus();
 				input.select();
+				setAction('copy');
+			});
+			// Typing over the generated value makes it the operator's own
+			// password, so the button goes back to "Generate".
+			input.addEventListener('input', () => {
+				if (action.dataset.mode === 'copy' && input.value !== generated) setAction('generate');
 			});
 			modal.root.querySelector('[data-ac-cancel]').addEventListener('click', modal.close);
 			modal.root.querySelector('[data-ac-confirm]').addEventListener('click', async () => {

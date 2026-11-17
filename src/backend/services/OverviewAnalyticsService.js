@@ -279,15 +279,47 @@ export class OverviewAnalyticsService {
 
   /**
    * @param {object} p
-   * @param {string} p.schoolId
+   * @param {string} p.schoolId  one organization (the classroom admin surface)
+   * @param {string[]} [p.schoolIds]  several organizations at once (platform
+   *   scope in the control center). When given it wins over `schoolId`.
    * @param {object} [p.filters] { academicYear, period, teacherId, classId, from, to }
    * @param {Date}   [p.now] injectable clock for tests
+   *
+   * Multi-organization requests run ONE set of aggregates scoped with
+   * `school_id: { in: [...] }` — the totals, means, pass rates and class
+   * rankings are therefore computed over the union of the organizations, not
+   * summed from per-school averages (which would weight a 2-student school
+   * like a 2000-student one). Every section already groups by user/class id,
+   * so no additional merging logic is required.
    */
-  async getSchoolOverview({ schoolId, filters = {}, now = new Date() }) {
-    const school = await this.#m.school.findUnique({
-      where: { id: schoolId },
-      select: { school_year: true },
-    });
+  async getSchoolOverview({ schoolId, schoolIds, filters = {}, now = new Date() }) {
+    const ids = (Array.isArray(schoolIds) && schoolIds.length
+      ? schoolIds
+      : Array.isArray(schoolId)
+        ? schoolId
+        : schoolId
+          ? [schoolId]
+          : []
+    )
+      .map((value) => String(value))
+      .filter(Boolean);
+    // An empty scope must never turn into an unscoped query.
+    if (!ids.length) ids.push('__no_school__');
+    const single = ids.length === 1;
+    // Prisma accepts either a scalar or `{ in: [...] }` for every `school_id`
+    // filter below, so the sections stay unchanged.
+    const schoolScope = single ? ids[0] : { in: ids };
+
+    // The academic-year window is a per-school free-text label. A single
+    // organization uses its own label; a multi-organization bundle uses the
+    // earliest configured one as a stable, documented approximation.
+    const school = ids.length
+      ? await this.#m.school.findFirst({
+          where: single ? { id: ids[0] } : { id: { in: ids } },
+          select: { school_year: true },
+          orderBy: { created_at: 'asc' },
+        })
+      : null;
     const academicWindow = parseAcademicYearWindow(school?.school_year, now);
 
     // Academic-year selection: 'current' (derived window), 'all' (unbounded),
@@ -306,7 +338,7 @@ export class OverviewAnalyticsService {
 
     const teacherId = filters.teacherId ? String(filters.teacherId) : '';
     const classId = filters.classId ? String(filters.classId) : '';
-    const teacherClassIds = teacherId ? await this.#teacherClassIds(schoolId, teacherId) : [];
+    const teacherClassIds = teacherId ? await this.#teacherClassIds(schoolScope, teacherId) : [];
     const studentId = filters.studentId ? String(filters.studentId) : '';
     const categoryId = filters.categoryId ? String(filters.categoryId) : '';
     const mode =
@@ -332,17 +364,21 @@ export class OverviewAnalyticsService {
       engagement,
       teacherInsights,
     ] = await Promise.all([
-      this.#sectionGlance(schoolId, fc, window, { studentId }),
-      this.#sectionContent(schoolId, teacherId, classId, teacherClassIds, { categoryId }),
-      this.#sectionAchievement(schoolId, fc, window, prev, { studentId }),
-      this.#sectionEngagement(schoolId, fc, window),
-      this.#sectionTeacherInsights(schoolId, teacherId, classId, teacherClassIds, window, fc),
+      this.#sectionGlance(schoolScope, fc, window, { studentId }),
+      this.#sectionContent(schoolScope, teacherId, classId, teacherClassIds, { categoryId }),
+      this.#sectionAchievement(schoolScope, fc, window, prev, { studentId }),
+      this.#sectionEngagement(schoolScope, fc, window),
+      this.#sectionTeacherInsights(schoolScope, teacherId, classId, teacherClassIds, window, fc),
     ]);
 
     return {
       meta: {
         generatedAt: now.toISOString(),
         scope: {
+          schoolIds: ids,
+          schoolCount: ids.length,
+          // "All organizations" when the request spans more than one.
+          label: single ? null : 'All organizations',
           academicYear: yearChoice,
           academicYearLabel: academicWindow?.label || null,
           academicYearWindowed: yearChoice !== 'all' && !!academicWindow,
@@ -593,6 +629,32 @@ export class OverviewAnalyticsService {
       trend = { insufficient: true, reason: 'No comparable preceding period (open-ended window).' };
     }
 
+    // Score distribution over the same formal attempts as the average. Four
+    // counts (never a download of every row) on the 0–100 stored scale, which
+    // the reader sees as the familiar 0–5 / 5–10 / 10–15 / 15–20 bands.
+    const scoreBands = [
+      { key: '0-5', label: '0–5', gte: 0, lt: 25 },
+      { key: '5-10', label: '5–10', gte: 25, lt: 50 },
+      { key: '10-15', label: '10–15', gte: 50, lt: 75 },
+      { key: '15-20', label: '15–20', gte: 75, lt: null },
+    ];
+    const bandCounts = await Promise.all(
+      scoreBands.map((band) =>
+        this.#m.result.count({
+          where: {
+            ...formalWindow,
+            ...(band.lt == null ? { score: { gte: band.gte } } : { score: { gte: band.gte, lt: band.lt } }),
+          },
+        }),
+      ),
+    );
+    const scoreDistribution = scoreBands.map((band, index) => ({
+      bucket: band.key,
+      label: band.label,
+      count: bandCounts[index],
+      pct: sample > 0 ? round1((bandCounts[index] / sample) * 100) : null,
+    }));
+
     // Per-class averages: group by student, then map to class (Result lacks a
     // class_id) — bounded, avoids N+1 and avoids downloading raw results.
     const classComparison = await this.#classComparison(schoolId, fc, window);
@@ -614,6 +676,7 @@ export class OverviewAnalyticsService {
         basis: 'period',
         note: 'Students who sat ≥1 formal exam in the window but have not passed one.',
       },
+      scoreDistribution,
       avgScoreTrend: trend,
       topClass: topClass
         ? { value: topClass.className, avgScore20: topClass.avgScore20, sample: topClass.sample }
@@ -654,9 +717,10 @@ export class OverviewAnalyticsService {
     const classOfUser = new Map(users.map((u) => [u.id, u.class_id]));
     const classes = await this.#m.class.findMany({
       where: { school_id: schoolId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, school_id: true },
     });
     const className = new Map(classes.map((c) => [c.id, c.name]));
+    const classSchool = new Map(classes.map((c) => [c.id, c.school_id]));
 
     // Weight each student's mean by their result count → per-class average.
     const bucket = new Map();
@@ -675,6 +739,7 @@ export class OverviewAnalyticsService {
       .map((b) => ({
         classId: b.classId,
         className: className.get(b.classId) || 'Unassigned',
+        schoolId: classSchool.get(b.classId) || null,
         avgScore20: b.count > 0 ? round2(b.scoreWeighted / b.count / 5) : null,
         sample: b.count,
         students: b.students,
@@ -763,7 +828,7 @@ export class OverviewAnalyticsService {
         role: ROLES.TEACHER,
         ...(teacherId ? { id: teacherId } : {}),
       },
-      select: { id: true, name: true, username: true, status: true },
+      select: { id: true, name: true, username: true, status: true, school_id: true },
     });
     const teacherIds = teachers.map((t) => t.id);
 
@@ -847,9 +912,17 @@ export class OverviewAnalyticsService {
     } catch { /* treat as empty */ }
     const schoolClasses = await this.#m.class.findMany({
       where: { school_id: schoolId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, school_id: true },
     });
     const classNameById = new Map(schoolClasses.map((c) => [c.id, c.name]));
+    // Organization labels, so a platform-scope table never shows three
+    // teachers called "Administrator" without saying which school they
+    // belong to. `id` accepts both a scalar and `{ in: [...] }`.
+    const schoolRows = await this.#m.school.findMany({
+      where: { id: schoolId },
+      select: { id: true, name: true },
+    });
+    const schoolNameById = new Map(schoolRows.map((s) => [s.id, s.name]));
 
     const activeTeacherSet = new Set();
     const teacherRows = teachers.map((t) => {
@@ -866,6 +939,8 @@ export class OverviewAnalyticsService {
         teacherId: t.id,
         name: t.name || t.username,
         status: t.status,
+        schoolId: t.school_id || null,
+        schoolName: schoolNameById.get(t.school_id) || null,
         questionsCreated: questionsByAuthor.get(t.id) || 0,
         examsCreated: examsByCreator.get(t.id) || 0,
         classesManaged: classNames.length,
@@ -886,7 +961,9 @@ export class OverviewAnalyticsService {
         const reasons = [];
         if (c.avgScore20 != null && c.avgScore20 < 8) reasons.push(`low average (${c.avgScore20}/20)`);
         if (c.passRate != null && c.passRate < 40) reasons.push(`low pass rate (${c.passRate}%)`);
-        return reasons.length ? { ...c, reasons } : null;
+        return reasons.length
+          ? { ...c, schoolName: schoolNameById.get(c.schoolId) || null, reasons }
+          : null;
       })
       .filter(Boolean);
 

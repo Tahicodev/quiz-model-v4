@@ -8380,3 +8380,136 @@ html[data-theme='dark'] .eas-student-link {
 html[data-theme='dark'] .eas-student-link:hover {
 	color: #c7d2fe;
 }
+
+/* =========================================================
+ * console-bundle.css — dark-mode overrides
+ * All selectors scoped under html[data-theme='dark']
+ * to match the existing theme-dark.css convention.
+ * ========================================================= */
+
+html[data-theme='dark'] {
+	--ac-bg: #0f172a;
+	--ac-surface: #1e293b;
+	--ac-surface-2: #0f172a;
+	--ac-border: #334155;
+	--ac-border-2: #475569;
+	--ac-text: #f1f5f9;
+	--ac-text-2: #94a3b8;
+	--ac-text-3: #64748b;
+	--ac-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.2);
+	--ac-shadow-md: 0 4px 12px 0 rgb(0 0 0 / 0.4), 0 2px 6px -2px rgb(0 0 0 / 0.25);
+	--ac-chip-bg: #1e293b;
+	--ac-chip-text: #cbd5e1;
+	--ac-chip-border: #334155;
+	--ac-chip-active-bg: #2563eb;
+	--ac-blue-bg: #1e3a5f;
+	--ac-blue-border: #1d4ed8;
+	--ac-green-bg: #052e16;
+	--ac-green-border: #166534;
+	--ac-purple-bg: #2e1065;
+	--ac-purple-border: #6b21a8;
+	--ac-amber-bg: #2d1a00;
+	--ac-amber-border: #92400e;
+	--ac-red-bg: #3b0a0a;
+	--ac-red-border: #7f1d1d;
+}
+
+html[data-theme='dark'] .ac-toolbar {
+	background: var(--ac-surface);
+	border-color: var(--ac-border);
+}
+
+html[data-theme='dark'] .ac-scope {
+	background: var(--ac-surface-2);
+	border-color: var(--ac-border);
+	color: var(--ac-text-2);
+}
+
+html[data-theme='dark'] .ac-chip:hover {
+	background: #334155;
+	border-color: #475569;
+}
+
+html[data-theme='dark'] .ac-pulse-card,
+html[data-theme='dark'] .ac-kpi,
+html[data-theme='dark'] .ac-workbench__panel {
+	background: var(--ac-surface);
+	border-color: var(--ac-border);
+}
+
+html[data-theme='dark'] .ac-pulse-card__value,
+html[data-theme='dark'] .ac-kpi__value {
+	color: var(--ac-text);
+}
+
+html[data-theme='dark'] .ac-pulse-card__label,
+html[data-theme='dark'] .ac-kpi__meta,
+html[data-theme='dark'] .ac-kpi__label {
+	color: var(--ac-text-2);
+}
+
+html[data-theme='dark'] .ac-table thead th {
+	background: var(--ac-surface-2);
+	border-color: var(--ac-border);
+	color: var(--ac-text-3);
+}
+
+html[data-theme='dark'] .ac-table tbody td {
+	border-color: var(--ac-border);
+	color: var(--ac-text-2);
+}
+
+html[data-theme='dark'] .ac-table tbody tr:hover td {
+	background: #1e293b;
+}
+
+html[data-theme='dark'] .ac-table .ac-table__name {
+	color: var(--ac-text);
+}
+
+html[data-theme='dark'] .ac-workbench__head {
+	border-color: var(--ac-border);
+}
+
+html[data-theme='dark'] .ac-workbench__title {
+	color: var(--ac-text);
+}
+
+html[data-theme='dark'] .ac-list-item {
+	background: var(--ac-surface-2);
+	border-color: var(--ac-border);
+}
+
+html[data-theme='dark'] .ac-list-item--alert {
+	background: var(--ac-red-bg);
+	border-color: var(--ac-red-border);
+}
+
+html[data-theme='dark'] .ac-list-item__name {
+	color: var(--ac-text);
+}
+
+html[data-theme='dark'] .ac-mini-stat {
+	background: var(--ac-surface-2);
+	border-color: var(--ac-border);
+}
+
+html[data-theme='dark'] .ac-mini-stat__val {
+	color: var(--ac-text);
+}
+
+html[data-theme='dark'] .ac-split-box.split-certified {
+	background: var(--ac-green-bg);
+	border-color: var(--ac-green-border);
+	color: #4ade80;
+}
+
+html[data-theme='dark'] .ac-split-box.split-pending {
+	background: var(--ac-amber-bg);
+	border-color: var(--ac-amber-border);
+	color: #fbbf24;
+}
+
+html[data-theme='dark'] #adminConsoleOverview {
+	background: var(--ac-bg);
+}

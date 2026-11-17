@@ -69,14 +69,30 @@
 
 	// ── helpers ────────────────────────────────────────────────────────────
 
-	function isTeacherSession() {
+	function isUserEligible() {
 		try {
-			if (window.Auth?.isAdmin && window.Auth.isAdmin()) return false;
+			if (window.Auth?.isAdmin && window.Auth.isAdmin()) return true;
 			const user = window.Auth?.getCurrentUser?.() || window.currentUser || null;
-			return String(user?.role || '').toLowerCase() === 'teacher';
+			const role = String(user?.role || '').toLowerCase();
+			return role === 'teacher' || role === 'admin' || role === 'super_admin';
 		} catch (_) {
 			return false;
 		}
+	}
+
+	function isAdminSession() {
+		try {
+			if (window.Auth?.isAdmin && window.Auth.isAdmin()) return true;
+			const user = window.Auth?.getCurrentUser?.() || window.currentUser || null;
+			const role = String(user?.role || '').toLowerCase();
+			return role === 'admin' || role === 'super_admin';
+		} catch (_) {
+			return false;
+		}
+	}
+
+	function isTeacherSession() {
+		return isUserEligible();
 	}
 
 	function esc(value) {
@@ -223,10 +239,11 @@
 	// ── data ───────────────────────────────────────────────────────────────
 
 	// The domain panels are a second view of the Overview contract, so they
-	// must read the same class/subject/period scope. Reading it lazily keeps
-	// them correct when the teacher changes the Overview filters and then
-	// opens a domain tab.
+	// must read the same scope the Overview is showing. Teachers read the
+	// teacher overview filters; admins read the console toolbar, which is the
+	// only filter surface on their Overview.
 	function currentFilters() {
+		if (isAdminSession()) return adminFilters();
 		try {
 			const filters = window.TeacherOverview && typeof window.TeacherOverview.getFilters === 'function'
 				? window.TeacherOverview.getFilters()
@@ -238,8 +255,39 @@
 		return { classIds: [], subjectIds: [], period: 'month', from: '', to: '' };
 	}
 
+	function adminFilters() {
+		const value = (id) => String(document.getElementById(id)?.value || '');
+		const chip = document.querySelector('#acPeriodChips .ac-chip.is-active');
+		const classId = value('acClassFilter');
+		return {
+			classIds: classId ? [classId] : [],
+			subjectIds: [],
+			period: (chip && chip.dataset.acPeriod) || '30d',
+			from: '',
+			to: '',
+			teacherId: value('acTeacherFilter'),
+			mode: value('acModeFilter'),
+			academicYear: value('acAcademicYearFilter') || 'current',
+		};
+	}
+
 	function filterParams() {
 		const filters = currentFilters();
+		if (isAdminSession()) {
+			const classId = (filters.classIds || []).join(',');
+			return {
+				// admin/overview reads classId; admin/presence reads classIds.
+				classId,
+				classIds: classId,
+				subjectIds: '',
+				period: filters.period || '30d',
+				from: '',
+				to: '',
+				teacherId: filters.teacherId || '',
+				mode: filters.mode || '',
+				academicYear: filters.academicYear || 'current',
+			};
+		}
 		return {
 			classIds: (filters.classIds || []).join(','),
 			subjectIds: (filters.subjectIds || []).join(','),
@@ -250,7 +298,16 @@
 	}
 
 	function filterSignature(params) {
-		return [params.classIds, params.subjectIds, params.period, params.from, params.to].join('|');
+		return [
+			params.classIds,
+			params.subjectIds,
+			params.period,
+			params.from,
+			params.to,
+			params.teacherId,
+			params.mode,
+			params.academicYear,
+		].join('|');
 	}
 
 	function isStale() {
@@ -275,11 +332,13 @@
 			if (!window.API || typeof window.API.list !== 'function') {
 				throw new Error('The REST client is not available. Reload the page.');
 			}
+			const isAdmin = isAdminSession();
 			const presencePromise = Promise.resolve()
-				.then(() => window.API.list('teacher-overview/presence', params))
+				.then(() => window.API.list(isAdmin ? 'admin/presence' : 'teacher-overview/presence', params))
 				.then((payload) => (payload && payload.data) || null)
 				.catch(() => null);
-			const payload = await window.API.list('teacher-overview/overview', params);
+			const endpoint = isAdmin ? 'admin/overview' : 'teacher-overview/overview';
+			const payload = await window.API.list(endpoint, params);
 			const data = payload && payload.data;
 			if (!data || !data.sections) throw new Error('Unexpected analytics response.');
 			if (token !== state.requestToken) return data;
@@ -303,11 +362,12 @@
 
 	// ── manage / analytics views ───────────────────────────────────────────
 	// Every domain tab is split in two: the original management UI and the
-	// read-only analytics presentation. Management stays the default so the
-	// existing workflows never move; analytics loads only when requested.
+	// read-only analytics presentation. Analytics is the default for both
+	// roles — admin analytics are school-wide, mirroring the teacher layout.
 
 	function activeView(tab) {
-		return state.views[tab] === 'manage' ? 'manage' : 'analytics';
+		if (state.views[tab]) return state.views[tab];
+		return 'analytics';
 	}
 
 	function setupSection(tab) {
@@ -1306,7 +1366,7 @@
 
 	function renderActiveDomain() {
 		if (!isTeacherSession()) return;
-		const hasOverview = window.TeacherOverview && typeof window.TeacherOverview.getFilters === 'function';
+		const hasOverview = (window.TeacherOverview && typeof window.TeacherOverview.getFilters === 'function') || isAdminSession();
 		Object.keys(HOSTS).forEach((tab) => {
 			const section = document.getElementById(tab);
 			if (!section || !section.classList.contains('active')) return;

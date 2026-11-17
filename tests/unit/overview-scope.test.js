@@ -150,6 +150,16 @@ function setRole(role, me) {
   resetEls();
 }
 
+// Admins no longer render the legacy client dashboard (the console +
+// server-aggregated bundle replaced it), but the legacy engine functions are
+// still the teacher fallback. Drive them explicitly to keep their coverage.
+function legacyInit() {
+  vm.runInContext(
+    'overviewStatsCache = null; populateOverviewFilters(); updateOverviewScopeBar(); updateDashboardStats(); renderRecentActivity();',
+    ctx,
+  );
+}
+
 beforeAll(() => {
   resetEls();
   seedTables();
@@ -292,7 +302,7 @@ describe('admin overview filters', () => {
   it('teacher filter narrows to that teacher', () => {
     seedTables();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     els.overviewTeacherFilter.value = T2;
     const dump = vm.runInContext('JSON.stringify(getAllActivities())', ctx);
     expect(dump).toContain('T2 Exam');
@@ -319,7 +329,7 @@ describe('admin overview filters', () => {
   it('category dropdown lists every category with no teacher selected', () => {
     seedTables();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const opts = els.overviewCategoryFilter.children.map((o) => o.value);
     // cat1 belongs to T1, cat2 to T2: both show school-wide.
     expect(opts).toContain('cat1');
@@ -330,7 +340,7 @@ describe('admin overview filters', () => {
     seedTables();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
     els.overviewTeacherFilter.value = T1;
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const opts = els.overviewCategoryFilter.children.map((o) => o.value);
     // Only the categories teacher One authored remain.
     expect(opts).toContain('cat1');
@@ -346,7 +356,7 @@ describe('admin overview filters', () => {
       created_by: T1,
     });
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const opts = els.overviewCategoryFilter.children.map((o) => o.value);
     expect(opts).toContain('cat1');
     expect(opts).not.toContain('kids-bucket');
@@ -378,7 +388,7 @@ describe('category insights', () => {
   it('computes training vs exam accuracy, attempts and struggling', () => {
     seedInsights();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const stats = vm.runInContext('getOverviewCategoryStats()', ctx);
     expect(stats.totals.attempts).toBe(4);
     expect([stats.totals.training.a, stats.totals.training.c]).toEqual([3, 1]);
@@ -394,7 +404,7 @@ describe('category insights', () => {
   it('admin sees needs-attention BY CATEGORY (management view, never a question stem)', () => {
     seedInsights();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     expect(els['kpi-cat-training'].textContent).toBe('33%');
     expect(els['kpi-cat-exam'].textContent).toBe('0%');
     expect(els['kpi-cat-attempts'].textContent).toBe('4');
@@ -421,29 +431,29 @@ describe('category insights', () => {
   it('category filter rolls the subtree up and narrows the charts', () => {
     seedInsights();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     // The picker lists the child indented under its parent.
     const labels = els.overviewCategoryFilter.children.map((o) => o.textContent);
     expect(labels).toContain('Math');
     expect(labels.some((t) => t.includes('Addition'))).toBe(true);
     // Filtering by the parent still covers the subcategory answers.
     els.overviewCategoryFilter.value = MATH;
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     expect(els['kpi-cat-attempts'].textContent).toBe('4');
     expect(els.categoryInsightsScopeLabel.textContent).toContain('Math');
     // Charts follow: uncategorized-only filter empties them.
     els.overviewCategoryFilter.value = 'uncategorized';
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     expect(els.scoreDistributionChart.innerHTML).toContain('chart-empty');
     els.overviewCategoryFilter.value = ADDITION;
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     expect(els.scoreDistributionChart.innerHTML).toContain('bar-group');
   });
 
   it('teacher scope restricts insights to own data', () => {
     seedInsights();
     setRole('teacher', { id: T1, role: 'teacher', name: 'Teacher One' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     // r12 belongs to the other class: excluded from teacher 1.
     expect(els['kpi-cat-attempts'].textContent).toBe('3');
     expect(
@@ -454,7 +464,7 @@ describe('category insights', () => {
   it('teacher keeps the per-question remediation list ranked lowest first', () => {
     seedInsights();
     setRole('teacher', { id: T1, role: 'teacher', name: 'Teacher One' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const hardHtml = els.categoryHardList.innerHTML;
     // The teacher authored the question, so they drill into individual stems,
     // ordered by accuracy (q11 0% before q10 50%).
@@ -472,7 +482,7 @@ describe('student filter', () => {
   it('lists nothing until a class is chosen', () => {
     seedTables();
     setRole('teacher', { id: T1, role: 'teacher', name: 'Teacher One' });
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     // Only the static "All Students" option (innerHTML string) plus the
     // appended hint node: no student options are built without a class.
     expect(els.overviewStudentFilter.innerHTML).toContain('All Students');
@@ -485,7 +495,7 @@ describe('student filter', () => {
     seedTables();
     setRole('teacher', { id: T1, role: 'teacher', name: 'Teacher One' });
     els.overviewClassFilter.value = C1;
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const labels = els.overviewStudentFilter.children.map((o) => o.textContent);
     expect(labels).toContain('#101 - Student One');
     expect(labels.some((t) => t.includes('Student Two'))).toBe(false);
@@ -495,9 +505,9 @@ describe('student filter', () => {
     seedInsights();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
     els.overviewClassFilter.value = C1;
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     els.overviewStudentFilter.value = 's1';
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const results = vm.runInContext(
       'scopeResultRows(window.__DI_CONTAINER__.repo.getAll_sync("results")).map((r) => r.id).sort()',
       ctx,
@@ -548,7 +558,7 @@ describe('student filter', () => {
     seedTables();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
     els.overviewClassFilter.value = C1;
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     const labels = els.overviewStudentFilter.children.map((o) => o.textContent);
     expect(labels).toContain('#101 - Student One');
     expect(labels.some((t) => t.includes('Student Two'))).toBe(false);
@@ -558,11 +568,11 @@ describe('student filter', () => {
     seedInsights();
     setRole('admin', { id: 'admin-1', role: 'admin', name: 'Admin' });
     els.overviewModeFilter.value = 'exam';
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     // Only the exam result counts: one attempt scoring 0 -> full 0-5/20 bar.
     expect(els.scoreDistributionChart.innerHTML).toContain('100%');
     els.overviewModeFilter.value = 'training';
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     // Two training attempts split across buckets -> 50% each.
     expect(els.scoreDistributionChart.innerHTML).toContain('50%');
   });
@@ -613,7 +623,7 @@ describe('period filter', () => {
 
   it('All time shows both windows; Last 7 days drops the old attempt', () => {
     seedPeriodResults();
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     // Both attempts land in distinct buckets (0-5 and 15-20): two bars at
     // one-count, plus the four always-rendered groups.
     const count1Bars = () =>
@@ -623,7 +633,7 @@ describe('period filter', () => {
     expect(els.overviewScopeLabel.textContent).toContain('All data');
 
     els.overviewPeriodFilter.value = '7d';
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     // Only the recent attempt counts: exclusively the green bucket.
     expect(count1Bars()).toBe(1);
     expect(els['kpi-activity-rate'].textContent).toBe('1');
@@ -635,14 +645,14 @@ describe('period filter', () => {
     seedPeriodResults();
     els.overviewModeFilter.value = 'exam';
     els.overviewPeriodFilter.value = 'today';
-    vm.runInContext('initDashboard();', ctx);
+    legacyInit();
     expect(els.scoreDistributionChart.innerHTML).toContain('chart-empty');
     expect(els['kpi-avg-score'].textContent).toBe('-');
   });
 });
 
 describe('overview markup', () => {
-  it('exposes all six filters plus the mobile toggle in admin.html', () => {
+  it('keeps the legacy filter bar (hidden for admins) in admin.html', () => {
     const html = readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
     for (const id of [
       'overviewTeacherFilter',
@@ -657,33 +667,66 @@ describe('overview markup', () => {
     ]) {
       expect(html).toContain(`id="${id}"`);
     }
-    expect(html).toContain('data-filter-target="#overviewFilterBar"');
-    expect(html).toContain('toggleMobileFilters(this)');
+    // The same IDs must not be duplicated by the hidden legacy stubs.
+    expect(html.split('id="overviewFilterBar"').length - 1).toBe(1);
+    expect(html.split('id="overviewScopeLabel"').length - 1).toBe(1);
     // Per-chart filters were consolidated into the top bar.
     expect(html).not.toContain('id="scoreDistributionMode"');
     expect(html).not.toContain('id="classPerformanceMode"');
     expect(html).not.toContain('id="classPerformanceClassFilter"');
-    // Category Insights sits right after Advanced Insights.
-    const advancedAt = html.indexOf('Advanced Insights');
-    const categoryAt = html.indexOf('id="categoryInsightsPanel"');
-    const reportsAt = html.indexOf('Reports Grid');
-    expect(advancedAt).toBeGreaterThanOrEqual(0);
-    expect(categoryAt).toBeGreaterThan(advancedAt);
-    expect(reportsAt).toBeGreaterThan(categoryAt);
-    // KPI domains are strictly separated: games/tournaments live in their
-    // own "Live Play" section, results metrics in "Advanced Insights".
-    const livePlayAt = html.indexOf('Live Play');
-    expect(livePlayAt).toBeGreaterThan(0);
-    expect(livePlayAt).toBeLessThan(advancedAt);
-    expect(html).toContain('kpi-avg-score');
-    expect(html).toContain('kpi-activity-window');
-    // The per-class table is gone: the Class Performance chart is the one
-    // class view (no duplicated class breakdown).
-    expect(html).not.toContain('categoryClassTableBody');
-    expect(html).not.toContain('insights-table');
     // Every filter dropdown carries a visible caption.
     expect(html).toContain('<label for="overviewClassFilter">');
     expect(html).toContain('<label for="overviewPeriodFilter">');
-    expect(html).toContain('needs-attention-block');
+  });
+
+  it('exposes the console-styled school-wide analytics surface', () => {
+    const html = readFileSync(path.join(ROOT, 'admin.html'), 'utf8');
+    // Console host is hidden by default and toggled for admin sessions only.
+    expect(html).toContain('id="adminConsoleOverview"');
+    expect(html).toMatch(/id="adminConsoleOverview"[^>]*hidden/);
+    // Console toolbar filters (the only admin filter surface).
+    for (const id of [
+      'acAcademicYearFilter',
+      'acTeacherFilter',
+      'acClassFilter',
+      'acModeFilter',
+      'acPeriodChips',
+      'acOverviewScopeLabel',
+      'acLastUpdated',
+    ]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+    expect(html).toContain('<label for="acTeacherFilter">');
+    expect(html).toContain('<label for="acClassFilter">');
+    expect(html).toContain('<label for="acModeFilter">');
+    // Live pulse, KPIs and the oversight workbench.
+    for (const id of [
+      'acPulseOnlineStudents',
+      'acPulseOnlineClasses',
+      'acPulseActiveTeachers',
+      'acPulseNeedingAttention',
+      'acKpiStudents',
+      'acKpiPassRate',
+      'acKpiAvgScore',
+      'acKpiQuestions',
+      'acKpiExams',
+      'acKpiClasses',
+      'acTeacherActivityBody',
+      'acClassesAttentionList',
+      'acClassMeansList',
+      'acScoreDistChart',
+      'acCertifiedStudents',
+      'acPendingStudents',
+      'acLiveGames',
+      'acGameLobbies',
+      'acActiveTournaments',
+      'acTotalAttempts',
+      'acParticipationByClass',
+    ]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+    // The bespoke console stylesheet is linked (the platform console sheet
+    // does not define these .ac-* components).
+    expect(html).toContain('admin-console.css');
   });
 });

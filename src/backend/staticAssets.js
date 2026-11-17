@@ -81,6 +81,7 @@ export const PUBLIC_ROOT_FILES = new Set([
 
 	// ── Stylesheets ───────────────────────────────────────────────────────
 	'admin.css',
+	'admin-console.css',
 	'qx-premium.css',
 	'styles.css',
 	'teacher-analytics.css',

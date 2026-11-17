@@ -169,12 +169,16 @@ describe('teacher domain view switcher', () => {
 		);
 	});
 
-	it('never injects the switcher for an admin session', () => {
+	it('injects the switcher for an admin session, defaulting to Analytics', () => {
 		const { section, host, manageContent } = boot('admin');
-		expect(section.querySelector('.teacher-domain-switch')).toBeNull();
-		expect(section.querySelector('[data-tda-pane]')).toBeNull();
-		expect(section.contains(manageContent)).toBe(true);
-		expect(host.hidden).toBe(true);
-		expect(host.innerHTML).toBe('');
+		const switcher = section.querySelector('.teacher-domain-switch');
+		expect(switcher).not.toBeNull();
+		const analyticsPane = section.querySelector('[data-tda-pane="analytics"]');
+		const managePane = section.querySelector('[data-tda-pane="manage"]');
+		expect(analyticsPane.hidden).toBe(false);
+		expect(managePane.hidden).toBe(true);
+		expect(analyticsPane.contains(host)).toBe(true);
+		expect(managePane.contains(manageContent)).toBe(true);
+		expect(host.hidden).toBe(false);
 	});
 });

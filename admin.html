@@ -51,6 +51,7 @@
 		<link rel="stylesheet" href="theme.css?v=2026-11-12-polish1" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-11-12-polish1" />
 		<link rel="stylesheet" href="teacher-analytics.css?v=2026-11-12-polish1" />
+		<link rel="stylesheet" href="admin-console.css?v=2026-11-17-console1" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -754,775 +755,280 @@
 						     Admin sessions never use this block. -->
 						<div id="teacherOverview" hidden></div>
 
-						<!-- Legacy Overview surface. One container so a teacher session
-						     hides the WHOLE old dashboard (header, KPI grids, category
-						     insights, report charts and activity feed) instead of leaving
-						     pieces of it visible under the teacher dashboard. -->
-						<div id="legacyOverviewContent">
-						<div id="legacyOverviewBlocks">
-						<div class="kpi-section-title">People &amp; Students</div>
-						<div class="kpi-grid">
-							<div
-								class="stat-card blue"
-								data-tooltip="Total number of unique students who have participated in training or exams"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-										<circle cx="9" cy="7" r="4"></circle>
-										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-students-total">0</h3>
-									<p>Total Students</p>
-								</div>
-							</div>
-							<div
-								class="stat-card green"
-								data-tooltip="Number of students who have passed at least one official exam (Score ≥ 10/20)"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-										<polyline points="22 4 12 14.01 9 11.01"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-students-passed">0</h3>
-									<p>Certified Students</p>
-								</div>
-							</div>
-							<div
-								class="stat-card rose"
-								data-tooltip="Number of active students who are currently working towards passing their first exam"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<circle cx="12" cy="12" r="10"></circle>
-										<line x1="12" y1="8" x2="12" y2="12"></line>
-										<line x1="12" y1="16" x2="12.01" y2="16"></line>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-students-pending">0</h3>
-									<p>Pending Success</p>
-								</div>
-							</div>
-							<div
-								class="stat-card purple"
-								data-tooltip="Total number of classes organized for quiz administration"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-										<circle cx="9" cy="7" r="4"></circle>
-										<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-										<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-classes">0</h3>
-									<p>Classes</p>
-								</div>
-							</div>
-						</div>
-
-						<div class="kpi-section-title">Content &amp; Structure</div>
-						<div class="kpi-grid">
-							<div
-								class="stat-card blue"
-								data-tooltip="Total number of quiz questions available across all categories"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<circle cx="12" cy="12" r="10"></circle>
-										<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-										<line x1="12" y1="17" x2="12.01" y2="17"></line>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-questions">0</h3>
-									<p>Total Questions</p>
-								</div>
-							</div>
-							<div
-								class="stat-card green"
-								data-tooltip="Total number of exams created and currently active"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path
-											d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-										></path>
-										<polyline points="14 2 14 8 20 8"></polyline>
-										<line x1="16" y1="13" x2="8" y2="13"></line>
-										<line x1="16" y1="17" x2="8" y2="17"></line>
-										<polyline points="10 9 9 9 8 9"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-exams">0</h3>
-									<p>Active Exams</p>
-								</div>
-							</div>
-							<div
-								class="stat-card amber"
-								data-tooltip="Total number of quiz categories available"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path
-											d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
-										></path>
-										<line x1="7" y1="7" x2="7.01" y2="7"></line>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-categories">0</h3>
-									<p>Categories</p>
-								</div>
-							</div>
-						</div>
-
-						<!-- Live Play kept fully separate from exams/training on
-						     purpose: games and tournaments are their own activity
-						     domain and must never blend into quiz KPIs. -->
-						<div class="kpi-section-title">Live Play</div>
-						<div class="kpi-grid">
-							<div
-								class="stat-card indigo"
-								data-tooltip="Total number of game lobbies configured in Game Studio"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<rect x="3" y="3" width="18" height="18" rx="2"></rect>
-										<line x1="3" y1="9" x2="21" y2="9"></line>
-										<line x1="9" y1="21" x2="9" y2="9"></line>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-games-total">0</h3>
-									<p>Game Lobbies</p>
-								</div>
-							</div>
-							<div
-								class="stat-card cyan"
-								data-tooltip="Number of game lobbies currently running live"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<polygon points="5 3 19 12 5 21 5 3"></polygon>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-games-live">0</h3>
-									<p>Live Games</p>
-								</div>
-							</div>
-							<div
-								class="stat-card blue"
-								data-tooltip="Total tournaments created (including active and completed)"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M8 21h8"></path>
-										<path d="M12 17v4"></path>
-										<path d="M7 4h10"></path>
-										<path d="M17 4a5 5 0 0 1-10 0"></path>
-										<path d="M5 4h14a2 2 0 0 1 2 2v1a7 7 0 0 1-7 7h-4a7 7 0 0 1-7-7V6a2 2 0 0 1 2-2z"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-tournaments-total">0</h3>
-									<p>Total Tournaments</p>
-								</div>
-							</div>
-							<div
-								class="stat-card green"
-								data-tooltip="Current active tournament count"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<circle cx="12" cy="12" r="10"></circle>
-										<path d="M9 12l2 2 4-4"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-tournaments-active">0</h3>
-									<p>Active Tournaments</p>
-								</div>
-							</div>
-						</div>
-
-						<div class="kpi-section-title">Advanced Insights</div>
-						<!-- New Intelligent KPIs -->
-						<div class="kpi-grid">
-							<div
-								class="stat-card indigo"
-								data-tooltip="Percentage change in average score: compares last 7 days vs previous 7 days"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
-										<polyline points="17 6 23 6 23 12"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-avg-trend">0%</h3>
-									<p>Avg Score Trend</p>
-								</div>
-							</div>
-							<div
-								class="stat-card rose"
-								data-tooltip="Average score of results in the current scope, filter mode and time window — shown /20"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<polyline points="4 17 10 11 4 5"></polyline>
-										<line x1="12" y1="19" x2="20" y2="19"></line>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-avg-score">-</h3>
-									<p>Avg Score (/20)</p>
-								</div>
-							</div>
-							<div
-								class="stat-card cyan"
-								data-tooltip="Number of quiz attempts in the selected time window"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M12 20v-6M6 20V10M18 20V4"></path>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-activity-rate">0</h3>
-									<p>Attempts (<span id="kpi-activity-window">last 30 days</span>)</p>
-								</div>
-							</div>
-							<div
-								class="stat-card orange"
-								data-tooltip="Class with the highest average quiz score"
-							>
-								<div class="stat-bar"></div>
-								<div class="stat-icon">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="24"
-										height="24"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-									>
-										<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-										<polyline points="22 4 12 14.01 9 11.01"></polyline>
-									</svg>
-								</div>
-								<div class="stat-info">
-									<h3 id="kpi-top-class">-</h3>
-									<p>Top Performing Class</p>
-								</div>
-							</div>
-						</div>
-
-						</div>
-						<!-- /legacyOverviewBlocks -->
-
-						<!-- School-wide analytics: ADMIN SESSION ONLY. Populated from
-						     GET /api/v1/admin/overview (server-side Prisma aggregates).
-						     Hidden for teachers, whose Overview stays the classroom view. -->
-						<div id="adminSchoolInsights" hidden>
-							<div class="overview-scope-bar" id="adminSchoolMetaBar">
-								<span class="overview-scope-label" id="adminSchoolScopeLabel"></span>
-								<span class="text-muted text-xs" id="adminSchoolStatus"></span>
-							</div>
-
-							<div class="kpi-section-title">School at a Glance</div>
-							<div class="kpi-grid">
-								<div class="stat-card cyan" data-tooltip="Distinct registered students (account records, role = student). Not exam attempts; each student is counted once regardless of how many results they have.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-total-students">-</h3><p>Registered Students</p></div>
-								</div>
-								<div class="stat-card green" data-tooltip="Distinct students who completed at least one qualifying activity (exam, training, tournament or game submission) during the selected reporting period. Multiple activities by the same student count once.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-active-students">-</h3><p>Active Students</p></div>
-								</div>
-								<div class="stat-card blue" data-tooltip="Active Students ÷ Registered Students for the same scope. Shown only when the denominator is greater than zero.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-participation">-</h3><p>Participation Rate</p></div>
-								</div>
-								<div class="stat-card rose" data-tooltip="Students with at least 2 formal exam attempts in the period and no passing result. Transparent rule — not an arbitrary 'at risk' label.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-needing-attention">-</h3><p>Students Needing Attention</p></div>
-								</div>
-								<div class="stat-card amber" data-tooltip="Registered teacher accounts in the school (role = teacher, current-state). Activity and class details are listed in the Teacher Activity table below.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-total-teachers">-</h3><p>Total Teachers</p></div>
-								</div>
-							</div>
-
-							<div class="kpi-section-title">Educational Content &amp; Assessment</div>
-							<div class="kpi-grid">
-								<div class="stat-card blue" data-tooltip="Distinct valid questions in the school bank (current-state; never date-filtered). When a teacher is selected this counts only that teacher's authored questions.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-total-questions">-</h3><p>Total Questions</p></div>
-								</div>
-								<div class="stat-card green" data-tooltip="Exams currently configured active (status = active) and not flagged as training. A snapshot of exam configuration, independent of the reporting period.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-active-exams">-</h3><p>Active Exams</p></div>
-								</div>
-								<div class="stat-card amber" data-tooltip="Distinct exams that produced at least one finalized formal-exam result in the reporting period. Exam definitions are not counted as conducted exams.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-exams-conducted">-</h3><p>Exams Conducted</p></div>
-								</div>
-								<div class="stat-card purple" data-tooltip="Categories that actually contain at least one question, out of all categories. Identifies thin content coverage. No curriculum-compliance claim is made (that mapping data does not exist).">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-content-coverage">-</h3><p>Content Coverage</p></div>
-								</div>
-								<div class="stat-card indigo" data-tooltip="Assignment-level completion cannot be computed reliably: legacy exams often store their target classes only in options_json, not in the exam_classes junction. Shown as unavailable rather than fabricated.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-completion">n/a</h3><p>Assessment Completion Rate</p></div>
-								</div>
-							</div>
-
-							<div class="kpi-section-title">Student Achievement &amp; Performance</div>
-							<div class="kpi-grid">
-								<div class="stat-card blue" data-tooltip="Arithmetic mean of eligible finalized formal-exam results in the period, normalized to /20 (score ÷ 5). Training, game and tournament results are excluded. Based on N eligible results.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-avg-score">-</h3><p>Average Exam Score (/20)</p></div>
-								</div>
-								<div class="stat-card green" data-tooltip="Passing finalized formal-exam results ÷ all eligible finalized formal-exam results in the period. Uses each result's passed flag (exam-configured threshold; default 10/20).">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-pass-rate">-</h3><p>Pass Rate</p></div>
-								</div>
-								<div class="stat-card purple" data-tooltip="Distinct students with at least one passing formal-exam result in the period. Training success is never counted as certification.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-certified">-</h3><p>Certified Students</p></div>
-								</div>
-								<div class="stat-card rose" data-tooltip="Students who sat at least one formal exam in the period but have not passed one. Computed from the same assessed population as Certified (not simply total − certified).">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-pending">-</h3><p>Pending Success</p></div>
-								</div>
-								<div class="stat-card indigo" data-tooltip="Difference between the average /20 score in the period and the immediately preceding equal-length period. The relative % is shown only when the prior average is non-zero; small samples are reported as insufficient data.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-trend">-</h3><p>Average Score Trend</p></div>
-								</div>
-								<div class="stat-card cyan" data-tooltip="Class with the highest average eligible formal-exam score in the period, subject to a minimum sample size. Reports 'insufficient data' when no class clears the threshold.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-top-class">-</h3><p>Top Performing Class</p></div>
-								</div>
-							</div>
-
-							<div class="dashboard-panel" id="schClassComparisonPanel">
-								<div class="panel-header"><h3>Class Performance Comparison</h3><span class="text-muted text-xs" id="schClassComparisonNote"></span></div>
-								<div class="panel-body"><div id="schClassComparison" class="overview-table-wrap"></div></div>
-							</div>
-
-							<div class="kpi-section-title">Teacher &amp; Class Insights</div>
-							<div class="dashboard-panel" id="schTeacherPanel">
-								<div class="panel-header"><h3>Teacher Activity &amp; Performance</h3><span class="text-muted text-xs" id="schTeacherNote"></span></div>
-								<div class="panel-body"><div id="schTeacherTable" class="overview-table-wrap"></div></div>
-							</div>
-							<div class="dashboard-panel" id="schAttentionPanel">
-								<div class="panel-header"><h3>Classes Needing Attention</h3><span class="text-muted text-xs">Transparent criteria: low average (&lt; 8/20) or low pass rate (&lt; 40%) with enough results</span></div>
-								<div class="panel-body"><div id="schAttentionList" class="overview-table-wrap"></div></div>
-							</div>
-
-							<div class="kpi-section-title">Live Learning Activity</div>
-							<div class="kpi-grid">
-								<div class="stat-card cyan" data-tooltip="Game lobbies currently waiting for players (status = waiting). A live snapshot, never date-filtered.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-game-lobbies">-</h3><p>Game Lobbies</p></div>
-								</div>
-								<div class="stat-card green" data-tooltip="Games in progress right now (status = active). A live snapshot, never date-filtered.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-live-games">-</h3><p>Live Games</p></div>
-								</div>
-								<div class="stat-card purple" data-tooltip="Tournaments currently running (status = active) out of all tournaments in the school. A live snapshot, never date-filtered.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-active-tournaments">-</h3><p>Active Tournaments</p></div>
-								</div>
-								<div class="stat-card blue" data-tooltip="Total qualifying learning activities (exam, training, tournament or game submissions) recorded by students in the reporting period.">
-									<div class="stat-bar"></div>
-									<div class="stat-info"><h3 id="sch-total-attempts">-</h3><p>Total Attempts</p></div>
-								</div>
-							</div>
-							<div class="dashboard-panel" id="schActivityTrendPanel">
-								<div class="panel-header"><h3>Activity Over Time</h3><span class="text-muted text-xs" id="schActivityTrendNote"></span></div>
-								<div class="panel-body"><div id="schActivityTrend" class="overview-table-wrap"></div></div>
-							</div>
-						</div>
-
-						<!-- Category Insights Panel -->
-						<div class="dashboard-panel" id="categoryInsightsPanel">
-							<div class="panel-header">
-								<h3>Category Insights</h3>
-								<div class="panel-controls">
-									<span
-										class="text-muted text-xs"
-										id="categoryInsightsScopeLabel"
-									></span>
-								</div>
-							</div>
-							<div
-								class="panel-body"
-								style="
-									padding: 20px;
-									display: flex;
-									flex-direction: column;
-									gap: 20px;
-								"
-							>
-								<div class="kpi-grid">
-									<div
-										class="stat-card indigo"
-										data-tooltip="Share of training answers that were correct in the current scope"
-									>
-										<div class="stat-bar"></div>
-										<div class="stat-icon">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<circle cx="12" cy="12" r="10"></circle>
-												<circle cx="12" cy="12" r="6"></circle>
-												<circle cx="12" cy="12" r="2"></circle>
-											</svg>
-										</div>
-										<div class="stat-info">
-											<h3 id="kpi-cat-training">-</h3>
-											<p>Training accuracy</p>
-										</div>
+						<!-- Admin Console Control Center: console design language with
+						     school-wide analytics. Shown in admin sessions only. -->
+						<div id="adminConsoleOverview" class="ac-root-portal" hidden>
+							<!-- Scope & Period Toolbar -->
+							<div class="ac-toolbar">
+								<div class="ac-toolbar__row">
+									<div class="ac-scope ac-scope--platform">
+										<span class="ac-scope__dot"></span>
+										<span id="acOverviewScopeLabel">School-wide Scope: All Teachers &amp; Classes</span>
 									</div>
-									<div
-										class="stat-card purple"
-										data-tooltip="Share of exam answers that were correct in the current scope"
-									>
-										<div class="stat-bar"></div>
-										<div class="stat-icon">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-												<polyline points="14 2 14 8 20 8"></polyline>
-												<line x1="16" y1="13" x2="8" y2="13"></line>
-												<line x1="16" y1="17" x2="8" y2="17"></line>
-											</svg>
-										</div>
-										<div class="stat-info">
-											<h3 id="kpi-cat-exam">-</h3>
-											<p>Exam accuracy</p>
-										</div>
+									<div class="ac-chip-group" id="acPeriodChips" role="radiogroup" aria-label="Reporting period">
+										<button type="button" class="ac-chip" data-ac-period="today" onclick="selectAdminPeriod('today')">Today</button>
+										<button type="button" class="ac-chip" data-ac-period="7d" onclick="selectAdminPeriod('7d')">7 Days</button>
+										<button type="button" class="ac-chip is-active" data-ac-period="30d" onclick="selectAdminPeriod('30d')">30 Days</button>
+										<button type="button" class="ac-chip" data-ac-period="month" onclick="selectAdminPeriod('month')">This Month</button>
+										<button type="button" class="ac-chip" data-ac-period="term" onclick="selectAdminPeriod('term')">This Term</button>
+										<button type="button" class="ac-chip" data-ac-period="year" onclick="selectAdminPeriod('year')">Academic Year</button>
 									</div>
-									<div
-										class="stat-card green"
-										data-tooltip="Questions answered by students in the current scope"
-									>
-										<div class="stat-bar"></div>
-										<div class="stat-icon">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<polyline points="9 11 12 14 22 4"></polyline>
-												<path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-											</svg>
-										</div>
-										<div class="stat-info">
-											<h3 id="kpi-cat-attempts">0</h3>
-											<p>Questions answered</p>
-										</div>
-									</div>
-									<div
-										class="stat-card rose"
-										id="catStrugglingCard"
-										data-tooltip="Questions with under 50% accuracy and at least 2 attempts"
-									>
-										<div class="stat-bar"></div>
-										<div class="stat-icon">
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="24"
-												height="24"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-											>
-												<path
-													d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-												></path>
-												<line x1="12" y1="9" x2="12" y2="13"></line>
-												<line x1="12" y1="17" x2="12.01" y2="17"></line>
-											</svg>
-										</div>
-										<div class="stat-info">
-											<h3 id="kpi-cat-struggling">0</h3>
-											<p id="kpi-cat-struggling-label">Struggling questions</p>
-										</div>
+									<div class="ac-toolbar__actions">
+										<span class="text-muted text-xs" id="acLastUpdated"></span>
+										<button type="button" class="btn btn-sm btn-secondary" onclick="loadAdminOverview()" title="Refresh data">
+											<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+											<span>Refresh</span>
+										</button>
 									</div>
 								</div>
-								<!-- Needs attention: ranked with the class table gone
-							     (Class Performance chart is the class view) and the
-							     findings allowed to breathe full width — mobile too. -->
-							<div class="insights-block needs-attention-block">
-								<div class="nit-head">
-									<h4 id="categoryInsightsBlockTitle">Needs attention <small id="categoryInsightsBlockHint">lowest accuracy first</small></h4>
-									<span class="nit-legend" aria-hidden="true">
-										<span class="nit-dot acc-high"></span>solid
-										<span class="nit-dot acc-mid"></span>mixed
-										<span class="nit-dot acc-low"></span>struggling
-									</span>
+								<div class="ac-toolbar__row ac-toolbar__filters">
+									<div class="overview-filter">
+										<label for="acAcademicYearFilter">Academic year</label>
+										<select id="acAcademicYearFilter" onchange="onAdminFilterChange()" title="Reporting window for the school year">
+											<option value="current">This academic year</option>
+											<option value="all">All years</option>
+										</select>
+									</div>
+									<div class="overview-filter">
+										<label for="acTeacherFilter">Teacher</label>
+										<select id="acTeacherFilter" onchange="onAdminFilterChange()">
+											<option value="">All Teachers</option>
+										</select>
+									</div>
+									<div class="overview-filter">
+										<label for="acClassFilter">Class</label>
+										<select id="acClassFilter" onchange="onAdminFilterChange()">
+											<option value="">All Classes</option>
+										</select>
+									</div>
+									<div class="overview-filter">
+										<label for="acModeFilter">Mode</label>
+										<select id="acModeFilter" onchange="onAdminFilterChange()">
+											<option value="">All Activities</option>
+											<option value="exam">Exams Only</option>
+											<option value="training">Training Only</option>
+										</select>
+									</div>
+									<button type="button" class="btn btn-sm btn-ghost" onclick="resetAdminOverviewFilters()">Reset Filters</button>
 								</div>
-								<div id="categoryHardList"></div>
-								<div
-									class="text-muted text-xs"
-									id="categoryUnattemptedLine"
-									style="margin-top: 10px"
-								></div>
 							</div>
-							</div>
-						</div>
 
-						<!-- Reports Grid -->
-						<div class="dashboard-charts-grid">
-							<!-- Score Distribution Panel -->
-							<div class="dashboard-panel">
-								<div class="panel-header">
-									<h3>Score Distribution</h3>
-								</div>
-								<div
-									class="panel-body"
-									style="
-										padding: 20px;
-										display: flex;
-										flex-direction: column;
-										gap: 20px;
-									"
-								>
-									<div id="scoreDistributionChart">
-										<div class="chart-empty">No result data available</div>
+							<!-- 1. Live Platform Pulse -->
+							<div class="ac-pulse-section">
+								<h3 class="ac-section-title">
+									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+									Live Platform Pulse
+								</h3>
+								<div class="ac-grid ac-grid--pulse">
+									<div class="ac-pulse-card pulse-blue">
+										<div class="ac-pulse-card__icon">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+										</div>
+										<div class="ac-pulse-card__content">
+											<span class="ac-pulse-card__value" id="acPulseOnlineStudents">0</span>
+											<span class="ac-pulse-card__label">Students Online Now</span>
+										</div>
+									</div>
+									<div class="ac-pulse-card pulse-green">
+										<div class="ac-pulse-card__icon">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+										</div>
+										<div class="ac-pulse-card__content">
+											<span class="ac-pulse-card__value" id="acPulseOnlineClasses">0</span>
+											<span class="ac-pulse-card__label">Active Classrooms</span>
+										</div>
+									</div>
+									<div class="ac-pulse-card pulse-purple">
+										<div class="ac-pulse-card__icon">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+										</div>
+										<div class="ac-pulse-card__content">
+											<span class="ac-pulse-card__value" id="acPulseActiveTeachers">0</span>
+											<span class="ac-pulse-card__label">Active Teachers in Period</span>
+										</div>
+									</div>
+									<div class="ac-pulse-card pulse-amber">
+										<div class="ac-pulse-card__icon">
+											<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+										</div>
+										<div class="ac-pulse-card__content">
+											<span class="ac-pulse-card__value" id="acPulseNeedingAttention">0</span>
+											<span class="ac-pulse-card__label">Students Needing Attention</span>
+										</div>
 									</div>
 								</div>
 							</div>
 
-							<!-- Class Performance Panel -->
-							<div class="dashboard-panel">
-								<div class="panel-header">
-									<h3>Class Performance</h3>
+							<!-- 2. Executive KPIs Grid -->
+							<div class="ac-grid ac-grid--kpi">
+								<div class="ac-kpi">
+									<span class="ac-kpi__label">Total Registered Students</span>
+									<span class="ac-kpi__value" id="acKpiStudents">0</span>
+									<span class="ac-kpi__meta" id="acKpiStudentsMeta">0 active in period</span>
 								</div>
-								<div class="panel-body" style="padding: 20px; position: relative;">
-									<div class="kpi-scroll-wrapper">
-										<button class="kpi-scroll-btn left" onclick="scrollKpi('classPerformanceChart', -300)" aria-label="Scroll left">&#10094;</button>
-										<div id="classPerformanceChart" class="chart-container horizontal-scroll-layout">
-											<div class="chart-empty">No class data available</div>
+								<div class="ac-kpi">
+									<span class="ac-kpi__label">Formal Exam Pass Rate</span>
+									<span class="ac-kpi__value" id="acKpiPassRate">0%</span>
+									<span class="ac-kpi__meta" id="acKpiPassRateMeta">Threshold ≥ 10/20</span>
+								</div>
+								<div class="ac-kpi">
+									<span class="ac-kpi__label">Average Exam Score</span>
+									<span class="ac-kpi__value" id="acKpiAvgScore">0<small>/20</small></span>
+									<span class="ac-kpi__meta" id="acKpiAvgScoreMeta">Normalized formal mean</span>
+								</div>
+								<div class="ac-kpi">
+									<span class="ac-kpi__label">Question Bank Items</span>
+									<span class="ac-kpi__value" id="acKpiQuestions">0</span>
+									<span class="ac-kpi__meta" id="acKpiQuestionsMeta">Across all categories</span>
+								</div>
+								<div class="ac-kpi">
+									<span class="ac-kpi__label">Active / Conducted Exams</span>
+									<span class="ac-kpi__value" id="acKpiExams">0</span>
+									<span class="ac-kpi__meta" id="acKpiExamsMeta">Formal assessments</span>
+								</div>
+								<div class="ac-kpi">
+									<span class="ac-kpi__label">Enrolled Classes</span>
+									<span class="ac-kpi__value" id="acKpiClasses">0</span>
+									<span class="ac-kpi__meta" id="acKpiClassesMeta">Organized cohorts</span>
+								</div>
+							</div>
+
+							<!-- 3. Admin Workbench: Oversight & Control Panels -->
+							<div class="ac-workbench">
+								<!-- Panel A: Teacher Activity & Content Oversight -->
+								<div class="ac-workbench__panel ac-workbench__panel--wide">
+									<div class="ac-workbench__head">
+										<div>
+											<h4 class="ac-workbench__title">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+												Teacher Activity &amp; Content Authorship
+											</h4>
+											<p class="ac-workbench__subtitle">Track questions created, exams authored, classes managed, and student results per teacher.</p>
 										</div>
-										<button class="kpi-scroll-btn right" onclick="scrollKpi('classPerformanceChart', 300)" aria-label="Scroll right">&#10095;</button>
 									</div>
-									<!-- Legend / keys explaining the chart -->
-									<div
-										class="chart-legend"
-										id="classPerformanceLegend"
-										role="region"
-										aria-label="Class Performance Chart Legend"
-									>
-										<div class="legend-item">
-											<span class="legend-swatch swatch-low"></span>
-											<span class="legend-label"
-												><strong>0-10/20:</strong> Low</span
-											>
+									<div class="ac-workbench__body ac-workbench__body--flush">
+										<div class="ac-table-container">
+											<table class="ac-table" id="acTeacherActivityTable">
+												<thead>
+													<tr>
+														<th>Teacher</th>
+														<th>Status</th>
+														<th>Questions</th>
+														<th>Exams</th>
+														<th>Classes</th>
+														<th>Assessments</th>
+														<th>Avg (/20)</th>
+														<th>Pass Rate</th>
+													</tr>
+												</thead>
+												<tbody id="acTeacherActivityBody">
+													<tr><td colspan="8" class="text-muted text-center" style="padding: 24px;">Loading teacher data…</td></tr>
+												</tbody>
+											</table>
 										</div>
-										<div class="legend-item">
-											<span class="legend-swatch swatch-mid"></span>
-											<span class="legend-label"
-												><strong>10-15/20:</strong> Medium</span
-											>
+									</div>
+								</div>
+
+								<!-- Panel B: Classes Performance & Critical Attention -->
+								<div class="ac-workbench__panel">
+									<div class="ac-workbench__head">
+										<div>
+											<h4 class="ac-workbench__title">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+												Class Rankings &amp; Intervention
+											</h4>
+											<p class="ac-workbench__subtitle">High performing cohorts vs classes requiring pedagogical intervention.</p>
 										</div>
-										<div class="legend-item">
-											<span class="legend-swatch swatch-high"></span>
-											<span class="legend-label"
-												><strong>15-20/20:</strong> High</span
-											>
+									</div>
+									<div class="ac-workbench__body">
+										<div class="ac-attention-section">
+											<h5 class="ac-sub-heading text-danger">Classes Needing Attention</h5>
+											<div id="acClassesAttentionList" class="ac-list-group">
+												<p class="text-muted text-xs">No classes currently trigger the attention threshold (&lt;8/20 avg or &lt;40% pass).</p>
+											</div>
 										</div>
-										<div class="legend-item">
-											<span class="legend-swatch swatch-info"></span>
-											<span class="legend-label"
-												><strong>Tip:</strong> Each bar shows distribution of
-												students by score range</span
-											>
+										<div class="ac-ranking-section" style="margin-top: 18px;">
+											<h5 class="ac-sub-heading">Class Means Comparison</h5>
+											<div id="acClassMeansList" class="ac-list-group"></div>
+										</div>
+									</div>
+								</div>
+
+								<!-- Panel C: Score Distribution & Certification Health -->
+								<div class="ac-workbench__panel">
+									<div class="ac-workbench__head">
+										<div>
+											<h4 class="ac-workbench__title">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+												Score Distribution &amp; Certification
+											</h4>
+											<p class="ac-workbench__subtitle">Overall distribution across the /20 scale and student certification split.</p>
+										</div>
+									</div>
+									<div class="ac-workbench__body">
+										<div id="acScoreDistChartWrap">
+											<div id="acScoreDistChart"></div>
+										</div>
+										<div class="ac-split-stats" style="margin-top: 14px; display: flex; gap: 12px;">
+											<div class="ac-split-box split-certified">
+												<span class="split-label">Certified (≥ 10/20)</span>
+												<strong class="split-value" id="acCertifiedStudents">0</strong>
+											</div>
+											<div class="ac-split-box split-pending">
+												<span class="split-label">Pending Success</span>
+												<strong class="split-value" id="acPendingStudents">0</strong>
+											</div>
+										</div>
+									</div>
+								</div>
+
+								<!-- Panel D: Platform Engagement & Live Gamification -->
+								<div class="ac-workbench__panel">
+									<div class="ac-workbench__head">
+										<div>
+											<h4 class="ac-workbench__title">
+												<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+												Platform Engagement &amp; Games
+											</h4>
+											<p class="ac-workbench__subtitle">Multiplayer rooms, tournament participation, and overall activity.</p>
+										</div>
+									</div>
+									<div class="ac-workbench__body">
+										<div class="ac-mini-stat-grid">
+											<div class="ac-mini-stat">
+												<span class="ac-mini-stat__val" id="acLiveGames">0</span>
+												<span class="ac-mini-stat__lbl">Live Games</span>
+											</div>
+											<div class="ac-mini-stat">
+												<span class="ac-mini-stat__val" id="acGameLobbies">0</span>
+												<span class="ac-mini-stat__lbl">Waiting Lobbies</span>
+											</div>
+											<div class="ac-mini-stat">
+												<span class="ac-mini-stat__val" id="acActiveTournaments">0</span>
+												<span class="ac-mini-stat__lbl">Active Tournaments</span>
+											</div>
+											<div class="ac-mini-stat">
+												<span class="ac-mini-stat__val" id="acTotalAttempts">0</span>
+												<span class="ac-mini-stat__lbl">Total Attempts</span>
+											</div>
+										</div>
+										<div style="margin-top: 14px;" id="acParticipationByClassWrap">
+											<div id="acParticipationByClass"></div>
 										</div>
 									</div>
 								</div>
 							</div>
 						</div>
 
-						<!-- Dashboard Content Grid -->
-						<div class="dashboard-content-grid">
-							<!-- Recent Activity Feed -->
-							<div class="dashboard-panel activity-panel">
-								<div class="panel-header">
-									<h3>Recent Activity</h3>
-									<button
-										id="recentActivityViewAll"
-										class="btn-text-only"
-										onclick="if(window.QuizNotifications){ window.QuizNotifications.openInbox(event); } else { openTab(event, 'notifications'); }"
-									>
-										View All
-									</button>
-								</div>
-								<div class="panel-body activity-list" id="recentActivityList">
-									<!-- Activity items will be injected here -->
-									<div class="empty-state-small">Loading activity...</div>
-								</div>
-							</div>
+						<!-- Hidden stubs for legacy DOM references to preserve script compatibility -->
+						<div id="legacyOverviewContent" class="hidden" style="display: none !important;">
+							<div id="legacyOverviewBlocks"></div>
+							<div id="adminSchoolInsights"></div>
+							<div id="categoryInsightsPanel"></div>
+							<div id="scoreDistributionChart"></div>
+							<div id="classPerformanceChart"></div>
+							<div id="recentActivityList"></div>
 						</div>
-						</div><!-- /legacyOverviewContent -->
 					</div>
 				</section>
 

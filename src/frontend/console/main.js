@@ -26,6 +26,7 @@ import { teachersPage } from './pages/users/teachers.js';
 import { studentsPage } from './pages/users/students.js';
 import { administratorsPage } from './pages/users/administrators.js';
 import { analyticsPage } from './pages/analytics.js';
+import { teachingPage } from './pages/teaching.js';
 import { auditPage } from './pages/audit.js';
 import { healthPage } from './pages/health.js';
 import { settingsPage, SECTIONS } from './pages/settings/index.js';
@@ -34,12 +35,16 @@ import { userDetailPage } from './pages/details/user.js';
 
 const NAV = [
 	{ id: 'overview', path: '/', title: 'Overview', icon: 'overview', permission: ['platform.console', 'school.console'] },
-	{ id: 'organizations', path: '/organizations', title: 'Organizations', icon: 'organizations', permission: ['platform.organizations.read', 'school.profile.read'] },
-	{ id: 'users', path: '/users', title: 'Users & Access', icon: 'users', permission: ['platform.users.read', 'school.users.read'] },
-	{ id: 'analytics', path: '/analytics', title: 'Platform Analytics', icon: 'analytics', permission: ['platform.analytics.read', 'school.analytics.read'] },
-	{ id: 'audit', path: '/audit', title: 'Activity & Audit', icon: 'audit', permission: ['platform.audit.read', 'school.audit.read'] },
-	{ id: 'health', path: '/health', title: 'System Health', icon: 'health', permission: ['platform.health.read', 'school.health.read'] },
-	{ id: 'settings', path: '/settings', title: 'Settings', icon: 'settings', permission: ['platform.settings.manage', 'school.settings.manage'] },
+	// Analytics: the teaching view first (what is happening in classrooms),
+	// then the platform adoption view (how the product is being used).
+	{ id: 'teaching', path: '/teaching', title: 'Teaching & Learning', icon: 'analytics', group: 'Analytics', permission: ['platform.analytics.read', 'school.analytics.read'] },
+	{ id: 'analytics', path: '/analytics', title: 'Platform Analytics', icon: 'analytics', group: 'Analytics', permission: ['platform.analytics.read', 'school.analytics.read'] },
+	// Manage: everything that changes the installation rather than reports on it.
+	{ id: 'organizations', path: '/organizations', title: 'Organizations', icon: 'organizations', group: 'Manage', permission: ['platform.organizations.read', 'school.profile.read'] },
+	{ id: 'users', path: '/users', title: 'Users & Access', icon: 'users', group: 'Manage', permission: ['platform.users.read', 'school.users.read'] },
+	{ id: 'audit', path: '/audit', title: 'Activity & Audit', icon: 'audit', group: 'Manage', permission: ['platform.audit.read', 'school.audit.read'] },
+	{ id: 'health', path: '/health', title: 'System Health', icon: 'health', group: 'Manage', permission: ['platform.health.read', 'school.health.read'] },
+	{ id: 'settings', path: '/settings', title: 'Settings', icon: 'settings', group: 'Manage', permission: ['platform.settings.manage', 'school.settings.manage'] },
 ];
 
 const PAGES = [
@@ -55,6 +60,7 @@ const PAGES = [
 	administratorsPage,
 	userDetailPage,
 	analyticsPage,
+	teachingPage,
 	auditPage,
 	healthPage,
 	settingsPage,
@@ -126,7 +132,16 @@ async function boot() {
 		deployment: session.deployment || {},
 		isOffline: Boolean(session.deployment?.isOffline),
 		getState,
-		setPeriod,
+		/**
+		 * Changing the reporting period re-renders the page that owns the
+		 * selector. The store itself has no page knowledge, so the wiring lives
+		 * here: a chip click updates the shared value and asks for a fresh
+		 * render, keeping every panel on the same window.
+		 */
+		setPeriod: (period, customRange) => {
+			setPeriod(period, customRange);
+			renderPage(shell, context, currentRoute);
+		},
 		rerender: () => renderPage(shell, context, currentRoute),
 		/** Detail pages can refine the header once their record is loaded. */
 		setTitle: (title, description) => {
@@ -225,6 +240,7 @@ async function boot() {
 	function wireGlobalSearch() {
 		const input = document.getElementById('ac-global-search');
 		const panel = document.getElementById('ac-search-panel');
+		const clear = document.getElementById('ac-search-clear');
 		if (!input || !panel) return;
 
 		const places = buildPlaceIndex(PAGES, SECTIONS);
@@ -232,17 +248,24 @@ async function boot() {
 		let active = -1;
 		let debounce = null;
 
+		/** The clear "×" exists only while there is something to clear. */
+		const syncClear = () => {
+			if (clear) clear.hidden = input.value.length === 0;
+		};
+
 		const close = () => {
 			panel.hidden = true;
 			panel.innerHTML = '';
 			items = [];
 			active = -1;
+			syncClear();
 		};
 
 		const go = (path) => {
 			close();
 			input.value = '';
 			input.blur();
+			syncClear();
 			navigate(path);
 		};
 
@@ -272,10 +295,20 @@ async function boot() {
 		};
 
 		input.addEventListener('input', () => {
+			syncClear();
 			clearTimeout(debounce);
 			debounce = setTimeout(refresh, 180);
 		});
+		// One click empties the box and closes the panel — the "×" the
+		// operator expects in a search field, in the app's own style.
+		clear?.addEventListener('click', () => {
+			input.value = '';
+			syncClear();
+			close();
+			input.focus();
+		});
 		input.addEventListener('focus', () => {
+			syncClear();
 			if (input.value.trim().length >= 2) refresh();
 		});
 		input.addEventListener('keydown', (event) => {

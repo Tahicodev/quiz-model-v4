@@ -446,6 +446,62 @@ router.get('/overview', async (req, res, next) => {
 	}
 });
 
+/**
+ * Teaching & learning analytics — the classroom analytics the teacher session
+ * shows, asked about the console's whole scope: every teacher, every class,
+ * every student, across every organization a platform operator can reach.
+ *
+ * A school administrator always reads their own organization (the scope
+ * middleware enforces it). A platform operator reads all organizations, or
+ * one of them with ?school_id=…
+ *
+ * The aggregation is one set of database queries over the union of the
+ * organizations, not a merge of per-school averages — see
+ * OverviewAnalyticsService#getSchoolOverview.
+ */
+router.get(
+	'/teaching',
+	requirePermission('platform.analytics.read', { allow: ['school.analytics.read'] }),
+	async (req, res, next) => {
+		try {
+			const { platformAnalyticsSvc, overviewAnalyticsSvc } = getContainer();
+			const target = await resolveTargetSchool(req, req.query.school_id);
+			const schoolIds = await platformAnalyticsSvc.resolveSchoolIds(
+				req.scope,
+				target ? [target] : null,
+			);
+			// The organizations this session can choose from — the whole scope,
+			// not the narrowed request, so the selector keeps every option after
+			// one organization has been picked.
+			const scopeSchoolIds = await platformAnalyticsSvc.resolveSchoolIds(req.scope, null);
+			const data = await overviewAnalyticsSvc.getSchoolOverview({
+				schoolIds,
+				filters: {
+					academicYear: req.query.academicYear || 'current',
+					period: req.query.period || '30d',
+					from: req.query.from || undefined,
+					to: req.query.to || undefined,
+					teacherId: req.query.teacherId || undefined,
+					classId: req.query.classId || undefined,
+					mode: req.query.mode || undefined,
+				},
+			});
+			// Labels for the organization selector and for the per-teacher
+			// organization column. One query, never a per-row lookup.
+			data.meta.scope.organizations = scopeSchoolIds.length
+				? await prisma.school.findMany({
+						where: { id: { in: scopeSchoolIds } },
+						select: { id: true, name: true, status: true },
+						orderBy: { name: 'asc' },
+					})
+				: [];
+			res.json({ data });
+		} catch (err) {
+			next(err);
+		}
+	},
+);
+
 /** Time series for the overview charts. */
 router.get('/trends', async (req, res, next) => {
 	try {
