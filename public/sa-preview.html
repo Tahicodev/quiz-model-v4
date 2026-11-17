@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Student Account — v4 preview</title>
+	<link rel="stylesheet" href="theme.css" />
+	<link rel="stylesheet" href="styles.css" />
+	<link rel="stylesheet" href="theme-dark.css" />
+	<style>
+		body { margin: 0; background: #eef2f7; font-family: system-ui, sans-serif; }
+		.preview-bar { display: flex; gap: 10px; align-items: center; padding: 12px 16px; background: #0f172a; color: #fff; font: 600 13px/1 system-ui, sans-serif; }
+		.preview-bar button { border: 1px solid rgba(255,255,255,.3); background: transparent; color: #fff; border-radius: 8px; padding: 7px 12px; cursor: pointer; font: inherit; }
+		#studentProfileModal.modal {
+			display: block !important;
+			position: static;
+			background: rgba(15, 23, 42, 0.42);
+			padding: 24px;
+		}
+		#studentProfileModal .modal-content { margin: 0 auto; }
+		.hidden { display: none !important; }
+	</style>
+</head>
+<body>
+	<div class="preview-bar">
+		<button type="button" onclick="document.documentElement.setAttribute('data-theme','light')">Light</button>
+		<button type="button" onclick="document.documentElement.setAttribute('data-theme','dark')">Dark</button>
+	</div>
+	<!-- The account modal markup, copied verbatim from student-workspace.html. -->
+	<div id="studentProfileModal" class="modal sa-modal-wrap">
+		<div class="modal-content sa-modal" role="dialog" aria-modal="true" aria-labelledby="studentAccountTitle">
+			<div class="modal-header student-account-header sa-header">
+				<div class="sa-title-block">
+					<h2 id="studentAccountTitle">Student Account</h2>
+					<p class="sa-subtitle">Your profile, progress and security</p>
+				</div>
+				<button type="button" class="arena-modal-close sa-close" aria-label="Close account">
+					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+				</button>
+			</div>
+			<div class="modal-body sa-body">
+				<div class="sa-tabs-sticky">
+					<nav class="profile-tabs profile-tabs-v2 sa-tabs" role="tablist" aria-label="Account sections">
+						<button type="button" class="profile-tab-btn active" data-profile-tab="profile" role="tab" id="studentProfileTabProfile" aria-controls="profile-tab" aria-selected="true" tabindex="0">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+							<span>My Profile</span>
+						</button>
+						<button type="button" class="profile-tab-btn" data-profile-tab="update" role="tab" id="studentProfileTabUpdate" aria-controls="update-tab" aria-selected="false" tabindex="-1">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+							<span>Update Profile</span>
+						</button>
+						<button type="button" class="profile-tab-btn" data-profile-tab="security" role="tab" id="studentProfileTabSecurity" aria-controls="security-tab" aria-selected="false" tabindex="-1">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+							<span>Security</span>
+						</button>
+					</nav>
+				</div>
+				<div id="profile-tab" class="profile-section sa-profile" role="tabpanel" aria-labelledby="studentProfileTabProfile">
+					<div class="profile-hero-banner sa-hero">
+						<div class="profile-hero-banner-content sa-hero-inner">
+							<div class="profile-avatar profile-avatar--floating sa-avatar">
+								<div class="avatar-frame sa-avatar-frame">
+									<img src="" alt="Profile" />
+									<span id="studentProfileAvatarFallback">M</span>
+								</div>
+								<label class="avatar-upload sa-upload">
+									<input type="file" id="studentProfileAvatarInput" accept="image/*" />
+									<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+									<span>Upload Photo</span>
+								</label>
+							</div>
+							<div class="profile-meta profile-meta--banner sa-identity">
+								<div class="profile-meta-top">
+									<div class="profile-name-row sa-name-row"><h3 id="studentProfileName">MQ Dev Student</h3></div>
+									<p id="studentProfileClass" class="sa-class">Terminale B — Groupe A</p>
+								</div>
+								<div class="profile-chip-row sa-chips">
+									<span class="profile-chip sa-chip" id="studentProfileNumber"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>#STU-2041</span>
+									<span class="profile-chip profile-chip-points sa-chip sa-chip-points" id="studentProfilePointsChip">Points: 340</span>
+									<span class="profile-chip profile-chip-badges sa-chip sa-chip-badges" id="studentProfileBadgesChip">Badges: 6</span>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="sa-season">
+						<div class="sa-season-badge">
+							<span class="sa-season-icon" aria-hidden="true">
+								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h2v2a2 2 0 0 1-2 2M7 5H5v2a2 2 0 0 0 2 2"/></svg>
+							</span>
+							<span class="sa-season-label">Season <strong>2026 · Spring</strong></span>
+						</div>
+						<div class="profile-season-track">
+							<div class="sa-season-bar"><span style="width:68%"></span></div>
+						</div>
+						<span class="sa-season-pct">68%</span>
+						<span class="sa-season-reward">Next: Diamond tier</span>
+					</div>
+
+					<div class="sa-stats-card">
+						<div class="sa-stats">
+							<div class="sa-stat">
+								<span>Level</span><strong>4</strong><small>128 EXP to level 5</small>
+							</div>
+							<div class="sa-stat">
+								<span>Experience</span><strong>372</strong><small>Total EXP earned</small>
+							</div>
+							<div class="sa-stat">
+								<span>Tournament points</span><strong>340</strong><small>Across 9 sessions</small>
+							</div>
+							<div class="sa-stat">
+								<span>Rewards</span><strong>6</strong><small>Badges unlocked</small>
+							</div>
+						</div>
+					</div>
+
+					<div class="sa-insights">
+						<div class="sa-insight">
+							<span class="profile-insight-kicker">Avg score</span>
+							<div class="profile-insight-value">82%</div>
+							<div class="profile-insight-copy">Across 12 completed exams</div>
+							<div class="sa-progress"><span class="profile-progress-fill" style="width:82%"></span></div>
+						</div>
+						<div class="sa-insight">
+							<span class="profile-insight-kicker">Study streak</span>
+							<div class="profile-insight-value">6 days</div>
+							<div class="profile-insight-copy">Longest this season: 11 days</div>
+							<div class="sa-mini-bar"><span style="width:55%"></span></div>
+						</div>
+						<div class="sa-insight">
+							<span class="profile-insight-kicker">Weakest topic</span>
+							<div class="profile-insight-value">Networks</div>
+							<div class="profile-insight-copy">Review 8 questions to improve</div>
+						</div>
+					</div>
+				</div>
+
+				<div id="update-tab" class="profile-section hidden" role="tabpanel" aria-labelledby="studentProfileTabUpdate">
+					<div class="sa-card">
+						<div class="profile-form-card-header sa-card-head">
+							<h3>Update Profile</h3>
+							<p>Changes are sent to your teacher for approval before they go live.</p>
+						</div>
+						<form class="profile-form sa-form" id="studentProfileForm">
+							<div class="sa-grid-2">
+								<div class="sa-field">
+									<label for="studentProfileFullName">Full name</label>
+									<input class="form-control" type="text" id="studentProfileFullName" value="MQ Dev Student" />
+								</div>
+								<div class="sa-field">
+									<label for="studentProfileUsername">Username <em>(cannot be changed)</em></label>
+									<input class="form-control" type="text" id="studentProfileUsername" value="mq-dev-student" disabled />
+								</div>
+								<div class="sa-field">
+									<label for="studentProfileEmail">Email</label>
+									<input class="form-control" type="email" id="studentProfileEmail" placeholder="you@example.com" />
+								</div>
+								<div class="sa-field">
+									<label for="studentProfileNumberInput">Student number</label>
+									<input class="form-control" type="text" id="studentProfileNumberInput" value="STU-2041" />
+								</div>
+								<div class="sa-field">
+									<label for="studentProfileClassSelect">Class</label>
+									<select class="form-control" id="studentProfileClassSelect">
+										<option>Terminale B — Groupe A</option>
+										<option>Terminale B — Groupe B</option>
+									</select>
+								</div>
+							</div>
+							<div class="sa-field">
+								<label for="studentProfileNote">Note for your teacher <em>(optional)</em></label>
+								<textarea class="form-control" id="studentProfileNote" rows="2" placeholder="Why should this change be approved?"></textarea>
+							</div>
+							<div class="profile-actions sa-actions">
+								<button type="submit" class="workspace-btn sa-btn-primary">Send request</button>
+								<button type="button" class="workspace-btn ghost sa-btn-ghost" aria-label="Discard unsaved changes">
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+									Reset
+								</button>
+							</div>
+							<div id="studentProfileRequestStatus" class="profile-request-status" role="status" aria-live="polite"></div>
+						</form>
+					</div>
+				</div>
+
+				<div id="security-tab" class="profile-section hidden" role="tabpanel" aria-labelledby="studentProfileTabSecurity">
+					<div class="sa-card">
+						<div class="profile-form-card-header sa-card-head">
+							<h3>Protect your account</h3>
+							<p>Use 8+ characters with a number and a symbol. Your teacher cannot see your password.</p>
+						</div>
+						<form class="profile-form sa-form" id="studentPasswordForm">
+							<div class="sa-field">
+								<label for="studentPasswordCurrent">Current password</label>
+								<div class="sa-password-wrap">
+									<input class="form-control" type="password" id="studentPasswordCurrent" />
+									<button type="button" class="sa-pw-toggle" data-sa-toggle="studentPasswordCurrent">Show</button>
+								</div>
+							</div>
+							<div class="sa-field">
+								<label for="studentPasswordNew">New password</label>
+								<div class="sa-password-wrap">
+									<input class="form-control" type="password" id="studentPasswordNew" />
+									<button type="button" class="sa-pw-toggle" data-sa-toggle="studentPasswordNew">Show</button>
+								</div>
+								<div class="sa-strength" id="studentPasswordStrengthBar"><span></span></div>
+								<div class="sa-hint" id="studentPasswordStrengthText">Use 8+ characters for a strong password.</div>
+							</div>
+							<div class="sa-field">
+								<label for="studentPasswordConfirm">Confirm new password</label>
+								<div class="sa-password-wrap">
+									<input class="form-control" type="password" id="studentPasswordConfirm" />
+									<button type="button" class="sa-pw-toggle" data-sa-toggle="studentPasswordConfirm">Show</button>
+								</div>
+							</div>
+							<ul class="sa-tips">
+								<li>At least 8 characters long</li>
+								<li>Mix uppercase, lowercase, numbers and symbols</li>
+								<li>Do not reuse a password from another site</li>
+							</ul>
+							<div class="profile-actions sa-actions">
+								<button type="submit" class="workspace-btn sa-btn-primary">Update password</button>
+								<button type="button" class="workspace-btn ghost sa-btn-ghost" aria-label="Discard unsaved changes">
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+									Reset
+								</button>
+							</div>
+							<div id="studentPasswordStatus" class="profile-request-status" role="status" aria-live="polite"></div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		function selectPreviewTab(name) {
+			var btn = document.querySelector('.profile-tab-btn[data-profile-tab="' + name + '"]');
+			if (!btn) return;
+			document.querySelectorAll('.profile-section').forEach(function (section) {
+				section.classList.toggle('hidden', section.id !== name + '-tab');
+			});
+			document.querySelectorAll('.profile-tab-btn').forEach(function (other) {
+				var active = other === btn;
+				other.classList.toggle('active', active);
+				other.setAttribute('aria-selected', String(active));
+				other.setAttribute('tabindex', active ? '0' : '-1');
+			});
+		}
+		document.querySelectorAll('.profile-tab-btn').forEach(function (btn) {
+			btn.addEventListener('click', function () { selectPreviewTab(btn.dataset.profileTab); });
+		});
+		var requested = new URLSearchParams(location.search).get('tab');
+		if (requested) selectPreviewTab(requested);
+		var theme = new URLSearchParams(location.search).get('theme');
+		if (theme) document.documentElement.setAttribute('data-theme', theme);
+	</script>
+</body>
+</html>

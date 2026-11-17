@@ -35,7 +35,7 @@ export const errorHandler = (err, req, res, next) => {
     } else if (Number.isInteger(err?.status) && err.status >= 400 && err.status < 600) {
       statusCode = err.status;
     }
-    logger.error('Unhandled Exception:', { error: err.message, stack: err.stack, path: req.path });
+    logger.error('Unhandled Exception: ' + err?.stack, { error: err.message, path: req.path });
   }
 
   // Defense-in-depth: res.status() throws RangeError for non-numeric or

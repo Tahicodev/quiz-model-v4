@@ -86,6 +86,58 @@ export function selectField({
 }
 
 /**
+ * The console toolbar.
+ *
+ * It is deliberately TWO rows:
+ *
+ *   row 1 — the controls that belong together: the chip group on the left
+ *           and the trailing action (usually Refresh) pushed to the right
+ *   row 2 — the field filters, on a line of their own
+ *
+ * On a single row the search box and the status select used to push the
+ * refresh button off the panel, and the audit filter chips collided with the
+ * search field. Two rows keep every control where the eye expects it and
+ * nothing overflows.
+ *
+ * A page with NO chip group has nothing to put on the first row, so the
+ * trailing action joins the field row instead — still pushed to the right
+ * edge, but without a row that holds a single lonely button.
+ *
+ * @param {{ chips?:string, fields?:string, filters?:string, actions?:string }} parts
+ * @returns {string} markup
+ */
+export function toolbar({ chips = '', fields = '', filters = '', actions = '' } = {}) {
+	const secondRow = fields || filters;
+
+	if (!chips) {
+		// No chip group: the action belongs to the field row.
+		if (!secondRow) {
+			return `<div class="ac-toolbar"><div class="ac-toolbar__row">
+				<div class="ac-toolbar__push">${actions}</div>
+			</div></div>`;
+		}
+		return `<div class="ac-toolbar">
+			<div class="ac-toolbar__row ac-toolbar__row--fields">
+				${fields}${filters}
+				${actions ? `<div class="ac-toolbar__push">${actions}</div>` : ''}
+			</div>
+		</div>`;
+	}
+
+	return `<div class="ac-toolbar">
+		<div class="ac-toolbar__row">
+			${chips}
+			${actions ? `<div class="ac-toolbar__push">${actions}</div>` : ''}
+		</div>
+		${
+			secondRow
+				? `<div class="ac-toolbar__row ac-toolbar__row--fields">${fields}${filters}</div>`
+				: ''
+		}
+	</div>`;
+}
+
+/**
  * The shared period toolbar. Renders the chip group plus, when the custom
  * period is selected, the two date inputs.
  */
@@ -101,8 +153,8 @@ export function periodToolbar({ value, customFrom = '', customTo = '' }) {
 					<input class="ac-input" id="ac-period-to" type="date" value="${esc(customTo)}" />
 				</div>`
 			: '';
-	return `<div class="ac-toolbar">
-		${chipGroup({ options: PERIODS, value, name: 'period' })}
-		${custom}
-	</div>`;
+	return toolbar({
+		chips: chipGroup({ options: PERIODS, value, name: 'period' }),
+		fields: custom,
+	});
 }

@@ -292,6 +292,20 @@
 			return;
 		}
 		if (action === 'student') {
+			// The intervention list addresses students by id. Open their record
+			// so "Review results & chapters" actually shows something — the
+			// previous implementation only wrote a name into the (hidden)
+			// results search box, so nothing happened on screen.
+			if (link.id && typeof window.openStudentProfileByUserId === 'function') {
+				setTimeout(() => {
+					try {
+						window.openStudentProfileByUserId(link.id);
+					} catch (_) {
+						/* the results module is optional */
+					}
+				}, 80);
+				return;
+			}
 			if (typeof window.openTab === 'function') window.openTab(null, 'results');
 			focusResultSearch(link.query);
 			return;

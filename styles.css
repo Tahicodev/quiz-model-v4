@@ -9259,6 +9259,22 @@ textarea {
 	color: var(--text-main);
 }
 
+/* The link to the control center, which sits in the settings tab strip.
+   It is a link, not a tab: it leaves this surface. */
+.settings-tab-btn--console {
+	display: inline-flex;
+	align-items: center;
+	text-decoration: none;
+	margin-left: auto;
+	color: var(--primary);
+	font-weight: 600;
+}
+
+.settings-tab-btn--console:hover {
+	background-color: var(--primary-light);
+	color: var(--primary);
+}
+
 .settings-tab-btn.active {
 	background-color: var(--primary-light);
 	color: var(--primary);
@@ -9873,10 +9889,64 @@ textarea {
 	color: var(--text-main);
 }
 
+/* Clickable student name inside the per-question detail row. */
+.eas-student-link {
+	display: inline;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--primary, #6366f1);
+	font: inherit;
+	font-weight: 650;
+	text-align: left;
+	text-decoration: underline;
+	text-decoration-style: dotted;
+	text-underline-offset: 3px;
+	cursor: pointer;
+	transition: color 0.15s ease;
+}
+
+.eas-student-link:hover {
+	color: var(--primary-hover, #4f46e5);
+	text-decoration-style: solid;
+}
+
+.eas-student-link:focus-visible {
+	outline: 2px solid var(--primary, #6366f1);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+.eas-student-name {
+	font-weight: 600;
+}
+
+/* Inline info chip under the accuracy table. */
 .eas-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
 	margin-top: var(--space-sm);
+	padding: 8px 14px;
+	border: 1px solid rgba(99, 102, 241, 0.18);
+	border-radius: 999px;
+	background: rgba(99, 102, 241, 0.06);
+	color: var(--text-secondary, #64748b);
 	font-size: 0.8rem;
-	color: var(--text-muted);
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.eas-hint-icon {
+	display: inline-flex;
+	flex: 0 0 22px;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	background: rgba(99, 102, 241, 0.12);
+	color: var(--primary, #6366f1);
 }
 
 .eas-student-cell {
@@ -13932,7 +14002,9 @@ body.student-workspace .workspace-panel[data-workspace-section="courses"] .stude
 	flex-wrap: nowrap;
 	align-items: center;
 	gap: 0.55rem;
-	margin: 0;
+	/* The bar sits between the panel header and the course grid, so it needs
+	   breathing room below it or the first row of cards feels glued to it. */
+	margin: 0 0 1.1rem;
 	padding: 0;
 	border: 0;
 	background: none;
@@ -13947,10 +14019,21 @@ body.student-workspace .workspace-panel[data-workspace-section="courses"] .stude
 body.student-workspace .workspace-panel[data-workspace-section="courses"] .student-filter-bar--compact .student-filter-fields {
 	flex: 0 1 auto;
 	flex-wrap: nowrap;
+	align-items: center;
+	gap: 0.55rem;
 }
 
+/* The course selects dropped their visible "Teacher" / "Subject" captions:
+   the option text ("All teachers" / "All subjects") names the dimension and
+   the control keeps an aria-label. Without the caption the select is the only
+   child, so it must not inherit the column gap of the labelled variant. */
 body.student-workspace .workspace-panel[data-workspace-section="courses"] .student-filter-bar--compact .student-filter {
 	flex: 0 0 auto;
+	gap: 0;
+}
+
+body.student-workspace .workspace-panel[data-workspace-section="courses"] .student-filter-bar--compact .student-filter select {
+	min-width: 150px;
 }
 
 body.student-workspace .filter-chip {
@@ -13969,10 +14052,6 @@ body.student-workspace .filter-chip:hover {
 	background: #e8f7f5;
 	border-color: #b9e4df;
 	color: var(--arena-teal-dark);
-}
-
-body.student-workspace .games-panel {
-	background: linear-gradient(180deg, #ffffff 0%, #fbfdfd 100%);
 }
 
 body.student-workspace .game-quick-join {
@@ -17584,6 +17663,49 @@ td.actions-cell {
 .header-right {
 	display: flex;
 	align-items: center;
+	gap: var(--space-sm);
+}
+
+/* The link to the control center.
+
+   The classroom surface (admin.html) is where content is authored; the
+   control center (/console) is where the platform is administered. The link
+   is marked up with data-roles so a teacher never sees it — they have no
+   access to the console, and offering it would be a dead end. */
+.console-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 7px 12px;
+	border-radius: var(--radius-md, 8px);
+	border: 1px solid var(--border-color);
+	background: var(--surface-color, transparent);
+	color: var(--text-color);
+	font-size: 13px;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+	transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.console-link:hover {
+	border-color: var(--primary-color, #3b82f6);
+	color: var(--primary-color, #3b82f6);
+	text-decoration: none;
+}
+
+.console-link svg {
+	flex: none;
+}
+
+@media (max-width: 860px) {
+	.console-link span {
+		display: none;
+	}
+
+	.console-link {
+		padding: 7px 9px;
+	}
 }
 
 /* Navigation Container */
@@ -32614,6 +32736,60 @@ body:has(.entry-gate-modal) {
 	overflow: hidden;
 }
 
+/* Continue — an existing session offered on the entry gate. The gate never
+   redirects on its own: the visitor decides whether to continue or to sign in
+   as somebody else. */
+.entry-continue {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 14px 16px;
+	margin-bottom: 18px;
+	border: 1px solid var(--border-color, #e3e8ef);
+	border-left: 3px solid var(--primary-color, #3b82f6);
+	border-radius: 10px;
+	background: var(--surface-color, #f9fafb);
+}
+
+.entry-continue[hidden] {
+	display: none;
+}
+
+.entry-continue-body {
+	min-width: 0;
+}
+
+.entry-continue-label {
+	margin: 0;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-muted, #64748b);
+}
+
+.entry-continue-name {
+	margin: 2px 0 0;
+	font-size: 15px;
+	font-weight: 650;
+	color: var(--text-color, #16202f);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.entry-continue-role {
+	margin: 1px 0 0;
+	font-size: 12.5px;
+	color: var(--text-muted, #64748b);
+}
+
+.entry-continue-actions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
 body:has(.entry-gate-container.entry-runtime-active) {
 	overflow: auto;
 }
@@ -34644,10 +34820,6 @@ body.student-workspace .filter-chip:hover {
 	color: var(--arena-teal-dark);
 }
 
-body.student-workspace .games-panel {
-	border-top: 3px solid #2563eb;
-}
-
 body.student-workspace .game-quick-join {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -36044,6 +36216,22 @@ body.training-modal-open {
 	max-width: 46vw;
 }
 
+/* The attempt name (exam / lesson / practice title). It used to be a
+   separate <h2> in the modal header, where it fought the close button for
+   the same grid cell and pushed the header out of shape. It now sits under
+   the student's name inside the strip, where it reads as the third line of
+   the identity block instead of a competing heading. */
+.training-student-title {
+	font-size: 0.68rem;
+	font-weight: 600;
+	line-height: 1.25;
+	color: var(--text-secondary, #475569);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 46vw;
+}
+
 .training-student-number {
 	flex-shrink: 0;
 	padding: 0.1rem 0.45rem;
@@ -36088,6 +36276,10 @@ html[data-theme='dark'] .training-student-name {
 
 html[data-theme='dark'] .training-student-class {
 	color: var(--text-muted, #94a3b8);
+}
+
+html[data-theme='dark'] .training-student-title {
+	color: var(--text-secondary, #cbd5e1);
 }
 
 html[data-theme='dark'] .training-student-number {
@@ -36139,23 +36331,19 @@ html[data-theme='dark'] .question-image-wrap.is-broken::after {
 	padding-top: 0.1rem;
 }
 
-.training-context-chip {
+.training-context-item {
 	display: inline-flex;
-	align-items: center;
-	gap: 0.35rem;
+	align-items: baseline;
+	gap: 0.4rem;
 	min-width: 0;
 	max-width: 100%;
-	padding: 0.16rem 0.55rem;
-	border: 1px solid var(--border-color, #e2e8f0);
-	border-radius: 999px;
-	background: rgba(148, 163, 184, 0.08);
-	font-size: 0.7rem;
-	line-height: 1.3;
+	font-size: 0.75rem;
+	line-height: 1.35;
 }
 
 .training-context-label {
 	flex-shrink: 0;
-	font-size: 0.6rem;
+	font-size: 0.7rem;
 	font-weight: 800;
 	letter-spacing: 0.05em;
 	text-transform: uppercase;
@@ -36172,9 +36360,8 @@ html[data-theme='dark'] .question-image-wrap.is-broken::after {
 	max-width: 46vw;
 }
 
-html[data-theme='dark'] .training-context-chip {
-	border-color: var(--border-color, #2c3a4d);
-	background: rgba(148, 163, 184, 0.1);
+html[data-theme='dark'] .training-context-item {
+	color: #e2e8f0;
 }
 
 html[data-theme='dark'] .training-context-label {
@@ -36346,7 +36533,8 @@ html[data-theme='dark'] .student-filter-reset {
 	}
 
 	.training-student-name,
-	.training-student-class {
+	.training-student-class,
+	.training-student-title {
 		max-width: 52vw;
 	}
 
@@ -45225,15 +45413,6 @@ body.student-workspace .workspace-header .mobile-menu-btn:hover {
 	flex-wrap: wrap;
 }
 
-#results .results-count-badge {
-	white-space: nowrap;
-}
-
-#results .results-count-badge span {
-	font-weight: 700;
-	color: var(--primary);
-}
-
 #results .results-export-group {
 	display: flex;
 	gap: 8px;
@@ -50492,6 +50671,10 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	padding: 10px 12px 10px calc(18px + var(--course-depth, 0) * 24px);
 	border-bottom: 1px solid var(--border-color, rgba(15, 23, 42, 0.08));
 	background: var(--bg-surface, #fff);
+	cursor: pointer;
+	transition:
+		background-color var(--transition-fast, 0.15s ease),
+		box-shadow var(--transition-fast, 0.15s ease);
 }
 
 .course-tree-row[hidden] {
@@ -50513,15 +50696,21 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 
 .course-tree-row:hover {
 	background: var(--bg-surface-alt, rgba(99, 102, 241, 0.05));
+	box-shadow: inset 3px 0 0 var(--primary-color, #6366f1);
 }
 
-.course-tree-category,
-.course-tree-actions {
+.course-tree-row:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: -2px;
+}
+
+.course-tree-category {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: 8px;
 	min-width: 0;
+	flex: 1 1 auto;
 }
 
 .course-tree-category strong {
@@ -50593,34 +50782,39 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	font-size: 0.83rem;
 }
 
-.course-tree-actions .btn {
-	min-height: 34px;
+/* Status chip shown at the end of a course-tree row. */
+.course-tree-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin-left: auto;
+	padding: 3px 10px;
 	border: 1px solid transparent;
-	border-radius: 8px;
-	padding: 6px 10px;
-	font-size: 0.8rem;
-	font-weight: 650;
-	transition:
-		transform 0.15s ease,
-		box-shadow 0.15s ease;
+	border-radius: 999px;
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	white-space: nowrap;
 }
 
-.course-tree-actions .btn:hover {
-	transform: translateY(-1px);
-	box-shadow: 0 2px 7px rgba(15, 23, 42, 0.12);
+.course-tree-status::before {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: currentColor;
+	content: "";
 }
 
-.course-tree-actions .course-tree-lesson-link {
-	border-color: rgba(37, 99, 235, 0.18);
-	background: #eff6ff;
-	color: #1d4ed8;
+.course-tree-status.is-ready {
+	border-color: rgba(22, 163, 74, 0.24);
+	background: rgba(34, 197, 94, 0.1);
+	color: #15803d;
 }
 
-.course-tree-actions .course-tree-generate,
-.course-structure-tools [data-generate-all-levels] {
-	border: 0;
-	background: linear-gradient(135deg, #7c3aed, #5b21b6);
-	color: #fff;
+.course-tree-status.is-empty {
+	border-color: rgba(148, 163, 184, 0.35);
+	background: rgba(148, 163, 184, 0.12);
+	color: var(--text-secondary, #64748b);
 }
 
 .course-detail-toolbar {
@@ -51694,6 +51888,105 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 	gap: 8px;
 }
 
+/* ── Course structure action buttons (Prep Sheets / Exercises / Documents) ── */
+
+.course-structure-tools .course-action-prep-sheets,
+.course-structure-tools .course-action-exercises,
+.course-structure-tools .course-action-documents {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-height: 34px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	padding: 6px 14px;
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		transform 0.15s ease,
+		box-shadow 0.15s ease,
+		background-color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.course-structure-tools .course-action-prep-sheets {
+	border-color: rgba(37, 99, 235, 0.22);
+	background: #eff6ff;
+	color: #1d4ed8;
+}
+
+.course-structure-tools .course-action-exercises {
+	border-color: rgba(217, 119, 6, 0.24);
+	background: #fffbeb;
+	color: #b45309;
+}
+
+.course-structure-tools .course-action-documents {
+	border-color: rgba(71, 85, 105, 0.22);
+	background: #f1f5f9;
+	color: #334155;
+}
+
+.course-structure-tools .course-action-prep-sheets:hover,
+.course-structure-tools .course-action-exercises:hover,
+.course-structure-tools .course-action-documents:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 3px 10px rgba(15, 23, 42, 0.12);
+}
+
+.course-structure-tools .course-action-prep-sheets:focus-visible,
+.course-structure-tools .course-action-exercises:focus-visible,
+.course-structure-tools .course-action-documents:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+
+/* ── "Generate all levels with AI" dropdown trigger ───────────────────────── */
+
+.course-all-levels-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border-radius: 999px;
+	padding-right: 10px;
+	font-weight: 700;
+}
+
+.course-all-levels-caret {
+	margin-left: 2px;
+	opacity: 0.85;
+	transition: transform 0.15s ease;
+}
+
+.course-all-levels-trigger[aria-expanded="true"] .course-all-levels-caret {
+	transform: rotate(180deg);
+}
+
+.course-all-levels-menu {
+	min-width: 280px;
+}
+
+.course-all-levels-item {
+	align-items: center;
+	gap: 10px;
+}
+
+.course-all-levels-icon {
+	display: inline-flex;
+	flex: 0 0 28px;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	background: rgba(99, 102, 241, 0.1);
+	font-size: 0.95rem;
+	line-height: 1;
+}
+
 .course-batch-status {
 	color: var(--text-secondary, #64748b);
 	font-size: 0.78rem;
@@ -51847,13 +52140,8 @@ html[data-theme='dark'] .exam-documents-modal .ed-stepper-footer {
 		padding-bottom: 12px;
 	}
 
-	.course-tree-actions {
-		display: none;
-	}
-
-	.course-tree-actions .btn {
-		max-width: 100%;
-		white-space: normal;
+	.course-tree-status {
+		margin-left: 0;
 	}
 
 	.course-generator-tabs {
@@ -56660,20 +56948,6 @@ html[data-theme='dark'] .course-student-tags > span {
 	font-size: 0.85rem;
 }
 
-#results .results-count-badge {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	font-variant-numeric: tabular-nums;
-}
-
-#results .results-count-badge strong,
-#results .results-count-badge span {
-	font-weight: 700;
-	color: inherit;
-	font-variant-numeric: tabular-nums;
-}
-
 #results .results-kpi-grid .stat-card.cyan .stat-bar { background: var(--info); }
 #results .results-kpi-grid .stat-card.indigo .stat-bar { background: #6366f1; }
 #results .results-kpi-grid .stat-card.rose .stat-bar { background: var(--danger); }
@@ -56740,16 +57014,60 @@ html[data-theme='dark'] .course-student-tags > span {
 	padding: var(--space-md) var(--space-lg) var(--space-lg);
 }
 
+/* The filter row is a grid of equal tracks. The shared `.filter-group
+   select` rule sets `min-width: 180px`, which is WIDER than a 155px
+   track — every select therefore overflowed its cell and pushed its
+   neighbours out of line (the "Attempt score" select, being the longest
+   label, was the one that broke the row visibly). The selects are reset
+   to `min-width: 0` here so each one fills its own track exactly, and the
+   track minimum is raised so the controls stay comfortably tappable. */
 #results .results-filters-row {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-	gap: 10px 12px;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: 12px 14px;
 	align-items: end;
 }
 
+#results .results-filters-row .filter-group {
+	min-width: 0;
+}
+
+#results .results-filters-row .filter-group select,
+#results .results-filters-row .filter-group input {
+	min-width: 0;
+	width: 100%;
+}
+
+/* The label sits directly above its control; keeping the caption and the
+   select on the same baseline rhythm is what stops the row from looking
+   ragged when one filter is hidden (Students vs All attempts views). */
+#results .results-filters-row .filter-group label {
+	display: block;
+	min-height: 1em;
+	margin-bottom: 1px;
+	line-height: 1.35;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ── Search row ─────────────────────────────────────────────
+   The search field used to live inside the filter grid and span two
+   tracks. It now owns its own row above the filters — the same shape the
+   student workspace uses — so a long placeholder never fights the
+   selects for horizontal space. */
+#results .results-search-row {
+	display: block;
+	width: 100%;
+}
+
 .results-filter-search {
-	grid-column: span 2;
-	min-width: 220px;
+	width: 100%;
+	min-width: 0;
+}
+
+#results .results-search-row .results-filter-search {
+	grid-column: auto;
 }
 
 .results-search-field {
@@ -56775,6 +57093,12 @@ html[data-theme='dark'] .course-student-tags > span {
 	border-radius: var(--radius-md);
 	background: var(--bg-surface);
 	color: var(--text-main);
+}
+
+#results .results-search-field input:focus {
+	outline: none;
+	border-color: var(--primary);
+	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
 #results .results-scope-bar {
@@ -56920,6 +57244,30 @@ html[data-theme='dark'] .course-student-tags > span {
 	margin-top: 2px;
 	color: var(--text-muted);
 	font-size: 0.7rem;
+}
+
+/* Count caption pill — "Showing the 6 most recent of 38 training attempts." */
+.results-caption {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	margin: 12px 0 2px;
+	padding: 5px 12px;
+	border: 1px solid var(--border-color, rgba(148, 163, 184, 0.22));
+	border-radius: 999px;
+	background: var(--bg-surface-alt, rgba(148, 163, 184, 0.1));
+	color: var(--text-secondary, #64748b);
+	font-size: 0.76rem;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.results-caption-dot {
+	flex: 0 0 6px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--primary, #6366f1);
 }
 
 .results-avg-cell {
@@ -57117,6 +57465,13 @@ body.results-profile-open {
    shrinking to fit the modal (which clipped Focus areas / Exam history). */
 .results-profile-body > * {
 	flex: 0 0 auto;
+}
+
+/* `.panel-body` has no global padding, so Focus areas / Exam history /
+   Recent training used to touch the panel edges. Give every panel inside the
+   student profile a comfortable inner margin. */
+.results-profile-body .panel-body {
+	padding: 14px 16px;
 }
 
 .results-profile-footer {
@@ -57397,7 +57752,8 @@ body.results-profile-open {
 	}
 
 	.results-filter-search {
-		grid-column: 1 / -1;
+		grid-column: auto;
+		width: 100%;
 	}
 
 	.results-students-header {
@@ -57523,8 +57879,8 @@ body.results-profile-open {
 .results-filter-shell {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	padding: 10px 14px 12px;
+	gap: 14px;
+	padding: 12px 14px 14px;
 	background: var(--bg-surface);
 	border: 1px solid var(--border-color);
 	border-radius: var(--radius-lg);
@@ -57547,8 +57903,8 @@ body.results-profile-open {
 }
 
 .results-filter-shell .results-filters-row {
-	grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
-	gap: 8px 12px;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: 12px 14px;
 	align-items: end;
 }
 
@@ -58563,7 +58919,7 @@ html[data-theme='dark'] .student-workspace .results-attempts td {
 	margin: auto;
 }
 
-/* ── Header layout: student + close, chips on their own row ──────────────── */
+/* ── Header layout: student identity + close, with a quiet context row ───── */
 #studentTrainingModal .training-modal-header {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
@@ -58600,85 +58956,52 @@ html[data-theme='dark'] .student-workspace .results-attempts td {
 #studentTrainingModal .training-context-meta {
 	grid-area: context;
 	order: initial;
-	display: flex;
-	flex-wrap: wrap;
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	align-items: center;
-	gap: 0.35rem 0.4rem;
+	gap: 0.75rem 2rem;
 	min-width: 0;
-	padding-top: 0.1rem;
+	padding: 0.1rem 0.3rem 0 0.7rem;
 }
 
-#studentTrainingModal .training-context-chip {
-	flex: 0 1 auto;
+/* Context supports the attempt rather than competing with it: two quiet
+   groups mirror the student identity and close control above them. */
+.training-context-group {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.45rem 1.25rem;
 	min-width: 0;
-	max-width: 100%;
+}
+
+.training-context-group--course {
+	justify-content: flex-end;
+	text-align: right;
+}
+
+#studentTrainingModal .training-context-item {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 0.4rem;
+	min-width: 0;
+	line-height: 1.35;
+}
+
+#studentTrainingModal .training-context-label {
+	font-size: 0.65rem;
+	font-weight: 700;
+	letter-spacing: 0.035em;
 }
 
 #studentTrainingModal .training-context-value {
-	max-width: min(46vw, 220px);
+	max-width: min(20vw, 160px);
+	font-size: 0.75rem;
+	font-weight: 600;
 }
 
-/* The attempt name (exam / lesson / practice title) is the primary badge of
-   the attempt, so it leads the chip row and carries the accent. */
-#studentTrainingModal .training-context-chip--attempt {
-	border-color: rgba(16, 185, 129, 0.38);
-	background: rgba(16, 185, 129, 0.1);
-}
-
-#studentTrainingModal .training-context-chip--attempt .training-context-label {
-	color: #047857;
-}
-
-#studentTrainingModal
-	.training-context-chip--attempt
-	.training-context-value {
-	max-width: min(60vw, 320px);
-	font-weight: 700;
-}
-
-html[data-theme='dark']
-	#studentTrainingModal
-	.training-context-chip--attempt {
-	border-color: rgba(52, 211, 153, 0.42);
-	background: rgba(16, 185, 129, 0.16);
-}
-
-html[data-theme='dark']
-	#studentTrainingModal
-	.training-context-chip--attempt
-	.training-context-label {
-	color: #6ee7b7;
-}
-
-/* The category is the identifying detail of the attempt, so it carries a
-   subtle accent while still matching the other header chips. */
-#studentTrainingModal .training-context-chip--category {
-	border-color: rgba(99, 102, 241, 0.38);
-	background: rgba(99, 102, 241, 0.1);
-}
-
-#studentTrainingModal .training-context-chip--category .training-context-label {
-	color: #4f46e5;
-}
-
-#studentTrainingModal
-	.training-context-chip--category
-	.training-context-value {
-	max-width: min(60vw, 300px);
-}
-
-html[data-theme='dark']
-	#studentTrainingModal
-	.training-context-chip--category {
-	border-color: rgba(129, 140, 248, 0.45);
-	background: rgba(99, 102, 241, 0.18);
-}
-
-html[data-theme='dark']
-	#studentTrainingModal
-	.training-context-chip--category
-	.training-context-label {
-	color: #a5b4fc;
+.training-context-group--course .training-context-item:last-child {
+	flex: 1 1 auto;
+	justify-content: flex-end;
 }
 
 /* ── Warning / timeout feedback on the inner attempt container ──────────── */
@@ -58819,7 +59142,8 @@ html[data-theme='dark'] #studentTrainingModal #studentTrainingStage.is-time-warn
 	}
 
 	#studentTrainingModal .training-student-name,
-	#studentTrainingModal .training-student-class {
+	#studentTrainingModal .training-student-class,
+	#studentTrainingModal .training-student-title {
 		max-width: 42vw;
 	}
 
@@ -58829,12 +59153,31 @@ html[data-theme='dark'] #studentTrainingModal #studentTrainingStage.is-time-warn
 		font-size: 0.78rem;
 	}
 
-	#studentTrainingModal .training-context-chip {
-		flex: 1 1 calc(50% - 0.4rem);
+	#studentTrainingModal .training-context-meta {
+		gap: 0.5rem 0.75rem;
+		padding: 0.05rem 0.15rem 0 0.6rem;
+	}
+
+	.training-context-group {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.training-context-group--course {
+		align-items: flex-end;
+	}
+
+	#studentTrainingModal .training-context-item {
+		max-width: 100%;
 	}
 
 	#studentTrainingModal .training-context-value {
-		max-width: none;
+		max-width: min(31vw, 180px);
+	}
+
+	.training-context-group--course .training-context-item:last-child {
+		flex: 0 1 auto;
 	}
 
 	#studentTrainingModal .close-modal-btn {
@@ -59921,4 +60264,859 @@ html[data-theme='dark'] .generated-docs-icon.is-copied {
 	.course-progress-fill {
 		transition: none;
 	}
+}
+
+/* ============================================================
+   RESTORED LIGHT THEME RULES
+   These complement the dark-theme counterparts that live in
+   theme-dark.css. Kept together so the two files stay in sync.
+   ============================================================ */
+
+/* Every workspace tab now wears the Games/Tournament container
+   style: gradient surface + a 3px blue top edge. */
+body.student-workspace .workspace-panel {
+	background: linear-gradient(180deg, #ffffff 0%, #fbfdfd 100%);
+	border-top: 3px solid #2563eb;
+}
+
+/* Lesson ordinal badge (course-lesson-number). The outline badge is a
+   filled indigo square for chapter ordinals; this one is a soft tint so
+   the two never read as the same kind of chip. */
+.course-lesson-number {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	min-width: 30px;
+	height: 22px;
+	padding: 0 8px;
+	border: 1px solid rgba(99, 102, 241, 0.28);
+	border-radius: 7px;
+	background: rgba(99, 102, 241, 0.08);
+	color: #4f46e5;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	line-height: 1;
+	transition:
+		border-color 0.16s ease,
+		background 0.16s ease,
+		color 0.16s ease;
+}
+
+.course-lesson-card:hover .course-lesson-number {
+	border-color: rgba(99, 102, 241, 0.46);
+	background: rgba(99, 102, 241, 0.14);
+	color: #4338ca;
+}
+
+/* Course detail header: a hairline divider separates the row from the
+   content below it. */
+.course-detail-header-row {
+	padding-bottom: 14px;
+	border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+/* Back button: visible keyboard focus + a pressed state. */
+.course-detail-header-row > .course-detail-back:focus-visible {
+	outline: 2px solid var(--primary-color, #4338ca);
+	outline-offset: 2px;
+	border-color: rgba(99, 102, 241, 0.55);
+	background: rgba(99, 102, 241, 0.08);
+	color: var(--primary-color, #4338ca);
+}
+
+.course-detail-header-row > .course-detail-back:active {
+	transform: translateX(-1px);
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+/* ============================================================
+   STUDENT ACCOUNT MODAL — v4 ARENA ALIGNMENT (2026-11-13)
+   The account dialog now uses the SAME visual language as the
+   student workspace (arena): white surfaces, 1px hairline borders,
+   the segmented-control tab bar, flat stat tiles and one quiet
+   elevation step. Everything decorative from v3 (gradient header,
+   orbs, grid overlay, glass hero, gradient chips, gradient pill)
+   is gone.
+   Placed LAST so it wins over every legacy `.sa-*` block above.
+   ============================================================ */
+
+#studentProfileModal.sa-modal-wrap {
+	--sa-ink: #102235;
+	--sa-muted: #64748b;
+	--sa-line: #e6edf4;
+	--sa-surface: #ffffff;
+	--sa-canvas: #f5f8fc;
+	--sa-accent: #2563eb;
+	--sa-accent-soft: #eff4ff;
+	--sa-radius: 14px;
+	--sa-shadow: 0 18px 45px rgba(16, 34, 53, 0.1);
+}
+
+#studentProfileModal.sa-modal-wrap .modal-content.sa-modal,
+#studentProfileModal .modal-content.sa-modal {
+	width: min(94vw, 860px);
+	max-width: 860px;
+	max-height: min(92dvh, 900px);
+	margin: 3vh auto;
+	padding: 0;
+	border: 1px solid var(--sa-line);
+	border-radius: 18px;
+	overflow: hidden;
+	background: var(--sa-surface);
+	box-shadow: var(--sa-shadow);
+	display: flex;
+	flex-direction: column;
+	animation: sa-rise 0.24s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes sa-rise {
+	from { opacity: 0; transform: translateY(10px); }
+	to { opacity: 1; transform: none; }
+}
+
+/* ---------- Header: plain title row on the white surface ---------- */
+#studentProfileModal .sa-header {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 18px 20px !important;
+	border: none !important;
+	border-bottom: 1px solid var(--sa-line) !important;
+	border-radius: 0 !important;
+	background: var(--sa-surface) !important;
+	color: var(--sa-ink) !important;
+}
+
+#studentProfileModal .sa-title-block { position: relative; min-width: 0; }
+#studentProfileModal .sa-header h2,
+#studentProfileModal .sa-header h2#studentAccountTitle {
+	margin: 0 !important;
+	color: var(--sa-ink) !important;
+	font-size: 1.25rem !important;
+	font-weight: 700 !important;
+	letter-spacing: -0.015em !important;
+	line-height: 1.2 !important;
+}
+#studentProfileModal .sa-subtitle {
+	margin: 3px 0 0 !important;
+	color: var(--sa-muted) !important;
+	font-size: 0.82rem !important;
+}
+
+#studentProfileModal .sa-close {
+	position: relative;
+	flex: 0 0 auto;
+	width: 36px;
+	height: 36px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50% !important;
+	border: 1px solid var(--sa-line) !important;
+	background: var(--sa-surface) !important;
+	color: var(--sa-muted) !important;
+	cursor: pointer;
+	transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease !important;
+}
+#studentProfileModal .sa-close:hover {
+	background: var(--sa-canvas) !important;
+	border-color: #cbd5e1 !important;
+	color: var(--sa-ink) !important;
+}
+#studentProfileModal .sa-close:focus-visible {
+	outline: 3px solid rgba(37, 99, 235, 0.3) !important;
+	outline-offset: 2px !important;
+}
+
+/* ---------- Body + tab bar (workspace segmented control) ---------- */
+#studentProfileModal .sa-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 18px clamp(14px, 3vw, 24px) 28px !important;
+	background: var(--sa-canvas);
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+}
+
+#studentProfileModal .sa-tabs-sticky {
+	position: sticky;
+	top: -18px;
+	z-index: 8;
+	padding: 12px 0;
+	margin: -12px 0 14px;
+	background: var(--sa-canvas);
+}
+#studentProfileModal .sa-tabs {
+	display: flex !important;
+	gap: 4px !important;
+	width: fit-content;
+	max-width: 100%;
+	padding: 4px !important;
+	margin: 0 !important;
+	background: #f1f5f9 !important;
+	border: 1px solid var(--sa-line) !important;
+	border-radius: 12px !important;
+	box-shadow: none !important;
+	overflow-x: auto !important;
+	scrollbar-width: none !important;
+}
+#studentProfileModal .sa-tabs::-webkit-scrollbar { display: none !important; }
+#studentProfileModal .sa-tabs .profile-tab-btn {
+	flex: 0 0 auto !important;
+	min-height: 38px !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	gap: 7px !important;
+	padding: 8px 15px !important;
+	border: 0 !important;
+	border-radius: 9px !important;
+	background: transparent !important;
+	color: #475569 !important;
+	font-size: 0.84rem !important;
+	font-weight: 600 !important;
+	white-space: nowrap !important;
+	transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease !important;
+}
+#studentProfileModal .sa-tabs .profile-tab-btn svg { opacity: 0.6; flex: 0 0 auto; }
+#studentProfileModal .sa-tabs .profile-tab-btn:hover:not(.active) {
+	background: rgba(255, 255, 255, 0.7) !important;
+	color: var(--sa-ink) !important;
+}
+#studentProfileModal .sa-tabs .profile-tab-btn:focus-visible {
+	outline: 3px solid rgba(37, 99, 235, 0.3) !important;
+	outline-offset: 2px !important;
+}
+#studentProfileModal .sa-tabs .profile-tab-btn.active {
+	background: #fff !important;
+	color: #4338ca !important;
+	box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1) !important;
+}
+#studentProfileModal .sa-tabs .profile-tab-btn.active svg { opacity: 1; }
+
+/* ---------- Identity card ---------- */
+#studentProfileModal .sa-hero {
+	position: relative;
+	border: 1px solid var(--sa-line) !important;
+	border-radius: var(--sa-radius) !important;
+	background: var(--sa-surface) !important;
+	overflow: visible !important;
+	margin: 0 0 16px !important;
+	box-shadow: none !important;
+}
+#studentProfileModal .sa-hero-inner {
+	position: relative;
+	display: flex !important;
+	align-items: center !important;
+	gap: 20px !important;
+	padding: 18px 20px !important;
+	flex-wrap: wrap !important;
+	color: var(--sa-ink) !important;
+}
+#studentProfileModal .sa-avatar {
+	display: flex !important;
+	flex-direction: column !important;
+	align-items: center !important;
+	gap: 9px !important;
+	margin: 0 !important;
+	flex: 0 0 auto !important;
+}
+#studentProfileModal .sa-avatar-frame {
+	width: 80px !important;
+	height: 80px !important;
+	border-radius: 20px !important;
+	padding: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	position: relative;
+	overflow: hidden !important;
+	border: 1px solid var(--sa-line) !important;
+}
+#studentProfileModal .sa-avatar-frame::before { display: none !important; }
+#studentProfileModal .sa-avatar-frame img,
+#studentProfileModal .sa-avatar-frame span#studentProfileAvatarFallback {
+	width: 100%;
+	height: 100%;
+	border-radius: 19px !important;
+	object-fit: cover;
+	background: var(--sa-accent-soft) !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center;
+	font-size: 1.6rem !important;
+	font-weight: 700 !important;
+	color: var(--sa-accent) !important;
+}
+#studentProfileModal .sa-avatar-frame img[src=""] { display: none !important; }
+
+#studentProfileModal .sa-upload {
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 5px !important;
+	font-size: 0.73rem !important;
+	font-weight: 600 !important;
+	padding: 6px 11px !important;
+	border-radius: 8px !important;
+	background: var(--sa-surface) !important;
+	color: var(--sa-muted) !important;
+	border: 1px solid var(--sa-line) !important;
+	cursor: pointer;
+	transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease !important;
+}
+#studentProfileModal .sa-upload:hover {
+	background: var(--sa-canvas) !important;
+	color: var(--sa-ink) !important;
+	border-color: #cbd5e1 !important;
+}
+#studentProfileModal .sa-upload input { display: none !important; }
+
+#studentProfileModal .sa-identity {
+	flex: 1 1 240px !important;
+	min-width: 0 !important;
+	gap: 10px !important;
+}
+#studentProfileModal .sa-name-row { display: flex !important; align-items: center !important; gap: 10px !important; flex-wrap: wrap !important; }
+#studentProfileModal .sa-identity h3 {
+	margin: 0 !important;
+	color: var(--sa-ink) !important;
+	font-size: 1.3rem !important;
+	font-weight: 700 !important;
+	letter-spacing: -0.015em !important;
+}
+#studentProfileModal .sa-class { margin: 3px 0 0 !important; color: var(--sa-muted) !important; font-size: 0.85rem !important; }
+
+#studentProfileModal .sa-chips { display: flex !important; flex-wrap: wrap !important; gap: 7px !important; margin-top: 4px !important; }
+#studentProfileModal .sa-chip {
+	display: inline-flex !important;
+	align-items: center !important;
+	gap: 5px !important;
+	padding: 5px 10px !important;
+	border-radius: 8px !important;
+	font-size: 0.74rem !important;
+	font-weight: 600 !important;
+	background: var(--sa-canvas) !important;
+	color: var(--sa-muted) !important;
+	border: 1px solid var(--sa-line) !important;
+}
+#studentProfileModal .sa-chip svg { opacity: 0.7; }
+
+/* ---------- Season ---------- */
+#studentProfileModal .sa-season {
+	display: flex !important;
+	align-items: center !important;
+	gap: 14px !important;
+	padding: 14px 16px !important;
+	border-radius: var(--sa-radius) !important;
+	margin: 0 0 18px !important;
+	background: var(--sa-surface) !important;
+	border: 1px solid var(--sa-line) !important;
+	box-shadow: none !important;
+	color: var(--sa-ink) !important;
+	position: relative;
+	overflow: hidden;
+}
+#studentProfileModal .sa-season::after { display: none !important; }
+#studentProfileModal .sa-season-badge { display: inline-flex; align-items: center; gap: 9px; flex: 0 0 auto; font-weight: 600; }
+#studentProfileModal .sa-season-icon {
+	width: 34px;
+	height: 34px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 10px;
+	background: #fef3c7 !important;
+	color: #b45309 !important;
+}
+#studentProfileModal .sa-season-label { font-size: 0.82rem !important; }
+#studentProfileModal .sa-season-label strong { font-size: 1rem !important; }
+#studentProfileModal .profile-season-track { flex: 1 1 180px !important; min-width: 150px !important; }
+#studentProfileModal .sa-season-pct { font-weight: 700; color: var(--sa-ink) !important; }
+#studentProfileModal .sa-season-bar { height: 7px !important; background: #eef2f7 !important; border-radius: 999px !important; overflow: hidden !important; }
+#studentProfileModal .sa-season-bar span { background: var(--sa-accent) !important; border-radius: inherit !important; display: block; height: 100%; transition: width 0.4s ease; }
+#studentProfileModal .sa-season-reward {
+	flex: 0 0 auto;
+	font-size: 0.75rem;
+	background: var(--sa-canvas) !important;
+	color: var(--sa-muted) !important;
+	padding: 6px 11px;
+	border-radius: 8px;
+	border: 1px solid var(--sa-line) !important;
+	white-space: nowrap;
+}
+
+/* ---------- Section head + stat tiles ---------- */
+#studentProfileModal .sa-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 0 2px 10px; }
+#studentProfileModal .sa-section-head h4 { margin: 0; font-size: 0.92rem; font-weight: 700; letter-spacing: -0.01em; color: var(--sa-ink); }
+#studentProfileModal .sa-section-head p { margin: 3px 0 0; font-size: 0.76rem; color: var(--sa-muted); }
+
+#studentProfileModal .sa-stats-card {
+	background: transparent !important;
+	border: none !important;
+	border-radius: 0 !important;
+	padding: 0 !important;
+	margin-bottom: 16px !important;
+	box-shadow: none !important;
+}
+#studentProfileModal .sa-stats {
+	background: transparent !important;
+	border-radius: 0 !important;
+	padding: 0 !important;
+	gap: 10px !important;
+	display: grid !important;
+	grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+#studentProfileModal .sa-stat {
+	position: relative !important;
+	overflow: hidden !important;
+	border: 1px solid var(--sa-line) !important;
+	border-radius: var(--sa-radius) !important;
+	padding: 14px 14px 13px !important;
+	background: var(--sa-surface) !important;
+	display: flex !important;
+	flex-direction: column !important;
+	gap: 2px !important;
+	transition: border-color 0.16s ease !important;
+}
+#studentProfileModal .sa-stat::before { display: none !important; }
+#studentProfileModal .sa-stat:hover { border-color: #cbd5e1 !important; }
+#studentProfileModal .sa-stat span:not(.sa-stat-icon) {
+	font-size: 0.66rem !important;
+	font-weight: 600 !important;
+	letter-spacing: 0.06em !important;
+	text-transform: uppercase !important;
+	color: var(--sa-muted) !important;
+}
+#studentProfileModal .sa-stat strong {
+	font-size: 1.55rem !important;
+	font-weight: 700 !important;
+	letter-spacing: -0.02em !important;
+	line-height: 1.15 !important;
+	margin-top: 3px !important;
+	color: var(--sa-ink) !important;
+}
+#studentProfileModal .sa-stat small { color: var(--sa-muted) !important; font-size: 0.72rem !important; line-height: 1.45 !important; margin-top: 3px !important; }
+
+/* ---------- Insight cards ---------- */
+#studentProfileModal .sa-insights { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 10px !important; margin-bottom: 4px !important; }
+#studentProfileModal .sa-insight {
+	border: 1px solid var(--sa-line) !important;
+	border-radius: var(--sa-radius) !important;
+	padding: 15px 15px 14px !important;
+	position: relative !important;
+	overflow: hidden !important;
+	background: var(--sa-surface) !important;
+	transition: border-color 0.16s ease !important;
+}
+#studentProfileModal .sa-insight::before { display: none !important; }
+#studentProfileModal .sa-insight:hover { border-color: #cbd5e1 !important; }
+#studentProfileModal .sa-insight .profile-insight-kicker {
+	display: block !important;
+	width: auto !important;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	background: transparent !important;
+	font-size: 0.65rem !important;
+	font-weight: 600 !important;
+	letter-spacing: 0.06em !important;
+	text-transform: uppercase !important;
+	color: var(--sa-muted) !important;
+	margin-bottom: 2px !important;
+}
+#studentProfileModal .sa-insight .profile-insight-value {
+	margin-top: 6px !important;
+	font-size: 1.15rem !important;
+	font-weight: 700 !important;
+	letter-spacing: -0.015em !important;
+	color: var(--sa-ink) !important;
+}
+#studentProfileModal .sa-insight .profile-insight-copy,
+#studentProfileModal .sa-insight .profile-progress-copy {
+	margin-top: 6px !important;
+	font-size: 0.78rem !important;
+	color: var(--sa-muted) !important;
+	line-height: 1.5 !important;
+}
+#studentProfileModal .sa-progress { height: 7px !important; margin-top: 10px !important; background: #eef2f7 !important; border-radius: 999px !important; overflow: hidden; }
+#studentProfileModal .sa-progress .profile-progress-fill { background: var(--sa-accent) !important; height: 100% !important; border-radius: inherit !important; transition: width 0.4s ease !important; }
+#studentProfileModal .sa-mini-bar { margin-top: 9px; height: 6px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+#studentProfileModal .sa-mini-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: #f4ad42; transition: width 0.4s ease; }
+
+/* ---------- Form cards ---------- */
+#studentProfileModal .sa-card {
+	background: var(--sa-surface) !important;
+	border: 1px solid var(--sa-line) !important;
+	border-left: 1px solid var(--sa-line) !important;
+	border-radius: var(--sa-radius) !important;
+	padding: 20px !important;
+	margin: 0 0 8px !important;
+	box-shadow: none !important;
+}
+#studentProfileModal .sa-card-head { margin: 0 0 16px !important; padding-bottom: 0 !important; border-bottom: none !important; }
+#studentProfileModal .sa-card-head h3 { margin: 0 !important; font-size: 1.02rem !important; font-weight: 700 !important; color: var(--sa-ink) !important; }
+#studentProfileModal .sa-card-head p { margin: 4px 0 0 !important; font-size: 0.81rem !important; color: var(--sa-muted) !important; line-height: 1.55 !important; }
+
+#studentProfileModal .sa-form { background: transparent !important; border: none !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; }
+#studentProfileModal .sa-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 0 14px !important; }
+#studentProfileModal .sa-field { display: flex !important; flex-direction: column !important; gap: 6px !important; margin-bottom: 14px !important; min-width: 0 !important; }
+#studentProfileModal .sa-field label {
+	font-size: 0.72rem !important;
+	font-weight: 600 !important;
+	letter-spacing: 0.01em !important;
+	text-transform: none !important;
+	color: #475569 !important;
+}
+#studentProfileModal .sa-field label em { font-style: normal; font-weight: 400; color: #94a3b8; }
+#studentProfileModal .sa-field .form-control {
+	width: 100% !important;
+	background: var(--sa-surface) !important;
+	border: 1px solid var(--sa-line) !important;
+	border-radius: 10px !important;
+	padding: 10px 12px !important;
+	font-size: 0.9rem !important;
+	color: var(--sa-ink) !important;
+	transition: border-color 0.16s ease, box-shadow 0.16s ease !important;
+}
+#studentProfileModal .sa-field .form-control::placeholder { color: #94a3b8 !important; }
+#studentProfileModal .sa-field .form-control:focus {
+	outline: none !important;
+	border-color: var(--sa-accent) !important;
+	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
+}
+#studentProfileModal .sa-field textarea.form-control { resize: vertical; min-height: 42px; }
+
+#studentProfileModal .sa-password-wrap { position: relative; display: flex; align-items: center; }
+#studentProfileModal .sa-password-wrap .form-control { padding-right: 62px !important; }
+#studentProfileModal .sa-pw-toggle {
+	position: absolute;
+	right: 5px;
+	top: 50%;
+	transform: translateY(-50%);
+	border: 1px solid var(--sa-line);
+	background: var(--sa-canvas);
+	color: var(--sa-muted);
+	font-size: 0.7rem;
+	font-weight: 600;
+	padding: 5px 9px;
+	border-radius: 7px;
+	cursor: pointer;
+	transition: background 0.14s ease, color 0.14s ease !important;
+}
+#studentProfileModal .sa-pw-toggle:hover { background: #e8eef6; color: var(--sa-ink); }
+#studentProfileModal .sa-strength { margin-top: 8px; height: 6px; border-radius: 999px; background: #eef2f7; overflow: hidden; }
+#studentProfileModal .sa-strength span { display: block; height: 100%; width: 0; border-radius: inherit; background: #ef4444; transition: width 0.3s ease, background 0.3s ease; }
+#studentProfileModal .sa-strength span[data-level="ok"] { background: #f4ad42; }
+#studentProfileModal .sa-strength span[data-level="strong"] { background: #0f9f9a; }
+#studentProfileModal .sa-hint { font-size: 0.73rem !important; color: var(--sa-muted) !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 400 !important; margin-top: 3px; }
+#studentProfileModal .sa-tips {
+	margin: 2px 0 16px;
+	padding: 11px 13px 11px 30px;
+	border-radius: 10px;
+	background: var(--sa-canvas);
+	border: 1px solid var(--sa-line);
+	font-size: 0.78rem;
+	color: var(--sa-muted);
+	line-height: 1.6;
+}
+#studentProfileModal .sa-tips li::marker { color: #0f9f9a; font-weight: 700; }
+
+#studentProfileModal .sa-actions { display: flex !important; flex-wrap: wrap !important; gap: 10px !important; margin-top: 6px !important; }
+#studentProfileModal .sa-btn-primary {
+	flex: 1 1 200px !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	gap: 8px !important;
+	padding: 11px 18px !important;
+	border-radius: 10px !important;
+	border: 1px solid transparent !important;
+	background: var(--sa-accent) !important;
+	color: #fff !important;
+	font-size: 0.85rem !important;
+	font-weight: 600 !important;
+	box-shadow: none !important;
+	cursor: pointer;
+	transition: background 0.16s ease !important;
+}
+#studentProfileModal .sa-btn-primary:hover { background: #1d4ed8 !important; transform: none !important; }
+#studentProfileModal .sa-btn-primary:focus-visible { outline: 3px solid rgba(37, 99, 235, 0.3) !important; outline-offset: 2px !important; }
+#studentProfileModal .sa-btn-ghost {
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	gap: 7px !important;
+	padding: 11px 18px !important;
+	border-radius: 10px !important;
+	background: var(--sa-surface) !important;
+	color: #475569 !important;
+	border: 1px solid var(--sa-line) !important;
+	font-weight: 600 !important;
+	box-shadow: none !important;
+	cursor: pointer;
+	transition: background 0.14s ease, color 0.14s ease, opacity 0.14s ease !important;
+}
+#studentProfileModal .sa-btn-ghost svg { flex: 0 0 auto; transition: transform 0.4s ease; }
+#studentProfileModal .sa-btn-ghost:hover:not(:disabled) { background: var(--sa-canvas) !important; color: var(--sa-ink) !important; }
+#studentProfileModal .sa-btn-ghost:hover:not(:disabled) svg { transform: rotate(-180deg); }
+#studentProfileModal .sa-btn-ghost:focus-visible { outline: 3px solid rgba(37, 99, 235, 0.3) !important; outline-offset: 2px !important; }
+#studentProfileModal .sa-btn-ghost:disabled,
+#studentProfileModal .sa-btn-ghost.is-disabled {
+	opacity: 0.45 !important;
+	cursor: not-allowed !important;
+	transform: none !important;
+}
+
+#studentProfileModal .profile-request-status:empty { display: none !important; }
+#studentProfileModal .profile-request-status:not(:empty) {
+	margin-top: 14px !important;
+	padding: 12px 14px !important;
+	border-radius: 10px !important;
+	font-size: 0.83rem !important;
+	line-height: 1.55 !important;
+	background: var(--sa-canvas) !important;
+	border: 1px solid var(--sa-line) !important;
+	color: #334155 !important;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 760px) {
+	#studentProfileModal.sa-modal-wrap .modal-content.sa-modal,
+	#studentProfileModal .modal-content.sa-modal {
+		width: 100% !important;
+		max-width: none !important;
+		max-height: 100dvh !important;
+		margin: 0 !important;
+		border-radius: 0 !important;
+		border-left: none !important;
+		border-right: none !important;
+	}
+	#studentProfileModal .sa-header { padding: 15px 16px !important; }
+	#studentProfileModal .sa-header h2,
+	#studentProfileModal .sa-header h2#studentAccountTitle { font-size: 1.1rem !important; }
+	#studentProfileModal .sa-subtitle { font-size: 0.76rem !important; }
+	#studentProfileModal .sa-body { padding: 14px 12px 24px !important; }
+	#studentProfileModal .sa-hero-inner {
+		flex-direction: column !important;
+		text-align: center !important;
+		align-items: center !important;
+		padding: 18px 14px !important;
+	}
+	#studentProfileModal .sa-identity { align-items: center !important; display: flex !important; flex-direction: column !important; }
+	#studentProfileModal .sa-name-row,
+	#studentProfileModal .sa-chips { justify-content: center !important; }
+	#studentProfileModal .sa-season { flex-wrap: wrap !important; }
+	#studentProfileModal .profile-season-track { min-width: 100% !important; order: 3 !important; flex-basis: 100% !important; }
+	#studentProfileModal .sa-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+	#studentProfileModal .sa-insights { grid-template-columns: 1fr !important; }
+	#studentProfileModal .sa-grid-2 { grid-template-columns: 1fr !important; }
+	#studentProfileModal .sa-card { padding: 16px 14px !important; }
+	#studentProfileModal .sa-btn-primary,
+	#studentProfileModal .sa-btn-ghost { flex: 1 1 100% !important; width: 100% !important; }
+	/* The tab bar is always reachable — it stays a compact, horizontally
+	   scrollable segmented control instead of being hidden. */
+	body.student-workspace #studentProfileModal .sa-tabs-sticky {
+		display: block !important;
+		margin: -14px -12px 14px !important;
+		padding: 10px 12px !important;
+		background: var(--sa-canvas) !important;
+	}
+	body.student-workspace #studentProfileModal .sa-tabs {
+		display: flex !important;
+		gap: 4px !important;
+		padding: 4px !important;
+		border-radius: 12px !important;
+		background: #f1f5f9 !important;
+		border: 1px solid var(--sa-line) !important;
+		overflow-x: auto !important;
+		scrollbar-width: none !important;
+	}
+	body.student-workspace #studentProfileModal .sa-tabs .profile-tab-btn {
+		flex: 1 1 auto !important;
+		justify-content: center !important;
+		gap: 6px !important;
+		padding: 8px 10px !important;
+		font-size: 0.76rem !important;
+		border-radius: 9px !important;
+		white-space: nowrap !important;
+	}
+	body.student-workspace #studentProfileModal .sa-tabs .profile-tab-btn svg {
+		width: 14px !important;
+		height: 14px !important;
+		flex: 0 0 auto !important;
+	}
+}
+@media (max-width: 420px) {
+	#studentProfileModal .sa-stats { grid-template-columns: 1fr !important; }
+	#studentProfileModal .sa-tabs .profile-tab-btn span { font-size: 0.72rem !important; }
+	#studentProfileModal .sa-avatar-frame { width: 68px !important; height: 68px !important; border-radius: 17px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+	#studentProfileModal .modal-content.sa-modal,
+	#studentProfileModal .sa-stat,
+	#studentProfileModal .sa-insight,
+	#studentProfileModal .sa-btn-primary,
+	#studentProfileModal .sa-btn-ghost,
+	#studentProfileModal .sa-close { animation: none !important; transition: none !important; }
+}
+
+/* ========================================================================
+   Student workspace — shared green card border
+   ---------------------------------------------------------------------
+   Games and Tournament already read as "cards you can act on" because
+   their borders carry a green accent. The other tabs (Overview, Exams,
+   Training, Courses, Results) used a plain grey rule, so the same card
+   looked inert in one tab and alive in the next.
+
+   This block gives every card family in the student workspace the same
+   green edge. It is deliberately scoped to `body.student-workspace` and
+   to the default (non-state) variant of each card, so the semantic
+   states that already own a colour keep it:
+     · completed / done / open  → green (unchanged, they already were)
+     · live / current / warning  → blue / amber (unchanged)
+     · upcoming / locked / pending → dashed blue-grey (unchanged)
+     · badge tiers (gold/silver/bronze) → their tier colour (unchanged)
+   ======================================================================== */
+
+body.student-workspace {
+	--student-card-green: #86efac;
+	--student-card-green-strong: #22c55e;
+	--student-card-green-soft: rgba(34, 197, 94, 0.08);
+}
+
+/* ── Exams tab ───────────────────────────────────────────────────────── */
+body.student-workspace .exam-card {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .exam-card:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+/* ── Overview / Performance snapshot rows ─────────────────────────────── */
+body.student-workspace .performance-row {
+	border: 1px solid var(--student-card-green);
+	background: linear-gradient(160deg, #ffffff 0%, #f0fdf4 100%);
+}
+
+body.student-workspace .performance-row:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+/* ── Training tab ────────────────────────────────────────────────────── */
+body.student-workspace .training-category-card {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .training-category-card:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+/* ── Courses tab (My Courses grid + the reader's outline / lesson cards) */
+body.student-workspace .course-student-card {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .course-student-card:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+body.student-workspace .course-outline-card,
+body.student-workspace .course-lesson-card {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .course-outline-card:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+/* ── Results tab (recent results rows + accuracy summary cards) ──────── */
+body.student-workspace .results-list .result-row {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .results-list .result-row:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+body.student-workspace .accuracy-summary-card {
+	border-color: var(--student-card-green);
+}
+
+/* The accuracy cards use a red/green tint to signal difficulty; the green
+   edge has to yield to that signal, so only the neutral variant keeps it. */
+body.student-workspace .accuracy-summary-card--hard {
+	border-color: rgba(239, 68, 68, 0.25);
+}
+
+/* ── Overview tab (badges & progression) ─────────────────────────────── */
+/* A badge's tier IS its colour (gold / silver / bronze / emerald / sky),
+   so the tiered cards keep their own edge. Only the plain badge — the
+   one with no tier yet — takes the shared green. */
+body.student-workspace .student-badge-card:not([class*='tier-']) {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .student-badge-card:not([class*='tier-']):hover {
+	border-color: var(--student-card-green-strong);
+}
+
+/* ── Games / Tournament stat tiles ───────────────────────────────────── */
+body.student-workspace .game-stat-card {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .student-tournament-stat {
+	border-color: var(--student-card-green);
+}
+
+/* The games grid already paints a green edge for `.open` cards; the
+   workspace-level `.game-card` rule above resets every other status to
+   the arena grey. Give those cards the same green edge so the whole grid
+   reads as one family. */
+body.student-workspace .game-card {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .game-card:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+/* Live games keep their blue edge — it carries the "happening now" signal. */
+body.student-workspace .game-card.live {
+	border-color: #93c5fd;
+}
+
+body.student-workspace .game-card.live:hover {
+	border-color: #60a5fa;
+}
+
+/* Tournament cards: the state variants own their colour (green when done,
+   blue when live, dashed when pending). The plain card has no state, so it
+   takes the shared green edge like every other card in the workspace. */
+body.student-workspace .student-tournament-round-card:not(.is-current):not(.is-completed):not(.is-upcoming):not(.is-locked),
+body.student-workspace .student-tournament-game-card:not(.is-live):not(.is-completed):not(.is-open):not(.is-pending),
+body.student-workspace .student-tournament-step:not(.is-active):not(.is-done):not(.is-locked),
+body.student-workspace .student-tournament-focus-card:not(.is-live):not(.is-warning):not(.is-done) {
+	border-color: var(--student-card-green);
+}
+
+/* Training progress summary tiles and the in-modal result stat cards are
+   cards too — they carry the same green edge so a student sees one
+   visual language across every tab. */
+body.student-workspace .training-summary-tile {
+	border-color: var(--student-card-green);
+}
+
+body.student-workspace .training-summary-tile:hover {
+	border-color: var(--student-card-green-strong);
+}
+
+body.student-workspace .game-result-card {
+	border-color: var(--student-card-green);
 }

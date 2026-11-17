@@ -40,14 +40,14 @@
 				}
 			})();
 		</script>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			rel="stylesheet"
-			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-		/>
+		<!--
+			The web font is served by this application (public/fonts/), so the
+			interface renders with no internet access. Re-vendor it with
+			scripts/vendor-fonts.mjs.
+		-->
+		<link rel="stylesheet" href="/fonts/inter.css" />
 		<link rel="stylesheet" href="styles.css?v=2026-11-12-polish1" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-12-polish1" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-17-kidsplay1" />
 		<link rel="stylesheet" href="theme.css?v=2026-11-12-polish1" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-11-12-polish1" />
 		<link rel="stylesheet" href="teacher-analytics.css?v=2026-11-12-polish1" />
@@ -168,18 +168,16 @@
 		<script src="teacher-overview.js?v=2026-11-08-analytics2" defer></script>
 		<script src="global-search.js?v=2026-11-09-notifications2" defer></script>
 		<script src="realtime-settings.js?v=2026-11-12-polish1" defer></script>
-		<script src="server-monitoring.js?v=2026-09-16-r1" defer></script>
 		<script src="classroom-devices.js?v=2026-11-12-polish1" defer></script>
 		<script src="quiz-presets.js?v=2026-11-12-polish1" defer></script>
 		<script src="games-management.js?v=2026-10-26-catgame1" defer></script>
-		<script src="kids-games-management.js?v=2026-10-31-kidsdel1" defer></script>
+		<script src="kids-games-management.js?v=2026-11-17-kidsplay1" defer></script>
 		<script src="kids-default-games.js?v=2026-10-31-kidsseed1" defer></script>
 		<script src="/kids/games/math-quest-core.js?v=2026-10-23-mq12" defer></script>
 <script src="kids-championships-management.js?v=2026-10-23-pub1" defer></script>
 		<script src="quick-start.js?v=2026-09-23-r5" defer></script>
 		<script src="archives.js?v=2026-09-24-r4" defer></script>
 		<script src="qrcode-generator.js" defer></script>
-		<script src="setup-wizard.js?v=2026-09-22-r2" defer></script>
 		<script src="admin-main.js?v=2026-11-09-notifications2" defer></script>
 		<script src="notifications.js?v=2026-11-09-notifmeta1" defer></script>
 		<script src="teacher-domain-analytics.js?v=2026-11-12-polish1" defer></script>
@@ -279,6 +277,39 @@
 
 					<!-- Right Side Profile -->
 					<div class="header-right">
+						<!--
+							The control center link.
+
+							The classroom surface (this page) is where content is
+							authored. The control center (/console) is where the
+							platform is administered. A teacher has no business in the
+							control center, so the link is hidden for that role.
+						-->
+						<a
+							href="/console"
+							class="console-link"
+							data-roles="admin,super_admin"
+							title="Open the control center — organizations, accounts, access, audit and health"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<rect x="3" y="3" width="7" height="9" rx="1"></rect>
+								<rect x="14" y="3" width="7" height="5" rx="1"></rect>
+								<rect x="14" y="12" width="7" height="9" rx="1"></rect>
+								<rect x="3" y="16" width="7" height="5" rx="1"></rect>
+							</svg>
+							<span>Control Center</span>
+						</a>
 						<button
 							type="button"
 							class="theme-toggle"
@@ -360,6 +391,30 @@
 								</div>
 								<div class="menu-divider"></div>
 								<a
+									href="/console"
+									class="menu-item"
+									data-roles="admin,super_admin"
+									title="Organizations, accounts, access, audit and health"
+									>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<rect x="3" y="3" width="7" height="9" rx="1"></rect>
+										<rect x="14" y="3" width="7" height="5" rx="1"></rect>
+										<rect x="14" y="12" width="7" height="9" rx="1"></rect>
+										<rect x="3" y="16" width="7" height="5" rx="1"></rect>
+									</svg>
+									Control Center
+</a>
+<a
 									href="#"
 									class="menu-item"
 									data-roles="admin,teacher"
@@ -571,18 +626,7 @@
 							</svg>
 							Notifications
 						</button>
-						<button
-							class="nav-tab"
-							data-tab="monitoring"
-							data-roles="admin"
-							onclick="openTab(event, 'monitoring'); if(window.loadServerMonitoring) window.loadServerMonitoring()"
-						>
-							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<polyline points="3 12 7 12 10 3 14 21 17 12 21 12"></polyline>
-							</svg>
-							Monitoring
-						</button>
-						<button
+												<button
 							class="nav-tab"
 							data-tab="devices"
 							data-roles="admin,teacher"
@@ -612,26 +656,6 @@
 								</p>
 							</div>
 		<!-- Setup Wizard modal -->
-		<div id="setupWizardModal" class="modal" role="dialog" aria-modal="true" aria-label="Classroom Setup Wizard">
-			<div class="modal-content sw-modal-content">
-				<div class="modal-header sw-modal-header">
-					<h2>🌐 Classroom Setup Wizard</h2>
-					<button type="button" class="modal-close" onclick="window.closeSetupWizard()">&times;</button>
-				</div>
-				<div class="modal-body sw-modal-body">
-					<div class="sw-layout">
-						<div class="sw-steps" id="swSteps"></div>
-						<div class="sw-panel">
-							<div id="swStepContent"></div>
-						</div>
-					</div>
-				</div>
-				<div class="modal-footer sw-modal-footer">
-					<button type="button" class="btn btn-secondary" id="swBackBtn" onclick="window.setupWizardBack()">Back</button>
-					<button type="button" class="btn btn-primary" id="swNextBtn" onclick="window.setupWizardNext()">Next</button>
-				</div>
-			</div>
-		</div>
 
 							<button
 								type="button"
@@ -1576,88 +1600,6 @@
 					</div>
 					<div class="notifications-feed" id="notificationsFeed">
 						<div class="notifications-empty">Loading activity…</div>
-					</div>
-				</section>
-
-				<!-- Server Monitoring Tab -->
-				<section id="monitoring" class="tab-content" data-roles="admin">
-					<div class="content-header monitoring-header">
-						<div class="monitoring-title-row">
-							<div>
-								<h1>Server Monitoring</h1>
-								<p class="text-muted">Request volume, response health, and repeated server messages.</p>
-							</div>
-							<button type="button" class="btn btn-secondary" id="monitoringExport">Export CSV</button>
-						</div>
-					</div>
-					<div class="dashboard-panel monitoring-filter-panel">
-						<div class="panel-header">
-							<h3>Filters</h3>
-							<div class="monitoring-filter-header-actions">
-								<button
-									type="button"
-									class="mobile-filters-toggle"
-									data-filter-target="#monitoringFilters"
-									onclick="toggleMobileFilters(this)"
-									aria-expanded="false"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
-									<span class="mobile-filters-toggle-label">Filters</span>
-									<span class="mobile-filters-count hidden">0</span>
-									<svg class="mobile-filters-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-								</button>
-								<button type="button" class="btn btn-secondary" id="monitoringRefresh">Refresh</button>
-							</div>
-						</div>
-						<div class="panel-body monitoring-panel-body collapsible-filter-controls" id="monitoringFilters">
-							<div class="monitoring-filters-row">
-								<div class="filter-group">
-									<label for="monitoringWindow">Window</label>
-									<select id="monitoringWindow" class="form-control" data-default="60">
-										<option value="5">Last 5 minutes</option>
-										<option value="15">Last 15 minutes</option>
-										<option value="60" selected>Last hour</option>
-										<option value="360">Last 6 hours</option>
-										<option value="1440">Last 24 hours</option>
-									</select>
-								</div>
-								<div class="filter-group">
-									<label for="monitoringUser">User</label>
-									<select id="monitoringUser" class="form-control" data-default="">
-										<option value="">All users</option>
-									</select>
-								</div>
-								<div class="filter-group filter-group-check">
-									<label class="monitoring-toggle" for="monitoringAutoRefresh"><input type="checkbox" id="monitoringAutoRefresh"> <span>Auto refresh</span></label>
-								</div>
-								<div class="filter-group">
-									<label aria-hidden="true">&nbsp;</label>
-									<button type="button" class="btn btn-secondary" id="monitoringClearUser" title="Clear user filter">Clear</button>
-								</div>
-							</div>
-						</div>
-					</div>
-					<div class="monitoring-status" id="monitoringUpdated"></div>
-					<div class="monitoring-kpis">
-						<div class="monitoring-kpi"><span>API calls</span><strong id="monitoringApiCalls">-</strong></div>
-						<div class="monitoring-kpi"><span>API errors</span><strong id="monitoringApiErrors">-</strong></div>
-						<div class="monitoring-kpi"><span>Warnings</span><strong id="monitoringWarnings">-</strong></div>
-						<div class="monitoring-kpi"><span>Server errors</span><strong id="monitoringErrors">-</strong></div>
-						<div class="monitoring-kpi"><span>Average response</span><strong id="monitoringLatency">-</strong></div>
-					</div>
-					<div class="monitoring-grid">
-						<div class="dashboard-panel">
-							<div class="panel-header"><h3>Most called API endpoints</h3></div>
-							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Method</th><th>Path</th><th>Calls</th><th>Errors</th><th>Avg. time</th><th>Users</th><th>Last caller</th></tr></thead><tbody id="monitoringApiBody"></tbody></table></div></div>
-						</div>
-						<div class="dashboard-panel">
-							<div class="panel-header"><h3>Repeated log messages</h3></div>
-							<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Level</th><th>Message</th><th>Source</th><th>User</th><th>Count</th><th>Last seen</th></tr></thead><tbody id="monitoringLogBody"></tbody></table></div></div>
-						</div>
-					</div>
-					<div class="dashboard-panel monitoring-recent-panel">
-						<div class="panel-header"><h3>Recent server logs</h3></div>
-						<div class="panel-body monitoring-panel-body"><div class="table-container"><table class="data-table"><thead><tr><th>Time</th><th>Level</th><th>Message</th><th>Source</th><th>User</th></tr></thead><tbody id="monitoringRecentBody"></tbody></table></div></div>
 					</div>
 				</section>
 
@@ -3665,6 +3607,15 @@
 								</div>
 							</div>
 						</div>
+						<div
+							class="assign-question-warning hidden"
+							id="examAssignQuestionWarning"
+							role="status"
+							aria-live="polite"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+							<span id="examAssignQuestionWarningText"></span>
+						</div>
 						<form id="assignExamQuestionsForm" class="assign-page-form" onsubmit="return false;">
 							<div class="exam-filters-container">
 								<div class="filter-toolbar">
@@ -4262,10 +4213,6 @@
 								</div>
 							</div>
 							<div class="toolbar-controls results-header-actions">
-								<span class="date-badge results-count-badge">
-									<strong id="resultsStudentCount">0</strong> <span id="resultsStudentLabel">students</span> ·
-									<span id="resultsCountBadge">0</span> <span id="resultsAttemptLabel">attempts</span>
-								</span>
 								<div class="results-export-group">
 									<button type="button" class="btn-export" onclick="exportResultsCSV()" title="Export the visible attempts as CSV">
 										<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4324,6 +4271,18 @@
 									</button>
 								</div>
 							</div>
+							<div class="results-search-row">
+								<div class="results-filter-search">
+									<label class="sr-only" for="resultSearch">Search results</label>
+									<div class="results-search-field">
+										<svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+											<circle cx="11" cy="11" r="8"></circle>
+											<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+										</svg>
+										<input type="text" id="resultSearch" placeholder="Search by student, number, exam or class…" onkeyup="filterResults()" />
+									</div>
+								</div>
+							</div>
 							<div class="results-filters-row collapsible-filter-controls">
 								<div class="filter-group">
 									<label for="resultFilterClass">Class</label>
@@ -4378,16 +4337,6 @@
 									<select id="resultTeacherFilter" class="form-control" onchange="filterResults()">
 										<option value="">All Teachers</option>
 									</select>
-								</div>
-								<div class="filter-group results-filter-search">
-									<label for="resultSearch">Search</label>
-									<div class="results-search-field">
-										<svg class="search-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<circle cx="11" cy="11" r="8"></circle>
-											<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-										</svg>
-										<input type="text" id="resultSearch" placeholder="Student, number or class…" onkeyup="filterResults()" />
-									</div>
 								</div>
 							</div>
 							<div class="results-filter-summary hidden" id="resultsScopeBar">
@@ -5876,8 +5825,16 @@
 						<h3>Pick a world</h3>
 						<p>The background, mascot and colors follow this theme.</p>
 					</div>
-					<div class="kids-theme-grid" id="kidsThemeGrid"></div>
-				</div>
+						<div class="kids-theme-grid" id="kidsThemeGrid"></div>
+						<section class="kids-template-picker" aria-labelledby="kidsTemplateTitle">
+							<div class="kids-template-heading">
+								<h4 id="kidsTemplateTitle">Choose how to play</h4>
+								<p>Keep the same question and answers; change the adventure around them.</p>
+							</div>
+							<div class="kids-template-grid" id="kidsPlayTemplateGrid" role="group" aria-label="Play style"></div>
+							<p class="kids-template-note" id="kidsPlayTemplateNote">Auto picks the best fit for each question.</p>
+						</section>
+					</div>
 
 				<!-- Step 3: Questions -->
 				<div class="kw-step-panel" data-step="3">
@@ -7494,10 +7451,6 @@
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
 									Realtime
 								</button>
-								<button type="button" class="settings-tab-btn" title="Setup" data-roles="admin" data-settings-tab="setup" onclick="switchSettingsTab(event, 'setup')">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-									Setup
-								</button>
 								<button type="button" class="settings-tab-btn" title="AI Generation" data-roles="admin,teacher" data-settings-tab="ai-generation" onclick="switchSettingsTab(event, 'ai-generation')">
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
 									AI Generation
@@ -7506,10 +7459,23 @@
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
 									Users
 								</button>
-								<button type="button" class="settings-tab-btn" title="Teacher Access" data-roles="admin" data-settings-tab="teacher-access" onclick="switchSettingsTab(event, 'teacher-access')">
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"></path><path d="m9 12 2 2 4-4"></path></svg>
-									Teacher Access
-								</button>
+	<!--
+		The two administrator-only tabs that used to live here —
+		"Teacher Access" and "Setup" (the classroom setup wizard) — are now
+		in the CONTROL CENTER:
+
+			/console#/settings?section=teaching
+			/console#/settings?section=setup
+
+		This panel keeps the settings a TEACHER needs: their profile, their
+		presets, their own data, the classroom realtime actions and their own
+		AI models. The administrator's settings live in one place, where the
+		audit trail records them.
+	-->
+	<a class="settings-tab-btn settings-tab-btn--console" href="/console#/settings" data-roles="admin,super_admin" title="Open the control center — the administrator's settings">
+		<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
+		Control Center
+	</a>
 							</div>
 
 						<!-- General Settings -->
@@ -8565,24 +8531,6 @@
 						</div>
 
 						<!-- Setup Wizard -->
-					<div id="setup-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="setup">
-						<div class="settings-group">
-							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-								<span style="background: #ecfdf5; color: #059669; padding: 6px; border-radius: 8px;">
-									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-								</span>
-								<h3 style="margin: 0; font-size: 1.1rem;">Classroom Setup Wizard</h3>
-							</div>
-							<p class="text-muted" style="margin-bottom: 15px;">
-								Prepare this PC to serve the app to up to 20 classroom devices (PCs/phones) over the school Wi-Fi. The wizard checks your server configuration, generates a student QR code, provides firewall commands, and backs up the database.
-							</p>
-							<div id="swSetupSummary" style="margin-bottom: 15px;"></div>
-							<button type="button" class="btn btn-primary" onclick="window.openSetupWizard()" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0;">
-								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-								Open Classroom Setup Wizard
-							</button>
-						</div>
-					</div>
 
 					<!-- AI Generation Settings -->
 						<div id="ai-generation-settings" class="settings-section hidden" data-roles="admin,teacher" data-settings-tab="ai-generation">
@@ -8950,145 +8898,7 @@
 					</div>
 
 					<!-- Teacher Access Settings -->
-					<div id="teacher-access-settings" class="settings-section hidden" data-roles="admin" data-settings-tab="teacher-access">
-						<div class="settings-group">
-							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-								<span style="background: #e2e8f0; color: #0f172a; padding: 6px; border-radius: 8px;">
-									<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-								</span>
-								<h3 style="margin: 0; font-size: 1.1rem;">Teacher Access Control</h3>
-							</div>
-							<p class="text-muted" style="margin-bottom: 16px; font-size: 0.9em;">
-								Choose which dashboard tabs and settings teachers can access. Monitoring is always admin-only.
-							</p>
-							<div class="teacher-access-grid">
-								<label class="switch-label">
-									<span class="switch-text">Overview</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-overview" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Questions</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-questions" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Subjects</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-subjects" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Exams</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-exams" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Classes</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-classes" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Games</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-games" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Kids Games</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-kidsgames" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Results</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-results" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Settings Modal</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-							</div>
-
-							<div class="teacher-access-subtitle">Settings Tabs</div>
-							<div class="teacher-access-grid">
-								<label class="switch-label">
-									<span class="switch-text">General</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-general" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">My Profile</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-profile" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Presets</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-presets" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Data</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-data" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Realtime</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-realtime" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">AI Config</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-ai" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Users</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-users" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-								<label class="switch-label">
-									<span class="switch-text">Game Settings</span>
-									<div class="switch-container">
-										<input type="checkbox" id="teacher-access-settings-games" class="switch-checkbox" />
-										<span class="switch-slider"></span>
-									</div>
-								</label>
-							</div>
-						</div>
 						</form>
-					</div>
 				</div>
 			</div>
 		</div>

@@ -4019,6 +4019,63 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	text-align: center;
 }
 
+/* Step 2 — world-preserving play-style picker */
+.kids-template-picker {
+	margin-top: 22px;
+	padding: 18px;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 16px;
+}
+.kids-template-heading { margin-bottom: 14px; }
+.kids-template-heading h4 { margin: 0 0 4px; color: #1e293b; font-size: 1rem; }
+.kids-template-heading p { margin: 0; color: #64748b; font-size: .82rem; }
+.kids-template-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+	gap: 10px;
+}
+.kids-template-card {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 76px;
+	padding: 12px 14px;
+	border: 2px solid #e2e8f0;
+	border-radius: 13px;
+	background: #fff;
+	color: #334155;
+	text-align: left;
+	cursor: pointer;
+	transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.kids-template-card:hover { border-color: #818cf8; transform: translateY(-1px); }
+.kids-template-card:focus-visible { outline: 3px solid #6366f1; outline-offset: 2px; }
+.kids-template-card.selected { border-color: #4f46e5; background: #eef2ff; box-shadow: 0 0 0 2px rgba(79,70,229,.14); }
+.kids-template-icon {
+	flex: 0 0 42px;
+	width: 42px;
+	height: 42px;
+	display: grid;
+	place-items: center;
+	border-radius: 12px;
+	background: #f1f5f9;
+	font-size: 1.55rem;
+}
+.kids-template-card.selected .kids-template-icon { background: #e0e7ff; }
+.kids-template-copy { display: grid; gap: 3px; }
+.kids-template-copy strong { color: #1e293b; font-size: .86rem; }
+.kids-template-copy small { color: #64748b; font-size: .73rem; line-height: 1.35; }
+.kids-template-note { margin: 12px 0 0; color: #475569; font-size: .78rem; }
+@media (max-width: 600px) {
+	.kids-template-picker { padding: 14px; }
+	.kids-template-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.kids-template-card { transition: none; }
+	.kids-template-card:hover { transform: none; }
+}
+
 /* Bank Controls */
 .kids-bank-controls {
 	display: flex;
@@ -5888,7 +5945,101 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	font-weight: 600;
+	min-height: 36px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	padding: 7px 14px;
+	font-weight: 650;
+	font-size: 0.82rem;
+	white-space: nowrap;
+	transition:
+		transform 0.15s ease,
+		box-shadow 0.15s ease,
+		background-color 0.15s ease,
+		border-color 0.15s ease,
+		color 0.15s ease;
+}
+.launchpad-actions .btn:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 3px 10px rgba(15, 23, 42, 0.14);
+}
+.launchpad-actions .btn:focus-visible {
+	outline: 2px solid var(--primary-color, #6366f1);
+	outline-offset: 2px;
+}
+.launchpad-actions .btn svg {
+	flex: 0 0 auto;
+}
+
+/* "Generate All Lessons (AI)" — the AI/violet action */
+.launchpad-lessons .launchpad-actions .btn-primary,
+.launchpad-lessons .launchpad-actions [data-generate-all-levels] {
+	background: linear-gradient(135deg, #7c3aed, #5b21b6);
+	border-color: transparent;
+	color: #fff;
+	box-shadow: 0 2px 8px rgba(109, 40, 217, 0.28);
+}
+.launchpad-lessons .launchpad-actions .btn-primary:hover,
+.launchpad-lessons .launchpad-actions [data-generate-all-levels]:hover {
+	background: linear-gradient(135deg, #6d28d9, #4c1d95);
+	box-shadow: 0 5px 14px rgba(109, 40, 217, 0.34);
+}
+
+/* "Export PDF / Word" — neutral outline */
+.launchpad-lessons .launchpad-actions .launchpad-export {
+	background: rgba(255, 255, 255, 0.72);
+	border-color: rgba(15, 118, 110, 0.28);
+	color: #0f766e;
+}
+.launchpad-lessons .launchpad-actions .launchpad-export:hover {
+	background: #fff;
+	border-color: rgba(15, 118, 110, 0.5);
+}
+
+/* "Send to Students" — green primary */
+.launchpad-lessons .launchpad-actions .launchpad-assign {
+	background: linear-gradient(135deg, #16a34a, #15803d);
+	border-color: transparent;
+	color: #fff;
+	box-shadow: 0 2px 8px rgba(22, 101, 52, 0.26);
+}
+.launchpad-lessons .launchpad-actions .launchpad-assign:hover {
+	background: linear-gradient(135deg, #15803d, #166534);
+	box-shadow: 0 5px 14px rgba(22, 101, 52, 0.32);
+}
+
+/* "Generate Questions (AI)" — violet */
+.launchpad-questions .launchpad-actions .btn-ai-generate {
+	background: linear-gradient(135deg, #7c3aed, #5b21b6);
+	border-color: transparent;
+	color: #fff;
+	box-shadow: 0 2px 8px rgba(109, 40, 217, 0.28);
+}
+.launchpad-questions .launchpad-actions .btn-ai-generate:hover {
+	background: linear-gradient(135deg, #6d28d9, #4c1d95);
+	box-shadow: 0 5px 14px rgba(109, 40, 217, 0.34);
+}
+
+/* "AI Prompt Studio" — neutral outline */
+.launchpad-questions .launchpad-actions .launchpad-prompt-studio {
+	background: rgba(255, 255, 255, 0.72);
+	border-color: rgba(124, 58, 237, 0.28);
+	color: #6d28d9;
+}
+.launchpad-questions .launchpad-actions .launchpad-prompt-studio:hover {
+	background: #fff;
+	border-color: rgba(124, 58, 237, 0.5);
+}
+
+/* "+ Add Manually" — dashed outline */
+.launchpad-questions .launchpad-actions .launchpad-add-manual {
+	border-style: dashed;
+	background: transparent;
+	color: #6d28d9;
+}
+.launchpad-questions .launchpad-actions .launchpad-add-manual:hover {
+	background: rgba(124, 58, 237, 0.08);
+	border-color: rgba(124, 58, 237, 0.55);
 }
 
 /* ── Course Guidance & Subject Badges ───────────────────────────────────────── */
@@ -5996,18 +6147,6 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .launchpad-modal-option .btn {
 	margin-top: auto;
 	width: 100%;
-}
-.course-tree-q-btn {
-	background: #f5f3ff;
-	border-color: #ddd6fe;
-	color: #6d28d9;
-	font-weight: 600;
-	font-size: 0.75rem;
-}
-.course-tree-q-btn:hover {
-	background: #ede9fe;
-	border-color: #c4b5fd;
-	color: #5b21b6;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -8398,6 +8537,67 @@ html[data-theme='dark'] .class-roster-card .roster-status-pending {
 .assign-page-selection .selected-questions .question-column-count {
 	background: rgba(16, 185, 129, 0.12);
 	color: #059669;
+}
+
+/* The selected-question count turns amber at the preset's expected size and
+   red once the teacher exceeds it. */
+.assign-page-selection .question-column-count.is-warning {
+	background: rgba(245, 158, 11, 0.16);
+	color: #b45309;
+}
+
+.assign-page-selection .question-column-count.is-over-limit {
+	background: rgba(239, 68, 68, 0.16);
+	color: #dc2626;
+}
+
+/* Warning banner shown in the exam "Assign Questions" pane when the selected
+   count exceeds the preset's totalQuestions. */
+.assign-question-warning {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	margin: 0 0 14px;
+	padding: 12px 14px;
+	border: 1px solid rgba(245, 158, 11, 0.45);
+	border-radius: 12px;
+	background: rgba(245, 158, 11, 0.1);
+	color: #92400e;
+	font-size: 0.86rem;
+	font-weight: 600;
+	line-height: 1.45;
+}
+
+.assign-question-warning svg {
+	flex: 0 0 auto;
+	margin-top: 2px;
+	color: #d97706;
+}
+
+.assign-question-warning.hidden {
+	display: none;
+}
+
+html[data-theme='dark'] .assign-question-warning {
+	border-color: rgba(251, 191, 36, 0.4);
+	background: rgba(245, 158, 11, 0.14);
+	color: #fcd34d;
+}
+
+html[data-theme='dark'] .assign-question-warning svg {
+	color: #fbbf24;
+}
+
+html[data-theme='dark'] .assign-page-selection .question-column-count.is-warning {
+	background: rgba(245, 158, 11, 0.2);
+	color: #fcd34d;
+}
+
+html[data-theme='dark']
+	.assign-page-selection
+	.question-column-count.is-over-limit {
+	background: rgba(239, 68, 68, 0.22);
+	color: #fca5a5;
 }
 
 .assign-page-selection .question-column-hint {

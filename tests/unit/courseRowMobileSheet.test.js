@@ -123,12 +123,12 @@ describe('course row actions', () => {
 
 	it('offers generate and copy-prompt actions for lessons on desktop and mobile', () => {
 		expect(js).toContain('window.openLessonAIActions = function');
-		expect(js).toContain("label: 'Generate lesson with AI'");
-		expect(js).toContain("label: 'Copy AI prompt'");
-		expect(js).toContain('promptOnly: true');
 		expect(js).toContain('window.openLessonAIResult = function');
 		expect(js).toContain('window.saveLessonAIResult = async function');
-		expect(css).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*?\.course-tree-actions\s*\{\s*display:\s*none;/);
+		expect(js).toContain('promptOnly: true');
+		// The per-row action column is gone — the row click drives the flow.
+		expect(js).not.toContain('course-tree-actions');
+		expect(css).not.toContain('.course-tree-actions');
 	});
 
 	it('offers PDF and Word course documents with templates and header layouts', () => {

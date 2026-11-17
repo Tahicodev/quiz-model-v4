@@ -718,16 +718,38 @@
 						.map((question) => question?.id || question?.questionId || question)
 						.filter(Boolean)
 				: [];
+			// De-duplicate: a pushed package must not carry the same question
+			// twice, or the student runner would show it twice.
+			const uniqueQuestionIds = [];
+			const seenQuestionIds = new Set();
+			questionIds.forEach((id) => {
+				const key = String(id);
+				if (seenQuestionIds.has(key)) return;
+				seenQuestionIds.add(key);
+				uniqueQuestionIds.push(id);
+			});
+			// The exam's configured duration (minutes) is the authoritative
+			// length. The package's `timeLimit` is only used when the exam has
+			// no duration — a stale cached `timeLimit` must never override the
+			// duration and show an hour-long timer on a short exam.
+			const durationMinutes = Number(sessionPackage.duration);
+			const derivedTimeLimit =
+				Number.isFinite(durationMinutes) && durationMinutes > 0
+					? Math.round(durationMinutes * 60)
+					: 0;
 			const pushedExam = {
 				...(existing || {}),
 				id: sessionPackage.examId,
 				name: sessionPackage.examName || existing?.name || 'Available exam',
 				status: 'active',
 				duration: sessionPackage.duration || existing?.duration || 0,
-				timeLimit: sessionPackage.timeLimit || existing?.timeLimit || 0,
+				timeLimit:
+					derivedTimeLimit || Number(sessionPackage.timeLimit) || 0,
 				passingScore:
 					sessionPackage.passingScore ?? existing?.passingScore ?? 60,
-				questions: questionIds.length ? questionIds : existing?.questions || [],
+				questions: uniqueQuestionIds.length
+					? uniqueQuestionIds
+					: existing?.questions || [],
 			};
 			const nextExams = existing
 				? exams.map((exam) =>

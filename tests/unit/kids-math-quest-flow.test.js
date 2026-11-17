@@ -205,7 +205,11 @@ function answerCurrent(correctAnswer) {
 	if (!confirm || confirm.disabled) throw new Error('confirm not enabled after picking');
 	confirm.click();
 	return vi.advanceTimersByTimeAsync(300).then(() => settle(24))
-		.then(() => vi.advanceTimersByTimeAsync(1650)).then(() => settle(24));
+		// The platform's answer feedback holds longer once a streak is going
+		// (1600 ms baseline, 2100 ms from the second correct answer in a row,
+		// 2900 ms when an explanation is shown) — feed enough time for any of
+		// the three holds.
+		.then(() => vi.advanceTimersByTimeAsync(3000)).then(() => settle(24));
 }
 
 describe('math-quest full flow (single level plan, server-verified)', () => {
@@ -256,7 +260,7 @@ describe('math-quest full flow (single level plan, server-verified)', () => {
 		expect(window.KidsPlayerEngine.locked).toBe(true); // duplicate-prevention lock is up
 		expect(document.querySelector('.mq-card-opt.mq-correct')).toBeTruthy(); // feedback on the picked card
 		expect(document.querySelector('.mq-card-star')).toBeTruthy(); // mq-star reward art
-		await vi.advanceTimersByTimeAsync(1650);
+		await vi.advanceTimersByTimeAsync(3000); // covers the streak hold (2100 ms) too
 		await settle(24);
 		for (let i = 1; i < 3; i++) {
 			await answerCurrent(['12', '8', '12'][i]);
@@ -300,7 +304,7 @@ describe('math-quest full flow (single level plan, server-verified)', () => {
 			if (card) { card.click(); document.querySelector('.mq-confirm').click(); }
 			await vi.advanceTimersByTimeAsync(300);
 			await settle(24);
-			await vi.advanceTimersByTimeAsync(1650);
+			await vi.advanceTimersByTimeAsync(3000); // covers the streak hold (2100 ms) too
 			await settle(24);
 		}
 		expect(document.querySelector('.mq-results')).toBeTruthy();
@@ -318,7 +322,7 @@ describe('math-quest full flow (single level plan, server-verified)', () => {
 			document.querySelector('.mq-confirm').click();
 			await vi.advanceTimersByTimeAsync(300);
 			await settle(24);
-			await vi.advanceTimersByTimeAsync(1650);
+			await vi.advanceTimersByTimeAsync(3000); // covers the streak hold (2100 ms) too
 			await settle(24);
 		}
 		expect(document.querySelector('.mq-results')).toBeTruthy();

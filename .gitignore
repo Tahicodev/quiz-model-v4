@@ -54,3 +54,12 @@ demo-pdf/
 # Agent scratch — throwaway verification drivers, headless-Chrome profiles,
 screenshots and test logs. Never part of the app.
 .zcode/
+
+# Offline-guard attempt log — written by scripts/offline-guard.mjs while the
+# offline validation runs. It stays empty on a healthy run.
+offline-guard-attempts.log
+
+# Windows reserved device names that can be accidentally created by commands
+nul
+NUL
+

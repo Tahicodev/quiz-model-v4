@@ -11,6 +11,7 @@
 import { api } from '../../core/api.js';
 import { esc, stat } from '../../viz/charts.js';
 import { renderTable } from '../../components/table.js';
+import { toolbar } from '../../components/filters.js';
 import { loadingBlock, errorState, emptyState } from '../../components/states.js';
 import {
 	formatNumber,
@@ -64,10 +65,9 @@ export const userDetailPage = {
 		);
 
 		host.innerHTML = `
-			<div class="ac-toolbar">
-				<a class="ac-btn" href="#/users">← All accounts</a>
-				<span style="flex:1"></span>
-				${
+			${toolbar({
+				chips: '<a class="ac-btn" href="#/users">← All accounts</a>',
+				actions: `${
 					canManage
 						? `<button type="button" class="ac-btn" data-ac-toggle-status>${
 								account.status === 'active'
@@ -87,7 +87,17 @@ export const userDetailPage = {
 						: ''
 				}
 				<button type="button" class="ac-btn" data-ac-revoke-sessions>Revoke sessions</button>
-			</div>
+				${
+					canManage && String(account.id) !== String(ctx.session.user?.id)
+						? '<button type="button" class="ac-btn" data-ac-reset-credential>Reset credential</button>'
+						: ''
+				}
+				${
+					canManage && String(account.id) !== String(ctx.session.user?.id)
+						? '<button type="button" class="ac-btn ac-btn--danger" data-ac-delete-account>Delete account</button>'
+						: ''
+				}`,
+			})}
 
 			<div class="ac-panel">
 				<div class="ac-panel__header">
@@ -479,4 +489,117 @@ function bindActions(host, ctx, userId, account, data) {
 			}
 		});
 	}
+
+	const resetCredential = host.querySelector('[data-ac-reset-credential]');
+	if (resetCredential) {
+		resetCredential.addEventListener('click', () => {
+			const modal = openModal({
+				title: 'Reset this credential',
+				subtitle:
+					'The account keeps everything except its password. Every live session of the account is revoked and the change is recorded in the audit trail.',
+				body: `<div class="ac-field">
+						<label class="ac-field__label" for="ac-new-password">New password</label>
+						<div class="ac-field-row">
+							<input class="ac-input" id="ac-new-password" type="text" autocomplete="off" spellcheck="false" placeholder="At least 8 characters" />
+							<button type="button" class="ac-btn" id="ac-generate-password" title="Generate a strong password">Generate</button>
+						</div>
+					</div>
+					<p class="ac-empty__message" style="margin:12px 0 0;font-size:12px">
+						Generate a strong password, or type your own. Share it with the account holder
+						through a channel you trust. It is shown here once and is never stored in clear text.
+					</p>`,
+				footer: `
+					<button type="button" class="ac-btn" data-ac-cancel>Cancel</button>
+					<button type="button" class="ac-btn ac-btn--primary" data-ac-confirm>Reset credential</button>
+				`,
+			});
+			// The generator: a readable, strong password — every class
+			// represented, no ambiguous characters (no 0/O, 1/l/I), drawn from
+			// the platform's own randomness.
+			modal.root.querySelector('#ac-generate-password').addEventListener('click', () => {
+				const input = modal.root.querySelector('#ac-new-password');
+				input.value = generatePassword(14);
+				input.focus();
+				input.select();
+			});
+			modal.root.querySelector('[data-ac-cancel]').addEventListener('click', modal.close);
+			modal.root.querySelector('[data-ac-confirm]').addEventListener('click', async () => {
+				const newPassword = modal.root.querySelector('#ac-new-password').value.trim();
+				if (newPassword.length < 8) {
+					toast('The password must be at least 8 characters.', 'error');
+					return;
+				}
+				try {
+					const result = await api.post(
+						`console/users/${encodeURIComponent(userId)}/credential`,
+						{ newPassword },
+					);
+					modal.close();
+					toast(
+						`Credential reset. ${result?.data?.revokedSessions || 0} session(s) revoked.`,
+						'success',
+					);
+				} catch (err) {
+					toast(err.message, 'error');
+				}
+			});
+		});
+	}
+
+	// ── Delete the account ────────────────────────────────────────────────
+	//
+	// Deleting is not the same as suspending: suspending ends the access and
+	// keeps the record, deleting removes the person. The confirmation says so
+	// plainly, and the action is recorded in the audit trail.
+	const deleteAccount = host.querySelector('[data-ac-delete-account]');
+	if (deleteAccount) {
+		deleteAccount.addEventListener('click', async () => {
+			const confirmed = await confirmDialog({
+				title: `Delete "${account.username}"?`,
+				message:
+					'The account is removed, together with its sessions and its results. This cannot be undone — suspending the account keeps the record if you only need to end the access.',
+				confirmLabel: 'Delete the account',
+				danger: true,
+			});
+			if (!confirmed) return;
+			try {
+				await api.del(`console/users/${encodeURIComponent(userId)}`);
+				toast('The account was deleted.', 'success');
+				window.location.hash = '#/users';
+			} catch (err) {
+				toast(err.message, 'error');
+			}
+		});
+	}
+}
+
+/**
+ * Generate a password an operator can read aloud and an account holder can
+ * type on a phone: upper case, lower case, digits and a symbol, with the
+ * ambiguous characters (0/O, 1/l/I) left out. Every class is guaranteed at
+ * least once, the rest is drawn from the platform's own randomness.
+ */
+export function generatePassword(length = 14) {
+	const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+	const lower = 'abcdefghijkmnpqrstuvwxyz';
+	const digits = '23456789';
+	const symbols = '!@#$%&*+-';
+	const all = upper + lower + digits + symbols;
+
+	const pick = (alphabet) => {
+		const buffer = new Uint32Array(1);
+		crypto.getRandomValues(buffer);
+		return alphabet[buffer[0] % alphabet.length];
+	};
+
+	// One of every class, then fill from the whole alphabet, then shuffle.
+	const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+	while (chars.length < length) chars.push(pick(all));
+	for (let i = chars.length - 1; i > 0; i -= 1) {
+		const buffer = new Uint32Array(1);
+		crypto.getRandomValues(buffer);
+		const j = buffer[0] % (i + 1);
+		[chars[i], chars[j]] = [chars[j], chars[i]];
+	}
+	return chars.join('');
 }

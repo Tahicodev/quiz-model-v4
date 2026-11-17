@@ -24,6 +24,9 @@
 	// exercises). Re-mounted after every render so the panel survives re-renders.
 	let courseJobState = null;
 	let resourcesMenuEl = null;
+	// Popover for the "Generate all levels with AI" dropdown in the course
+	// workspace (separate from the courses-table row resources menu).
+	let allLevelsMenuEl = null;
 	let resourceState = null;
 	let publishAfterAssignCourseId = null;
 	let courseDetailMode = 'view';
@@ -2359,22 +2362,22 @@
 					const toggle = hasChildren
 						? `<button type="button" class="course-tree-toggle" data-course-collapse="${esc(category.id)}" onclick="toggleCourseCategory('${esc(category.id)}')" aria-label="Toggle ${esc(category.name)} chapters" aria-expanded="${!collapsedCourseCategoryIds.has(String(category.id))}">${collapsedCourseCategoryIds.has(String(category.id)) ? '+' : '−'}</button>`
 						: '<span class="course-tree-toggle-spacer" aria-hidden="true"></span>';
-					const lessonLabel = lesson
-						? `<button type="button" class="btn btn-sm course-tree-lesson-link" onclick="focusLesson('${esc(lesson.id)}')" title="Open lesson">Lesson: ${esc(lesson.title)}</button>`
-						: `<span class="course-tree-unassigned">${hasChildren ? 'Lessons are organized below' : 'No lesson linked'}</span>`;
-					const generateBtn = lesson
-						? `<button type="button" class="btn btn-ai-generate btn-sm course-tree-generate" data-gen-lesson="${esc(lesson.id)}" onclick="openLessonAIActions('${esc(lesson.id)}')">Generate course content via AI</button>`
-						: '';
-					const generateQuestionsBtn = !hasChildren
-						? `<button type="button" class="btn btn-sm course-tree-q-btn" onclick="openCategoryQuestionGeneration('${esc(category.id)}')">Generate questions</button>`
-						: '';
-					return (
-						`<div class="course-tree-row" data-category-id="${esc(category.id)}"${lesson ? ` data-lesson-id="${esc(lesson.id)}"` : ''} style="--course-depth:${depth};">` +
-						`<div class="course-tree-category">${toggle}<span class="course-tree-level">${level}</span>` +
-						`<strong class="course-tree-category-name" title="Open outline for ${esc(category.name)}">${esc(category.name)}</strong><span class="course-tree-count" onclick="event.stopPropagation(); questionsFilterByCategoryName(event, '${esc(category.name)}')" title="View questions for ${esc(category.name)}">${qCount} question${qCount === 1 ? '' : 's'}</span></div>` +
-						`<div class="course-tree-actions">${lessonLabel}${generateBtn}${generateQuestionsBtn}</div>` +
-						'</div>'
-					);
+						// The row itself is the action: clicking opens the linked
+						// lesson when it has content, otherwise it offers the
+						// generation flow. No per-row action buttons.
+						const hasContent = !!(lesson && String(lesson.content || '').trim());
+						const statusChip = lesson
+							? `<span class="course-tree-status${hasContent ? ' is-ready' : ' is-empty'}">${hasContent ? 'Lesson ready' : 'Not generated'}</span>`
+							: `<span class="course-tree-status is-empty">${hasChildren ? 'Lessons below' : 'No lesson'}</span>`;
+						return (
+							`<div class="course-tree-row" data-category-id="${esc(category.id)}"${lesson ? ` data-lesson-id="${esc(lesson.id)}"` : ''} style="--course-depth:${depth};">` +
+							`<div class="course-tree-category">${toggle}<span class="course-tree-level">${level}</span>` +
+							`<strong class="course-tree-category-name" title="Open outline for ${esc(category.name)}">${esc(category.name)}</strong>` +
+							`<span class="course-tree-count" onclick="event.stopPropagation(); questionsFilterByCategoryName(event, '${esc(category.name)}')" title="View questions for ${esc(category.name)}">${qCount} question${qCount === 1 ? '' : 's'}</span>` +
+							statusChip +
+							'</div>' +
+							'</div>'
+						);
 				})
 				.join('')
 			: '<div class="course-generator-hint">This course has no linked category branch (or the branch was deleted). Add lessons manually below.</div>';
@@ -2431,16 +2434,16 @@
 						`<div class="launchpad-header"><span class="launchpad-icon">📖</span><div><h4>Course Material & Lessons</h4><small>${(course.lessons || []).length} lesson unit(s) · Interactive student reader & exports</small></div></div>` +
 						`<div class="launchpad-actions">` +
 							(course.lessons?.length ? `<button type="button" class="btn btn-sm btn-primary" data-generate-all-levels onclick="confirmGenerateAllCourseLessons()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path></svg> Generate All Lessons (AI)</button>` : '') +
-							`<button type="button" class="btn btn-sm" onclick="createCourseDocument()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg> Export PDF / Word</button>` +
-							`<button type="button" class="btn btn-sm" onclick="openAssignClassesModal()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg> Send to Students</button>` +
+							`<button type="button" class="btn btn-sm launchpad-export" onclick="createCourseDocument()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg> Export PDF / Word</button>` +
+							`<button type="button" class="btn btn-sm launchpad-assign" onclick="openAssignClassesModal()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg> Send to Students</button>` +
 						`</div>` +
 					`</div>` +
 					`<div class="launchpad-card launchpad-questions">` +
 						`<div class="launchpad-header"><span class="launchpad-icon">🎯</span><div><h4>Assessments & Question Bank</h4><small>3 ways: In-App AI, Prompt Studio, or Manual</small></div></div>` +
 						`<div class="launchpad-actions">` +
 							`<button type="button" class="btn btn-sm btn-ai-generate" onclick="openCourseQuestionLaunchpad()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg> Generate Questions (AI)</button>` +
-							`<button type="button" class="btn btn-sm" onclick="openPromptStudioForCourse()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6M9 13h6M9 17h4"></path></svg> AI Prompt Studio</button>` +
-							`<button type="button" class="btn btn-sm" onclick="openManualQuestionForCourse()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> + Add Manually</button>` +
+							`<button type="button" class="btn btn-sm launchpad-prompt-studio" onclick="openPromptStudioForCourse()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6M9 13h6M9 17h4"></path></svg> AI Prompt Studio</button>` +
+							`<button type="button" class="btn btn-sm launchpad-add-manual" onclick="openManualQuestionForCourse()"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> + Add Manually</button>` +
 						`</div>` +
 					`</div>` +
 				`</div>` +
@@ -2452,8 +2455,8 @@
 				? '<button type="button" class="course-tree-bulk-toggle" onclick="setCourseCategoriesCollapsed(true)">Collapse all</button><button type="button" class="course-tree-bulk-toggle" onclick="setCourseCategoriesCollapsed(false)">Expand all</button>'
 				: '') +
 			'<span id="courseBatchStatus" class="course-batch-status" aria-live="polite"></span>' +
-(course.lessons?.length
-					? '<button type="button" class="btn btn-primary btn-sm" data-generate-all-levels onclick="confirmGenerateAllCourseLessons()">Generate all levels with AI</button>'
+				(course.lessons?.length
+					? `<button type="button" class="btn btn-primary btn-sm course-all-levels-trigger" data-generate-all-levels aria-haspopup="menu" aria-expanded="false" onclick="openCourseAllLevelsMenu(this)"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path></svg> Generate all levels with AI<svg class="course-all-levels-caret" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>`
 					: '') +
 				(course.lessons?.length
 					? '<button type="button" class="btn btn-sm course-action-prep-sheets" data-prep-sheets-all onclick="openCourseResource(\'prep-sheets\', currentCourse.id)">Prep Sheets</button>'
@@ -2475,14 +2478,160 @@
 			});
 		}
 		updateCourseTreeVisibility();
-		pane.querySelectorAll('.course-tree-row[data-lesson-id]').forEach((row) => {
+		pane.querySelectorAll('.course-tree-row').forEach((row) => {
 			row.addEventListener('click', (event) => {
-				if (window.innerWidth > 768 || event.target.closest('button')) return;
+				// The expand toggle and the question counter keep their own
+				// behaviour — the row click handles navigation only.
+				if (event.target.closest('button, .course-tree-count')) return;
 				event.stopPropagation();
-				openMobileLessonActions(row.dataset.lessonId);
+				openCourseTreeRow(row);
 			});
 		});
 		mountCourseProgress();
+	};
+
+	/**
+	 * Row click flow:
+	 *  • lesson with content      → jump to its lesson card,
+	 *  • lesson without content   → offer the AI generation modal,
+	 *  • no lesson linked         → offer "create lesson" / "generate questions".
+	 */
+	function openCourseTreeRow(row) {
+		if (!row) return;
+		const lessonId = row.dataset.lessonId;
+		const categoryId = row.dataset.categoryId;
+		if (lessonId) {
+			const lesson = currentCourse?.lessons?.find((l) => String(l.id) === String(lessonId));
+			if (lesson && String(lesson.content || '').trim()) {
+				window.focusLesson(lessonId);
+				return;
+			}
+			if (lesson) {
+				window.openLessonAIActions(lessonId);
+				return;
+			}
+		}
+		if (categoryId) window.openCategoryLessonGeneration(categoryId);
+	}
+
+	/** Modal shown when a course-tree level has no lesson yet. */
+	window.openCategoryLessonGeneration = function (categoryId) {
+		if (!currentCourse) return;
+		const cat = categoryList().find((c) => String(c.id) === String(categoryId));
+		const label = cat ? (categoryPath(cat.id) || cat.name) : 'this level';
+		openModal(
+			'courseCategoryGenerationModal',
+			`No lesson yet · ${label}`,
+			`<p>This level has no lesson content. Create one and let AI fill it in, or go straight to questions.</p>`,
+			`<button type="button" class="btn" onclick="closeCourseModal('courseCategoryGenerationModal')">Cancel</button>` +
+				`<button type="button" class="btn" onclick="closeCourseModal('courseCategoryGenerationModal');openCategoryQuestionGeneration('${esc(categoryId)}')">Generate questions</button>` +
+				`<button type="button" class="btn btn-primary" onclick="closeCourseModal('courseCategoryGenerationModal');createLessonForCategory('${esc(categoryId)}')">Create lesson &amp; generate with AI</button>`,
+		);
+	};
+
+	window.createLessonForCategory = async function (categoryId) {
+		const A = api();
+		if (!A || !currentCourse) return;
+		const cat = categoryList().find((c) => String(c.id) === String(categoryId));
+		try {
+			const created = await A.raw('POST', `/courses/${encodeURIComponent(currentCourse.id)}/lessons`, {
+				title: cat ? cat.name : 'New lesson',
+				summary: '',
+				content: '',
+				category_id: String(categoryId),
+			});
+			currentCourse = await A.raw('GET', `/courses/${encodeURIComponent(currentCourse.id)}`);
+			renderCourseDetail();
+			const lessonId = created?.id;
+			if (lessonId) window.openLessonAIActions(lessonId);
+		} catch (err) {
+			toast('Could not create the lesson: ' + (err?.message || 'error'), 'error');
+		}
+	};
+
+	// ── "Generate all levels with AI" dropdown ───────────────────────────────
+	// One trigger, four global actions. Every entry acts on all the trees of
+	// the open course (all its lessons), opening the matching studio modal.
+
+	function closeCourseAllLevelsMenu() {
+		if (allLevelsMenuEl && allLevelsMenuEl.parentNode) {
+			allLevelsMenuEl.parentNode.removeChild(allLevelsMenuEl);
+		}
+		allLevelsMenuEl = null;
+		document
+			.querySelectorAll('.course-all-levels-trigger[aria-expanded="true"]')
+			.forEach((button) => button.setAttribute('aria-expanded', 'false'));
+		document.removeEventListener('click', allLevelsDocClick, true);
+		document.removeEventListener('keydown', allLevelsKeyDown, true);
+	}
+
+	function allLevelsDocClick(event) {
+		if (!allLevelsMenuEl) return;
+		if (allLevelsMenuEl.contains(event.target)) return;
+		if (event.target.closest('.course-all-levels-trigger')) return;
+		closeCourseAllLevelsMenu();
+	}
+
+	function allLevelsKeyDown(event) {
+		if (event.key === 'Escape') closeCourseAllLevelsMenu();
+	}
+
+	window.courseAllLevelsAction = function (kind) {
+		closeCourseAllLevelsMenu();
+		if (!currentCourse) return;
+		if (kind === 'course') return window.confirmGenerateAllCourseLessons();
+		if (kind === 'prep-sheets') return window.openCourseResource('prep-sheets', currentCourse.id);
+		if (kind === 'exercises') return window.openCourseResource('exercises', currentCourse.id);
+		if (kind === 'documents') return window.openGeneratedDocumentsLibrary(currentCourse.id);
+	};
+
+	window.openCourseAllLevelsMenu = function (anchor) {
+		if (!currentCourse) return;
+		const course = currentCourse;
+		const lessonCount = (course.lessons || []).length;
+		const alreadyOpen = allLevelsMenuEl && allLevelsMenuEl.dataset.courseId === String(course.id);
+		closeCourseAllLevelsMenu();
+		if (alreadyOpen) return;
+
+		const items = [
+			{ kind: 'course', label: 'Generate course content', hint: 'Lesson content for every level', icon: '📘' },
+			{ kind: 'prep-sheets', label: 'Prep Sheets', hint: 'Session planning sheets for every level', icon: '📝' },
+			{ kind: 'exercises', label: 'Exercises', hint: 'Situation-problems with worked solutions', icon: '✏️' },
+			{ kind: 'documents', label: 'Documents', hint: 'Generated PDF / Word library', icon: '📄' },
+		];
+
+		const menu = document.createElement('div');
+		menu.className = 'course-resources-menu course-all-levels-menu';
+		menu.setAttribute('role', 'menu');
+		menu.dataset.courseId = String(course.id);
+		menu.innerHTML =
+			`<div class="course-resources-head"><strong>${esc(course.name || 'Course')}</strong>` +
+			`<small>${lessonCount} level${lessonCount === 1 ? '' : 's'} · applies to the whole course</small></div>` +
+			items.map((item) =>
+				`<button type="button" role="menuitem" class="course-resources-item course-all-levels-item" onclick="courseAllLevelsAction('${item.kind}')">` +
+					'<span class="course-all-levels-icon" aria-hidden="true">' + item.icon + '</span>' +
+					'<span class="course-resources-item-main">' +
+						`<strong>${esc(item.label)}</strong><small>${esc(item.hint)}</small>` +
+					'</span>' +
+				'</button>'
+			).join('');
+		document.body.appendChild(menu);
+		allLevelsMenuEl = menu;
+
+		const rect = anchor && typeof anchor.getBoundingClientRect === 'function'
+			? anchor.getBoundingClientRect()
+			: { right: window.innerWidth - 16, bottom: 80 };
+		const menuRect = menu.getBoundingClientRect();
+		const top = Math.min(Math.max(rect.bottom + 6, 8), Math.max(window.innerHeight - menuRect.height - 12, 8));
+		const left = Math.min(Math.max(rect.right - menuRect.width, 8), window.innerWidth - menuRect.width - 8);
+		menu.style.top = `${top}px`;
+		menu.style.left = `${left}px`;
+		if (anchor && typeof anchor.setAttribute === 'function') anchor.setAttribute('aria-expanded', 'true');
+
+		setTimeout(() => {
+			document.addEventListener('click', allLevelsDocClick, true);
+			document.addEventListener('keydown', allLevelsKeyDown, true);
+		}, 0);
 	};
 
 	window.confirmGenerateAllCourseLessons = function () {
@@ -2829,38 +2978,6 @@ window.generateAllCourseLessons = async function () {
 					`<button type="button" class="btn course-action-import" onclick="openLessonAIResult('${esc(lesson.id)}')">Load AI result</button>`,
 		);
 	};
-
-	function openMobileLessonActions(lessonId) {
-		const lesson = currentCourse?.lessons?.find((item) => String(item.id) === String(lessonId));
-		if (!lesson) return;
-		if (!window.MobileActionSheet || typeof window.MobileActionSheet.open !== 'function') {
-			window.openLessonAIActions(lessonId);
-			return;
-		}
-		window.MobileActionSheet.open(`Lesson: ${String(lesson.title || '')}`, [
-			{
-				label: 'Open lesson',
-				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>',
-				onClick: () => window.focusLesson(lessonId),
-			},
-			{
-				label: 'Generate lesson with AI',
-				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3z"></path><path d="m19 14 1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14z"></path></svg>',
-				onClick: () => window.generateLessonContent(lessonId),
-				variant: 'primary',
-			},
-			{
-				label: 'Copy AI prompt',
-				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="13" height="13" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>',
-				onClick: () => window.copyLessonAIPrompt(lessonId),
-			},
-			{
-				label: 'Load AI result',
-				icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path><path d="M20 16.5v2A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5v-2"></path></svg>',
-				onClick: () => window.openLessonAIResult(lessonId),
-			},
-		]);
-	}
 
 	window.copyLessonAIPrompt = async function (lessonId) {
 		const A = api();

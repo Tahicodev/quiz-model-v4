@@ -11,6 +11,7 @@
 import { api } from '../../core/api.js';
 import { esc, stat, barChart } from '../../viz/charts.js';
 import { renderTable } from '../../components/table.js';
+import { toolbar } from '../../components/filters.js';
 import { loadingBlock, errorState, emptyState } from '../../components/states.js';
 import { formatNumber, formatDate, formatRelative, confirmDialog, toast } from '../../components/ui.js';
 
@@ -50,19 +51,16 @@ export const organizationDetailPage = {
 		);
 
 		host.innerHTML = `
-			<div class="ac-toolbar">
-				<a class="ac-btn" href="#/organizations">← All organizations</a>
-				<span style="flex:1"></span>
-				${
-					canManage
-						? `<button type="button" class="ac-btn" data-ac-toggle-status>${
-								org.status === 'suspended'
-									? 'Reactivate organization'
-									: 'Suspend organization'
-							}</button>`
-						: ''
-				}
-			</div>
+			${toolbar({
+				chips: '<a class="ac-btn" href="#/organizations">← All organizations</a>',
+				actions: canManage
+					? `<button type="button" class="ac-btn" data-ac-toggle-status>${
+							org.status === 'suspended'
+								? 'Reactivate organization'
+								: 'Suspend organization'
+						}</button>`
+					: '',
+			})}
 
 			<div class="ac-panel">
 				<div class="ac-panel__header">

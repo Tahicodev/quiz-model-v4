@@ -78,23 +78,46 @@ export class UserService {
     return this.#stripPassword(user);
   }
 
+  /**
+   * The target account must live in the caller's organization.
+   *
+   * A platform administrator (`super_admin`) administers every organization,
+   * so the check does not apply to them. For everyone else, editing or
+   * deleting an account of ANOTHER organization by id is a cross-tenant
+   * write and is refused.
+   */
+  #assertSameTenant(existing, currentUser) {
+    if (!existing) throw new NotFoundError('User');
+    if (currentUser?.role === ROLES.SUPER_ADMIN) return;
+    if (existing.school_id !== currentUser?.school_id) {
+      throw new NotFoundError('User');
+    }
+  }
+
   async update(id, data, currentUser) {
     this.#requireStaff(currentUser);
     const existing = await this.#repo.getById('users', id);
     if (!existing) throw new NotFoundError('User');
+    this.#assertSameTenant(existing, currentUser);
 
     const parsed = UserUpdateSchema.safeParse(data);
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
 
-    // Split the validated payload into DB columns: subjects (array) goes to
-    // subjects_json; everything else maps 1:1 onto the User table.
-    const { subjects, ...columns } = parsed.data;
-    const updated = await this.#repo.update('users', id, {
+    // A credential sent with a profile update is hashed here, never stored
+    // as sent. It is removed from the column map so it cannot reach the
+    // database as a plain column.
+    const { subjects, password, ...columns } = parsed.data;
+    const patch = {
       ...columns,
       ...(subjects !== undefined && {
         subjects_json: subjects ? JSON.stringify(subjects) : null,
       }),
-    });
+    };
+    if (password) {
+      patch.password_hash = await bcrypt.hash(password, config.bcryptRounds);
+    }
+
+    const updated = await this.#repo.update('users', id, patch);
     return this.#stripPassword(updated);
   }
 
@@ -106,6 +129,7 @@ export class UserService {
 
     const existing = await this.#repo.getById('users', id);
     if (!existing) throw new NotFoundError('User');
+    this.#assertSameTenant(existing, currentUser);
 
     // Protect the last admin in the tenant
     if (existing.role === ROLES.ADMIN) {
@@ -144,18 +168,91 @@ export class UserService {
 
   /**
    * Admin-initiated password reset.
+   *
+   * The credential is written with bcrypt, the target's live sessions are
+   * revoked (a reset must end the sessions the old password opened), and the
+   * action is recorded in the audit trail.
+   *
+   * @param {string} userId
+   * @param {string} newPassword
+   * @param {object} currentUser the administrator performing the reset
+   * @param {object} [options]
+   * @param {string} [options.schoolId] the caller's organization — the target
+   *        must belong to it, so a reset cannot cross the tenant boundary.
+   * @param {object} [options.authSvc] used to revoke the target's sessions
+   * @param {object} [options.auditSvc] used to record the action
+   * @param {object} [options.securityEventSvc] used to record the event
    */
-  async resetPassword(userId, newPassword, currentUser) {
+  async resetPassword(userId, newPassword, currentUser, options = {}) {
     this.#requireAdmin(currentUser);
-    if (newPassword.length < 6) {
-      throw new ValidationError({ password: ['Minimum 6 characters'] });
+    const password = String(newPassword || '');
+    if (password.length < 8) {
+      throw new ValidationError({ password: ['Minimum 8 characters'] });
     }
     const user = await this.#repo.getById('users', userId);
     if (!user) throw new NotFoundError('User');
 
-    const passwordHash = await bcrypt.hash(newPassword, config.bcryptRounds);
+    // Tenant boundary: an administrator may only reset an account inside
+    // their own organization.
+    if (options.schoolId && user.school_id !== options.schoolId) {
+      throw new NotFoundError('User');
+    }
+    // Never let an administrator lock themselves out by accident.
+    if (currentUser.id === userId) {
+      throw new ConflictError('Use "change password" to update your own password');
+    }
+
+    const passwordHash = await bcrypt.hash(password, config.bcryptRounds);
     await this.#repo.update('users', userId, { password_hash: passwordHash });
-    this.#logger.info({ userId, actorId: currentUser.id }, 'User password reset by admin');
+
+    // End every session the old password opened.
+    let revokedSessions = 0;
+    if (options.authSvc?.revokeUserSessions) {
+      try {
+        const result = await options.authSvc.revokeUserSessions(userId);
+        revokedSessions = result?.revoked || 0;
+      } catch (err) {
+        this.#logger.warn({ err, userId }, 'Could not revoke sessions after a password reset');
+      }
+    }
+
+    if (options.auditSvc?.log) {
+      try {
+        await options.auditSvc.log({
+          schoolId: user.school_id,
+          actorId: currentUser.id,
+          entityType: 'user',
+          entityId: userId,
+          action: 'reset-password',
+          outcome: 'success',
+          severity: 'critical',
+          diff: { before: { status: user.status }, after: { credential: 'rotated' } },
+        });
+      } catch (err) {
+        this.#logger.warn({ err, userId }, 'Audit write failed after a password reset');
+      }
+    }
+
+    if (options.securityEventSvc?.record) {
+      try {
+        await options.securityEventSvc.record({
+          type: 'password_reset',
+          schoolId: user.school_id,
+          userId,
+          username: user.username,
+          reason: 'reset_by_administrator',
+          meta: { actorId: currentUser.id, revokedSessions },
+        });
+      } catch (err) {
+        this.#logger.warn({ err, userId }, 'Security event write failed after a password reset');
+      }
+    }
+
+    this.#logger.info(
+      { userId, actorId: currentUser.id, revokedSessions },
+      'User password reset by admin',
+    );
+    return { userId, revokedSessions };
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

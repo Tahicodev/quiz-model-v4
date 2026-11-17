@@ -306,8 +306,13 @@
       var token = forceToken || getToken();
       if (!token) {
         // Anonymous — nothing to bootstrap. Leave the cache as-is.
+        window.__legacyBridgeBootstrapPending = false;
         return Promise.resolve();
       }
+      // Signal that the server snapshot is on its way. Deferred consumers
+      // (e.g. the student workspace's `?examId=` deep link) must not treat
+      // the local cache as authoritative while this is in flight.
+      window.__legacyBridgeBootstrapPending = true;
       var url = getBaseUrl() + '/bootstrap';
       function doFetch(t) {
         return fetch(url, {
@@ -413,6 +418,7 @@
           // yet when the fetch resolves — this lets them detect a bootstrap
           // that already landed before they were ready.
           serverDataReady = true;
+          window.__legacyBridgeBootstrapPending = false;
           window.__legacyBridgeBootstrappedAt = Date.now();
           try {
             window.dispatchEvent(new CustomEvent('quiz:bootstrap-ready', {
@@ -424,6 +430,7 @@
           // If the bootstrap fails (e.g. token expired between page load and
           // fetch), keep whatever was in cache/localStorage. The next login
           // cycle will re-bootstrap cleanly.
+          window.__legacyBridgeBootstrapPending = false;
           if (err && err.status === 401) {
             invalidateAuthSession();
             return;

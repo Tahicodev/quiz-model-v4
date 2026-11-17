@@ -26,6 +26,20 @@
 		{ id: 'math-quest', icon: '🦖', label: 'Math Quest', desc: 'Jungle adventure with a map between levels', kidType: 'multiple-choice' },
 	];
 	var KIDS_THEMES = ['jungle', 'space', 'ocean', 'farm', 'castle', 'dinosaur', 'forest', 'city', 'circus', 'magic', 'school', 'superhero'];
+	var KIDS_PLAY_TEMPLATES = [
+		{ id: 'auto', icon: '✨', label: 'Best fit', desc: 'Let each question choose its best way to play.', types: [] },
+		{ id: 'bubble-pop', icon: '🫧', label: 'Bubble Pop', desc: 'Chase the floating answer bubbles.', types: ['multiple-choice'], single: true },
+		{ id: 'subj-choice', icon: '🎯', label: 'Choice Board', desc: 'Pick a bright, easy-to-read answer card.', types: ['multiple-choice'], single: true },
+		{ id: 'count-tap', icon: '🔢', label: 'Count & Tap', desc: 'Count the objects, then choose a number.', types: ['multiple-choice'], intent: 'count', single: true },
+		{ id: 'num-balance', icon: '⚖️', label: 'Number Balance', desc: 'Help the crocodile compare two numbers.', types: ['multiple-choice'], intent: 'balance', single: true },
+		{ id: 'star-collector', icon: '🌟', label: 'Star Collector', desc: 'Collect every correct answer.', types: ['multiple-choice'], multi: true },
+		{ id: 'leap-frog', icon: '🐸', label: 'Leap Frog', desc: 'Hop to true or false.', types: ['true-false'] },
+		{ id: 'sort-it-out', icon: '🧺', label: 'Sort It Out', desc: 'Spot the one that does not belong.', types: ['odd-one-out'] },
+		{ id: 'pair-party', icon: '🎴', label: 'Pair Party', desc: 'Match the pairs to connect them.', types: ['matching'] },
+		{ id: 'build-a-tower', icon: '🏗️', label: 'Build-a-Tower', desc: 'Stack the answers in the right order.', types: ['draggable'] },
+		{ id: 'magic-words', icon: '🪄', label: 'Magic Words', desc: 'Fill the blank with the right word.', types: ['fill-blank'] },
+		{ id: 'code-explorer', icon: '🔭', label: 'Code Explorer', desc: 'Explore the answer in a code console.', types: ['code'] },
+	];
 	var KIDS_GRADES = ['maternelle', 'cp', 'ce1', 'ce2', 'cm1', 'cm2'];
 	/* Math Quest level editor (config_json.levels) */
 	var MQ_ART_VALUES = ['home', 'treasure', 'temple', 'sunset'];
@@ -43,7 +57,7 @@
 		filters: { game_type: '', grade: '', subject: '', status: '', teacher_id: '', search: '' },
 		wizardStep: 1,
 		editingId: null,
-		wizard: { game_type: null, theme: 'jungle', questions: [], mqLevels: [], pickMode: null, defaultGameId: null },
+		wizard: { game_type: null, theme: 'jungle', playTemplate: 'auto', questions: [], mqLevels: [], pickMode: null, defaultGameId: null },
 		bank: [],
 		bankTypeFilter: 'all',
 		aiResults: [],
@@ -308,7 +322,7 @@
 			state.editingId = editId || null;
 			state.wizardStep = 1;
 			state.maxWizardStep = 1;
-			state.wizard = { game_type: null, theme: 'jungle', questions: [], mqLevels: [], pickMode: null, defaultGameId: null };
+			state.wizard = { game_type: null, theme: 'jungle', playTemplate: 'auto', questions: [], mqLevels: [], pickMode: null, defaultGameId: null };
 			state.aiResults = [];
 			state.manualList = [];
 			state.publishedGame = null;
@@ -327,6 +341,7 @@
 					state.wizard.theme = game.theme || 'jungle';
 					state.wizard.questions = parseJsonSafe(game.questions_json, []).map(normalizeKidQuestion);
 					var cfg = parseJsonSafe(game.config_json, {});
+					state.wizard.playTemplate = typeof cfg.play_template === 'string' ? cfg.play_template : 'auto';
 					hydrateMqLevels(cfg);
 					setFormValue('kidsGameName', game.name || '');
 					setFormValue('kidsGameSubject', game.subject || '');
@@ -476,10 +491,12 @@
 			renderKidsWizardSelectedQuestions();
 		}
 		state.wizard.game_type = id;
+		state.wizard.playTemplate = 'auto';
 		buildGameTypeGrid();
 		buildSubjectGrid();
 		loadKidsBank();
 		renderKidsWizardSelectedQuestions();
+		renderKidsPlayTemplates();
 		syncMqLevelsVisibility();
 	}
 
@@ -707,6 +724,7 @@
 	/** config_json for the wizard payload — Math Quest carries the level plan. */
 	function buildKidsGameConfig() {
 		var base = {
+			play_template: KIDS_PLAY_TEMPLATES.some(function (t) { return t.id === state.wizard.playTemplate; }) ? state.wizard.playTemplate : 'auto',
 			time_per_q: Number($('kidsGameTimePerQ').value) || 15,
 			max_hints: Number($('kidsGameMaxHints').value) || 0,
 			mascot_theme: $('kidsGameMascotTheme').value || null,
@@ -1053,16 +1071,76 @@
 		if (!grid) return;
 		grid.innerHTML = '';
 		KIDS_THEMES.forEach(function (t) {
-			var card = document.createElement('div');
+			var card = document.createElement('button');
+			card.type = 'button';
 			card.className = 'kids-theme-card' + (state.wizard.theme === t ? ' selected' : '');
+			card.setAttribute('aria-pressed', state.wizard.theme === t ? 'true' : 'false');
+			card.setAttribute('aria-label', t + ' world');
 			card.style.background = THEME_BG[t];
-			card.innerHTML = '<div class="kids-theme-name">' + esc(t) + '</div>';
+			card.innerHTML = '<span class="kids-theme-name">' + esc(t) + '</span>';
 			card.addEventListener('click', function () { selectKidsTheme(t); });
 			grid.appendChild(card);
 		});
 	}
 	function selectKidsTheme(id) { state.wizard.theme = id; buildThemeGrid(); }
-	function syncWizardSelectionUI() { buildGameTypeGrid(); buildThemeGrid(); buildSubjectGrid(); }
+	function questionFitsPlayTemplate(q, template) {
+		if (!q || template.id === 'auto') return true;
+		var type = String(q.type || 'multiple-choice');
+		if (template.types.indexOf(type) < 0) return false;
+		if (template.multi && !q.allowMultipleAnswers) return false;
+		if (template.single && q.allowMultipleAnswers) return false;
+		if (template.intent === 'count') {
+			var opts = kidOptionList(q);
+			return opts.length > 0 && opts.every(function (o) { return /^\d{1,3}$/.test(String(o).trim()); }) &&
+				/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(String(q.text || ''));
+		}
+		if (template.intent === 'balance') {
+			var signs = kidOptionList(q);
+			return signs.length >= 2 && signs.every(function (o) { return ['<', '=', '>'].indexOf(String(o).trim()) >= 0; }) &&
+				/\d+[^\d]+\d+/.test(String(q.text || ''));
+		}
+		return true;
+	}
+	function playTemplateOptions() {
+		if (!state.wizard.game_type || state.wizard.game_type === 'math-quest') return [KIDS_PLAY_TEMPLATES[0]];
+		var questions = state.wizard.questions || [];
+		var candidates = questions.length ? questions : [{ type: wizardKidType(), allowMultipleAnswers: state.wizard.game_type === 'star-collector' }];
+		return KIDS_PLAY_TEMPLATES.filter(function (template) {
+			return template.id === 'auto' || candidates.every(function (q) { return questionFitsPlayTemplate(q, template); });
+		});
+	}
+	function renderKidsPlayTemplates() {
+		var grid = $('kidsPlayTemplateGrid');
+		var note = $('kidsPlayTemplateNote');
+		if (!grid) return;
+		var options = playTemplateOptions();
+		if (!options.some(function (t) { return t.id === state.wizard.playTemplate; })) state.wizard.playTemplate = 'auto';
+		grid.innerHTML = '';
+		options.forEach(function (t) {
+			var card = document.createElement('button');
+			card.type = 'button';
+			card.className = 'kids-template-card' + (state.wizard.playTemplate === t.id ? ' selected' : '');
+			card.dataset.template = t.id;
+			card.setAttribute('aria-pressed', state.wizard.playTemplate === t.id ? 'true' : 'false');
+			card.innerHTML = '<span class="kids-template-icon" aria-hidden="true">' + t.icon + '</span>' +
+				'<span class="kids-template-copy"><strong>' + esc(t.label) + '</strong><small>' + esc(t.desc) + '</small></span>';
+			card.addEventListener('click', function () { selectKidsPlayTemplate(t.id); });
+			grid.appendChild(card);
+		});
+		if (note) note.textContent = state.wizard.game_type === 'math-quest'
+			? 'Math Quest keeps its own template choice on each adventure level.'
+			: state.wizard.playTemplate === 'auto'
+				? 'Best fit follows each question. Your answers and scoring stay the same.'
+				: 'Chosen style: ' + ((options.filter(function (t) { return t.id === state.wizard.playTemplate; })[0] || {}).label || 'Best fit') + '. Answers and scoring stay the same.';
+	}
+	function selectKidsPlayTemplate(id) {
+		var choice = playTemplateOptions().filter(function (t) { return t.id === id; })[0];
+		if (!choice) { state.wizard.playTemplate = 'auto'; renderKidsPlayTemplates(); return; }
+		state.wizard.playTemplate = id;
+		renderKidsPlayTemplates();
+		updateKidsWizardPreview();
+	}
+	function syncWizardSelectionUI() { buildGameTypeGrid(); buildThemeGrid(); buildSubjectGrid(); renderKidsPlayTemplates(); }
 
 	/* Step 3 — question sources */
 	function kidsWizardSwitchSource(src, btn) {
@@ -1253,9 +1331,10 @@
 		var list = $('kidsSelectedQuestionsList');
 		var count = $('kidsSelectedCount');
 		if (count) count.textContent = String(state.wizard.questions.length);
-		if (!list) return;
+		if (!list) { renderKidsPlayTemplates(); return; }
 		if (!state.wizard.questions.length) {
 			list.innerHTML = '<div class="empty-state-small">No questions selected yet.</div>';
+			renderKidsPlayTemplates();
 			return;
 		}
 		list.innerHTML = '';
@@ -1271,6 +1350,7 @@
 			row.appendChild(btn);
 			list.appendChild(row);
 		});
+		renderKidsPlayTemplates();
 	}
 	function removeKidsWizardSelectedQuestion(id) {
 		state.wizard.questions = state.wizard.questions.filter(function (q) { return String(q.id) !== String(id); });
@@ -1622,6 +1702,7 @@
 		var subject = String(($('kidsGameSubject') || {}).value || '').trim();
 		var cfg = {};
 		try { cfg = buildKidsGameConfig(); } catch (_) { cfg = {}; }
+		var playMeta = KIDS_PLAY_TEMPLATES.filter(function (t) { return t.id === cfg.play_template; })[0] || KIDS_PLAY_TEMPLATES[0];
 		var questions = state.wizard.questions.length;
 		var rules = [
 			'⏱ ' + (cfg.time_per_q || 15) + 's',
@@ -1648,6 +1729,7 @@
 				'<div class="kids-pub-kid-title">' + esc(String(($('kidsGameName') || {}).value || '').trim() || 'Your game') + '</div>' +
 				'<div class="kids-pub-kid-sub">' + esc(meta.label || state.wizard.game_type || '—') + ' · ' + esc(String(grade).toUpperCase()) + (subject ? ' · ' + esc(subject) : '') + '</div>' +
 				'<div class="kids-pub-kid-count">' + questions + ' question' + (questions === 1 ? '' : 's') + '</div>' +
+				'<div class="kids-pub-kid-template"><span aria-hidden="true">' + esc(playMeta.icon) + '</span> ' + esc(playMeta.label) + '</div>' +
 				'<div class="kids-pub-kid-rules">' + rules.map(function (r) { return '<span>' + esc(r) + '</span>'; }).join('') + '</div>' +
 			'</div>' +
 			'<p class="kids-pub-note">👀 What the kids see when they type your PIN' +
@@ -2124,6 +2206,11 @@
 		openWizard: openKidsGameWizard,
 		state: state,
 		normalize: normalizeKidQuestion,
+		playTemplates: KIDS_PLAY_TEMPLATES,
+		playTemplateOptions: playTemplateOptions,
+		selectPlayTemplate: selectKidsPlayTemplate,
+		buildConfig: buildKidsGameConfig,
+		collectPayload: collectWizardPayload,
 		defaultGames: function () {
 			var cat = kidsCatalog();
 			return cat ? cat.list() : [];

@@ -548,6 +548,17 @@
           sessionEnded = false;
           startSessionWatchdog();
           showMsg('Login successful', 'success');
+
+          // Role routing. The three roles live in three surfaces:
+          //   administrator → the control center (management and control)
+          //   teacher       → this classroom surface
+          // Mixing them was what made an administrator see the teacher's
+          // analytics on top of the administration content.
+          var role = String((user && user.role) || '').toLowerCase();
+          if (role === 'admin' || role === 'super_admin') {
+            window.location.href = '/console';
+            return;
+          }
           window.location.reload();
         }).catch(function (err) {
           // Admin portal: newest session always wins — no conflict dead-end.

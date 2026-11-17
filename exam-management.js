@@ -630,6 +630,43 @@ function updateCategoryQuestionCounts() {
 	updateSelectedCount();
 }
 
+// The preset's `totalQuestions` is the intended exam size. Selecting more is
+// allowed (the teacher may genuinely want a longer exam), but it must be
+// called out clearly so a 5-question exam never ships with 12 questions by
+// accident.
+function updateAssignQuestionLimitWarning(selectedCount) {
+	const count = Number(selectedCount) || 0;
+	const exam =
+		assignExamQuestionsId != null
+			? exams.find((e) => String(e.id) === String(assignExamQuestionsId))
+			: null;
+	const preset = exam ? resolvePresetForExam(exam) : null;
+	const limit = Number(preset?.totalQuestions) || 0;
+
+	const warningEl = document.getElementById('examAssignQuestionWarning');
+	const warningTextEl = document.getElementById(
+		'examAssignQuestionWarningText',
+	);
+	const countEl = document.getElementById('selectedQuestionCount');
+
+	// The count badge turns amber (near the limit) then red (past it).
+	if (countEl) {
+		countEl.classList.toggle('is-warning', !!limit && count >= limit);
+		countEl.classList.toggle('is-over-limit', !!limit && count > limit);
+	}
+
+	if (!warningEl || !warningTextEl) return;
+	if (!limit || count <= limit) {
+		warningEl.classList.add('hidden');
+		warningTextEl.textContent = '';
+		return;
+	}
+	warningEl.classList.remove('hidden');
+	warningTextEl.textContent = `This exam is set to ${limit} question${
+		limit === 1 ? '' : 's'
+	} in its preset, but ${count} questions are selected. Saving will push all ${count} questions to students.`;
+}
+
 function updateSelectedCount() {
 	const selectedCount = document.querySelectorAll(
 		'#selectedQuestionsList .question-item',
@@ -638,6 +675,7 @@ function updateSelectedCount() {
 	if (selectedCountElement) {
 		selectedCountElement.textContent = selectedCount;
 	}
+	updateAssignQuestionLimitWarning(selectedCount);
 	const selectedPointsElement = document.getElementById(
 		'selectedQuestionPoints',
 	);
@@ -2358,53 +2396,58 @@ async function saveAssignExamQuestions() {
 		return;
 	}
 
-	exam.questions = selectedQuestions;
+		exam.questions = selectedQuestions;
 
-	// When the exam uses personalized per-question time, the total duration is
-	// the sum of the assigned questions' own times — recompute it now that the
-	// question set is known.
-	const assignedPreset = resolvePresetForExam(exam);
-	if (assignedPreset && assignedPreset.timerMode === 'perQuestion') {
-		const derived = computeExamDurationMinutes(exam);
-		if (derived) exam.duration = derived;
-	}
-
-	// Persist to the backend first; mirror into localStorage on success.
-	if (window.API && typeof window.API.update === 'function') {
-		try {
-			// Resolve the local index-based selection to question ids so the
-			// server can persist them in the exam_questions junction (the
-			// legacy indices would fail ExamUpdateSchema's uuid validation).
-			const bank =
-				JSON.parse(
-					JSON.stringify(
-						window.__DI_CONTAINER__?.repo?.getAll_sync
-							? window.__DI_CONTAINER__.repo.getAll_sync('questions')
-							: [],
-					) || '[]',
-				) || [];
-			const selectedIds = selectedQuestions
-				.map((idx) => bank[idx] && (bank[idx].id || bank[idx].question_id))
-				.filter(Boolean);
-
-			await window.API.update('exams', examId, {
-				name: exam.name,
-				duration: exam.duration,
-				passingScore: exam.passingScore,
-				questions: selectedIds,
-				classes: Array.isArray(exam.classes) ? exam.classes : [],
-				presetId: exam.presetId || null,
-			});
-		} catch (apiErr) {
-			console.warn('[exams] API assign questions failed:', apiErr);
-			showToast(
-				'Failed to save assignment on server: ' +
-					(apiErr?.message || 'network error'),
-				'error',
-			);
-			return;
+		// When the exam uses personalized per-question time, the total duration is
+		// the sum of the assigned questions' own times — recompute it now that the
+		// question set is known.
+		const assignedPreset = resolvePresetForExam(exam);
+		if (assignedPreset && assignedPreset.timerMode === 'perQuestion') {
+			const derived = computeExamDurationMinutes(exam);
+			if (derived) exam.duration = derived;
 		}
-	}
+
+		// Persist to the backend first; mirror into localStorage on success.
+		if (window.API && typeof window.API.update === 'function') {
+			try {
+				// Resolve the local index-based selection to question ids so the
+				// server can persist them in the exam_questions junction (the
+				// legacy indices would fail ExamUpdateSchema's uuid validation).
+				const bank =
+					JSON.parse(
+						JSON.stringify(
+							window.__DI_CONTAINER__?.repo?.getAll_sync
+								? window.__DI_CONTAINER__.repo.getAll_sync('questions')
+								: [],
+						) || '[]',
+					) || [];
+				const selectedIds = selectedQuestions
+					.map((idx) => bank[idx] && (bank[idx].id || bank[idx].question_id))
+					.filter(Boolean);
+
+				await window.API.update('exams', examId, {
+					name: exam.name,
+					duration: exam.duration,
+					passingScore: exam.passingScore,
+					// The server reconciles the exam_questions junction from this
+					// mirror, so it must always be sent — including as an empty
+					// array when the teacher cleared the selection. Omitting it
+					// leaves stale links behind and the student keeps seeing
+					// questions that were just removed.
+					questions: selectedIds,
+					classes: Array.isArray(exam.classes) ? exam.classes : [],
+					presetId: exam.presetId || null,
+				});
+			} catch (apiErr) {
+				console.warn('[exams] API assign questions failed:', apiErr);
+				showToast(
+					'Failed to save assignment on server: ' +
+						(apiErr?.message || 'network error'),
+					'error',
+				);
+				return;
+			}
+		}
 
 	saveExams();
 	updateExamList();
@@ -3548,9 +3591,23 @@ function createExamPackage(examId) {
 		return byId ? { ...byId } : null;
 	};
 
+	// Resolve the assigned questions and keep only unique, real questions.
+	// Legacy mirrors (numeric bank indices) and the normalized junction can both
+	// be present in `exam.questions`; without de-duplication the same question
+	// is pushed twice and the student counts it twice in the runner.
+	const seenQuestionIds = new Set();
 	const examQuestions = (Array.isArray(exam.questions) ? exam.questions : [])
 		.map((entry) => resolveExamQuestionEntry(entry))
-		.filter((question) => question);
+		.filter((question) => {
+			if (!question) return false;
+			const id = String(
+				question.id ?? question.questionId ?? question.uuid ?? '',
+			).trim();
+			if (!id) return true;
+			if (seenQuestionIds.has(id)) return false;
+			seenQuestionIds.add(id);
+			return true;
+		});
 
 	// Get preset settings if assigned. The exam may carry a full presetSnapshot
 	// (embedded at save time) which works even when the local quizPresets
@@ -3743,6 +3800,27 @@ function createExamPackage(examId) {
 		return 0;
 	})();
 
+	// Total time for the session, in seconds.
+	//
+	// Precedence: computed per-question sum → preset time limit → the
+	// exam's own configured duration (minutes) → the app default.
+	//
+	// There is deliberately NO `|| 3600` fallback: inventing an hour here
+	// shipped a bogus "1 hour" timer to students on exams that had no
+	// preset and no duration. When nothing can be derived the exam is
+	// untimed (0) and the student UI simply shows no countdown.
+	const totalTimeLimitSeconds = (() => {
+		if (computedTotalSeconds > 0) return computedTotalSeconds;
+		if (Number(presetSettings.timeLimit) > 0)
+			return Number(presetSettings.timeLimit);
+		const durationMinutes = Number(exam.duration);
+		if (Number.isFinite(durationMinutes) && durationMinutes > 0)
+			return Math.round(durationMinutes * 60);
+		const appLimit = Number(appSettings.timeLimit);
+		if (Number.isFinite(appLimit) && appLimit > 0) return appLimit;
+		return 0;
+	})();
+
 	// Build the examActiveSession package
 	const sessionPackage = {
 		version: '1.0',
@@ -3753,12 +3831,10 @@ function createExamPackage(examId) {
 		duration: exam.duration,
 		timerMode,
 		perQuestionTime,
-		timeLimit:
-			computedTotalSeconds ||
-			presetSettings.timeLimit ||
-			exam.duration * 60 ||
-			appSettings.timeLimit ||
-			3600,
+		timeLimit: totalTimeLimitSeconds,
+		// The resolved question count lets the student validate that the
+		// pushed exam carries exactly the questions the teacher assigned.
+		questionCount: packagedQuestions.length,
 		penalty: presetSettings.penalty ?? appSettings.penalty ?? 0,
 		passingScore: presetSettings.passingScore || exam.passingScore || 60,
 		shuffleQuestions: presetSettings.shuffleQuestions ?? true,

@@ -53,6 +53,31 @@ async function ensureTeacher() {
 	}
 }
 
+/**
+ * Remove the fixture account so the roster is left exactly as it was found.
+ */
+async function removeTeacher() {
+	const prisma = new PrismaClient();
+	try {
+		const user = await prisma.user.findFirst({
+			where: { school_id: SCHOOL, username: USER },
+			select: { id: true },
+		});
+		if (!user) return;
+		await prisma.refreshToken.deleteMany({ where: { user_id: user.id } });
+		await prisma.securityEvent.deleteMany({ where: { user_id: user.id } });
+		await prisma.auditLog.deleteMany({ where: { actor_id: user.id } });
+		await prisma.result.deleteMany({ where: { user_id: user.id } });
+		await prisma.examSession.deleteMany({ where: { user_id: user.id } });
+		await prisma.gameSession.deleteMany({ where: { user_id: user.id } });
+		await prisma.user.delete({ where: { id: user.id } });
+	} catch {
+		/* best effort */
+	} finally {
+		await prisma.$disconnect();
+	}
+}
+
 const chrome = spawn(
 	CHROME,
 	[
@@ -173,10 +198,12 @@ main()
 		console.error('FAILED', err);
 		process.exitCode = 1;
 	})
-	.finally(() => {
+	.finally(async () => {
 		try {
 			chrome.kill();
 		} catch {
 			/* ignore */
 		}
+		// The fixture account is removed so the roster is left as it was found.
+		await removeTeacher();
 	});

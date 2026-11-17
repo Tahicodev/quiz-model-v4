@@ -346,6 +346,16 @@ function hydrateLegacyPayload(data) {
     const legacy = parseJson(exam.options_json, {});
     const normalizedQuestionIds = questionIdsByExam.get(String(exam.id)) || [];
     const normalizedClassIds = classIdsByExam.get(String(exam.id)) || [];
+    // The exam's own duration is the single source of truth for its length
+    // (minutes). `timeLimit` is hydrated in seconds for compatibility with
+    // the push payload, but it is only derived from `duration` — never
+    // invented — so a student never sees a one-hour timer on a five-minute
+    // exam.
+    const durationMinutes = Number(exam.duration);
+    const derivedTimeLimitSeconds =
+      Number.isFinite(durationMinutes) && durationMinutes > 0
+        ? Math.round(durationMinutes * 60)
+        : 0;
     return {
       ...exam,
       questions: normalizedQuestionIds.length ? normalizedQuestionIds : (legacy.questions || []),
@@ -353,6 +363,7 @@ function hydrateLegacyPayload(data) {
       passingScore: exam.passing_score,
       isTraining: exam.is_training,
       maxAttempts: exam.max_attempts,
+      timeLimit: derivedTimeLimitSeconds,
       // Preset configuration travels with the exam (options_json) so student
       // devices — which never receive the admin's quizPresets store — still
       // see every preset-driven rule: welcome title/message, penalty, time

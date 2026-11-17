@@ -907,6 +907,13 @@
 						entry.totalQuestions ?? entry.total_points ?? 0,
 					),
 					timeSpent: Number(entry.timeSpent ?? entry.time_spent ?? 0),
+					// The attempt ordinal lets the workspace tell "one attempt
+					// used" from "three attempts used" even though the exam
+					// results list is de-duplicated to the latest attempt.
+					attemptNumber: Number(
+						entry.attemptNumber ?? entry.attempt_number ?? 0,
+					),
+					resultId: entry.id || '',
 					date: entry.date || entry.dateTaken || entry.date_taken || '',
 				});
 			});
@@ -919,15 +926,53 @@
 				(exam) => [String(exam?.id || ''), String(exam?.name || '')],
 			),
 		);
+
+		// The workspace's own completion marker. It is written the moment an
+		// attempt is finished, so a refresh before the server row lands still
+		// knows the exam was taken.
+		const markers = readExamCompletionMarkers();
+		Object.entries(markers).forEach(([examId, marker]) => {
+			if (!marker) return;
+			results.push({
+				examId,
+				examName: marker.examName || examNames.get(String(examId)) || 'Exam',
+				score: Number(marker.score) || 0,
+				totalQuestions: Number(marker.totalQuestions) || 0,
+				timeSpent: Number(marker.timeSpent) || 0,
+				attemptNumber: Number(marker.attemptNumber) || 1,
+				resultId: marker.resultId || '',
+				date: marker.date || '',
+			});
+		});
+
 		const latestByExam = new Map();
 		results.forEach((result) => {
 			if (!result?.examId) return;
-			const existing = latestByExam.get(String(result.examId));
-			if (
-				!existing ||
-				new Date(result.date || 0) >= new Date(existing.date || 0)
-			) {
-				latestByExam.set(String(result.examId), result);
+			const key = String(result.examId);
+			const existing = latestByExam.get(key);
+			if (!existing) {
+				latestByExam.set(key, result);
+				return;
+			}
+			const incomingDate = new Date(result.date || 0).getTime() || 0;
+			const existingDate = new Date(existing.date || 0).getTime() || 0;
+			const incomingAttempt = Number(result.attemptNumber) || 0;
+			const existingAttempt = Number(existing.attemptNumber) || 0;
+			// The newest attempt wins. When two mirrors carry the same
+			// timestamp (a local snapshot written at the same second as the
+			// server row), the one with the higher attempt ordinal wins so the
+			// attempt counter never goes backwards.
+			const isNewer =
+				incomingDate > existingDate ||
+				(incomingDate === existingDate &&
+					incomingAttempt > existingAttempt);
+			if (isNewer) {
+				latestByExam.set(key, {
+					...result,
+					attemptNumber: Math.max(incomingAttempt, existingAttempt),
+				});
+			} else if (incomingAttempt > existingAttempt) {
+				existing.attemptNumber = incomingAttempt;
 			}
 		});
 		return Array.from(latestByExam.values()).map((result) => ({
@@ -2375,6 +2420,7 @@
 		}
 		renderProfileSection(context);
 		switchStudentProfileTab('profile');
+		syncProfileResetState();
 		closeStudentDropdown();
 		modal.style.display = 'flex';
 		modal.classList.add('active');
@@ -2409,6 +2455,9 @@
 			const isActive = btn.dataset.profileTab === target;
 			btn.classList.toggle('active', isActive);
 			btn.setAttribute('aria-selected', String(isActive));
+			// Roving tabindex: only the active tab is in the tab order, which
+			// is what lets the arrow keys drive the tablist.
+			btn.setAttribute('tabindex', isActive ? '0' : '-1');
 		});
 	}
 
@@ -2502,6 +2551,7 @@
 		if (request) {
 			showToast('Profile update request sent', 'success');
 			state.profileDirty = false;
+			syncProfileResetState();
 			renderProfileRequestStatus(context);
 		} else {
 			showToast('Unable to send request', 'error');
@@ -2566,6 +2616,16 @@
 		reader.readAsDataURL(file);
 	}
 
+	// Keep the Account modal's Reset button in sync with the form's dirty
+	// state: with nothing to discard it is dimmed and does not invite clicks.
+	function syncProfileResetState() {
+		const resetBtn = byId('studentProfileReset');
+		if (!resetBtn) return;
+		const dirty = Boolean(state.profileDirty);
+		resetBtn.disabled = !dirty;
+		resetBtn.classList.toggle('is-disabled', !dirty);
+	}
+
 	function resetProfileForm(context) {
 		state.profileDirty = false;
 		state.profileEditingRequestId = '';
@@ -2573,6 +2633,12 @@
 		populateProfileForm(context);
 		const noteInput = byId('studentProfileNote');
 		if (noteInput) noteInput.value = '';
+		const statusEl = byId('studentProfileRequestStatus');
+		if (statusEl) {
+			statusEl.textContent = '';
+			statusEl.className = 'profile-request-status';
+		}
+		syncProfileResetState();
 	}
 
 	function renderHeroStats(exams, resultsMap) {
@@ -4799,6 +4865,12 @@
 				</label>
 			`;
 		};
+		const hasActiveFilter = Boolean(
+			filters.subject ||
+				filters.teacher ||
+				filters.course ||
+				filters.lesson,
+		);
 		container.innerHTML = `
 			<div class="student-filter-fields">
 				${makeSelect('teacher', 'Teacher', options.teachers, 'All teachers')}
@@ -4806,7 +4878,16 @@
 				${makeSelect('course', 'Course', courseOptions, 'All courses')}
 				${makeSelect('lesson', 'Lesson', lessonOptions, 'All lessons')}
 			</div>
-			<button type="button" class="student-filter-reset" data-student-filter-reset>Reset</button>
+			<button
+				type="button"
+				class="student-filter-reset"
+				data-student-filter-reset
+				aria-label="Reset filters"
+				${hasActiveFilter ? '' : 'disabled'}
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+				Reset
+			</button>
 		`;
 		if (container.dataset.studentFilterBound !== 'true') {
 			container.dataset.studentFilterBound = 'true';
@@ -15498,11 +15579,55 @@
 			});
 		}
 
-		document.querySelectorAll('.profile-tab-btn').forEach((btn) => {
+		const profileTabButtons = Array.from(
+			document.querySelectorAll('.profile-tab-btn'),
+		);
+		profileTabButtons.forEach((btn) => {
 			btn.addEventListener('click', () => {
 				switchStudentProfileTab(btn.dataset.profileTab || 'profile');
 			});
 		});
+
+		// Arrow-key navigation across the account tablist (WAI-ARIA tabs
+		// pattern): Left/Right move, Home/End jump to the first/last tab.
+		const accountTablist = document.querySelector(
+			'#studentProfileModal [role="tablist"]',
+		);
+		if (accountTablist) {
+			accountTablist.addEventListener('keydown', (event) => {
+				if (!profileTabButtons.length) return;
+				const currentIndex = profileTabButtons.indexOf(
+					document.activeElement,
+				);
+				if (currentIndex === -1) return;
+				let nextIndex = currentIndex;
+				switch (event.key) {
+					case 'ArrowRight':
+					case 'ArrowDown':
+						nextIndex = (currentIndex + 1) % profileTabButtons.length;
+						break;
+					case 'ArrowLeft':
+					case 'ArrowUp':
+						nextIndex =
+							(currentIndex - 1 + profileTabButtons.length) %
+							profileTabButtons.length;
+						break;
+					case 'Home':
+						nextIndex = 0;
+						break;
+					case 'End':
+						nextIndex = profileTabButtons.length - 1;
+						break;
+					default:
+						return;
+				}
+				event.preventDefault();
+				const nextBtn = profileTabButtons[nextIndex];
+				if (!nextBtn) return;
+				nextBtn.focus();
+				switchStudentProfileTab(nextBtn.dataset.profileTab || 'profile');
+			});
+		}
 
 		const settingsBtn = byId('studentDropdownSettings');
 		if (settingsBtn) {
@@ -15548,6 +15673,7 @@
 		profileInputs.forEach((input) => {
 			input.addEventListener('input', () => {
 				state.profileDirty = true;
+				syncProfileResetState();
 			});
 		});
 
@@ -16480,6 +16606,7 @@
 			'success',
 		);
 		state.profileDirty = false;
+		syncProfileResetState();
 		renderProfileStatus(context);
 	}
 
@@ -16528,6 +16655,7 @@
 
 		state.profileEditingRequestId = String(request.id || '');
 		state.profileDirty = true;
+		syncProfileResetState();
 		renderProfileStatus(context);
 		showToast('Loaded pending request into form. Save to update it.', 'info');
 	}
@@ -17270,46 +17398,12 @@
 		return rows.length ? rows[0] : null;
 	}
 
-	// Resolve the category shown in the attempt header. Category/lesson
-	// practice carries the name directly; exam-based attempts fall back to the
-	// category of the first categorised question so the chip still names the
-	// topic.
-	function resolveTrainingCategoryLabel(session) {
-		const practiceContext = session?.practiceContext || {};
-		const direct = String(practiceContext.categoryTitle || '').trim();
-		if (direct) return direct;
-		const categoryId = String(practiceContext.categoryId || '').trim();
-		if (categoryId) {
-			const name = String(getFilterCategory(categoryId)?.name || '').trim();
-			if (name) return name;
-		}
-		const examId = String(session?.examId || '').trim();
-		if (!examId) return '';
-		const exam = readRepoTable('exams').find((row) => String(row.id) === examId);
-		const questionIds = new Set(
-			(Array.isArray(exam?.questions) ? exam.questions : [])
-				.map((value) => String(value?.id ?? value ?? ''))
-				.filter(Boolean),
-		);
-		if (!questionIds.size) return '';
-		for (const question of readRepoTable('questions')) {
-			if (!questionIds.has(String(question.id))) continue;
-			const category = getFilterCategory(
-				question.categoryId ?? question.category_id ?? question.category ?? '',
-			);
-			const name = String(category?.name || '').trim();
-			if (name) return name;
-		}
-		return '';
-	}
-
 	// Resolve the subject/teacher for the running attempt from every available
 	// source: the category tree (leaf → root), the bound course, then the exam.
 	function resolveTrainingContextLabels(source) {
 		const session = source || trainingState || {};
 		const practiceContext = session.practiceContext || {};
 		const categoryId = String(practiceContext.categoryId || '').trim();
-		const category = resolveTrainingCategoryLabel(session);
 		let subject = categoryId ? getCategorySubjectLabel(categoryId) : '';
 		let teacher = categoryId ? getCategoryTeacherLabel(categoryId) : '';
 		let course = findFilterCourseByName(practiceContext.courseTitle || '');
@@ -17330,14 +17424,28 @@
 				subject = subject || getExamSubjectLabel(exam);
 			}
 		}
-		return { category, subject, teacher };
+		return { subject, teacher };
+	}
+
+	// The attempt name shown in the modal header. It lives inside the student
+	// strip (as the third line of the identity block) rather than as a
+	// standalone heading, so the header no longer has two competing titles.
+	function applyTrainingAttemptTitle() {
+		const titleEl = byId('trainingModalTitle');
+		if (!titleEl) return;
+		// `examName` carries the label of whatever opened the runner: the
+		// exam's own name, "Lesson: ..." for course practice, or the generic
+	// training heading for free practice. Category practice prefixes its
+	// name with "Category: ", so the title drops the redundant prefix.
+		const titleText = trainingState.examName || 'Training Practice Test';
+		titleEl.textContent = trainingState.practiceContext?.categoryId
+			? titleText.replace(/^category:\s*/i, '')
+			: titleText;
 	}
 
 	function applyTrainingContextLabels(labels) {
-		const categoryEl = byId('trainingContextCategory');
 		const subjectEl = byId('trainingContextSubject');
 		const teacherEl = byId('trainingContextTeacher');
-		if (categoryEl) categoryEl.textContent = labels?.category || '—';
 		if (subjectEl) subjectEl.textContent = labels?.subject || '—';
 		if (teacherEl) teacherEl.textContent = labels?.teacher || '—';
 	}
@@ -17369,12 +17477,12 @@
 		// Course- and exam-derived labels need the student course catalogue;
 		// refresh the chips once it arrives so they stop showing placeholders.
 		const current = resolveTrainingContextLabels(source);
-		if (!current.category || !current.subject || !current.teacher) {
+		if (!current.subject || !current.teacher) {
 			ensureFilterCourseCatalog()
 				.then(() => {
 					if (!trainingState || !trainingState.active) return;
 					const next = resolveTrainingContextLabels(source);
-					if (next.category || next.subject || next.teacher) {
+					if (next.subject || next.teacher) {
 						applyTrainingContextLabels(next);
 					}
 				})
@@ -17646,19 +17754,211 @@
 		renderTrainingQuestion();
 	};
 
+	// How many attempts of this exam has the student already completed?
+	// `collectExamResults` de-duplicates to the latest attempt per exam, so
+	// the count is "attempts used" (the newest attempt's `attempt_number` is
+	// preferred when the server recorded it).
+	function countCompletedExamAttempts(examId, identity) {
+		if (!identity) return 0;
+		const results = collectExamResults(identity).filter(
+			(result) => String(result.examId) === String(examId),
+		);
+		if (!results.length) return 0;
+		const latest = results[0];
+		const attemptNumber = Number(
+			latest?.attemptNumber ?? latest?.attempt_number ?? 0,
+		);
+		return Number.isFinite(attemptNumber) && attemptNumber > 0
+			? attemptNumber
+			: results.length;
+	}
+
+	// The exam's configured attempt budget. `max_attempts` is nullable in the
+	// schema ("null = unlimited"), so an unset value means the student may
+	// still start an attempt — but a completed attempt is never silently
+	// re-opened by a page refresh (see `openExamFromQuery`).
+	function getExamAttemptBudget(exam) {
+		const raw = exam?.max_attempts ?? exam?.maxAttempts ?? null;
+		const value = Number(raw);
+		return Number.isFinite(value) && value > 0 ? value : 0;
+	}
+
+	// The latest recorded attempt of an exam for this student, or null.
+	function findLatestExamAttempt(examId, identity) {
+		if (!identity) return null;
+		return (
+			collectExamResults(identity).find(
+				(result) => String(result.examId) === String(examId),
+			) || null
+		);
+	}
+
+	// ── Local completion marker ──────────────────────────────────────────────
+	// The legacy bridge writes a new result straight to the server and keeps
+	// the local `quizResults` mirror untouched, so a page refresh right after
+	// submitting an exam saw no attempt on record and re-opened the runner.
+	// The workspace therefore stamps a tiny marker of its own the moment an
+	// attempt is finished; it is read back on the next page load.
+	const EXAM_COMPLETION_KEY = 'quizCompletedExams';
+
+	function readExamCompletionMarkers() {
+		try {
+			const raw = JSON.parse(
+				localStorage.getItem(EXAM_COMPLETION_KEY) || '{}',
+			);
+			return raw && typeof raw === 'object' ? raw : {};
+		} catch (_) {
+			return {};
+		}
+	}
+
+	function markExamCompleted(examId, payload) {
+		const id = String(examId || '').trim();
+		if (!id) return;
+		try {
+			const markers = readExamCompletionMarkers();
+			markers[id] = {
+				...(markers[id] || {}),
+				...(payload || {}),
+				date: (payload && payload.date) || new Date().toISOString(),
+			};
+			localStorage.setItem(EXAM_COMPLETION_KEY, JSON.stringify(markers));
+		} catch (_) {
+			/* Storage may be unavailable; the server result still blocks it. */
+		}
+	}
+
+	// Re-open the finished attempt instead of the question runner. A refresh on
+	// `?examId=…` must not hand the student a fresh paper for an exam they
+	// already submitted: the results are what they are looking for.
+	function openCompletedExamResult(exam, attempt) {
+		const total = Math.max(0, Number(attempt?.totalQuestions) || 0);
+		const grade = Number.isFinite(Number(attempt?.grade20))
+			? Number(attempt.grade20)
+			: grade20(attempt?.score, total);
+		const percent = total > 0 ? Math.round((grade / 20) * 100) : 0;
+		const preset = getExamPresetInfo(exam);
+		const rules = buildAttemptRules(preset, {
+			strictToggles: true,
+			defaultShuffle: false,
+			defaultExplanations: false,
+			fallbackPassingScore: exam?.passingScore,
+		});
+		const elapsedSec = Math.max(0, Number(attempt?.timeSpent) || 0);
+
+		trainingState = {
+			...trainingState,
+			active: true,
+			mode: 'exam',
+			examId: exam?.id,
+			examName: exam?.name || 'Exam',
+			penalty: rules.penalty,
+			passingScore: rules.passingScore,
+			penaltyDocked: 0,
+			questions: [],
+			currentIndex: 0,
+			userAnswers: {},
+			score: Math.max(0, Number(attempt?.score) || 0),
+			startTime: Date.now() - elapsedSec * 1000,
+			endTime: Date.now(),
+			completed: true,
+			showCorrections: false,
+			allowCorrections: rules.showExplanations,
+			resultId: attempt?.resultId || '',
+			resultPayload: null,
+			serverGrading: null,
+			serverGradingFailed: false,
+			perQuestion: [],
+			questionOptions: [],
+			timerHandle: null,
+			timeLimitSec: 0,
+		};
+
+		const container = byId('studentTrainingStage');
+		if (!container) return;
+		const passed = grade + 1e-9 >= rules.passingScore / 5;
+		const attemptsUsed = countCompletedExamAttempts(
+			exam?.id,
+			getStudentContext()?.identity,
+		);
+		const budget = getExamAttemptBudget(exam);
+		container.innerHTML = `
+			<div class="training-results-view">
+				<div class="results-header">
+					<h2>${escapeHtml(trainingState.examName)}</h2>
+					<p>This exam has already been completed${attemptsUsed ? ` — attempt ${attemptsUsed}${budget ? ` of ${budget}` : ''}` : ''}.</p>
+				</div>
+
+				<div class="results-stats-grid">
+					<div class="stat-card accent ${passed ? 'stat-passed' : 'stat-failed'}">
+						<div class="stat-value">${formatGrade20(grade)}</div>
+						<div class="stat-label">${passed ? 'Passed' : 'Failed'}</div>
+					</div>
+					<div class="stat-card">
+						<div class="stat-value">${percent}%</div>
+						<div class="stat-label">Score</div>
+					</div>
+					<div class="stat-card">
+						<div class="stat-value">${total || '—'}</div>
+						<div class="stat-label">Questions</div>
+					</div>
+					<div class="stat-card">
+						<div class="stat-value">${formatTrainingDuration(elapsedSec)}</div>
+						<div class="stat-label">Time Elapsed</div>
+					</div>
+				</div>
+
+				<div class="results-actions">
+					${
+						!budget || attemptsUsed < budget
+							? `<button type="button" class="workspace-btn" onclick="retakeExam('${escapeHtml(
+									String(exam?.id || ''),
+								)}')">Start another attempt</button>`
+							: ''
+					}
+					<button type="button" class="workspace-btn ghost" onclick="closeTrainingModal()">
+						Close &amp; Return to Workspace
+					</button>
+				</div>
+			</div>
+		`;
+		applyTrainingAttemptTitle();
+		openTrainingSurface();
+		// The results view is static — no timer runs, but the header strip and
+		// context chips still need their values.
+		renderTrainingStudentStrip();
+		updateTrainingContextMeta(trainingState);
+	}
+
 	function startExamModal(exam) {
 		const context = getStudentContext();
+		// How many times has this student already attempted this exam? The
+		// exam's `max_attempts` (when set) decides whether another attempt is
+		// allowed — matching on the exam id alone previously locked students
+		// out of every retry.
+		const priorAttempts = countCompletedExamAttempts(exam?.id, context?.identity);
+		const maxAttempts = getExamAttemptBudget(exam);
 		if (
-			context &&
-			collectExamResults(context.identity).some(
-				(result) => String(result.examId) === String(exam?.id),
-			)
+			priorAttempts > 0 &&
+			Number.isFinite(maxAttempts) &&
+			maxAttempts > 0 &&
+			priorAttempts >= maxAttempts
 		) {
-			showToast('This exam has already been completed.', 'info');
+			showToast(
+				`This exam has already been completed (${priorAttempts}/${maxAttempts} attempts used).`,
+				'info',
+			);
 			return;
 		}
+
 		const questionBank =
 			window.__DI_CONTAINER__?.repo?.getAll_sync('questions') || [];
+		// The assigned list can reach the student through several mirrors (the
+		// normalized junction and the legacy numeric indices). Resolve every
+		// entry, drop the ones that no longer exist and de-duplicate by id so
+		// the runner shows exactly the questions the teacher assigned — in the
+		// assigned order.
+		const seenQuestionIds = new Set();
 		const questions = (Array.isArray(exam?.questions) ? exam.questions : [])
 			.map((entry) => {
 				if (entry && typeof entry === 'object') return entry;
@@ -17666,7 +17966,14 @@
 					(question) => String(question?.id) === String(entry),
 				);
 			})
-			.filter(Boolean);
+			.filter((question) => {
+				if (!question) return false;
+				const id = String(question?.id ?? question?.question_id ?? '').trim();
+				if (!id) return true;
+				if (seenQuestionIds.has(id)) return false;
+				seenQuestionIds.add(id);
+				return true;
+			});
 		if (!questions.length) {
 			showToast('This exam has no questions available.', 'warning');
 			return;
@@ -17714,18 +18021,26 @@
 			overallTimeExpired: false,
 			questionTimeWarning: false,
 			questionTimeExpired: false,
-			// `timeLimit` is stored in seconds; `duration` is in minutes.
-			// Personalized-time presets override both with the sum of the
-			// assigned questions' own time budgets; a fixed preset time limit
-			// applies before the exam-level fields.
+			// Time limit precedence: per-question budgets → preset time limit →
+			// the exam's configured duration (minutes) → the cached
+			// `timeLimit` (seconds) as a last resort → untimed.
+			//
+			// The exam's own `duration` deliberately outranks the cached
+			// `timeLimit`: older pushed packages stored a hard-coded 3600
+			// seconds there, which surfaced to students as a one-hour timer
+			// on exams that were only meant to run for a few minutes.
 			timeLimitSec: Math.max(0, (() => {
 				const perQTotal = resolvePerQuestionTotal(ordered, preset);
 				if (perQTotal > 0) return perQTotal;
 				if (preset && Number(preset.timeLimit) > 0) return Number(preset.timeLimit);
 				const minutesLimit = Number(exam.duration) || 0;
+				if (minutesLimit > 0) return minutesLimit * 60;
 				const secondsLimit = Number(exam.timeLimit) || 0;
-				return secondsLimit > 0 ? secondsLimit : minutesLimit * 60;
+				return secondsLimit > 0 ? secondsLimit : 0;
 			})()),
+			// The attempt number is appended to the result id so a second try
+			// never overwrites the first attempt's record.
+			attemptNumber: priorAttempts + 1,
 		};
 
 		clearTrainingStorage();
@@ -18765,20 +19080,9 @@
 			return;
 		}
 
-		const q = trainingState.questions[trainingState.currentIndex];
-		if (!q) return;
-const modalTitle = byId('trainingModalTitle');
-		if (modalTitle) {
-			// `examName` carries the label of whatever opened the runner: the
-			// exam's own name, "Lesson: ..." for course practice, or the generic
-			// training heading for free practice. Category practice prefixes the
-			// name with "Category: ", which the header badge already conveys, so
-			// the title drops it to avoid repeating the chip.
-			const titleText = trainingState.examName || 'Training Practice Test';
-			modalTitle.textContent = trainingState.practiceContext?.categoryId
-				? titleText.replace(/^category:\s*/i, '')
-				: titleText;
-		}
+	const q = trainingState.questions[trainingState.currentIndex];
+	if (!q) return;
+	applyTrainingAttemptTitle();
 
 		const total = trainingState.questions.length;
 		const currentNum = trainingState.currentIndex + 1;
@@ -19159,8 +19463,12 @@ const modalTitle = byId('trainingModalTitle');
 		const newResult = {
 			id:
 				trainingState.mode === 'exam'
-					? `exam-${trainingState.examId}-${context?.user?.id || context?.identity?.numero || 'student'}`
+					? `exam-${trainingState.examId}-${context?.user?.id || context?.identity?.numero || 'student'}-${trainingState.attemptNumber || 1}`
 					: `training-${trainingState.examId || 'practice'}-${Date.now()}`,
+			// The attempt number tells the server how many tries this student
+			// has made, and keeps each attempt on its own row.
+			attempt_number: trainingState.attemptNumber || 1,
+			attemptNumber: trainingState.attemptNumber || 1,
 			userId: context?.user?.id || 'guest',
 			user_id: context?.user?.id || 'guest',
 			name:
@@ -19245,6 +19553,19 @@ const modalTitle = byId('trainingModalTitle');
 		// server response replaces it (and the corrections view) on arrival.
 		trainingState.resultId = newResult.id;
 		trainingState.resultPayload = newResult;
+		// Stamp the local completion marker so a refresh before the server
+		// row lands still knows this attempt was submitted.
+		if (trainingState.mode === 'exam') {
+			markExamCompleted(trainingState.examId, {
+				examName: trainingState.examName,
+				score,
+				totalQuestions,
+				timeSpent,
+				attemptNumber: trainingState.attemptNumber || 1,
+				resultId: newResult.id,
+				date: newResult.date,
+			});
+		}
 		ensureServerGrading().then(() => {
 			refreshGradingViews();
 			if (context) {
@@ -19632,6 +19953,34 @@ const modalTitle = byId('trainingModalTitle');
 		window.openTrainingMode(trainingState.examId);
 	};
 
+	// Start a fresh attempt of an exam the student already completed. The
+	// attempt budget still applies; the deep link is not reused so the runner
+	// is not re-entered through the "already completed" path.
+	window.retakeExam = function (examId) {
+		const id = String(examId || '').trim();
+		if (!id) return;
+		const exam = readRepoTable('exams').find(
+			(entry) => String(entry?.id) === id,
+		);
+		if (!exam) {
+			showToast('This exam is no longer available.', 'warning');
+			return;
+		}
+		const context = getStudentContext();
+		const attemptsUsed = countCompletedExamAttempts(id, context?.identity);
+		const budget = getExamAttemptBudget(exam);
+		if (budget > 0 && attemptsUsed >= budget) {
+			showToast(
+				`This exam has already been completed (${attemptsUsed}/${budget} attempts used).`,
+				'info',
+			);
+			return;
+		}
+		closeTrainingModal();
+		clearTrainingStorage();
+		startExamModal(exam);
+	};
+
 	window.joinActiveTournament = function () {
 		const context = getStudentContext();
 		if (!context) {
@@ -19785,18 +20134,98 @@ const modalTitle = byId('trainingModalTitle');
 	// (same pattern as the admin panel's toggleMobileNav).
 	window.toggleMobileNav = toggleMobileNav;
 
+	// A deep link like `student-workspace.html?examId=…` opens the exam
+	// runner. Once the student has submitted that exam, reloading the same URL
+	// must NOT hand them a fresh paper: it re-opens their recorded result
+	// instead.
+	//
+	// The server snapshot is asynchronous, so at DOMContentLoaded the
+	// authoritative result set may not have arrived yet. The decision is
+	// therefore:
+	//
+	//   1. An attempt is already on record (local mirror, local completion
+	//      marker, or the bootstrapped results) → show the recorded result.
+	//   2. No attempt is on record AND the server snapshot is still in flight
+	//      → wait for it. The exam may have been taken on another device.
+	//   3. No attempt is on record AND the snapshot already landed (or the
+	//      bridge is not in play at all) → open the runner.
+	let examQueryState = { pending: false, resolved: false };
+
+	function isExamQueryAuthoritative() {
+		// The bridge stamps the bootstrap time once the server snapshot has
+		// been applied. Without it we are still looking at the local cache.
+		return Boolean(window.__legacyBridgeBootstrappedAt);
+	}
+
+	function hasPendingExamSnapshot() {
+		// The bridge is only present in the real app. When it is absent
+		// (tests, offline static pages) the local cache is all there is and
+		// there is nothing to wait for.
+		if (typeof window.__legacyBridgeBootstrap !== 'function') return false;
+		if (window.__legacyBridgeBootstrappedAt) return false;
+		return window.__legacyBridgeBootstrapPending !== false;
+	}
+
 	function openExamFromQuery() {
 		const examId = new URLSearchParams(window.location.search).get('examId');
 		if (!examId) return;
-		const exams = window.__DI_CONTAINER__?.repo?.getAll_sync('exams') || [];
+		const exams = readRepoTable('exams');
 		const exam = exams.find((entry) => String(entry?.id) === String(examId));
-		if (exam) {
-			startExamModal(exam);
+		if (!exam) {
+			// The exam list has not hydrated yet — retry when it does.
+			if (!examQueryState.pending) {
+				examQueryState.pending = true;
+				window.addEventListener('quiz:bootstrap-ready', openExamFromQuery, {
+					once: true,
+				});
+			}
 			return;
 		}
-		window.addEventListener('quiz:bootstrap-ready', openExamFromQuery, {
-			once: true,
-		});
+
+		const context = getStudentContext();
+		const attempt = findLatestExamAttempt(examId, context?.identity);
+		if (attempt) {
+			// Already completed: show the recorded result, never the runner.
+			examQueryState.resolved = true;
+			openCompletedExamResult(exam, attempt);
+			return;
+		}
+
+		// No attempt on record — but the results may not have hydrated yet.
+		// Wait for the authoritative snapshot before starting the paper, so a
+		// refresh right after submitting never restarts the exam.
+		if (hasPendingExamSnapshot() && !examQueryState.resolved) {
+			if (!examQueryState.pending) {
+				examQueryState.pending = true;
+				window.addEventListener('quiz:bootstrap-ready', openExamFromQuery, {
+					once: true,
+				});
+				// Safety net: if the bootstrap never lands (offline), start the
+				// attempt from the local cache rather than leaving the student
+				// on a dead page.
+				setTimeout(() => {
+					if (examQueryState.resolved) return;
+					examQueryState.resolved = true;
+					const late = readRepoTable('exams').find(
+						(entry) => String(entry?.id) === String(examId),
+					);
+					if (!late) return;
+					const lateAttempt = findLatestExamAttempt(
+						examId,
+						getStudentContext()?.identity,
+					);
+					if (lateAttempt) {
+						openCompletedExamResult(late, lateAttempt);
+						return;
+					}
+					startExamModal(late);
+				}, 1500);
+			}
+			return;
+		}
+
+		examQueryState.resolved = true;
+		startExamModal(exam);
 	}
 
 	// Direct links must land logged in: when a join/play URL is opened

@@ -14,6 +14,7 @@ import { esc, stat, columnChart, barChart, legend } from '../viz/charts.js';
 import { renderTable } from '../components/table.js';
 import { loadingBlock, errorState, emptyState } from '../components/states.js';
 import { formatNumber, formatDate, formatRelative } from '../components/ui.js';
+import { toolbar } from '../components/filters.js';
 
 const WINDOWS = [
 	{ key: '15', label: '15 min' },
@@ -33,17 +34,17 @@ export const healthPage = {
 	permission: ['platform.health.read', 'school.health.read'],
 	async render(host, ctx) {
 		host.innerHTML = `
-			<div class="ac-toolbar">
-				<div class="ac-chip-group" role="group" aria-label="Window">
+			${toolbar({
+				chips: `<div class="ac-chip-group" role="group" aria-label="Window">
 					${WINDOWS.map(
 						(window) =>
 							`<button type="button" class="ac-chip${
 								STATE.minutes === window.key ? ' is-active' : ''
 							}" data-ac-window="${window.key}">${esc(window.label)}</button>`,
 					).join('')}
-				</div>
-				<button type="button" class="ac-btn" data-ac-refresh>Refresh</button>
-			</div>
+				</div>`,
+				actions: '<button type="button" class="ac-btn" data-ac-refresh>Refresh</button>',
+			})}
 			<div data-ac-health><div class="ac-skeleton-stack" aria-busy="true">
 				<div class="ac-skeleton" style="width:45%"></div>
 				<div class="ac-skeleton" style="width:100%"></div>

@@ -12,8 +12,15 @@
 import { api } from '../core/api.js';
 import { esc, stat, barChart } from '../viz/charts.js';
 import { renderTable, bindTable, renderPagination } from '../components/table.js';
+import { rowActions, bindRowActions, organizationActions } from '../components/actions.js';
+import {
+	openCreateOrganization,
+	openEditOrganization,
+	confirmDeleteOrganization,
+	toggleOrganizationStatus,
+} from './organizations/forms.js';
 import { loadingBlock, errorState, emptyState } from '../components/states.js';
-import { searchField, selectField } from '../components/filters.js';
+import { searchField, selectField, toolbar } from '../components/filters.js';
 import { formatNumber, formatDate, formatRelative, toast } from '../components/ui.js';
 
 const PAGE_SIZE = 25;
@@ -34,22 +41,26 @@ export const organizationsPage = {
 	permission: ['platform.organizations.read', 'school.profile.read'],
 	async render(host, ctx) {
 		host.innerHTML = `
-			<div class="ac-toolbar">
-				${searchField({ id: 'ac-org-search', placeholder: 'Search organizations…', value: STATE.search })}
-				${selectField({
-					id: 'ac-org-status',
-					label: 'Status',
-					value: STATE.status,
-					includeAll: true,
-					allLabel: 'All statuses',
-					options: [
-						{ value: 'active', label: 'Active' },
-						{ value: 'pending', label: 'Pending' },
-						{ value: 'suspended', label: 'Suspended' },
-					],
-				})}
-				<button type="button" class="ac-btn" data-ac-refresh>Refresh</button>
-			</div>
+			${toolbar({
+				fields: `${searchField({ id: 'ac-org-search', placeholder: 'Search organizations…', value: STATE.search })}
+					${selectField({
+						id: 'ac-org-status',
+						label: 'Status',
+						value: STATE.status,
+						includeAll: true,
+						allLabel: 'All statuses',
+						options: [
+							{ value: 'active', label: 'Active' },
+							{ value: 'pending', label: 'Pending' },
+							{ value: 'suspended', label: 'Suspended' },
+						],
+					})}`,
+				actions: `${
+					ctx.isPlatform
+						? '<button type="button" class="ac-btn ac-btn--primary" data-ac-org-new>Add an organization</button>'
+						: ''
+				}<button type="button" class="ac-btn" data-ac-refresh>Refresh</button>`,
+			})}
 			<div class="ac-grid ac-grid--kpi" data-ac-org-kpis></div>
 			<section class="ac-panel" style="margin-top:16px">
 				<div class="ac-panel__header">
@@ -208,6 +219,13 @@ export const organizationsPage = {
 									.join(' ')
 							: '<span class="ac-table__muted">—</span>',
 				},
+				{
+					key: 'actions',
+					label: 'Actions',
+					align: 'right',
+					render: (row) =>
+						rowActions(organizationActions(row, { canManage: ctx.isPlatform })),
+				},
 			],
 			rows,
 			sort: STATE.sort,
@@ -304,5 +322,34 @@ export const organizationsPage = {
 			ctx.rerender();
 		});
 		host.querySelector('[data-ac-refresh]').addEventListener('click', () => ctx.rerender());
+
+		// ── The row actions ─────────────────────────────────────────────
+		bindRowActions(bodyHost, {
+			open: (id) => {
+				window.location.hash = `#/organizations/${id}`;
+			},
+			'toggle-status': async (id) => {
+				const organization = rows.find((row) => row.id === id);
+				if (!organization) return;
+				await toggleOrganizationStatus(organization, { onChanged: () => ctx.rerender() });
+			},
+			edit: (id) => {
+				const organization = rows.find((row) => row.id === id);
+				if (!organization) return;
+				openEditOrganization(organization, { onSaved: () => ctx.rerender() });
+			},
+			delete: async (id) => {
+				const organization = rows.find((row) => row.id === id);
+				if (!organization) return;
+				await confirmDeleteOrganization(organization, { onDeleted: () => ctx.rerender() });
+			},
+		});
+
+		// ── Add an organization ─────────────────────────────────────────
+		host.querySelector('[data-ac-org-new]')?.addEventListener('click', () => {
+			openCreateOrganization({
+				onCreated: () => ctx.rerender(),
+			});
+		});
 	},
 };

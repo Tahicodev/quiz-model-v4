@@ -1162,14 +1162,6 @@ function renderResultsChrome(profiles, visibleProfiles, filtered) {
 			? 'One row per student, with their latest performance.'
 			: 'Every attempt, newest first. Open a student profile from the student cell.';
 	}
-	const studentCount = document.getElementById('resultsStudentCount');
-	if (studentCount) studentCount.textContent = String(profiles.length);
-	const studentLabel = document.getElementById('resultsStudentLabel');
-	if (studentLabel) studentLabel.textContent = profiles.length === 1 ? 'student' : 'students';
-	const attemptCount = document.getElementById('resultsCountBadge');
-	if (attemptCount) attemptCount.textContent = String(filtered.length);
-	const attemptLabel = document.getElementById('resultsAttemptLabel');
-	if (attemptLabel) attemptLabel.textContent = filtered.length === 1 ? 'attempt' : 'attempts';
 	const tableHint = document.getElementById('resultsTableHint');
 	if (tableHint) {
 		tableHint.textContent = `${filtered.length} attempt${
@@ -1818,11 +1810,11 @@ function resultsProfileExamHistoryHtml(examResults) {
 				.join('')}</tbody>
 		</table>
 	</div>
-	${
-		examResults.length > rows.length
-			? `<p class="results-cell-sub">Showing the ${rows.length} most recent of ${examResults.length} exam attempts.</p>`
-			: ''
-	}`;
+		${
+			examResults.length > rows.length
+				? `<p class="results-caption"><span class="results-caption-dot" aria-hidden="true"></span>Showing the ${rows.length} most recent of ${examResults.length} exam attempts.</p>`
+				: ''
+		}`;
 }
 
 function resultsProfileTrainingHtml(training) {
@@ -1844,11 +1836,11 @@ function resultsProfileTrainingHtml(training) {
 			</li>`,
 		)
 		.join('')}</ul>
-	${
-		training.length > rows.length
-			? `<p class="results-cell-sub">Showing the ${rows.length} most recent of ${training.length} training attempts.</p>`
-			: ''
-	}`;
+		${
+			training.length > rows.length
+				? `<p class="results-caption"><span class="results-caption-dot" aria-hidden="true"></span>Showing the ${rows.length} most recent of ${training.length} training attempts.</p>`
+				: ''
+		}`;
 }
 
 function renderStudentProfile(profile) {
@@ -1967,10 +1959,94 @@ function openStudentProfileByKey(encodedKey) {
 	renderStudentProfile(profile);
 	const modal = document.getElementById('resultsStudentProfileModal');
 	if (!modal) return;
+	// The teacher domain splits every tab into an analytics pane and a manage
+	// pane, and the modal markup lives inside the manage pane. While the
+	// analytics view is active that pane is `display:none`, so the profile was
+	// rendered but invisible — the app looked frozen and the scroll stayed
+	// locked. Re-parent the modal to <body> so it always paints on top.
+	ensureStudentProfileModalIsTopmost(modal);
 	modal.classList.add('active');
 	document.body.classList.add('results-profile-open');
 	const close = modal.querySelector('[data-profile-close]');
 	if (close && typeof close.focus === 'function') close.focus();
+}
+
+/**
+ * Move the student-profile modal out of any hidden pane and to the end of
+ * <body> so it is never trapped behind a `hidden` ancestor.
+ */
+function ensureStudentProfileModalIsTopmost(modal) {
+	if (!modal || !modal.parentNode) return;
+	if (modal.parentNode === document.body) return;
+	document.body.appendChild(modal);
+}
+
+/**
+ * Show the Results *management* view (roster + attempts).
+ *
+ * The teacher analytics split keeps the roster in the manage pane; the
+ * programmatic `openTab(null, 'results')` switches a teacher to the analytics
+ * view, which hides it. Any action that needs the roster (opening a student
+ * profile, filtering) must ask for the manage view explicitly.
+ */
+function showResultsManageView() {
+	try {
+		if (
+			window.TeacherDomainAnalytics &&
+			typeof window.TeacherDomainAnalytics.showView === 'function'
+		) {
+			window.TeacherDomainAnalytics.showView('results', 'manage');
+		}
+	} catch (_) {
+		/* the analytics module is optional */
+	}
+}
+
+/**
+ * Open the Results tab on its management view.
+ *
+ * `openTab(null, tab)` is the "programmatic navigation" signal the teacher
+ * domain wrapper uses to force the analytics view. Passing a truthy (but
+ * empty) event keeps the wrapper from resetting the view we just selected, so
+ * the intervention list never flashes in front of the roster.
+ */
+function openResultsManageTab() {
+	showResultsManageView();
+	if (typeof window.openTab === 'function') {
+		window.openTab({}, 'results');
+	}
+}
+
+/**
+ * Open the profile of a student by their user id.
+ * The intervention list and the exam analysis both address students by id.
+ */
+function openStudentProfileByUserId(userId) {
+	const id = String(userId || '').trim();
+	if (!id) return false;
+	openResultsManageTab();
+	if (!resultsViewState.profiles.length) {
+		try {
+			loadResults();
+		} catch (_) {
+			/* the results module is optional */
+		}
+	}
+	// The roster keys profiles by `u:<id>` for students that have a user row.
+	// Fall back to a direct id scan so a student without a matching key (an
+	// imported result, a renamed account) still opens.
+	const key = `u:${id}`;
+	const profile =
+		resultsViewState.profiles.find((item) => item.key === key) ||
+		resultsViewState.profiles.find(
+			(item) => String(item.studentId || '') === id,
+		);
+	if (profile) {
+		openStudentProfileByKey(profile.key);
+		return true;
+	}
+	openStudentProfileByKey(key);
+	return true;
 }
 
 function closeStudentProfile() {
@@ -2483,7 +2559,14 @@ window.clearAllResultFilters = clearAllResultFilters;
 window.setResultsView = setResultsView;
 window.setResultsSort = setResultsSort;
 window.openStudentProfileByKey = openStudentProfileByKey;
+window.openStudentProfileByUserId = openStudentProfileByUserId;
+window.showResultsManageView = showResultsManageView;
+window.openResultsManageTab = openResultsManageTab;
 window.closeStudentProfile = closeStudentProfile;
+// Shared with the exam-analysis screen so a student name always resolves to
+// the same profile key as in the Results table.
+window.resultsStudentKeyForResult = studentKeyForResult;
+window.resultsStudentKeyForUserId = studentKeyForUserId;
 window.exportStudentProfileCSV = exportStudentProfileCSV;
 window.escapeHtml = escapeHtml;
 window.exportResultsCSV = exportResultsCSV;

@@ -30,11 +30,7 @@ app.use(
 					"'unsafe-eval'",
 				],
 				scriptSrcAttr: ["'unsafe-inline'"],
-				styleSrc: [
-					"'self'",
-					"'unsafe-inline'",
-					'https://fonts.googleapis.com',
-				],
+				styleSrc: ["'self'", "'unsafe-inline'"],
 				imgSrc: ["'self'", 'data:', 'blob:'],
 				connectSrc: [
 					"'self'",
@@ -44,7 +40,9 @@ app.use(
 					'https://api.openai.com',
 					'https://api.anthropic.com',
 				],
-				fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+				// The web fonts are vendored under public/fonts/ and served by
+				// this application, so the interface needs no remote origin.
+				fontSrc: ["'self'", 'data:'],
 				workerSrc: ["'self'", 'blob:'],
 			},
 		},
@@ -408,8 +406,16 @@ app.use((req, res, next) => {
 });
 
 // The built bundle + the whole Kids player live in public/.
+//
+// `public/` is mounted at BOTH "/" and "/public": index.html references its
+// bundle as `public/student-bundle.js` (a relative path), which resolves to
+// /public/student-bundle.js from the root. The old catch-all mount served
+// that path by accident; the allow-list serves it on purpose.
 for (const dir of PUBLIC_DIRECTORIES) {
 	app.use(express.static(dir, noCacheOpts));
+}
+for (const dir of PUBLIC_DIRECTORIES) {
+	app.use(`/${dir}`, express.static(dir, noCacheOpts));
 }
 
 // User-uploaded images (question/media options) live in appRoot/uploads and

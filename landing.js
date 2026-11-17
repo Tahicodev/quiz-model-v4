@@ -163,19 +163,13 @@
 	}
 
 		function redirectIfLoggedIn() {
-			if (isExamFlowActive()) return false;
-			const user = window.Auth?.getCurrentUser ? window.Auth.getCurrentUser() : null;
-			if (!user) return false;
-			if (user.role === 'student') {
-				window.location.href = 'student-workspace.html';
-				return true;
-			}
-			if (user.role === 'admin' || user.role === 'super_admin') {
-				// Administrators land in the control center. The classroom
-				// surface (admin.html) stays one click away from there.
-				window.location.href = 'console';
-				return true;
-			}
+			// The entry page is the SIGN-IN page. It must never silently redirect
+			// an already-signed-in visitor away: they would have no way to sign in
+			// as somebody else, and the sign-in form would never be seen.
+			//
+			// The modern entry page (src/frontend/ui/pages/entry/EntryPage.js)
+			// offers the existing session as an explicit "Continue" choice and
+			// routes by role when it is taken.
 			return false;
 		}
 
@@ -331,7 +325,11 @@
 				}
 				window.location.href = 'student-workspace.html';
 			} else if (user.role === 'admin' || user.role === 'super_admin') {
+				// Administrators manage the platform from the control center.
 				window.location.href = 'console';
+			} else if (user.role === 'teacher') {
+				// Teachers work in the classroom surface.
+				window.location.href = 'admin.html';
 			} else {
 				updateExamEntryAvailability();
 			}

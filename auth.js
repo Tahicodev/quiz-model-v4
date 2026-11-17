@@ -466,7 +466,23 @@
 			}
 		}
 
-		// Legacy localStorage-only fallback (offline).
+		// Legacy localStorage-only fallback (the server was unreachable).
+		//
+		// IMPORTANT: this only changes the credential held in THIS browser's
+		// cache. The server's credential is untouched, so signing in — which
+		// goes through the server — would fail. Say so plainly instead of
+		// promising a sign-in that cannot work.
+		const serverReachable =
+			window.API && typeof window.API.raw === 'function' && !recoveryTicket;
+		if (serverReachable) {
+			setRecoveryStatus(
+				'The server could not be reached, so the password was NOT changed. ' +
+					'Start the server and try again, or ask an administrator to reset it.',
+				'error',
+			);
+			return;
+		}
+
 		const users = await ensureDefaultAdmin();
 		let user = findUserByUsername(users, username);
 		if (!user) {
@@ -494,8 +510,9 @@
 		setRecoveryPanelMode('closed');
 		if (formEl) formEl.reset();
 		setRecoveryStatus(
-			'Dashboard password reset. Sign in with the new password.',
-			'success',
+			'Password changed on this device only — the server was unreachable, so the ' +
+				'account still uses its old password. Start the server and reset it again.',
+			'error',
 		);
 	}
 
@@ -918,10 +935,9 @@
 			// Notifications are always available to teachers — the server
 			// scopes the feed to their own activity, classes and students.
 			notifications: true,
-			// Monitoring is an admin-only view, hard-hidden for teachers in
-			// every gate below — no toggle exists for it.
+			// The activity log is an admin-only view, hard-hidden for
+			// teachers in every gate below — no toggle exists for it.
 			activity: false,
-			monitoring: false,
 		},
 		settings: true,
 		settingsTabs: {
@@ -971,11 +987,10 @@
 			} catch (_) {}
 		}
 		const mergedTabs = { ...DEFAULT_TEACHER_ACCESS.tabs, ...(stored.tabs || {}) };
-		// Activity/Monitoring are hard admin-only: a stored `true` (saved
-		// when the default was still on, or hand-edited) must never reopen
-		// them for teachers.
+		// Activity is hard admin-only: a stored `true` (saved when the
+		// default was still on, or hand-edited) must never reopen it for
+		// teachers.
 		mergedTabs.activity = false;
-		mergedTabs.monitoring = false;
 		// The Notifications tab is role-scoped server-side, so it is never
 		// revocable for teachers.
 		mergedTabs.notifications = true;
@@ -4206,8 +4221,13 @@
 				// Adopt the real id so later edits/resets reuse it, not the stub.
 				if (String(serverTargetId) !== String(user.id)) {
 					user.id = serverTargetId;
-					saveUsers(users);
 				}
+				// Mirror the new credential locally. Leaving the OLD
+				// client-side hash in place made the legacy local sign-in
+				// reject the password the administrator was just given.
+				user.passwordHash = await hashPassword(newPassword);
+				user.updatedAt = new Date().toISOString();
+				saveUsers(users);
 			} catch (apiErr) {
 				console.warn('[auth] API reset password failed:', apiErr);
 				showToast(

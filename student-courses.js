@@ -699,10 +699,15 @@
 			container.innerHTML = '';
 			return;
 		}
+		// The visible "Teacher" / "Subject" captions used to sit above each
+		// select and threw the row out of alignment (the captions had a
+		// different line height than the selects they labelled). The select
+		// itself now carries the dimension — "All teachers" / "All subjects"
+		// until a value is picked — and the accessible name moves onto the
+		// control, so nothing is announced twice and nothing drifts.
 		const makeSelect = (field, label, items, allLabel) => `
 			<label class="student-filter">
-				<span class="student-filter-label">${esc(label)}</span>
-				<select data-course-filter="${field}">
+				<select data-course-filter="${field}" aria-label="${esc(label)}">
 					<option value="">${esc(allLabel)}</option>
 					${items
 						.map(
@@ -715,6 +720,9 @@
 				</select>
 			</label>
 		`;
+		const hasActiveFilter = Boolean(
+			courseFilters.teacher || courseFilters.subject,
+		);
 		container.innerHTML = `
 			<div class="student-filter-bar__head">
 				<span class="student-filter-bar__icon" aria-hidden="true">
@@ -725,11 +733,17 @@
 			<div class="student-filter-fields">
 				${makeSelect('teacher', 'Teacher', teachers, 'All teachers')}
 				${makeSelect('subject', 'Subject', subjects, 'All subjects')}
-				<button type="button" class="student-filter-reset" data-course-filter-reset>
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
-					Reset
-				</button>
 			</div>
+			<button
+				type="button"
+				class="student-filter-reset"
+				data-course-filter-reset
+				aria-label="Reset course filters"
+				${hasActiveFilter ? '' : 'disabled'}
+			>
+				<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+				Reset
+			</button>
 		`;
 		if (container.dataset.courseFilterBound !== 'true') {
 			container.dataset.courseFilterBound = 'true';

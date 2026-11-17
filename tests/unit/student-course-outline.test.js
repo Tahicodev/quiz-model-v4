@@ -9,6 +9,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import '../../student-courses.js';
 
 const MODULE = 'module-1';
@@ -108,6 +110,34 @@ describe('student course outline numbering', () => {
 			(node) => node.textContent,
 		);
 		expect(badges).toEqual(['1']);
+	});
+
+	it('renders the lesson badge inside the lesson head, next to the kicker', async () => {
+		await window.StudentCourses.openCourse('course-1');
+		window.StudentCourses.openChapter(CHAPTER_A);
+		const reader = document.getElementById('studentCourseReader');
+		const badge = reader.querySelector('.course-lesson-number');
+		expect(badge).not.toBeNull();
+		// The badge has a style of its own (it used to render as a bare
+		// inline span) and lives in the shared head row.
+		expect(badge.closest('.course-lesson-head')).not.toBeNull();
+	});
+});
+
+describe('lesson ordinal badge styling', () => {
+	it('has a dedicated badge rule in the stylesheet', () => {
+		const css = readFileSync(path.join(process.cwd(), 'styles.css'), 'utf8');
+		expect(css).toMatch(/\.course-lesson-number\s*\{/);
+		// The rule must actually style the badge, not just exist.
+		const rule = /\.course-lesson-number\s*\{([^}]*)\}/.exec(css);
+		expect(rule).not.toBeNull();
+		expect(rule[1]).toMatch(/border-radius/);
+		expect(rule[1]).toMatch(/background/);
+	});
+
+	it('has a dark-theme variant', () => {
+		const dark = readFileSync(path.join(process.cwd(), 'theme-dark.css'), 'utf8');
+		expect(dark).toMatch(/html\[data-theme='dark'\] \.course-lesson-number/);
 	});
 });
 

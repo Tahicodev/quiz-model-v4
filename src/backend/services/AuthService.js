@@ -107,6 +107,79 @@ export class AuthService {
   }
 
   /**
+   * Verify a plaintext password against a stored hash.
+   *
+   * Three hash generations are accepted:
+   *   1. bcrypt ($2a$/$2b$/$2y$)         — the current scheme
+   *   2. legacy `simple-<signed int>`      — from the old client-side hash
+   *   3. legacy SHA-256 hex (64 chars)     — from the old client-side hash
+   *
+   * A legacy match sets `shouldMigrate`, so the caller can transparently
+   * re-hash it with bcrypt. An unknown scheme never authenticates.
+   *
+   * @param {string} password
+   * @param {string} storedHash
+   * @returns {Promise<{matches:boolean, shouldMigrate:boolean, scheme:string}>}
+   */
+  async #verifyStoredHash(password, storedHash) {
+    const stored = String(storedHash || '');
+    if (stored.startsWith('$2a$') || stored.startsWith('$2b$') || stored.startsWith('$2y$')) {
+      return { matches: await bcrypt.compare(password, stored), shouldMigrate: false, scheme: 'bcrypt' };
+    }
+    if (stored.startsWith('simple-')) {
+      // Mirror auth.js simpleHash: djb2-style 32-bit with sign.
+      let h = 0;
+      const s = String(password || '');
+      for (let i = 0; i < s.length; i++) {
+        h = (h << 5) - h + s.charCodeAt(i);
+        h |= 0;
+      }
+      const matches = `simple-${h}` === stored;
+      return { matches, shouldMigrate: matches, scheme: 'simple' };
+    }
+    if (/^[0-9a-f]{64}$/i.test(stored)) {
+      const hex = crypto
+        .createHash('sha256')
+        .update(String(password || ''), 'utf8')
+        .digest('hex');
+      const matches = hex === stored.toLowerCase();
+      return { matches, shouldMigrate: matches, scheme: 'sha256' };
+    }
+    // Unknown scheme — do not authenticate.
+    return { matches: false, shouldMigrate: false, scheme: 'unknown' };
+  }
+
+  /**
+   * The lifecycle status of an organization.
+   *
+   * Returns 'active' | 'pending' | 'suspended' | null (unknown).
+   *
+   * 'suspended' is the only status that blocks access. A lookup that FAILS
+   * returns null rather than 'suspended': the account's own status is the
+   * primary control, and a transient read error must not lock every account
+   * on the platform out of the system. A missing row also returns null —
+   * there is no organization to suspend.
+   */
+  async #organizationStatus(schoolId) {
+    if (!schoolId) return null;
+    const repo = this.#repo;
+    // A repository that cannot expose the model (a legacy or test double)
+    // simply has no organization lifecycle to enforce.
+    if (typeof repo?.modelFor !== 'function') return null;
+    try {
+      const schools = repo.modelFor('schools');
+      const row = await schools.findUnique({
+        where: { id: schoolId },
+        select: { id: true, status: true },
+      });
+      return row?.status || null;
+    } catch (err) {
+      logger.warn({ err, schoolId }, 'Could not read the organization status');
+      return null;
+    }
+  }
+
+  /**
    * Best-effort durable security trail. Never throws — a failed write must
    * not break the authentication flow it is describing.
    */
@@ -194,11 +267,8 @@ export class AuthService {
     // refuses every sign-in regardless of its accounts' own status — and
     // re-activating the organization restores access without touching a
     // single account.
-    const organization = await this.#repo.modelFor('schools').findUnique({
-      where: { id: user.school_id },
-      select: { id: true, status: true, name: true },
-    });
-    if (organization && organization.status === 'suspended') {
+    const organizationStatus = await this.#organizationStatus(user.school_id);
+    if (organizationStatus === 'suspended') {
       securityLog('login_failure', { userId: user.id, reason: 'organization_suspended', ip });
       await this.#recordSecurity({
         type: 'login_failure',
@@ -220,31 +290,10 @@ export class AuthService {
     //   3. legacy SHA-256 hex (64 lower-hex chars)                 — older local
     // Whenever a non-bcrypt hash matches, immediately re-hash with bcrypt and
     // persist, so the user's next login goes through the fast path.
-    let matches = false;
-    let shouldMigrate = false;
-    const stored = String(user.password_hash || '');
-
-    if (stored.startsWith('$2a$') || stored.startsWith('$2b$') || stored.startsWith('$2y$')) {
-      matches = await bcrypt.compare(password, stored);
-    } else if (stored.startsWith('simple-')) {
-      // Mirror auth.js simpleHash: djb2-style 32-bit with sign.
-      let h = 0;
-      const s = String(password || '');
-      for (let i = 0; i < s.length; i++) {
-        h = (h << 5) - h + s.charCodeAt(i);
-        h |= 0;
-      }
-      matches = `simple-${h}` === stored;
-      shouldMigrate = matches;
-    } else if (/^[0-9a-f]{64}$/i.test(stored)) {
-      // SHA-256 hex of the plaintext (auth.js hashPassword fallback).
-      const hex = crypto.createHash('sha256').update(String(password || ''), 'utf8').digest('hex');
-      matches = hex === stored.toLowerCase();
-      shouldMigrate = matches;
-    } else {
-      // Unknown scheme — do not authenticate.
-      matches = false;
-    }
+    const { matches, shouldMigrate, scheme } = await this.#verifyStoredHash(
+      password,
+      user.password_hash,
+    );
 
     if (!matches) {
       securityLog('login_failure', { userId: user.id, reason: 'bad_password', ip });
@@ -266,7 +315,7 @@ export class AuthService {
       try {
         const newHash = await bcrypt.hash(password, config.bcryptRounds);
         await this.#repo.update('users', user.id, { password_hash: newHash });
-        securityLog('password_hash_migrated', { userId: user.id, from: stored.startsWith('simple-') ? 'simple' : 'sha256' });
+        securityLog('password_hash_migrated', { userId: user.id, from: scheme });
       } catch (migrateErr) {
         // Migration failure must not block a valid login.
         logger.warn({ err: migrateErr, userId: user.id }, 'Password hash migration failed — continuing');
@@ -369,11 +418,8 @@ export class AuthService {
     }
 
     // A suspended organization stops every session, not just new sign-ins.
-    const organization = await this.#repo.modelFor('schools').findUnique({
-      where: { id: user.school_id },
-      select: { id: true, status: true },
-    });
-    if (organization && organization.status === 'suspended') {
+    const organizationStatus = await this.#organizationStatus(user.school_id);
+    if (organizationStatus === 'suspended') {
       throw new UnauthorizedError('Organization suspended');
     }
 
@@ -664,7 +710,11 @@ export class AuthService {
     const user = await this.#repo.getById('users', userId);
     if (!user) throw new NotFoundError('User');
 
-    const matches = await bcrypt.compare(oldPassword, user.password_hash);
+    // The comparison accepts the three hash generations the login path
+    // accepts (bcrypt, legacy `simple-`, legacy SHA-256 hex). A user still
+    // on a legacy hash could SIGN IN but could never change their own
+    // password, because this used to bcrypt-only compare.
+    const matches = await this.#verifyStoredHash(oldPassword, user.password_hash);
     if (!matches) {
       await this.#recordSecurity({
         type: 'password_change',

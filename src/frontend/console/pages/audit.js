@@ -16,7 +16,7 @@ import { api } from '../core/api.js';
 import { esc, stat, barChart } from '../viz/charts.js';
 import { renderTable, renderPagination } from '../components/table.js';
 import { loadingBlock, errorState, emptyState } from '../components/states.js';
-import { searchField, selectField } from '../components/filters.js';
+import { searchField, selectField, toolbar } from '../components/filters.js';
 import { formatNumber, formatDate, openModal } from '../components/ui.js';
 
 const PAGE_SIZE = 25;
@@ -41,15 +41,15 @@ export const auditPage = {
 	permission: ['platform.audit.read', 'school.audit.read'],
 	async render(host, ctx) {
 		host.innerHTML = `
-			<div class="ac-toolbar">
-				<div class="ac-chip-group" role="group" aria-label="Trail">
+			${toolbar({
+				chips: `<div class="ac-chip-group" role="group" aria-label="Trail">
 					<button type="button" class="ac-chip is-active" data-ac-stream="actions">Administrative actions</button>
 					<button type="button" class="ac-chip" data-ac-stream="security">Security events</button>
-				</div>
-				${searchField({ id: 'ac-audit-search', placeholder: 'Search the trail…', value: STATE.search })}
-				<span data-ac-audit-filters></span>
-				<button type="button" class="ac-btn" data-ac-refresh>Refresh</button>
-			</div>
+				</div>`,
+				fields: searchField({ id: 'ac-audit-search', placeholder: 'Search the trail…', value: STATE.search }),
+				filters: '<span data-ac-audit-filters></span>',
+				actions: '<button type="button" class="ac-btn" data-ac-refresh>Refresh</button>',
+			})}
 			<div class="ac-grid ac-grid--kpi" data-ac-audit-kpis></div>
 			<section class="ac-panel" style="margin-top:16px">
 				<div class="ac-panel__header">

@@ -39,7 +39,6 @@ const SCHEMA_PATH = join(PROJECT_ROOT, 'prisma', 'schema.prisma');
 
 const CDN_PROBE_HOSTS = [
 	{ id: 'cdnjs', host: 'https://cdnjs.cloudflare.com', vendored: true },
-	{ id: 'google-fonts', host: 'https://fonts.googleapis.com' },
 	{ id: 'jsdelivr', host: 'https://cdn.jsdelivr.net', vendored: true },
 	{ id: 'sheetjs', host: 'https://cdn.sheetjs.com', vendored: true },
 	{ id: 'socket.io', host: 'https://cdn.socket.io', vendored: true },
@@ -391,8 +390,21 @@ router.post('/reset-data', adminOnly, async (req, res, next) => {
 		await wipe('kidsChampionships');
 		await wipe('games');
 		await wipe('exam_sessions');
-		await wipe('exam_questions');
-		await wipe('exam_classes');
+		// The junction tables carry no school_id — they are scoped through
+		// their parent exam. Deleting them BLANKET would strip every other
+		// organization's exam links, so they are scoped to THIS
+		// organization's exams. (The cascade from the exams would remove
+		// them too, but the exams are wiped further down, and an explicit
+		// scoped delete keeps the count honest.)
+		const examModel = repo.modelFor ? repo.modelFor('exams') : null;
+		const examIds = examModel
+			? (await examModel.findMany({ where: { school_id: schoolId }, select: { id: true } })).map(
+					(row) => row.id,
+				)
+			: [];
+		const examScope = examIds.length ? { exam_id: { in: examIds } } : { exam_id: '__none__' };
+		await wipe('exam_questions', examScope);
+		await wipe('exam_classes', examScope);
 		await wipe('exams');
 		await wipe('questions');
 		await wipe('categories');

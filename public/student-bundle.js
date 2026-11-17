@@ -15106,7 +15106,15 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }),
     phone: optionalContact(50),
     subjects: subjectsField,
-    status: external_exports.enum(["active", "inactive", "suspended"]).optional()
+    status: external_exports.enum(["active", "inactive", "suspended"]).optional(),
+    // A credential sent with a profile update.
+    //
+    // This field used to be ABSENT, and zod silently strips unknown keys — so
+    // the edit-user form's password was dropped, the account kept its old
+    // credential, the UI reported success, and the next sign-in failed with
+    // "Invalid username or password". Accepting it here (and hashing it in
+    // UserService.update) makes the API honest about what the form sends.
+    password: external_exports.string().min(8).max(200).optional()
   });
   var UserFilterSchema = external_exports.object({
     role: external_exports.enum(roleValues).optional(),
@@ -15958,7 +15966,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     constructor(repo) {
       this.#repo = repo;
     }
-    async createSession({ examId, userId, durationMinutes }) {
+    async createSession({ examId, userId, durationMinutes, schoolId = null }) {
       if (typeof this.#repo.startSession === "function") {
         return this.#repo.startSession(examId, durationMinutes);
       }
@@ -15970,6 +15978,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       return this.#repo.create("exam_sessions", {
         exam_id: examId,
         user_id: userId,
+        // The session belongs to an organization. The REST route derives it from
+        // the signed token and passes it in; without it the row could not be
+        // written (school_id is NOT NULL) and the attempt could not be graded
+        // later, because the result inherits the session's organization.
+        ...schoolId ? { school_id: schoolId } : {},
         status: SESSION_STATUS.ACTIVE,
         answers_json: "{}",
         current_question_index: 0,
@@ -17638,11 +17651,35 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           </div>
         </div>
         <div class="modal-body auth-modal-body">
+          <!--
+            \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+             CONTINUE \u2014 shown when this browser already holds a session.
+             The entry page ALWAYS shows the sign-in form: an existing session
+             is offered as an explicit choice, never applied as a silent
+             redirect. The person at the keyboard decides who they are.
+            \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+          -->
+          <div id="entryContinue" class="entry-continue" hidden>
+            <div class="entry-continue-body">
+              <p class="entry-continue-label">Signed in as</p>
+              <p class="entry-continue-name" id="entryContinueName"></p>
+              <p class="entry-continue-role" id="entryContinueRole"></p>
+            </div>
+            <div class="entry-continue-actions">
+              <button type="button" class="btn btn-primary" id="entryContinueBtn">
+                Continue
+              </button>
+              <button type="button" class="btn btn-secondary" id="entryContinueSignOut">
+                Sign in as someone else
+              </button>
+            </div>
+          </div>
           <form id="entryAuthForm" class="auth-form" novalidate>
             <p class="auth-form-intro">
-              Enter your credentials. You'll be taken to the admin panel if you
-              sign in as an admin, or to the student workspace if you sign in
-              as a student.
+              Enter your credentials. You will be taken to the control center
+              if you sign in as an administrator, to the classroom workspace
+              if you sign in as a teacher, and to the student workspace if you
+              sign in as a student.
             </p>
             <div class="form-group auth-field">
               <label for="entry-auth-username">Username</label>
@@ -17972,7 +18009,11 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
   }
   function redirectAfterLogin(role) {
     const normalized = String(role || "").toLowerCase();
-    if (normalized === "admin" || normalized === "super_admin" || normalized === "teacher") {
+    if (normalized === "admin" || normalized === "super_admin") {
+      window.location.href = "console";
+      return;
+    }
+    if (normalized === "teacher") {
       window.location.href = "admin.html";
       return;
     }
@@ -18122,35 +18163,61 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       });
     }
   }
-  function redirectIfAlreadySignedIn() {
+  function existingSession() {
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get("examId")) {
         window.location.href = `student-workspace.html${window.location.search}`;
-        return true;
+        return null;
       }
-      if (params.get("mode") === "training") return false;
+      if (params.get("mode") === "training") return null;
       const raw = sessionStorage.getItem("quizSession") || localStorage.getItem("quizSessionRemember");
-      if (!raw) return false;
+      if (!raw) return null;
       const session = JSON.parse(raw);
-      if (!session || !session.role) return false;
+      if (!session || !session.role) return null;
       if (session.expiresAt && Date.now() > Date.parse(session.expiresAt)) {
         sessionStorage.removeItem("quizSession");
         localStorage.removeItem("quizSessionRemember");
-        return false;
+        return null;
       }
-      redirectAfterLogin(session.role);
-      return true;
+      return session;
     } catch (_) {
-      return false;
+      return null;
     }
+  }
+  function renderContinue(session) {
+    const panel = document.getElementById("entryContinue");
+    const nameEl = document.getElementById("entryContinueName");
+    const roleEl = document.getElementById("entryContinueRole");
+    if (!panel || !nameEl || !roleEl) return;
+    const role = String(session.role || "").toLowerCase();
+    const roleLabel = role === "admin" || role === "super_admin" ? "Administrator" : role === "teacher" ? "Teacher" : "Student";
+    nameEl.textContent = session.name || session.username || "a signed-in user";
+    roleEl.textContent = roleLabel;
+    panel.hidden = false;
+    document.getElementById("entryContinueBtn")?.addEventListener("click", () => {
+      redirectAfterLogin(role);
+    });
+    document.getElementById("entryContinueSignOut")?.addEventListener("click", () => {
+      try {
+        sessionStorage.removeItem("quizSession");
+        localStorage.removeItem("quizSessionRemember");
+        localStorage.removeItem("quizSession");
+        localStorage.removeItem("quizAuthToken");
+        localStorage.removeItem("quizCurrentUser");
+      } catch (_) {
+      }
+      panel.hidden = true;
+      document.getElementById("entry-auth-username")?.focus();
+    });
   }
   function initEntryPage(container) {
     if (!container) return;
-    if (redirectIfAlreadySignedIn()) return;
     const tpl = document.createElement("template");
     tpl.innerHTML = ENTRY_HTML.trim();
     container.replaceChildren(tpl.content.cloneNode(true));
+    const existing = existingSession();
+    if (existing) renderContinue(existing);
     const runtimeParams = new URLSearchParams(window.location.search);
     const isRuntimeRoute = Boolean(
       runtimeParams.get("examId") || runtimeParams.get("mode") === "training"
@@ -18717,18 +18784,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     function request(method, path, body, _retried) {
       var url2 = getBaseUrl() + path;
+      var sentToken = getToken();
       var init = {
         method,
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...getToken() ? { Authorization: "Bearer " + getToken() } : {}
+          ...sentToken ? { Authorization: "Bearer " + sentToken } : {}
         }
       };
       if (body !== void 0 && body !== null) {
         init.body = JSON.stringify(body);
       }
       return fetch(url2, init).then(function(res) {
+        if (res.status === 401 && !sentToken) {
+          var anon = new Error("Not authenticated");
+          anon.status = 401;
+          anon.isAuthFailure = false;
+          anon.isAnonymous = true;
+          throw anon;
+        }
         if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
           return refreshAccessToken().then(function() {
             return request(method, path, body, true);
@@ -18778,18 +18853,26 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
     function requestBlob(method, path, body, _retried) {
       var url2 = getBaseUrl() + path;
+      var sentToken = getToken();
       var init = {
         method,
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          ...getToken() ? { Authorization: "Bearer " + getToken() } : {}
+          ...sentToken ? { Authorization: "Bearer " + sentToken } : {}
         }
       };
       if (body !== void 0 && body !== null) {
         init.body = JSON.stringify(body);
       }
       return fetch(url2, init).then(function(res) {
+        if (res.status === 401 && !sentToken) {
+          var anon = new Error("Not authenticated");
+          anon.status = 401;
+          anon.isAuthFailure = false;
+          anon.isAnonymous = true;
+          throw anon;
+        }
         if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
           return refreshAccessToken().then(function() {
             return requestBlob(method, path, body, true);
@@ -18985,12 +19068,13 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         if (e.randomize != null) out.randomize = !!e.randomize;
         if (e.max_attempts != null) out.max_attempts = Number(e.max_attempts);
         if (e.maxAttempts != null) out.max_attempts = Number(e.maxAttempts);
+        var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
         var qIds = Array.isArray(e.questions) ? e.questions.map(function(q) {
           return q && typeof q === "object" ? q.id || q.question_id : q;
         }).filter(function(q) {
-          return typeof q === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+          return typeof q === "string" && UUID_RE.test(q);
         }) : [];
-        if (qIds.length) out.questions = qIds;
+        if (Array.isArray(e.questions)) out.questions = qIds;
         var legacy = {};
         if (Array.isArray(e.questions)) legacy.questions = e.questions;
         if (Array.isArray(e.classes)) legacy.classes = e.classes;
@@ -19185,6 +19269,23 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       /** PATCH /api/v1/<entity>/<id> */
       update: function(entity, id, patch) {
         return uploadEmbeddedImages(entity, patch).then(function(payload) {
+          if (entity === "users" && payload && payload.password) {
+            var newPassword = String(payload.password);
+            var rest = Object.assign({}, payload);
+            delete rest.password;
+            return request(
+              "POST",
+              "/users/" + encodeURIComponent(id) + "/reset-password",
+              { newPassword }
+            ).then(function() {
+              if (!Object.keys(rest).length) return { message: "Password reset" };
+              return request(
+                "PATCH",
+                "/" + entity + "/" + encodeURIComponent(id),
+                mapPayload(entity, rest)
+              );
+            });
+          }
           return request("PATCH", "/" + entity + "/" + encodeURIComponent(id), mapPayload(entity, payload));
         });
       },
@@ -19570,6 +19671,14 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
           );
         }
       }
+      const serverReachable = window.API && typeof window.API.raw === "function" && !recoveryTicket;
+      if (serverReachable) {
+        setRecoveryStatus(
+          "The server could not be reached, so the password was NOT changed. Start the server and try again, or ask an administrator to reset it.",
+          "error"
+        );
+        return;
+      }
       const users = await ensureDefaultAdmin();
       let user = findUserByUsername(users, username);
       if (!user) {
@@ -19595,8 +19704,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       setRecoveryPanelMode("closed");
       if (formEl) formEl.reset();
       setRecoveryStatus(
-        "Dashboard password reset. Sign in with the new password.",
-        "success"
+        "Password changed on this device only \u2014 the server was unreachable, so the account still uses its old password. Start the server and reset it again.",
+        "error"
       );
     }
     function findUserByUsername(users, username) {
@@ -19906,10 +20015,9 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
         // Notifications are always available to teachers — the server
         // scopes the feed to their own activity, classes and students.
         notifications: true,
-        // Monitoring is an admin-only view, hard-hidden for teachers in
-        // every gate below — no toggle exists for it.
-        activity: false,
-        monitoring: false
+        // The activity log is an admin-only view, hard-hidden for
+        // teachers in every gate below — no toggle exists for it.
+        activity: false
       },
       settings: true,
       settingsTabs: {
@@ -19957,7 +20065,6 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
       }
       const mergedTabs = { ...DEFAULT_TEACHER_ACCESS.tabs, ...stored.tabs || {} };
       mergedTabs.activity = false;
-      mergedTabs.monitoring = false;
       mergedTabs.notifications = true;
       const mergedSettingsTabs = {
         ...DEFAULT_TEACHER_ACCESS.settingsTabs,
@@ -22482,8 +22589,10 @@ A new temporary password will be generated and shown to you once so you can shar
           );
           if (String(serverTargetId) !== String(user.id)) {
             user.id = serverTargetId;
-            saveUsers(users);
           }
+          user.passwordHash = await hashPassword(newPassword);
+          user.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+          saveUsers(users);
         } catch (apiErr) {
           console.warn("[auth] API reset password failed:", apiErr);
           showToast2(
@@ -28701,17 +28810,6 @@ They will be signed out immediately.`
       renderExamSelection([]);
     }
     function redirectIfLoggedIn() {
-      if (isExamFlowActive()) return false;
-      const user = window.Auth?.getCurrentUser ? window.Auth.getCurrentUser() : null;
-      if (!user) return false;
-      if (user.role === "student") {
-        window.location.href = "student-workspace.html";
-        return true;
-      }
-      if (user.role === "admin" || user.role === "super_admin") {
-        window.location.href = "console";
-        return true;
-      }
       return false;
     }
     function openStudentAuthModal() {
@@ -28847,6 +28945,8 @@ They will be signed out immediately.`
         window.location.href = "student-workspace.html";
       } else if (user.role === "admin" || user.role === "super_admin") {
         window.location.href = "console";
+      } else if (user.role === "teacher") {
+        window.location.href = "admin.html";
       } else {
         updateExamEntryAvailability();
       }
@@ -29414,15 +29514,25 @@ They will be signed out immediately.`
           (exam) => String(exam?.id) === String(sessionPackage.examId)
         );
         const questionIds2 = Array.isArray(sessionPackage.questions) ? sessionPackage.questions.map((question) => question?.id || question?.questionId || question).filter(Boolean) : [];
+        const uniqueQuestionIds = [];
+        const seenQuestionIds = /* @__PURE__ */ new Set();
+        questionIds2.forEach((id) => {
+          const key = String(id);
+          if (seenQuestionIds.has(key)) return;
+          seenQuestionIds.add(key);
+          uniqueQuestionIds.push(id);
+        });
+        const durationMinutes = Number(sessionPackage.duration);
+        const derivedTimeLimit = Number.isFinite(durationMinutes) && durationMinutes > 0 ? Math.round(durationMinutes * 60) : 0;
         const pushedExam = {
           ...existing || {},
           id: sessionPackage.examId,
           name: sessionPackage.examName || existing?.name || "Available exam",
           status: "active",
           duration: sessionPackage.duration || existing?.duration || 0,
-          timeLimit: sessionPackage.timeLimit || existing?.timeLimit || 0,
+          timeLimit: derivedTimeLimit || Number(sessionPackage.timeLimit) || 0,
           passingScore: sessionPackage.passingScore ?? existing?.passingScore ?? 60,
-          questions: questionIds2.length ? questionIds2 : existing?.questions || []
+          questions: uniqueQuestionIds.length ? uniqueQuestionIds : existing?.questions || []
         };
         const nextExams = existing ? exams.map(
           (exam) => String(exam?.id) === String(sessionPackage.examId) ? pushedExam : exam
@@ -29437,10 +29547,10 @@ They will be signed out immediately.`
             console.error("Invalid session package received:", sessionPackage);
             return;
           }
-          const existingSession = localStorage.getItem("examActiveSession");
-          if (existingSession) {
+          const existingSession2 = localStorage.getItem("examActiveSession");
+          if (existingSession2) {
             try {
-              const existing = JSON.parse(existingSession);
+              const existing = JSON.parse(existingSession2);
               if (existing.examId === sessionPackage.examId && existing.pushedAt === sessionPackage.pushedAt) {
                 upsertPushedExam(sessionPackage);
                 window.dispatchEvent(new CustomEvent("quiz:exams-updated"));
@@ -29807,58 +29917,58 @@ They will be signed out immediately.`
             if (!existingGame) return incomingGame;
             if (!incomingGame) return existingGame;
             const merged = { ...existingGame, ...incomingGame };
-            const existingSession = existingGame.session || {};
+            const existingSession2 = existingGame.session || {};
             const incomingSession = incomingGame.session || {};
-            merged.session = { ...existingSession, ...incomingSession };
+            merged.session = { ...existingSession2, ...incomingSession };
             merged.session.participants = mergeParticipants(
-              existingSession.participants || [],
+              existingSession2.participants || [],
               incomingSession.participants || []
             );
             merged.session.warmup = mergeWarmup(
-              existingSession.warmup,
+              existingSession2.warmup,
               incomingSession.warmup
             );
             merged.session.round = mergeRound(
-              existingSession.round,
+              existingSession2.round,
               incomingSession.round
             );
             merged.session.tieBreak = mergeTieBreak(
-              existingSession.tieBreak,
+              existingSession2.tieBreak,
               incomingSession.tieBreak
             );
             merged.session.card = mergeCard(
-              existingSession.card,
+              existingSession2.card,
               incomingSession.card
             );
             merged.session.sprint = mergeSprint(
-              existingSession.sprint,
+              existingSession2.sprint,
               incomingSession.sprint
             );
             merged.session.hotPotato = mergeHotPotato(
-              existingSession.hotPotato,
+              existingSession2.hotPotato,
               incomingSession.hotPotato
             );
             merged.session.lastSurvivor = mergeLastSurvivor(
-              existingSession.lastSurvivor,
+              existingSession2.lastSurvivor,
               incomingSession.lastSurvivor
             );
-            if (Array.isArray(existingSession.roundHistory) || Array.isArray(incomingSession.roundHistory)) {
-              const existingHistory = existingSession.roundHistory || [];
+            if (Array.isArray(existingSession2.roundHistory) || Array.isArray(incomingSession.roundHistory)) {
+              const existingHistory = existingSession2.roundHistory || [];
               const incomingHistory = incomingSession.roundHistory || [];
               merged.session.roundHistory = incomingHistory.length >= existingHistory.length ? incomingHistory : existingHistory;
             }
-            const existingStatus = existingGame.status || existingSession.status || "";
+            const existingStatus = existingGame.status || existingSession2.status || "";
             const incomingStatus = incomingGame.status || incomingSession.status || "";
             const preserveAuthoritativeLiveSession = scope?.type === "game" && String(existingStatus || "").toLowerCase() === "live" && String(incomingStatus || "").toLowerCase() === "live";
             if (preserveAuthoritativeLiveSession) {
               merged.status = existingGame.status || merged.status;
-              merged.session.status = existingSession.status || merged.session.status;
-              merged.session.startedAt = existingSession.startedAt || merged.session.startedAt;
-              merged.session.participants = Array.isArray(existingSession.participants) && existingSession.participants.length ? existingSession.participants : merged.session.participants;
-              merged.session.round = existingSession.round || merged.session.round;
-              merged.session.card = existingSession.card || merged.session.card;
-              merged.session.warmup = existingSession.warmup || merged.session.warmup;
-              merged.session.tieBreak = existingSession.tieBreak || merged.session.tieBreak;
+              merged.session.status = existingSession2.status || merged.session.status;
+              merged.session.startedAt = existingSession2.startedAt || merged.session.startedAt;
+              merged.session.participants = Array.isArray(existingSession2.participants) && existingSession2.participants.length ? existingSession2.participants : merged.session.participants;
+              merged.session.round = existingSession2.round || merged.session.round;
+              merged.session.card = existingSession2.card || merged.session.card;
+              merged.session.warmup = existingSession2.warmup || merged.session.warmup;
+              merged.session.tieBreak = existingSession2.tieBreak || merged.session.tieBreak;
               if (existingGame.results && !incomingGame.results) {
                 merged.results = existingGame.results;
               }
@@ -29868,12 +29978,12 @@ They will be signed out immediately.`
             const incomingRank = statusRank[incomingStatus] ?? 0;
             if (existingRank > incomingRank) {
               merged.status = existingGame.status || existingStatus;
-              merged.session.status = existingSession.status || merged.session.status;
-              merged.session.startedAt = existingSession.startedAt || merged.session.startedAt;
-              merged.session.round = existingSession.round || merged.session.round;
-              merged.session.card = existingSession.card || merged.session.card;
-              merged.session.warmup = existingSession.warmup || merged.session.warmup;
-              merged.session.tieBreak = existingSession.tieBreak || merged.session.tieBreak;
+              merged.session.status = existingSession2.status || merged.session.status;
+              merged.session.startedAt = existingSession2.startedAt || merged.session.startedAt;
+              merged.session.round = existingSession2.round || merged.session.round;
+              merged.session.card = existingSession2.card || merged.session.card;
+              merged.session.warmup = existingSession2.warmup || merged.session.warmup;
+              merged.session.tieBreak = existingSession2.tieBreak || merged.session.tieBreak;
             }
             if (existingGame.results && !incomingGame.results) {
               merged.results = existingGame.results;
@@ -30835,6 +30945,11 @@ They will be signed out immediately.`
             sessionEnded = false;
             startSessionWatchdog();
             showMsg("Login successful", "success");
+            var role = String(user && user.role || "").toLowerCase();
+            if (role === "admin" || role === "super_admin") {
+              window.location.href = "/console";
+              return;
+            }
             window.location.reload();
           }).catch(function(err) {
             if (err && err.code === "SESSION_ACTIVE") {

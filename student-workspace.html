@@ -5,12 +5,12 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Student Workspace</title>
 		<link rel="stylesheet" href="styles.css?v=2026-11-12-polish1" />
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			rel="stylesheet"
-			href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
-		/>
+		<!--
+			The web font is served by this application (public/fonts/), so the
+			interface renders with no internet access. Re-vendor it with
+			scripts/vendor-fonts.mjs.
+		-->
+		<link rel="stylesheet" href="/fonts/inter.css" />
 		<!-- APP_CONFIG for SaaS mode detection -->
 		<script>
 			window.APP_CONFIG = window.APP_CONFIG || {
@@ -392,7 +392,7 @@
 					</div>
 				</section>
 
-				<section class="workspace-grid">
+				<section class="workspace-grid workspace-grid--full-width">
 					<div class="workspace-column">
 						<div class="workspace-panel" data-workspace-section="exams">
 							<div class="panel-header">
@@ -533,21 +533,21 @@
 									<p>Lessons your teachers shared with your class — read them, then practice</p>
 								</div>
 								<div class="panel-filters">
-									<div
-										id="studentCourseFilters"
-										class="student-filter-bar student-filter-bar--compact"
-										aria-label="Filter courses by teacher or subject"
-									></div>
 									<button
-											class="filter-chip"
-											type="button"
-											onclick="StudentCourses.load(true)"
+										class="filter-chip"
+										type="button"
+										onclick="StudentCourses.load(true)"
 									>
-											Refresh
+										Refresh
 									</button>
 								</div>
-</div>
-								<div class="exam-card-grid course-student-grid" id="studentCourseGrid"></div>
+							</div>
+							<div
+								id="studentCourseFilters"
+								class="student-filter-bar student-filter-bar--compact"
+								aria-label="Filter courses by teacher or subject"
+							></div>
+							<div class="exam-card-grid course-student-grid" id="studentCourseGrid"></div>
 							<div id="studentCourseReader" style="display: none"></div>
 						</div>
 					</div>
@@ -1056,19 +1056,9 @@
 		<div id="studentProfileModal" class="modal sa-modal-wrap">
 			<div class="modal-content sa-modal" role="dialog" aria-modal="true" aria-labelledby="studentAccountTitle">
 				<div class="modal-header student-account-header sa-header">
-					<div class="sa-header-bg" aria-hidden="true">
-						<span class="sa-orb sa-orb-1"></span>
-						<span class="sa-orb sa-orb-2"></span>
-						<span class="sa-orb sa-orb-3"></span>
-						<span class="sa-grid"></span>
-					</div>
 					<div class="sa-title-block">
-						<span class="arena-eyebrow sa-eyebrow">
-							<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-							Student Workspace
-						</span>
 						<h2 id="studentAccountTitle">Student Account</h2>
-						<p class="sa-subtitle">Profile, progress &amp; security in one place</p>
+						<p class="sa-subtitle">Your profile, progress and security</p>
 					</div>
 					<button
 						type="button"
@@ -1091,7 +1081,10 @@
 							class="profile-tab-btn active"
 							data-profile-tab="profile"
 							role="tab"
+							id="studentProfileTabProfile"
+							aria-controls="profile-tab"
 							aria-selected="true"
+							tabindex="0"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -1101,6 +1094,7 @@
 								fill="none"
 								stroke="currentColor"
 								stroke-width="2"
+								aria-hidden="true"
 							>
 								<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
 								<circle cx="12" cy="7" r="4"></circle>
@@ -1112,7 +1106,10 @@
 							class="profile-tab-btn"
 							data-profile-tab="update"
 							role="tab"
+							id="studentProfileTabUpdate"
+							aria-controls="update-tab"
 							aria-selected="false"
+							tabindex="-1"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -1122,6 +1119,7 @@
 								fill="none"
 								stroke="currentColor"
 								stroke-width="2"
+								aria-hidden="true"
 							>
 								<path
 									d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
@@ -1137,7 +1135,10 @@
 							class="profile-tab-btn"
 							data-profile-tab="security"
 							role="tab"
+							id="studentProfileTabSecurity"
+							aria-controls="security-tab"
 							aria-selected="false"
+							tabindex="-1"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -1147,6 +1148,7 @@
 								fill="none"
 								stroke="currentColor"
 								stroke-width="2"
+								aria-hidden="true"
 							>
 								<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
 								<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -1155,20 +1157,15 @@
 						</button>
 					</nav>
 					</div>
-					<div id="profile-tab" class="profile-section sa-profile" role="tabpanel">
-						<!-- Refactored hero: cover + identity + quick actions -->
+					<div id="profile-tab" class="profile-section sa-profile" role="tabpanel" aria-labelledby="studentProfileTabProfile">
+						<!-- Identity card: avatar + name + meta, on the same white
+						     surface the rest of the workspace uses. -->
 						<div class="profile-hero-banner sa-hero">
-							<div class="profile-hero-banner-bg sa-hero-cover" aria-hidden="true">
-								<span class="sa-hero-glow sa-hero-glow-1"></span>
-								<span class="sa-hero-glow sa-hero-glow-2"></span>
-								<span class="sa-hero-ring" aria-hidden="true"></span>
-							</div>
 							<div class="profile-hero-banner-content sa-hero-inner">
 								<div class="profile-avatar profile-avatar--floating sa-avatar">
 									<div class="avatar-frame sa-avatar-frame">
 										<img id="studentProfileAvatarImage" src="" alt="Profile" />
 										<span id="studentProfileAvatarFallback">S</span>
-										<span class="sa-avatar-status" title="Active" aria-hidden="true"></span>
 									</div>
 									<label class="avatar-upload sa-upload">
 										<input
@@ -1184,7 +1181,6 @@
 									<div class="profile-meta-top">
 										<div class="profile-name-row sa-name-row">
 											<h3 id="studentProfileName">Student</h3>
-											<span class="profile-premium-badge sa-premium">★ Premium</span>
 										</div>
 										<p id="studentProfileClass" class="sa-class">Class</p>
 									</div>
@@ -1203,30 +1199,20 @@
 											>Badges: 0</span
 										>
 									</div>
-									<div class="sa-quick-actions">
-										<button type="button" class="sa-quick-btn" data-profile-tab="update">
-											<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-											Edit profile
-										</button>
-										<button type="button" class="sa-quick-btn" data-profile-tab="security">
-											<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-											Security
-										</button>
-									</div>
 								</div>
 							</div>
 						</div>
 						<div class="profile-season-banner sa-season sa-normal-only" id="studentSeasonBanner" aria-live="polite">
 							<div class="profile-season-badge sa-season-badge">
 								<span class="sa-season-icon" aria-hidden="true">
-								<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-									<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
-									<path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
-									<path d="M4 22h16"></path>
-									<path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
-									<path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
-									<path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
-								</svg>
+									<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+										<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+										<path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+										<path d="M4 22h16"></path>
+										<path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+										<path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+										<path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+									</svg>
 								</span>
 								<span class="sa-season-label">Season <strong id="studentSeasonNumber">1</strong></span>
 							</div>
@@ -1250,28 +1236,23 @@
 							</div>
 						</div>
 						<div class="profile-stats-card sa-stats-card sa-normal-only">
-							<div class="profile-stats-card-bg" aria-hidden="true"></div>
 							<div class="profile-hero-stats sa-stats">
 								<article class="profile-stat-tile sa-stat sa-stat-level">
-									<span class="sa-stat-icon" aria-hidden="true">◈</span>
 									<span>Level</span>
 									<strong id="studentProfileLevelValue">1</strong>
 									<small>Progression driven by live play.</small>
 								</article>
 								<article class="profile-stat-tile sa-stat sa-stat-exp">
-									<span class="sa-stat-icon" aria-hidden="true">✦</span>
 									<span>Experience</span>
 									<strong id="studentProfileExpValue">0</strong>
 									<small>Total points earned across sessions.</small>
 								</article>
 								<article class="profile-stat-tile sa-stat sa-stat-tourney">
-									<span class="sa-stat-icon" aria-hidden="true">🏆</span>
 									<span>Tournament Points</span>
 									<strong id="studentProfileTournamentPointsValue">0</strong>
 									<small>Competitive points collected in arena play.</small>
 								</article>
 								<article class="profile-stat-tile sa-stat sa-stat-rewards">
-									<span class="sa-stat-icon" aria-hidden="true">🎖</span>
 									<span>Rewards</span>
 									<strong id="studentProfileRewardsValue">0</strong>
 									<small>Badges and seasonal rewards unlocked.</small>
@@ -1336,28 +1317,23 @@
 								</div>
 							</div>
 							<div class="profile-stats-card sa-stats-card">
-								<div class="profile-stats-card-bg" aria-hidden="true"></div>
 								<div class="profile-hero-stats sa-stats">
 									<article class="profile-stat-tile sa-stat sa-stat-level">
-										<span class="sa-stat-icon" aria-hidden="true">🎮</span>
 										<span>Games Played</span>
 										<strong id="studentKidsGamesPlayedValue">0</strong>
 										<small>Fun games you finished.</small>
 									</article>
 									<article class="profile-stat-tile sa-stat sa-stat-exp">
-										<span class="sa-stat-icon" aria-hidden="true">⭐</span>
 										<span>Stars Earned</span>
 										<strong id="studentKidsStarsValue">0</strong>
 										<small>Stars collected from your games.</small>
 									</article>
 									<article class="profile-stat-tile sa-stat sa-stat-tourney">
-										<span class="sa-stat-icon" aria-hidden="true">🏆</span>
 										<span>Championships</span>
 										<strong id="studentKidsChampionshipsValue">0</strong>
 										<small>Championships you can join.</small>
 									</article>
 									<article class="profile-stat-tile sa-stat sa-stat-rewards">
-										<span class="sa-stat-icon" aria-hidden="true">🎖</span>
 										<span>Badges</span>
 										<strong id="studentKidsBadgesValue">0</strong>
 										<small>Rewards you've unlocked.</small>
@@ -1397,16 +1373,9 @@
 							</div>
 						</div>
 					</div>
-					<div id="update-tab" class="profile-section hidden" role="tabpanel">
-						<div class="sa-back-row">
-							<button type="button" class="sa-back-btn" data-profile-tab="profile" aria-label="Back to profile">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-								<span>Back to Profile</span>
-							</button>
-						</div>
+					<div id="update-tab" class="profile-section hidden" role="tabpanel" aria-labelledby="studentProfileTabUpdate">
 						<div class="profile-form-card sa-card">
 							<div class="profile-form-card-header sa-card-head">
-								<span class="sa-step">Step 01 — Identity</span>
 								<h3>Update Profile</h3>
 								<p>
 									Send a request to your teacher or admin to change your
@@ -1491,7 +1460,9 @@
 										type="button"
 										class="workspace-btn ghost sa-btn-ghost"
 										id="studentProfileReset"
+										aria-label="Discard unsaved changes"
 									>
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
 										Reset
 									</button>
 								</div>
@@ -1499,27 +1470,17 @@
 							<div
 								id="studentProfileRequestStatus"
 								class="profile-request-status"
+								role="status"
+								aria-live="polite"
 							></div>
 						</div>
 					</div>
-					<div id="security-tab" class="profile-section hidden" role="tabpanel">
-						<div class="sa-back-row">
-							<button type="button" class="sa-back-btn" data-profile-tab="profile" aria-label="Back to profile">
-								<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-								<span>Back to Profile</span>
-							</button>
-						</div>
-						<div class="profile-security-intro sa-secure-intro">
-							<div class="profile-security-medal sa-shield" aria-hidden="true">
-								<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-							</div>
-							<div>
-								<span class="sa-step">Step 02 — Protection</span>
+					<div id="security-tab" class="profile-section hidden" role="tabpanel" aria-labelledby="studentProfileTabSecurity">
+						<div class="profile-form-card sa-card sa-card-secure">
+							<div class="profile-form-card-header sa-card-head">
 								<h3>Protect your account</h3>
 								<p>Use 8+ characters with a mix of letters &amp; numbers. You'll stay signed in on this device after changing it.</p>
 							</div>
-						</div>
-						<div class="profile-form-card sa-card sa-card-secure">
 						<form id="studentPasswordForm" class="profile-form sa-form">
 							<div class="form-row sa-grid-2">
 								<div class="form-group half sa-field">
@@ -1613,23 +1574,28 @@
 						>
 							S
 						</div>
-						<div class="training-student-meta">
-							<span class="training-student-name" id="trainingStudentName"
-								>Student</span
-							>
-							<span class="training-student-class" id="trainingStudentClass"
-								>Class</span
+							<div class="training-student-meta">
+								<span class="training-student-name" id="trainingStudentName"
+									>Student</span
+								>
+								<span class="training-student-class" id="trainingStudentClass"
+									>Class</span
+								>
+								<span
+									class="training-student-title"
+									id="trainingModalTitle"
+									>Training Practice Test</span
+								>
+							</div>
+							<span
+								class="training-student-number"
+								id="trainingStudentNumber"
+								hidden
+							></span>
+							<span class="training-student-mode" id="trainingStudentMode"
+								>Training</span
 							>
 						</div>
-						<span
-							class="training-student-number"
-							id="trainingStudentNumber"
-							hidden
-						></span>
-						<span class="training-student-mode" id="trainingStudentMode"
-							>Training</span
-						>
-					</div>
 					<div class="training-header-meta">
 						<button
 							type="button"
@@ -1643,32 +1609,28 @@
 					<div
 						class="training-context-meta"
 						id="trainingContextMeta"
-						aria-label="Attempt, category, school, school year, subject and teacher"
+						aria-label="School, school year, subject and teacher"
 					>
-						<span class="training-context-chip training-context-chip--attempt">
-							<span class="training-context-label">Attempt</span>
-							<span class="training-context-value" id="trainingModalTitle">Training Practice Test</span>
-						</span>
-						<span class="training-context-chip training-context-chip--category">
-							<span class="training-context-label">Category</span>
-							<span class="training-context-value" id="trainingContextCategory">—</span>
-						</span>
-						<span class="training-context-chip">
-							<span class="training-context-label">School</span>
-							<span class="training-context-value" id="trainingContextSchool">—</span>
-						</span>
-						<span class="training-context-chip">
-							<span class="training-context-label">Year</span>
-							<span class="training-context-value" id="trainingContextYear">—</span>
-						</span>
-						<span class="training-context-chip">
-							<span class="training-context-label">Subject</span>
-							<span class="training-context-value" id="trainingContextSubject">—</span>
-						</span>
-						<span class="training-context-chip">
-							<span class="training-context-label">Teacher</span>
-							<span class="training-context-value" id="trainingContextTeacher">—</span>
-						</span>
+						<div class="training-context-group training-context-group--identity">
+							<span class="training-context-item">
+								<span class="training-context-label">School</span>
+								<span class="training-context-value" id="trainingContextSchool">—</span>
+							</span>
+							<span class="training-context-item">
+								<span class="training-context-label">Subject</span>
+								<span class="training-context-value" id="trainingContextSubject">—</span>
+							</span>
+						</div>
+						<div class="training-context-group training-context-group--course">
+							<span class="training-context-item">
+								<span class="training-context-label">Year</span>
+								<span class="training-context-value" id="trainingContextYear">—</span>
+							</span>
+							<span class="training-context-item">
+								<span class="training-context-label">Teacher</span>
+								<span class="training-context-value" id="trainingContextTeacher">—</span>
+							</span>
+						</div>
 					</div>
 				</div>
 				<div
@@ -1726,136 +1688,58 @@
 		>
 			<img id="trainingLightboxImg" alt="preview" />
 		</div>
-		<script>
-			// Student Account modal micro-interactions (safe: no global MutationObserver).
-			(function () {
-				var MOBILE_QUERY = '(max-width: 760px)';
-				function isMobileViewport() {
-					try {
-						return window.matchMedia
-							? window.matchMedia(MOBILE_QUERY).matches
-							: window.innerWidth <= 760;
-					} catch (e) {
-						return false;
-					}
-				}
-				function activateTab(key) {
-					var btn = document.querySelector(
-						'#studentProfileModal .profile-tab-btn[data-profile-tab="' + key + '"]'
-					);
-					if (btn) btn.click();
-				}
-				// Mobile only: the tab bar (.profile-tabs/.profile-tabs-v2/.sa-tabs)
-				// is hidden via CSS, so the student name becomes the way back
-				// to the Profile overview tab.
-				function syncMobileNameLink() {
-					var name = document.getElementById('studentProfileName');
-					if (!name) return;
-					var mobile = isMobileViewport();
-					name.classList.toggle('sa-name-link', mobile);
-					if (mobile) {
-						name.setAttribute('role', 'button');
-						name.setAttribute('tabindex', '0');
-						name.setAttribute('title', 'Back to profile');
-						name.setAttribute('aria-label', 'Back to profile');
-					} else {
-						name.removeAttribute('role');
-						name.removeAttribute('tabindex');
-						name.removeAttribute('title');
-						name.removeAttribute('aria-label');
-					}
-				}
-				function goToProfileFromName() {
-					if (!isMobileViewport()) return;
-					activateTab('profile');
-					var body = document.querySelector('#studentProfileModal .sa-body');
-					if (body) {
-						try {
-							body.scrollTo({ top: 0, behavior: 'smooth' });
-						} catch (e) {
-							body.scrollTop = 0;
+			<script>
+				// Student Account modal micro-interactions (safe: no global MutationObserver).
+				(function () {
+					function paintStrength() {
+						var input = document.getElementById('studentPasswordNew');
+						var bar = document.getElementById('studentPasswordStrengthBar');
+						var text = document.getElementById('studentPasswordStrengthText');
+						var winBar = document.getElementById('studentProfileWinRateBar');
+						var winVal = document.getElementById('studentProfileWinRateValue');
+						if (winBar && winVal) {
+							var pct = parseFloat(String(winVal.textContent || '0').replace('%', '')) || 0;
+							if (isFinite(pct)) winBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+						}
+						if (!input || !bar) return;
+						var v = input.value || '';
+						var score = 0;
+						if (v.length >= 6) score += 25;
+						if (v.length >= 10) score += 25;
+						if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score += 20;
+						if (/\d/.test(v)) score += 15;
+						if (/[^A-Za-z0-9]/.test(v)) score += 15;
+						bar.style.width = Math.min(100, score) + '%';
+						try { bar.dataset.level = score >= 75 ? 'strong' : score >= 45 ? 'ok' : 'weak'; } catch (e) {}
+						if (text) {
+							text.textContent =
+								!v ? 'Use 8+ characters for a strong password.'
+								: score >= 75 ? 'Strong — nice choice.'
+								: score >= 45 ? 'Okay — add a number or symbol.'
+								: 'Weak — make it longer.';
 						}
 					}
-					setTimeout(paintStrength, 50);
-				}
-				function paintStrength() {
-					var input = document.getElementById('studentPasswordNew');
-					var bar = document.getElementById('studentPasswordStrengthBar');
-					var text = document.getElementById('studentPasswordStrengthText');
-					var winBar = document.getElementById('studentProfileWinRateBar');
-					var winVal = document.getElementById('studentProfileWinRateValue');
-					if (winBar && winVal) {
-						var pct = parseFloat(String(winVal.textContent || '0').replace('%', '')) || 0;
-						if (isFinite(pct)) winBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+					document.addEventListener('click', function (e) {
+						var toggle = e.target && e.target.closest ? e.target.closest('.sa-pw-toggle[data-sa-toggle]') : null;
+						if (toggle) {
+							var input = document.getElementById(toggle.getAttribute('data-sa-toggle'));
+							if (!input) return;
+							var show = input.type === 'password';
+							input.type = show ? 'text' : 'password';
+							toggle.textContent = show ? 'Hide' : 'Show';
+						}
+						var tab = e.target && e.target.closest ? e.target.closest('#studentProfileModal .profile-tab-btn') : null;
+						if (tab) setTimeout(paintStrength, 50);
+					});
+					document.addEventListener('input', function (e) {
+						if (e.target && e.target.id === 'studentPasswordNew') paintStrength();
+					});
+					if (document.readyState === 'loading') {
+						document.addEventListener('DOMContentLoaded', paintStrength);
+					} else {
+						paintStrength();
 					}
-					if (!input || !bar) return;
-					var v = input.value || '';
-					var score = 0;
-					if (v.length >= 6) score += 25;
-					if (v.length >= 10) score += 25;
-					if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score += 20;
-					if (/\d/.test(v)) score += 15;
-					if (/[^A-Za-z0-9]/.test(v)) score += 15;
-					bar.style.width = Math.min(100, score) + '%';
-					try { bar.dataset.level = score >= 75 ? 'strong' : score >= 45 ? 'ok' : 'weak'; } catch (e) {}
-					if (text) {
-						text.textContent =
-							!v ? 'Use 8+ characters for a strong password.'
-							: score >= 75 ? 'Strong — nice choice.'
-							: score >= 45 ? 'Okay — add a number or symbol.'
-							: 'Weak — make it longer.';
-					}
-				}
-				document.addEventListener('click', function (e) {
-					var nameLink = e.target && e.target.closest ? e.target.closest('#studentProfileName.sa-name-link') : null;
-					if (nameLink) {
-						goToProfileFromName();
-						return;
-					}
-					var quick = e.target && e.target.closest ? e.target.closest('.sa-quick-btn[data-profile-tab], .sa-back-btn[data-profile-tab]') : null;
-					if (quick) {
-						activateTab(quick.getAttribute('data-profile-tab'));
-						setTimeout(paintStrength, 50);
-						return;
-					}
-					var toggle = e.target && e.target.closest ? e.target.closest('.sa-pw-toggle[data-sa-toggle]') : null;
-					if (toggle) {
-						var input = document.getElementById(toggle.getAttribute('data-sa-toggle'));
-						if (!input) return;
-						var show = input.type === 'password';
-						input.type = show ? 'text' : 'password';
-						toggle.textContent = show ? 'Hide' : 'Show';
-					}
-					var tab = e.target && e.target.closest ? e.target.closest('#studentProfileModal .profile-tab-btn') : null;
-					if (tab) setTimeout(paintStrength, 50);
-				});
-				document.addEventListener('input', function (e) {
-					if (e.target && e.target.id === 'studentPasswordNew') paintStrength();
-				});
-				document.addEventListener('keydown', function (e) {
-					if (e.key !== 'Enter' && e.key !== ' ') return;
-					var nameLink = e.target && e.target.closest ? e.target.closest('#studentProfileName.sa-name-link') : null;
-					if (nameLink) {
-						e.preventDefault();
-						goToProfileFromName();
-					}
-				});
-				try {
-					if (window.matchMedia) {
-						var mq = window.matchMedia(MOBILE_QUERY);
-						if (mq.addEventListener) mq.addEventListener('change', syncMobileNameLink);
-						else if (mq.addListener) mq.addListener(syncMobileNameLink);
-					}
-				} catch (e) {}
-				window.addEventListener('resize', syncMobileNameLink);
-				if (document.readyState === 'loading') {
-					document.addEventListener('DOMContentLoaded', function () { paintStrength(); syncMobileNameLink(); });
-				} else {
-					paintStrength();
-					syncMobileNameLink();
-				}
-				syncMobileNameLink();
-			})();
-		</script>
+				})();
+			</script>
 	</body>
 </html>

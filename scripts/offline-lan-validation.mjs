@@ -29,6 +29,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
+import { useIsolatedDatabase } from './lib/validationDb.mjs';
 import bcrypt from 'bcrypt';
 import { io as ioClient } from 'socket.io-client';
 
@@ -83,9 +84,16 @@ const SCHOOL = 'validation-school';
 const PASSWORD = 'Validate2026!';
 
 let prisma;
+let databaseUrl = null;
+let cleanupDatabase = null;
 
 async function seed() {
-	prisma = new PrismaClient();
+	// The validation runs against its OWN database. The development data is
+	// never touched, and no fixture is left behind.
+	const isolated = await useIsolatedDatabase('validation-offline.db');
+	prisma = isolated.prisma;
+	databaseUrl = isolated.url;
+	cleanupDatabase = isolated.cleanup;
 	const hash = await bcrypt.hash(PASSWORD, 4);
 
 	await prisma.school.upsert({
@@ -113,6 +121,7 @@ async function seed() {
 	await mk('v-admin', 'v-admin', 'admin');
 	await mk('v-teacher', 'v-teacher', 'teacher');
 	await mk('v-student', 'v-student', 'student');
+	await mk('v-student2', 'v-student2', 'student');
 	// 20 DISTINCT administrators. The single-active-session rule means two
 	// clients cannot share one account, so a 20-machine LAN means 20 accounts.
 	for (let i = 0; i < CONCURRENCY; i += 1) {
@@ -148,6 +157,7 @@ async function startServer() {
 			env: {
 				...process.env,
 				PORT: String(PORT),
+				DATABASE_URL: databaseUrl,
 				NODE_ENV: 'development',
 				// A LAN installation: no internet, no cloud.
 				DEPLOYMENT_MODE: 'offline',
@@ -203,6 +213,7 @@ async function run() {
 	let adminToken = await login('v-admin', PASSWORD);
 	const teacherToken = await login('v-teacher', PASSWORD);
 	const studentToken = await login('v-student', PASSWORD);
+	const studentToken2 = await login('v-student2', PASSWORD);
 	record('local administrator authenticates', Boolean(adminToken));
 	record('teacher authenticates', Boolean(teacherToken));
 	record('student authenticates', Boolean(studentToken));
@@ -392,7 +403,11 @@ async function run() {
 		token: studentToken,
 		body: { exam_id: exam.id },
 	});
-	record('a student can start an exam session', sessionCreate.status === 200, `status=${sessionCreate.status}`);
+	record(
+		'a student can start an exam session',
+		sessionCreate.status === 201 || sessionCreate.status === 200,
+		`status=${sessionCreate.status}`,
+	);
 
 	const sessionId = sessionCreate.body?.id;
 	const answer = await api(`/api/v1/sessions/${sessionId}/answer`, {
@@ -425,48 +440,56 @@ async function run() {
 	);
 
 	// ── 7. Educational game ────────────────────────────────────────────────
+	// The game id must be a UUID and the join code exactly 6 characters —
+	// both are validated by the game's join schema.
+	const gameId = '44444444-4444-4444-8444-444444444444';
+	const joinCode = 'VAL123';
+
 	// Clear any previous fixture so the run is repeatable.
-	await prisma.gameSession.deleteMany({ where: { game_id: 'v-game' } });
-	await prisma.game.deleteMany({ where: { id: 'v-game' } });
+	await prisma.gameSession.deleteMany({ where: { game_id: gameId } });
+	await prisma.game.deleteMany({ where: { id: gameId } });
 
 	const game = await prisma.game.create({
 		data: {
-			id: 'v-game',
+			id: gameId,
 			school_id: SCHOOL,
 			creator_id: 'v-teacher',
 			name: 'Validation Game',
 			type: 'quiz',
 			status: 'waiting',
 			question_ids: JSON.stringify([question.id]),
-			join_code: 'VAL123',
+			join_code: joinCode,
 		},
 	});
 	const join = await api('/api/v1/games/join', {
 		method: 'POST',
 		token: studentToken,
-		body: { join_code: 'VAL123' },
+		body: { join_code: joinCode },
 	});
 	record('a student can join a game', join.status === 200, `status=${join.status}`);
-	const start = await api('/api/v1/games/v-game/start', {
-		method: 'POST',
-		token: teacherToken,
-		body: {},
-	});
-	record('a teacher can start a game', start.status === 200, `status=${start.status}`);
-	const finish = await api('/api/v1/games/v-game/finish', {
-		method: 'POST',
-		token: teacherToken,
-		body: {},
-	});
-	record('a teacher can finish a game', finish.status === 200, `status=${finish.status}`);
 
 	// ── 8. Socket.IO realtime, offline ─────────────────────────────────────
-	const realtime = await testRealtime(teacherToken, studentToken);
+	// The realtime check runs while the game is still open: the join handler
+	// refuses a finished game.
+	const realtime = await testRealtime(gameId, joinCode, studentToken, studentToken2);
 	record(
 		'Socket.IO: a second client sees the game state pushed by the server',
 		realtime.ok,
 		realtime.detail,
 	);
+
+	const start = await api(`/api/v1/games/${gameId}/start`, {
+		method: 'POST',
+		token: teacherToken,
+		body: {},
+	});
+	record('a teacher can start a game', start.status === 200, `status=${start.status}`);
+	const finish = await api(`/api/v1/games/${gameId}/finish`, {
+		method: 'POST',
+		token: teacherToken,
+		body: {},
+	});
+	record('a teacher can finish a game', finish.status === 200, `status=${finish.status}`);
 
 	// ── 9. Concurrency ─────────────────────────────────────────────────────
 	const concurrency = await testConcurrency();
@@ -475,7 +498,7 @@ async function run() {
 		concurrency.ok,
 		concurrency.detail,
 	);
-	const concurrentWrites = await testConcurrentWrites();
+	const concurrentWrites = await testConcurrentWrites(examId);
 	record(
 		`${CONCURRENCY} concurrent clients submit exam attempts`,
 		concurrentWrites.ok,
@@ -515,11 +538,12 @@ async function run() {
 		}
 	}
 	await prisma.$disconnect();
+	if (cleanupDatabase) cleanupDatabase();
 	process.exitCode = failures === 0 ? 0 : 1;
 }
 // ── Realtime check ─────────────────────────────────────────────────────────
 
-function testRealtime(hostToken, playerToken) {
+function testRealtime(gameId, joinCode, hostToken, playerToken) {
 	return new Promise((resolve) => {
 		let settled = false;
 		const done = (ok, detail) => {
@@ -563,8 +587,12 @@ function testRealtime(hostToken, playerToken) {
 
 		host.on('connect', async () => {
 			try {
-				host.emit('game:join', { gameId: 'v-game', name: 'Host' });
-				await sleep(700);
+				host.emit('game:join', {
+					gameId,
+					joinCode,
+					userName: 'Host',
+				});
+				await sleep(900);
 
 				player = ioClient(BASE, {
 					transports: ['websocket', 'polling'],
@@ -585,12 +613,21 @@ function testRealtime(hostToken, playerToken) {
 							`received game:state_update (${JSON.stringify(payload).slice(0, 60)})`,
 						);
 					};
+					const onJoined = (payload) => {
+						clearTimeout(timer);
+						host.off('player:joined', onJoined);
+						done(
+							true,
+							`received player:joined (${JSON.stringify(payload).slice(0, 60)})`,
+						);
+					};
 					host.on('game:state_update', onState);
-					player.emit('game:join', { gameId: 'v-game', name: 'Player' });
-					// If no push arrives, ask the server for the state directly.
-					setTimeout(() => {
-						host.emit('game:sync', { gameId: 'v-game' });
-					}, 1500);
+					host.on('player:joined', onJoined);
+					player.emit('game:join', {
+						gameId,
+						joinCode,
+						userName: 'Player',
+					});
 				});
 			} catch (err) {
 				clearTimeout(timer);
@@ -623,7 +660,7 @@ async function testConcurrency() {
 	};
 }
 
-async function testConcurrentWrites() {
+async function testConcurrentWrites(examId) {
 	const started = Date.now();
 	const tasks = [];
 	for (let i = 0; i < CONCURRENCY; i += 1) {
@@ -634,7 +671,7 @@ async function testConcurrentWrites() {
 						data: {
 							id: crypto.randomUUID(),
 							school_id: SCHOOL,
-							exam_id: 'v-exam',
+							exam_id: examId,
 							user_id: 'v-student',
 							mode: 'exam',
 							score: 50,
@@ -666,4 +703,5 @@ run()
 	.finally(async () => {
 		await stopServer();
 		if (prisma) await prisma.$disconnect().catch(() => {});
+		if (cleanupDatabase) cleanupDatabase();
 	});

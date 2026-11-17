@@ -23,11 +23,13 @@
  */
 
 import { Router } from 'express';
+import bcrypt from 'bcrypt';
 import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { ROLES } from '../../shared/constants.js';
 import { ForbiddenError } from '../../shared/errors.js';
 import { getContainer } from '../container.js';
+import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { getTeacherClassIds } from './users.routes.js';
 
@@ -260,8 +262,14 @@ const SANITIZERS = {
   users: (row, schoolId) => {
     // The legacy UI stores client-hashed passwords under `passwordHash` and
     // uses `studentNumber` instead of `numero`.
-    const passwordHash =
-      row.password_hash || row.passwordHash || row.password || undefined;
+    //
+    // A PLAINTEXT `password` is never stored as-is: it is hashed with bcrypt
+    // before the row is written. Storing it raw produced accounts whose
+    // `password_hash` matched no verifier, so they could never sign in.
+    // A client-supplied HASH is still accepted (the legacy UI has no other
+    // way to sync), and the login path understands `simple-` and SHA-256.
+    const clientHash = row.password_hash || row.passwordHash || undefined;
+    const plaintext = row.password != null ? String(row.password) : undefined;
     // class_id is a real FK — drop obviously-bogus legacy ids ("test-class-1")
     // so the upsert doesn't P2003 against a Class row that doesn't exist.
     const classId = pickUuid(row.class_id ?? row.classId);
@@ -270,7 +278,8 @@ const SANITIZERS = {
       school_id: schoolId,
       ...(classId && { class_id: classId }),
       username: String(row.username ?? row.email ?? '').trim(),
-      ...(passwordHash && { password_hash: String(passwordHash) }),
+      ...(clientHash && { password_hash: String(clientHash) }),
+      ...(plaintext && { _plaintext_password: plaintext }),
       role: pickStr(row.role) || 'student',
       name: pickStr(row.name) || pickStr(row.username) || 'Unknown',
       // Civility for greetings/display (Mr | Mme) — anything else is dropped.
@@ -1560,6 +1569,17 @@ router.post('/:table', async (req, res, next) => {
           if (table === 'users' && rest.password_hash !== undefined) {
             delete rest.password_hash;
           }
+          // A plaintext password from the client is hashed here, once, and
+          // never stored raw. It is only honoured on CREATE — an update must
+          // go through POST /users/:id/reset-password, which also revokes
+          // the target's sessions and records the action.
+          if (table === 'users' && rest._plaintext_password) {
+            const plaintext = String(rest._plaintext_password);
+            delete rest._plaintext_password;
+            rest.password_hash = await bcrypt.hash(plaintext, config.bcryptRounds);
+            delete row._plaintext_password;
+            row.password_hash = rest.password_hash;
+          }
           // For exams the legacy UI sends partial `classes`/`questions`
           // (e.g. a class reassignment in class-management.js sends only
           // `classes`), and we persist those in `options_json` as a JSON
@@ -1618,18 +1638,25 @@ router.post('/:table', async (req, res, next) => {
           });
           if (existing) {
             // Never let a bulk sync overwrite the real bcrypt hash
-            const { password_hash, ...rest } = row;
+            const { password_hash, _plaintext_password, ...rest } = row;
             await model.update({ where: { id: existing.id }, data: rest });
           } else {
             // Schema requires password_hash. If the payload didn't carry one
             // (the UI stripped it on update), skip this row rather than
             // creating a user with an un-loginable account.
-            if (!row.password_hash) {
+            if (!row.password_hash && !row._plaintext_password) {
               missingRequiredCount += 1;
-              logger.warn('bulk.routes: skipping user create without password_hash', {
+              logger.warn('bulk.routes: skipping user create without a credential', {
                 table, username: row.username,
               });
               continue;
+            }
+            // A plaintext password is hashed here so the row is never stored
+            // with a value no verifier can match.
+            if (row._plaintext_password) {
+              const plaintext = String(row._plaintext_password);
+              delete row._plaintext_password;
+              row.password_hash = await bcrypt.hash(plaintext, config.bcryptRounds);
             }
             await model.create({ data: row });
           }

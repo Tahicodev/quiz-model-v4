@@ -259,6 +259,8 @@
 		questionStart: 0,
 		renderer: null,
 		locked: false,
+		streak: 0,
+		hintsUsed: 0,
 
 		init: function () {
 			MascotManager.el = document.getElementById('kidMascot');
@@ -776,6 +778,8 @@
 						self.index = 0;
 						self.answers = [];
 						self.score = 0;
+						self.streak = 0;
+						self.hintsUsed = 0;
 						document.getElementById('kidProgress').hidden = false;
 						// Math Quest (guarded): the adventure map owns the flow after
 						// a session starts — EXCEPT championship challenge runs,
@@ -818,13 +822,154 @@
 			var q = questions[this.index];
 			this.locked = false;
 			this.questionStart = Date.now();
+			this.hintUsedThisQuestion = false;
 			this.renderChrome(q);
-			this.startTimer();
 			this.mountRenderer(q);
+			this.mountLearningTools(q);
+			this.startTimer();
+		},
+		/** The teacher's supported play-style preference, or '' for Auto. */
+		playTemplateKey: function () {
+			var raw = String((this.config && this.config.play_template) || '');
+			if (!raw || raw === 'auto') return '';
+			var supported = {
+				'bubble-pop': 1, 'subj-choice': 1, 'count-tap': 1, 'num-balance': 1,
+				'star-collector': 1, 'leap-frog': 1, 'sort-it-out': 1, 'pair-party': 1,
+				'build-a-tower': 1, 'magic-words': 1, 'code-explorer': 1,
+			};
+			return supported[raw] ? raw : '';
+		},
+		/** The renderer key for a template, when that renderer is loaded. */
+		playTemplateRenderer: function (id) {
+			if (id === 'subj-choice') {
+				return (window.KidsGameRenderers || {})['subj-choice'] ? 'subj-choice' : '';
+			}
+			return (window.KidsGameRenderers || {})[id] ? id : '';
+		},
+		/** Compatibility is checked per question against its own type/flags,
+		   so one odd question in the deck falls back instead of breaking the
+		   play style for the whole run. */
+		playTemplateFits: function (key, q) {
+			var type = String(q.type || 'multiple-choice');
+			var opts = kidOptions(q);
+			switch (key) {
+				case 'bubble-pop':
+				case 'subj-choice':
+					return type === 'multiple-choice' && !q.allowMultipleAnswers && opts.length >= 2;
+				case 'count-tap':
+					if (!this.playTemplateFits('subj-choice', q)) return false;
+					try { return /\p{Extended_Pictographic}|\p{Emoji_Presentation}/u.test(String(q.text || '')); } catch (_) { return false; }
+				case 'num-balance':
+					if (!this.playTemplateFits('subj-choice', q)) return false;
+					try {
+						return opts.length >= 2 && opts.every(function (o) { return ['<', '=', '>'].indexOf(String(o).trim()) >= 0; }) &&
+							/\d+[^\d]+\d+/.test(String(q.text || ''));
+					} catch (_) { return false; }
+				case 'star-collector':
+					return type === 'multiple-choice' && !!q.allowMultipleAnswers && opts.length >= 2;
+				case 'leap-frog':
+					return type === 'true-false';
+				case 'sort-it-out':
+					return type === 'odd-one-out' && opts.length >= 3;
+				case 'pair-party':
+					return type === 'matching' && ((kidPairs(q) || []).length >= 2 || opts.length >= 2);
+				case 'build-a-tower':
+					return type === 'draggable' && opts.length >= 2;
+				case 'magic-words':
+					return type === 'fill-blank';
+				case 'code-explorer':
+					return type === 'code';
+				default:
+					return false;
+			}
+		},
+		/** Learning support below the renderer: a non-answer-revealing hint,
+		 * limited by the teacher's `max_hints` budget for the whole run. */
+		mountLearningTools: function (q) {
+			if (this.game && this.game.game_type === 'math-quest') return;
+			var root = document.getElementById('kidScreen');
+			if (!root) return;
+			var maxHints = Math.max(0, Math.floor(Number(this.config.max_hints) || 0));
+			if (maxHints <= this.hintsUsed) return;
+			var hints = {
+				'multiple-choice': 'Look at every choice. Can you cross out one that does not fit?',
+				'true-false': 'Check the whole sentence. Is every part true?',
+				'odd-one-out': 'Look for a group rule. Which one does not belong?',
+				'draggable': 'Check the order clues and compare the pieces one at a time.',
+				'fill-blank': 'Read the whole sentence aloud and find the word that makes sense.',
+				'matching': 'Find one pair with a clear connection, then look for the next.',
+				'code': 'Trace the instructions one step at a time.',
+			};
+			var type = String(q.type || 'multiple-choice');
+			var hintText = hints[type] || 'Read the question slowly and look for a clue in the words.';
+			var wrap = document.createElement('div');
+			wrap.className = 'kid-learning-tools';
+			wrap.innerHTML = '<button type="button" class="kid-hint-btn" id="kidHint" aria-describedby="kidHintText">💡 Need a hint?</button>' +
+				'<p class="kid-hint-copy" id="kidHintText" role="status" aria-live="polite" hidden></p>';
+			root.appendChild(wrap);
+			var self = this;
+			wrap.querySelector('#kidHint').addEventListener('click', function () {
+				if (self.locked || self.hintUsedThisQuestion || self.hintsUsed >= maxHints) return;
+				self.hintUsedThisQuestion = true;
+				self.hintsUsed += 1;
+				var text = wrap.querySelector('#kidHintText');
+				text.textContent = hintText;
+				text.hidden = false;
+				var button = wrap.querySelector('#kidHint');
+				button.disabled = true;
+				button.textContent = 'Hint used ✓';
+				SoundManager.play('hint');
+			});
+		},
+		/** Post-answer explanation, only when the teacher enabled it. */
+		showExplanation: function (q) {
+			if (this.game && this.game.game_type === 'math-quest') return;
+			if (this.config.show_explanations === false || !q || !String(q.explanation || '').trim()) return;
+			var root = document.getElementById('kidScreen');
+			if (!root || root.querySelector('.kid-explanation')) return;
+			var card = document.createElement('aside');
+			card.className = 'kid-explanation';
+			card.setAttribute('aria-live', 'polite');
+			var title = document.createElement('strong');
+			title.textContent = 'A little learning tip';
+			var text = document.createElement('p');
+			text.textContent = String(q.explanation).trim();
+			card.appendChild(title);
+			card.appendChild(text);
+			root.appendChild(card);
+		},
+		/** Streak celebration every three correct answers in a row. */
+		showStreakReward: function () {
+			if (this.game && this.game.game_type === 'math-quest') return;
+			var root = document.getElementById('kidScreen');
+			if (!root) return;
+			var reward = document.createElement('div');
+			reward.className = 'kid-streak-reward';
+			reward.setAttribute('role', 'status');
+			reward.innerHTML = '<img src="/kids/assets/badge-streak-hero.png" alt="" />' +
+				'<span><strong>' + this.streak + ' in a row!</strong><small>Your brilliant streak keeps growing!</small></span>';
+			var old = root.querySelector('.kid-streak-reward');
+			if (old) old.remove();
+			root.appendChild(reward);
 		},
 		renderChrome: function (q) {
 			var total = (this.game.questions || []).length;
 			document.getElementById('kidProgressLabel').textContent = (this.index + 1) + '/' + total + ' · ⭐' + this.score;
+			// Streak chip lives in the progress row; created on demand so the
+			// shell markup stays untouched and other pages never see it.
+			var bar = document.getElementById('kidProgress');
+			var chip = document.getElementById('kidStreak');
+			if (bar && this.streak > 1) {
+				if (!chip) {
+					chip = document.createElement('span');
+					chip.id = 'kidStreak';
+					chip.className = 'kid-streak-chip';
+					bar.appendChild(chip);
+				}
+				chip.textContent = '🔥 ' + this.streak + ' in a row';
+			} else if (chip) {
+				chip.remove();
+			}
 			document.getElementById('kidProgressFill').style.width = Math.round((this.index / total) * 100) + '%';
 		},
 		startTimer: function () {
@@ -869,23 +1014,34 @@
 			try { if (this.renderer && this.renderer.lock) this.renderer.lock(correct, given); } catch (_) { }
 			// Every message goes through the mascot toast — no inline text.
 			if (timedOut) {
+				this.streak = 0;
 				this.nudge("Time's up! Watch it glow", '⏰');
 				MascotManager.set('encourage');
 				SoundManager.play('retry');
 			} else if (correct) {
+				this.streak += 1;
 				var cheers = [['Bravo!', '🎉'], ['Awesome!', '⭐'], ['Super!', '🌈']];
 				var cheer = cheers[Math.floor(Math.random() * cheers.length)];
 				this.nudge(cheer[0], cheer[1]);
 				MascotManager.set(this.score >= 3 ? 'excited' : 'happy');
 				SoundManager.play('correct');
 				this.starsRain(24);
+				if (this.streak === 3 || (this.streak > 3 && this.streak % 3 === 0)) {
+					this.showStreakReward();
+					SoundManager.play('celebration');
+				}
 			} else {
+				this.streak = 0;
 				this.nudge('Good try! Look at the glowing answer', '💡');
 				MascotManager.set('encourage');
 				SoundManager.play('retry');
 			}
+			this.showExplanation(q);
 			this.renderChrome(q);
-			setTimeout(function () { self.index += 1; self.next(); }, 1600);
+			var screenEl = document.getElementById('kidScreen');
+			var hasTip = !!(screenEl && screenEl.querySelector('.kid-explanation'));
+			var holdMs = hasTip ? 2900 : (this.streak > 1 ? 2100 : 1600);
+			setTimeout(function () { self.index += 1; self.next(); }, holdMs);
 		},
 		mountRenderer: function (q) {
 			var map = {
@@ -894,22 +1050,34 @@
 				'magic-words': 'magic-words', 'code-explorer': 'code-explorer', 'math-quest': 'math-quest',
 			};
 			var key = map[this.game.game_type] || 'bubble-pop';
+			var qType = String(q.type || '');
 			// Question-type delegation (same pattern as Math Quest core): the
 			// kid matching UI lives in pair-party, so a matching question in
 			// any other game falls through to it. math-quest delegates by
 			// question type itself — never bypass its quest wrapper here.
-			var qType = String(q.type || '');
 			if ((qType === 'matching' || qType === 'matching-pairs') && key !== 'pair-party' && key !== 'math-quest') {
 				key = 'pair-party';
+			}
+			var delegatedKey = key;
+			// Teacher's explicit play style from config_json.play_template.
+			// It overrides the automatic subject presentation (so Bubble Pop
+			// really bubbles) but only when the renderer exists AND can play
+			// this question type — anything else falls back to the delegated
+			// renderer, never to a dead screen. Math Quest keeps its own
+			// per-level templates untouched.
+			var explicit = this.playTemplateKey();
+			if (explicit && this.game && this.game.game_type !== 'math-quest') {
+				var altKey = this.playTemplateRenderer(explicit);
+				if (altKey && this.playTemplateFits(altKey, q)) key = altKey;
+				else key = delegatedKey;
 			}
 			// Built-in Math / French / Arabic multiple-choice games wear bespoke,
 			// intent-matched presentations (🐊 balance for comparisons, 🔢 count &
 			// tap for counting, 🎯 choice board otherwise) instead of the generic
 			// Bubble Pop. SubjectGames.js answers with the exact SAME option label,
-			// so grading/results are untouched. Only redirects 'bubble-pop', only
-			// when the bespoke renderer is actually loaded, so towers, magic-words,
-			// custom games and non-subject games keep their original behaviour.
-			if (key === 'bubble-pop' && this.game && this.game.game_type !== 'math-quest'
+			// so grading/results are untouched. Skipped when the teacher picked a
+			// style on purpose.
+			if (key === 'bubble-pop' && !explicit && this.game && this.game.game_type !== 'math-quest'
 				&& window.KidsPlayer.pickSubjectPresentation) {
 				var alt = window.KidsPlayer.pickSubjectPresentation(q, this.game);
 				if (alt && (window.KidsGameRenderers || {})[alt]) key = alt;
@@ -999,9 +1167,10 @@
 					(total !== totalPoints ? ' · ' + total + ' question' + (total === 1 ? '' : 's') : '') + '</p>' +
 				championshipPodium(res) +
 				'<img class="kid-badge" id="kidBadge" alt="Badge" style="display:none" />' +
-				'<div class="kid-win-actions">' +
-					'<button class="kid-btn green kid-win-cta" id="kidAgain">Play Again 🔁</button>' +
-					'<a class="kid-btn ghost" href="/kids/">New PIN</a>' +
+				'<div class="kid-win-actions' + (this.config.allow_replay === false ? ' single' : '') + '">' +
+					(this.config.allow_replay === false ? '' :
+						'<button class="kid-btn green kid-win-btn" id="kidAgain">Play Again 🔁</button>') +
+					'<a class="kid-btn ghost kid-win-btn" href="/kids/">New PIN 🔑</a>' +
 				'</div></div>';
 			this.screen(html);
 			probeImage(badgeSources('finish')).then(function () { /* warm cache */ });
@@ -1009,14 +1178,14 @@
 				var img = document.getElementById('kidBadge');
 				if (img && src) { img.src = src; img.style.display = 'block'; }
 			});
-			document.getElementById('kidAgain').addEventListener('click', function () {
-				if (self.config.allow_replay === false) {
-					self.screen('<div class="kid-card"><h2>Thanks for playing! 🌈</h2><p class="hint">Ask your teacher for a new game.</p><a class="kid-btn" href="/kids/">Back</a></div>');
-					return;
-				}
-				self.index = 0; self.answers = []; self.score = 0;
-				self.createSession();
-			});
+			var again = document.getElementById('kidAgain');
+			if (again) {
+				again.addEventListener('click', function () {
+					self.index = 0; self.answers = []; self.score = 0;
+					self.streak = 0; self.hintsUsed = 0;
+					self.createSession();
+				});
+			}
 			/** The champion's card on the results screen: what this run was
 			 * worth, where it put the kid, and who they are chasing. Built
 			 * from `res.championship`, which the server only sends when the

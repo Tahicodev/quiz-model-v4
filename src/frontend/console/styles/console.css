@@ -811,12 +811,48 @@ button.ac-kpi:hover {
 
 /* ── Toolbar / filters ─────────────────────────────────────────────────── */
 
+/*
+ * The toolbar is TWO rows on purpose:
+ *   row 1 — the controls that belong together (chips on the left, the
+ *           refresh button pushed to the right)
+ *   row 2 — the field filters, on their own line
+ * On one row the search field and the status select used to push the refresh
+ * button off the panel, and the audit filter chips collided with the search
+ * box.
+ */
 .ac-toolbar {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 10px;
+	margin-bottom: 14px;
+}
+
+.ac-toolbar__row {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	flex-wrap: wrap;
-	margin-bottom: 14px;
+	min-width: 0;
+}
+
+.ac-toolbar__row--fields {
+	padding-top: 2px;
+}
+
+/* Push the trailing control to the right edge of the row. */
+.ac-toolbar__push {
+	margin-left: auto;
+}
+
+.ac-toolbar .ac-field {
+	margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+	.ac-toolbar__push {
+		margin-left: 0;
+	}
 }
 
 .ac-field {
@@ -1211,8 +1247,14 @@ button.ac-kpi:hover {
 	position: fixed;
 	inset: 0;
 	background: var(--ac-overlay);
-	display: grid;
-	place-items: center;
+	/* Flex centering, NOT grid place-items — a centered grid item does not
+	   stretch, so the modal's `width: min(560px, 100%)` resolved against a
+	   shrink-to-fit area and modals came out content-wide (378px for one,
+	   560px for another). With flex, the percentage resolves against the
+	   backdrop's padding box and every modal is a predictable width. */
+	display: flex;
+	align-items: center;
+	justify-content: center;
 	padding: 24px;
 	z-index: 80;
 	animation: ac-fade 0.12s ease;
@@ -1232,7 +1274,10 @@ button.ac-kpi:hover {
 	border: 1px solid var(--ac-border);
 	border-radius: var(--ac-radius-lg);
 	box-shadow: var(--ac-shadow-lg);
+	/* One predictable width, whatever the content: the modal never grows
+	   and never shrinks with its fields. */
 	width: min(560px, 100%);
+	flex: 0 1 auto;
 	max-height: min(86vh, 820px);
 	display: flex;
 	flex-direction: column;
@@ -1519,7 +1564,559 @@ button.ac-kpi:hover {
 	color: var(--ac-text-muted);
 }
 
-/* ── Responsive ────────────────────────────────────────────────────────── */
+/* ── Settings page: section + collapsed right menu ─────────────────────── */
+
+/**
+ * The settings page is a PAGE, not a modal: the right-hand column is a
+ * collapsible section menu. Collapsed it is a narrow rail of icons; expanded
+ * it shows the section names. The content never moves horizontally when the
+ * menu collapses — the grid column just changes width.
+ */
+.ac-split {
+	display: grid;
+	grid-template-columns: 1fr 236px;
+	gap: 16px;
+	align-items: start;
+}
+
+.ac-split--collapsed {
+	grid-template-columns: 1fr 60px;
+}
+
+.ac-split__main {
+	min-width: 0;
+}
+
+.ac-section-menu {
+	position: sticky;
+	top: calc(var(--ac-header-h) + 22px);
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	box-shadow: var(--ac-shadow-sm);
+	overflow: hidden;
+}
+
+.ac-section-menu__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--ac-border);
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--ac-text-subtle);
+}
+
+.ac-section-menu__toggle {
+	border: 0;
+	background: transparent;
+	color: var(--ac-text-muted);
+	cursor: pointer;
+	padding: 3px 6px;
+	border-radius: var(--ac-radius-sm);
+	font-size: 13px;
+	line-height: 1;
+}
+
+.ac-section-menu__toggle:hover {
+	background: var(--ac-surface-3);
+	color: var(--ac-text);
+}
+
+.ac-section-menu__list {
+	display: flex;
+	flex-direction: column;
+	padding: 6px;
+	gap: 1px;
+	max-height: calc(100vh - var(--ac-header-h) - 120px);
+	overflow-y: auto;
+}
+
+.ac-section-menu__item {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	width: 100%;
+	padding: 8px 9px;
+	border: 0;
+	border-radius: var(--ac-radius-sm);
+	background: transparent;
+	color: var(--ac-text-muted);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 550;
+	text-align: left;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.ac-section-menu__item:hover {
+	background: var(--ac-surface-3);
+	color: var(--ac-text);
+}
+
+.ac-section-menu__item.is-active {
+	background: var(--ac-brand-soft);
+	color: var(--ac-brand);
+	font-weight: 650;
+}
+
+.ac-section-menu__icon {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	display: grid;
+	place-items: center;
+}
+
+.ac-section-menu__badge {
+	margin-left: auto;
+	flex: none;
+	font-size: 10.5px;
+	font-weight: 700;
+	min-width: 17px;
+	height: 17px;
+	padding: 0 5px;
+	border-radius: 9px;
+	display: grid;
+	place-items: center;
+	background: var(--ac-warning-soft);
+	color: var(--ac-warning);
+}
+
+/* Collapsed: icons only, with a tooltip carrying the section name. */
+.ac-section-menu--collapsed .ac-section-menu__head {
+	justify-content: center;
+	padding: 10px 4px;
+}
+
+.ac-section-menu--collapsed .ac-section-menu__head span {
+	display: none;
+}
+
+.ac-section-menu--collapsed .ac-section-menu__item {
+	justify-content: center;
+	padding: 9px 4px;
+}
+
+.ac-section-menu--collapsed .ac-section-menu__label {
+	display: none;
+}
+
+.ac-section-menu--collapsed .ac-section-menu__badge {
+	display: none;
+}
+
+.ac-section-panel {
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	box-shadow: var(--ac-shadow-sm);
+	margin-bottom: 16px;
+	overflow: hidden;
+}
+
+.ac-section-panel__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 14px 16px;
+	border-bottom: 1px solid var(--ac-border);
+}
+
+.ac-section-panel__title {
+	margin: 0;
+	font-size: 13.5px;
+	font-weight: 650;
+	letter-spacing: -0.01em;
+}
+
+.ac-section-panel__subtitle {
+	margin: 2px 0 0;
+	font-size: 12px;
+	color: var(--ac-text-muted);
+}
+
+.ac-section-panel__body {
+	padding: 16px;
+}
+
+.ac-field-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 12px 16px;
+	margin-bottom: 14px;
+}
+
+/* A field marked `full` spans the whole row. The class shipped without a
+   rule, so full-width fields landed in ONE grid cell and the rows around
+   them fell out of alignment. */
+.ac-field-grid .ac-field--full {
+	grid-column: 1 / -1;
+}
+
+/* Inside a modal every field takes the full row: a two-column grid is a
+   settings-page idea, a dialog is a form that reads top to bottom. */
+.ac-modal__body .ac-field {
+	display: flex;
+	width: 100%;
+	margin-bottom: 12px;
+}
+
+.ac-modal__body .ac-field:last-child {
+	margin-bottom: 0;
+}
+
+.ac-modal__body .ac-input,
+.ac-modal__body .ac-select {
+	width: 100%;
+	flex: 1 1 auto;
+}
+
+/* An input with a companion button (the password generator), side by side
+   and equal height. */
+.ac-field-row {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	width: 100%;
+}
+
+.ac-field-row .ac-input {
+	flex: 1;
+	min-width: 0;
+}
+
+.ac-field-row .ac-btn {
+	flex: none;
+	white-space: nowrap;
+}
+
+/* A bare select dropped into a grid stretches to the row height of its
+   neighbours — the "dropdown with the big height". Selects always ride in
+   a labelled field, and their height is fixed. */
+.ac-field .ac-select {
+	height: 32px;
+}
+
+.ac-field-grid > .ac-check {
+	align-self: end;
+	padding-bottom: 4px;
+}
+
+.ac-field-grid .ac-field:last-child {
+	margin-bottom: 0;
+}
+
+.ac-field__hint {
+	margin: 3px 0 0;
+	font-size: 11.5px;
+	color: var(--ac-text-subtle);
+}
+
+.ac-input--full {
+	width: 100%;
+}
+
+.ac-switch-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+	padding: 11px 0;
+	border-bottom: 1px solid var(--ac-border);
+}
+
+.ac-switch-row:last-child {
+	border-bottom: 0;
+}
+
+.ac-switch-row__text {
+	min-width: 0;
+}
+
+.ac-switch-row__label {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.ac-switch-row__hint {
+	margin: 2px 0 0;
+	font-size: 12px;
+	color: var(--ac-text-muted);
+}
+
+.ac-switch {
+	position: relative;
+	flex: none;
+	width: 40px;
+	height: 22px;
+	border-radius: 11px;
+	border: 1px solid var(--ac-border-strong);
+	background: var(--ac-surface-3);
+	cursor: pointer;
+	transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.ac-switch::after {
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	background: var(--ac-surface);
+	box-shadow: var(--ac-shadow-sm);
+	transition: transform 0.14s ease;
+}
+
+.ac-switch[aria-checked='true'] {
+	background: var(--ac-brand);
+	border-color: var(--ac-brand);
+}
+
+.ac-switch[aria-checked='true']::after {
+	transform: translateX(18px);
+}
+
+@media (max-width: 1024px) {
+	.ac-split,
+	.ac-split--collapsed {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.ac-section-menu {
+		position: static;
+	}
+
+	.ac-section-menu--collapsed .ac-section-menu__list {
+		display: none;
+	}
+
+	.ac-section-menu--collapsed .ac-section-menu__label {
+		display: inline;
+	}
+}
+
+/* ── Users: role sub-pages ─────────────────────────────────────────────── */
+
+.ac-role-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+	gap: 14px;
+}
+
+.ac-role-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 16px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface);
+	box-shadow: var(--ac-shadow-sm);
+	color: inherit;
+	text-decoration: none;
+	transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+
+.ac-role-card:hover {
+	border-color: var(--ac-border-strong);
+	box-shadow: var(--ac-shadow);
+	transform: translateY(-1px);
+	text-decoration: none;
+}
+
+.ac-role-card__icon {
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+	display: grid;
+	place-items: center;
+	background: var(--ac-brand-soft);
+	color: var(--ac-brand);
+	margin-bottom: 4px;
+}
+
+.ac-role-card__title {
+	margin: 0;
+	font-size: 14.5px;
+	font-weight: 650;
+	color: var(--ac-text);
+}
+
+.ac-role-card__desc {
+	margin: 0;
+	font-size: 12.5px;
+	color: var(--ac-text-muted);
+}
+
+.ac-role-card__count {
+	margin: 2px 0 0;
+	font-size: 22px;
+	font-weight: 680;
+	letter-spacing: -0.02em;
+	color: var(--ac-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.ac-role-card__count small {
+	font-size: 12px;
+	font-weight: 550;
+	color: var(--ac-text-muted);
+	letter-spacing: 0;
+}
+
+/* ── Workbench (the administrator's role-shaped overview) ───────────────── */
+
+.ac-workbench {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+	gap: 16px;
+	align-items: start;
+}
+
+.ac-workbench__panel {
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	box-shadow: var(--ac-shadow-sm);
+	overflow: hidden;
+}
+
+.ac-workbench__head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+	padding: 13px 15px;
+	border-bottom: 1px solid var(--ac-border);
+}
+
+.ac-workbench__title {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 650;
+	letter-spacing: -0.005em;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+}
+
+.ac-workbench__title svg {
+	color: var(--ac-brand);
+	flex: none;
+}
+
+.ac-workbench__subtitle {
+	margin: 2px 0 0;
+	font-size: 11.5px;
+	color: var(--ac-text-muted);
+}
+
+.ac-workbench__body {
+	padding: 14px 15px;
+}
+
+.ac-workbench__body--flush {
+	padding: 0;
+}
+
+.ac-workbench__list {
+	display: flex;
+	flex-direction: column;
+}
+
+.ac-workbench__row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 9px 15px;
+	border-bottom: 1px solid var(--ac-border);
+	font-size: 12.5px;
+}
+
+.ac-workbench__row:last-child {
+	border-bottom: 0;
+}
+
+.ac-workbench__row-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.ac-workbench__row-title {
+	margin: 0;
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ac-workbench__row-sub {
+	margin: 1px 0 0;
+	font-size: 11.5px;
+	color: var(--ac-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ac-workbench__row-value {
+	flex: none;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+	color: var(--ac-text);
+}
+
+.ac-quick-actions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 10px;
+}
+
+.ac-quick-action {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 13px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface);
+	color: inherit;
+	text-decoration: none;
+	font-size: 13px;
+	font-weight: 600;
+	transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.ac-quick-action:hover {
+	border-color: var(--ac-brand);
+	background: var(--ac-brand-soft);
+	color: var(--ac-brand);
+	text-decoration: none;
+}
+
+.ac-quick-action svg {
+	flex: none;
+	color: var(--ac-brand);
+}
+
+.ac-quick-action span {
+	color: var(--ac-text);
+}
+
+.ac-quick-action:hover span {
+	color: var(--ac-brand);
+}
+
 
 @media (max-width: 1024px) {
 	.ac-root {
@@ -1585,6 +2182,483 @@ button.ac-kpi:hover {
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
+}
+
+/* ── Row actions ────────────────────────────────────────────────────────── */
+
+/*
+ * The action strip on a table row. Every record-holding list offers the same
+ * actions in the same place, so an operator never has to learn a new table.
+ */
+.ac-row-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 5px;
+	flex-wrap: wrap;
+}
+
+.ac-row-actions .ac-btn {
+	white-space: nowrap;
+}
+
+/* The in-page Back button — rendered into the page's own toolbar, next to
+   Refresh, NOT in the console header. Offered only when there is somewhere
+   to go. */
+.ac-back-btn .ac-back-btn__label {
+	margin-left: 6px;
+}
+
+/* The management index in the Summary step. */
+.ac-manage-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 8px;
+}
+
+.ac-manage-card {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: 11px 13px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface-2);
+	color: inherit;
+	text-decoration: none;
+	transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.ac-manage-card:hover {
+	border-color: var(--ac-brand);
+	background: var(--ac-brand-soft);
+	text-decoration: none;
+}
+
+.ac-manage-card__title {
+	font-size: 13px;
+	font-weight: 650;
+	color: var(--ac-text);
+}
+
+.ac-manage-card:hover .ac-manage-card__title {
+	color: var(--ac-brand);
+}
+
+.ac-manage-card__desc {
+	font-size: 11.5px;
+	line-height: 1.45;
+	color: var(--ac-text-muted);
+}
+
+/* ── The setup wizard stepper ───────────────────────────────────────────── */
+
+/*
+ * The classroom setup wizard was a six-step modal. In the console it is a
+ * stepper: the same steps, in the same order, as a page. The step you are
+ * on is in the URL, so a support ticket can point at it.
+ */
+.ac-stepper {
+	display: flex;
+	align-items: stretch;
+	gap: 4px;
+	margin-bottom: 16px;
+	padding: 5px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface);
+	box-shadow: var(--ac-shadow-sm);
+	overflow-x: auto;
+}
+
+.ac-stepper__step {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex: 1;
+	min-width: 0;
+	padding: 9px 11px;
+	border: 0;
+	border-radius: var(--ac-radius-sm);
+	background: transparent;
+	color: var(--ac-text-muted);
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: 550;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 0.14s ease, color 0.14s ease;
+}
+
+.ac-stepper__step:hover {
+	background: var(--ac-surface-3);
+	color: var(--ac-text);
+}
+
+.ac-stepper__step.is-active {
+	background: var(--ac-brand-soft);
+	color: var(--ac-brand);
+	font-weight: 650;
+}
+
+.ac-stepper__step.is-done {
+	color: var(--ac-success);
+}
+
+.ac-stepper__icon {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 13px;
+	line-height: 1;
+}
+
+.ac-stepper__icon svg {
+	display: block;
+}
+
+.ac-stepper__label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+@media (max-width: 900px) {
+	.ac-stepper__label {
+		display: none;
+	}
+
+	.ac-stepper__step {
+		flex: none;
+	}
+}
+
+/* The address the students must use. */
+.ac-primary-url {
+	padding: 16px;
+	border: 1px solid var(--ac-brand);
+	border-radius: var(--ac-radius);
+	background: var(--ac-brand-soft);
+}
+
+.ac-primary-url__label {
+	margin: 0;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--ac-text-subtle);
+}
+
+.ac-primary-url__value {
+	margin: 4px 0 0;
+	font-size: 22px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	color: var(--ac-text);
+	font-variant-numeric: tabular-nums;
+	word-break: break-all;
+}
+
+.ac-primary-url__note {
+	margin: 4px 0 0;
+	font-size: 12.5px;
+	color: var(--ac-text-muted);
+}
+
+/* A command block the operator copies. */
+.ac-pre {
+	margin: 0;
+	padding: 12px 14px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface-2);
+	color: var(--ac-text);
+	font-family: var(--ac-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 12.5px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+/* A checklist of manual verifications. */
+.ac-checklist {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.ac-check {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	padding: 8px 0;
+	cursor: pointer;
+	font-size: 13px;
+}
+
+.ac-check input[type='checkbox'] {
+	flex: none;
+	margin-top: 2px;
+	width: 15px;
+	height: 15px;
+	accent-color: var(--ac-brand);
+}
+
+.ac-check__label {
+	font-weight: 550;
+	color: var(--ac-text);
+}
+
+.ac-check__hint {
+	display: block;
+	margin-top: 2px;
+	font-size: 12px;
+	color: var(--ac-text-muted);
+}
+
+/* The summary of the setup checks. */
+.ac-summary {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+	gap: 10px;
+}
+
+.ac-summary__item {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 11px 13px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface-2);
+}
+
+.ac-summary__label {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ac-text);
+}
+
+.ac-summary__detail {
+	margin: 2px 0 0;
+	font-size: 12px;
+	color: var(--ac-text-muted);
+}
+
+/* ── The live model catalog (AI settings) ───────────────────────────────── */
+
+.ac-model-catalog {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 6px;
+	max-height: 300px;
+	overflow-y: auto;
+	padding: 8px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface-2);
+}
+
+.ac-model-catalog__item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 9px;
+	border: 1px solid transparent;
+	border-radius: var(--ac-radius-sm);
+	cursor: pointer;
+	font-size: 12.5px;
+}
+
+.ac-model-catalog__item:hover {
+	background: var(--ac-surface);
+	border-color: var(--ac-border);
+}
+
+.ac-model-catalog__item[hidden] {
+	display: none;
+}
+
+.ac-model-catalog__name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ac-model-catalog__id {
+	flex: none;
+	font-size: 11px;
+	color: var(--ac-text-subtle);
+}
+
+/* ── The file picker ────────────────────────────────────────────────────── */
+
+/*
+ * A raw `<input type="file">` renders as a native OS button the theme
+ * cannot touch — an alien grey widget on the Documents & data panel. The
+ * picker hides the native input and offers the styled console button plus
+ * the chosen file name instead. The input stays in the DOM, focusable and
+ * labelled, so keyboard and screen readers keep working.
+ */
+.ac-file {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	border: 1px dashed var(--ac-border);
+	border-radius: var(--ac-radius-sm);
+	background: var(--ac-surface-2);
+	cursor: pointer;
+	transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.ac-file:hover,
+.ac-file:focus-within {
+	border-color: var(--ac-brand);
+	background: var(--ac-brand-soft);
+}
+
+.ac-file input[type='file'] {
+	/* The native input stays, but occupies nothing visually. */
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+.ac-file__btn {
+	flex: none;
+}
+
+.ac-file__name {
+	flex: 1;
+	min-width: 0;
+	font-size: 12.5px;
+	color: var(--ac-text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ac-file__name.is-set {
+	color: var(--ac-text);
+	font-weight: 550;
+}
+
+/* ── The global search ──────────────────────────────────────────────────── */
+
+/*
+ * The header search was an input with no listener — decoration. It now
+ * opens one panel that searches the console itself: the pages, the
+ * settings sections, and (live, from the API) the accounts and the
+ * organizations the operator may read.
+ */
+.ac-search {
+	position: relative;
+}
+
+.ac-search__panel {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	width: min(380px, calc(100vw - 48px));
+	max-height: min(480px, 70vh);
+	overflow-y: auto;
+	background: var(--ac-surface);
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	box-shadow: var(--ac-shadow-lg);
+	z-index: 90;
+	padding: 6px;
+}
+
+.ac-search__panel[hidden] {
+	display: none;
+}
+
+.ac-search__group {
+	padding: 8px 10px 3px;
+	font-size: 10.5px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--ac-text-subtle);
+}
+
+.ac-search__item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 7px 10px;
+	border: 0;
+	border-radius: var(--ac-radius-sm);
+	background: transparent;
+	color: var(--ac-text);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.ac-search__item:hover,
+.ac-search__item.is-active {
+	background: var(--ac-brand-soft);
+	color: var(--ac-brand);
+}
+
+.ac-search__item[aria-disabled='true'] {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.ac-search__item-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 550;
+}
+
+.ac-search__item-sub {
+	flex: none;
+	font-size: 11px;
+	color: var(--ac-text-subtle);
+	max-width: 40%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ac-search__empty {
+	padding: 12px 10px;
+	font-size: 12.5px;
+	color: var(--ac-text-muted);
+}
+
+.ac-search__badge {
+	flex: none;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	padding: 2px 6px;
+	border-radius: 999px;
+	background: var(--ac-surface-3);
+	color: var(--ac-text-muted);
+}
+
+.ac-search__badge--user {
+	background: var(--ac-brand-soft);
+	color: var(--ac-brand);
 }
 
 @media (prefers-reduced-motion: reduce) {

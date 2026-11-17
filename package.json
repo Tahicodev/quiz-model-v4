@@ -20,6 +20,9 @@
 		"admin:create": "node scripts/create-platform-admin.mjs",
 		"console:shots": "node scripts/console-screenshots.mjs",
 		"teacher:regression": "node scripts/teacher-regression-shot.mjs",
+		"verify:static": "node scripts/verify-static-exposure.mjs",
+		"verify:offline": "node scripts/offline-lan-validation.mjs",
+		"verify:saas": "node scripts/saas-validation.mjs",
 		"offline:bundle": "node scripts/generate-offline-bundle.mjs",
 		"offline:package": "node scripts/make-offline-package.mjs"
 	},

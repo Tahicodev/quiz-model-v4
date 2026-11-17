@@ -67,13 +67,16 @@ export class PlatformAnalyticsService {
 		this.kidsGameSessions = repo.modelFor('kidsGameSessions');
 		this.tournaments = repo.modelFor('tournaments');
 		this.tournamentEntries = repo.modelFor('tournament_entries');
+		this.teacherMessages = repo.modelFor('teacher_messages');
+		this.teacherAssignments = repo.modelFor('teacher_assignments');
+		this.schoolArchives = repo.modelFor('school_archives');
+		this.generatedDocuments = repo.modelFor('generated_documents');
+		this.refreshTokens = repo.modelFor('refresh_tokens');
 		this.auditLogs = repo.modelFor('audit_logs');
 		this.securityEvents = repo.modelFor('security_events');
 		this.accountRequests = repo.modelFor('account_requests');
 		this.profileRequests = repo.modelFor('profile_requests');
 		this.devices = repo.modelFor('devices');
-		this.teacherMessages = repo.modelFor('teacher_messages');
-		this.teacherAssignments = repo.modelFor('teacher_assignments');
 	}
 
 	// ── Scope ───────────────────────────────────────────────────────────────
@@ -484,7 +487,13 @@ export class PlatformAnalyticsService {
 	async listUsers(input) {
 		const schoolIds = await this.resolveSchoolIds(input.scope, input.schoolIds);
 		const where = schoolIds.length ? { school_id: { in: schoolIds } } : { school_id: '__none__' };
-		if (input.role) where.role = input.role;
+		// `roles` accepts a list, so the administrators page can ask for
+		// BOTH the organization administrators and the platform ones.
+		if (input.roles && input.roles.length) {
+			where.role = { in: input.roles };
+		} else if (input.role) {
+			where.role = input.role;
+		}
 		if (input.status) where.status = input.status;
 		if (input.schoolId) where.school_id = input.schoolId;
 		if (input.search) {
@@ -908,6 +917,248 @@ export class PlatformAnalyticsService {
 				createdAt: row.created_at,
 			})),
 		};
+	}
+
+	// ── The administrator's workbench ───────────────────────────────────────
+
+	/**
+	 * The read model behind the administrator's dashboard.
+	 *
+	 * The shape follows what an administrator actually does, not what the
+	 * database happens to contain:
+	 *
+	 *   control      — what this installation looks like right now
+	 *   access       — who is waiting for access to be granted
+	 *   activity     — are the teachers and students working
+	 *   documents    — what has been produced
+	 *   credentials  — accounts that have never been used
+	 *   notes        — the notes sent to teachers
+	 *   planning     — what is coming up
+	 *   maintenance  — is the installation healthy
+	 *
+	 * Every number is aggregated server-side from real rows.
+	 */
+	async getWorkbench(input) {
+		const now = input.now || new Date();
+		const schoolIds = await this.resolveSchoolIds(input.scope, input.schoolIds);
+		const inScope = schoolIds.length ? { school_id: { in: schoolIds } } : { school_id: '__none__' };
+		const thirtyDaysAgo = new Date(now.getTime() - 30 * 86400000);
+
+		const [
+			documents,
+			notes,
+			assignments,
+			upcomingExams,
+			archives,
+			pendingRequests,
+			profileRequests,
+			overrides,
+			liveSessions,
+			recentAudit,
+		] = await Promise.all([
+			this.generatedDocuments.findMany({
+				where: inScope,
+				orderBy: { created_at: 'desc' },
+				take: 8,
+				select: {
+					id: true,
+					kind: true,
+					title: true,
+					format: true,
+					file_name: true,
+					size_bytes: true,
+					created_at: true,
+					created_by: true,
+				},
+			}),
+			this.teacherMessages.findMany({
+				where: inScope,
+				orderBy: { date: 'desc' },
+				take: 8,
+				select: {
+					id: true,
+					title: true,
+					body: true,
+					date: true,
+					teacher_name: true,
+					teacher_id: true,
+					class_name: true,
+				},
+			}),
+			this.teacherAssignments.findMany({
+				where: { ...inScope, due_date: { not: null } },
+				orderBy: { due_date: 'asc' },
+				take: 8,
+				select: {
+					id: true,
+					title: true,
+					due_date: true,
+					teacher_id: true,
+					class_id: true,
+					created_at: true,
+				},
+			}),
+			this.exams.findMany({
+				where: { ...inScope, status: { not: 'archived' } },
+				orderBy: { created_at: 'desc' },
+				take: 8,
+				select: {
+					id: true,
+					name: true,
+					status: true,
+					is_training: true,
+					duration: true,
+					created_at: true,
+					creator_id: true,
+				},
+			}),
+			this.schoolArchives.findMany({
+				where: inScope,
+				orderBy: { created_at: 'desc' },
+				take: 5,
+				select: { id: true, year: true, label: true, size_bytes: true, created_at: true },
+			}),
+			this.accountRequests.count({ where: { ...inScope, status: 'pending' } }),
+			this.profileRequests.count({ where: { ...inScope, status: 'pending' } }),
+			this.#repo
+				.modelFor('user_permission_overrides')
+				.count(),
+			this.refreshTokens.count({
+				where: { revoked: false, expires_at: { gt: now } },
+			}),
+			this.auditLogs.findMany({
+				where: inScope,
+				orderBy: { occurred_at: 'desc' },
+				take: 10,
+				select: {
+					id: true,
+					occurred_at: true,
+					action: true,
+					entity_type: true,
+					outcome: true,
+					severity: true,
+					actor: { select: { name: true, username: true } },
+				},
+			}),
+		]);
+
+		// Accounts that have never signed in — the credential backlog.
+		const unused = await this.users.findMany({
+			where: { ...inScope, OR: [{ last_login: null }, { last_login: { lt: thirtyDaysAgo } }] },
+			orderBy: { created_at: 'desc' },
+			take: 8,
+			select: {
+				id: true,
+				name: true,
+				username: true,
+				role: true,
+				status: true,
+				last_login: true,
+				created_at: true,
+			},
+		});
+
+		const suspended = await this.users.count({ where: { ...inScope, status: 'suspended' } });
+		const teachersWithoutClasses = await this.#teachersWithoutClasses(schoolIds);
+
+		return {
+			meta: {
+				generatedAt: now.toISOString(),
+				scope: { kind: input.scope?.kind || 'school', schoolIds },
+			},
+			sections: {
+				access: {
+					pendingAccountRequests: pendingRequests,
+					pendingProfileRequests: profileRequests,
+					permissionOverrides: overrides,
+					suspendedAccounts: suspended,
+					teachersWithoutClasses,
+					unusedCredentials: unused,
+				},
+				documents: {
+					recent: documents.map((doc) => ({
+						id: doc.id,
+						kind: doc.kind,
+						title: doc.title,
+						format: doc.format,
+						fileName: doc.file_name,
+						sizeBytes: doc.size_bytes,
+						createdAt: doc.created_at,
+					})),
+				},
+				notes: {
+					recent: notes.map((note) => ({
+						id: note.id,
+						title: note.title,
+						body: note.body,
+						date: note.date,
+						teacherName: note.teacher_name,
+						className: note.class_name,
+					})),
+				},
+				planning: {
+					upcomingAssignments: assignments.map((assignment) => ({
+						id: assignment.id,
+						title: assignment.title,
+						dueDate: assignment.due_date,
+						createdAt: assignment.created_at,
+					})),
+					recentExams: upcomingExams.map((exam) => ({
+						id: exam.id,
+						name: exam.name,
+						status: exam.status,
+						isTraining: exam.is_training,
+						duration: exam.duration,
+						createdAt: exam.created_at,
+					})),
+					archives: archives.map((archive) => ({
+						id: archive.id,
+						year: archive.year,
+						label: archive.label,
+						sizeBytes: archive.size_bytes,
+						createdAt: archive.created_at,
+					})),
+				},
+				maintenance: {
+					liveSessions,
+					recentAudit: recentAudit.map((row) => ({
+						id: row.id,
+						occurredAt: row.occurred_at,
+						action: row.action,
+						entityType: row.entity_type,
+						outcome: row.outcome,
+						severity: row.severity,
+						actorName: row.actor?.name || row.actor?.username || null,
+					})),
+				},
+			},
+		};
+	}
+
+	/**
+	 * Teachers who manage no class. They can author content but cannot reach
+	 * a class, which is worth an administrator's attention.
+	 */
+	async #teachersWithoutClasses(schoolIds) {
+		if (!schoolIds.length) return [];
+		const teachers = await this.users.findMany({
+			where: { school_id: { in: schoolIds }, role: 'teacher' },
+			select: { id: true, name: true, username: true },
+		});
+		if (!teachers.length) return [];
+		const teacherIds = teachers.map((teacher) => teacher.id);
+		const assignments = await this.teacherAssignments.findMany({
+			where: { teacher_id: { in: teacherIds } },
+			select: { teacher_id: true },
+		});
+		const withClasses = new Set(assignments.map((row) => row.teacher_id));
+		return teachers
+			.filter((teacher) => !withClasses.has(teacher.id))
+			.map((teacher) => ({
+				id: teacher.id,
+				name: teacher.name,
+				username: teacher.username,
+			}));
 	}
 
 	// ── Internal helpers ────────────────────────────────────────────────────

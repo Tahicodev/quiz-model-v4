@@ -234,10 +234,16 @@ router.delete('/:id', requireRole(USER_MANAGER_ROLES), async (req, res, next) =>
 // POST /api/v1/users/:id/reset-password
 router.post('/:id/reset-password', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN]), async (req, res, next) => {
   try {
-    const { userSvc } = getContainer();
+    const { userSvc, authSvc, auditSvc, securityEventSvc } = getContainer();
     const { newPassword } = req.body;
-    await userSvc.resetPassword(req.params.id, newPassword, req.user);
-    res.json({ message: 'Password reset' });
+    const result = await userSvc.resetPassword(req.params.id, newPassword, req.user, {
+      // The target must live in the caller's organization.
+      schoolId: req.schoolId,
+      authSvc,
+      auditSvc,
+      securityEventSvc,
+    });
+    res.json({ message: 'Password reset', revokedSessions: result?.revokedSessions || 0 });
   } catch (err) { next(err); }
 });
 

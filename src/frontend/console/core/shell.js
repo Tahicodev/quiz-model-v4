@@ -156,6 +156,10 @@ export function renderShell(root, { session, navItems, canAny, onNavigate }) {
 					<div class="ac-search">
 						${ICONS.search}
 						<input type="search" id="ac-global-search" placeholder="Search…" aria-label="Search the console" autocomplete="off" />
+						<button type="button" class="ac-search__clear" id="ac-search-clear" aria-label="Clear the search" title="Clear" hidden>
+							<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+						</button>
+						<div class="ac-search__panel" id="ac-search-panel" hidden></div>
 					</div>
 					<button type="button" class="ac-btn ac-btn--ghost ac-btn--icon" data-ac-theme aria-label="Toggle colour theme">
 						${ICONS.sun}
@@ -190,13 +194,23 @@ export function renderShell(root, { session, navItems, canAny, onNavigate }) {
 		title: root.querySelector('#ac-page-title'),
 		description: root.querySelector('#ac-page-description'),
 		setActive(path) {
-			root.querySelectorAll('[data-ac-nav]').forEach((button) => {
-				button.classList.toggle(
-					'is-active',
-					button.dataset.acPath === path ||
-						(path !== '/' && button.dataset.acPath !== '/' && path.startsWith(button.dataset.acPath)),
-				);
+			const items = Array.from(root.querySelectorAll('[data-ac-nav]'));
+			let matched = false;
+			items.forEach((button) => {
+				const target = button.dataset.acPath;
+				// The root item ('/') is the overview; it never matches a
+				// prefix, it is the fallback.
+				const hit =
+					target === path ||
+					(target !== '/' && path.startsWith(target));
+				if (hit) matched = true;
+				button.classList.toggle('is-active', hit);
 			});
+			if (!matched) {
+				items.forEach((button) => {
+					if (button.dataset.acPath === '/') button.classList.add('is-active');
+				});
+			}
 		},
 	};
 }

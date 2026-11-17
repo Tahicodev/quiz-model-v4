@@ -309,24 +309,70 @@ function legacyNormalizeLegacyData(raw, currentUser) {
 
 	const examQuestions = [];
 	const examClasses = [];
+
+	// The legacy store may already carry normalized `exam_questions` rows.
+	// Those are authoritative: they were produced by the exam picker's saved
+	// selection. Regenerating the links from the legacy numeric index array
+	// instead used to run in parallel and re-add questions the teacher had
+	// already removed, which is how a 5-question exam reached students with
+	// more than five questions.
+	const legacyJunctionByExam = new Map();
+	legacyReferencesFor(raw.exam_questions).forEach((row) => {
+		const examId = legacyAsId(row?.exam_id || row?.examId);
+		const questionId = legacyAsId(row?.question_id || row?.questionId);
+		if (!examId || !questionId || !questionIds.has(questionId)) return;
+		if (!legacyJunctionByExam.has(examId)) {
+			legacyJunctionByExam.set(examId, []);
+		}
+		const list = legacyJunctionByExam.get(examId);
+		if (list.some((entry) => entry.question_id === questionId)) return;
+		list.push({
+			exam_id: examId,
+			question_id: questionId,
+			order_index: legacyAsNumber(
+				row?.order_index ?? row?.orderIndex,
+				list.length,
+			),
+		});
+	});
+
 	(raw.exams || []).forEach((legacyExam, examIndex) => {
 		const examId = exams[examIndex]?.id;
 		if (!examId) return;
-		legacyReferencesFor(legacyExam.questions).forEach(
-			(reference, orderIndex) => {
-				const questionId =
-					typeof reference === 'number'
-						? questionIdByIndex.get(reference)
-						: legacyAsId(reference?.id || reference);
-				if (questionId && questionIds.has(questionId)) {
+
+		// An exam that already has normalized junction rows keeps exactly
+		// those links — the legacy index array is only a fallback for exams
+		// that were never migrated through the picker.
+		const junctionRows = legacyJunctionByExam.get(examId);
+		if (junctionRows && junctionRows.length) {
+			junctionRows
+				.slice()
+				.sort((a, b) => a.order_index - b.order_index)
+				.forEach((entry, orderIndex) => {
 					examQuestions.push({
 						exam_id: examId,
-						question_id: questionId,
+						question_id: entry.question_id,
 						order_index: orderIndex,
 					});
-				}
-			},
-		);
+				});
+		} else {
+			legacyReferencesFor(legacyExam.questions).forEach(
+				(reference, orderIndex) => {
+					const questionId =
+						typeof reference === 'number'
+							? questionIdByIndex.get(reference)
+							: legacyAsId(reference?.id || reference);
+					if (questionId && questionIds.has(questionId)) {
+						examQuestions.push({
+							exam_id: examId,
+							question_id: questionId,
+							order_index: orderIndex,
+						});
+					}
+				},
+			);
+		}
+
 		legacyReferencesFor(legacyExam.classes || legacyExam.classIds).forEach(
 			(reference) => {
 				const classId = legacyAsId(reference?.id || reference);

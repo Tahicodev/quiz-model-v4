@@ -51,10 +51,9 @@ const DEFAULT_SETTINGS = {
 			// Notifications are always available to teachers — the server
 			// scopes the feed to their own activity, classes and students.
 			notifications: true,
-			// Activity Log and Monitoring are admin-only views, hard-hidden
-			// for teachers in every gate (no toggle exists for them).
+			// The Activity Log is an admin-only view, hard-hidden for
+			// teachers in every gate (no toggle exists for it).
 			activity: false,
-			monitoring: false,
 		},
 		settings: true,
 		settingsTabs: {
@@ -307,8 +306,6 @@ function openSettingsModal() {
 		syncIntervalInput.value = currentSettings.realtimeSyncInterval || 5;
 
 	// Populate teacher access controls
-	populateTeacherAccessForm();
-
 	// Pre-fill the My Profile card so it starts in sync with the signed-in
 	// user. Otherwise saveAllSettings → saveOwnProfileIfDirty would see an
 	// empty (never-populated) name field and silently abort the whole save.
@@ -601,106 +598,6 @@ function toggleSettingsSidebar(forceCollapsed) {
 			: 'settingsSidebarCollapsed',
 		String(collapsed),
 	);
-}
-
-function populateTeacherAccessForm() {
-	const access =
-		currentSettings.teacherAccess || DEFAULT_SETTINGS.teacherAccess;
-	const tabMap = {
-		overview: 'teacher-access-overview',
-		questions: 'teacher-access-questions',
-		subjects: 'teacher-access-subjects',
-		exams: 'teacher-access-exams',
-		classes: 'teacher-access-classes',
-		games: 'teacher-access-games',
-		kidsGames: 'teacher-access-kidsgames',
-		results: 'teacher-access-results',
-	};
-	const settingsMap = {
-		general: 'teacher-access-settings-general',
-		profile: 'teacher-access-settings-profile',
-		presets: 'teacher-access-settings-presets',
-		data: 'teacher-access-settings-data',
-		realtime: 'teacher-access-settings-realtime',
-		'ai-generation': 'teacher-access-settings-ai',
-		users: 'teacher-access-settings-users',
-		games: 'teacher-access-settings-games',
-	};
-
-	Object.entries(tabMap).forEach(([key, id]) => {
-		const el = document.getElementById(id);
-		if (el)
-			el.checked =
-				access.tabs?.[key] !== undefined
-					? access.tabs[key]
-					: DEFAULT_SETTINGS.teacherAccess.tabs[key];
-	});
-
-	const settingsToggle = document.getElementById('teacher-access-settings');
-	if (settingsToggle)
-		settingsToggle.checked =
-			access.settings !== undefined
-				? access.settings
-				: DEFAULT_SETTINGS.teacherAccess.settings;
-
-	Object.entries(settingsMap).forEach(([key, id]) => {
-		const el = document.getElementById(id);
-		if (el)
-			el.checked =
-				access.settingsTabs?.[key] !== undefined
-					? access.settingsTabs[key]
-					: DEFAULT_SETTINGS.teacherAccess.settingsTabs[key];
-	});
-}
-
-function readTeacherAccessForm() {
-	const access =
-		currentSettings.teacherAccess || DEFAULT_SETTINGS.teacherAccess;
-	const tabMap = {
-		overview: 'teacher-access-overview',
-		questions: 'teacher-access-questions',
-		subjects: 'teacher-access-subjects',
-		exams: 'teacher-access-exams',
-		classes: 'teacher-access-classes',
-		games: 'teacher-access-games',
-		kidsGames: 'teacher-access-kidsgames',
-		results: 'teacher-access-results',
-	};
-	const settingsMap = {
-		general: 'teacher-access-settings-general',
-		profile: 'teacher-access-settings-profile',
-		presets: 'teacher-access-settings-presets',
-		data: 'teacher-access-settings-data',
-		realtime: 'teacher-access-settings-realtime',
-		'ai-generation': 'teacher-access-settings-ai',
-		users: 'teacher-access-settings-users',
-		games: 'teacher-access-settings-games',
-	};
-
-	const nextAccess = {
-		rev: 4,
-		tabs: { ...access.tabs },
-		settings: access.settings,
-		settingsTabs: { ...access.settingsTabs },
-	};
-	// The Categories tab became Subjects: drop the retired key so a stale
-	// `categories: false` can never gate the new section (see auth.js).
-	delete nextAccess.tabs.categories;
-
-	Object.entries(tabMap).forEach(([key, id]) => {
-		const el = document.getElementById(id);
-		if (el) nextAccess.tabs[key] = el.checked;
-	});
-
-	const settingsToggle = document.getElementById('teacher-access-settings');
-	if (settingsToggle) nextAccess.settings = settingsToggle.checked;
-
-	Object.entries(settingsMap).forEach(([key, id]) => {
-		const el = document.getElementById(id);
-		if (el) nextAccess.settingsTabs[key] = el.checked;
-	});
-
-	return nextAccess;
 }
 
 // Switch Tabs
@@ -1037,9 +934,18 @@ async function saveSettingsForm(options = {}) {
 		)
 			? parseInt(document.getElementById('setting-realtimeSyncInterval').value)
 			: currentSettings.realtimeSyncInterval || 5,
-
-		teacherAccess: readTeacherAccessForm(),
 	};
+
+	// The teacher-access map is NOT written from here.
+	//
+	// It moved to the control center (`#/settings?section=teaching`), which
+	// is where an administrator now edits it. Writing it from this panel as
+	// well would let a stale local copy overwrite the map the console has
+	// just saved — the two surfaces would fight over one setting.
+	//
+	// The value is still READ here (the classroom surface enforces it) and
+	// still kept in the local cache as an offline fallback.
+	const teacherAccess = currentSettings.teacherAccess;
 
 	// Save
 	// Persist settings on the server before updating the cache or showing a
@@ -1053,7 +959,9 @@ async function saveSettingsForm(options = {}) {
 		}));
 		await window.API.raw('POST', '/settings/bulk', { settings });
 	}
-	currentSettings = newSettings;
+	currentSettings = teacherAccess
+		? { ...newSettings, teacherAccess }
+		: newSettings;
 	localStorage.setItem('quizSettings', JSON.stringify(currentSettings));
 	if (source !== 'auto') settingsAutoSaveDirty = false;
 	// Clean up any Admin Secret left over from the old shared-secret flow —

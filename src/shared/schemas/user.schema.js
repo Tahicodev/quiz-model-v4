@@ -69,6 +69,14 @@ export const UserUpdateSchema = z.object({
 	phone: optionalContact(50),
 	subjects: subjectsField,
 	status: z.enum(['active', 'inactive', 'suspended']).optional(),
+	// A credential sent with a profile update.
+	//
+	// This field used to be ABSENT, and zod silently strips unknown keys — so
+	// the edit-user form's password was dropped, the account kept its old
+	// credential, the UI reported success, and the next sign-in failed with
+	// "Invalid username or password". Accepting it here (and hashing it in
+	// UserService.update) makes the API honest about what the form sends.
+	password: z.string().min(8).max(200).optional(),
 });
 
 export const UserFilterSchema = z.object({

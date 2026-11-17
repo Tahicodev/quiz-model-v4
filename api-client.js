@@ -241,18 +241,32 @@
 
     function request(method, path, body, _retried) {
       var url = getBaseUrl() + path;
+      // Remember whether this call carried a bearer token. A 401 on an
+      // ANONYMOUS call simply means "not signed in" — it must never be
+      // treated as "the signed-in session died". Treating it as an expired
+      // session made every unauthenticated page load fire the expiry path,
+      // which wiped the storage and redirected the login form away before a
+      // teacher could ever sign in.
+      var sentToken = getToken();
       var init = {
         method: method,
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+          ...(sentToken ? { Authorization: 'Bearer ' + sentToken } : {}),
         },
       };
       if (body !== undefined && body !== null) {
         init.body = JSON.stringify(body);
       }
       return fetch(url, init).then(function (res) {
+        if (res.status === 401 && !sentToken) {
+          var anon = new Error('Not authenticated');
+          anon.status = 401;
+          anon.isAuthFailure = false;
+          anon.isAnonymous = true;
+          throw anon;
+        }
         if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
         return refreshAccessToken()
           .then(function () { return request(method, path, body, true); })
@@ -319,18 +333,28 @@
 
   function requestBlob(method, path, body, _retried) {
     var url = getBaseUrl() + path;
+    // Same rule as `request`: an anonymous 401 is "not signed in", never
+    // "the session expired".
+    var sentToken = getToken();
     var init = {
       method: method,
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+        ...(sentToken ? { Authorization: 'Bearer ' + sentToken } : {}),
       },
     };
     if (body !== undefined && body !== null) {
       init.body = JSON.stringify(body);
     }
     return fetch(url, init).then(function (res) {
+      if (res.status === 401 && !sentToken) {
+        var anon = new Error('Not authenticated');
+        anon.status = 401;
+        anon.isAuthFailure = false;
+        anon.isAnonymous = true;
+        throw anon;
+      }
       if (res.status === 401 && !_retried && !isPublicAuthPath(path)) {
         return refreshAccessToken().then(function () {
           return requestBlob(method, path, body, true);
@@ -570,17 +594,22 @@
       // exam_questions junction). Legacy numeric indices never qualify and
       // stay in options_json below, so an exam still carrying local indices
       // can never be rejected by the ExamUpdateSchema uuid validation.
+      //
+      // The key is forwarded whenever the caller supplied it — INCLUDING an
+      // empty array. ExamService reconciles the exam_questions junction from
+      // this mirror, so dropping `questions: []` would leave stale links in
+      // place and the student would keep seeing questions the teacher removed.
+      var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       var qIds = Array.isArray(e.questions)
         ? e.questions
             .map(function (q) {
               return (q && typeof q === 'object') ? (q.id || q.question_id) : q;
             })
             .filter(function (q) {
-              return typeof q === 'string' &&
-                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+              return typeof q === 'string' && UUID_RE.test(q);
             })
         : [];
-      if (qIds.length) out.questions = qIds;
+      if (Array.isArray(e.questions)) out.questions = qIds;
       // Preserve legacy arrays in options_json so nothing is lost.
       var legacy = {};
       if (Array.isArray(e.questions)) legacy.questions = e.questions;
@@ -825,6 +854,29 @@
     /** PATCH /api/v1/<entity>/<id> */
     update: function (entity, id, patch) {
       return uploadEmbeddedImages(entity, patch).then(function (payload) {
+        // A password on a user row must go through the credential endpoint.
+        // `PATCH /users/:id` has no `password` field on purpose: the update
+        // schema strips unknown keys, so the password was silently DROPPED and
+        // the account kept its old credential while the UI reported success.
+        // The edit-user form has a password field, so route it correctly —
+        // and still apply the profile changes that came with it.
+        if (entity === 'users' && payload && payload.password) {
+          var newPassword = String(payload.password);
+          var rest = Object.assign({}, payload);
+          delete rest.password;
+          return request(
+            'POST',
+            '/users/' + encodeURIComponent(id) + '/reset-password',
+            { newPassword: newPassword },
+          ).then(function () {
+            if (!Object.keys(rest).length) return { message: 'Password reset' };
+            return request(
+              'PATCH',
+              '/' + entity + '/' + encodeURIComponent(id),
+              mapPayload(entity, rest),
+            );
+          });
+        }
         return request('PATCH', '/' + entity + '/' + encodeURIComponent(id), mapPayload(entity, payload));
       });
     },

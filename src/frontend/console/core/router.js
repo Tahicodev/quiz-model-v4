@@ -100,6 +100,89 @@ export function navigate(path, { replace = false } = {}) {
 	render();
 }
 
+// ── Navigation history ─────────────────────────────────────────────────────
+//
+// The browser already keeps the hash history, but it cannot say WHERE it
+// would go back to, and it has nothing to offer when the console was opened
+// directly on a deep link. So the console keeps its own trail: the pages the
+// operator has actually been on.
+//
+// The trail is a stack. Navigating to a page that is already on the stack
+// truncates it there — which is exactly what a back navigation does.
+
+const trail = [];
+
+/** The path of a hash, without the query. Two hashes with the same path are the same page. */
+function pathOf(hash) {
+	return String(hash || '#/').replace(/^#/, '').split('?')[0] || '/';
+}
+
+/** Record the current page on the trail. */
+function pushTrail(hash) {
+	const value = hash || '#/';
+	const last = trail[trail.length - 1];
+	// Switching a section of the SAME page (the settings section menu) is
+	// not a new page: it replaces the current entry rather than growing the
+	// trail, so the Back button does not walk through the sections.
+	if (last && pathOf(last) === pathOf(value)) {
+		trail[trail.length - 1] = value;
+		return;
+	}
+	if (last === value) return;
+	const index = trail.indexOf(value);
+	if (index !== -1) {
+		// A back (or forward) navigation: everything after it is no longer
+		// the path the operator took.
+		trail.length = index + 1;
+		return;
+	}
+	trail.push(value);
+}
+
+/**
+ * The route one level up from the current one.
+ *
+ * Used when the console was opened directly on a deep link and there is no
+ * history to go back to: the parent page is the next best place to be.
+ */
+function parentOf(path) {
+	const parts = String(path || '/').split('/').filter(Boolean);
+	if (parts.length < 2) return null;
+	if (parts[0] === 'users') return '/users';
+	if (parts[0] === 'organizations') return '/organizations';
+	return null;
+}
+
+/** Where the Back button would take the operator. `null` when there is nowhere to go. */
+export function backTarget() {
+	if (trail.length > 1) return trail[trail.length - 2];
+	const parent = parentOf(parseHash().path);
+	return parent ? `#${parent}` : null;
+}
+
+/** Whether the Back button should be offered. */
+export function canGoBack() {
+	return backTarget() !== null;
+}
+
+/** Go back one page. Returns false when there is nowhere to go. */
+export function goBack() {
+	const target = backTarget();
+	if (!target) return false;
+	// The trail is corrected by the hashchange handler that follows.
+	if (trail.length > 1) {
+		const index = trail.lastIndexOf(target);
+		if (index !== -1) trail.length = index + 1;
+	}
+	navigate(target);
+	return true;
+}
+
+/** The page titles of the trail, for the Back button's label. */
+export function trailLabels() {
+	return trail.slice();
+}
+
 /**
  * Render the route matching the current hash.
  * Returns the route that was rendered (or null when access was refused).
@@ -108,6 +191,7 @@ export function render() {
 	const { path, query } = parseHash();
 	const route = match(path) || notFound;
 	if (!route) return null;
+	pushTrail(window.location.hash);
 
 	const required = route.permission
 		? Array.isArray(route.permission)

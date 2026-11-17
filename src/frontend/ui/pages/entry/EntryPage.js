@@ -61,11 +61,35 @@ const ENTRY_HTML = `
           </div>
         </div>
         <div class="modal-body auth-modal-body">
+          <!--
+            ══════════════════════════════════════════════════════════════
+             CONTINUE — shown when this browser already holds a session.
+             The entry page ALWAYS shows the sign-in form: an existing session
+             is offered as an explicit choice, never applied as a silent
+             redirect. The person at the keyboard decides who they are.
+            ══════════════════════════════════════════════════════════════
+          -->
+          <div id="entryContinue" class="entry-continue" hidden>
+            <div class="entry-continue-body">
+              <p class="entry-continue-label">Signed in as</p>
+              <p class="entry-continue-name" id="entryContinueName"></p>
+              <p class="entry-continue-role" id="entryContinueRole"></p>
+            </div>
+            <div class="entry-continue-actions">
+              <button type="button" class="btn btn-primary" id="entryContinueBtn">
+                Continue
+              </button>
+              <button type="button" class="btn btn-secondary" id="entryContinueSignOut">
+                Sign in as someone else
+              </button>
+            </div>
+          </div>
           <form id="entryAuthForm" class="auth-form" novalidate>
             <p class="auth-form-intro">
-              Enter your credentials. You'll be taken to the admin panel if you
-              sign in as an admin, or to the student workspace if you sign in
-              as a student.
+              Enter your credentials. You will be taken to the control center
+              if you sign in as an administrator, to the classroom workspace
+              if you sign in as a teacher, and to the student workspace if you
+              sign in as a student.
             </p>
             <div class="form-group auth-field">
               <label for="entry-auth-username">Username</label>
@@ -455,11 +479,13 @@ function persistLegacySession(payload, remember) {
  */
 function redirectAfterLogin(role) {
 	const normalized = String(role || '').toLowerCase();
-	if (
-		normalized === 'admin' ||
-		normalized === 'super_admin' ||
-		normalized === 'teacher'
-	) {
+	// The three roles live in three different surfaces and must not be mixed:
+	// an administrator manages the platform, a teacher runs the classroom.
+	if (normalized === 'admin' || normalized === 'super_admin') {
+		window.location.href = 'console';
+		return;
+	}
+	if (normalized === 'teacher') {
 		window.location.href = 'admin.html';
 		return;
 	}
@@ -659,10 +685,16 @@ function bindAuthGate() {
 }
 
 /**
- * If the user is already signed in, skip the gate and redirect immediately.
- * Returns true when a redirect was issued.
+ * The session this browser already holds, if any.
+ *
+ * The entry page never redirects on its own: it shows the sign-in form and
+ * offers the existing session as an explicit "Continue" choice. A silent
+ * redirect makes it impossible to sign in as somebody else, and hides the
+ * fact that a session is still open.
+ *
+ * @returns {object|null}
  */
-function redirectIfAlreadySignedIn() {
+function existingSession() {
 	try {
 		// Exam/training links are a real authenticated runtime route. Do not
 		// bounce them back to the workspace, otherwise every Start button loops
@@ -670,25 +702,62 @@ function redirectIfAlreadySignedIn() {
 		const params = new URLSearchParams(window.location.search);
 		if (params.get('examId')) {
 			window.location.href = `student-workspace.html${window.location.search}`;
-			return true;
+			return null;
 		}
-		if (params.get('mode') === 'training') return false;
+		if (params.get('mode') === 'training') return null;
 		const raw =
 			sessionStorage.getItem('quizSession') ||
 			localStorage.getItem('quizSessionRemember');
-		if (!raw) return false;
+		if (!raw) return null;
 		const session = JSON.parse(raw);
-		if (!session || !session.role) return false;
+		if (!session || !session.role) return null;
 		if (session.expiresAt && Date.now() > Date.parse(session.expiresAt)) {
 			sessionStorage.removeItem('quizSession');
 			localStorage.removeItem('quizSessionRemember');
-			return false;
+			return null;
 		}
-		redirectAfterLogin(session.role);
-		return true;
+		return session;
 	} catch (_) {
-		return false;
+		return null;
 	}
+}
+
+/**
+ * Offer the existing session on the gate.
+ */
+function renderContinue(session) {
+	const panel = document.getElementById('entryContinue');
+	const nameEl = document.getElementById('entryContinueName');
+	const roleEl = document.getElementById('entryContinueRole');
+	if (!panel || !nameEl || !roleEl) return;
+
+	const role = String(session.role || '').toLowerCase();
+	const roleLabel =
+		role === 'admin' || role === 'super_admin'
+			? 'Administrator'
+			: role === 'teacher'
+				? 'Teacher'
+				: 'Student';
+	nameEl.textContent = session.name || session.username || 'a signed-in user';
+	roleEl.textContent = roleLabel;
+	panel.hidden = false;
+
+	document.getElementById('entryContinueBtn')?.addEventListener('click', () => {
+		redirectAfterLogin(role);
+	});
+	document.getElementById('entryContinueSignOut')?.addEventListener('click', () => {
+		try {
+			sessionStorage.removeItem('quizSession');
+			localStorage.removeItem('quizSessionRemember');
+			localStorage.removeItem('quizSession');
+			localStorage.removeItem('quizAuthToken');
+			localStorage.removeItem('quizCurrentUser');
+		} catch (_) {
+			/* best effort */
+		}
+		panel.hidden = true;
+		document.getElementById('entry-auth-username')?.focus();
+	});
 }
 
 /**
@@ -701,16 +770,14 @@ function redirectIfAlreadySignedIn() {
 export function initEntryPage(container) {
 	if (!container) return;
 
-	// Already signed in? Skip the gate entirely — redirect before paint.
-	// Check both the canonical localStorage remember key and any existing
-	// sessionStorage session so admins hitting / with a remembered session
-	// go straight to admin.html (same for students → workspace).
-	if (redirectIfAlreadySignedIn()) return;
-
 	// Paint the gate + the hidden exam runtime markup.
 	const tpl = document.createElement('template');
 	tpl.innerHTML = ENTRY_HTML.trim();
 	container.replaceChildren(tpl.content.cloneNode(true));
+
+	// An existing session is OFFERED, not applied. The gate always shows.
+	const existing = existingSession();
+	if (existing) renderContinue(existing);
 
 	// Direct exam/training links use this page as the runtime host after an
 	// authenticated student arrives. Avoid leaving the quiz container hidden.
