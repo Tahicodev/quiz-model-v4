@@ -9,6 +9,7 @@
 			name="description"
 			content="Administration console for the educational platform: organizations, users, analytics, audit and system health."
 		/>
+		<link rel="stylesheet" href="/fonts/inter.css" />
 		<link rel="stylesheet" href="/console-bundle.css" />
 		<link
 			rel="icon"
@@ -22,8 +23,8 @@
 			<div class="ac-boot__mark" aria-hidden="true">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
-					width="28"
-					height="28"
+					width="22"
+					height="22"
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
@@ -42,11 +43,50 @@
 		<div id="ac-root" class="ac-root" hidden></div>
 
 		<noscript>
-			<div class="ac-boot">
-				<p class="ac-boot__title">Platform Control Center</p>
-				<p class="ac-boot__status">
-					This console requires JavaScript. Enable it and reload.
-				</p>
+			<div class="ac-boot ac-boot--error">
+				<div class="ac-boot__card" role="alert">
+					<div class="ac-boot__brand">
+						<span class="ac-boot__brand-mark" aria-hidden="true">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="13"
+								height="13"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" />
+								<path d="M6 12v5c3 3 9 3 12 0v-5" />
+							</svg>
+						</span>
+						<span class="ac-boot__brand-text">Platform Control Center</span>
+					</div>
+					<div class="ac-boot__icon ac-boot__icon--warning" aria-hidden="true">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="22"
+							height="22"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.8"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+							<path d="M12 9v4" />
+							<path d="M12 17h.01" />
+						</svg>
+					</div>
+					<h1 class="ac-boot__title">JavaScript is required</h1>
+					<p class="ac-boot__message">
+						This console is a single-page application. Enable JavaScript in your
+						browser, then reload this page.
+					</p>
+				</div>
 			</div>
 		</noscript>
 

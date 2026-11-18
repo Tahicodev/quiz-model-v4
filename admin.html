@@ -47,11 +47,13 @@
 		-->
 		<link rel="stylesheet" href="/fonts/inter.css" />
 		<link rel="stylesheet" href="styles.css?v=2026-11-12-polish1" />
-		<link rel="stylesheet" href="admin.css?v=2026-11-17-kidsplay1" />
+		<link rel="stylesheet" href="admin.css?v=2026-11-18-adv1" />
 		<link rel="stylesheet" href="theme.css?v=2026-11-12-polish1" />
 		<link rel="stylesheet" href="theme-dark.css?v=2026-11-12-polish1" />
 		<link rel="stylesheet" href="teacher-analytics.css?v=2026-11-12-polish1" />
 		<link rel="stylesheet" href="admin-console.css?v=2026-11-17-console1" />
+		<!-- App-wide typographic layer (loaded last so it refines every surface) -->
+		<link rel="stylesheet" href="typography.css?v=2026-11-18-type4" />
 		<script>
 			// Apply the saved (or system-preferred) theme before first paint so
 			// there is no light-mode flash. Mirrors theme-toggle.js.
@@ -172,7 +174,7 @@
 		<script src="classroom-devices.js?v=2026-11-12-polish1" defer></script>
 		<script src="quiz-presets.js?v=2026-11-12-polish1" defer></script>
 		<script src="games-management.js?v=2026-10-26-catgame1" defer></script>
-		<script src="kids-games-management.js?v=2026-11-17-kidsplay1" defer></script>
+		<script src="kids-games-management.js?v=2026-11-18-adv1" defer></script>
 		<script src="kids-default-games.js?v=2026-10-31-kidsseed1" defer></script>
 		<script src="/kids/games/math-quest-core.js?v=2026-10-23-mq12" defer></script>
 <script src="kids-championships-management.js?v=2026-10-23-pub1" defer></script>
@@ -5335,7 +5337,7 @@
 						<section class="kids-template-picker" aria-labelledby="kidsTemplateTitle">
 							<div class="kids-template-heading">
 								<h4 id="kidsTemplateTitle">Choose how to play</h4>
-								<p>Keep the same question and answers; change the adventure around them.</p>
+								<p>Keep the same question and answers; change the adventure around them. Styles made for your world appear first.</p>
 							</div>
 							<div class="kids-template-grid" id="kidsPlayTemplateGrid" role="group" aria-label="Play style"></div>
 							<p class="kids-template-note" id="kidsPlayTemplateNote">Auto picks the best fit for each question.</p>

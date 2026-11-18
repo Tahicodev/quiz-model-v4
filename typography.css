@@ -1,0 +1,841 @@
+/*
+ * typography.css — the app-wide typographic layer.
+ *
+ * Loaded LAST on every legacy surface (landing, teacher/admin dashboard,
+ * student workspace) so it can refine the type system without touching the
+ * internals of styles.css / admin.css / theme.css (1.6 MB of classroom UI
+ * rules that other work is still editing).
+ *
+ * Goals
+ *   - one typeface (Inter) and one coherent scale everywhere;
+ *   - no off-scale sizes (10.88px, 12.48px, 13.12px …) in the UI chrome;
+ *   - a calm weight ladder — 400 / 500 / 600 / 700, never 800–900;
+ *   - consistent tracking: tight on display text, open on caps labels;
+ *   - tabular figures wherever numbers are compared.
+ *
+ * Rules are additive: element selectors and equal-specificity class
+ * selectors are used so component rules loaded earlier keep their intent,
+ * while the sizes below win by source order. Nothing here changes colour,
+ * spacing, layout or behaviour.
+ */
+
+/* ── 1. Tokens ──────────────────────────────────────────────────────────── */
+
+:root {
+	/* Type scale — a single 4-step ramp for the whole product. */
+	--type-2xs: 0.6875rem; /* 11px — caps labels, chips, table heads */
+	--type-xs: 0.75rem; /* 12px — meta, captions, helper text */
+	--type-sm: 0.8125rem; /* 13px — dense body, table cells */
+	--type-md: 0.875rem; /* 14px — controls, primary UI */
+	--type-base: 0.9375rem; /* 15px — reading text */
+	--type-lg: 1rem; /* 16px — lead / emphasised text */
+	--type-xl: 1.125rem; /* 18px — section titles */
+	--type-2xl: 1.25rem; /* 20px — page titles */
+	--type-3xl: 1.5rem; /* 24px — hero titles */
+	--type-4xl: 1.75rem; /* 28px — large metrics */
+	--type-5xl: 2rem; /* 32px — display */
+	--type-6xl: 2.5rem; /* 40px — marketing */
+
+	/* Weight ladder. 800/900 read as "shouting" on 11–13px UI text. */
+	--weight-regular: 400;
+	--weight-medium: 500;
+	--weight-semibold: 600;
+	--weight-bold: 700;
+
+	/* Leading */
+	--leading-none: 1;
+	--leading-tight: 1.2;
+	--leading-snug: 1.35;
+	--leading-normal: 1.5;
+	--leading-relaxed: 1.6;
+
+	/* Tracking */
+	--tracking-tighter: -0.03em;
+	--tracking-tight: -0.018em;
+	--tracking-snug: -0.01em;
+	--tracking-normal: 0;
+	--tracking-wide: 0.04em;
+	--tracking-caps: 0.06em;
+}
+
+/* ── 2. Base rendering ──────────────────────────────────────────────────── */
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	font-family: var(--font-sans);
+	font-size: var(--type-base);
+	line-height: var(--leading-relaxed);
+	letter-spacing: -0.006em;
+	font-kerning: normal;
+	font-feature-settings:
+		'cv02' 1,
+		'cv03' 1,
+		'cv04' 1;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+/* Text that is read in paragraphs, not in a grid. */
+p,
+li,
+dd,
+blockquote {
+	line-height: var(--leading-relaxed);
+}
+
+::selection {
+	background: rgba(37, 99, 235, 0.18);
+}
+
+/* ── 3. Headings ────────────────────────────────────────────────────────── */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-tight);
+	letter-spacing: var(--tracking-tight);
+	text-wrap: balance;
+}
+
+/* Element-level sizes only (class rules still win where a component needs
+   a specific size). This fixes bare headings without touching panels that
+   deliberately use their own scale. */
+h1 {
+	font-size: var(--type-3xl);
+}
+h2 {
+	font-size: var(--type-2xl);
+}
+h3 {
+	font-size: var(--type-xl);
+}
+h4 {
+	font-size: var(--type-lg);
+	line-height: var(--leading-snug);
+}
+h5 {
+	font-size: var(--type-md);
+	line-height: var(--leading-snug);
+}
+h6 {
+	font-size: var(--type-xs);
+	line-height: var(--leading-snug);
+	letter-spacing: var(--tracking-wide);
+}
+
+/* App chrome keeps its compact header title. */
+.app-header h1,
+.admin-header h1,
+.workspace-header h1,
+.topbar h1,
+header.app-header h1 {
+	font-size: var(--type-lg);
+	line-height: var(--leading-snug);
+	letter-spacing: var(--tracking-snug);
+}
+
+h1 small,
+h2 small,
+h3 small,
+h4 small,
+h5 small,
+h6 small,
+.subtitle,
+.page-subtitle,
+.section-subtitle {
+	font-weight: var(--weight-regular);
+	letter-spacing: var(--tracking-normal);
+}
+
+/* Titles stay 600 even where a legacy rule used 800. */
+[class$='-title'],
+[class*='-title '],
+[class$='__title'],
+[class$='-heading'],
+[class*='-heading '] {
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-snug);
+}
+
+/* ── 4. Emphasis, muted copy, code ──────────────────────────────────────── */
+
+strong,
+b {
+	font-weight: var(--weight-semibold);
+}
+
+small,
+.text-small,
+.text-xs,
+.form-hint,
+.field-hint,
+.helper-text,
+.help-text,
+[class$='-hint'],
+[class*='-hint '],
+[class$='-note'],
+[class*='-note '],
+[class$='-caption'],
+[class$='-meta'],
+[class*='-meta '] {
+	font-size: var(--type-xs);
+	line-height: var(--leading-normal);
+}
+
+code,
+kbd,
+samp,
+pre,
+.mono {
+	font-family: var(--font-mono);
+	font-size: 0.8125em;
+	letter-spacing: 0;
+}
+
+/* ── 5. Buttons and controls ────────────────────────────────────────────── */
+
+button,
+input,
+select,
+textarea,
+optgroup {
+	font-family: inherit;
+}
+
+button,
+.btn,
+.action-btn,
+.workspace-btn,
+.filter-chip,
+.nav-tab {
+	font-size: var(--type-md);
+	font-weight: var(--weight-medium);
+	letter-spacing: var(--tracking-normal);
+	line-height: var(--leading-snug);
+}
+
+.btn.btn-sm,
+.btn-sm,
+.btn--sm,
+.btn-small,
+.btn.small,
+button.small,
+[class$='-btn-sm'],
+[class*='-btn-sm '] {
+	font-size: var(--type-sm);
+}
+
+/* Small square icon buttons keep their own glyph size. */
+.btn-icon,
+.icon-btn,
+[class$='-icon-btn'],
+.close,
+.modal-close {
+	font-size: inherit;
+}
+
+/* Primary calls to action stay a notch larger than body UI. */
+.start-btn,
+.auth-submit-btn,
+.btn-primary.btn-lg,
+.btn.btn-primary.auth-submit-btn {
+	font-size: var(--type-lg);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-normal);
+}
+
+/* ── 6. Forms ───────────────────────────────────────────────────────────── */
+
+label,
+.form-label,
+.field-label,
+.form-group > label,
+.form-field > label {
+	font-size: var(--type-xs);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-snug);
+	letter-spacing: var(--tracking-wide);
+}
+
+/* Legacy filter panels sized labels with 0.68rem (10.88px) + 0.08em. */
+.overview-filter label,
+.filters label,
+.filter-group label,
+.filter-field label,
+.roster-filter-field label {
+	font-size: var(--type-xs) !important;
+	font-weight: var(--weight-semibold) !important;
+	line-height: var(--leading-snug) !important;
+	letter-spacing: var(--tracking-wide) !important;
+}
+
+input,
+select,
+textarea,
+.form-control,
+.auth-input,
+.ed-input,
+.qs-input,
+[class$='-input'],
+[class*='-input '] {
+	font-size: var(--type-md);
+	line-height: var(--leading-snug);
+	letter-spacing: var(--tracking-normal);
+}
+
+input::placeholder,
+textarea::placeholder {
+	letter-spacing: var(--tracking-normal);
+}
+
+/* Validation / inline status copy under a field. */
+.form-error,
+.field-error,
+.error-text,
+.auth-message,
+.form-message {
+	font-size: var(--type-xs);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+/* ── 7. Tables and data grids ───────────────────────────────────────────── */
+
+table {
+	font-variant-numeric: tabular-nums;
+}
+
+table th,
+.data-table th,
+.admin-table th,
+.ac-table th {
+	font-size: var(--type-2xs);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-snug);
+	letter-spacing: var(--tracking-caps);
+}
+
+table td,
+.data-table td,
+.admin-table td,
+.ac-table td {
+	font-size: var(--type-sm);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+/* ── 8. Badges, chips, pills, tags ──────────────────────────────────────── */
+
+[class$='-badge'],
+[class*='-badge '],
+[class$='-chip'],
+[class*='-chip '],
+[class$='-pill'],
+[class*='-pill '],
+[class$='-tag'],
+[class*='-tag '],
+[class$='-status'],
+[class*='-status '] {
+	font-size: var(--type-2xs);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-snug);
+	letter-spacing: 0.015em;
+}
+
+/* Caps-style eyebrows (BADGES & PROGRESSION, TOTAL EXAMS, …). */
+.hero-label,
+.eyebrow,
+.kicker,
+[class$='-kicker'],
+[class*='-kicker '] {
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-caps);
+}
+
+/* Bare chip classes (the class-prefix variants above miss `.badge`). */
+.badge,
+.chip,
+.pill,
+.tag,
+.status-pill,
+.request-pill,
+.score-pill {
+	font-size: var(--type-2xs);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-snug);
+	letter-spacing: 0.015em;
+}
+
+/* ── 9. Numbers and metrics ─────────────────────────────────────────────── */
+
+.hero-value,
+.stat-value,
+.metric-value,
+.kpi-value,
+.ac-kpi__value,
+.score-display,
+[class$='-value'],
+[class*='-value '],
+[class$='-count'],
+[class*='-count '],
+[class$='-num'],
+[class*='-num '] {
+	font-variant-numeric: tabular-nums;
+	letter-spacing: var(--tracking-tight);
+}
+
+/* ── 10. Navigation and tabs ────────────────────────────────────────────── */
+
+.nav-item,
+.sidebar-nav a,
+.sidebar-nav button,
+.admin-tab,
+.nav-tab,
+.ac-nav__label,
+.ac-nav__group-label {
+	letter-spacing: var(--tracking-normal);
+}
+
+.ac-nav__group-label,
+.nav-group-label,
+.nav-section-label {
+	font-size: var(--type-2xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.08em;
+}
+
+/* ── 11. Panels, cards, modals, toasts ──────────────────────────────────── */
+
+.panel-header h2,
+.panel-header h3,
+.card-title,
+.panel-title,
+.modal-title,
+.modal-header h2,
+.modal-header h3 {
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-snug);
+}
+
+.modal-body,
+.panel-body,
+.card-body {
+	line-height: var(--leading-relaxed);
+}
+
+.notification-toast,
+.toast,
+.toast-message {
+	font-size: var(--type-sm);
+	font-weight: var(--weight-medium);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+/* ── 12. Landing / auth surface ─────────────────────────────────────────── */
+
+.auth-modal .auth-modal-brand-text h2 {
+	font-size: var(--type-2xl);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-tight);
+	letter-spacing: var(--tracking-tight);
+}
+
+.auth-modal .auth-modal-brand-text p {
+	font-size: var(--type-sm);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+.auth-form-intro,
+.auth-footnote,
+.auth-meta-row,
+.auth-remember span {
+	font-size: var(--type-sm);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+.auth-form-intro {
+	font-size: var(--type-sm) !important;
+}
+
+.auth-modal .auth-field label {
+	font-size: var(--type-xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-wide);
+	text-transform: none;
+}
+
+.auth-modal .auth-input {
+	font-size: var(--type-base);
+}
+
+.auth-modal .auth-toggle-password {
+	font-size: var(--type-xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.01em;
+}
+
+.auth-modal .auth-submit-btn {
+	font-size: var(--type-lg);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-normal);
+}
+
+/* ── 13. Teacher dashboard ──────────────────────────────────────────────── */
+
+.teacher-overview__title {
+	font-size: var(--type-2xl);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-tight);
+	letter-spacing: var(--tracking-tight);
+}
+
+.teacher-overview__sub {
+	font-size: var(--type-sm);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+.teacher-overview__meta,
+.teacher-overview__note {
+	font-size: var(--type-xs);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+.teacher-overview__section-head h3 {
+	font-size: var(--type-xl);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-tight);
+	letter-spacing: var(--tracking-snug);
+}
+
+/* Teacher analytics views (Analytics/Results/Exams domain). */
+.ta-domain__title {
+	font-size: var(--type-xl);
+	font-weight: var(--weight-semibold);
+	line-height: var(--leading-tight);
+	letter-spacing: var(--tracking-tight);
+}
+
+.ta-domain__sub,
+.ta-domain__hint,
+.ta-panel__sub,
+.ta-legend__item,
+.ta-stat__note {
+	font-size: var(--type-xs);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+/* Panel subtitles sit under a higher-specificity `.ta-panel …` rule. */
+.ta-panel .ta-panel__sub {
+	font-size: var(--type-xs) !important;
+	line-height: var(--leading-normal) !important;
+}
+
+.ta-scope__chip {
+	font-size: var(--type-xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.01em;
+}
+
+.teacher-domain-switch__btn {
+	font-size: var(--type-sm);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-normal);
+}
+
+.teacher-overview__score {
+	font-size: var(--type-sm);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Results table (Manage/Analytics domain). */
+.by-name {
+	font-size: var(--type-2xs);
+	line-height: var(--leading-snug);
+}
+
+.result-date,
+.results-student-number,
+.results-avg-suffix,
+.results-cell-sub,
+.results-trend {
+	font-size: var(--type-2xs);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: var(--tracking-normal);
+}
+
+.results-activity-main,
+.results-last-activity {
+	font-size: var(--type-xs);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+.results-pass-value {
+	font-size: var(--type-md);
+	font-weight: var(--weight-semibold);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Stat cards: 24px was already on scale — calm the weight, keep the size. */
+.stat-info h3 {
+	font-weight: var(--weight-semibold);
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+}
+
+.stat-info p {
+	font-size: var(--type-xs);
+	font-weight: var(--weight-medium);
+	line-height: var(--leading-snug);
+	letter-spacing: 0.005em;
+}
+
+/* ── 13b. Legacy tab chrome ─────────────────────────────────────────────── */
+
+/* The legacy Games tab shrinks its own chrome with `#games …` ID rules
+   (0.74–0.95rem). Re-assert the app scale at the same specificity. */
+#games .btn {
+	font-size: var(--type-md) !important;
+}
+
+#games .btn-sm {
+	font-size: var(--type-sm) !important;
+}
+
+#games .panel-header h3 {
+	font-size: var(--type-xl);
+}
+
+#games .panel-header h4 {
+	font-size: var(--type-lg);
+}
+
+#games .text-muted,
+#games small {
+	font-size: var(--type-xs);
+}
+
+.game-preset-summary h4 {
+	font-size: var(--type-lg);
+}
+
+/* `.text-muted` is a colour utility — it must not resize text. Component
+   rules that need a specific size keep working because they out-specify it. */
+.text-muted {
+	font-size: inherit;
+}
+
+/* Notification tags were the last sub-11px text in the product. */
+.notification-tag-label {
+	font-size: var(--type-2xs) !important;
+	font-weight: var(--weight-semibold) !important;
+	letter-spacing: 0.03em !important;
+	line-height: var(--leading-snug) !important;
+}
+
+.mobile-filters-toggle-label {
+	font-size: var(--type-sm) !important;
+	font-weight: var(--weight-semibold) !important;
+}
+
+/* Tab-level page titles (Notifications/…) were 1.15rem. */
+.tab-content h1 {
+	font-size: var(--type-2xl) !important;
+	line-height: var(--leading-tight) !important;
+	letter-spacing: var(--tracking-tight) !important;
+}
+
+/* Overview shortcut links ("Open exams", "Review results"). */
+.teacher-overview__link {
+	font-size: var(--type-sm) !important;
+	font-weight: var(--weight-semibold) !important;
+	letter-spacing: var(--tracking-normal) !important;
+}
+
+/* Teacher analytics metric strip and insight captions. */
+.ta-metric__label {
+	font-size: var(--type-2xs) !important;
+	font-weight: var(--weight-semibold) !important;
+	letter-spacing: var(--tracking-caps) !important;
+}
+
+.ta-metric__value {
+	font-size: var(--type-xl) !important;
+	font-weight: var(--weight-semibold) !important;
+	font-variant-numeric: tabular-nums;
+}
+
+.ta-metric__note,
+.ta-ring__label,
+.ta-note {
+	font-size: var(--type-xs) !important;
+	line-height: var(--leading-normal) !important;
+	letter-spacing: var(--tracking-normal) !important;
+}
+
+.ta-insight__domain,
+.ta-insight__scope {
+	font-size: var(--type-2xs) !important;
+	font-weight: var(--weight-semibold) !important;
+	letter-spacing: var(--tracking-caps) !important;
+}
+
+/* ── 14. Student workspace ──────────────────────────────────────────────── */
+
+body.student-workspace .hero-label {
+	font-size: var(--type-2xs);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-caps);
+}
+
+body.student-workspace .hero-value {
+	font-size: var(--type-4xl);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-tighter);
+}
+
+body.student-workspace .hero-footnote {
+	font-size: var(--type-xs);
+	line-height: var(--leading-normal);
+	letter-spacing: var(--tracking-normal);
+}
+
+body.student-workspace .workspace-panel h2,
+body.student-workspace .workspace-panel h3,
+body.student-workspace .panel-header h2 {
+	font-size: var(--type-xl);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-tight);
+}
+
+body.student-workspace .workspace-panel p {
+	font-size: var(--type-sm);
+}
+
+body.student-workspace .performance-title {
+	font-size: var(--type-lg);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-snug);
+}
+
+body.student-workspace .performance-subtitle {
+	font-size: var(--type-xs);
+	line-height: var(--leading-normal);
+}
+
+body.student-workspace .student-badge-title {
+	font-size: var(--type-md);
+	font-weight: var(--weight-semibold);
+	letter-spacing: var(--tracking-snug);
+}
+
+body.student-workspace .student-badge-desc {
+	font-size: var(--type-sm);
+	line-height: var(--leading-normal);
+}
+
+body.student-workspace .student-badge-date,
+body.student-workspace .student-badge-pill,
+body.student-workspace .student-badges-locked-label {
+	font-size: var(--type-2xs);
+	letter-spacing: 0.03em;
+}
+
+body.student-workspace .student-badge-pill,
+body.student-workspace .student-badges-locked-label {
+	font-weight: var(--weight-semibold);
+}
+
+body.student-workspace .student-badge-icon {
+	font-size: var(--type-md);
+	font-weight: var(--weight-bold);
+}
+
+body.student-workspace .workspace-avatar {
+	font-size: var(--type-md);
+	font-weight: var(--weight-semibold);
+}
+
+/* ── 15. Compact chrome at small widths ─────────────────────────────────── */
+
+/* The legacy stylesheet shrinks toolbars on phones with rules like
+   `.toolbar h2 { font-size: 0.98rem }` (15.68px) and
+   `.toolbar .btn { font-size: 0.78rem }` (12.48px). Keep the compact intent
+   but land on scale steps instead of the em remainder. */
+@media (max-width: 768px) {
+	.toolbar .btn,
+	[class$='-toolbar'] .btn,
+	[class*='-toolbar '] .btn {
+		font-size: var(--type-sm) !important;
+	}
+
+	.toolbar label,
+	[class$='-toolbar'] label,
+	[class*='-toolbar '] label {
+		font-size: var(--type-xs) !important;
+	}
+
+	.toolbar h2,
+	[class$='-toolbar'] h2,
+	[class*='-toolbar '] h2,
+	.toolbar-title,
+	[class$='-toolbar-title'],
+	[class*='-toolbar-title '] {
+		font-size: var(--type-lg) !important;
+		letter-spacing: var(--tracking-snug) !important;
+	}
+
+	.toolbar span,
+	[class$='-toolbar'] span,
+	[class*='-toolbar '] span {
+		font-size: var(--type-xs) !important;
+	}
+}
+
+/* ── 16. Dark theme polish ──────────────────────────────────────────────── */
+
+/* Inter's lighter strokes benefit from a touch more letter-spacing in dark
+   mode, where subpixel rendering is disabled on most platforms. */
+html[data-theme='dark'] body {
+	letter-spacing: -0.003em;
+}
+
+html[data-theme='dark'] th,
+html[data-theme='dark'] .hero-label,
+html[data-theme='dark'] .eyebrow,
+html[data-theme='dark'] .kicker {
+	letter-spacing: var(--tracking-caps);
+}
+
+/* ── 17. Print ──────────────────────────────────────────────────────────── */
+
+@media print {
+	body {
+		font-size: 11pt;
+		line-height: 1.45;
+	}
+	h1 {
+		font-size: 20pt;
+	}
+	h2 {
+		font-size: 16pt;
+	}
+	h3 {
+		font-size: 13pt;
+	}
+}

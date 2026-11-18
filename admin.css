@@ -4052,6 +4052,16 @@ html[data-theme='dark'] #exportUserModal .form-actions {
 .kids-template-card:hover { border-color: #818cf8; transform: translateY(-1px); }
 .kids-template-card:focus-visible { outline: 3px solid #6366f1; outline-offset: 2px; }
 .kids-template-card.selected { border-color: #4f46e5; background: #eef2ff; box-shadow: 0 0 0 2px rgba(79,70,229,.14); }
+/* Styles made for the world the teacher picked are grouped first. A small
+   badge names the match instead of hiding the other choices. */
+.kids-template-card.recommended { border-color: #c7d2fe; }
+.kids-template-card.recommended.selected { border-color: #4f46e5; }
+.kids-template-badge {
+	display: inline-block; margin-left: 2px; padding: 1px 7px;
+	border-radius: 999px; background: #e0e7ff; color: #3730a3;
+	font-size: .64rem; font-weight: 800; letter-spacing: .02em;
+	text-transform: capitalize; vertical-align: middle; white-space: nowrap;
+}
 .kids-template-icon {
 	flex: 0 0 42px;
 	width: 42px;

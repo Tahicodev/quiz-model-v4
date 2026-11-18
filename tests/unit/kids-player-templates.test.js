@@ -16,6 +16,7 @@ const STORE_SRC = readFileSync(path.join(KIDS, 'kids-store.js'), 'utf8');
 const PLAYER_SRC = readFileSync(path.join(KIDS, 'kids-player.js'), 'utf8');
 const BUBBLE_SRC = readFileSync(path.join(KIDS, 'games/BubblePopGame.js'), 'utf8');
 const SUBJECT_SRC = readFileSync(path.join(KIDS, 'games/SubjectGames.js'), 'utf8');
+const ADVENTURE_SRC = readFileSync(path.join(KIDS, 'games/AdventureGames.js'), 'utf8');
 
 const SHELL = `
 	<div class="kid-wrap">
@@ -39,6 +40,7 @@ function loadPlayer() {
 	window.eval(STORE_SRC);
 	window.eval(BUBBLE_SRC);
 	window.eval(SUBJECT_SRC);
+	window.eval(ADVENTURE_SRC);
 	window.eval(readFileSync(path.join(KIDS, 'games/PairPartyGame.js'), 'utf8'));
 	window.eval(PLAYER_SRC);
 	return window.KidsPlayerEngine;
@@ -196,6 +198,104 @@ describe('Bubble Pop bubbles are real, keyboard-operable controls', () => {
 		expect(long).toBeTruthy();
 		const size = Number(long.style.getPropertyValue('--b-size').replace('px', ''));
 		expect(size).toBeGreaterThan(116);
+	});
+});
+
+describe('adventure play styles', () => {
+	/* id → renderer, choice selector and the tap-to-answer delay it waits for
+	   so the selection animation actually lands before grading. */
+	const STYLES = [
+		{ id: 'treasure-hunt', renderer: 'TreasureHuntGame', choice: '.kid-adv-chest', delay: 300 },
+		{ id: 'space-mission', renderer: 'SpaceMissionGame', choice: '.kid-adv-planet', delay: 380 },
+		{ id: 'seed-grow', renderer: 'SeedGrowGame', choice: '.kid-adv-seed', delay: 360 },
+		{ id: 'rescue-mission', renderer: 'RescueMissionGame', choice: '.kid-adv-cage', delay: 320 },
+		{ id: 'puzzle-reveal', renderer: 'PuzzleRevealGame', choice: '.kid-adv-piece', delay: 300 },
+	];
+
+	it('routes every advertised adventure id to its own renderer', () => {
+		const engine = loadPlayer();
+		STYLES.forEach((style) => {
+			startGame(engine, [mc()], { play_template: style.id });
+			expect(engine.renderer.constructor.name).toBe(style.renderer);
+			expect(engine.playTemplateKey.call({ config: { play_template: style.id } })).toBe(style.id);
+		});
+	});
+
+	it('still falls back to the delegated renderer for a question it cannot play', () => {
+		const engine = loadPlayer();
+		const q = mc({ type: 'true-false', answer: 'true', options_json: '["true","false"]' });
+		startGame(engine, [q], { play_template: 'treasure-hunt' });
+		expect(engine.renderer.constructor.name).not.toBe('TreasureHuntGame');
+	});
+
+	STYLES.forEach((style) => {
+		it(`${style.id}: one real button per option, labels preserved and escaped`, () => {
+			const engine = loadPlayer();
+			startGame(engine, [mc()], { play_template: style.id });
+			const choices = [...document.querySelectorAll('#kidScreen ' + style.choice)];
+			expect(choices).toHaveLength(3);
+			expect(new Set(choices.map((b) => b.dataset.opt))).toEqual(new Set(['🍎', '🚗', '🌳']));
+			choices.forEach((btn) => {
+				expect(btn.tagName).toBe('BUTTON');
+				expect(btn.type).toBe('button');
+				expect(btn.getAttribute('aria-label')).toBe(btn.dataset.opt);
+				expect(btn.textContent).toContain(btn.dataset.opt);
+			});
+			// the card itself is never a choice: only the option buttons answer
+			expect(document.querySelector('#kidScreen .kid-card').hasAttribute('data-opt')).toBe(false);
+			const prop = document.querySelector('#kidScreen .kid-adv-art img');
+			expect(prop.getAttribute('alt')).not.toBe(null);
+			expect(prop.getAttribute('onerror')).toContain("display='none'");
+		});
+
+		it(`${style.id}: a tap submits the label once, after its animation delay`, async () => {
+			const engine = loadPlayer();
+			engine.answer = vi.fn();
+			startGame(engine, [mc()], { play_template: style.id });
+			const wrong = [...document.querySelectorAll(style.choice)].find((b) => b.dataset.opt === '🚗');
+			wrong.click();
+			wrong.click(); // double taps must not double-submit
+			expect(engine.answer).not.toHaveBeenCalled();
+			expect(wrong.classList.contains('kid-adv-chosen')).toBe(true);
+			await new Promise((r) => setTimeout(r, style.delay + 40));
+			expect(engine.answer).toHaveBeenCalledTimes(1);
+			expect(engine.answer).toHaveBeenCalledWith('🚗');
+		});
+
+		it(`${style.id}: lock() marks the right answer and disables every choice`, () => {
+			const engine = loadPlayer();
+			startGame(engine, [mc()], { play_template: style.id });
+			engine.renderer.lock(false, '🚗');
+			const choices = [...document.querySelectorAll(style.choice)];
+			const right = choices.find((b) => b.dataset.opt === '🍎');
+			const picked = choices.find((b) => b.dataset.opt === '🚗');
+			const other = choices.find((b) => b.dataset.opt === '🌳');
+			expect(right.classList.contains('kid-adv-correct')).toBe(true);
+			expect(picked.classList.contains('kid-adv-wrong')).toBe(true);
+			expect(other.classList.contains('kid-adv-dim')).toBe(true);
+			expect(choices.every((b) => b.disabled && b.getAttribute('aria-disabled') === 'true')).toBe(true);
+			const stage = document.querySelector('#kidScreen .kid-adv-stage');
+			expect(stage.classList.contains('kid-adv-miss')).toBe(true);
+		});
+
+		it(`${style.id}: destroy() cancels a pending answer`, async () => {
+			const engine = loadPlayer();
+			engine.answer = vi.fn();
+			startGame(engine, [mc()], { play_template: style.id });
+			document.querySelector(style.choice).click();
+			engine.renderer.destroy();
+			await new Promise((r) => setTimeout(r, style.delay + 40));
+			expect(engine.answer).not.toHaveBeenCalled();
+		});
+	});
+
+	it('spreads puzzle pieces on a two- or three-column grid by option count', () => {
+		const engine = loadPlayer();
+		startGame(engine, [mc()], { play_template: 'puzzle-reveal' });
+		expect(document.querySelector('#kidScreen .kid-adv-pieces').style.getPropertyValue('--cols')).toBe('2');
+		const five = mc({ options_json: '["a","b","c","d","e"]', answer: 'a' });
+		startGame(engine, [five], { play_template: 'puzzle-reveal' });
+		expect(document.querySelector('#kidScreen .kid-adv-pieces').style.getPropertyValue('--cols')).toBe('3');
 	});
 });
 

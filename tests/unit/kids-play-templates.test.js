@@ -102,7 +102,12 @@ describe('wizard Step 2 template compatibility', () => {
 		window.openKidsGameWizard();
 		window.selectKidsGameType('bubble-pop');
 		// no questions yet: candidates fall back to the game type's kid type
-		expect(offeredIds()).toEqual(['auto', 'bubble-pop', 'subj-choice']);
+		const ids = offeredIds();
+		expect(ids[0]).toBe('auto');
+		expect(new Set(ids)).toEqual(new Set([
+			'auto', 'bubble-pop', 'subj-choice',
+			'treasure-hunt', 'space-mission', 'seed-grow', 'rescue-mission', 'puzzle-reveal',
+		]));
 		// the picker is a radiogroup-like button set, not a native select
 		const cards = [...document.querySelectorAll('#kidsPlayTemplateGrid .kids-template-card')];
 		expect(cards.every((c) => c.tagName === 'BUTTON' && c.type === 'button')).toBe(true);
@@ -124,6 +129,55 @@ describe('wizard Step 2 template compatibility', () => {
 		expect(offeredIds()).toContain('star-collector');
 		expect(offeredIds()).not.toContain('bubble-pop');
 		expect(offeredIds()).not.toContain('subj-choice');
+		// adventure styles are single-answer only, so they leave too
+		expect(offeredIds()).not.toContain('treasure-hunt');
+		expect(offeredIds()).not.toContain('puzzle-reveal');
+	});
+
+	it('moves the styles made for the picked world to the front of the picker', () => {
+		window.openKidsGameWizard();
+		window.selectKidsGameType('bubble-pop');
+
+		// default world is jungle → the jungle trio leads, in catalog order
+		expect(offeredIds().slice(0, 4)).toEqual(['auto', 'treasure-hunt', 'seed-grow', 'rescue-mission']);
+
+		window.KidsGames.selectTheme('space');
+		expect(offeredIds().slice(0, 3)).toEqual(['auto', 'space-mission', 'bubble-pop']);
+
+		window.KidsGames.selectTheme('farm');
+		expect(offeredIds().slice(0, 3)).toEqual(['auto', 'seed-grow', 'rescue-mission']);
+
+		// circus only has Puzzle Reveal, so it leads alone
+		window.KidsGames.selectTheme('circus');
+		expect(offeredIds().slice(0, 3)).toEqual(['auto', 'puzzle-reveal', 'bubble-pop']);
+
+		// a world no style was designed for keeps the catalog order
+		window.KidsGames.selectTheme('ocean');
+		expect(offeredIds().slice(0, 3)).toEqual(['auto', 'rescue-mission', 'bubble-pop']);
+		window.KidsGames.selectTheme('superhero');
+		expect(offeredIds().slice(0, 3)).toEqual(['auto', 'space-mission', 'bubble-pop']);
+	});
+
+	it('badges the recommended styles and names the world in the note', () => {
+		window.openKidsGameWizard();
+		window.selectKidsGameType('bubble-pop');
+		window.KidsGames.selectTheme('jungle');
+
+		const recommended = [...document.querySelectorAll('#kidsPlayTemplateGrid .kids-template-card.recommended')]
+			.map((c) => c.dataset.template);
+		expect(recommended).toEqual(['treasure-hunt', 'seed-grow', 'rescue-mission']);
+		expect(recommended.every((id) => document.querySelector(`[data-template="${id}"] .kids-template-badge`))).toBe(true);
+		expect(document.querySelector('[data-template="bubble-pop"] .kids-template-badge')).toBeNull();
+		expect(document.getElementById('kidsPlayTemplateNote').textContent).toContain('jungle world');
+
+		// the badge follows the world live, without losing the picked style
+		window.KidsGames.selectPlayTemplate('bubble-pop');
+		window.KidsGames.selectTheme('space');
+		const after = [...document.querySelectorAll('#kidsPlayTemplateGrid .kids-template-card.recommended')]
+			.map((c) => c.dataset.template);
+		expect(after).toEqual(['space-mission']);
+		expect(window.KidsGames.state.wizard.playTemplate).toBe('bubble-pop');
+		expect(document.getElementById('kidsPlayTemplateNote').textContent).toContain('space world');
 	});
 
 	it('hides Count & Tap and Number Balance unless every question matches their intent', () => {
@@ -237,6 +291,53 @@ describe('wizard Step 2 serialization + edit hydration', () => {
 		expect(window.KidsGames.state.wizard.playTemplate).toBe('subj-choice');
 		window.selectKidsGameType('pair-party');
 		expect(window.KidsGames.state.wizard.playTemplate).toBe('auto');
+	});
+});
+
+describe('wizard Step 1 — a ready-made game jumps straight to the world', () => {
+	function stubCatalog() {
+		const game = {
+			id: 'jungle-1', name: 'Jungle Words', game_type: 'bubble-pop', theme: 'jungle',
+			subject: 'maths', axis: 'numbers',
+			questions: [mcQuestion({ text: '3 + 2 ?', options_json: '["4","5"]', answer: '5' })],
+		};
+		window.KidsDefaultGames = {
+			list: () => [game],
+			get: (id) => (id === game.id ? game : null),
+			bySubject: () => [game],
+			subject: () => ({ name: 'Maths', icon: '🔢', blurb: '' }),
+			subjects: [],
+		};
+		return game;
+	}
+
+	it('selects the game and moves to Step 2 without a toast or a Selected pause', () => {
+		stubCatalog();
+		window.openKidsGameWizard();
+		window.KidsGames.applyDefaultGame('jungle-1');
+
+		expect(window.KidsGames.state.wizard.defaultGameId).toBe('jungle-1');
+		expect(window.KidsGames.state.wizard.questions.length).toBeGreaterThan(0);
+		expect(window.showToast).not.toHaveBeenCalled();
+		expect(document.getElementById('kidsGameWizardStep').value).toBe('2');
+		expect(document.querySelector('#kidsGameWizardModal .kw-step-panel[data-step="2"]').classList.contains('active')).toBe(true);
+		expect(document.querySelector('#kidsGameWizardModal .kw-step-panel[data-step="1"]').classList.contains('active')).toBe(false);
+	});
+
+	it('keeps the current step when editing an existing game', () => {
+		stubCatalog();
+		window.openKidsGameWizard();
+		window.KidsGames.state.editingId = 'game-9';
+		window.KidsGames.applyDefaultGame('jungle-1');
+		expect(document.getElementById('kidsGameWizardStep').value).toBe('1');
+	});
+
+	it('still reports a missing catalog entry', () => {
+		stubCatalog();
+		window.openKidsGameWizard();
+		window.KidsGames.applyDefaultGame('nope');
+		expect(window.showToast).toHaveBeenCalled();
+		expect(document.getElementById('kidsGameWizardStep').value).toBe('1');
 	});
 });
 

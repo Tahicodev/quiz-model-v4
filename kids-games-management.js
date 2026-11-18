@@ -32,6 +32,14 @@
 		{ id: 'subj-choice', icon: '🎯', label: 'Choice Board', desc: 'Pick a bright, easy-to-read answer card.', types: ['multiple-choice'], single: true },
 		{ id: 'count-tap', icon: '🔢', label: 'Count & Tap', desc: 'Count the objects, then choose a number.', types: ['multiple-choice'], intent: 'count', single: true },
 		{ id: 'num-balance', icon: '⚖️', label: 'Number Balance', desc: 'Help the crocodile compare two numbers.', types: ['multiple-choice'], intent: 'balance', single: true },
+		/* Adventure styles — same question and answer, a different world to
+		   play it in. Each one maps to a shipped prop so the art never has to
+		   be invented at runtime; `themes` only drives the recommendation. */
+		{ id: 'treasure-hunt', icon: '🗝️', label: 'Treasure Hunt', desc: 'Unlock the chest with the right answer.', types: ['multiple-choice'], single: true, themes: ['jungle', 'castle', 'dinosaur', 'magic'] },
+		{ id: 'space-mission', icon: '🚀', label: 'Space Mission', desc: 'Fly the rocket to the right planet.', types: ['multiple-choice'], single: true, themes: ['space', 'superhero', 'city'] },
+		{ id: 'seed-grow', icon: '🌱', label: 'Seed & Grow', desc: 'Water the right seed and watch it grow.', types: ['multiple-choice'], single: true, themes: ['farm', 'forest', 'jungle'] },
+		{ id: 'rescue-mission', icon: '🐾', label: 'Rescue Mission', desc: 'Free the right animal from its cage.', types: ['multiple-choice'], single: true, themes: ['ocean', 'forest', 'jungle', 'farm'] },
+		{ id: 'puzzle-reveal', icon: '🧩', label: 'Puzzle Reveal', desc: 'Each answer reveals a piece of the picture.', types: ['multiple-choice'], single: true, themes: ['school', 'circus', 'city', 'magic'] },
 		{ id: 'star-collector', icon: '🌟', label: 'Star Collector', desc: 'Collect every correct answer.', types: ['multiple-choice'], multi: true },
 		{ id: 'leap-frog', icon: '🐸', label: 'Leap Frog', desc: 'Hop to true or false.', types: ['true-false'] },
 		{ id: 'sort-it-out', icon: '🧺', label: 'Sort It Out', desc: 'Spot the one that does not belong.', types: ['odd-one-out'] },
@@ -50,6 +58,12 @@
 		forest: 'linear-gradient(135deg,#052e16,#34d399)', city: 'linear-gradient(135deg,#1e3a8a,#93c5fd)',
 		circus: 'linear-gradient(135deg,#9a3412,#fbbf24)', magic: 'linear-gradient(135deg,#581c87,#f0abfc)',
 		school: 'linear-gradient(135deg,#0f766e,#99f6e0)', superhero: 'linear-gradient(135deg,#b91c1c,#fca5a5)',
+	};
+	/* One emoji per world — used by the play-style picker to recommend styles
+	   that match the world the teacher just chose. */
+	var THEME_EMOJI = {
+		jungle: '🌳', space: '🚀', ocean: '🌊', farm: '🚜', castle: '🏰', dinosaur: '🦖',
+		forest: '🌲', city: '🏙️', circus: '🎪', magic: '✨', school: '🏫', superhero: '🦸',
 	};
 
 	var state = {
@@ -962,7 +976,12 @@
 		renderKidsDefaultGames();
 		buildGameTypeGrid();
 		syncMqLevelsVisibility();
-		toast(game.name + ' — ' + questions.length + ' questions ready ✓', 'success');
+		// A ready-made game is a complete starting point: the teacher's next
+		// decision is the world, so go straight there. No toast and no pause on
+		// "Selected" — the marker only matters if they navigate back. Editing an
+		// existing game keeps the current step (the teacher is usually there to
+		// change questions, not the theme).
+		if (!state.editingId) goToWizardStep(2);
 	}
 	/** Re-derive Step 1 selection when editing a game built from the catalog:
 	   the config marker is authoritative, the question ids are the fallback
@@ -1082,7 +1101,14 @@
 			grid.appendChild(card);
 		});
 	}
-	function selectKidsTheme(id) { state.wizard.theme = id; buildThemeGrid(); }
+	function selectKidsTheme(id) {
+		state.wizard.theme = id;
+		buildThemeGrid();
+		// The play-style list recommends styles made for the chosen world, so it
+		// has to re-render (and re-sort) with the world.
+		renderKidsPlayTemplates();
+		updateKidsWizardPreview();
+	}
 	function questionFitsPlayTemplate(q, template) {
 		if (!q || template.id === 'auto') return true;
 		var type = String(q.type || 'multiple-choice');
@@ -1105,9 +1131,22 @@
 		if (!state.wizard.game_type || state.wizard.game_type === 'math-quest') return [KIDS_PLAY_TEMPLATES[0]];
 		var questions = state.wizard.questions || [];
 		var candidates = questions.length ? questions : [{ type: wizardKidType(), allowMultipleAnswers: state.wizard.game_type === 'star-collector' }];
-		return KIDS_PLAY_TEMPLATES.filter(function (template) {
-			return template.id === 'auto' || candidates.every(function (q) { return questionFitsPlayTemplate(q, template); });
-		});
+		var theme = state.wizard.theme;
+		return KIDS_PLAY_TEMPLATES
+			.filter(function (template) {
+				return template.id === 'auto' || candidates.every(function (q) { return questionFitsPlayTemplate(q, template); });
+			})
+			// Best fit leads; then styles made for the picked world; then the
+			// rest. Array#sort is stable, so each group keeps its catalog order.
+			.sort(function (a, b) {
+				if (a.id === 'auto') return -1;
+				if (b.id === 'auto') return 1;
+				return (playTemplateMatchesTheme(b, theme) ? 1 : 0) - (playTemplateMatchesTheme(a, theme) ? 1 : 0);
+			});
+	}
+	/** True when this style was designed for the world the teacher picked. */
+	function playTemplateMatchesTheme(template, theme) {
+		return !!(template && template.themes && template.themes.indexOf(theme) >= 0);
 	}
 	function renderKidsPlayTemplates() {
 		var grid = $('kidsPlayTemplateGrid');
@@ -1115,23 +1154,33 @@
 		if (!grid) return;
 		var options = playTemplateOptions();
 		if (!options.some(function (t) { return t.id === state.wizard.playTemplate; })) state.wizard.playTemplate = 'auto';
+		var theme = state.wizard.theme;
 		grid.innerHTML = '';
 		options.forEach(function (t) {
+			var recommended = playTemplateMatchesTheme(t, theme);
 			var card = document.createElement('button');
 			card.type = 'button';
-			card.className = 'kids-template-card' + (state.wizard.playTemplate === t.id ? ' selected' : '');
+			card.className = 'kids-template-card' + (state.wizard.playTemplate === t.id ? ' selected' : '') + (recommended ? ' recommended' : '');
 			card.dataset.template = t.id;
 			card.setAttribute('aria-pressed', state.wizard.playTemplate === t.id ? 'true' : 'false');
 			card.innerHTML = '<span class="kids-template-icon" aria-hidden="true">' + t.icon + '</span>' +
-				'<span class="kids-template-copy"><strong>' + esc(t.label) + '</strong><small>' + esc(t.desc) + '</small></span>';
+				'<span class="kids-template-copy"><strong>' + esc(t.label) +
+					(recommended ? ' <span class="kids-template-badge">' + (THEME_EMOJI[theme] || '✨') + ' for ' + esc(theme) + '</span>' : '') +
+				'</strong><small>' + esc(t.desc) + '</small></span>';
 			card.addEventListener('click', function () { selectKidsPlayTemplate(t.id); });
 			grid.appendChild(card);
 		});
-		if (note) note.textContent = state.wizard.game_type === 'math-quest'
-			? 'Math Quest keeps its own template choice on each adventure level.'
-			: state.wizard.playTemplate === 'auto'
-				? 'Best fit follows each question. Your answers and scoring stay the same.'
-				: 'Chosen style: ' + ((options.filter(function (t) { return t.id === state.wizard.playTemplate; })[0] || {}).label || 'Best fit') + '. Answers and scoring stay the same.';
+		if (note) {
+			var chosen = options.filter(function (t) { return t.id === state.wizard.playTemplate; })[0] || {};
+			// The world hint is useful whatever is picked, so it rides along with
+			// both the Auto and the chosen-style copy.
+			var worldHint = ' Styles marked ' + (THEME_EMOJI[theme] || '✨') + ' match your ' + theme + ' world.';
+			note.textContent = state.wizard.game_type === 'math-quest'
+				? 'Math Quest keeps its own template choice on each adventure level.'
+				: state.wizard.playTemplate === 'auto'
+					? 'Best fit follows each question.' + worldHint
+					: 'Chosen style: ' + (chosen.label || 'Best fit') + '. Answers and scoring stay the same.' + worldHint;
+		}
 	}
 	function selectKidsPlayTemplate(id) {
 		var choice = playTemplateOptions().filter(function (t) { return t.id === id; })[0];
@@ -2209,6 +2258,7 @@
 		playTemplates: KIDS_PLAY_TEMPLATES,
 		playTemplateOptions: playTemplateOptions,
 		selectPlayTemplate: selectKidsPlayTemplate,
+		selectTheme: selectKidsTheme,
 		buildConfig: buildKidsGameConfig,
 		collectPayload: collectWizardPayload,
 		defaultGames: function () {

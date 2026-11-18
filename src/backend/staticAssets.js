@@ -87,6 +87,7 @@ export const PUBLIC_ROOT_FILES = new Set([
 	'teacher-analytics.css',
 	'theme-dark.css',
 	'theme.css',
+	'typography.css',
 ]);
 
 /** Vendored browser libraries. The offline bundle (vendor/offline) and the

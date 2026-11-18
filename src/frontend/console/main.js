@@ -66,22 +66,132 @@ const PAGES = [
 	settingsPage,
 ];
 
-const bootStatus = document.getElementById('ac-boot-status');
 const bootRoot = document.getElementById('ac-boot');
 const root = document.getElementById('ac-root');
 
-function bootError(message, hint = '') {
-	if (!bootStatus) return;
-	bootStatus.textContent = message;
-	bootStatus.style.color = 'var(--ac-danger)';
-	const host = bootStatus.parentElement;
-	if (hint) {
-		const extra = document.createElement('p');
-		extra.className = 'ac-boot__status';
-		extra.style.marginTop = '10px';
-		extra.innerHTML = hint;
-		host.appendChild(extra);
+/** Where an administrator goes when the console cannot resolve a session. */
+const SIGN_IN_PATH = '/admin.html';
+
+/* ── Boot failure surface ───────────────────────────────────────────────── */
+
+const ICON_PATHS = {
+	cap: ['M22 10v6M2 10l10-5 10 5-10 5-10-5z', 'M6 12v5c3 3 9 3 12 0v-5'],
+	lock: ['M7 10V7a5 5 0 0 1 10 0v3', 'M5 10h14v11H5z', 'M12 15v2'],
+	warning: [
+		'M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z',
+		'M12 9v4',
+		'M12 17h.01',
+	],
+};
+
+function node(tag, className, text) {
+	const el = document.createElement(tag);
+	if (className) el.className = className;
+	if (text != null) el.textContent = text;
+	return el;
+}
+
+/** Stroke icon in the same visual language as the shell (no icon font). */
+function icon(paths, size = 22) {
+	const svgNS = 'http://www.w3.org/2000/svg';
+	const svg = document.createElementNS(svgNS, 'svg');
+	svg.setAttribute('viewBox', '0 0 24 24');
+	svg.setAttribute('width', String(size));
+	svg.setAttribute('height', String(size));
+	svg.setAttribute('fill', 'none');
+	svg.setAttribute('stroke', 'currentColor');
+	svg.setAttribute('stroke-width', '1.8');
+	svg.setAttribute('stroke-linecap', 'round');
+	svg.setAttribute('stroke-linejoin', 'round');
+	svg.setAttribute('aria-hidden', 'true');
+	svg.setAttribute('focusable', 'false');
+	for (const d of paths) {
+		const path = document.createElementNS(svgNS, 'path');
+		path.setAttribute('d', d);
+		svg.appendChild(path);
 	}
+	return svg;
+}
+
+/**
+ * Turn the boot screen into a failure card.
+ *
+ * The card answers three questions in order: what is this page, what went
+ * wrong, and what do I do now. It is built from DOM nodes rather than an HTML
+ * string because `message` comes from the API layer (server copy, error
+ * codes) and must never be parsed as markup.
+ */
+function renderBootFailure({
+	message,
+	hint = '',
+	code = '',
+	meta = '',
+	tone = 'danger',
+	actions = [],
+}) {
+	if (!bootRoot) return;
+
+	document.title = 'Could not open · Control Center';
+	bootRoot.classList.add('ac-boot--error');
+	bootRoot.replaceChildren();
+
+	const card = node('div', 'ac-boot__card');
+	card.setAttribute('role', 'alert');
+
+	const brand = node('div', 'ac-boot__brand');
+	const brandMark = node('span', 'ac-boot__brand-mark');
+	brandMark.appendChild(icon(ICON_PATHS.cap, 13));
+	brand.append(brandMark, node('span', 'ac-boot__brand-text', 'Platform Control Center'));
+
+	const badge = node('div', `ac-boot__icon ac-boot__icon--${tone}`);
+	badge.setAttribute('aria-hidden', 'true');
+	badge.appendChild(icon(tone === 'warning' ? ICON_PATHS.warning : ICON_PATHS.lock));
+
+	const heading = node('h1', 'ac-boot__title', 'Could not open the control center');
+	const body = node('p', 'ac-boot__message', message);
+
+	card.append(brand, badge, heading, body);
+
+	if (hint) card.appendChild(node('p', 'ac-boot__hint', hint));
+
+	if (actions.length) {
+		const list = node('div', 'ac-boot__actions');
+		for (const action of actions) {
+			if (action.href) {
+				const link = node('a', `ac-btn ${action.variant || ''}`.trim(), action.label);
+				link.href = action.href;
+				list.appendChild(link);
+			} else {
+				const button = node('button', `ac-btn ${action.variant || ''}`.trim(), action.label);
+				button.type = 'button';
+				button.addEventListener('click', action.onClick);
+				list.appendChild(button);
+			}
+		}
+		card.appendChild(list);
+	}
+
+	if (code || meta) {
+		const footer = node('p', 'ac-boot__meta');
+		if (code) footer.appendChild(node('span', 'ac-boot__code', code));
+		if (meta) footer.appendChild(document.createTextNode(meta));
+		card.appendChild(footer);
+	}
+
+	bootRoot.appendChild(card);
+}
+
+const retry = () => window.location.reload();
+
+function showSessionEnded() {
+	renderBootFailure({
+		message: 'Your session has ended. Please sign in again.',
+		meta: 'Signing in again reopens this console.',
+		actions: [
+			{ label: 'Go to the sign-in page', href: SIGN_IN_PATH, variant: 'ac-btn--primary' },
+			{ label: 'Try again', onClick: retry, variant: 'ac-btn--ghost' },
+		],
+	});
 }
 
 let currentRoute = null;
@@ -101,18 +211,26 @@ async function boot() {
 	try {
 		session = await loadSession();
 	} catch (err) {
-		bootError(
-			'Could not open the control center.',
-			`${err.message}<br><br><a class="ac-btn ac-btn--primary" href="/admin.html">Go to the sign-in page</a>`,
-		);
+		const expired = err?.status === 401 || err?.code === 'UNAUTHORIZED';
+		if (expired) {
+			showSessionEnded();
+		} else {
+			renderBootFailure({
+				message: err?.message || 'The console could not reach the server.',
+				hint: 'Check that the server is running, then try again.',
+				code: err?.code || '',
+				tone: 'warning',
+				actions: [
+					{ label: 'Try again', onClick: retry, variant: 'ac-btn--primary' },
+					{ label: 'Go to the sign-in page', href: SIGN_IN_PATH },
+				],
+			});
+		}
 		return;
 	}
 
 	if (!session?.user) {
-		bootError(
-			'Could not open the control center.',
-			'<a class="ac-btn ac-btn--primary" href="/admin.html">Go to the sign-in page</a>',
-		);
+		showSessionEnded();
 		return;
 	}
 

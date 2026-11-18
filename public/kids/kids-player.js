@@ -832,10 +832,12 @@
 		playTemplateKey: function () {
 			var raw = String((this.config && this.config.play_template) || '');
 			if (!raw || raw === 'auto') return '';
-			var supported = {
+var supported = {
 				'bubble-pop': 1, 'subj-choice': 1, 'count-tap': 1, 'num-balance': 1,
 				'star-collector': 1, 'leap-frog': 1, 'sort-it-out': 1, 'pair-party': 1,
 				'build-a-tower': 1, 'magic-words': 1, 'code-explorer': 1,
+				'treasure-hunt': 1, 'space-mission': 1, 'seed-grow': 1,
+				'rescue-mission': 1, 'puzzle-reveal': 1,
 			};
 			return supported[raw] ? raw : '';
 		},
@@ -855,6 +857,14 @@
 			switch (key) {
 				case 'bubble-pop':
 				case 'subj-choice':
+				/* Adventure styles are presentations of one single-answer
+				   multiple-choice question: same option labels, same submission,
+				   only the stage around them changes. */
+				case 'treasure-hunt':
+				case 'space-mission':
+				case 'seed-grow':
+				case 'rescue-mission':
+				case 'puzzle-reveal':
 					return type === 'multiple-choice' && !q.allowMultipleAnswers && opts.length >= 2;
 				case 'count-tap':
 					if (!this.playTemplateFits('subj-choice', q)) return false;

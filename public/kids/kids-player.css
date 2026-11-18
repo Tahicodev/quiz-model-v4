@@ -1792,6 +1792,118 @@ body.kid-theme-superhero::after {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   ADVENTURE PLAY STYLES — five extra ways to answer one single-choice
+   question (Treasure Hunt, Space Mission, Seed & Grow, Rescue Mission,
+   Puzzle Reveal). All colours come from the world palette tokens
+   (--kid-primary / -2, --kid-tint, --kid-accent), so the same style wears
+   whichever "Pick a world" the teacher chose. Presentation only: every
+   renderer submits the same option label as Bubble Pop. */
+.kid-adv { overflow: visible; }
+.kid-adv-tip { margin: -6px 0 12px; color: #475569; font-size: .95rem; font-weight: 700; }
+.kid-adv-stage { position: relative; margin: 0 auto; max-width: 620px; }
+.kid-adv-choices { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.kid-adv-choice {
+	position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+	gap: 4px; min-width: 104px; min-height: 104px; padding: 10px 12px;
+	border: 3px solid var(--kid-primary, #7c3aed); border-radius: 20px;
+	background: #fff; color: #1f2937; cursor: pointer;
+	font-family: var(--kid-font); font-size: .95rem; font-weight: 800; text-align: center;
+	box-shadow: 0 5px 0 rgba(0,0,0,.16), 0 8px 18px rgba(0,0,0,.14);
+	transition: transform 140ms var(--kid-spring), box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.kid-adv-choice:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 0 rgba(0,0,0,.14), 0 12px 22px rgba(0,0,0,.18); }
+.kid-adv-choice:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 3px 0 rgba(0,0,0,.16); }
+.kid-adv-choice:focus-visible { outline: 4px solid #0f172a; outline-offset: 3px; }
+.kid-adv-choice:disabled { cursor: default; }
+.kid-adv-label { display: block; overflow-wrap: anywhere; line-height: 1.2; }
+/* Optional prop art sits behind the emoji so a missing file is invisible. */
+.kid-adv-art { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.kid-adv-art img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* Treasure Hunt — chests on a beach of light */
+.kid-adv-treasure-stage { padding-top: 8px; }
+.kid-adv-treasure-prop { position: relative; display: block; height: 96px; margin-bottom: 4px; opacity: .95; }
+.kid-adv-treasure-prop img { height: 96px; }
+.kid-adv-chest { background: linear-gradient(180deg, #fffbeb, var(--kid-tint, #fef3c7)); border-color: var(--kid-accent, #f59e0b); }
+.kid-adv-chest-lid { font-size: 1.7rem; line-height: 1; }
+.kid-adv-chest.kid-adv-chosen .kid-adv-chest-lid { animation: kid-adv-pop .45s var(--kid-spring) both; }
+.kid-adv-chest.kid-adv-correct { background: #f0fdf4; border-color: var(--kid-good, #22c55e); }
+.kid-adv-chest.kid-adv-correct::after { content: "💰"; position: absolute; top: -14px; right: -8px; font-size: 1.4rem; animation: kid-adv-pop .5s var(--kid-spring) both; }
+
+/* Space Mission — planets around a rocket */
+.kid-adv-space-stage { padding: 6px 0 2px; }
+.kid-adv-space-stage::before {
+	content: ""; position: absolute; inset: 0 0 auto; height: 120px;
+	background: radial-gradient(circle at 50% 30%, var(--kid-tint, #ede9fe), transparent 62%);
+	border-radius: 24px;
+}
+.kid-adv-rocket { position: relative; font-size: 2rem; text-align: center; line-height: 1; margin-bottom: 6px; animation: kid-adv-hover 3.2s ease-in-out infinite alternate; }
+.kid-adv-planet { width: 132px; min-height: 132px; border-radius: 50%; padding-top: 18px; background: radial-gradient(circle at 34% 26%, #fff 2%, var(--kid-tint, #ede9fe) 58%, #fff 100%); }
+.kid-adv-planet-art { opacity: .55; }
+.kid-adv-planet-art img { height: 92px; filter: saturate(1.1); }
+.kid-adv-planet-emoji { position: relative; font-size: 1.9rem; line-height: 1; }
+.kid-adv-planet .kid-adv-label { position: relative; margin-top: 2px; }
+.kid-adv-planet.kid-adv-chosen { animation: kid-adv-lift .38s var(--kid-spring) both; }
+.kid-adv-planet.kid-adv-correct { border-color: var(--kid-good, #22c55e); background: #f0fdf4; }
+.kid-adv-space-stage.kid-adv-win .kid-adv-rocket { animation: kid-adv-fly .7s ease-out both; }
+
+/* Seed & Grow — packets in a garden row */
+.kid-adv-garden { padding-top: 4px; }
+.kid-adv-garden-prop { position: relative; display: block; height: 84px; margin-bottom: 2px; }
+.kid-adv-garden-prop img { height: 84px; }
+.kid-adv-seed { min-height: 124px; background: linear-gradient(180deg, #f0fdf4, #fff); border-color: var(--kid-primary, #16a34a); }
+.kid-adv-sprout { font-size: 1.7rem; line-height: 1; transform-origin: 50% 90%; }
+.kid-adv-seed.kid-adv-chosen .kid-adv-sprout { animation: kid-adv-grow .5s var(--kid-spring) both; }
+.kid-adv-seed.kid-adv-correct { background: #dcfce7; border-color: var(--kid-good, #22c55e); }
+.kid-adv-seed.kid-adv-correct .kid-adv-sprout { font-size: 2.1rem; }
+
+/* Rescue Mission — caged friends */
+.kid-adv-rescue-prop { position: relative; display: block; height: 84px; margin-bottom: 2px; }
+.kid-adv-rescue-prop img { height: 84px; }
+.kid-adv-cage { min-height: 128px; overflow: hidden; background: linear-gradient(180deg, var(--kid-tint, #ecfeff), #fff); }
+.kid-adv-pet { font-size: 1.9rem; line-height: 1; transition: transform 260ms var(--kid-spring); }
+.kid-adv-bars {
+	position: absolute; inset: 6px 14px 34px; border-radius: 12px; pointer-events: none;
+	background: repeating-linear-gradient(90deg, rgba(51,65,85,.55) 0 3px, transparent 3px 12px);
+	transition: opacity 220ms ease, transform 220ms ease;
+}
+.kid-adv-cage.kid-adv-correct .kid-adv-bars,
+.kid-adv-cage.kid-adv-chosen .kid-adv-bars { opacity: 0; transform: translateY(-8px); }
+.kid-adv-cage.kid-adv-chosen .kid-adv-pet { transform: translateY(-6px) scale(1.08); }
+.kid-adv-cage.kid-adv-correct { background: #f0fdf4; border-color: var(--kid-good, #22c55e); }
+
+/* Puzzle Reveal — jigsaw-piece choices over a picture board */
+.kid-adv-puzzle-prop { position: relative; display: block; height: 110px; margin-bottom: 8px; opacity: .9; }
+.kid-adv-puzzle-prop img { height: 110px; border-radius: 14px; }
+.kid-adv-pieces { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(112px, 1fr)); gap: 10px; }
+.kid-adv-piece { border-radius: 18px; border-style: dashed; min-height: 112px; background: linear-gradient(180deg, #fff, var(--kid-tint, #f5f3ff)); }
+.kid-adv-notch { position: absolute; top: -8px; left: 50%; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: #fff; border: 3px dashed var(--kid-primary, #7c3aed); }
+.kid-adv-piece.kid-adv-chosen { animation: kid-adv-lift .35s var(--kid-spring) both; border-style: solid; }
+.kid-adv-piece.kid-adv-correct { background: #f0fdf4; border-color: var(--kid-good, #22c55e); border-style: solid; }
+
+/* Shared feedback states */
+.kid-adv-choice.kid-adv-wrong { border-color: var(--kid-bad, #ef4444); background: #fef2f2; }
+.kid-adv-choice.kid-adv-dim { opacity: .45; filter: grayscale(.5); }
+.kid-adv-stage.kid-adv-win .kid-adv-choices { animation: kid-adv-pop .45s var(--kid-spring) both; }
+@keyframes kid-adv-pop { 0% { transform: scale(1); } 45% { transform: scale(1.08); } 100% { transform: scale(1); } }
+@keyframes kid-adv-lift { 0% { transform: translateY(0); } 55% { transform: translateY(-8px) scale(1.04); } 100% { transform: translateY(-4px) scale(1.02); } }
+@keyframes kid-adv-grow { 0% { transform: scale(.7); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes kid-adv-hover { from { transform: translateY(0) rotate(-2deg); } to { transform: translateY(-6px) rotate(2deg); } }
+@keyframes kid-adv-fly { from { transform: translateY(0) scale(1); opacity: 1; } to { transform: translateY(-56px) scale(.8); opacity: 0; } }
+
+@media (max-width: 430px) {
+	.kid-adv-pieces { grid-template-columns: 1fr; }
+	.kid-adv-planet { width: 118px; min-height: 118px; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.kid-adv-choice, .kid-adv-choice:hover:not(:disabled), .kid-adv-choice:active:not(:disabled) { transition: none; transform: none; }
+	.kid-adv-rocket, .kid-adv-chest-lid, .kid-adv-planet, .kid-adv-sprout,
+	.kid-adv-pet, .kid-adv-piece, .kid-adv-choices, .kid-adv-space-stage .kid-adv-rocket { animation: none !important; }
+	/* keep static, unmistakable feedback */
+	.kid-adv-choice.kid-adv-correct { box-shadow: 0 0 0 5px rgba(34,197,94,.45); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    SUBJECT WORLDS — adorable, high-visibility identity per school subject.
    kids-player.js adds body.kid-subject-<math|french|arabic> (and
    [data-kid-subject]) alongside the mascot theme world (kid-theme-*), so the
