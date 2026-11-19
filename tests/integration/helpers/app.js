@@ -41,6 +41,7 @@ import teacherOverviewRoutes from '../../../src/backend/routes/teacher-overview.
 import kidsChampionshipRoutes from '../../../src/backend/routes/kids-championships.routes.js';
 import kidsRoutes from '../../../src/backend/routes/kids.routes.js';
 import consoleRoutes from '../../../src/backend/routes/console.routes.js';
+import learningRoutes from '../../../src/backend/routes/learning.routes.js';
 import adminRoutes from '../../../src/backend/routes/admin.routes.js';
 import queryRoutes from '../../../src/backend/routes/query.routes.js';
 
@@ -88,6 +89,7 @@ app.use('/api/v1/kids', kidsRoutes);
 app.use('/api/v1/devices', devicesRoutes);
 app.use('/api/v1/teacher-overview', teacherOverviewRoutes);
 app.use('/api/v1/console', consoleRoutes);
+app.use('/api/v1/learning', learningRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/query', queryRoutes);
 

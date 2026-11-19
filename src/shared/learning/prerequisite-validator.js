@@ -95,17 +95,17 @@ export function validatePrerequisiteGraph(edges) {
     const prerequisite = edge?.prerequisite_objective_id;
 
     if (!objective || !prerequisite) {
-      push('edges', ['Both objective_id and prerequisite_objective_id are required']);
+      push('edges', 'Both objective_id and prerequisite_objective_id are required');
       continue;
     }
-    if (objective === prerequisite) push(objective, ['An objective cannot be its own prerequisite']);
+    if (objective === prerequisite) push(objective, 'An objective cannot be its own prerequisite');
 
     const pair = `${objective}|${prerequisite}`;
-    if (seen.has(pair)) push(objective, [`Duplicate prerequisite edge to "${prerequisite}"`]);
+    if (seen.has(pair)) push(objective, `Duplicate prerequisite edge to "${prerequisite}"`);
     else seen.add(pair);
 
     if (edge.strength != null && !PREREQUISITE_STRENGTHS.includes(edge.strength)) {
-      push(objective, [`strength must be one of ${PREREQUISITE_STRENGTHS.join(' | ')}`]);
+      push(objective, `strength must be one of ${PREREQUISITE_STRENGTHS.join(' | ')}`);
     }
   }
 
@@ -130,7 +130,7 @@ export function validatePrerequisiteGraph(edges) {
   };
   for (const id of needs.keys()) {
     if (!visit(id, new Set())) {
-      push(id, ['Prerequisite cycle detected']);
+      push(id, 'Prerequisite cycle detected');
       break;
     }
   }
@@ -138,7 +138,7 @@ export function validatePrerequisiteGraph(edges) {
   const depths = computeDepths(edges);
   for (const [id, depth] of depths.entries()) {
     if (depth >= MAX_PREREQUISITE_DEPTH) {
-      push(id, [`Prerequisite chain deeper than ${MAX_PREREQUISITE_DEPTH}`]);
+      push(id, `Prerequisite chain deeper than ${MAX_PREREQUISITE_DEPTH}`);
     }
   }
 

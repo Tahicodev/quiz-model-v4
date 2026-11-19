@@ -9,8 +9,9 @@ this file wins.
 **Branch:** `feature/adaptive-learning-phase1`
 **Authorization:** WP1 accepted 2026-11-19; WP2 and WP3 accepted by the same "continue" instruction;
 WP4 accepted; **WP5 authorized** by the owner's decisions (console SPA page · gated by
-`learning.adaptive.enabled` + an admin toggle · objectives + competencies + proposal queue). WP5 is
-implemented and **awaiting owner review**. WP6+ is not authorized until that review.
+`learning.adaptive.enabled` + an admin toggle · objectives + competencies + proposal queue);
+**WP6 authorized by the follow-up "continue"**. WP6 is implemented and **awaiting owner review**.
+WP7 is not authorized until that review.
 
 **Ground rules carried from the spec and Phase 0**
 
@@ -30,8 +31,8 @@ implemented and **awaiting owner review**. WP6+ is not authorized until that rev
 | WP2 | Backend data access (`MODEL_MAP` / `SEARCH_FIELDS`, repository parity) | **Done — accepted (covered by continuation)** | Yes |
 | WP3 | Services (`LearningTaxonomyService`, `QuestionPedagogyService`) | **Done — accepted (covered by continuation)** | Yes |
 | WP4 | Routes + permissions + backup | **Done — accepted by owner 2026-11-19** | Yes |
-| WP5 | Frontend (pedagogy panel, filters, proposal queue, labels/RTL) | **Done — awaiting review** | Yes |
-| WP6 | Tests (validators, integration, scope, regression) | Not started | — |
+| WP5 | Frontend (pedagogy panel, filters, proposal queue, labels/RTL) | **Done — accepted 2026-11-19** | Yes |
+| WP6 | Tests (validators, integration, scope, regression) | **Done — awaiting review** | Yes |
 | WP7 | Docs + flags / completion report | Not started | — |
 
 ---
@@ -423,6 +424,75 @@ and `/console/organizations` still answer **403**. The student and unauthenticat
 
 ---
 
+## WP6 — Tests
+
+**Scope:** unit tests for the four pure validators, integration tests for the criteria CRUD and the
+proposal flow, the security/scope tests the spec enumerates, and a regression run (existing
+question/exam/game suites + the Phase-0 repository contract, unchanged).
+
+### Deliverables
+
+**Unit — `tests/unit/` (4 files, 72 tests)**
+
+| File | Covers |
+|---|---|
+| `bloom-catalog-validator.test.js` (15) | seed valid; six ids in order; EN/FR/AR present; non-array; missing / unknown / duplicate id; duplicate key; out-of-range and duplicate `order_index`; missing locale; invalid JSON; parsed-vs-string labels; **Bloom ≠ difficulty** (no difficulty key, no difficulty in `toBloomRow`, taxonomy order independent of difficulty). |
+| `pedagogy-validator.test.js` (30) | empty set; single and multi criterion; tolerance; weights ≠ 1; negative / non-numeric weight; required ids; foreign objective / competency; subject mismatch; transversal competency; blank competency; duplicate key; blank key defaults to `main`; duplicate triple; different keys accepted; negative `max_score`; bad `source` / `review_status`; `derivePedagogyStatus` (all four states, `needs_review` wins, NaN-safe); `pickPrimaryBloom` (heaviest, accumulation, deterministic tie-break, missing ids). |
+| `prerequisite-validator.test.js` (16) | self-edge; no-cycle; direct cycle; longer cycle; replaced edge ignored; unrelated edges; whole-graph validation (empty, valid, non-array, missing endpoint, duplicate, bad strength, cycle, depth ceiling at `MAX_PREREQUISITE_DEPTH`). |
+| `competency-link-validator.test.js` (11) | same-school/same-subject; transversal; missing / foreign endpoints; cross-subject; default weight; negative / non-finite weight; single-primary rule (same competency re-mark is fine, another competency conflicts, other objectives ignored); non-primary always allowed. |
+
+**Integration — `tests/integration/learning.routes.test.js` (42 tests)**, real HTTP against a real DB,
+two schools, one admin, three teachers and a student:
+
+| Group | Assertions |
+|---|---|
+| Flags | unauthenticated 401; student 403; both settings default **false**; the adaptive switch reads back true when the admin turns it on. |
+| Bloom | six dimensions in taxonomy order. |
+| D2 governance | teacher + OFF → `proposed`; teacher + ON → `active`; admin → `active`; duplicate `(subject, code)` → 409; proposal appears in `?status=proposed`; teacher cannot approve/reject (403); admin approves; reject without note → 422; reject with note → `rejected` + note; teacher edits own proposal but not a colleague's (403); `PATCH status='active'` → 422; archive admin-only (teacher 403, admin 200); foreign objective 404 for admin and teacher. |
+| Pedagogy / ownership | unclassified start; teacher classifies own question → `classified` + primary Bloom; labels enriched (`objective_code`, `bloom_name`, `bloom_labels`); colleague's question → 403; author and admin may classify; weights ≠ 1 → 422 with **flat** `fields.weights`; unknown Bloom → 422; foreign objective → 404; foreign question 404 on read and write; add/remove a criterion (valid remainder) → 200, re-delete → 404; clear → `unclassified`; `recompute` teacher 403 / admin 200 deriving `partial` + primary Bloom from an imported row; objective-questions endpoint returns the criteria rows. |
+| Admin-only taxonomy | teacher refused competencies, links, prerequisites (403); admin creates links, second primary → 422, non-primary 201, unlink 200; prerequisite add 201, cycle 422, self-edge 422, remove 200; foreign competency 404. |
+| Regression / filters | unclassified question reads 200 with `unclassified`; stays in the list; `pedagogy_status` filter both ways; `ids` filter returns exactly the set and stays inside the school; teacher author scope unchanged; student refused the learning read. |
+
+**Test-app helper.** `tests/integration/helpers/app.js` now mounts `learningRoutes` at
+`/api/v1/learning` (it mirrors `server.js`; the earlier suites never needed it).
+
+### Defects found by these tests and fixed
+
+1. **Double-nested validation field messages (WP3).** All four validators called
+   `push(key, ['message'])`, so `ValidationError.fields` was `Record<string, string[][]>` and every
+   learning 422 serialized as `{ "criteria[0]": [["objective_id is required"]] }` instead of the
+   contract `Record<string, string[]>`. Fixed at the 36 call sites; the integration test now pins the
+   flat shape.
+2. **The `ids` question filter was silently ignored (WP5).** The route converted `?ids=` into
+   `filters.id = { in: [...] }`, but `QuestionService.list` re-parses its filters through
+   `QuestionFilterSchema`, which strips unknown keys — so the objective-filter path in the pedagogy
+   view returned the unfiltered list. The conversion now happens **inside** `QuestionService.list`
+   after parsing (from the schema-validated `ids` string), still capped at 500 and still inside the
+   school-scoped query. Pinned by the integration tests for the explicit id set and the tenant
+   boundary.
+
+### Verification
+
+| Suite | Result |
+|---|---|
+| Four validator unit suites | **72/72 pass** |
+| `tests/integration/learning.routes.test.js` | **42/42 pass** |
+| `tests/integration/questions.author-scope.test.js` (unchanged) | pass |
+| Phase-0 repository contract (`PrismaRepository.contract.test.js`) | pass |
+| Full suite (`npx vitest run`) | **121 files / 1592 tests pass** (was 116 / 1478) |
+
+No console-bundle rebuild was needed: none of the changed production modules is part of the console
+bundle (verified — the bundle contains neither the validators nor `QuestionService`).
+
+### Open items
+
+- Frontend/UI tests are not part of WP6 (the spec scopes them to the validators, routes, scope and
+  regression); the WP5 pages are exercised manually at review.
+- AR/FR strings still pending native review (WP7 gate).
+- Nothing advances to WP7 without the owner's review.
+
+---
+
 ## Progress log
 
 ### 2026-11-19 — WP1 — schema + migration
@@ -497,6 +567,24 @@ and `/console/organizations` still answer **403**. The student and unauthenticat
 - Verified: `node --check` on every touched module; `npm run build:console` clean; full suite **116 files
   / 1478 tests pass**.
 - **Stopped for owner review.** No WP6 tests, no AI work — both remain unauthorized.
+
+### 2026-11-19 — WP5 — accepted; WP6 authorized
+
+- Owner accepted WP5 and authorized WP6 with the continuation instruction ("continue").
+
+### 2026-11-19 — WP6 — tests
+
+- Added four validator unit suites (72 tests), including the explicit "Bloom ≠ difficulty" contract,
+  and an integration suite (42 tests) covering the D2 proposal flow, criteria CRUD, question ownership,
+  tenant isolation, admin-only taxonomy, the flags' off-by-default state and the Phase-1 question
+  filters.
+- Mounted `/api/v1/learning` in the integration test app helper.
+- Found and fixed two defects the tests exposed: validator `fields` were double-nested (WP3) and the
+  `?ids=` question filter was dropped by `QuestionService`'s filter re-parse (WP5). Both are pinned by
+  the new tests.
+- Verified: 72/72 unit, 42/42 integration, full suite **121 files / 1592 tests pass**; the existing
+  author-scope suite and the repository contract pass unchanged.
+- **Stopped for owner review.** WP7 (docs + flags report) remains unauthorized.
 
 ---
 

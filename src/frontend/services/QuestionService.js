@@ -16,8 +16,20 @@ export class QuestionService {
     const { or = null, created_by = undefined, ...restFilters } = filters;
     const parsed = QuestionFilterSchema.safeParse({ ...restFilters, ...pagination });
     if (!parsed.success) throw new ValidationError(parsed.error.flatten().fieldErrors);
-    const { limit, offset, orderBy, direction, search, ...rest } = parsed.data;
+    const { limit, offset, orderBy, direction, search, ids, ...rest } = parsed.data;
     if (created_by !== undefined) rest.created_by = created_by;
+    // Phase 1: an explicit id set (the pedagogy view resolves "questions of
+    // objective X" to criteria rows first) becomes a plain `id IN (...)`.
+    // It narrows the SAME school-scoped query, so it cannot widen what the
+    // caller is allowed to read. The cap keeps the SQL parameter list bounded.
+    if (ids) {
+      const list = String(ids)
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .slice(0, 500);
+      rest.id = { in: list };
+    }
     return this.#repo.getAll('questions', { filters: rest, limit, offset, orderBy, direction, search, ...(or ? { or } : {}) });
   }
 

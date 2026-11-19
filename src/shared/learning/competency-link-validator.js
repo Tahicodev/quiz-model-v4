@@ -35,24 +35,24 @@ export function validateCompetencyLink(link, context = {}) {
 
   const { schoolId, objective, competency, existingLinks = [] } = context;
 
-  if (!objective) push('objective_id', ['Objective not found in this school']);
-  if (!competency) push('competency_id', ['Competency not found in this school']);
+  if (!objective) push('objective_id', 'Objective not found in this school');
+  if (!competency) push('competency_id', 'Competency not found in this school');
 
   if (objective && schoolId && objective.school_id !== schoolId) {
-    push('objective_id', ['Objective belongs to another school']);
+    push('objective_id', 'Objective belongs to another school');
   }
   if (competency && schoolId && competency.school_id !== schoolId) {
-    push('competency_id', ['Competency belongs to another school']);
+    push('competency_id', 'Competency belongs to another school');
   }
 
   if (objective && competency && competency.subject_id && objective.subject_id
       && competency.subject_id !== objective.subject_id) {
-    push('competency_id', ['Competency and objective belong to different subjects']);
+    push('competency_id', 'Competency and objective belong to different subjects');
   }
 
   const weight = Number(link?.weight ?? 1);
   if (!Number.isFinite(weight) || weight < 0) {
-    push('weight', ['weight must be a number greater than or equal to 0']);
+    push('weight', 'weight must be a number greater than or equal to 0');
   }
 
   if (link?.is_primary) {
@@ -62,7 +62,7 @@ export function validateCompetencyLink(link, context = {}) {
         && candidate.competency_id !== link.competency_id,
     );
     if (other) {
-      push('is_primary', ['This objective already has a primary competency']);
+      push('is_primary', 'This objective already has a primary competency');
     }
   }
 

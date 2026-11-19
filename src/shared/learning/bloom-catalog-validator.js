@@ -40,20 +40,20 @@ export function validateBloomCatalog(rows) {
     const where = row?.id ?? '(missing id)';
 
     if (!BLOOM_DIMENSION_IDS.includes(row?.id)) {
-      push(where, [`Unknown Bloom id "${row?.id}"`]);
+      push(where, `Unknown Bloom id "${row?.id}"`);
       continue;
     }
-    if (seenIds.has(row.id)) push(where, ['Duplicate id']);
+    if (seenIds.has(row.id)) push(where, 'Duplicate id');
     seenIds.add(row.id);
 
-    if (typeof row.key !== 'string' || !row.key.trim()) push(where, ['key is required']);
-    else if (seenKeys.has(row.key)) push(where, [`Duplicate key "${row.key}"`]);
+    if (typeof row.key !== 'string' || !row.key.trim()) push(where, 'key is required');
+    else if (seenKeys.has(row.key)) push(where, `Duplicate key "${row.key}"`);
     else seenKeys.add(row.key);
 
     if (!Number.isInteger(row.order_index) || row.order_index < 0 || row.order_index > 5) {
-      push(where, ['order_index must be an integer 0–5']);
+      push(where, 'order_index must be an integer 0–5');
     } else if (seenOrder.has(row.order_index)) {
-      push(where, [`Duplicate order_index ${row.order_index}`]);
+      push(where, `Duplicate order_index ${row.order_index}`);
     } else {
       seenOrder.add(row.order_index);
     }
@@ -65,23 +65,23 @@ export function validateBloomCatalog(rows) {
       try {
         labels = JSON.parse(labels);
       } catch {
-        push(where, ['labels_json is not valid JSON']);
+        push(where, 'labels_json is not valid JSON');
         continue;
       }
     }
     if (!labels || typeof labels !== 'object') {
-      push(where, ['labels_json must be a locale → label object']);
+      push(where, 'labels_json must be a locale → label object');
       continue;
     }
     for (const locale of REQUIRED_LOCALES) {
       if (typeof labels[locale] !== 'string' || !labels[locale].trim()) {
-        push(where, [`labels_json is missing the "${locale}" label`]);
+        push(where, `labels_json is missing the "${locale}" label`);
       }
     }
   }
 
   for (const id of BLOOM_DIMENSION_IDS) {
-    if (!seenIds.has(id)) push('catalog', [`Missing dimension "${id}"`]);
+    if (!seenIds.has(id)) push('catalog', `Missing dimension "${id}"`);
   }
 
   return { ok: Object.keys(errors).length === 0, errors };

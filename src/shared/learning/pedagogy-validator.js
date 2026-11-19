@@ -67,20 +67,20 @@ export function validateCriteriaSet(criteria, context = {}) {
     const value = criterion || {};
 
     if (!isNonEmptyString(value.objective_id)) {
-      push(at, ['objective_id is required']);
+      push(at, 'objective_id is required');
     } else if (objectiveIds && !objectiveIds.has(value.objective_id)) {
-      push(at, ['objective does not belong to this school']);
+      push(at, 'objective does not belong to this school');
     }
 
     if (!isNonEmptyString(value.bloom_dimension_id)) {
-      push(at, ['bloom_dimension_id is required']);
+      push(at, 'bloom_dimension_id is required');
     } else if (bloomIds.size && !bloomIds.has(value.bloom_dimension_id)) {
-      push(at, [`unknown Bloom dimension "${value.bloom_dimension_id}"`]);
+      push(at, `unknown Bloom dimension "${value.bloom_dimension_id}"`);
     }
 
     if (value.competency_id != null && value.competency_id !== '') {
       if (competencyIds && !competencyIds.has(value.competency_id)) {
-        push(at, ['competency does not belong to this school']);
+        push(at, 'competency does not belong to this school');
       } else {
         // Subject compatibility: a competency with a subject may only be linked
         // to objectives of the SAME subject. A subject-less competency is
@@ -88,45 +88,45 @@ export function validateCriteriaSet(criteria, context = {}) {
         const compSubject = competencySubjectById[value.competency_id] ?? null;
         const objSubject = objectiveSubjectById[value.objective_id] ?? null;
         if (compSubject && objSubject && compSubject !== objSubject) {
-          push(at, ['competency and objective belong to different subjects']);
+          push(at, 'competency and objective belong to different subjects');
         }
       }
     }
 
     const weight = Number(value.weight);
     if (!Number.isFinite(weight) || weight < 0) {
-      push(at, ['weight must be a number greater than or equal to 0']);
+      push(at, 'weight must be a number greater than or equal to 0');
     } else {
       weightSum += weight;
     }
 
     const key = isNonEmptyString(value.criterion_key) ? value.criterion_key : 'main';
-    if (seenKeys.has(key)) push(at, [`duplicate criterion_key "${key}"`]);
+    if (seenKeys.has(key)) push(at, `duplicate criterion_key "${key}"`);
     else seenKeys.add(key);
 
     const triple = `${value.question_id ?? ''}|${value.objective_id}|${value.bloom_dimension_id}|${key}`;
     if (seenTriples.has(triple)) {
-      push(at, ['two criteria target the same objective, Bloom dimension and criterion key']);
+      push(at, 'two criteria target the same objective, Bloom dimension and criterion key');
     } else {
       seenTriples.add(triple);
     }
 
     if (value.max_score != null && value.max_score !== '') {
       const max = Number(value.max_score);
-      if (!Number.isFinite(max) || max < 0) push(at, ['max_score must be a number greater than or equal to 0']);
+      if (!Number.isFinite(max) || max < 0) push(at, 'max_score must be a number greater than or equal to 0');
     }
 
     if (value.source != null && !CRITERION_SOURCES.includes(value.source)) {
-      push(at, [`source must be one of ${CRITERION_SOURCES.join(' | ')}`]);
+      push(at, `source must be one of ${CRITERION_SOURCES.join(' | ')}`);
     }
 
     if (value.review_status != null && !REVIEW_STATUSES.includes(value.review_status)) {
-      push(at, [`review_status must be one of ${REVIEW_STATUSES.join(' | ')}`]);
+      push(at, `review_status must be one of ${REVIEW_STATUSES.join(' | ')}`);
     }
   });
 
   if (criteria.length > 0 && Math.abs(weightSum - 1) > WEIGHT_TOLERANCE) {
-    push('weights', [`Criterion weights must sum to 1 (got ${Number(weightSum.toFixed(4))})`]);
+    push('weights', `Criterion weights must sum to 1 (got ${Number(weightSum.toFixed(4))})`);
   }
 
   return { ok: Object.keys(errors).length === 0, errors };
