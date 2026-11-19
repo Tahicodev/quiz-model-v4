@@ -980,6 +980,13 @@ const EXPORT_TABLES = Object.freeze([
 	'notifications',
 	'gamification',
 	'settings',
+	// Phase 1 learning taxonomy. `bloom_dimensions` is intentionally absent: it
+	// is a global, seeded catalog, not organization data.
+	'learning_objectives',
+	'competencies',
+	'learning_objective_competencies',
+	'learning_prerequisites',
+	'question_assessment_criteria',
 ]);
 
 /** Strip the fields a backup must never carry. */

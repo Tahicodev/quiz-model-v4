@@ -41,6 +41,8 @@ import { AdminActionService } from './services/AdminActionService.js';
 import { listPresence } from './realtime/presence.registry.js';
 import { ExamDocumentService } from './services/ExamDocumentService.js';
 import { GeneratedDocumentService } from './services/GeneratedDocumentService.js';
+import { LearningTaxonomyService } from './services/learning/LearningTaxonomyService.js';
+import { QuestionPedagogyService } from './services/learning/QuestionPedagogyService.js';
 
 // Reused frontend services (pure JS, repo-based, no browser deps)
 import { QuestionService } from '../frontend/services/QuestionService.js';
@@ -159,6 +161,13 @@ export function createContainer() {
     // Registry + on-disk store for every document the app renders for teachers
     // (course booklets, prep sheets, exercises with solutions, exams).
     genDocSvc: new GeneratedDocumentService(repo, { logger }),
+
+    // Phase 1 adaptive-learning foundation. Taxonomy (Bloom catalog, objectives
+    // with the D2 proposal workflow, competencies, links, prerequisites) and
+    // question pedagogy (criteria + the derived status/Bloom caches). Both are
+    // school-scoped and audited; the Bloom catalog is seeded at boot.
+    learningTaxonomySvc: new LearningTaxonomyService(repo, { auditSvc }),
+    questionPedagogySvc: new QuestionPedagogyService(repo, { auditSvc }),
   });
 
   return _container;

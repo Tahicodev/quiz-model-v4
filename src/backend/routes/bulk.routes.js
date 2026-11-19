@@ -1130,6 +1130,136 @@ const SANITIZERS = {
       ...(row.occurred_at && { occurred_at: pickDate(row.occurred_at) }),
     };
   },
+
+  // ── Phase 1 learning taxonomy ─────────────────────────────────────────────
+  // Restore path for a full backup. The exported rows already use the Prisma
+  // column names, so these sanitizers mostly coerce types and drop the row when
+  // a hard FK (id, subject, question, Bloom) is missing — a partial restore is
+  // preferable to a batch-wide failure. The global `bloom_dimensions` catalog
+  // is seeded at boot and intentionally not restored.
+
+  // model LearningObjective { id, school_id, subject_id, category_id?, parent_id?,
+  //   primary_bloom_dimension_id?, code, statement, description?, order_index,
+  //   status, proposed_by?, reviewed_by?, reviewed_at?, review_note?, created_by? }
+  learning_objectives: (row, schoolId, actorId) => {
+    const objectiveId = pickUuid(row.id);
+    const subjectId = pickUuid(row.subject_id);
+    const code = pickStr(row.code);
+    const statement = pickStr(row.statement);
+    if (!objectiveId || !subjectId || !code || !statement) return null;
+    return {
+      id: objectiveId,
+      school_id: schoolId,
+      subject_id: subjectId,
+      category_id: pickUuid(row.category_id) || null,
+      parent_id: pickUuid(row.parent_id) || null,
+      primary_bloom_dimension_id: pickStr(row.primary_bloom_dimension_id) || null,
+      code,
+      statement,
+      ...(row.description != null && { description: pickStr(row.description) }),
+      order_index: pickInt(row.order_index) ?? 0,
+      status: pickStr(row.status) || 'active',
+      proposed_by: pickUuid(row.proposed_by) || null,
+      reviewed_by: pickUuid(row.reviewed_by) || null,
+      ...(row.reviewed_at && { reviewed_at: pickDate(row.reviewed_at) }),
+      ...(row.review_note != null && { review_note: pickStr(row.review_note) }),
+      created_by: pickUuid(row.created_by) || pickStr(actorId) || null,
+      ...(row.created_at && { created_at: pickDate(row.created_at) }),
+      ...(row.updated_at && { updated_at: pickDate(row.updated_at) }),
+    };
+  },
+
+  // model Competency { id, school_id, subject_id?, parent_id?, kind, code, name,
+  //                    description?, status, created_by? }
+  competencies: (row, schoolId, actorId) => {
+    const competencyId = pickUuid(row.id);
+    const code = pickStr(row.code);
+    const name = pickStr(row.name);
+    if (!competencyId || !code || !name) return null;
+    return {
+      id: competencyId,
+      school_id: schoolId,
+      subject_id: pickUuid(row.subject_id) || null,
+      parent_id: pickUuid(row.parent_id) || null,
+      kind: pickStr(row.kind) || 'competency',
+      code,
+      name,
+      ...(row.description != null && { description: pickStr(row.description) }),
+      status: pickStr(row.status) || 'active',
+      created_by: pickUuid(row.created_by) || pickStr(actorId) || null,
+      ...(row.created_at && { created_at: pickDate(row.created_at) }),
+      ...(row.updated_at && { updated_at: pickDate(row.updated_at) }),
+    };
+  },
+
+  // model LearningObjectiveCompetency { id, school_id, objective_id,
+  //                                    competency_id, weight, is_primary }
+  learning_objective_competencies: (row, schoolId) => {
+    const linkId = pickUuid(row.id);
+    const objectiveId = pickUuid(row.objective_id);
+    const competencyId = pickUuid(row.competency_id);
+    if (!linkId || !objectiveId || !competencyId) return null;
+    const weight = Number(row.weight);
+    return {
+      id: linkId,
+      school_id: schoolId,
+      objective_id: objectiveId,
+      competency_id: competencyId,
+      weight: Number.isFinite(weight) ? weight : 1,
+      is_primary: pickBool(row.is_primary) ?? false,
+      ...(row.created_at && { created_at: pickDate(row.created_at) }),
+    };
+  },
+
+  // model LearningPrerequisite { id, school_id, objective_id,
+  //   prerequisite_objective_id, strength, min_mastery_state, rationale?, created_by? }
+  learning_prerequisites: (row, schoolId, actorId) => {
+    const prerequisiteId = pickUuid(row.id);
+    const objectiveId = pickUuid(row.objective_id);
+    const prerequisiteObjectiveId = pickUuid(row.prerequisite_objective_id);
+    if (!prerequisiteId || !objectiveId || !prerequisiteObjectiveId) return null;
+    return {
+      id: prerequisiteId,
+      school_id: schoolId,
+      objective_id: objectiveId,
+      prerequisite_objective_id: prerequisiteObjectiveId,
+      strength: pickStr(row.strength) || 'required',
+      min_mastery_state: pickStr(row.min_mastery_state) || 'developing',
+      ...(row.rationale != null && { rationale: pickStr(row.rationale) }),
+      created_by: pickUuid(row.created_by) || pickStr(actorId) || null,
+      ...(row.created_at && { created_at: pickDate(row.created_at) }),
+    };
+  },
+
+  // model QuestionAssessmentCriterion { id, school_id, question_id, objective_id,
+  //   competency_id?, bloom_dimension_id, criterion_key, weight, max_score?,
+  //   rubric_json?, source, review_status, created_by? }
+  question_assessment_criteria: (row, schoolId, actorId) => {
+    const criterionId = pickUuid(row.id);
+    const questionId = pickUuid(row.question_id);
+    const objectiveId = pickUuid(row.objective_id);
+    const bloomId = pickStr(row.bloom_dimension_id);
+    if (!criterionId || !questionId || !objectiveId || !bloomId) return null;
+    const weight = Number(row.weight);
+    const maxScore = Number(row.max_score);
+    return {
+      id: criterionId,
+      school_id: schoolId,
+      question_id: questionId,
+      objective_id: objectiveId,
+      competency_id: pickUuid(row.competency_id) || null,
+      bloom_dimension_id: bloomId,
+      criterion_key: pickStr(row.criterion_key) || 'main',
+      weight: Number.isFinite(weight) ? weight : 1,
+      ...(Number.isFinite(maxScore) && { max_score: maxScore }),
+      ...(row.rubric_json != null && { rubric_json: pickStr(row.rubric_json) }),
+      source: pickStr(row.source) || 'manual',
+      review_status: pickStr(row.review_status) || 'approved',
+      created_by: pickUuid(row.created_by) || pickStr(actorId) || null,
+      ...(row.created_at && { created_at: pickDate(row.created_at) }),
+      ...(row.updated_at && { updated_at: pickDate(row.updated_at) }),
+    };
+  },
 };
 
 /**
@@ -1196,6 +1326,11 @@ const REQUIRED_FIELDS = {
   notifications: ['type', 'message'],
   teacher_messages: ['title', 'body'],
   teacher_assignments: ['title'],
+  learning_objectives: ['subject_id', 'code', 'statement'],
+  competencies: ['code', 'name'],
+  learning_objective_competencies: ['objective_id', 'competency_id'],
+  learning_prerequisites: ['objective_id', 'prerequisite_objective_id'],
+  question_assessment_criteria: ['question_id', 'objective_id', 'bloom_dimension_id'],
 };
 
 /**

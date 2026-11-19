@@ -57,11 +57,15 @@ export const PERMISSIONS = Object.freeze([
   { id: 'school.health.read',          group: 'School', scope: SCOPES.SCHOOL, label: 'View system health', description: 'Read service availability and error trends.' },
   { id: 'school.settings.manage',      group: 'School', scope: SCOPES.SCHOOL, label: 'Manage organization settings', description: 'Change this organization’s settings, security policies and feature availability.' },
   { id: 'school.devices.manage',       group: 'School', scope: SCOPES.SCHOOL, label: 'Manage classroom devices', description: 'Allow, block and assign classroom devices.' },
+  { id: 'school.learning.read',        group: 'School', scope: SCOPES.SCHOOL, label: 'View learning taxonomy', description: 'Read the learning objectives, competencies, prerequisites and question pedagogy of this organization.' },
+  { id: 'school.learning.manage',      group: 'School', scope: SCOPES.SCHOOL, label: 'Manage learning taxonomy', description: 'Create and archive objectives, competencies, links and prerequisites, and review teacher proposals.' },
 
   // ── Class (teacher) ─────────────────────────────────────────────────────
   { id: 'class.content.author',        group: 'Class', scope: SCOPES.CLASS, label: 'Author content', description: 'Create questions, exams, courses and games for assigned classes.' },
   { id: 'class.students.read',         group: 'Class', scope: SCOPES.CLASS, label: 'View class students', description: 'Read the roster and progress of students in assigned classes.' },
   { id: 'class.realtime.manage',       group: 'Class', scope: SCOPES.CLASS, label: 'Manage live sessions', description: 'Push games and exams to assigned classes.' },
+  { id: 'class.learning.read',         group: 'Class', scope: SCOPES.CLASS, label: 'View learning taxonomy', description: 'Read the Bloom catalog, learning objectives and question pedagogy.' },
+  { id: 'class.learning.classify',     group: 'Class', scope: SCOPES.CLASS, label: 'Classify questions', description: 'Attach learning criteria to your own questions and propose learning objectives.' },
 ]);
 
 /** Fast lookup: permission id → catalog entry. */

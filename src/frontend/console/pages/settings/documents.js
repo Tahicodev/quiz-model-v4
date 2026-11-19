@@ -427,6 +427,14 @@ const IMPORT_ORDER = [
 	'notifications',
 	'gamification',
 	'settings',
+	// Phase 1 learning taxonomy — parents before children, and the criteria
+	// after `questions` because each criterion is an FK onto a question. The
+	// global Bloom catalog is seeded at boot and is deliberately not restored.
+	'learning_objectives',
+	'competencies',
+	'learning_objective_competencies',
+	'learning_prerequisites',
+	'question_assessment_criteria',
 ];
 
 async function applySnapshot(data) {

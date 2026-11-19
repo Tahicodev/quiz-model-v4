@@ -7,8 +7,8 @@ open). When the two disagree about *scope*, the spec wins; when they disagree ab
 this file wins.
 
 **Branch:** `feature/adaptive-learning-phase1`
-**Authorization:** WP1 accepted 2026-11-19; WP2 accepted by the same "continue" instruction; WP3
-implemented and **awaiting owner review**. WP4+ is not authorized until the WP3 review.
+**Authorization:** WP1 accepted 2026-11-19; WP2 and WP3 accepted by the same "continue" instruction;
+WP4 implemented and **awaiting owner review**. WP5+ is not authorized until the WP4 review.
 
 **Ground rules carried from the spec and Phase 0**
 
@@ -26,8 +26,8 @@ implemented and **awaiting owner review**. WP4+ is not authorized until the WP3 
 |---|---|---|---|
 | WP1 | Schema + migration | **Done — accepted by owner 2026-11-19** | Yes (see evidence below) |
 | WP2 | Backend data access (`MODEL_MAP` / `SEARCH_FIELDS`, repository parity) | **Done — accepted (covered by continuation)** | Yes |
-| WP3 | Services (`LearningTaxonomyService`, `QuestionPedagogyService`) | **Done — awaiting review** | Yes |
-| WP4 | Routes + permissions + backup | Not started | — |
+| WP3 | Services (`LearningTaxonomyService`, `QuestionPedagogyService`) | **Done — accepted (covered by continuation)** | Yes |
+| WP4 | Routes + permissions + backup | **Done — awaiting review** | Yes |
 | WP5 | Frontend (pedagogy panel, filters, proposal queue, labels/RTL) | Not started | — |
 | WP6 | Tests (validators, integration, scope, regression) | Not started | — |
 | WP7 | Docs + flags / completion report | Not started | — |
@@ -213,6 +213,122 @@ Two defects found and fixed during verification:
 
 ---
 
+## WP4 — Routes, permissions and backup
+
+### Deliverables
+
+**Permissions — `src/shared/permissions.js`** (catalog entries; `ROLE_PERMISSIONS` is derived, so the
+roles pick them up automatically through `permissionsInScope(scope)`):
+
+| id | scope | granted to |
+|---|---|---|
+| `school.learning.read` | SCHOOL | SUPER_ADMIN, ADMIN |
+| `school.learning.manage` | SCHOOL | SUPER_ADMIN, ADMIN |
+| `class.learning.read` | CLASS | TEACHER |
+| `class.learning.classify` | CLASS | TEACHER |
+
+Verified by resolving `ROLE_PERMISSIONS`: **admin** → `school.learning.read, school.learning.manage`;
+**teacher** → `class.learning.read, class.learning.classify`; **student** → none. No migration is needed
+because `RoleService.ensureSeeded()` mirrors the catalog into `RolePermission` at boot.
+
+**Boundary schemas — `src/shared/schemas/learning.schema.js`** (new). Zod schemas for every write
+payload, exported with their enum constants: `ObjectiveCreateSchema`, `ObjectiveUpdateSchema`
+(all-optional, `status` accepted only so the route can answer it with a clear 422), `ObjectiveFilterSchema`,
+`ObjectiveApproveSchema` (note optional), `ObjectiveRejectSchema` (note **required**), `CompetencyCreateSchema`,
+`CompetencyUpdateSchema`, `CompetencyFilterSchema`, `CompetencyLinkSchema`, `PrerequisiteCreateSchema`,
+`CriterionSchema`, `CriteriaSetSchema` (max 50 criteria, `source`, `mark_reviewed`).
+
+**Routes — `src/backend/routes/learning.routes.js`** (new), mounted at `app.use('/api/v1/learning', …)`
+in `server.js`. The router applies `requireAuth` + `enforceTenant` to everything, then one of three
+guards: `read` (`school.learning.read` \| `class.learning.read` \| either manage/classify),
+`write` (`school.learning.manage` \| `class.learning.classify`), `manage` (`school.learning.manage`
+only). A student token — which holds none of these — never reaches a service.
+
+| Method + path | Guard | Service call |
+|---|---|---|
+| `GET /bloom` | read | `listBloomDimensions()` |
+| `GET /objectives` | read + `ObjectiveFilterSchema` | `listObjectives()` (`?status=proposed` returns the queue) |
+| `GET /objectives/:id` | read | `getObjective()` |
+| `POST /objectives` | write | `createObjective()` (allows a teacher to propose when the school enables it) |
+| `PATCH /objectives/:id` | write | `updateObjective()` — `status:'archived'` is intercepted and dispatched to admin-only `archiveObjective()`; any other `status` **and** the approve/reject statuses are rejected 422 |
+| `POST /objectives/:id/approve` | manage | `approveObjective()` |
+| `POST /objectives/:id/reject` | manage | `rejectObjective()` |
+| `GET/POST /objectives/:id/competencies` | read / manage | `listObjectiveCompetencies()` / `linkCompetency()` |
+| `DELETE /objectives/:id/competencies/:competencyId` | manage | `unlinkCompetency()` |
+| `GET/POST /objectives/:id/prerequisites` | read / manage | `listPrerequisites()` / `addPrerequisite()` |
+| `DELETE /objectives/:id/prerequisites/:prerequisiteObjectiveId` | manage | `removePrerequisite()` |
+| `GET /competencies` | read + filter | `listCompetencies()` |
+| `POST /competencies` · `PATCH /competencies/:id` · `POST /competencies/:id/archive` | manage | `createCompetency()` / `updateCompetency()` / `archiveCompetency()` |
+| `GET/PUT /questions/:questionId/pedagogy` | read / write | `getQuestionPedagogy()` / `setCriteria()` |
+| `POST /questions/:questionId/pedagogy/criteria` · `DELETE …/criteria/:criterionId` · `DELETE …/pedagogy` | write | `addCriterion()` / `removeCriterion()` / `clearCriteria()` |
+| `POST /questions/:questionId/pedagogy/recompute` | manage | `recompute()` |
+
+The status interception is how the frozen spec's *"Archive remains `PATCH status='archived'`"* is
+honored without adding a duplicate archive endpoint or letting a teacher move `proposed → active`:
+archive is a management action there too, and every other status change is refused at the boundary
+instead of reaching `updateObjective`, which never touches status.
+
+**Wiring — `src/backend/container.js` and `src/backend/server.js`.** Both learning services are
+registered on the container (`learningTaxonomySvc`, `questionPedagogySvc`) with the audit service
+injected, and `server.js` calls `learningTaxonomySvc.ensureSeeded()` after the role seed, inside a
+`try/catch` so a catalog-sync failure is logged as a warning and **never fails boot** (the same
+pattern as the existing seed blocks).
+
+**Backup / restore.** The five taxonomy stores are now in **both** lists, so a snapshot round-trips
+them:
+
+- Export — `src/backend/routes/console.routes.js` → `EXPORT_TABLES`: `learning_objectives`,
+  `competencies`, `learning_objective_competencies`, `learning_prerequisites`,
+  `question_assessment_criteria`.
+- Import — `src/frontend/console/pages/settings/documents.js` → `IMPORT_ORDER`, same five, ordered
+  parents-before-children and with the criteria **after** `questions` (each criterion FKs a question).
+- Restore endpoints — `src/backend/routes/bulk.routes.js`: five `SANITIZERS` (uuid-checked ids/FKs via
+  `pickUuid`, string/int/bool/date coercion; a row with a missing or non-uuid required id is dropped
+  rather than corrupting an FK) and five `REQUIRED_FIELDS` entries:
+  `learning_objectives: [subject_id, code, statement]`, `competencies: [code, name]`,
+  `learning_objective_competencies: [objective_id, competency_id]`,
+  `learning_prerequisites: [objective_id, prerequisite_objective_id]`,
+  `question_assessment_criteria: [question_id, objective_id, bloom_dimension_id]`.
+- `bloom_dimensions` is deliberately **not** exported: it is a global seeded catalog, not organization
+  data, so it is re-seeded at boot on the target machine instead of being restored.
+
+The console bundle (`public/console-bundle.js` / `.css`) was rebuilt after the `documents.js` change, so
+the tracked artifact matches its source.
+
+### Verification
+
+Throwaway route + backup round-trip script against a temp DB (results copied here, script deleted):
+
+| Area | Checks |
+|---|---|
+| Auth + tenancy | unauthenticated → 401; student token → 403 on read **and** write; a second school's admin gets 404 on a foreign objective, competency link and question |
+| Objectives | teacher proposes (school setting OFF) → `proposed`; admin `?status=proposed` queue sees it; approve → `active`; reject without a note → 422; teacher cannot approve → 403; teacher edits own proposal; teacher edits another's → 404; `PATCH status='active'` → 422; `PATCH status='archived'` → archived, and by a teacher → 403 |
+| Competencies + links | create/list/patch/archive; primary-link conflict → 409; cross-subject link → 422; idempotent re-link; unlink |
+| Prerequisites | add, duplicate → 409, self-edge → 422, cycle → 422, remove |
+| Criteria | `PUT` valid set → `classified` with the correct cached primary Bloom; weight-sum ≠ 1 → 422; duplicate `criterion_key` → 422; foreign objective → 404; `POST` criterion then `DELETE` it re-derives; `DELETE …/pedagogy` → `unclassified`; `recompute` |
+| Backup round-trip | export → wipe → bulk restore reproduces all five tables with correct rows and counts |
+
+| Suite | Result |
+|---|---|
+| WP4 route + backup script (temp DB) | **64/64 pass** |
+| Full suite (`npx vitest run`) | **116 files / 1478 tests pass** |
+| `npm run build:console` | clean; bundle regenerated |
+
+Defect found and fixed during verification: the sanitizers' `pickUuid` rejected non-uuid fixture ids.
+Checked against the live `prisma/dev.db` — real `school`/`user`/`subject`/`question` ids **are** uuids,
+so `pickUuid` is correct for production data; the test fixtures were corrected to uuid-shaped ids, after
+which 64/64 passed.
+
+### Open items
+
+1. **`subjects` is not in the backup lists** (pre-existing, not introduced here). Restoring objectives or
+   criteria on a *different* machine therefore needs `subjects` to already exist — the same dependency
+   `categories` has today. Left as-is; fixing the subject export is its own change.
+2. Route-level integration tests (the script was throwaway) are **WP6** per the spec.
+3. AR/FR Bloom labels still need native review before pilot (WP7 gate).
+
+---
+
 ## Progress log
 
 ### 2026-11-19 — WP1 — schema + migration
@@ -250,6 +366,21 @@ Two defects found and fixed during verification:
   and fixed (partial-update field leakage; non-deterministic criteria order). Throwaway script deleted.
 - **Stopped for owner review.** No container wiring, routes, permissions or backup changes — those are
   WP4 and remain unauthorized.
+
+### 2026-11-19 — WP3 — accepted
+
+- WP3 accepted by the same continuation instruction that authorized WP4 ("ok continue").
+
+### 2026-11-19 — WP4 — routes, permissions and backup
+
+- Added the four `*.learning.*` permissions (derived into `ROLE_PERMISSIONS`), the Zod boundary schemas,
+  and `learning.routes.js` behind `requireAuth` + `enforceTenant` with read / write / manage guards.
+- Wired both services onto the container and added the boot `ensureSeeded()` (warn-only, cannot fail boot).
+- Added the five taxonomy stores to the backup export list, the import order and the bulk sanitizers /
+  required-field maps; `bloom_dimensions` stays a seeded global catalog and is not exported.
+- Verified with a temp-DB route + backup round-trip script (64 checks) plus the full suite (116 files /
+  1478 tests): all green. Rebuilt the console bundle. Throwaway script deleted.
+- **Stopped for owner review.** No frontend — WP5 remains unauthorized.
 
 ---
 

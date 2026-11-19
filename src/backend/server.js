@@ -214,6 +214,7 @@ import importsRoutes from './routes/imports.routes.js';
 import kidsRoutes from './routes/kids.routes.js';
 import kidsChampionshipsRoutes from './routes/kids-championships.routes.js';
 import devicesRoutes from './routes/devices.routes.js';
+import learningRoutes from './routes/learning.routes.js';
 
 // ── Inject APP_CONFIG into the served HTML via index.html ─────────────────
 // APP_CONFIG is delivered via an inline <script> prepended to the served
@@ -373,6 +374,7 @@ app.use('/api/v1/imports', importsRoutes);
 app.use('/api/v1/kids/championships', kidsChampionshipsRoutes);
 app.use('/api/v1/kids', kidsRoutes);
 app.use('/api/v1/devices', devicesRoutes);
+app.use('/api/v1/learning', learningRoutes);
 
 // ── Static Files (built frontend bundle + explicitly approved assets) ──────
 // Disable caching for HTML/JS entry points so dev edits reach the browser
@@ -538,6 +540,19 @@ const httpServer = tlsOpts ? https.createServer(tlsOpts, app) : http.createServe
 			logger.info(seeded, 'Role catalog synced');
 		} catch (seedErr) {
 			logger.warn({ err: seedErr }, 'Role catalog sync failed — continuing with the code map');
+		}
+
+		// Seed the global Bloom taxonomy (Phase 1). Idempotent upsert by stable
+		// id — no provider-specific SQL, so the same code runs on SQLite and
+		// PostgreSQL. Like the role sync, a failure must not stop the boot: the
+		// catalog is re-seeded on the next start and criteria validation reads
+		// the fixed id list, not the table.
+		try {
+			const { learningTaxonomySvc } = container;
+			const seeded = await learningTaxonomySvc.ensureSeeded();
+			logger.info(seeded, 'Bloom catalog synced');
+		} catch (seedErr) {
+			logger.warn({ err: seedErr }, 'Bloom catalog sync failed — continuing');
 		}
 
 		await initSocketServer(httpServer, {
