@@ -15,7 +15,7 @@ import './styles/console.css';
 
 import { loadSession, canAny, getState, setPeriod, reset } from './core/store.js';
 import { setUnauthorizedHandler } from './core/api.js';
-import { defineRoutes, start, setNavigationHandler, setContext, navigate, canGoBack, goBack, backTarget } from './core/router.js';
+import { defineRoutes, start, setNavigationHandler, setContext, navigate, canGoBack, goBack, backTarget, parseHash } from './core/router.js';
 import { renderShell, applyTheme } from './core/shell.js';
 import { buildPlaceIndex, runSearch } from './core/search.js';
 
@@ -32,13 +32,30 @@ import { healthPage } from './pages/health.js';
 import { settingsPage, SECTIONS } from './pages/settings/index.js';
 import { organizationDetailPage } from './pages/details/organization.js';
 import { userDetailPage } from './pages/details/user.js';
+import { learningHubPage } from './pages/learning/index.js';
+import { pedagogyQuestionsPage } from './pages/learning/questions.js';
+import { taxonomyPage } from './pages/learning/taxonomy.js';
+import { LEARNING_READ_PERMISSIONS } from './pages/learning/flags.js';
 
+/**
+ * The navigation.
+ *
+ * The Learning entry is deliberately NOT gated on `learning.adaptive.enabled`:
+ * with the master switch off, every learning PAGE renders only the "not
+ * enabled" state plus the administrator's toggle. Hiding the entry as well
+ * would hide the switch itself — and a capability nobody can turn on from the
+ * interface is not "off by default", it is unreachable.
+ */
 const NAV = [
 	{ id: 'overview', path: '/', title: 'Overview', icon: 'overview', permission: ['platform.console', 'school.console'] },
 	// Analytics: the teaching view first (what is happening in classrooms),
 	// then the platform adoption view (how the product is being used).
 	{ id: 'teaching', path: '/teaching', title: 'Teaching & Learning', icon: 'analytics', group: 'Analytics', permission: ['platform.analytics.read', 'school.analytics.read'] },
 	{ id: 'analytics', path: '/analytics', title: 'Platform Analytics', icon: 'analytics', group: 'Analytics', permission: ['platform.analytics.read', 'school.analytics.read'] },
+	// The Phase 1 learning taxonomy and question classification. Administrators
+	// and teachers both reach it; each page decides what the role may do, and
+	// the API stays the final authority.
+	{ id: 'learning', path: '/learning', title: 'Learning', icon: 'learning', group: 'Teaching', permission: LEARNING_READ_PERMISSIONS },
 	// Manage: everything that changes the installation rather than reports on it.
 	{ id: 'organizations', path: '/organizations', title: 'Organizations', icon: 'organizations', group: 'Manage', permission: ['platform.organizations.read', 'school.profile.read'] },
 	{ id: 'users', path: '/users', title: 'Users & Access', icon: 'users', group: 'Manage', permission: ['platform.users.read', 'school.users.read'] },
@@ -64,6 +81,9 @@ const PAGES = [
 	auditPage,
 	healthPage,
 	settingsPage,
+	learningHubPage,
+	pedagogyQuestionsPage,
+	taxonomyPage,
 ];
 
 const bootRoot = document.getElementById('ac-boot');
@@ -513,6 +533,24 @@ async function boot() {
 	}
 
 	wireGlobalSearch();
+
+	/**
+	 * Where a session that is NOT an administrator belongs.
+	 *
+	 * A teacher reaches the console for exactly one reason: the learning
+	 * taxonomy. Every other section is administrator-gated, so the default
+	 * address ('#/', the overview) would only ever answer "access restricted".
+	 * Opening the console therefore lands a teacher on the Learning hub, which
+	 * decides for itself whether the surfaces are enabled.
+	 */
+	function landOnFirstSection() {
+		const canOpenOverview = context.canAny(['platform.console', 'school.console']);
+		if (canOpenOverview) return;
+		const canOpenLearning = context.canAny(LEARNING_READ_PERMISSIONS);
+		if (!canOpenLearning) return;
+		if (parseHash().path === '/') navigate('/learning', { replace: true });
+	}
+	landOnFirstSection();
 
 	start();
 

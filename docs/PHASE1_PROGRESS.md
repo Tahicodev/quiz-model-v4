@@ -8,7 +8,9 @@ this file wins.
 
 **Branch:** `feature/adaptive-learning-phase1`
 **Authorization:** WP1 accepted 2026-11-19; WP2 and WP3 accepted by the same "continue" instruction;
-WP4 implemented and **awaiting owner review**. WP5+ is not authorized until the WP4 review.
+WP4 accepted; **WP5 authorized** by the owner's decisions (console SPA page · gated by
+`learning.adaptive.enabled` + an admin toggle · objectives + competencies + proposal queue). WP5 is
+implemented and **awaiting owner review**. WP6+ is not authorized until that review.
 
 **Ground rules carried from the spec and Phase 0**
 
@@ -27,8 +29,8 @@ WP4 implemented and **awaiting owner review**. WP5+ is not authorized until the 
 | WP1 | Schema + migration | **Done — accepted by owner 2026-11-19** | Yes (see evidence below) |
 | WP2 | Backend data access (`MODEL_MAP` / `SEARCH_FIELDS`, repository parity) | **Done — accepted (covered by continuation)** | Yes |
 | WP3 | Services (`LearningTaxonomyService`, `QuestionPedagogyService`) | **Done — accepted (covered by continuation)** | Yes |
-| WP4 | Routes + permissions + backup | **Done — awaiting review** | Yes |
-| WP5 | Frontend (pedagogy panel, filters, proposal queue, labels/RTL) | Not started | — |
+| WP4 | Routes + permissions + backup | **Done — accepted by owner 2026-11-19** | Yes |
+| WP5 | Frontend (pedagogy panel, filters, proposal queue, labels/RTL) | **Done — awaiting review** | Yes |
 | WP6 | Tests (validators, integration, scope, regression) | Not started | — |
 | WP7 | Docs + flags / completion report | Not started | — |
 
@@ -329,6 +331,98 @@ which 64/64 passed.
 
 ---
 
+## WP5 — Frontend
+
+**Scope (authorized):** the Question Pedagogy panel, the objective/Bloom/pedagogy-status filters, bulk
+classify, the admin proposal queue, the EN/FR/AR learning label dictionary and RTL `dir` on the
+learning-panel root only. **No AI controls** (that is Phase 6).
+
+### Deliverables
+
+**New console pages — `src/frontend/console/pages/learning/`** (all under the console SPA, no parallel UI):
+
+| File | Responsibility |
+|---|---|
+| `labels.js` | The learning label dictionary in EN/FR/AR (~250 keys) plus `LANGUAGES`, `dirFor`, `getLanguage`/`setLanguage` (persisted per browser in `localStorage`, display preference only — never a source of truth), `t`/`translator`, `pedagogyStatusLabel`, `objectiveStatusLabel`. |
+| `flags.js` | The Phase-1 flag client: `ADAPTIVE_SETTING_KEY` (`learning.adaptive.enabled`), the read/write/manage permission sets, `loadFlags`/`getFlags`/`resetFlags`, `isAdaptiveEnabled`, `teacherCreationEnabled`, and `setAdaptiveEnabled` (writes through the admin-only `PATCH /settings/:key`). |
+| `common.js` | Shared shell for the three pages: `learningShell`/`bindLearningShell` (the `dir` root + language switch), `ensureEnabled` (fails **closed** when the flag cannot be read), `disabledBody`/`bindEnableToggle`, `fetchBloom`, `bloomLabel`/`bloomOptions`/`bloomById`, `pedagogyChip`/`objectiveChip`, `renderLoadError`/`renderLoading`. |
+| `index.js` | `learningHubPage` — the section hub. Four KPI cards (objectives, proposals, competencies, questions) drawn from one `Promise.all`; the disabled-state panel with the admin-only enable toggle. |
+| `questions.js` | `pedagogyQuestionsPage` — the question list with search, **objective / Bloom / pedagogy-status** filters, server-side paging, row selection, a per-row classify action and the bulk-classify entry point. |
+| `pedagogy-editor.js` | `openPedagogyEditor` — the criteria modal: one row per criterion (objective + Bloom + competency + weight + `criterion_key` + rubric), a live weight total that disables Save until it is 1.00, a `mark_reviewed` checkbox and Clear. |
+| `bulk-classify.js` | `openBulkClassify` — one objective + one Bloom + weight 1.00 applied to the selection, **sequentially**, with an `x / n` progress line and a per-question failure list on partial success. |
+| `forms.js` | `openObjectiveForm` / `openCompetencyForm` / `openCompetencyLinkForm` / `openPrerequisiteForm` — the taxonomy create/edit dialogs (subject-dependent category/parent repaint; `err.fields` rendered as `key: message`). |
+| `taxonomy.js` | `taxonomyPage` — the objective list, the competency list and the **proposal queue** (tabs, admin-only), plus the objective detail view with its competency links, prerequisites, unlink/remove and the approve/reject review dialog (reject requires a note). |
+
+**Modified console files**
+
+- `main.js` — imports the hub + two pages; a Learning entry in `NAV` (group *Teaching*) and the three
+  pages in `PAGES`; `landOnFirstSection()` redirects a teacher (who holds a learning permission but not
+  `platform.console`/`school.console`) from `#/` to `#/learning`, so they never land on *Access
+  restricted*.
+- `core/shell.js` — one new `learning` icon.
+- `styles/console.css` — the `.learning-*` block (panel, status chips, criteria editor, weight total,
+  tabs, detail, question cell, selection row, bulk drawer, dialog form). Every rule uses **logical**
+  properties (`inline-start/end`, `block-start/end`) so the RTL `dir` root lays out without a second
+  stylesheet.
+
+**Additive backend plumbing the frontend needed** (read-only; cannot widen any caller's scope)
+
+| Change | File |
+|---|---|
+| `GET /learning/flags` → `{adaptive_enabled, teacher_objective_creation}` | `src/backend/routes/learning.routes.js` |
+| `GET /learning/objectives/:id/questions` — the objective filter resolves to criteria rows server-side | same |
+| `QuestionFilterSchema` gains `pedagogy_status`, `primary_bloom_dimension_id`, `ids` (all optional) | `src/shared/schemas/question.schema.js` |
+| `GET /questions?ids=a,b,c` → `id IN (...)` (capped at 500), inside the **same** school-scoped query | `src/backend/routes/questions.routes.js` |
+
+The objective filter is applied **server-side** (via `ids`) rather than by re-filtering in the browser,
+so paging and the total stay the server's and the id set can never widen what the caller may read.
+
+**Console gate extension — `src/backend/routes/console.routes.js`** (the one boundary the change
+touches). The console router's `requirePermission('platform.console', { allow: [...] })` gains the four
+learning permissions on its **allow** list, because teachers author the taxonomy on the console SPA and
+otherwise could not reach it. It is a gate, not a grant: `/console/session` becomes readable for a
+teacher (the shell needs it), but every console route keeps its own permission check, the navigation is
+built from the permission set, and a teacher still holds **no** `school.*` / `platform.*` permission —
+so every management surface refuses them.
+
+**Test updated to pin the narrower, correct boundary — `tests/integration/console.permissions.test.js`.**
+The old `refuses a teacher` expectation is now wrong by design, so it was replaced by
+`admits a teacher ONLY for the learning surface`, which asserts the session is readable, contains
+`class.learning.read`, contains **no** `school.*` / `platform.*` permission, and that `/console/users`
+and `/console/organizations` still answer **403**. The student and unauthenticated cases are unchanged.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `node --check` on every new/modified frontend + backend module | clean |
+| Console gate re-read (`console.routes.js`) and flag/objective-questions routes re-read | present, as described |
+| `npm run build:console` | clean — `public/console-bundle.js` 325.6 kb, `.css` 45.2 kb |
+| Full suite (`npx vitest run`) | **116 files / 1478 tests pass** (after the teacher-boundary test was corrected) |
+
+### Deliberate limitations (reported, not hidden)
+
+1. **Per-row criteria counts are not shown.** Criteria are not on the question row, and filling them in
+   would be an N+1 call per page; the list shows the *derived* `pedagogy_status` chip instead, which is
+   the same information state at a fraction of the cost.
+2. **The pedagogy/taxonomy dialogs are not RTL.** The frozen spec confines `dir` to the learning-panel
+   root, so the modals render LTR; the panel around them switches direction.
+3. **FR/AR strings are best-effort** and still need native review (the WP7 localization gate, the same
+   one flagged for the Bloom labels in WP3).
+4. **The Learning navigation entry is deliberately not hidden when the flag is off.** With
+   `learning.adaptive.enabled` OFF the pages render only the disabled state plus the admin toggle;
+   hiding the entry would make the switch unreachable — i.e. the capability would be off *and*
+   impossible to turn on from the UI.
+
+### Open items
+
+- Route/UI tests for the learning surface are **WP6** per the spec.
+- The gate widening above is called out for the owner's review specifically: it is the only place WP5
+  changes an existing access boundary, and it is pinned by the updated integration test.
+- AR/FR strings pending native review (WP7).
+
+---
+
 ## Progress log
 
 ### 2026-11-19 — WP1 — schema + migration
@@ -381,6 +475,28 @@ which 64/64 passed.
 - Verified with a temp-DB route + backup round-trip script (64 checks) plus the full suite (116 files /
   1478 tests): all green. Rebuilt the console bundle. Throwaway script deleted.
 - **Stopped for owner review.** No frontend — WP5 remains unauthorized.
+
+### 2026-11-19 — WP4 — accepted; WP5 authorized
+
+- Owner accepted WP4 and authorized WP5 with three decisions: the surface is a **new console SPA page**;
+  the capability is gated by **`learning.adaptive.enabled` plus an admin toggle**; the scope is
+  **objectives + competencies + proposal queue**.
+
+### 2026-11-19 — WP5 — frontend
+
+- Added the learning section to the console SPA: the label dictionary (EN/FR/AR + RTL helper), the flag
+  client, the section hub with the admin enable toggle, the question-pedagogy list (objective / Bloom /
+  status filters, server-side paging, row selection), the criteria editor, bulk classify, the taxonomy
+  page with the admin proposal queue, and the taxonomy dialogs. No AI controls.
+- Added the three additive read/filter affordances the UI needed (`GET /learning/flags`,
+  `GET /learning/objectives/:id/questions`, the `pedagogy_status` / `primary_bloom_dimension_id` / `ids`
+  question filters) and the `ids → id IN (...)` handling in the questions route.
+- Widened the console gate's allow list by exactly the four learning permissions so a teacher can reach
+  the taxonomy; corrected the pinned teacher-boundary integration test to assert the new — narrower —
+  boundary (session readable, no `school.*` / `platform.*`, management surfaces still 403).
+- Verified: `node --check` on every touched module; `npm run build:console` clean; full suite **116 files
+  / 1478 tests pass**.
+- **Stopped for owner review.** No WP6 tests, no AI work — both remain unauthorized.
 
 ---
 

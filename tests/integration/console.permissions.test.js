@@ -4,7 +4,10 @@
  * The console is the only surface that can reach across organizations. These
  * tests pin the boundaries that matter:
  *
- *   1. A teacher or a student cannot open the console at all.
+ *   1. A student cannot open the console at all. A TEACHER is admitted to the
+ *      console shell (Phase 1: the learning taxonomy is authored on the
+ *      console SPA) but holds nothing beyond the learning permissions, and
+ *      every management surface still refuses them.
  *   2. An organization administrator sees ONLY their own organization — for
  *      the user list, the organization list, the audit trail and the overview.
  *   3. A platform administrator sees every organization, and may NARROW a
@@ -79,10 +82,26 @@ async function login(username) {
 const as = (token) => ({ Authorization: `Bearer ${token}` });
 
 describe('Console access control', () => {
-	it('refuses a teacher', async () => {
+	it('admits a teacher ONLY for the learning surface', async () => {
+		// Phase 1 widened the console gate by exactly the learning permissions, so
+		// that a teacher can author the taxonomy. That exception must stay narrow:
+		// the session is readable (the shell needs it) but the teacher still holds
+		// no organization- or platform-scope permission, and the console's
+		// management surfaces — which all require one — refuse them.
 		const token = await login('teacher-a');
-		const res = await request(app).get('/api/v1/console/session').set(as(token));
-		expect(res.status).toBe(403);
+		const session = await request(app).get('/api/v1/console/session').set(as(token));
+		expect(session.status).toBe(200);
+		expect(session.body.permissions).toContain('class.learning.read');
+		for (const permission of session.body.permissions) {
+			expect(permission).not.toMatch(/^(school|platform)\./);
+		}
+
+		const users = await request(app).get('/api/v1/console/users').set(as(token));
+		expect(users.status).toBe(403);
+		const organizations = await request(app)
+			.get('/api/v1/console/organizations')
+			.set(as(token));
+		expect(organizations.status).toBe(403);
 	});
 
 	it('refuses a student', async () => {

@@ -38,7 +38,14 @@ function assertOwnership(row, user) {
 router.get('/', requireRole([ROLES.ADMIN, ROLES.SUPER_ADMIN, ROLES.TEACHER]), validateQuery(QuestionFilterSchema), async (req, res, next) => {
   try {
     const { questionSvc } = getContainer();
-    const { limit, offset, orderBy, direction, search, created_by, ...filters } = req.query;
+    const { limit, offset, orderBy, direction, search, created_by, ids, ...filters } = req.query;
+    // An explicit id set (Phase 1: the pedagogy view's objective filter) is a
+    // plain `id IN (...)` clause. It narrows the SAME school-scoped query, so
+    // it can never widen what the caller is allowed to read.
+    if (ids) {
+      const list = String(ids).split(',').map((value) => value.trim()).filter(Boolean).slice(0, 500);
+      filters.id = { in: list };
+    }
     // Teachers see only their own rows. Admins see all, optionally
     // narrowed to one author via ?created_by=.
     const or = req.user.role === ROLES.TEACHER

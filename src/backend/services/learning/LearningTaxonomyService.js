@@ -28,6 +28,15 @@ import { findCycle } from '../../../shared/learning/prerequisite-validator.js';
 /** Setting that decides whether teachers create objectives directly (D2). */
 export const TEACHER_OBJECTIVE_CREATION_SETTING = 'learning.teacher_objective_creation';
 
+/**
+ * Master switch for the Phase 1 learning surfaces (default OFF).
+ *
+ * The API stays reachable behind its permissions — this flag only decides
+ * whether the taxonomy and pedagogy UI is shown at all. It is surfaced to the
+ * client through `GET /learning/flags` and is never trusted for authorization.
+ */
+export const ADAPTIVE_ENABLED_SETTING = 'learning.adaptive.enabled';
+
 export const OBJECTIVE_STATUS = Object.freeze({
   PROPOSED: 'proposed',
   ACTIVE: 'active',
@@ -133,6 +142,20 @@ export class LearningTaxonomyService {
     return String(row.value).trim().toLowerCase() === 'true';
   }
 
+  /**
+   * @returns {Promise<boolean>} true only when the school explicitly opts in.
+   * Absent or malformed → false (the Phase 1 surfaces stay hidden).
+   */
+  async isAdaptiveEnabled(schoolId) {
+    const { data } = await this.#repo.getAll('settings', {
+      filters: { school_id: schoolId, key: ADAPTIVE_ENABLED_SETTING },
+      limit: 1,
+    });
+    const row = (data || [])[0];
+    if (!row) return false; // default OFF
+    return String(row.value).trim().toLowerCase() === 'true';
+  }
+
   // ─── Shared loaders (tenant-scoped) ──────────────────────────────────────
 
   async #getScopedRow(table, schoolId, id, entity) {
@@ -223,6 +246,25 @@ export class LearningTaxonomyService {
       this.listPrerequisites(user, { objectiveId: id }),
     ]);
     return { ...objective, competencies: links, prerequisites: prerequisites.data };
+  }
+
+  /**
+   * The questions classified against one objective, as criteria rows.
+   *
+   * Read-only support for the pedagogy view's objective filter: a criterion is
+   * the join between a question and an objective, so this is a plain filtered
+   * read of that table — no question content is returned, only the mapping the
+   * caller needs to narrow a list they already hold.
+   */
+  async listObjectiveQuestions(user, objectiveId, { limit = 500, offset = 0 } = {}) {
+    await this.#loadObjective(user.school_id, objectiveId);
+    return this.#repo.getAll('question_assessment_criteria', {
+      filters: { school_id: user.school_id, objective_id: objectiveId },
+      limit,
+      offset,
+      orderBy: 'created_at',
+      direction: 'asc',
+    });
   }
 
   /**

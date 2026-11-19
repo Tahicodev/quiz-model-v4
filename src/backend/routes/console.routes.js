@@ -37,11 +37,25 @@ const router = Router();
 // Every console route requires a valid token and a resolved scope.
 router.use(requireAuth, resolveScope);
 
-// The console is for platform and organization administrators only. Teachers
-// keep the teacher session; students keep the student workspace.
+// The console is for platform and organization administrators. Teachers keep
+// the teacher session; students keep the student workspace.
+//
+// ONE exception: the Phase 1 learning surfaces (taxonomy + question pedagogy)
+// are authored by teachers, so a caller holding a learning permission is
+// admitted PAST this gate. It is a gate, not a grant — every console route
+// still carries its own permission check, the navigation is built from the
+// session's permission set, and a teacher holds none of the other console
+// permissions. The result is a teacher who sees exactly one destination
+// (Learning) and is refused everywhere else.
 router.use(
 	requirePermission('platform.console', {
-		allow: ['school.console'],
+		allow: [
+			'school.console',
+			'school.learning.read',
+			'school.learning.manage',
+			'class.learning.read',
+			'class.learning.classify',
+		],
 	}),
 );
 

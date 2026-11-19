@@ -63,6 +63,31 @@ router.get('/bloom', requireLearningRead, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── Feature flags ──────────────────────────────────────────────────────────
+
+/**
+ * The Phase 1 flags, readable by anyone who may read the taxonomy.
+ *
+ * The settings themselves are admin-visibility rows, so a teacher cannot read
+ * them through `/settings/*`; the UI still needs to know whether the surfaces
+ * are enabled and whether an objective they create is published or proposed.
+ * This exposes the two booleans and nothing else — the write path stays
+ * `PATCH /settings/:key`, which is admin-only.
+ */
+router.get('/flags', requireLearningRead, async (req, res, next) => {
+  try {
+    const { learningTaxonomySvc } = getContainer();
+    const [adaptiveEnabled, teacherObjectiveCreation] = await Promise.all([
+      learningTaxonomySvc.isAdaptiveEnabled(req.schoolId),
+      learningTaxonomySvc.isTeacherCreationEnabled(req.schoolId),
+    ]);
+    res.json({
+      adaptive_enabled: adaptiveEnabled,
+      teacher_objective_creation: teacherObjectiveCreation,
+    });
+  } catch (err) { next(err); }
+});
+
 // ─── Objectives ─────────────────────────────────────────────────────────────
 
 router.get('/objectives', requireLearningRead, validateQuery(ObjectiveFilterSchema), async (req, res, next) => {
@@ -86,6 +111,20 @@ router.get('/objectives/:id', requireLearningRead, async (req, res, next) => {
   try {
     const { learningTaxonomySvc } = getContainer();
     res.json(await learningTaxonomySvc.getObjective(req.user, req.params.id));
+  } catch (err) { next(err); }
+});
+
+/**
+ * The criteria rows that map questions to this objective — the pedagogy view's
+ * objective filter reads the returned question ids. Three segments, so it can
+ * never be shadowed by `/objectives/:id` above.
+ */
+router.get('/objectives/:id/questions', requireLearningRead, async (req, res, next) => {
+  try {
+    const { learningTaxonomySvc } = getContainer();
+    const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 500));
+    const offset = Math.max(0, Number(req.query.offset) || 0);
+    res.json(await learningTaxonomySvc.listObjectiveQuestions(req.user, req.params.id, { limit, offset }));
   } catch (err) { next(err); }
 });
 

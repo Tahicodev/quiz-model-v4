@@ -2960,6 +2960,372 @@ button.ac-kpi:hover {
 	color: var(--ac-brand);
 }
 
+/* ── Learning (Phase 1) ─────────────────────────────────────────────────────
+ *
+ * The learning surface is the one part of the console that renders in the
+ * reader's own direction: its panel root carries `dir`, set from the panel's
+ * language selector. Everything here therefore uses LOGICAL properties
+ * (inline-start/end, block-start/end) so the same rules serve LTR and RTL
+ * without a second stylesheet.
+ */
+
+.learning-panel {
+	display: grid;
+	gap: 16px;
+	text-align: start;
+	padding: 18px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius-lg);
+	background: var(--ac-surface);
+}
+
+.learning-panel__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.learning-panel__lang {
+	max-width: 200px;
+}
+
+.learning-panel__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.learning-panel__body {
+	display: grid;
+	gap: 16px;
+}
+
+.learning-panel__status-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.learning-panel__stamp {
+	margin: 0;
+	font-size: var(--ac-fs-xs);
+	color: var(--ac-text-muted);
+}
+
+.learning-panel__toggle {
+	margin-top: 12px;
+}
+
+.learning-panel__fact {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	font-size: var(--ac-fs-sm);
+}
+
+.learning-panel__fact-label {
+	color: var(--ac-text-muted);
+}
+
+.learning-panel__footer {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+}
+
+.learning-panel__footer-left {
+	margin-inline-end: auto;
+}
+
+/* Classification pills. The status is DERIVED from the criteria by the
+   server; the colour only repeats what the label already says. */
+.learning-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: var(--ac-fs-2xs);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	white-space: nowrap;
+	background: var(--ac-surface-3);
+	color: var(--ac-text-muted);
+}
+
+.learning-chip--unclassified {
+	background: var(--ac-surface-3);
+	color: var(--ac-text-muted);
+}
+
+.learning-chip--partial {
+	background: var(--ac-warning-soft);
+	color: var(--ac-warning);
+}
+
+.learning-chip--classified {
+	background: var(--ac-success-soft);
+	color: var(--ac-success);
+}
+
+.learning-chip--needs_review {
+	background: var(--ac-danger-soft);
+	color: var(--ac-danger);
+}
+
+.learning-chip--obj-proposed {
+	background: var(--ac-warning-soft);
+	color: var(--ac-warning);
+}
+
+.learning-chip--obj-active {
+	background: var(--ac-success-soft);
+	color: var(--ac-success);
+}
+
+.learning-chip--obj-rejected {
+	background: var(--ac-danger-soft);
+	color: var(--ac-danger);
+}
+
+.learning-chip--obj-archived {
+	background: var(--ac-surface-3);
+	color: var(--ac-text-subtle);
+}
+
+/* ── Criteria editor ─────────────────────────────────────────────────────── */
+
+.learning-criteria {
+	display: grid;
+	gap: 14px;
+}
+
+.learning-criteria__rows {
+	display: grid;
+	gap: 12px;
+}
+
+.learning-criteria__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.learning-criterion {
+	display: grid;
+	gap: 10px;
+	padding: 12px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface-2);
+}
+
+.learning-criterion__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.learning-criterion__key {
+	font-size: var(--ac-fs-2xs);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--ac-text-subtle);
+}
+
+.learning-criterion__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+	gap: 10px;
+}
+
+/* The live weight total: the one number that decides whether the set can be
+   saved. It states the rule it enforces ("x / 1.00") rather than a verdict. */
+.learning-weightsum {
+	font-size: var(--ac-fs-sm);
+	font-variant-numeric: tabular-nums;
+	color: var(--ac-text-muted);
+}
+
+.learning-weightsum.is-complete {
+	color: var(--ac-success);
+	font-weight: 600;
+}
+
+.learning-weightsum.is-incomplete {
+	color: var(--ac-warning);
+	font-weight: 600;
+}
+
+/* ── Taxonomy ────────────────────────────────────────────────────────────── */
+
+.learning-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	padding: 4px;
+	border-radius: var(--ac-radius);
+	background: var(--ac-surface-3);
+}
+
+.learning-tab {
+	border: 0;
+	background: transparent;
+	padding: 6px 12px;
+	border-radius: var(--ac-radius-sm);
+	font-size: var(--ac-fs-sm);
+	font-weight: 500;
+	color: var(--ac-text-muted);
+	cursor: pointer;
+}
+
+.learning-tab.is-active {
+	background: var(--ac-surface);
+	color: var(--ac-text);
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+
+.learning-detail {
+	display: grid;
+	gap: 10px;
+	padding: 16px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius-lg);
+	background: var(--ac-surface);
+}
+
+.learning-detail__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.learning-detail__code {
+	font-size: var(--ac-fs-lg);
+	font-weight: 600;
+}
+
+.learning-detail__statement {
+	margin: 0;
+	font-size: var(--ac-fs-base);
+	line-height: 1.5;
+}
+
+.learning-detail__description {
+	margin: 0;
+	font-size: var(--ac-fs-sm);
+	color: var(--ac-text-muted);
+	line-height: 1.55;
+}
+
+.learning-detail__meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 14px;
+	margin: 0;
+	font-size: var(--ac-fs-xs);
+	color: var(--ac-text-muted);
+}
+
+/* ── Question list ───────────────────────────────────────────────────────── */
+
+.learning-question {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.learning-question__text {
+	font-weight: 500;
+}
+
+.learning-question__type {
+	font-size: var(--ac-fs-2xs);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--ac-text-subtle);
+}
+
+.learning-col-select {
+	width: 34px;
+}
+
+.learning-col-actions {
+	width: 1%;
+	white-space: nowrap;
+	text-align: end;
+}
+
+.ac-table tbody tr.is-selected {
+	background: var(--ac-brand-soft);
+}
+
+/* ── Bulk classify ───────────────────────────────────────────────────────── */
+
+.learning-bulk {
+	display: grid;
+	gap: 14px;
+}
+
+.learning-bulk__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+	gap: 12px;
+}
+
+.learning-bulk__progress {
+	font-size: var(--ac-fs-sm);
+	color: var(--ac-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.learning-bulk__failures {
+	display: grid;
+	gap: 8px;
+}
+
+.learning-bulk__list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: grid;
+	gap: 6px;
+	max-height: 220px;
+	overflow: auto;
+	font-size: var(--ac-fs-xs);
+	color: var(--ac-text-muted);
+}
+
+.learning-bulk__list li {
+	padding-block: 6px;
+	border-block-start: 1px solid var(--ac-border);
+}
+
+/* ── Dialog forms ────────────────────────────────────────────────────────── */
+
+.ac-form {
+	display: grid;
+	gap: 12px;
+}
+
+.ac-form__grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 12px;
+}
+
+.ac-muted {
+	color: var(--ac-text-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
