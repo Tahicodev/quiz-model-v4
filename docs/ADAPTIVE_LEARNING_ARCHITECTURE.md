@@ -2925,6 +2925,9 @@ competencies: 'competency',
 learning_objective_competencies: 'learningObjectiveCompetency',
 learning_prerequisites: 'learningPrerequisite',
 question_assessment_criteria: 'questionAssessmentCriterion',
+// Phase 1: the global Bloom catalog is reachable through the generic repo like
+// every other table, so it gets a mapping too (it carries no school_id).
+bloom_dimensions: 'bloomDimension',
 // question_classification_suggestions: deferred to Phase 6 (not in Phase 1)
 // question_classification_suggestions: 'questionClassificationSuggestion',
 assessment_blueprints: 'assessmentBlueprint',

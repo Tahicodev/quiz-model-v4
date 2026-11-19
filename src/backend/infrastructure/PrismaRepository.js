@@ -61,6 +61,14 @@ const MODEL_MAP = {
 	user_permission_overrides: 'userPermissionOverride',
 	// NOTE: Prisma camelCases "AIConfig" to "aIConfig" on the client delegate.
 	ai_configs: 'aIConfig',
+	// Learning taxonomy (Phase 1). bloom_dimensions is the global catalog
+	// (no school_id); the other five are tenant-scoped.
+	bloom_dimensions: 'bloomDimension',
+	learning_objectives: 'learningObjective',
+	competencies: 'competency',
+	learning_objective_competencies: 'learningObjectiveCompetency',
+	learning_prerequisites: 'learningPrerequisite',
+	question_assessment_criteria: 'questionAssessmentCriterion',
 };
 
 /**
@@ -82,6 +90,12 @@ const SEARCH_FIELDS = {
 	tournament: ['name', 'description'],
 	setting: ['key'],
 	kidsGame: ['name', 'description', 'subject'],
+	// Learning taxonomy (Phase 1). The link/prerequisite tables carry no
+	// free-text column worth searching, so they are intentionally absent.
+	bloomDimension: ['key', 'name'],
+	learningObjective: ['code', 'statement', 'description'],
+	competency: ['code', 'name', 'description'],
+	questionAssessmentCriterion: ['criterion_key'],
 };
 
 const DEFAULT_ORDER_BY = {
@@ -111,6 +125,9 @@ const DEFAULT_ORDER_BY = {
 	settings: 'updated_at',
   	audit_logs: 'occurred_at',
 	refresh_tokens: 'created_at',
+	// Learning taxonomy (Phase 1): display order is curated, not chronological.
+	bloom_dimensions: 'order_index',
+	learning_objectives: 'order_index',
 };
 
 export class PrismaRepository extends IStorageRepository {

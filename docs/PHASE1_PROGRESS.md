@@ -23,8 +23,8 @@ this file wins.
 
 | WP | Scope | Status | Verified |
 |---|---|---|---|
-| WP1 | Schema + migration | **Done — awaiting review** | Yes (see evidence below) |
-| WP2 | Backend data access (`MODEL_MAP` / `SEARCH_FIELDS`, repository parity) | Not started | — |
+| WP1 | Schema + migration | **Done — accepted by owner 2026-11-19** | Yes (see evidence below) |
+| WP2 | Backend data access (`MODEL_MAP` / `SEARCH_FIELDS`, repository parity) | **Done — awaiting review** | Yes |
 | WP3 | Services (`LearningTaxonomyService`, `QuestionPedagogyService`) | Not started | — |
 | WP4 | Routes + permissions + backup | Not started | — |
 | WP5 | Frontend (pedagogy panel, filters, proposal queue, labels/RTL) | Not started | — |
@@ -92,17 +92,74 @@ seeded idempotently at runtime by `LearningTaxonomyService.ensureSeeded()` (WP3)
 
 ---
 
+## WP2 — Backend data access
+
+### Deliverables
+
+- `src/backend/infrastructure/PrismaRepository.js`
+  - `MODEL_MAP` +6: `bloom_dimensions: 'bloomDimension'` (global catalog), `learning_objectives`,
+    `competencies`, `learning_objective_competencies`, `learning_prerequisites`,
+    `question_assessment_criteria`.
+  - `SEARCH_FIELDS` +4: `bloomDimension: [key, name]`, `learningObjective: [code, statement, description]`,
+    `competency: [code, name, description]`, `questionAssessmentCriterion: [criterion_key]`.
+    The link and prerequisite tables carry no free-text column, so they are intentionally absent.
+  - `DEFAULT_ORDER_BY` +2: `bloom_dimensions` and `learning_objectives` order by `order_index`;
+    every other new table falls back to its `created_at`.
+- `docs/ADAPTIVE_LEARNING_ARCHITECTURE.md` §I.3 — added the `bloom_dimensions` mapping so the
+  catalog is reachable through the generic repository like every other table.
+- `ApiRepository` unchanged by design: it is table-agnostic (`/${table}`), so the new tables become
+  reachable from the frontend once WP4 adds the routes. `IStorageRepository` needs no new method —
+  the generic contract already covers them.
+
+### Verification
+
+Temp-DB round-trip through the generic repository (22 checks, all pass): all six tables resolve;
+Bloom orders by `order_index` and searches on `key`/`name`; objective defaults (`status='active'`,
+`order_index=0`) and search+filter work; `update` to `proposed` works; unique constraints hold on
+`(objective, competency)` and `(objective, prerequisite)`; `Question.pedagogy_status` defaults to
+`unclassified`; criteria defaults (`main` / `manual` / `approved`); a `Question` delete **cascades**
+its criteria; a Bloom row referenced by a criterion cannot be deleted (**Restrict**); once free, its
+delete clears the objective's cached Bloom id (**SetNull**).
+
+| Suite | Result |
+|---|---|
+| `tests/integration/PrismaRepository.contract.test.js` | 13/13 pass |
+| Full suite (`npx vitest run`) | **116 files / 1478 tests pass** |
+
+### Open items
+
+1. **EPERM is benign.** The failed engine-DLL rename is Prisma's last step: the generated client
+   (`node_modules/.prisma/client/index.js` + `index.d.ts`) *was* rewritten and does carry the six new
+   models, and the existing engine binary is the correct version. WP2 is therefore not blocked.
+   A clean `npx prisma generate` with the dev server (port 3000, PID holds the DLL) stopped is still
+   worth doing before release.
+
+---
+
 ## Progress log
 
 ### 2026-11-19 — WP1 — schema + migration
 
 - Implemented the additive `Question` pedagogy fields and the six taxonomy models; no suggestion table.
-- Wrote and committed the `learning_taxonomy` migration; no seed SQL (portability).
+- Wrote the `learning_taxonomy` migration; no seed SQL (portability).
 - Verified: `prisma validate` clean; regenerated diff byte-identical to the migration; migration applied
   successfully to a copy of the live snapshot **and** to a fresh empty database; all 10,489 questions
   preserved and left `unclassified`; FK and integrity checks clean.
 - Reported the Prisma diff, the migration SQL and the apply results.
-- **Stopped for owner review.** No WP2+ work started.
+- **Stopped for owner review.**
+
+### 2026-11-19 — WP1 — accepted
+
+- Owner accepted the WP1 review and authorized continuation ("ok you can continue"), with the standing
+  instruction to keep reporting phase progress. WP2 started.
+
+### 2026-11-19 — WP2 — backend data access
+
+- Added the six taxonomy tables to `MODEL_MAP` (+ search fields, + display ordering) and synced the
+  architecture's repository table.
+- Verified with a temp-DB round-trip (22 checks) plus the repository contract suite and the full suite:
+  all green. Temp database and the throwaway script were deleted.
+- **Stopped for owner review.** No WP3 work started in this step.
 
 ---
 
