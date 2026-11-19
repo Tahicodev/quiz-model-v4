@@ -2900,7 +2900,11 @@ Existing services remain authoritative for their domains:
 
 ### I.2 Pure modules
 
-These modules contain no database access and are the primary unit-test targets:
+These modules contain no database access and are the primary unit-test targets. They live under
+`src/shared/learning/` so both the backend services and the frontend can import the label helpers
+without pulling in a service. **Status: `pedagogy-validator.js`, `prerequisite-validator.js`,
+`competency-link-validator.js`, `bloom-catalog-validator.js` and `bloomCatalog.js` are implemented
+(Phase 1 WP3);** the remaining rows are later-phase targets.
 
 | Module | Responsibility |
 |---|---|
@@ -2912,6 +2916,7 @@ These modules contain no database access and are the primary unit-test targets:
 | `prerequisite-validator.js` | Acyclic graph, self-edge rejection, max depth |
 | `competency-link-validator.js` | Objective↔competency link: same school, subject compatibility, weight ≥ 0, at most one `is_primary` per objective |
 | `bloom-catalog-validator.js` | Exactly the six fixed IDs, unique `key`, `labels_json` parses with `en`/`fr`/`ar`, `order_index` 0–5, idempotent seed |
+| `bloomCatalog.js` | The six-dimension seed data (`BLOOM_DIMENSIONS`, `BLOOM_DIMENSION_IDS`, `BLOOM_ORDER`, `toBloomRow`) and the shared labels/verbs/examples |
 
 The pure modules are shared with tests under `tests/unit/learning/`. The frontend may import small label/formatting helpers, but it must not import the authoritative calculator.
 

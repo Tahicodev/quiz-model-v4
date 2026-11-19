@@ -7,7 +7,8 @@ open). When the two disagree about *scope*, the spec wins; when they disagree ab
 this file wins.
 
 **Branch:** `feature/adaptive-learning-phase1`
-**Authorization:** WP1 only. WP2+ is **not** authorized until the owner accepts the WP1 review.
+**Authorization:** WP1 accepted 2026-11-19; WP2 accepted by the same "continue" instruction; WP3
+implemented and **awaiting owner review**. WP4+ is not authorized until the WP3 review.
 
 **Ground rules carried from the spec and Phase 0**
 
@@ -24,8 +25,8 @@ this file wins.
 | WP | Scope | Status | Verified |
 |---|---|---|---|
 | WP1 | Schema + migration | **Done — accepted by owner 2026-11-19** | Yes (see evidence below) |
-| WP2 | Backend data access (`MODEL_MAP` / `SEARCH_FIELDS`, repository parity) | **Done — awaiting review** | Yes |
-| WP3 | Services (`LearningTaxonomyService`, `QuestionPedagogyService`) | Not started | — |
+| WP2 | Backend data access (`MODEL_MAP` / `SEARCH_FIELDS`, repository parity) | **Done — accepted (covered by continuation)** | Yes |
+| WP3 | Services (`LearningTaxonomyService`, `QuestionPedagogyService`) | **Done — awaiting review** | Yes |
 | WP4 | Routes + permissions + backup | Not started | — |
 | WP5 | Frontend (pedagogy panel, filters, proposal queue, labels/RTL) | Not started | — |
 | WP6 | Tests (validators, integration, scope, regression) | Not started | — |
@@ -136,6 +137,82 @@ delete clears the objective's cached Bloom id (**SetNull**).
 
 ---
 
+## WP3 — Services
+
+### Deliverables
+
+**Pure modules — `src/shared/learning/` (no database, no DOM, unit-testable in isolation)**
+
+| File | Exports | Responsibility |
+|---|---|---|
+| `bloomCatalog.js` | `BLOOM_DIMENSIONS`, `BLOOM_DIMENSION_IDS`, `BLOOM_ORDER`, `toBloomRow()` | The six fixed Bloom dimensions with EN/FR/AR labels, verbs and examples. **AR/FR strings are flagged in-file as pending native review** (WP7 localization gate). |
+| `bloom-catalog-validator.js` | `validateBloomCatalog()`, `validateBloomSeed()` | Exactly six rows, unique id/key/order_index, `order_index` 0–5, `labels_json` parses with all three languages. |
+| `pedagogy-validator.js` | `validateCriteriaSet()`, `derivePedagogyStatus()`, `pickPrimaryBloom()`, `PEDAGOGY_STATUS`, `CRITERION_SOURCES`, `REVIEW_STATUSES`, `WEIGHT_TOLERANCE` | Whole-set criteria validation (weights ≥ 0 and sum ≈ 1, unique `criterion_key`, unique objective/bloom/key triple, enum checks, objective/bloom/competency existence + cross-tenant + subject compatibility); status derivation (`unclassified`/`partial`/`classified`/`needs_review`); primary Bloom = heaviest weight, ties by taxonomy order then id. |
+| `prerequisite-validator.js` | `findCycle()`, `validatePrerequisiteGraph()`, `PREREQUISITE_STRENGTHS`, `MAX_PREREQUISITE_DEPTH` | Directed-graph cycle detection for the prerequisite tree. |
+| `competency-link-validator.js` | `validateCompetencyLink()` | Same-school, subject compatibility, finite non-negative weight, at most one `is_primary` per objective. |
+
+**Services — `src/backend/services/learning/`**
+
+- `LearningTaxonomyService.js`
+  - `ensureSeeded()` — validates the catalog then upserts by id; returns `{created, updated, total}`;
+    idempotent (second run: 0 created, 6 updated). No seed SQL, so it is provider-agnostic.
+  - D2 governance: `listObjectives` (teachers see `active` + `archived` + their own proposals),
+    `getObjective`, `createObjective` (admin or `learning.teacher_objective_creation` ON → `active`,
+    otherwise `proposed` + `proposed_by`), `updateObjective` (teacher: own `proposed` only, status
+    never editable; admin: any), `approveObjective`, `rejectObjective` (note required),
+    `archiveObjective` — **no hard delete anywhere**.
+  - Competencies + links: `listCompetencies`, `createCompetency`, `updateCompetency`,
+    `archiveCompetency`, `listObjectiveCompetencies`, `linkCompetency` (idempotent), `unlinkCompetency`.
+  - Prerequisites: `listPrerequisites`, `addPrerequisite` (self-edge + cycle rejected),
+    `removePrerequisite`.
+  - Setting read: `isTeacherCreationEnabled(schoolId)` — default **false**, only the literal `'true'` counts.
+  - Every mutation is audited; all ids are re-checked against the caller's `school_id` (foreign → 404).
+- `QuestionPedagogyService.js`
+  - `listCriteria`, `getQuestionPedagogy` (criteria + objective/competency/Bloom labels in one call;
+    deterministic order — heaviest criterion first, ties by `criterion_key`), `setCriteria`
+    (validates the whole set before writing, delete-then-create), `addCriterion`, `removeCriterion`,
+    `clearCriteria`, `recompute`.
+  - `#applyDerivedFields` writes the cached `pedagogy_status`, `primary_bloom_dimension_id` and the
+    review stamp; `recompute` never stamps a review.
+  - Write scope: admin any question, teacher only questions they authored (`created_by`); a foreign
+    question is a 404, not a cross-tenant write.
+
+### Verification
+
+Temp-DB flow script (throwaway, deleted afterwards): **51 checks, 51 pass, 0 fail** — covering Bloom
+seed idempotency/order/labels, D2 OFF→`proposed` / approve / reject-with-note / teacher-cannot-approve /
+own-proposal edit / status not editable / ON→`active`, duplicate `(subject, code)` conflict,
+cross-tenant subject 404, unknown Bloom 422, archive, competency primary-link conflict + cross-subject
+rejection + idempotent re-link + unlink, prerequisite self/cycle/teacher-forbidden/removal/re-add,
+criteria weight-sum + duplicate-key + foreign-objective 404, valid set → `classified` with primary Bloom
+`apply`, enriched labels (`fr = 'Appliquer'`), other-teacher forbidden, `addCriterion` re-validation,
+`removeCriterion` re-derivation, clear → `unclassified`, imported 0.5 weights → `partial`,
+`needs_review` wins, and the audit trail.
+
+| Suite | Result |
+|---|---|
+| WP3 flow script (temp DB) | 51/51 pass |
+| Full suite (`npx vitest run`) | **116 files / 1478 tests pass** |
+
+Two defects found and fixed during verification:
+
+1. **Partial objective update mis-read as full.** The teacher branch of `updateObjective` built an object
+   with every editable key present (values `undefined`), so `order_index: undefined` was treated as
+   *supplied* and rejected. Fixed by forwarding only the keys actually present in the request.
+2. **Non-deterministic criteria order.** `question_assessment_criteria` has no natural ordering, so a
+   panel could reorder between reads. `listCriteria` now sorts by weight desc then `criterion_key`.
+
+### Open items
+
+- Unit tests for the four validators and the service flows are **WP6** (spec), not WP3 — the temp-DB
+  script is the WP3 evidence and has been removed so no throwaway code lands on the branch.
+- AR/FR Bloom labels still need a native-language review before pilot use (WP7 gate; flagged in
+  `bloomCatalog.js`).
+- Nothing from WP3 is wired into the container, boot seed, routes, permissions or backup yet — that is
+  deliberately **WP4**.
+
+---
+
 ## Progress log
 
 ### 2026-11-19 — WP1 — schema + migration
@@ -160,6 +237,19 @@ delete clears the objective's cached Bloom id (**SetNull**).
 - Verified with a temp-DB round-trip (22 checks) plus the repository contract suite and the full suite:
   all green. Temp database and the throwaway script were deleted.
 - **Stopped for owner review.** No WP3 work started in this step.
+
+### 2026-11-19 — WP2 — accepted
+
+- WP2 accepted by the same continuation instruction that authorized WP3.
+
+### 2026-11-19 — WP3 — services
+
+- Added the four pure modules under `src/shared/learning/` (Bloom catalog, pedagogy, prerequisite,
+  competency-link validators) and the two services under `src/backend/services/learning/`.
+- Verified with a temp-DB flow script (51 checks) plus the full suite: all green. Two defects found
+  and fixed (partial-update field leakage; non-deterministic criteria order). Throwaway script deleted.
+- **Stopped for owner review.** No container wiring, routes, permissions or backup changes — those are
+  WP4 and remain unauthorized.
 
 ---
 
