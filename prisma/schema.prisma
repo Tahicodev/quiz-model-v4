@@ -69,6 +69,11 @@ model School {
   courses            Course[]
   securityEvents     SecurityEvent[]
   permissionOverrides UserPermissionOverride[]
+  learningObjectives         LearningObjective[]
+  competencies               Competency[]
+  questionAssessmentCriteria QuestionAssessmentCriterion[]
+  learningObjectivesLink     LearningObjectiveCompetency[]
+  prerequisites              LearningPrerequisite[]
 
   @@index([status])
 }
@@ -208,6 +213,7 @@ model Category {
   kidsGames KidsGame[]
   courses   Course[]
   lessons   Lesson[]
+  learningObjectives LearningObjective[]
 
   @@unique([school_id, subject_id, parent_id, name])
   @@index([school_id])
@@ -228,6 +234,8 @@ model Subject {
   creator   User      @relation("SubjectCreator", fields: [created_by], references: [id], onDelete: Cascade)
   categories Category[]
   courses    Course[]
+  learningObjectives LearningObjective[]
+  competencies Competency[]
 
   @@unique([school_id, created_by, name])
   @@index([school_id])
@@ -251,11 +259,20 @@ model Question {
   // Author (teacher/admin user id). NULL = legacy unattributed row,
   // visible to admins only (teachers see strictly their own rows).
   created_by   String?
+  // Phase 1 pedagogy (additive). pedagogy_status is derived from criteria
+  // coverage: unclassified | partial | classified | needs_review.
+  pedagogy_status            String    @default("unclassified")
+  primary_bloom_dimension_id String?
+  pedagogy_reviewed_at       DateTime?
+  pedagogy_reviewed_by       String?
+  pedagogy_source            String? // manual | imported (ai_accepted reserved for Phase 6)
   created_at   DateTime @default(now())
   updated_at   DateTime @updatedAt
 
   school        School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
   category      Category?      @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  primaryBloom  BloomDimension? @relation("QuestionPrimaryBloom", fields: [primary_bloom_dimension_id], references: [id], onDelete: SetNull)
+  assessmentCriteria QuestionAssessmentCriterion[]
   examQuestions ExamQuestion[]
 
   @@index([school_id])
@@ -263,6 +280,8 @@ model Question {
   @@index([type])
   @@index([difficulty])
   @@index([created_by])
+  @@index([primary_bloom_dimension_id])
+  @@index([school_id, pedagogy_status])
 }
 
 // ─── Exams ───────────────────────────────────────────────────────────────────
@@ -1128,4 +1147,166 @@ model Device {
   @@unique([school_id, device_key])
   @@index([school_id, status])
   @@index([school_id, assigned_user_id])
+}
+
+// ─── Learning Taxonomy (Phase 1) ────────────────────────────────────────────
+// Bloom's revised taxonomy catalog. Global (no school_id): the six dimensions
+// are the same for every tenant and are seeded idempotently by
+// LearningTaxonomyService.ensureSeeded() (see docs/ADAPTIVE_LEARNING_ARCHITECTURE.md).
+model BloomDimension {
+  id            String   @id
+  key           String   @unique // remember | understand | apply | analyze | evaluate | create
+  name          String
+  labels_json   String // JSON: locale -> label (fr, en, ar)
+  description   String?
+  verbs_json    String? // JSON: string[] — indicative verbs
+  examples_json String? // JSON: string[]
+  order_index   Int      @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  learningObjectives LearningObjective[]          @relation("ObjectiveBloom")
+  questionPrimary    Question[]                   @relation("QuestionPrimaryBloom")
+  questionCriteria   QuestionAssessmentCriterion[]
+
+  @@index([order_index])
+}
+
+// School-managed learning objectives. status: proposed | active | rejected |
+// archived. Teacher-created rows are `proposed` unless the school enables
+// learning.teacher_objective_creation (default false); then they are `active`
+// immediately. Only admins may activate/reject a proposal.
+model LearningObjective {
+  id                         String    @id @default(uuid())
+  school_id                  String
+  subject_id                 String
+  category_id                String?
+  parent_id                  String?
+  primary_bloom_dimension_id String?
+  code                       String
+  statement                  String
+  description                String?
+  order_index                Int       @default(0)
+  status                     String    @default("active") // proposed | active | rejected | archived
+  proposed_by                String? // teacher who proposed (NULL for admin-created)
+  reviewed_by                String? // admin who approved/rejected
+  reviewed_at                DateTime?
+  review_note                String?
+  created_by                 String?
+  created_at                 DateTime  @default(now())
+  updated_at                 DateTime  @updatedAt
+
+  school        School         @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  subject       Subject        @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  category      Category?      @relation(fields: [category_id], references: [id], onDelete: SetNull)
+  parent        LearningObjective?  @relation("ObjectiveTree", fields: [parent_id], references: [id], onDelete: Restrict)
+  children      LearningObjective[] @relation("ObjectiveTree")
+  primaryBloom  BloomDimension? @relation("ObjectiveBloom", fields: [primary_bloom_dimension_id], references: [id], onDelete: SetNull)
+  competencyLinks LearningObjectiveCompetency[]
+  criteria        QuestionAssessmentCriterion[]
+  prerequisites   LearningPrerequisite[] @relation("ObjectivePrerequisites")
+  requiredFor     LearningPrerequisite[] @relation("ObjectiveIsPrerequisite")
+
+  @@unique([school_id, subject_id, code])
+  @@index([school_id, subject_id, status])
+  @@index([school_id, category_id])
+  @@index([school_id, parent_id])
+  @@index([school_id, status])
+}
+
+// Competency catalog (kind: competency | skill | domain). School-managed.
+model Competency {
+  id          String   @id @default(uuid())
+  school_id   String
+  subject_id  String?
+  parent_id   String?
+  kind        String   @default("competency")
+  code        String
+  name        String
+  description String?
+  status      String   @default("active") // active | archived
+  created_by  String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  school     School    @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  subject    Subject?  @relation(fields: [subject_id], references: [id], onDelete: SetNull)
+  parent     Competency?  @relation("CompetencyTree", fields: [parent_id], references: [id], onDelete: Restrict)
+  children   Competency[] @relation("CompetencyTree")
+  objectiveLinks LearningObjectiveCompetency[]
+  criteria       QuestionAssessmentCriterion[]
+
+  @@unique([school_id, code])
+  @@index([school_id, subject_id, status])
+  @@index([school_id, parent_id])
+}
+
+// Many-to-many objective ↔ competency mapping with weight.
+model LearningObjectiveCompetency {
+  id            String   @id @default(uuid())
+  school_id     String
+  objective_id  String
+  competency_id String
+  weight        Float    @default(1)
+  is_primary    Boolean  @default(false)
+  created_at    DateTime @default(now())
+
+  school     School           @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  objective  LearningObjective @relation(fields: [objective_id], references: [id], onDelete: Cascade)
+  competency Competency        @relation(fields: [competency_id], references: [id], onDelete: Cascade)
+
+  @@unique([objective_id, competency_id])
+  @@index([school_id, competency_id])
+}
+
+// Directed prerequisite edge: objective_id requires prerequisite_objective_id.
+// Self-cycles and longer cycles are rejected by prerequisite-validator.js.
+model LearningPrerequisite {
+  id                         String   @id @default(uuid())
+  school_id                  String
+  objective_id               String
+  prerequisite_objective_id  String
+  strength                   String   @default("required") // required | recommended
+  min_mastery_state          String   @default("developing")
+  rationale                  String?
+  created_by                 String?
+  created_at                 DateTime @default(now())
+
+  school                School            @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  objective             LearningObjective @relation("ObjectivePrerequisites", fields: [objective_id], references: [id], onDelete: Cascade)
+  prerequisiteObjective LearningObjective @relation("ObjectiveIsPrerequisite", fields: [prerequisite_objective_id], references: [id], onDelete: Restrict)
+
+  @@unique([objective_id, prerequisite_objective_id])
+  @@index([school_id, prerequisite_objective_id])
+}
+
+// Which taxonomy an assessment item measures. One question may carry several
+// criteria (different objectives/Bloom levels); weights are normalized by
+// QuestionPedagogyService. Deleting a question cascades its criteria.
+model QuestionAssessmentCriterion {
+  id                String   @id @default(uuid())
+  school_id         String
+  question_id       String
+  objective_id      String
+  competency_id     String?
+  bloom_dimension_id String
+  criterion_key     String   @default("main")
+  weight            Float    @default(1)
+  max_score         Float?
+  rubric_json       String? // JSON: rubric structure for creative/open items
+  source            String   @default("manual") // manual | imported
+  review_status     String   @default("approved") // approved | needs_review
+  created_by        String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  school     School           @relation(fields: [school_id], references: [id], onDelete: Cascade)
+  question   Question         @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  objective  LearningObjective @relation(fields: [objective_id], references: [id], onDelete: Restrict)
+  competency Competency?       @relation(fields: [competency_id], references: [id], onDelete: SetNull)
+  bloomDim   BloomDimension    @relation(fields: [bloom_dimension_id], references: [id], onDelete: Restrict)
+
+  @@unique([question_id, objective_id, bloom_dimension_id, criterion_key])
+  @@index([school_id, objective_id, bloom_dimension_id])
+  @@index([question_id])
 }
