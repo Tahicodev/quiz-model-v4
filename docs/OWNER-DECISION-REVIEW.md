@@ -817,3 +817,27 @@ The owner explicitly confirmed:
 
 Authoritative acceptance record: `docs/PHASE1_PROGRESS.md` (header + status board + dated log entry
 2026-11-21).
+
+### 9.4 Update (2026-11-22) — Phase 1 formally CLOSED (owner)
+
+- **Decision:** the owner **approved formal closure of Adaptive Learning Phase 1** on 2026-11-22,
+  following WP1–WP7 acceptance and the final read-only closure audit. The authoritative Phase 1
+  snapshot is commit `d22d22e` on `feature/adaptive-learning-phase1` (pushed to
+  `origin/feature/adaptive-learning-phase1`, approved 45-file manifest, working tree clean at the last
+  verification).
+- **Confirmed by closure:** WP1–WP7 accepted; Defects A and B closed; G2/G3 remain accepted; G4 adopted
+  per C1/D1 (E1 wording); D15 approved with its implementation and governance boundaries preserved;
+  U8 closed; U15 approved in principle with its wording condition satisfied; the provenance hierarchy
+  and historical decision safeguards remain authoritative. Superseded decision records are preserved,
+  not rewritten or removed.
+- **Unchanged:** **U6 remains deferred** (non-blocking); **ADR-0001 remains Proposed**; **Phase 1B
+  remains NOT authorized** — a separate explicit owner authorization is required. Arabic/French
+  localization remains a pre-pilot gate; deployment readiness is a separate assessment;
+  database/test-file hygiene remains outstanding; none of these is resolved by closure.
+- **Execution:** documentation-only — closure entries in `PHASE1_COMPLETION_REPORT.md` (§10),
+  `PHASE1_PROGRESS.md` (status board note, header update, dated log entry), `ARCHITECTURE-BASELINE.md`
+  (status header + §5.1) and this §9.4. No code, tests, schema, database or Git history was modified;
+  the local recovery branch `backup/phase1-snapshot-d584df3` is preserved; changes were left unstaged
+  and uncommitted for owner review.
+
+No owner decision beyond the closure approval stated here is recorded by §9.4.

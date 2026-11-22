@@ -37,6 +37,12 @@ its chronology preserved. Phase 1 is **ready for formal closure review**, subjec
 reconciliation and safe preservation of the accepted deliverables. **Phase 1B remains NOT authorized.**
 No other work package, gate or decision is inferred accepted by this record.
 
+**Owner decision (2026-11-22):** **Phase 1 is formally CLOSED.** The authoritative Phase 1 snapshot is
+commit `d22d22e` on `feature/adaptive-learning-phase1` (pushed to `origin/feature/adaptive-learning-phase1`,
+approved 45-file manifest). U6 remains **deferred**, ADR-0001 remains **Proposed**, and **Phase 1B
+remains NOT authorized**. See the 2026-11-22 progress-log entry below and
+[`docs/PHASE1_COMPLETION_REPORT.md`](./PHASE1_COMPLETION_REPORT.md) §10.
+
 **Draft proposal (not approved, not implemented):**
 [`docs/DRAFT-PROGRAMME-ARCHITECTURE-REVISION.md`](./DRAFT-PROGRAMME-ARCHITECTURE-REVISION.md) —
 programme identity/versioning (`programme_key`), objective versioning (P10), historized class
@@ -116,6 +122,9 @@ C/D/E/F stay in the Phase 1B scope.
 | WP6 | Tests (validators, integration, scope, regression) | **Done — accepted by owner 2026-11-19** | Yes |
 | pre-WP7 | Owner-requested fixes (gate, console sweep, rebuild audit, walkthrough, docs/restore) | **Done — accepted** (owner confirmed the WP5 result 2026-11-21; the five fixes were part of that reviewed result) | Yes |
 | WP7 | Docs + flags / completion report | **Done — accepted by owner 2026-11-21** (report at `docs/PHASE1_COMPLETION_REPORT.md`; acceptance supersedes the prior "awaiting owner review" status, chronology preserved) | Yes |
+
+**Phase 1: FORMALLY CLOSED by owner decision 2026-11-22** — see the 2026-11-22 progress-log entry.
+**Phase 1B remains NOT authorized.**
 
 ---
 
@@ -970,6 +979,34 @@ decision register.
   evidence only. No migrations were run and no database was altered during reconciliation.
 - **Commit not yet authorized.** A categorized snapshot proposal (proposed manifest, exclusions, proposed
   commit message) was prepared for owner review; nothing was staged or committed.
+
+### 2026-11-22 — Phase 1 FORMAL CLOSURE (owner)
+
+**DECISION: APPROVED — Phase 1 formally CLOSED** by the owner on 2026-11-22, following WP1–WP7
+acceptance and the final read-only closure audit. The authoritative Phase 1 snapshot is branch
+`feature/adaptive-learning-phase1`, commit `d22d22e` (approved 45-file manifest), pushed to
+`origin/feature/adaptive-learning-phase1`; the working tree was clean at the last verification.
+
+- **Confirmed by closure:** WP1–WP7 accepted; Defects A and B closed; G2/G3 remain accepted; G4 adopted
+  per owner decisions C1 and D1 (E1 wording); D15 approved with its implementation and governance
+  boundaries preserved; U8 closed; U15 approved in principle with its wording condition satisfied; the
+  provenance hierarchy and historical decision safeguards remain authoritative. The corrected snapshot
+  is authoritative; superseded decision records are preserved, not rewritten or removed.
+- **Unchanged:** U6 remains **deferred (non-blocking)**; ADR-0001 remains **Proposed**; **Phase 1B
+  remains NOT authorized** (a separate explicit owner authorization is required); Arabic/French
+  localization remains a pre-pilot gate; deployment readiness is assessed separately; database and
+  test-file hygiene remains outstanding. Closure authorizes no additional implementation, deployment
+  or pilot launch.
+- **Open items preserved (not resolved by closure):** native Arabic/French review before pilot; tracked
+  database files and database exposure hygiene; test-database storage accumulation; the documentation
+  inaccuracy concerning the admin enable toggle; U6 deferred status; ADR-0001 Proposed status;
+  remaining deployment and pre-pilot readiness requirements.
+- **Execution:** documentation-only — `PHASE1_COMPLETION_REPORT.md` (§10), this progress log (header
+  update, status board note, this entry), `ARCHITECTURE-BASELINE.md` (status header + §5.1) and
+  `OWNER-DECISION-REVIEW.md` (§9.4). No code, tests, schema, database or Git history was modified; the
+  local recovery branch `backup/phase1-snapshot-d584df3` is preserved; no reflog expiration or garbage
+  collection ran; no merge, force-push or deploy. Changes were left **unstaged and uncommitted** for
+  owner review.
 
 ---
 

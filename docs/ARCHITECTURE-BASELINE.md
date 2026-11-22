@@ -13,6 +13,10 @@ wording condition; **U8 is closed**; the document hierarchy is ratified with own
 (§2.1). **Update 2026-11-21 (owner): WP5 is accepted** (the refactored Questions-tab integration,
 superseding A2, which is preserved as history) **and WP7 is accepted**; Phase 1 is ready for formal
 closure review subject to record reconciliation and safe preservation of the accepted deliverables.
+**Update 2026-11-22 (owner): Phase 1 is FORMALLY CLOSED.** The corrected snapshot commit `d22d22e` on
+`feature/adaptive-learning-phase1` (pushed to `origin/feature/adaptive-learning-phase1`, approved
+45-file manifest) is the authoritative Phase 1 snapshot. Phase 1B remains **unauthorized**; ADR-0001
+remains **Proposed**; U6 remains **deferred**.
 
 **Date:** 2026-11-21 · **Branch (worktree):** `feature/adaptive-learning-phase1`
 
@@ -169,8 +173,10 @@ Owner choices finalized 2026-11-21 (draft §20.2/§20.6):
 - **Phase 1** — taxonomy + manual question pedagogy, behind default-off flags
   (`learning.adaptive.enabled` + admin toggle) on `feature/adaptive-learning-phase1`. **WP1–WP7 all
   accepted by the owner** (WP5 accepted 2026-11-21 — the refactored Questions-tab integration, superseding
-  A2; WP7 accepted the same day; the pre-WP7 fix set was part of the accepted result). Phase 1 is ready
-  for formal closure review; a Phase 1 snapshot commit is proposed but **not yet authorized**.
+  A2; WP7 accepted the same day; the pre-WP7 fix set was part of the accepted result). **Phase 1 formally
+  closed by owner decision 2026-11-22**; the corrected snapshot commit `d22d22e` (pushed to
+  `origin/feature/adaptive-learning-phase1`, approved 45-file manifest) is the authoritative Phase 1
+  snapshot.
 - **Defect A** — non-transactional `setCriteria` fixed: `runInTransaction(fn)` + `deleteMany` on the
   repository; `setCriteria`/`clearCriteria` atomic; repository without transaction support is refused.
 - **Defect B** — silent 1,000-row truncation replaced by a complete pagination helper

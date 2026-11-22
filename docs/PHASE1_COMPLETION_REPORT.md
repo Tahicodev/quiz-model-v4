@@ -156,3 +156,35 @@ Per school, admin only, and deliberately not scripted here:
 WP7 is complete as a **documentation and verification** work package: this completion report, the
 flags-default-off confirmation (§3), and the no-evidence/no-mastery confirmation (§4). No code was
 changed to produce it. No merge, no push, and no Phase 2 work has been performed.
+
+---
+
+## 10. Formal closure (owner decision, 2026-11-22)
+
+**DECISION: APPROVED — PHASE 1 FORMALLY CLOSED.** Following WP1–WP7 acceptance and the final
+read-only closure audit, the owner formally approved closure of Phase 1 on 2026-11-22. This entry
+records that decision; nothing above is rewritten.
+
+- **Authoritative Phase 1 snapshot:** branch `feature/adaptive-learning-phase1`, commit `d22d22e`
+  ("feat(learning): Phase 1 — taxonomy + question pedagogy (WP1–WP7, owner-accepted)"), approved
+  45-file manifest, remote `origin/feature/adaptive-learning-phase1`; working tree clean at the last
+  verification.
+- **Confirmed by closure:** WP1–WP7 accepted; Defects A and B closed; G2/G3 remain accepted; G4 adopted
+  per owner decisions C1 and D1 (E1 wording); D15 approved with its implementation and governance
+  boundaries preserved; U8 closed; U15 approved in principle with its wording condition satisfied; the
+  provenance hierarchy and historical decision safeguards remain authoritative. Superseded decision
+  records are preserved, not removed.
+- **Unchanged by closure:** U6 remains **deferred (non-blocking)**; ADR-0001 remains **Proposed**;
+  **Phase 1B remains NOT AUTHORIZED**; Arabic/French localization stays a pre-pilot gate; deployment
+  readiness is a separate assessment; database/test-file hygiene remains outstanding. Closure
+  authorizes no additional implementation, deployment or pilot launch.
+- **Open items preserved (not resolved by closure):** (1) native Arabic/French review before pilot;
+  (2) tracked database files and database exposure hygiene; (3) test-database storage accumulation;
+  (4) the minor documentation inaccuracy concerning the admin enable toggle; (5) U6 deferred status;
+  (6) ADR-0001 Proposed status; (7) remaining deployment and pre-pilot readiness requirements.
+- **Execution:** documentation-only — this entry, `PHASE1_PROGRESS.md` (status board note, header
+  update, dated log entry), `ARCHITECTURE-BASELINE.md` (status header + §5.1) and
+  `OWNER-DECISION-REVIEW.md` (§9.4). No code, tests, schema, database or Git history was modified; the
+  local recovery branch `backup/phase1-snapshot-d584df3` is preserved; no reflog expiration or garbage
+  collection ran; no merge, force-push or deploy. Documentation changes were left **unstaged and
+  uncommitted** for owner review.
