@@ -1133,6 +1133,82 @@ button.ac-kpi:hover {
 	color: var(--ac-text-subtle);
 }
 
+/* Required marker + validation state (dialog forms). The * is decorative:
+   the input itself carries aria-required, and the invalid state is signalled
+   by border, marker color and the alert text — never by color alone. */
+.ac-required {
+	color: var(--ac-danger);
+	margin-inline-start: 2px;
+}
+
+.ac-field--invalid .ac-input,
+.ac-field--invalid .ac-select {
+	border-color: var(--ac-danger);
+	box-shadow: 0 0 0 3px var(--ac-danger-soft);
+}
+
+.ac-field--invalid .ac-field__label {
+	color: var(--ac-danger);
+}
+
+.ac-provenance-note {
+	margin: 0;
+	padding: 8px 10px;
+	border: 1px dashed var(--ac-border);
+	border-radius: var(--ac-radius-sm);
+	color: var(--ac-text-muted);
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: var(--ac-fs-sm);
+}
+
+/* ── Objective form: organized around the learning outcome ─────────────────
+   Conceptual groups instead of a four-column database grid: the statement
+   is the primary content, administrative properties follow quietly. */
+.ac-form--objective .ac-form__section + .ac-form__section {
+	margin-top: 4px;
+	padding-top: 14px;
+	border-top: 1px solid var(--ac-border);
+}
+
+.ac-form--objective .ac-form__section-title {
+	margin: 0 0 10px;
+	font-size: var(--ac-fs-md);
+	font-weight: 600;
+	color: var(--ac-text);
+	letter-spacing: -0.01em;
+}
+
+/* Sentence-case labels with normal spacing — the uppercase micro-label
+   style is for dense tables, not for a form the teacher must read. */
+.ac-form--objective .ac-field__label {
+	text-transform: none;
+	letter-spacing: 0;
+	font-size: var(--ac-fs-sm);
+	font-weight: 600;
+	color: var(--ac-text);
+}
+
+.ac-form--objective .ac-form__row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+}
+
+/* The statement is the primary field: comfortable to write in. */
+.ac-form--objective .ac-input--statement {
+	font-size: var(--ac-fs-md);
+	line-height: 1.55;
+	min-height: 88px;
+	resize: vertical;
+}
+
+@media (max-width: 640px) {
+	.ac-form--objective .ac-form__row {
+		grid-template-columns: 1fr;
+	}
+}
+
 .ac-input,
 .ac-select {
 	padding: 6px 9px;
@@ -3332,5 +3408,383 @@ button.ac-kpi:hover {
 	*::after {
 		animation-duration: 0.001ms !important;
 		transition-duration: 0.001ms !important;
+	}
+}
+
+/* ── Learning polish pass ────────────────────────────────────────────────────
+ *
+ * Logical properties only: the learning panel sets `dir` from its own language
+ * selector, so every new rule must serve LTR and RTL alike.
+ */
+
+/* Hub hero — answers "is learning on?" before anything else. */
+.learning-hero {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 18px 20px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius-lg);
+	background:
+		linear-gradient(135deg, var(--ac-brand-soft), transparent 62%),
+		var(--ac-surface);
+	box-shadow: var(--ac-shadow-sm);
+}
+
+.learning-hero__main {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	min-width: 0;
+	flex: 1 1 320px;
+}
+
+.learning-hero__icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 44px;
+	height: 44px;
+	border-radius: 12px;
+	background: var(--ac-brand);
+	color: #fff;
+	box-shadow: 0 4px 10px rgba(37, 99, 235, 0.24);
+}
+
+.learning-hero__text {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+
+.learning-hero__eyebrow {
+	margin: 0;
+	font-size: var(--ac-fs-2xs);
+	font-weight: 700;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--ac-brand);
+}
+
+.learning-hero__title {
+	margin: 0;
+	font-size: var(--ac-fs-2xl);
+	font-weight: 650;
+	letter-spacing: -0.02em;
+	color: var(--ac-text);
+}
+
+.learning-hero__body {
+	margin: 0;
+	max-width: 64ch;
+	font-size: var(--ac-fs-sm);
+	line-height: 1.55;
+	color: var(--ac-text-muted);
+}
+
+.learning-hero__chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 4px;
+}
+
+.learning-hero__actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: none;
+}
+
+/* The one thing that needs an administrator's decision. */
+.learning-attention {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 16px;
+	border: 1px solid var(--ac-warning);
+	border-radius: var(--ac-radius);
+	background: var(--ac-warning-soft);
+	color: var(--ac-text);
+	text-decoration: none;
+	transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+
+.learning-attention:hover {
+	box-shadow: var(--ac-shadow);
+	transform: translateY(-1px);
+	text-decoration: none;
+}
+
+.learning-attention__icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 34px;
+	height: 34px;
+	border-radius: 9px;
+	background: var(--ac-surface);
+	color: var(--ac-warning);
+}
+
+.learning-attention__text {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+	flex: 1 1 auto;
+	font-size: var(--ac-fs-sm);
+	line-height: 1.4;
+}
+
+.learning-attention__text strong {
+	font-weight: 650;
+	color: var(--ac-text);
+}
+
+.learning-attention__text span {
+	color: var(--ac-text-muted);
+}
+
+.learning-attention__cta {
+	flex: none;
+	font-size: var(--ac-fs-sm);
+	font-weight: 600;
+	color: var(--ac-warning);
+	white-space: nowrap;
+}
+
+/* Hub destination cards. */
+.learning-cards {
+	align-items: stretch;
+}
+
+.learning-card {
+	position: relative;
+	gap: 7px;
+}
+
+.learning-card__foot {
+	margin-top: auto;
+	padding-top: 10px;
+	font-size: var(--ac-fs-xs);
+	font-weight: 600;
+	color: var(--ac-brand);
+}
+
+.learning-card__foot--muted {
+	font-weight: 500;
+	line-height: 1.45;
+	color: var(--ac-text-muted);
+}
+
+.learning-card--static {
+	cursor: default;
+	background:
+		repeating-linear-gradient(
+			135deg,
+			transparent,
+			transparent 9px,
+			var(--ac-surface-2) 9px,
+			var(--ac-surface-2) 10px
+		),
+		var(--ac-surface);
+}
+
+.learning-card--static:hover {
+	border-color: var(--ac-border);
+	box-shadow: var(--ac-shadow-sm);
+	transform: none;
+}
+
+.learning-card__badge {
+	position: absolute;
+	inset-block-start: 14px;
+	inset-inline-end: 14px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: var(--ac-surface-3);
+	color: var(--ac-text-muted);
+	font-size: var(--ac-fs-2xs);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+.learning-section-head {
+	margin-block-start: 4px;
+}
+
+/* Tabs: a segmented control plus a one-line explanation of the active tab. */
+.learning-tabs-block {
+	display: grid;
+	gap: 8px;
+}
+
+.learning-tabs {
+	align-items: center;
+}
+
+.learning-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.learning-tab:hover {
+	color: var(--ac-text);
+	background: color-mix(in srgb, var(--ac-surface) 55%, transparent);
+}
+
+.learning-tab__icon {
+	display: inline-flex;
+	color: currentColor;
+	opacity: 0.85;
+}
+
+.learning-tab.is-active .learning-tab__icon {
+	opacity: 1;
+}
+
+.learning-tab__count {
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--ac-surface-3);
+	color: var(--ac-text-muted);
+	font-size: var(--ac-fs-2xs);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.learning-tab.is-active .learning-tab__count {
+	background: var(--ac-brand-soft);
+	color: var(--ac-brand);
+}
+
+.learning-tabs__desc {
+	margin: 0;
+	font-size: var(--ac-fs-xs);
+	color: var(--ac-text-muted);
+	line-height: 1.5;
+}
+
+/* Result count + clear-filters line. */
+.learning-results {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-block-start: -4px;
+}
+
+.learning-results__count {
+	font-size: var(--ac-fs-xs);
+	font-weight: 600;
+	color: var(--ac-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.learning-results__clear {
+	padding-inline: 10px;
+}
+
+/* Detail view. */
+.learning-detail__bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.learning-detail__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.learning-facts {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin: 2px 0 0;
+}
+
+.learning-fact {
+	display: grid;
+	gap: 1px;
+	min-width: 96px;
+	padding: 8px 12px;
+	border: 1px solid var(--ac-border);
+	border-radius: var(--ac-radius-sm);
+	background: var(--ac-surface-2);
+}
+
+.learning-fact dt {
+	margin: 0;
+	font-size: var(--ac-fs-2xs);
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--ac-text-subtle);
+}
+
+.learning-fact dd {
+	margin: 0;
+	font-size: var(--ac-fs-sm);
+	font-weight: 600;
+	color: var(--ac-text);
+}
+
+.learning-section-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 22px;
+	padding: 1px 7px;
+	margin-inline-start: 6px;
+	border-radius: 999px;
+	background: var(--ac-surface-3);
+	color: var(--ac-text-muted);
+	font-size: var(--ac-fs-2xs);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	vertical-align: middle;
+}
+
+/* Empty states in the detail view can carry their own primary action. */
+.ac-empty .ac-btn {
+	margin-block-start: 10px;
+}
+
+@media (max-width: 640px) {
+	.learning-hero {
+		padding: 16px;
+	}
+
+	.learning-hero__actions {
+		width: 100%;
+	}
+
+	.learning-attention {
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+
+	.learning-attention__cta {
+		width: 100%;
+		text-align: end;
+	}
+
+	.learning-tabs {
+		width: 100%;
+	}
+
+	.learning-tab {
+		flex: 1 1 auto;
+		justify-content: center;
 	}
 }

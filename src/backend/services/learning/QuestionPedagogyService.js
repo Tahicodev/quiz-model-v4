@@ -22,8 +22,7 @@ import {
   pickPrimaryBloom,
   PEDAGOGY_STATUS,
 } from '../../../shared/learning/pedagogy-validator.js';
-
-const SCHOOL_WIDE_LIMIT = 1000;
+import { fetchAllRows, DEFAULT_PAGE_SIZE } from '../../../shared/pagination.js';
 
 export class QuestionPedagogyService {
   #repo;
@@ -115,19 +114,23 @@ export class QuestionPedagogyService {
   }
 
   async #objectiveLabels(schoolId) {
-    const { data } = await this.#repo.getAll('learning_objectives', {
+    const rows = await fetchAllRows(this.#repo, 'learning_objectives', {
       filters: { school_id: schoolId },
-      limit: SCHOOL_WIDE_LIMIT,
+      orderBy: 'id',
+      direction: 'asc',
+      pageSize: DEFAULT_PAGE_SIZE,
     });
-    return new Map((data || []).map((row) => [row.id, row]));
+    return new Map(rows.map((row) => [row.id, row]));
   }
 
   async #competencyLabels(schoolId) {
-    const { data } = await this.#repo.getAll('competencies', {
+    const rows = await fetchAllRows(this.#repo, 'competencies', {
       filters: { school_id: schoolId },
-      limit: SCHOOL_WIDE_LIMIT,
+      orderBy: 'id',
+      direction: 'asc',
+      pageSize: DEFAULT_PAGE_SIZE,
     });
-    return new Map((data || []).map((row) => [row.id, row]));
+    return new Map(rows.map((row) => [row.id, row]));
   }
 
   async #bloomLabels() {
@@ -188,20 +191,50 @@ export class QuestionPedagogyService {
       created_by: user.id || null,
     }));
 
-    // Replace, then re-derive the caches. Validation already passed, so a
-    // failure mid-write cannot leave a half-validated set behind.
-    await this.#deleteAllCriteria(user.school_id, questionId);
-    for (const row of rows) {
-      await this.#repo.create('question_assessment_criteria', row);
-    }
-    const updated = await this.#applyDerivedFields(question, rows, { markReviewed, userId: user.id });
+    // Replace, then re-derive the caches — atomically. The delete, the inserts
+    // and the cache update run inside ONE transaction, so a failure anywhere
+    // rolls the whole replacement back: the question keeps its previous criteria
+    // and its previous derived fields rather than being left half-replaced.
+    const updated = await this.#inTransaction(async (txRepo) => {
+      await txRepo.deleteMany('question_assessment_criteria', {
+        school_id: user.school_id,
+        question_id: questionId,
+      });
+      for (const row of rows) {
+        await txRepo.create('question_assessment_criteria', row);
+      }
+      return this.#applyDerivedFields(question, rows, {
+        markReviewed,
+        userId: user.id,
+        repo: txRepo,
+      });
+    });
 
+    // Audit stays OUTSIDE the transaction: it is a best-effort trail and must
+    // never abort a committed write (see AuditService). Moving it inside is
+    // deferred to the confirmation workflow.
     await this.#audit(user, questionId, 'criteria.set', {
       criteria_count: rows.length,
       pedagogy_status: updated.pedagogy_status,
       primary_bloom_dimension_id: updated.primary_bloom_dimension_id,
     });
     return { question: updated, criteria: await this.listCriteria(user, questionId) };
+  }
+
+  /**
+   * Run `fn` against a transaction-bound repository.
+   *
+   * Refuses loudly when the repository cannot provide a transaction rather than
+   * silently performing a non-atomic write — a partial criteria set is worse
+   * than a refused request.
+   */
+  #inTransaction(fn) {
+    if (typeof this.#repo.runInTransaction !== 'function') {
+      throw new Error(
+        'QuestionPedagogyService: repository does not support runInTransaction(); refusing a non-atomic criteria write',
+      );
+    }
+    return this.#repo.runInTransaction(fn);
   }
 
   /** Append one criterion, re-validating the resulting set as a whole. */
@@ -226,12 +259,20 @@ export class QuestionPedagogyService {
   }
 
   async #clearCriteria(user, question) {
-    await this.#deleteAllCriteria(user.school_id, question.id);
-    const updated = await this.#repo.update('questions', question.id, {
-      pedagogy_status: PEDAGOGY_STATUS.UNCLASSIFIED,
-      primary_bloom_dimension_id: null,
-      pedagogy_reviewed_at: null,
-      pedagogy_reviewed_by: null,
+    // Deleting the criteria and resetting the derived fields is one atomic
+    // unit: either the question becomes `unclassified` with no criteria, or
+    // nothing changes.
+    const updated = await this.#inTransaction(async (txRepo) => {
+      await txRepo.deleteMany('question_assessment_criteria', {
+        school_id: user.school_id,
+        question_id: question.id,
+      });
+      return txRepo.update('questions', question.id, {
+        pedagogy_status: PEDAGOGY_STATUS.UNCLASSIFIED,
+        primary_bloom_dimension_id: null,
+        pedagogy_reviewed_at: null,
+        pedagogy_reviewed_by: null,
+      });
     });
     await this.#audit(user, question.id, 'criteria.clear', { before: question, after: updated });
     return { question: updated, criteria: [] };
@@ -250,18 +291,12 @@ export class QuestionPedagogyService {
     });
   }
 
-  async #deleteAllCriteria(schoolId, questionId) {
-    const { data } = await this.#repo.getAll('question_assessment_criteria', {
-      filters: { school_id: schoolId, question_id: questionId },
-      limit: 200,
-    });
-    for (const row of data || []) {
-      await this.#repo.delete('question_assessment_criteria', row.id);
-    }
-  }
-
-  /** Write the derived caches (status, primary Bloom, review stamp) together. */
-  async #applyDerivedFields(question, criteriaRows, { markReviewed, userId }) {
+  /**
+   * Write the derived caches (status, primary Bloom, review stamp) together.
+   * `repo` defaults to the service repository; callers inside a transaction
+   * pass the transaction-bound repository so the update joins the same unit.
+   */
+  async #applyDerivedFields(question, criteriaRows, { markReviewed, userId, repo = this.#repo }) {
     const patch = {
       pedagogy_status: derivePedagogyStatus(criteriaRows),
       primary_bloom_dimension_id: pickPrimaryBloom(criteriaRows),
@@ -270,7 +305,7 @@ export class QuestionPedagogyService {
       patch.pedagogy_reviewed_at = new Date();
       patch.pedagogy_reviewed_by = userId || null;
     }
-    return this.#repo.update('questions', question.id, patch);
+    return repo.update('questions', question.id, patch);
   }
 
   /**

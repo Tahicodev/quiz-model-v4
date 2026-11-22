@@ -24,6 +24,7 @@ import { BLOOM_DIMENSIONS, BLOOM_DIMENSION_IDS, toBloomRow } from '../../../shar
 import { validateBloomSeed } from '../../../shared/learning/bloom-catalog-validator.js';
 import { validateCompetencyLink } from '../../../shared/learning/competency-link-validator.js';
 import { findCycle } from '../../../shared/learning/prerequisite-validator.js';
+import { fetchAllRows } from '../../../shared/pagination.js';
 
 /** Setting that decides whether teachers create objectives directly (D2). */
 export const TEACHER_OBJECTIVE_CREATION_SETTING = 'learning.teacher_objective_creation';
@@ -51,8 +52,12 @@ export const COMPETENCY_STATUS = Object.freeze({
 
 export const COMPETENCY_KINDS = Object.freeze(['competency', 'skill', 'domain']);
 
-/** Per-school lookups are unbounded in the schema; page them generously. */
-const SCHOOL_WIDE_LIMIT = 1000;
+/**
+ * Page size for the school-wide loaders. It is a PAGE, not a cap: the loaders
+ * read every page until the dataset is complete (see `fetchAllRows`), so a
+ * school with more rows than this is never silently truncated.
+ */
+const SCHOOL_WIDE_PAGE_SIZE = 1000;
 
 export class LearningTaxonomyService {
   #repo;
@@ -143,8 +148,10 @@ export class LearningTaxonomyService {
   }
 
   /**
+   * The master switch for the Phase 1 surfaces. Absent or malformed → false.
+   * Enforced by the `/learning` router itself (every route except `/flags`),
+   * so this is an authorization input, not just a display hint.
    * @returns {Promise<boolean>} true only when the school explicitly opts in.
-   * Absent or malformed → false (the Phase 1 surfaces stay hidden).
    */
   async isAdaptiveEnabled(schoolId) {
     const { data } = await this.#repo.getAll('settings', {
@@ -177,29 +184,32 @@ export class LearningTaxonomyService {
     return this.#getScopedRow('competencies', schoolId, id, 'Competency');
   }
 
-  /** All objectives of one school, for the tenant-scoped validator contexts. */
-  async #schoolObjectives(schoolId) {
-    const { data } = await this.#repo.getAll('learning_objectives', {
-      filters: { school_id: schoolId },
-      limit: SCHOOL_WIDE_LIMIT,
-    });
-    return data || [];
-  }
-
+  /**
+   * Every competency of one school, for the validator contexts and the label
+   * maps. Completeness matters: a truncated set silently drops labels and can
+   * accept an invalid link, so the loaders read every page.
+   */
   async #schoolCompetencies(schoolId) {
-    const { data } = await this.#repo.getAll('competencies', {
+    return fetchAllRows(this.#repo, 'competencies', {
       filters: { school_id: schoolId },
-      limit: SCHOOL_WIDE_LIMIT,
+      orderBy: 'id',
+      direction: 'asc',
+      pageSize: SCHOOL_WIDE_PAGE_SIZE,
     });
-    return data || [];
   }
 
+  /**
+   * Every prerequisite edge of one school. Used for cycle detection on write,
+   * where a missing edge means a cycle is accepted — so this set MUST be
+   * complete, never a single capped page.
+   */
   async #schoolPrerequisites(schoolId) {
-    const { data } = await this.#repo.getAll('learning_prerequisites', {
+    return fetchAllRows(this.#repo, 'learning_prerequisites', {
       filters: { school_id: schoolId },
-      limit: SCHOOL_WIDE_LIMIT,
+      orderBy: 'id',
+      direction: 'asc',
+      pageSize: SCHOOL_WIDE_PAGE_SIZE,
     });
-    return data || [];
   }
 
   // ─── Objectives ──────────────────────────────────────────────────────────
@@ -605,11 +615,13 @@ export class LearningTaxonomyService {
 
   async listObjectiveCompetencies(user, objectiveId) {
     await this.#loadObjective(user.school_id, objectiveId);
-    const { data } = await this.#repo.getAll('learning_objective_competencies', {
+    const data = await fetchAllRows(this.#repo, 'learning_objective_competencies', {
       filters: { school_id: user.school_id, objective_id: objectiveId },
-      limit: SCHOOL_WIDE_LIMIT,
+      orderBy: 'id',
+      direction: 'asc',
+      pageSize: SCHOOL_WIDE_PAGE_SIZE,
     });
-    if (!data?.length) return [];
+    if (!data.length) return [];
 
     const competencies = await this.#schoolCompetencies(user.school_id);
     const byId = new Map(competencies.map((c) => [c.id, c]));
@@ -636,9 +648,11 @@ export class LearningTaxonomyService {
       this.#loadCompetency(schoolId, competencyId),
     ]);
 
-    const { data: existingLinks } = await this.#repo.getAll('learning_objective_competencies', {
+    const existingLinks = await fetchAllRows(this.#repo, 'learning_objective_competencies', {
       filters: { school_id: schoolId, objective_id: objectiveId },
-      limit: SCHOOL_WIDE_LIMIT,
+      orderBy: 'id',
+      direction: 'asc',
+      pageSize: SCHOOL_WIDE_PAGE_SIZE,
     });
 
     const check = validateCompetencyLink(

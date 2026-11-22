@@ -1,12 +1,12 @@
 # Phase 0 — Adaptive Learning Decision Register
 
-**Status:** **PARTIALLY APPROVED — Phase 1 gate only.** D1, D2 and D8 are approved (2026-11-19) and Phase 1 is authorized (Phase 1 only). Every other decision (D3–D7, D9–D13) remains recommended, not approved, until the owner records a disposition. See §4.
-**Date:** 2026-11-19
+**Status:** **PARTIALLY APPROVED — Phase 1 gate only, plus D15.** D1, D2 and D8 were approved on 2026-11-19, authorizing Phase 1 only. The owner accepted D15's **register wording** on 2026-11-21 and then **substantively approved the D15 recommended default** on 2026-11-21 (owner decision F1). D3–D14 remain recommended/not approved unless a separate disposition is recorded. **Phase 1B remains unauthorized**: the D15 gate is now decided, but implementation still requires a separate explicit owner authorization. See §4.
+**Date:** 2026-11-21 (D15 substantive approval and register reconciliation; original D1/D2/D8 approval remains dated 2026-11-19)
 **Related architecture:** `docs/ADAPTIVE_LEARNING_ARCHITECTURE.md`
 **Related review:** `docs/PHASE0_ARCHITECTURE_REVIEW.md`
 **Related ADR:** `docs/ADR-0001-ADAPTIVE-LEARNING-FOUNDATION.md`
 
-> This register resolves the questions in Appendix E of the architecture proposal into explicit, reviewable decisions (D1–D14). Each entry gives a recommended default, alternatives, advantages, disadvantages, consequences, the approval owner, and the implementation phase affected. Recommendations are not approvals. Pedagogical thresholds and labels remain owner decisions.
+> This register resolves the questions in Appendix E of the architecture proposal into explicit, reviewable decisions (D1–D15). Each entry gives a recommended default, alternatives, advantages, disadvantages, consequences, the approval owner, and the implementation phase affected. Recommendations are not approvals. Pedagogical thresholds and labels remain owner decisions.
 
 ---
 
@@ -28,8 +28,9 @@
 | D12 | Teacher visibility of evidence | **Show summarized evidence** and a four-part explanation (observed performance, evidence sufficiency, missing evidence, next action); hide internal weights/model constants behind “Why this?”; students get plain-language, non-stigmatizing wording for every state | Product + privacy | **Yes — product/privacy** | Recommended, not approved |
 | D13 | Trust boundary for summative evidence | **Require server-authoritative summative evidence**: a rule-4 `exam` row counts as `summative` only if linked to a committed `ExamSession` for the same `(exam_id, user_id)` and re-graded with `GradingService`; otherwise demote to `formative` and flag `trust='client_supplied'` for admin review. `POST /results` and bulk writes cannot self-certify summative evidence. **Plus an explicit teacher-attested path** for offline/bulk exams and paper scores (see the detailed section) | Engineering + security (+ pedagogy for the attested path) | **Yes — engineering/security (product awareness)** | Recommended, not approved |
 | D14 | Which formal exams are high-stakes | **Every `is_training=false` exam is high-stakes by default**, so the D4 gate consumes all such exams; a school may **explicitly designate** a formal-but-non-summative exam (e.g. a diagnostic/placement exam) as **not** high-stakes. High-stakes evidence additionally requires the D13 trust checks. The designation is captured from Phase 2 and the policy is finalized before Phase 3 publishes levels | Pedagogy | **Yes — pedagogy** | Recommended, not approved |
+| D15 | Programme governance and objective versioning | **Official objectives are immutable once published** and revised only by **new versions**; a version bump requires an **explicit per-class adoption** and never moves a class automatically; teachers import only within their **assigned subjects**, enforced **server-side**; governance mode is a school setting with an **audited** switch (stricter re-evaluates existing rows; looser never silently grants reliability) | Product + pedagogy | **Yes — product and pedagogy** | **Approved 2026-11-21 (substantive, F1)** — wording accepted 2026-11-21; the Phase 1B gate is decided, but implementation remains unauthorized |
 
-**Approval rule:** D1, D2, D4, D5, D6, D7, D8, D11, D12, D13 and D14 require explicit product, pedagogical and/or security approval. D3, D9 and D10 also require the named engineering or privacy sign-off. Not every decision must be approved before Phase 1; each must be approved, revised, or explicitly deferred to a named dependent phase. The dependency table in §3 is normative. No recommendation is to be treated as accepted because it appears in the architecture document.
+**Approval rule:** D1, D2, D4, D5, D6, D7, D8, D11, D12, D13, D14 and D15 require explicit product, pedagogical and/or security approval. D3, D9 and D10 also require the named engineering or privacy sign-off. Not every decision must be approved before Phase 1; each must be approved, revised, or explicitly deferred to a named dependent phase. The dependency table in §3 is normative. No recommendation is to be treated as accepted because it appears in the architecture document.
 
 ---
 
@@ -796,6 +797,23 @@ This keeps one trust decision (D13) with two evidence paths: a server-authoritat
 
 ---
 
+### D15 — Programme governance and objective versioning
+
+**Question.** What governance and versioning policy must be decided before Phase 1B implements official programmes, objective versions, imports and coverage?
+
+**Recommended default — SUBSTANTIVELY APPROVED 2026-11-21 (owner decision F1).** The owner accepted the four limbs below as the approved default, without broadening them. The earlier wording-only acceptance (2026-11-21) is distinct and did not itself approve the default.
+
+- Official objectives are **immutable once published** and revised only by creating new versions (architecture draft, P2 / input (e)).
+- A version bump requires **explicit per-class adoption** and never moves a class automatically (U3, §19.1).
+- Teacher imports are restricted to the teacher's **assigned subjects**, enforced server-side (U2, §19.1).
+- Governance mode is a school setting with an **audited** switch; moving to a stricter mode re-evaluates existing rows, while moving to a looser mode never silently grants reliability (U11, §19.2).
+
+**Gate:** before **Phase 1B**. **Status:** **DECIDED — substantively approved 2026-11-21 (owner decision F1).** The gate is satisfied as a decision; it does **not** authorize implementation. U1–U5, U7, U9 and U11 are the stated dependencies (approved in the architecture draft, §19). U10–U14 inform the design; U15 is **approved in principle**, and its G4 wording condition is now **satisfied** by the adopted G4 wording (owner decision E1, draft §20.2); G2/G3 are approved and their wording accepted (§20.3–§20.4). **U8 is closed** because this substantive decision is recorded here, not by a label change.
+
+**Approval owner:** Product + pedagogy. **Explicit approval required: yes.** **Approved:** 2026-11-21 — owner decision F1, the recommended default accepted unchanged (four limbs above). No Phase 1B implementation is authorized by this entry.
+
+---
+
 ## 3. Decision-to-phase approval gates
 
 Not every decision must be approved before Phase 1. Each decision must be **approved, revised, or explicitly deferred to the named dependent phase**. A deferral is recorded, is not an approval, and blocks that phase. Mandatory pedagogical, privacy and security approvals cannot be weakened by deferral.
@@ -803,6 +821,7 @@ Not every decision must be approved before Phase 1. Each decision must be **appr
 | Phase | Decisions required before the phase starts | Why this gate |
 |---|---|---|
 | Phase 1 — Taxonomy and question pedagogy | **D1, D2, D8** | Label wording, objective authority and localization scope are visible in the first UI and API |
+| Phase 1B — Curriculum programmes and coverage | **D15 (decided 2026-11-21)** | D15 is substantively approved; **Phase 1B implementation is still not authorized** and requires a separate explicit owner authorization |
 | Phase 2 — Evidence and activity attempts | **D3, D7, D9 (retention/privacy direction), D10, D12, D13** | Backfill, game evidence, retention/privacy, ingestion recovery, evidence visibility and the summative trust boundary affect real student evidence |
 | Phase 3 — Deterministic mastery and profiles | **D4, D5, D6, D14** | High-stakes gate, thresholds/weights, override authority and the high-stakes designation determine levels and messaging |
 | Phase 4 — Resource mapping and blueprints | No new decision; all prior gates remain | Uses taxonomy and evidence from earlier phases |
@@ -828,9 +847,11 @@ Not every decision must be approved before Phase 1. Each decision must be **appr
 
 | Field | Value |
 |---|---|
-| Owner | ____________________ |
-| Date | 2026-11-19 (Phase 1 gate only; full approval record not yet signed) |
-| Approved decisions | **D1** (label “Learning profile”), **D2** (school-managed objectives, teachers may propose), **D8** (EN/FR/AR learning panels, no full-app RTL) |
+| Owner | ____________________ (name not entered; provenance is the owner's explicit 2026-11-21 consolidated decision record, which the ratified safeguard in `docs/ARCHITECTURE-BASELINE.md` §2.1 treats as valid owner-decision provenance) |
+| Date | 2026-11-21 (D15 substantive approval and register reconciliation; original Phase 1 gate record dated 2026-11-19) |
+| Approved decisions | **D1** (label “Learning profile”), **D2** (school-managed objectives, teachers may propose), **D8** (EN/FR/AR learning panels, no full-app RTL) — **Phase 1 gate only**; **D15** (programme governance and objective versioning) — **substantive approval 2026-11-21 (F1)**, decision only |
+| Register wording accepted | **D15 — Programme governance and objective versioning** (2026-11-21); wording acceptance is recorded **separately** from the substantive approval below |
+| D15 substantive approval | **2026-11-21 — owner decision F1:** the recommended default is accepted unchanged (immutable published objectives; explicit per-class adoption; server-side import scope; audited governance setting). **No Phase 1B implementation is authorized.** U8 is closed because this decision is recorded here. |
 | Revised decisions | None recorded |
 | Deferred decisions (decision → phase → owner) | D3, D4, D5, D6, D7, D9, D10, D11, D12, D13, D14 → their dependent phases → owner TBD |
 | `mastery-v1.1` | **Acknowledged as an unvalidated review candidate** (not validated science, not permanently approved) |
@@ -838,6 +859,6 @@ Not every decision must be approved before Phase 1. Each decision must be **appr
 | Phase 2 gate confirmed (D3, D7, D9 direction, D10, D12, D13) | ____________________ |
 | Phase 3 gate confirmed (D4, D5, D6, D14) | ____________________ |
 | Conditions | Phase 1 implementation may begin only after the Phase 1 plan is accepted. No Phase 2 work, no evidence storage, no `summative` promotion, and no level publication until the Phase 2/3 gates are recorded. |
-| Signature/confirmation | ____________________ (name/signature line still blank) |
+| Signature/confirmation | ____________________ (no signature line executed; the 2026-11-21 owner decisions are recorded as explicit conversation decisions — valid provenance under `docs/ARCHITECTURE-BASELINE.md` §2.1; a blank signature does not invalidate them) |
 
 **No implementation may begin until the required gate decisions are recorded and Phase 1 is explicitly authorized.** A blank deferral is not permission; an unapproved decision must not silently become an implementation default.

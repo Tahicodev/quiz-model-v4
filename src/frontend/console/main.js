@@ -33,7 +33,6 @@ import { settingsPage, SECTIONS } from './pages/settings/index.js';
 import { organizationDetailPage } from './pages/details/organization.js';
 import { userDetailPage } from './pages/details/user.js';
 import { learningHubPage } from './pages/learning/index.js';
-import { pedagogyQuestionsPage } from './pages/learning/questions.js';
 import { taxonomyPage } from './pages/learning/taxonomy.js';
 import { LEARNING_READ_PERMISSIONS } from './pages/learning/flags.js';
 
@@ -52,9 +51,11 @@ const NAV = [
 	// then the platform adoption view (how the product is being used).
 	{ id: 'teaching', path: '/teaching', title: 'Teaching & Learning', icon: 'analytics', group: 'Analytics', permission: ['platform.analytics.read', 'school.analytics.read'] },
 	{ id: 'analytics', path: '/analytics', title: 'Platform Analytics', icon: 'analytics', group: 'Analytics', permission: ['platform.analytics.read', 'school.analytics.read'] },
-	// The Phase 1 learning taxonomy and question classification. Administrators
-	// and teachers both reach it; each page decides what the role may do, and
-	// the API stays the final authority.
+	// The Phase 1 learning taxonomy. Question classification no longer lives
+	// here: since the WP5 refactor (2026-11-21) teachers classify questions
+	// inside the existing Questions tab of the application, and this section
+	// is the ADMINISTRATIVE governance surface (objectives, competencies,
+	// proposal queue, prerequisites).
 	{ id: 'learning', path: '/learning', title: 'Learning', icon: 'learning', group: 'Teaching', permission: LEARNING_READ_PERMISSIONS },
 	// Manage: everything that changes the installation rather than reports on it.
 	{ id: 'organizations', path: '/organizations', title: 'Organizations', icon: 'organizations', group: 'Manage', permission: ['platform.organizations.read', 'school.profile.read'] },
@@ -82,7 +83,6 @@ const PAGES = [
 	healthPage,
 	settingsPage,
 	learningHubPage,
-	pedagogyQuestionsPage,
 	taxonomyPage,
 ];
 
@@ -535,23 +535,15 @@ async function boot() {
 	wireGlobalSearch();
 
 	/**
-	 * Where a session that is NOT an administrator belongs.
+	 * No teacher auto-routing.
 	 *
-	 * A teacher reaches the console for exactly one reason: the learning
-	 * taxonomy. Every other section is administrator-gated, so the default
-	 * address ('#/', the overview) would only ever answer "access restricted".
-	 * Opening the console therefore lands a teacher on the Learning hub, which
-	 * decides for itself whether the surfaces are enabled.
+	 * The WP5 Learning Console used to redirect teachers straight to
+	 * `#/learning` on boot. That separate workflow was refactored away:
+	 * teachers classify questions inside the existing Questions tab of the
+	 * application, so the console no longer captures their entry point. A
+	 * teacher who opens the console sees the same permission-filtered
+	 * navigation as before the Learning Console existed.
 	 */
-	function landOnFirstSection() {
-		const canOpenOverview = context.canAny(['platform.console', 'school.console']);
-		if (canOpenOverview) return;
-		const canOpenLearning = context.canAny(LEARNING_READ_PERMISSIONS);
-		if (!canOpenLearning) return;
-		if (parseHash().path === '/') navigate('/learning', { replace: true });
-	}
-	landOnFirstSection();
-
 	start();
 
 	// The boot screen is replaced by the shell.

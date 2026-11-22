@@ -386,7 +386,14 @@ router.get('/session', async (req, res, next) => {
 // ── Roles & permissions ─────────────────────────────────────────────────────
 // The real permission catalog, so the Roles & Permissions page shows what the
 // platform actually enforces instead of a hardcoded list.
-router.get('/roles', async (req, res, next) => {
+//
+// These are console-ADMINISTRATION surfaces, so they use the console scopes
+// proper (not the Phase 1 learning exception): the teacher admitted to the
+// console for the learning taxonomy holds neither, and is refused here.
+router.get(
+	'/roles',
+	requireAnyPermission(['platform.console', 'school.console']),
+	async (req, res, next) => {
 	try {
 		const { roleSvc } = getContainer();
 		const roles = await roleSvc.listRoles();
@@ -408,7 +415,10 @@ router.get('/roles', async (req, res, next) => {
 });
 
 // ── The caller's own effective permissions ──────────────────────────────────
-router.get('/permissions', async (req, res, next) => {
+router.get(
+	'/permissions',
+	requireAnyPermission(['platform.console', 'school.console']),
+	async (req, res, next) => {
 	try {
 		const { roleSvc } = getContainer();
 		const permissions = await roleSvc.effectivePermissions(
@@ -423,7 +433,10 @@ router.get('/permissions', async (req, res, next) => {
 });
 
 // ── The caller's own permission overrides ───────────────────────────────────
-router.get('/permissions/overrides', async (req, res, next) => {
+router.get(
+	'/permissions/overrides',
+	requireAnyPermission(['platform.console', 'school.console']),
+	async (req, res, next) => {
 	try {
 		const { roleSvc } = getContainer();
 		res.json({ overrides: await roleSvc.listOverrides(req.user.id) });
@@ -647,7 +660,10 @@ router.get('/audit/summary', async (req, res, next) => {
 
 // ── System health ──────────────────────────────────────────────────────────
 
-router.get('/health', async (req, res, next) => {
+router.get(
+	'/health',
+	requireAnyPermission(['platform.health.read', 'school.health.read']),
+	async (req, res, next) => {
 	try {
 		const { systemHealthSvc } = getContainer();
 		const data = await systemHealthSvc.getSnapshot({ minutes: req.query.minutes });

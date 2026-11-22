@@ -68,12 +68,28 @@ const STRINGS = {
 		'lang.label': 'Language',
 		'learning.title': 'Learning',
 		'learning.description':
-			'The learning taxonomy and question classification of this organization.',
+			'The learning taxonomy governance of this organization. Teachers classify questions in the application\'s Questions tab.',
 		'nav.hub': 'Learning',
 		'nav.questions': 'Question pedagogy',
 		'nav.taxonomy': 'Taxonomy',
 		'card.questions.desc': 'Review the bank, see what each question assesses, and classify it.',
+		'card.questions.moved':
+			'Question classification lives in the application\'s Questions tab since the WP5 refactor — teachers classify where they already work.',
 		'card.taxonomy.desc': 'The objectives and competencies the classification is built on.',
+		'card.classify.title': 'Question classification',
+		'card.classify.desc':
+			'Classify questions where you already work — in the application\'s Questions tab.',
+		'card.classify.badge': 'In the application',
+		'card.open': 'Open',
+		'hub.eyebrow': 'Learning governance',
+		'hub.status.enabled': 'Enabled',
+		'hub.attention.title': '{count} objective(s) awaiting approval',
+		'hub.attention.body':
+			'Review teacher proposals so their questions can be classified against them.',
+		'hub.attention.cta': 'Review proposals',
+		'hub.cards.title': 'Where to go next',
+		'hub.disable.confirm':
+			'Turn learning off for this organization? Teachers will no longer see the learning surfaces. Nothing is deleted.',
 
 		'flag.disabled.title': 'Learning is not enabled',
 		'flag.disabled.body':
@@ -113,6 +129,7 @@ const STRINGS = {
 		'action.remove': 'Remove',
 		'action.selectAll': 'Select all',
 		'action.clearSelection': 'Clear selection',
+		'action.clearFilters': 'Clear filters',
 
 		'field.statement': 'Statement',
 		'field.description': 'Description',
@@ -149,6 +166,13 @@ const STRINGS = {
 		'hint.readOnlyTeacher': 'Only administrators manage competencies and prerequisites.',
 		'hint.rubricJson': 'A JSON object or free text, shown to graders.',
 		'hint.language': 'Labels only — it does not change the school language.',
+		'hint.form.name': 'The competency as teachers will recognise it.',
+		'hint.form.description': 'Optional context for teachers — what this competency covers.',
+		'hint.form.weight': 'How strongly this competency counts toward the objective.',
+		'hint.form.primary': 'Mark the single competency that best represents the objective.',
+		'hint.form.strength': 'Required prerequisites block progression; recommended ones do not.',
+		'hint.form.minMastery': 'The mastery state a learner needs before starting this objective.',
+		'hint.form.rationale': 'Why this objective depends on the prerequisite.',
 
 		'table.question': 'Question',
 		'table.type': 'Type',
@@ -186,6 +210,10 @@ const STRINGS = {
 		'summary.proposed': 'Awaiting approval',
 		'summary.competencies': 'Competencies',
 		'summary.prerequisites': 'Prerequisites',
+		'tax.desc.objectives': 'The outcomes the school teaches and the questions are classified against.',
+		'tax.desc.competencies': 'The skills and domains an objective builds, grouped for reuse.',
+		'tax.desc.proposals': 'Teacher proposals waiting for an administrator decision.',
+		'results.count': '{count} result(s)',
 
 		'empty.questions.title': 'No questions match the current filters',
 		'empty.questions.message':
@@ -222,18 +250,46 @@ const STRINGS = {
 
 		'error.load': 'This section could not be loaded',
 		'error.save': 'The change could not be saved',
+
+		'form.requiredMark': 'Required',
+		'form.requiredMissing': 'Please fill in the highlighted required fields before saving.',
+		'form.hint.code': 'Short unique identifier, e.g. MATH-6.NS1.',
+		'form.hint.order': 'Display position among the subject objectives (lower numbers come first).',
+		'form.hint.statement': 'One sentence describing what the learner should be able to do.',
+		'option.none': 'None',
+		'objSection.context': 'Curriculum context',
+		'objSection.outcome': 'Learning outcome',
+		'objSection.organization': 'Organization',
+		'form.note.official':
+			'Official objective — part of the curriculum catalog; proposed_by is empty for objectives created by the school administration.',
 	},
 
 	fr: {
 		'lang.label': 'Langue',
 		'learning.title': 'Apprentissage',
 		'learning.description':
-			'La taxonomie d\'apprentissage et la classification des questions de cet établissement.',
+			'La gouvernance de la taxonomie d\'apprentissage de cet établissement. Les enseignants classent les questions dans l\'onglet Questions de l\'application.',
 		'nav.hub': 'Apprentissage',
 		'nav.questions': 'Pédagogie des questions',
 		'nav.taxonomy': 'Taxonomie',
 		'card.questions.desc': 'Parcourez la banque, voyez ce que chaque question évalue et classez-la.',
+		'card.questions.moved':
+			'Depuis la refonte WP5, la classification des questions vit dans l’onglet Questions de l’application — les enseignants classent là où ils travaillent déjà.',
 		'card.taxonomy.desc': 'Les objectifs et compétences sur lesquels repose la classification.',
+		'card.classify.title': 'Classification des questions',
+		'card.classify.desc':
+			'Classez les questions là où vous travaillez déjà — dans l\'onglet Questions de l\'application.',
+		'card.classify.badge': 'Dans l\'application',
+		'card.open': 'Ouvrir',
+		'hub.eyebrow': 'Gouvernance de l\'apprentissage',
+		'hub.status.enabled': 'Activé',
+		'hub.attention.title': '{count} objectif(s) en attente d\'approbation',
+		'hub.attention.body':
+			'Examinez les propositions des enseignants pour que leurs questions puissent être classées.',
+		'hub.attention.cta': 'Examiner les propositions',
+		'hub.cards.title': 'Où aller ensuite',
+		'hub.disable.confirm':
+			'Désactiver l\'apprentissage pour cet établissement ? Les enseignants ne verront plus les surfaces d\'apprentissage. Rien n\'est supprimé.',
 
 		'flag.disabled.title': 'L\'apprentissage n\'est pas activé',
 		'flag.disabled.body':
@@ -273,6 +329,7 @@ const STRINGS = {
 		'action.remove': 'Retirer',
 		'action.selectAll': 'Tout sélectionner',
 		'action.clearSelection': 'Effacer la sélection',
+		'action.clearFilters': 'Effacer les filtres',
 
 		'field.statement': 'Énoncé',
 		'field.description': 'Description',
@@ -310,6 +367,13 @@ const STRINGS = {
 			'Seuls les administrateurs gèrent les compétences et les prérequis.',
 		'hint.rubricJson': 'Un objet JSON ou du texte libre, montré aux correcteurs.',
 		'hint.language': 'Libellés uniquement — ne change pas la langue de l\'établissement.',
+		'hint.form.name': 'La compétence telle que les enseignants la reconnaîtront.',
+		'hint.form.description': 'Contexte facultatif pour les enseignants — ce que couvre cette compétence.',
+		'hint.form.weight': 'Dans quelle mesure cette compétence compte pour l\'objectif.',
+		'hint.form.primary': 'Marquez la compétence unique qui représente le mieux l\'objectif.',
+		'hint.form.strength': 'Les prérequis requis bloquent la progression ; les recommandés non.',
+		'hint.form.minMastery': 'L\'état de maîtrise nécessaire avant de commencer cet objectif.',
+		'hint.form.rationale': 'Pourquoi cet objectif dépend du prérequis.',
 
 		'table.question': 'Question',
 		'table.type': 'Type',
@@ -347,6 +411,10 @@ const STRINGS = {
 		'summary.proposed': 'En attente d\'approbation',
 		'summary.competencies': 'Compétences',
 		'summary.prerequisites': 'Prérequis',
+		'tax.desc.objectives': 'Les résultats enseignés par l\'établissement, sur lesquels les questions sont classées.',
+		'tax.desc.competencies': 'Les habiletés et domaines qu\'un objectif développe, regroupés pour être réutilisés.',
+		'tax.desc.proposals': 'Les propositions des enseignants en attente de décision d\'un administrateur.',
+		'results.count': '{count} résultat(s)',
 
 		'empty.questions.title': 'Aucune question ne correspond aux filtres',
 		'empty.questions.message':
@@ -385,17 +453,43 @@ const STRINGS = {
 
 		'error.load': 'Cette section n\'a pas pu être chargée',
 		'error.save': 'La modification n\'a pas pu être enregistrée',
+
+		'form.requiredMark': 'Obligatoire',
+		'form.requiredMissing': 'Veuillez remplir les champs obligatoires surlignés avant d\'enregistrer.',
+		'form.hint.code': 'Identifiant court unique, ex. MATH-6.NS1.',
+		'form.hint.order': 'Position d\'affichage parmi les objectifs de la matière (les nombres bas d\'abord).',
+		'form.hint.statement': 'Une phrase décrivant ce que l\'apprenant doit être capable de faire.',
+		'option.none': 'Aucun',
+		'objSection.context': 'Contexte du programme',
+		'objSection.outcome': 'Résultat d’apprentissage',
+		'objSection.organization': 'Organisation',
+		'form.note.official':
+			'Objectif officiel — fait partie du catalogue du programme ; proposed_by est vide pour les objectifs créés par l\'administration.',
 	},
 
 	ar: {
 		'lang.label': 'اللغة',
 		'learning.title': 'التعلّم',
-		'learning.description': 'تصنيف التعلّم وتصنيف الأسئلة الخاص بهذه المؤسسة.',
+		'learning.description': 'إدارة تصنيف التعلّم لهذه المؤسسة. يصنّف المعلمون الأسئلة في تبويب الأسئلة داخل التطبيق.',
 		'nav.hub': 'التعلّم',
 		'nav.questions': 'بيداغوجيا الأسئلة',
 		'nav.taxonomy': 'التصنيف',
 		'card.questions.desc': 'راجع بنك الأسئلة، واطّلع على ما يقيسه كل سؤال، ثم صنّفه.',
+		'card.questions.moved':
+			'منذ إعادة هيكلة WP5، يعيش تصنيف الأسئلة في تبويب الأسئلة داخل التطبيق — يصنّف المعلمون حيث يعملون أصلًا.',
 		'card.taxonomy.desc': 'الأهداف والكفاءات التي يقوم عليها التصنيف.',
+		'card.classify.title': 'تصنيف الأسئلة',
+		'card.classify.desc': 'صنّف الأسئلة حيث تعمل أصلًا — في تبويب الأسئلة داخل التطبيق.',
+		'card.classify.badge': 'داخل التطبيق',
+		'card.open': 'فتح',
+		'hub.eyebrow': 'حوكمة التعلّم',
+		'hub.status.enabled': 'مُفعّل',
+		'hub.attention.title': '{count} هدف/أهداف بانتظار الموافقة',
+		'hub.attention.body': 'راجع اقتراحات المعلّمين كي يمكن تصنيف أسئلتهم وفقها.',
+		'hub.attention.cta': 'مراجعة الاقتراحات',
+		'hub.cards.title': 'إلى أين تذهب بعد ذلك',
+		'hub.disable.confirm':
+			'تعطيل التعلّم لهذه المؤسسة؟ لن يرى المعلّمون واجهات التعلّم بعد ذلك. لا يُحذف أي شيء.',
 
 		'flag.disabled.title': 'التعلّم غير مُفعّل',
 		'flag.disabled.body':
@@ -435,6 +529,7 @@ const STRINGS = {
 		'action.remove': 'إزالة',
 		'action.selectAll': 'تحديد الكل',
 		'action.clearSelection': 'مسح التحديد',
+		'action.clearFilters': 'مسح المرشّحات',
 
 		'field.statement': 'النص',
 		'field.description': 'الوصف',
@@ -469,6 +564,13 @@ const STRINGS = {
 		'hint.readOnlyTeacher': 'المشرفون فقط يديرون الكفاءات والمتطلبات.',
 		'hint.rubricJson': 'كائن JSON أو نص حر يُعرض على المصحّحين.',
 		'hint.language': 'التسميات فقط — لا تغيّر لغة المؤسسة.',
+		'hint.form.name': 'الكفاءة كما سيتعرّف عليها المعلّمون.',
+		'hint.form.description': 'سياق اختياري للمعلّمين — ما تغطّيه هذه الكفاءة.',
+		'hint.form.weight': 'مدى وزن هذه الكفاءة في الهدف.',
+		'hint.form.primary': 'حدّد الكفاءة الواحدة التي تمثّل الهدف أفضل تمثيل.',
+		'hint.form.strength': 'المتطلبات المطلوبة تمنع التقدّم؛ المُستحسنة لا تمنعه.',
+		'hint.form.minMastery': 'حالة الإتقان التي يحتاجها المتعلّم قبل بدء هذا الهدف.',
+		'hint.form.rationale': 'لماذا يعتمد هذا الهدف على المتطلب السابق.',
 
 		'table.question': 'السؤال',
 		'table.type': 'النوع',
@@ -506,6 +608,10 @@ const STRINGS = {
 		'summary.proposed': 'بانتظار الموافقة',
 		'summary.competencies': 'الكفاءات',
 		'summary.prerequisites': 'المتطلبات السابقة',
+		'tax.desc.objectives': 'النواتج التي تدرّسها المؤسسة وتُصنّف الأسئلة وفقها.',
+		'tax.desc.competencies': 'المهارات والمجالات التي يبنيها الهدف، مجمّعة لإعادة الاستخدام.',
+		'tax.desc.proposals': 'اقتراحات المعلّمين بانتظار قرار المشرف.',
+		'results.count': '{count} نتيجة/نتائج',
 
 		'empty.questions.title': 'لا توجد أسئلة مطابقة للمعايير الحالية',
 		'empty.questions.message': 'عدّل البحث أو التصنيف أو مرشّح بلوم.',
@@ -540,6 +646,18 @@ const STRINGS = {
 
 		'error.load': 'تعذّر تحميل هذا القسم',
 		'error.save': 'تعذّر حفظ التغيير',
+
+		'form.requiredMark': 'مطلوب',
+		'form.requiredMissing': 'يرجى إكمال الحقول المطلوبة المحددة قبل الحفظ.',
+		'form.hint.code': 'معرّف قصير فريد، مثال: MATH-6.NS1.',
+		'form.hint.order': 'ترتيب العرض بين أهداف المادة (الأرقام الأصغر أولاً).',
+		'form.hint.statement': 'جملة واحدة تصف ما يجب أن يكون المتعلّم قادراً عليه.',
+		'option.none': 'بلا',
+		'objSection.context': 'سياق المنهج',
+		'objSection.outcome': 'ناتج التعلّم',
+		'objSection.organization': 'التنظيم',
+		'form.note.official':
+			'هدف رسمي — جزء من كتالوغ المنهج؛ proposed_by فارغ للأهداف التي أنشأتها إدارة المدرسة.',
 	},
 };
 

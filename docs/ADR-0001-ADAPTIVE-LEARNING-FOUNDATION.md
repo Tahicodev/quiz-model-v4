@@ -8,7 +8,7 @@
   - `docs/PHASE0_DECISION_REGISTER.md`
   - `docs/PHASE0_ARCHITECTURE_REVIEW.md`
   - `complete_adaptive_learning _system.md`
-- **Implementation status:** Not started. No source code, Prisma migration, API route or UI change is part of this ADR.
+- **Implementation status:** Phase 1 (taxonomy + manual question pedagogy) implemented behind default-off flags on branch `feature/adaptive-learning-phase1`; Phase 2–8 not started. The ADR status remains **Proposed** by owner instruction (§6.5).
 
 ---
 
@@ -33,7 +33,7 @@ This ADR **proposes** the following foundation for all subsequent adaptive-learn
 3. **Pedagogical taxonomy.** A global six-row Bloom catalog plus school-scoped learning objectives, competencies/skills, objective–competency links, prerequisites and question assessment criteria.
 4. **Evidence layer.** Immutable-content evidence derived only from real persisted results and activity attempts (including teacher-assessed activities). Unmapped evidence is stored but excluded from mastery. No inference of objectives or Bloom from text or AI.
 5. **Deterministic mastery.** A pure, versioned calculator using policy v1.1 (review candidate). AI has no authority over evidence, mastery, levels or assignments.
-6. **Teacher-controlled adaptation.** Pathways, groups, assignments, interventions and overrides are teacher/admin actions with audit. Recommendations are suggestions, never automatic assignments.
+6. **Teacher-controlled adaptation.** Pathways, groups, assignments, interventions and overrides are teacher/admin actions with audit. Recommendations are suggestions, never automatic assignments. Question classification is its own class-scope permission (`class.learning.classify`, Phase 1): a teacher may attach criteria only to questions the server confirms are their own, and may propose (not activate) an objective; `class.learning.read` covers reading and `school.learning.manage` covers admin approval. `class.learning.manage`/`class.learning.assign` remain Phase 3 design permissions and are not in the Phase 1 catalog.
 7. **No permanent global level.** Mastery and support levels are per objective/competency/topic, evidence-scoped and recomputed. “Not enough evidence” is a first-class state.
 8. **Tenant safety.** Every new school-scoped table carries `school_id`; services re-check tenant and class scope; cross-tenant IDs are rejected.
 9. **No LocalStorage authority.** The frontend reads adaptive state from APIs only. Offline adaptive data is unavailable or read-only.
@@ -45,6 +45,7 @@ The following are **proposed**, not accepted. Each is subject to the owner decis
 
 - Evidence records carry `source_type`, `source_id`, `source_mode`, `method`, `evidence_class`, `evidence_item_key`, attempt metadata, score/max, credit, weight components, timestamp and provenance.
 - **Classification is derived, not guessed from `Result.mode`.** Because the session path always writes `mode='exam'`, a formal exam is identified as `mode='exam'` **and** a real `exam_id` **and** joined `Exam.is_training=false`; every other `Result` is `training`, `game`, `tournament` or `kids_game`, and all of these are `formative` (`docs/ADAPTIVE_LEARNING_ARCHITECTURE.md` §E.2.1). Only `source_kind='exam'` or `method='teacher_rubric'` is `summative`. A `mode='training'` row that carries a real `exam_id` is **not** exam evidence. This is what makes it impossible for repeated training attempts to satisfy the summative gate.
+- **What is recorded ≠ what can be proven ≠ what a teacher designates as formal.** This is a non-negotiable invariant, not a slogan. *Recorded* is what a system persisted (a result, a score, an attempt) and is not proof, because `mode`, `exam_id` and scores can be client-supplied. *Proven* is what survives the D13 trust checks (server-authoritative completed session, single use, server re-grade, mapped criteria), and only proven evidence may satisfy a mastery gate. *Formal* is a governance designation — D14's `Exam.is_high_stakes`, a teacher attestation for an offline/paper exam, an admin's approval of a proposed objective — and it changes how proven evidence is treated; it cannot promote recorded-but-unproven rows, and it is itself audited and revocable. The API and UI must state which of the three a value represents.
 - **Summative (`exam`) evidence is server-authoritative (D13).** Because `mode`, `exam_id` and the score can be client-supplied on `POST /results` and bulk writes, a rule-4 row is promoted to `summative` only when it matches a committed completed `ExamSession` (same `exam_id`, `user_id`, `school_id`; single use) and its per-question correctness is re-derived server-side with `GradingService`. Otherwise it is ingested as `formative` and flagged for admin review. Offline, bulk-imported and paper exams enter only through an **explicit, audited teacher attestation** (`method='teacher_attestation'`), never as an unattested bulk row. See `docs/PHASE0_DECISION_REGISTER.md` D13.
 - **Which formal exams are high-stakes (D14).** Every `is_training=false` exam is high-stakes by default; a school may explicitly designate a formal-but-non-summative exam (diagnostic/placement) as `is_high_stakes=false`. High-stakes still requires the D13 checks. See D14.
 - `source_type` is limited to `result` and `activity_attempt`. Teacher assessment is a `LearningActivityAttempt` that carries assessed `LearningActivityCriterion` rows; the evidence it produces has `method='teacher_rubric'` (derived from the criteria — `LearningActivityAttempt` itself has **no** `method` column). Interventions are pedagogical actions, not an evidence source; a teacher observation that should count is recorded as an activity attempt.
@@ -64,7 +65,7 @@ The following schema additions are **proposed**, not accepted, and are not creat
 - Add activity attempt idempotency and attempt metadata.
 - Add tournament resources to `LearningResourceMap` and `LearningPathwayItem`.
 - Add evidence fields for method, lane, item key, canonical criterion identity, source fingerprint, attempt number and weight components.
-- Add `Exam.is_high_stakes` (additive, default `true`; meaningful only when `is_training=false`) for the D14 designation.
+- Add `Exam.is_high_stakes` (additive, default `true`; meaningful only when `is_training=false`) for the D14 designation. **Phase 2/3 design only:** not created by the Phase 1 schema or migration, and no Phase 1 code reads or writes it.
 - Add mastery fields for attempt/current-evidence counts, recent/previous performance, recognition state and last computation.
 - Add tenant-safe unique constraints where appropriate.
 - Keep course mastery as a derived scope: objectives are resolved through the course’s category branch and/or `LearningResourceMap` targets; no duplicate course/objective table is introduced in v1. If direct objective–course association becomes a product requirement, add an explicit join in Phase 4, not a second curriculum tree.
@@ -102,7 +103,7 @@ The following schema additions are **proposed**, not accepted, and are not creat
 
   `proficient_below = 0.85` is the upper bound of the proficient band, **not** its entry threshold; proficiency starts at `0.70`. If the owner wants proficiency to start at `0.85`, that is a D5 policy change and Example 1 becomes `developing`; no threshold is changed silently.
 - One summative item satisfies the minimum high-stakes count but is weak evidence; confidence can still keep the student at `developing`.
-- Teacher-rubric evidence carries a higher method weight (1.2); the source weight depends on whether it is an exercise-based rubric (0.9, combined 1.08) or a teacher-created activity (1.1, combined 1.32). These are provisional policy choices, not empirical findings.
+- Teacher-rubric evidence carries a higher method weight (1.2); the source weight depends on whether it is an exercise-based rubric (0.9, combined 1.08) or a teacher-created activity (1.1, combined 1.32). These are provisional policy choices, not empirical findings. **Teacher-attestation weight is capped at 1.0** and is set to 1.0 pending the owner's D5 decision: an attestation has no session or answer key to re-grade, so its only trust anchor is teacher accountability, and it must not outweigh auto-graded or rubric evidence. Raising it requires a recorded D5 disposition and pilot data.
 - Four distinct items can satisfy the advanced evidence-count gate, but the advanced confidence gate and Evaluate/Create rubric requirement still apply.
 - The same provisional thresholds apply across subjects and age groups in v1; subject/age calibration is a pilot question, not an established result.
 - D4/D5 remain provisional. A pilot with teachers and real student evidence must measure one-item proficiency, teacher disagreement, override frequency, time in `summative_pending`, and explanation comprehension before thresholds are treated as validated.
@@ -202,6 +203,7 @@ The following schema additions are **proposed**, not accepted, and are not creat
 | Do not introduce duplicate systems | Deliberate non-entities documented |
 | Do not use LocalStorage as source of truth | API-only authoritative state |
 | Do not introduce fake student evidence | Unmapped evidence excluded; no inference |
+| What is recorded is not proof and not formal | Recorded ≠ proven ≠ formal; only D13-checked evidence satisfies a gate; D14/attestation/approval are audited designations |
 | Do not assign permanent global levels | Per-objective/topic mastery; no global level |
 | Bloom is not difficulty | Separate axes and fields |
 | Automatic MCQ cannot prove creative/advanced reasoning | Evaluate/Create automatic cap and rubric requirements |
@@ -262,6 +264,9 @@ The owner recorded the §6.1 Phase-1 dispositions on 2026-11-19 and directed tha
 - AI question-classification suggestions are deferred to Phase 6; Phase 1 creates no `QuestionClassificationSuggestion` table and adds no suggestion endpoints or UI.
 - Teacher objective creation is governed by `learning.teacher_objective_creation` (default `false`): off → teacher-created objectives are `proposed` and need admin approval; on → `active`.
 - Phase 1 is schema + taxonomy + manual question pedagogy only. No evidence, mastery or pathway tables are created.
+- **Permission split (as-built).** `class.learning.read` (read the taxonomy and pedagogy) and `class.learning.classify` (attach criteria to the teacher's own questions and propose objectives) are the two Phase 1 class-scope permissions; approval uses `school.learning.manage`. `class.learning.manage` and `class.learning.assign` are not in the catalog.
+- **Master switch (as-built).** `learning.adaptive.enabled` defaults to `false` and is enforced by the `/learning` router on every route except `GET /learning/flags`, returning `403 FEATURE_DISABLED`. `/learning/flags` remains readable so the console can show the disabled state and an administrator can enable the capability; the flag payload is display input, never authorization.
+- `Exam.is_high_stakes` is design-only in Phase 1: the column, its migration and its D14 confirmation/audit flow are Phase 2/3 work.
 
 ---
 

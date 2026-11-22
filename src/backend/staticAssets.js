@@ -55,6 +55,10 @@ export const PUBLIC_ROOT_FILES = new Set([
 	'prompt-builder.js',
 	'qrcode-generator.js',
 	'questions-management.js',
+	// WP5 refactor (2026-11-21): the adaptive-learning integration module for
+	// the existing Questions tab, loaded by admin.html next to
+	// questions-management.js.
+	'questions-pedagogy.js',
 	'quick-start.js',
 	'quiz-presets.js',
 	'qx-ui.js',

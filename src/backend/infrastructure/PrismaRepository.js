@@ -279,6 +279,36 @@ export class PrismaRepository extends IStorageRepository {
 	}
 
 	/**
+	 * Delete every row matching `where` in a single statement.
+	 *
+	 * Unlike a read-then-delete loop this is not bounded by a page size, so it
+	 * can never silently leave rows behind — which makes it the only supported
+	 * way to guarantee a *complete* deletion regardless of row count.
+	 * @returns {Promise<{ count: number }>} rows deleted
+	 */
+	async deleteMany(table, where = {}) {
+		return this.#model(table).deleteMany({ where });
+	}
+
+	/**
+	 * Run `fn` inside one Prisma interactive transaction. The callback receives a
+	 * repository bound to the transaction client, so every write it performs
+	 * through that repository belongs to the same atomic unit: if `fn` throws,
+	 * Prisma rolls the whole transaction back and no partial write survives.
+	 *
+	 * The transaction-bound repository is a normal `PrismaRepository` over the
+	 * transaction client (whose delegates share the same API) — the private
+	 * client is never handed to service code.
+	 *
+	 * @template T
+	 * @param {(repo: PrismaRepository) => Promise<T>} fn
+	 * @returns {Promise<T>}
+	 */
+	async runInTransaction(fn) {
+		return this.#prisma.$transaction((tx) => fn(new PrismaRepository(tx)));
+	}
+
+	/**
 	 * Named queries — stable public API used by services on both ends.
 	 * e.g. 'exam.withQuestions', 'result.byUserAndExam', 'game.sessions'.
 	 */

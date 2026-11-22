@@ -304,6 +304,10 @@ function createQuestionRow(question, index) {
 	})());
 	row.setAttribute('data-difficulty', question.difficulty || 'medium');
 	row.setAttribute('data-instruction', question.instruction || ''); // Add instruction attribute
+	// WP5 refactor: server-cached pedagogy columns ride the row as data
+	// attributes so the adaptive badges/filters stay client-side and cheap.
+	row.setAttribute('data-pedagogy-status', question.pedagogy_status || 'unclassified');
+	row.setAttribute('data-pedagogy-bloom', question.primary_bloom_dimension_id || '');
 	row.setAttribute(
 		'data-owner',
 		// Ownership vocabulary mirror of teacher-filter.js getOwnerId, but
@@ -352,6 +356,11 @@ function createQuestionRow(question, index) {
 	// Author badge only. The category already renders via
 	// renderQuestionContent's own category badge — do NOT duplicate it here.
 	const badgeOwnerHtml = `<span class="q-owner-badge" title="Created by">${escapeHtml(getOwnerLabel(getOwnerId(question)))}</span>`;
+	// WP5 refactor: adaptive badges (status + Bloom) render inline when the
+	// school's learning switch is ON; empty otherwise, so nothing changes.
+	const badgePedagogyHtml = window.QuestionsPedagogy
+		? window.QuestionsPedagogy.rowBadgeHtml(question)
+		: '';
 
 	row.innerHTML = `
         <td class="checkbox-cell" data-label="Select">
@@ -373,7 +382,7 @@ function createQuestionRow(question, index) {
 									false
 								)}
             </div>
-            <div class="q-badges">${badgeOwnerHtml}</div>
+            <div class="q-badges">${badgeOwnerHtml}${badgePedagogyHtml}</div>
             ${question.explanation ? `
             <div class="q-explanation">
                 <span class="q-explanation-label">Explanation</span>
@@ -462,6 +471,7 @@ function createQuestionRow(question, index) {
         <td class="usage-cell" data-label="Used in">${renderUsageCell(question)}</td>
         <td class="actions-cell" data-label="Actions">
             <div class="exam-actions">
+                ${window.QuestionsPedagogy ? window.QuestionsPedagogy.rowActionHtml(question) : ''}
                 <button class="exam-action-btn exam-edit-btn" onclick="editQuestion(${index})" title="Edit">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1857,6 +1867,14 @@ async function addOrUpdateQuestion() {
 		clearQuestionForm();
 		// saveSettings(false); // Removed undefined function call
 
+		// WP5 refactor: persist the Learning alignment chosen in the editor's
+		// optional section (no-op unless the teacher changed it; failures are
+		// toasted, never fatal — the question itself is already saved).
+		if (window.QuestionsPedagogy && typeof window.QuestionsPedagogy.onQuestionSaved === 'function') {
+			try { await window.QuestionsPedagogy.onQuestionSaved(questionObj); }
+			catch (pedErr) { console.warn('[pedagogy] post-save alignment failed:', pedErr); }
+		}
+
 		// Broadcast Updates if enabled
 		if (document.getElementById('setting-broadcastUpdates')?.checked) {
 			console.log('Broadcast Updates enabled, triggering sync...');
@@ -2301,8 +2319,17 @@ function editQuestionByRow(button) {
 		// Prevent double opening if already open/opening
 		if (modal.classList.contains('active') || modal.style.display === 'flex') {
 			// If already open, just repopulate
+			if (window.QuestionsPedagogy && typeof window.QuestionsPedagogy.onEditorOpened === 'function') {
+				try { window.QuestionsPedagogy.onEditorOpened(question || null); } catch (pedErr) { console.warn('[pedagogy] editor hook failed:', pedErr); }
+			}
 			populateEditForm(question);
 			return;
+		}
+
+		// WP5 refactor: sync the optional Learning-alignment section with the
+		// question being edited.
+		if (window.QuestionsPedagogy && typeof window.QuestionsPedagogy.onEditorOpened === 'function') {
+			try { window.QuestionsPedagogy.onEditorOpened(question || null); } catch (pedErr) { console.warn('[pedagogy] editor hook failed:', pedErr); }
 		}
 
 		modal.style.display = 'flex';
@@ -4306,6 +4333,12 @@ function updateQuestionList() {
 		return;
 	}
 
+	// WP5 refactor: let the adaptive integration paint badges and re-apply
+	// its filters over the freshly rendered rows (a no-op while disabled).
+	if (window.QuestionsPedagogy && typeof window.QuestionsPedagogy.onListRendered === 'function') {
+		try { window.QuestionsPedagogy.onListRendered(); } catch (pedErr) { console.warn('[pedagogy] list hook failed:', pedErr); }
+	}
+
 	// Update bulk delete buttons
 	updateBulkDeleteButtons();
 }
@@ -4848,6 +4881,12 @@ function openQuestionFormModal(questionToEdit = null) {
 	// Prevent double opening
 	if (modal.classList.contains('active') || modal.style.display === 'flex') {
 		return;
+	}
+
+	// WP5 refactor: sync the optional Learning-alignment section with the
+	// question being edited (or reset it for a new question).
+	if (window.QuestionsPedagogy && typeof window.QuestionsPedagogy.onEditorOpened === 'function') {
+		try { window.QuestionsPedagogy.onEditorOpened(questionToEdit || null); } catch (pedErr) { console.warn('[pedagogy] editor hook failed:', pedErr); }
 	}
 
 	modal.style.display = 'flex';

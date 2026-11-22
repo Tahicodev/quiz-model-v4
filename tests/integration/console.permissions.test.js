@@ -81,6 +81,40 @@ async function login(username) {
 
 const as = (token) => ({ Authorization: `Bearer ${token}` });
 
+// ── Route enumeration ───────────────────────────────────────────────────────
+// Walking the mounted router means the sweep below cannot drift out of date
+// when a console route is added: a new route is covered automatically.
+
+const CONSOLE_ROUTE_FIXTURES = {
+	':id': 'u-student-a',
+	':permission': 'platform.console',
+};
+
+function collectConsoleRoutes(router) {
+	const routes = [];
+	const walk = (stack) => {
+		for (const layer of stack) {
+			if (layer.route) {
+				for (const method of Object.keys(layer.route.methods)) {
+					routes.push({ method, path: layer.route.path });
+				}
+			} else if (layer.name === 'router' && layer.handle?.stack) {
+				walk(layer.handle.stack);
+			}
+		}
+	};
+	walk(router.stack);
+	return routes;
+}
+
+function consolePath(path) {
+	let out = path;
+	for (const [param, value] of Object.entries(CONSOLE_ROUTE_FIXTURES)) {
+		out = out.split(param).join(value);
+	}
+	return `/api/v1/console${out}`;
+}
+
 describe('Console access control', () => {
 	it('admits a teacher ONLY for the learning surface', async () => {
 		// Phase 1 widened the console gate by exactly the learning permissions, so
@@ -102,6 +136,64 @@ describe('Console access control', () => {
 			.get('/api/v1/console/organizations')
 			.set(as(token));
 		expect(organizations.status).toBe(403);
+	});
+
+	it('describes what /console/session returns to a teacher', async () => {
+		const token = await login('teacher-a');
+		const res = await request(app).get('/api/v1/console/session').set(as(token));
+
+		expect(res.status).toBe(200);
+		expect(Object.keys(res.body).sort()).toEqual(['deployment', 'permissions', 'scope', 'user']);
+		expect(res.body.user).toMatchObject({
+			id: 'u-teacher-a',
+			username: 'teacher-a',
+			role: 'teacher',
+			roleLabel: 'Teacher',
+		});
+		expect(res.body.scope).toMatchObject({
+			kind: 'class',
+			isPlatform: false,
+			schoolId: SCHOOL_A,
+			organization: { id: SCHOOL_A },
+		});
+		expect(res.body.deployment).toEqual(
+			expect.objectContaining({ isOffline: expect.any(Boolean), isSaaS: expect.any(Boolean) }),
+		);
+		// Exactly the class-scope set — no school.* / platform.* permission at all.
+		expect([...res.body.permissions].sort()).toEqual([
+			'class.content.author',
+			'class.learning.classify',
+			'class.learning.read',
+			'class.realtime.manage',
+			'class.students.read',
+		]);
+	});
+
+	it('refuses a teacher on EVERY console route except the session', async () => {
+		// The console gate admits a teacher for the learning taxonomy. This sweep
+		// pins the other half of that exception: every console endpoint — current
+		// and future — must still answer 403. The router is enumerated rather than
+		// listed, so a new route cannot slip through unguarded without failing here.
+		const { default: consoleRoutes } = await import('../../src/backend/routes/console.routes.js');
+		const routes = collectConsoleRoutes(consoleRoutes);
+		expect(routes.length).toBeGreaterThanOrEqual(25);
+
+		const token = await login('teacher-a');
+		const leaked = [];
+		for (const { method, path } of routes) {
+			const call = request(app)[method](consolePath(path)).set(as(token));
+			if (!['get', 'delete'].includes(method)) call.send({});
+			const res = await call;
+
+			if (method === 'get' && path === '/session') {
+				// The shell needs the session to know where it may go.
+				expect(res.status, 'GET /session').toBe(200);
+				continue;
+			}
+			if (res.status !== 403) leaked.push(`${method.toUpperCase()} ${path} -> ${res.status}`);
+		}
+
+		expect(leaked, `console routes that did not refuse a teacher:\n${leaked.join('\n')}`).toEqual([]);
 	});
 
 	it('refuses a student', async () => {

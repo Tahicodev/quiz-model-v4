@@ -44,12 +44,17 @@ export function field({
 	full = false,
 	placeholder = '',
 	disabled = false,
+	required = false,
 } = {}) {
-	return `<div class="ac-field${full ? ' ac-field--full' : ''}">
-		<label class="ac-field__label" for="${esc(id)}">${esc(label)}</label>
+	return `<div class="ac-field${full ? ' ac-field--full' : ''}" data-ac-field>
+		<label class="ac-field__label" for="${esc(id)}">${esc(label)}${
+			required ? ' <span class="ac-required" aria-hidden="true" title="Required">*</span>' : ''
+		}</label>
 		<input class="ac-input ac-input--full" id="${esc(id)}" type="${esc(type)}" value="${esc(
 		value ?? '',
-	)}" placeholder="${esc(placeholder)}" autocomplete="off" ${disabled ? 'disabled' : ''} />
+	)}" placeholder="${esc(placeholder)}" autocomplete="off" ${required ? 'aria-required="true"' : ''} ${
+		disabled ? 'disabled' : ''
+	} />
 		${hint ? `<p class="ac-field__hint">${esc(hint)}</p>` : ''}
 	</div>`;
 }
@@ -80,13 +85,16 @@ export function select({
 	value = '',
 	hint = '',
 	allLabel = null,
+	required = false,
 } = {}) {
 	const all = allLabel
 		? `<option value=""${value ? '' : ' selected'}>${esc(allLabel)}</option>`
 		: '';
-	return `<div class="ac-field">
-		<label class="ac-field__label" for="${esc(id)}">${esc(label)}</label>
-		<select class="ac-select" id="${esc(id)}">
+	return `<div class="ac-field" data-ac-field>
+		<label class="ac-field__label" for="${esc(id)}">${esc(label)}${
+			required ? ' <span class="ac-required" aria-hidden="true" title="Required">*</span>' : ''
+		}</label>
+		<select class="ac-select" id="${esc(id)}" ${required ? 'aria-required="true"' : ''}>
 			${all}
 			${options
 				.map(

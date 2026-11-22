@@ -39,41 +39,59 @@ export function openObjectiveForm({ objective = null, subjects, objectives, cate
 	const modal = openModal({
 		title: isEdit ? t('action.edit') : t('action.newObjective'),
 		subtitle: isEdit ? objective.code : t('hint.teacherProposal'),
-		wide: true,
 		body: `
-			<div class="ac-form" data-ac-form>
+			<div class="ac-form ac-form--objective" data-ac-form>
 				<div data-ac-form-error hidden></div>
-				<div class="ac-form__grid">
-					${select({
-						id: 'ac-obj-subject',
-						label: t('field.subject'),
-						value: objective?.subject_id || '',
-						options: subjects.map((subject) => ({ value: subject.id, label: subject.name })),
-						allLabel: null,
-					})}
-					${field({ id: 'ac-obj-code', label: t('field.code'), value: objective?.code || '' })}
-					${field({ id: 'ac-obj-order', label: t('field.orderIndex'), type: 'number', value: objective?.order_index ?? 0 })}
-					${select({
-						id: 'ac-obj-bloom',
-						label: t('field.bloom'),
-						value: objective?.primary_bloom_dimension_id || '',
-						options: bloomOptions(bloom, { lang }),
-						allLabel: '—',
-					})}
-					<div class="ac-field ac-field--full">
-						<label class="ac-field__label" for="ac-obj-statement">${esc(t('field.statement'))}</label>
-						<input class="ac-input ac-input--full" id="ac-obj-statement" type="text" value="${esc(
+				${isEdit && !objective.proposed_by ? `<p class="ac-field__hint ac-provenance-note">${esc(t('form.note.official'))}</p>` : ''}
+
+				<section class="ac-form__section">
+					<h3 class="ac-form__section-title">${esc(t('objSection.context'))}</h3>
+					<div class="ac-form__row">
+						${select({
+							id: 'ac-obj-subject',
+							label: t('field.subject'),
+							value: objective?.subject_id || '',
+							options: subjects.map((subject) => ({ value: subject.id, label: subject.name })),
+							allLabel: null,
+							required: true,
+						})}
+						<div data-ac-obj-parent-slot class="ac-field" data-ac-field></div>
+					</div>
+				</section>
+
+				<section class="ac-form__section">
+					<h3 class="ac-form__section-title">${esc(t('objSection.outcome'))}</h3>
+					<div class="ac-field ac-field--full" data-ac-field>
+						<label class="ac-field__label ac-field__label--primary" for="ac-obj-statement">${esc(t('field.statement'))}<span class="ac-required" aria-hidden="true" title="${esc(t('form.requiredMark'))}">*</span></label>
+						<textarea class="ac-input ac-input--full ac-input--statement" id="ac-obj-statement" rows="3" aria-required="true" autocomplete="off" placeholder="${esc(t('form.hint.statement'))}">${esc(
 							objective?.statement || '',
-						)}" autocomplete="off" />
+						)}</textarea>
 					</div>
 					${textarea({
 						id: 'ac-obj-description',
 						label: t('field.description'),
 						value: objective?.description || '',
-						rows: 3,
+						rows: 2,
 					})}
-					<div data-ac-obj-dependent class="ac-field ac-field--full"></div>
-				</div>
+				</section>
+
+				<section class="ac-form__section">
+					<h3 class="ac-form__section-title">${esc(t('objSection.organization'))}</h3>
+					<div class="ac-form__row">
+						${field({ id: 'ac-obj-code', label: t('field.code'), value: objective?.code || '', hint: t('form.hint.code'), required: true })}
+						<div data-ac-obj-category-slot class="ac-field" data-ac-field></div>
+					</div>
+					<div class="ac-form__row">
+						${select({
+							id: 'ac-obj-bloom',
+							label: t('field.bloom'),
+							value: objective?.primary_bloom_dimension_id || '',
+							options: bloomOptions(bloom, { lang }),
+							allLabel: t('option.none'),
+						})}
+						${field({ id: 'ac-obj-order', label: t('field.orderIndex'), type: 'number', value: objective?.order_index ?? 0, hint: t('form.hint.order') })}
+					</div>
+				</section>
 			</div>`,
 		footer: `
 			<button type="button" class="ac-btn" data-ac-form-cancel>${esc(t('action.cancel'))}</button>
@@ -82,9 +100,11 @@ export function openObjectiveForm({ objective = null, subjects, objectives, cate
 
 	const root = modal.root;
 	const subjectSelect = root.querySelector('#ac-obj-subject');
-	const dependent = root.querySelector('[data-ac-obj-dependent]');
+	const parentSlot = root.querySelector('[data-ac-obj-parent-slot]');
+	const categorySlot = root.querySelector('[data-ac-obj-category-slot]');
 
-	/** Category and parent are both scoped by the effective subject. */
+	/** Category and parent are both scoped by the effective subject, but each
+	 *  lives in its own conceptual group (context vs organization). */
 	function paintDependent() {
 		const subjectId = subjectSelect.value || objective?.subject_id || '';
 		const subjectCategories = (categories || []).filter(
@@ -93,32 +113,42 @@ export function openObjectiveForm({ objective = null, subjects, objectives, cate
 		const subjectObjectives = ownObjectives.filter(
 			(row) => !subjectId || row.subject_id === subjectId,
 		);
-		dependent.innerHTML = `<div class="ac-form__grid">
-			${select({
-				id: 'ac-obj-category',
-				label: t('field.category'),
-				value: objective?.category_id || '',
-				options: subjectCategories.map((category) => ({ value: category.id, label: category.name })),
-				allLabel: '—',
-			})}
-			${select({
-				id: 'ac-obj-parent',
-				label: t('field.parent'),
-				value: objective?.parent_id || '',
-				options: subjectObjectives.map((row) => ({
-					value: row.id,
-					label: `${row.code} — ${truncate(row.statement)}`,
-				})),
-				allLabel: '—',
-			})}
-		</div>`;
+		parentSlot.innerHTML = select({
+			id: 'ac-obj-parent',
+			label: t('field.parent'),
+			value: objective?.parent_id || '',
+			options: subjectObjectives.map((row) => ({
+				value: row.id,
+				label: `${row.code} — ${truncate(row.statement)}`,
+			})),
+			allLabel: t('option.none'),
+		});
+		categorySlot.innerHTML = select({
+			id: 'ac-obj-category',
+			label: t('field.category'),
+			value: objective?.category_id || '',
+			options: subjectCategories.map((category) => ({ value: category.id, label: category.name })),
+			allLabel: t('option.none'),
+		});
 	}
 	paintDependent();
 	subjectSelect.addEventListener('change', paintDependent);
 
 	root.querySelector('[data-ac-form-cancel]').addEventListener('click', () => modal.close());
+
+	/** Clear the invalid highlight as soon as the teacher fixes a field. */
+	bindInvalidClear(root);
+
 	root.querySelector('[data-ac-form-save]').addEventListener('click', async (event) => {
 		const button = event.currentTarget;
+
+		// Client-side required check: fail fast with the field highlighted, so the
+		// teacher never loses a half-written form to a server 500.
+		if (requireFields(root, ['#ac-obj-subject', '#ac-obj-code', '#ac-obj-statement']).length) {
+			showMissing(root, t);
+			return;
+		}
+
 		const body = {
 			subject_id: valueOf(root, '#ac-obj-subject'),
 			code: valueOf(root, '#ac-obj-code'),
@@ -162,8 +192,20 @@ export function openCompetencyForm({ competency = null, subjects, competencies, 
 			<div class="ac-form" data-ac-form>
 				<div data-ac-form-error hidden></div>
 				<div class="ac-form__grid">
-					${field({ id: 'ac-comp-code', label: t('field.code'), value: competency?.code || '' })}
-					${field({ id: 'ac-comp-name', label: t('field.name'), value: competency?.name || '' })}
+					${field({
+						id: 'ac-comp-code',
+						label: t('field.code'),
+						value: competency?.code || '',
+						hint: t('form.hint.code'),
+						required: true,
+					})}
+					${field({
+						id: 'ac-comp-name',
+						label: t('field.name'),
+						value: competency?.name || '',
+						hint: t('hint.form.name'),
+						required: true,
+					})}
 					${select({
 						id: 'ac-comp-kind',
 						label: t('field.kind'),
@@ -194,6 +236,7 @@ export function openCompetencyForm({ competency = null, subjects, competencies, 
 						label: t('field.description'),
 						value: competency?.description || '',
 						rows: 3,
+						hint: t('hint.form.description'),
 					})}
 				</div>
 			</div>`,
@@ -204,7 +247,12 @@ export function openCompetencyForm({ competency = null, subjects, competencies, 
 
 	const root = modal.root;
 	root.querySelector('[data-ac-form-cancel]').addEventListener('click', () => modal.close());
+	bindInvalidClear(root);
 	root.querySelector('[data-ac-form-save]').addEventListener('click', async (event) => {
+		if (requireFields(root, ['#ac-comp-code', '#ac-comp-name']).length) {
+			showMissing(root, t);
+			return;
+		}
 		await submit({
 			root,
 			button: event.currentTarget,
@@ -249,12 +297,20 @@ export function openCompetencyLinkForm({ objective, competencies, onSaved }) {
 							label: `${row.code} — ${row.name}`,
 						})),
 						allLabel: '—',
+						required: true,
 					})}
-					${field({ id: 'ac-link-weight', label: t('field.weight'), type: 'number', value: 1 })}
+					${field({
+						id: 'ac-link-weight',
+						label: t('field.weight'),
+						type: 'number',
+						value: 1,
+						hint: t('hint.form.weight'),
+					})}
 				</div>
 				${checkbox({
 					id: 'ac-link-primary',
 					label: t('field.primaryCompetency'),
+					hint: t('hint.form.primary'),
 				})}
 			</div>`,
 		footer: `
@@ -264,7 +320,12 @@ export function openCompetencyLinkForm({ objective, competencies, onSaved }) {
 
 	const root = modal.root;
 	root.querySelector('[data-ac-form-cancel]').addEventListener('click', () => modal.close());
+	bindInvalidClear(root);
 	root.querySelector('[data-ac-form-save]').addEventListener('click', async (event) => {
+		if (requireFields(root, ['#ac-link-competency']).length) {
+			showMissing(root, t);
+			return;
+		}
 		await submit({
 			root,
 			button: event.currentTarget,
@@ -307,11 +368,13 @@ export function openPrerequisiteForm({ objective, objectives, onSaved }) {
 							label: `${row.code} — ${truncate(row.statement)}`,
 						})),
 						allLabel: '—',
+						required: true,
 					})}
 					${select({
 						id: 'ac-prereq-strength',
 						label: t('field.strength'),
 						value: 'required',
+						hint: t('hint.form.strength'),
 						options: ['required', 'recommended'].map((key) => ({
 							value: key,
 							label: t(`strength.${key}`),
@@ -321,12 +384,14 @@ export function openPrerequisiteForm({ objective, objectives, onSaved }) {
 						id: 'ac-prereq-mastery',
 						label: t('field.minMastery'),
 						value: 'developing',
+						hint: t('hint.form.minMastery'),
 					})}
 					${textarea({
 						id: 'ac-prereq-rationale',
 						label: t('field.rationale'),
 						value: '',
 						rows: 2,
+						hint: t('hint.form.rationale'),
 					})}
 				</div>
 			</div>`,
@@ -337,10 +402,10 @@ export function openPrerequisiteForm({ objective, objectives, onSaved }) {
 
 	const root = modal.root;
 	root.querySelector('[data-ac-form-cancel]').addEventListener('click', () => modal.close());
+	bindInvalidClear(root);
 	root.querySelector('[data-ac-form-save]').addEventListener('click', async (event) => {
-		const candidate = valueOf(root, '#ac-prereq-objective');
-		if (!candidate) {
-			toast(`${t('field.objective')} — ${t('error.save')}`, 'error');
+		if (requireFields(root, ['#ac-prereq-objective']).length) {
+			showMissing(root, t);
 			return;
 		}
 		await submit({
@@ -376,6 +441,47 @@ async function submit({ root, button, url, method, body, toastMessage, onSaved }
 		button.disabled = false;
 		showFormError(root, err);
 	}
+}
+
+/** Highlight required controls that are still empty. Returns them. */
+function requireFields(root, selectors) {
+	const missing = [];
+	selectors.forEach((selector) => {
+		const control = root.querySelector(selector);
+		const box = control ? control.closest('[data-ac-field]') : null;
+		if (control && !String(control.value || '').trim()) {
+			missing.push(control);
+			if (box) box.classList.add('ac-field--invalid');
+		} else if (box) {
+			box.classList.remove('ac-field--invalid');
+		}
+	});
+	return missing;
+}
+
+/** Show the standard "required fields" alert and focus the first offender. */
+function showMissing(root, t) {
+	const host = root.querySelector('[data-ac-form-error]');
+	if (host) {
+		host.hidden = false;
+		host.innerHTML = `<div class="ac-alert ac-alert--danger"><div class="ac-alert__body"><p class="ac-alert__text">${esc(
+			t('form.requiredMissing'),
+		)}</p></div></div>`;
+	}
+	root.querySelector('.ac-field--invalid .ac-input, .ac-field--invalid .ac-select')?.focus();
+}
+
+/**
+ * Clear the invalid highlight as soon as the operator fixes a field. Delegated,
+ * so it also covers fields a select re-renders (e.g. the objective parent).
+ */
+function bindInvalidClear(root) {
+	const clear = (event) => {
+		const box = event.target?.closest?.('[data-ac-field]');
+		if (box) box.classList.remove('ac-field--invalid');
+	};
+	root.addEventListener('input', clear);
+	root.addEventListener('change', clear);
 }
 
 function showFormError(root, err) {

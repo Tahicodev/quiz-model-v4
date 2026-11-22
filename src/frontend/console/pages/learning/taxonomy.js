@@ -48,6 +48,21 @@ const COMPETENCY_KINDS = ['competency', 'skill', 'domain'];
 const COMPETENCY_STATUSES = ['active', 'archived'];
 const LOOKUP_LIMIT = 200;
 
+const TAB_ICONS = {
+	objectives:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>',
+	competencies:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+	proposals:
+		'<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+};
+
+const TAB_DESCRIPTIONS = {
+	objectives: 'tax.desc.objectives',
+	competencies: 'tax.desc.competencies',
+	proposals: 'tax.desc.proposals',
+};
+
 /** Module-scoped so a language switch keeps the operator's place. */
 const state = {
 	tab: 'objectives',
@@ -108,7 +123,7 @@ export const taxonomyPage = {
 		const total = Number(payload?.total ?? rows.length);
 
 		const body = `
-			${tabBar({ state, t, canManage })}
+			${tabBar({ state, t, canManage, total })}
 			${tabBody({ state, rows, total, lang, t, canManage, lookups })}`;
 
 		host.innerHTML = learningShell({ body });
@@ -152,25 +167,49 @@ function fetchTabData() {
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 
-function tabBar({ state: view, t, canManage }) {
+function tabBar({ state: view, t, canManage, total }) {
 	const tabs = [{ key: 'objectives', label: t('summary.objectives') }];
 	if (canManage) {
 		tabs.push({ key: 'competencies', label: t('summary.competencies') });
 		tabs.push({ key: 'proposals', label: t('summary.proposed') });
 	}
-	return `<div class="learning-tabs" role="tablist">${tabs
-		.map(
-			(tab) =>
-				`<button type="button" class="learning-tab${
-					tab.key === view.tab ? ' is-active' : ''
-				}" role="tab" aria-selected="${tab.key === view.tab}" data-ac-learning-tab="${esc(tab.key)}">${esc(
-					tab.label,
-				)}</button>`,
-		)
-		.join('')}</div>`;
+	const count = Number(total ?? 0).toLocaleString();
+	return `<div class="learning-tabs-block">
+		<div class="learning-tabs" role="tablist" aria-label="${esc(t('learning.title'))}">${tabs
+			.map((tab) => {
+				const active = tab.key === view.tab;
+				return `<button type="button" class="learning-tab${active ? ' is-active' : ''}" role="tab" aria-selected="${active}" tabindex="${
+					active ? '0' : '-1'
+				}" data-ac-learning-tab="${esc(tab.key)}">
+					<span class="learning-tab__icon" aria-hidden="true">${TAB_ICONS[tab.key] || ''}</span>
+					<span class="learning-tab__label">${esc(tab.label)}</span>
+					${active ? `<span class="learning-tab__count">${count}</span>` : ''}
+				</button>`;
+			})
+			.join('')}</div>
+		<p class="learning-tabs__desc">${esc(t(TAB_DESCRIPTIONS[view.tab] || 'learning.description'))}</p>
+	</div>`;
+}
+
+/** A count + "clear filters" line between the toolbar and the table. */
+function resultsRow({ view, total, t }) {
+	const active = Boolean(view.search || view.kind || (view.tab !== 'proposals' && view.status));
+	return `<div class="learning-results">
+		<span class="learning-results__count">${esc(
+			t('results.count', { count: Number(total ?? 0).toLocaleString() }),
+		)}</span>
+		${
+			active
+				? `<button type="button" class="ac-btn ac-btn--sm learning-results__clear" data-ac-tax-clear>${esc(
+						t('action.clearFilters'),
+					)}</button>`
+				: ''
+		}
+	</div>`;
 }
 
 function tabBody({ state: view, rows, total, lang, t, canManage, lookups }) {
+	const results = resultsRow({ view, total, t });
 	if (view.tab === 'competencies') {
 		return `
 			${toolbar({
@@ -198,6 +237,7 @@ function tabBody({ state: view, rows, total, lang, t, canManage, lookups }) {
 						t('action.newCompetency'),
 					)}</button>`,
 			})}
+			${results}
 			${renderTable({
 				columns: competencyColumns({ lang, t, lookups }),
 				rows,
@@ -212,6 +252,7 @@ function tabBody({ state: view, rows, total, lang, t, canManage, lookups }) {
 				fields: searchField({ id: 'ac-tax-search', placeholder: t('action.search'), value: view.search }),
 				actions: `<button type="button" class="ac-btn ac-btn--sm" data-ac-tax-refresh>${esc(t('action.refresh'))}</button>`,
 			})}
+			${results}
 			${renderTable({
 				columns: proposalColumns({ lang, t }),
 				rows,
@@ -238,6 +279,7 @@ function tabBody({ state: view, rows, total, lang, t, canManage, lookups }) {
 					canManage ? t('action.newObjective') : t('action.proposeObjective'),
 				)}</button>`,
 		})}
+		${results}
 		${renderTable({
 			columns: objectiveColumns({ lang, t, canManage, lookups }),
 			rows,
@@ -356,12 +398,23 @@ async function renderDetail(host, ctx, { canManage, lookups }) {
 	const prerequisites = Array.isArray(objective.prerequisites) ? objective.prerequisites : [];
 	const dimension = bloomById(lookups.bloom, objective.primary_bloom_dimension_id);
 
+	const linkAction = canManage
+		? `<button type="button" class="ac-btn ac-btn--sm ac-btn--primary" data-ac-tax-link>${esc(
+				t('action.linkCompetency'),
+			)}</button>`
+		: '';
+	const prereqAction = canManage
+		? `<button type="button" class="ac-btn ac-btn--sm ac-btn--primary" data-ac-tax-prereq>${esc(
+				t('action.addPrerequisite'),
+			)}</button>`
+		: '';
+
 	const body = `
 		<div class="learning-detail">
-			<button type="button" class="ac-btn ac-btn--sm" data-ac-tax-back>← ${esc(t('summary.objectives'))}</button>
-			<div class="learning-detail__head">
-				<span class="learning-detail__code">${esc(objective.code)}</span>
-				${objectiveChip(lang, objective.status)}
+			<div class="learning-detail__bar">
+				<button type="button" class="ac-btn ac-btn--sm" data-ac-tax-back><span aria-hidden="true">←</span> ${esc(
+					t('summary.objectives'),
+				)}</button>
 				${
 					canManage
 						? `<button type="button" class="ac-btn ac-btn--sm" data-ac-tax-edit="${esc(objective.id)}">${esc(
@@ -370,44 +423,58 @@ async function renderDetail(host, ctx, { canManage, lookups }) {
 						: ''
 				}
 			</div>
+			<div class="learning-detail__head">
+				<span class="learning-detail__code">${esc(objective.code)}</span>
+				${objectiveChip(lang, objective.status)}
+			</div>
 			<p class="learning-detail__statement">${esc(objective.statement)}</p>
 			${objective.description ? `<p class="learning-detail__description">${esc(objective.description)}</p>` : ''}
-			<p class="learning-detail__meta">
-				<span>${esc(t('field.subject'))}: ${esc(subjectName(lookups.subjects, objective.subject_id))}</span>
-				${dimension ? `<span>${esc(t('field.bloom'))}: ${esc(bloomLabel(dimension, lang))}</span>` : ''}
-			</p>
+			<dl class="learning-facts">
+				<div class="learning-fact">
+					<dt>${esc(t('field.subject'))}</dt>
+					<dd>${esc(subjectName(lookups.subjects, objective.subject_id))}</dd>
+				</div>
+				${
+					dimension
+						? `<div class="learning-fact">
+								<dt>${esc(t('field.bloom'))}</dt>
+								<dd>${esc(bloomLabel(dimension, lang))}</dd>
+							</div>`
+						: ''
+				}
+				<div class="learning-fact">
+					<dt>${esc(t('summary.competencies'))}</dt>
+					<dd>${links.length.toLocaleString()}</dd>
+				</div>
+				<div class="learning-fact">
+					<dt>${esc(t('summary.prerequisites'))}</dt>
+					<dd>${prerequisites.length.toLocaleString()}</dd>
+				</div>
+			</dl>
 		</div>
 
 		<section class="ac-section-panel">
 			<div class="ac-section-panel__head">
-				<h3 class="ac-section-panel__title">${esc(t('summary.competencies'))}</h3>
-				${
-					canManage
-						? `<div class="ac-panel__actions"><button type="button" class="ac-btn ac-btn--sm" data-ac-tax-link>${esc(
-								t('action.linkCompetency'),
-							)}</button></div>`
-						: ''
-				}
+				<h3 class="ac-section-panel__title">${esc(t('summary.competencies'))} <span class="learning-section-count">${links.length.toLocaleString()}</span></h3>
+				${canManage ? `<div class="ac-panel__actions">${linkAction}</div>` : ''}
 			</div>
 			<div class="ac-section-panel__body">
 				${
 					links.length
 						? linkTable(links, { t, canManage })
-						: emptyState({ title: t('empty.competencies.title'), message: t('empty.competencies.message') })
+						: emptyState({
+								title: t('empty.competencies.title'),
+								message: t('empty.competencies.message'),
+								action: linkAction,
+							})
 				}
 			</div>
 		</section>
 
 		<section class="ac-section-panel">
 			<div class="ac-section-panel__head">
-				<h3 class="ac-section-panel__title">${esc(t('summary.prerequisites'))}</h3>
-				${
-					canManage
-						? `<div class="ac-panel__actions"><button type="button" class="ac-btn ac-btn--sm" data-ac-tax-prereq>${esc(
-								t('action.addPrerequisite'),
-							)}</button></div>`
-						: ''
-				}
+				<h3 class="ac-section-panel__title">${esc(t('summary.prerequisites'))} <span class="learning-section-count">${prerequisites.length.toLocaleString()}</span></h3>
+				${canManage ? `<div class="ac-panel__actions">${prereqAction}</div>` : ''}
 			</div>
 			<div class="ac-section-panel__body">
 				${
@@ -416,6 +483,7 @@ async function renderDetail(host, ctx, { canManage, lookups }) {
 						: emptyState({
 								title: t('empty.prerequisites.title'),
 								message: t('empty.prerequisites.message'),
+								action: prereqAction,
 							})
 				}
 			</div>
@@ -438,18 +506,22 @@ async function renderDetail(host, ctx, { canManage, lookups }) {
 			onSaved: () => ctx.rerender(),
 		});
 	});
-	host.querySelector('[data-ac-tax-link]')?.addEventListener('click', async () => {
-		openCompetencyLinkForm({
-			objective,
-			competencies: await loadCompetencies(),
-			onSaved: () => ctx.rerender(),
+	host.querySelectorAll('[data-ac-tax-link]').forEach((button) => {
+		button.addEventListener('click', async () => {
+			openCompetencyLinkForm({
+				objective,
+				competencies: await loadCompetencies(),
+				onSaved: () => ctx.rerender(),
+			});
 		});
 	});
-	host.querySelector('[data-ac-tax-prereq]')?.addEventListener('click', () => {
-		openPrerequisiteForm({
-			objective,
-			objectives: lookups.objectives,
-			onSaved: () => ctx.rerender(),
+	host.querySelectorAll('[data-ac-tax-prereq]').forEach((button) => {
+		button.addEventListener('click', () => {
+			openPrerequisiteForm({
+				objective,
+				objectives: lookups.objectives,
+				onSaved: () => ctx.rerender(),
+			});
 		});
 	});
 
@@ -547,7 +619,8 @@ function prerequisiteTable(prerequisites, { t, canManage, lookups }) {
 // ── Wiring ───────────────────────────────────────────────────────────────────
 
 function bindTaxonomy(host, ctx, { rows, t, canManage, lookups }) {
-	host.querySelectorAll('[data-ac-learning-tab]').forEach((button) => {
+	const tabButtons = Array.from(host.querySelectorAll('[data-ac-learning-tab]'));
+	tabButtons.forEach((button, index) => {
 		button.addEventListener('click', () => {
 			state.tab = button.dataset.acLearningTab;
 			state.detailId = null;
@@ -556,6 +629,20 @@ function bindTaxonomy(host, ctx, { rows, t, canManage, lookups }) {
 			state.status = '';
 			state.kind = '';
 			ctx.rerender();
+		});
+		// Roving tabindex: arrow keys move between tabs without a round-trip
+		// through the rest of the page. Direction follows the panel's `dir`.
+		button.addEventListener('keydown', (event) => {
+			const rtl = (host.querySelector('[data-ac-learning-panel]')?.getAttribute('dir') || 'ltr') === 'rtl';
+			const forward = event.key === 'ArrowRight' ? !rtl : event.key === 'ArrowLeft' ? rtl : null;
+			if (forward === null && event.key !== 'Home' && event.key !== 'End') return;
+			event.preventDefault();
+			let next = index;
+			if (event.key === 'Home') next = 0;
+			else if (event.key === 'End') next = tabButtons.length - 1;
+			else next = (index + (forward ? 1 : -1) + tabButtons.length) % tabButtons.length;
+			tabButtons[next].focus();
+			tabButtons[next].click();
 		});
 	});
 
@@ -582,6 +669,13 @@ function bindTaxonomy(host, ctx, { rows, t, canManage, lookups }) {
 	}
 
 	host.querySelector('[data-ac-tax-refresh]')?.addEventListener('click', () => ctx.rerender());
+	host.querySelector('[data-ac-tax-clear]')?.addEventListener('click', () => {
+		state.search = '';
+		state.status = '';
+		state.kind = '';
+		state.offset = 0;
+		ctx.rerender();
+	});
 	bindTable(host, { onPage: (offset) => { state.offset = offset; ctx.rerender(); } });
 
 	host.querySelector('[data-ac-tax-new-objective]')?.addEventListener('click', () => {

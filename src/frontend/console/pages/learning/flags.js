@@ -10,8 +10,12 @@
  * cannot read them through `/settings/*`. `GET /learning/flags` exposes the
  * two booleans to anyone who may read the taxonomy — the client then knows
  * whether to draw the learning surfaces at all, and whether an objective it
- * creates is published or proposed. The flags are a UI gate only: they are
- * never used for authorization, which stays in the API's permission checks.
+ * creates is published or proposed. The flags are NOT the authority: the API
+ * enforces `learning.adaptive.enabled` on every learning route except
+ * `/learning/flags` (403 FEATURE_DISABLED), and the permission middleware
+ * still guards each route. The client copy exists so the console can draw the
+ * disabled state without provoking a stream of 403s; it is never trusted in
+ * place of the server check.
  */
 
 import { api } from '../../core/api.js';

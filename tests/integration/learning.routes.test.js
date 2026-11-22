@@ -15,7 +15,9 @@
  *      teacher even though the teacher holds a learning permission.
  *   5. Criteria CRUD — weights must sum to 1, the cache is re-derived on every
  *      write, and clearing returns the question to `unclassified`.
- *   6. Flags — both Phase 1 settings default OFF and are readable.
+ *   6. Flags — both Phase 1 settings default OFF and are readable, and with the
+ *      adaptive flag OFF every learning route except /flags is refused
+ *      server-side with FEATURE_DISABLED.
  *   7. A question without criteria keeps working everywhere (the filters, the
  *      list, the detail read).
  */
@@ -136,6 +138,11 @@ beforeAll(async () => {
   token.teacherA2 = await login('lrn-teacher-a2');
   token.teacherB = await login('lrn-teacher-b');
   token.studentA = await login('lrn-student-a');
+
+  // The adaptive flag is OFF by default and every non-flags route is gated on
+  // it, so the suite opens with the feature enabled. The gate tests below turn
+  // it off explicitly and restore it.
+  await setAdaptive(true);
 });
 
 afterAll(async () => {
@@ -153,6 +160,52 @@ async function setTeacherCreation(enabled) {
   }
 }
 
+async function setAdaptive(enabled, schoolId = SCHOOL_A) {
+  await prisma.setting.deleteMany({
+    where: { school_id: schoolId, key: 'learning.adaptive.enabled' },
+  });
+  if (enabled) {
+    await prisma.setting.create({
+      data: { school_id: schoolId, key: 'learning.adaptive.enabled', value: 'true' },
+    });
+  }
+}
+
+// Enumerate the mounted learning router rather than hard-coding the paths, so
+// the flag-gate test necessarily covers any route added later.
+const ROUTE_PARAM_FIXTURES = {
+  ':id': OBJ_A,
+  ':questionId': Q_OWN,
+  ':competencyId': 'cmp-missing',
+  ':prerequisiteObjectiveId': OBJ_A2,
+  ':criterionId': 'crit-missing',
+};
+
+function collectLearningRoutes(router) {
+  const routes = [];
+  const walk = (stack) => {
+    for (const layer of stack) {
+      if (layer.route) {
+        for (const method of Object.keys(layer.route.methods)) {
+          routes.push({ method, path: layer.route.path });
+        }
+      } else if (layer.name === 'router' && layer.handle?.stack) {
+        walk(layer.handle.stack);
+      }
+    }
+  };
+  walk(router.stack);
+  return routes;
+}
+
+function learningPath(path) {
+  let out = path;
+  for (const [param, value] of Object.entries(ROUTE_PARAM_FIXTURES)) {
+    out = out.split(param).join(value);
+  }
+  return `/api/v1/learning${out}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Flags
 // ─────────────────────────────────────────────────────────────────────────────
@@ -168,19 +221,64 @@ describe('Phase 1 flags', () => {
     expect(res.status).toBe(403);
   });
 
-  it('defaults both settings to OFF', async () => {
-    const res = await request(app).get('/api/v1/learning/flags').set(as('teacherA'));
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ adaptive_enabled: false, teacher_objective_creation: false });
+  it('defaults both settings to OFF, and /flags stays readable while OFF', async () => {
+    await setAdaptive(false);
+    try {
+      const res = await request(app).get('/api/v1/learning/flags').set(as('teacherA'));
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ adaptive_enabled: false, teacher_objective_creation: false });
+    } finally {
+      await setAdaptive(true);
+    }
   });
 
   it('reports the adaptive switch when the admin enables it', async () => {
-    await prisma.setting.create({
-      data: { school_id: SCHOOL_A, key: 'learning.adaptive.enabled', value: 'true' },
-    });
     const res = await request(app).get('/api/v1/learning/flags').set(as('teacherA'));
+    expect(res.status).toBe(200);
     expect(res.body.adaptive_enabled).toBe(true);
-    await prisma.setting.deleteMany({ where: { school_id: SCHOOL_A, key: 'learning.adaptive.enabled' } });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Server-side adaptive gate
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('adaptive feature gate', () => {
+  it('refuses every learning route except /flags while the flag is OFF', async () => {
+    const { default: learningRoutes } = await import('../../src/backend/routes/learning.routes.js');
+    const routes = collectLearningRoutes(learningRoutes).filter((route) => route.path !== '/flags');
+    // Guard against the enumeration silently shrinking to nothing.
+    expect(routes.length).toBeGreaterThanOrEqual(20);
+
+    await setAdaptive(false);
+    try {
+      for (const { method, path } of routes) {
+        const call = request(app)[method](learningPath(path)).set(as('adminA'));
+        // The gate runs before any body validation, so the body is irrelevant;
+        // send an empty object for the verbs that expect one.
+        if (!['get', 'delete'].includes(method)) call.send({});
+        const res = await call;
+        expect(res.status, `${method.toUpperCase()} ${path}`).toBe(403);
+        expect(res.body.error?.code, `${method.toUpperCase()} ${path}`).toBe('FEATURE_DISABLED');
+      }
+
+      // The flag read surface stays reachable so the console can render the
+      // disabled state and tell the admin which setting to flip.
+      const flags = await request(app).get('/api/v1/learning/flags').set(as('adminA'));
+      expect(flags.status).toBe(200);
+      expect(flags.body).toEqual({ adaptive_enabled: false, teacher_objective_creation: false });
+    } finally {
+      await setAdaptive(true);
+    }
+  });
+
+  it('applies per school: school B stays refused while school A is enabled', async () => {
+    const res = await request(app).get('/api/v1/learning/bloom').set(as('teacherB'));
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FEATURE_DISABLED');
+
+    const ownSchool = await request(app).get('/api/v1/learning/bloom').set(as('teacherA'));
+    expect(ownSchool.status).toBe(200);
   });
 });
 

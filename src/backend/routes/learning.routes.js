@@ -22,7 +22,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { enforceTenant } from '../middleware/tenant.js';
 import { requireAnyPermission, requirePermission } from '../middleware/permission.js';
 import { validate, validateQuery } from '../middleware/validate.js';
-import { ValidationError } from '../../shared/errors.js';
+import { AppError, ValidationError } from '../../shared/errors.js';
 import {
   ObjectiveCreateSchema,
   ObjectiveUpdateSchema,
@@ -54,15 +54,6 @@ const requireLearningWrite = requireAnyPermission([
 ]);
 const requireLearningManage = requirePermission('school.learning.manage');
 
-// ─── Bloom catalog (global, read-only) ──────────────────────────────────────
-
-router.get('/bloom', requireLearningRead, async (req, res, next) => {
-  try {
-    const { learningTaxonomySvc } = getContainer();
-    res.json({ data: await learningTaxonomySvc.listBloomDimensions() });
-  } catch (err) { next(err); }
-});
-
 // ─── Feature flags ──────────────────────────────────────────────────────────
 
 /**
@@ -73,6 +64,10 @@ router.get('/bloom', requireLearningRead, async (req, res, next) => {
  * are enabled and whether an objective they create is published or proposed.
  * This exposes the two booleans and nothing else — the write path stays
  * `PATCH /settings/:key`, which is admin-only.
+ *
+ * Declared BEFORE the adaptive gate: this is the one endpoint that must stay
+ * reachable while the flag is OFF, otherwise the console could never discover
+ * the disabled state nor point the admin at the toggle.
  */
 router.get('/flags', requireLearningRead, async (req, res, next) => {
   try {
@@ -85,6 +80,44 @@ router.get('/flags', requireLearningRead, async (req, res, next) => {
       adaptive_enabled: adaptiveEnabled,
       teacher_objective_creation: teacherObjectiveCreation,
     });
+  } catch (err) { next(err); }
+});
+
+// ─── Adaptive feature gate ──────────────────────────────────────────────────
+
+/**
+ * `learning.adaptive.enabled` is enforced here, server-side, for every route
+ * registered after this middleware (i.e. every learning route except `/flags`).
+ * The console hiding its navigation is a convenience; this is the authority.
+ * A school that has not enabled the feature gets a 403 with a stable code
+ * (`FEATURE_DISABLED`) and no taxonomy read or write is performed. The setting
+ * lives per school and stays OFF by default.
+ */
+const requireAdaptiveEnabled = async (req, res, next) => {
+  try {
+    const { learningTaxonomySvc } = getContainer();
+    if (!(await learningTaxonomySvc.isAdaptiveEnabled(req.schoolId))) {
+      // Distinct from FORBIDDEN: the caller may be perfectly authorized, the
+      // feature is simply off. The console renders the disabled state on this
+      // code instead of a permission error.
+      throw new AppError(
+        'FEATURE_DISABLED',
+        'Learning features are disabled for this organization',
+        403,
+      );
+    }
+    next();
+  } catch (err) { next(err); }
+};
+
+router.use(requireAdaptiveEnabled);
+
+// ─── Bloom catalog (global, read-only) ──────────────────────────────────────
+
+router.get('/bloom', requireLearningRead, async (req, res, next) => {
+  try {
+    const { learningTaxonomySvc } = getContainer();
+    res.json({ data: await learningTaxonomySvc.listBloomDimensions() });
   } catch (err) { next(err); }
 });
 

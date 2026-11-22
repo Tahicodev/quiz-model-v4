@@ -1,7 +1,8 @@
 # Phase 1 plan — Taxonomy and question pedagogy (approved with changes)
 
 **Branch:** `feature/adaptive-learning-phase1` (dedicated; no unrelated work).
-**Status:** WP1 implemented and verified (2026-11-19) — **awaiting owner review**. WP2+ is **not** authorized until the WP1 review is accepted.
+**Status:** live status lives in [`docs/PHASE1_PROGRESS.md`](./PHASE1_PROGRESS.md) — as of 2026-11-21 all
+Phase 1 work packages (WP1–WP7) are accepted by the owner and Phase 1 is ready for formal closure review.
 **This file is the frozen Phase 1 spec** — scope, decisions, field names, lifecycle rules, acceptance criteria. It changes only when the owner approves a scope change. Live status, verification evidence and the dated progress log are in [`docs/PHASE1_PROGRESS.md`](./PHASE1_PROGRESS.md).
 **Scope lock:** taxonomy + question pedagogy only. No evidence, no mastery, no levels, no evidence tables, no writes to `Result` / `ExamSession` / `Exam`. Every new capability is default off.
 

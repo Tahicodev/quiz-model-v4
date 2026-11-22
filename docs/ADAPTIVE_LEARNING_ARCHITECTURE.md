@@ -1,8 +1,20 @@
 # Adaptive Learning Architecture
 
-**Status:** **READY FOR OWNER APPROVAL — Phase 0 review complete.**
-**No source code, Prisma schema, migration, API route or UI has been changed.**
-**Branch:** `feature/kid-games`
+> **DOCUMENT-CONTROL NOTE (2026-11-21) — Phase 0 proposal snapshot; not the current authority.**
+> This file is the **Phase 0 architecture proposal** as of 2026-11-19. Its header ("READY FOR OWNER
+> APPROVAL", "Branch: feature/kid-games", "the 14 decisions", "No source code … has been changed")
+> reflects that date and is **superseded** by later events: the owner approved the Phase 1 gate (D1, D2,
+> D8) on 2026-11-19; Phase 1 was then implemented behind default-off flags on
+> `feature/adaptive-learning-phase1`; and a fifteenth decision (**D15**) was added on 2026-11-21.
+> For **current** status and the consolidated architecture baseline, see
+> `docs/ARCHITECTURE-BASELINE.md`; for **normative gate decisions**, see
+> `docs/PHASE0_DECISION_REGISTER.md`; for the current programme/architecture decisions, see
+> `docs/DRAFT-PROGRAMME-ARCHITECTURE-REVISION.md` §§19–§20. The text below is preserved unchanged as the
+> Phase 0 proposal and rationale.
+
+**Status (as of 2026-11-19): READY FOR OWNER APPROVAL — Phase 0 review complete.**
+**No source code, Prisma schema, migration, API route or UI had been changed as of this date.**
+**Branch (as of this date):** `feature/kid-games`
 **Date:** 2026-11-19
 **Inputs:** `complete_adaptive_learning _system.md`, `DESIGN THE COMPLETE ADAPTIVE LEARNING ARCHITECTURE..md`, the completed feature audit, and a read-only inspection of the repository.
 **Gate:** implementation starts only after the owner records the Phase 0 decisions and explicitly authorizes Phase 1.
@@ -40,11 +52,17 @@ The platform already contains the raw material an adaptive system needs: thousan
 
 This document designs that layer additively. It does not rebuild questions, exams, courses, exercises, games or results. It does not introduce a second assessment engine, a second course system or a second game system.
 
-### Three non-negotiable invariants
+### Four non-negotiable invariants
 
 1. **No fabricated evidence.** Evidence is created only from a real persisted `Result` (including game, tournament and Kids results), a `LearningActivityAttempt`, or a teacher-assessed activity. A missing objective, Bloom dimension or competency is recorded as *unmapped*, never guessed.
 2. **No permanent global learning level.** Levels are computed per objective, competency or topic, carry an evidence-confidence value, and are recomputed. There is no student-wide “level 3” badge.
 3. **No AI authority over mastery.** AI may suggest classifications (Phase 6; not in Phase 1) and pathway drafts. It cannot write evidence, mastery, levels or assignments. A teacher accepts or rejects every AI suggestion.
+4. **What is recorded ≠ what can be proven ≠ what a teacher designates as formal.** These are three separate claims and must never be collapsed into one:
+   - *Recorded* is what a system persisted (a `Result` row, a score, an attempt). Recording is not proof: `mode`, `exam_id` and scores can be client-supplied.
+   - *Proven* is what survives the D13 trust checks (server-authoritative session, single use, server re-grade, mapped criteria). Only proven evidence may satisfy a mastery gate.
+   - *Formal* is a governance designation, not evidence: D14's `Exam.is_high_stakes`, a teacher attestation for an offline/paper exam, or an admin's approval of a proposed objective. A designation changes how proven evidence is *treated*; it cannot promote recorded-but-unproven rows, and it is itself audited and revocable.
+
+   The UI and the API must say which of the three a value represents: “the score exists” is never reported as “the student proved it”, and “the teacher marked it formal” is never reported as proof.
 
 ### Build order
 
@@ -1877,6 +1895,8 @@ Checks 1–5 are all required. If rule 4 matches but any check fails, the row is
 
 **Which exams are high-stakes (D14).** `source_kind='exam'` evidence counts toward the high-stakes gate only when the exam is high-stakes-designated: by default **every `is_training=false` exam is high-stakes**, and a school may explicitly designate a formal-but-non-summative exam (diagnostic, placement) as **not** high-stakes via `Exam.is_high_stakes` (default `true`, meaningful only when `is_training=false`). Effective high-stakes = `is_training=false AND is_high_stakes=true` **and** the D13 trust checks pass. The A.7 condition is read as `((source_kind='exam' AND exam is high-stakes) OR method='teacher_rubric') AND credit >= 0.60`; distinct-item counting is unchanged. Changing the designation on an exam with existing evidence follows the same confirmation/audit/recompute guard as flipping `Exam.is_training`. This is decision D14.
 
+**Implementation status of `Exam.is_high_stakes`.** The column is **Phase 2/3 design only**. It is not part of the Phase 1 schema (`prisma/schema.prisma`) or the Phase 1 migration, and no Phase 1 route reads or writes it. Phase 1 adds only the question-pedagogy columns and the taxonomy tables. The designation is recorded here so D14 has a stable contract; creating the column requires the Phase 2/3 authorization and the same confirmation/audit/recompute guard as `Exam.is_training`.
+
 **Is `source_kind` part of the fingerprint?** Yes. `source_fingerprint` is the deterministic hash of the normalized source item **including the classification inputs** (`source_type`, `source_kind`, `evidence_class`, `exam_id`, and the joined `Exam.is_training` value at ingest) together with the answer/correctness/credit payload. This matters because classification can change without the answer payload changing:
 
 - If `Exam.is_training` is flipped **from `false` to `true`** (a formal exam converted to training), the next reconciliation sees a fingerprint mismatch and processes it as a correction: it upserts a new receipt/evidence with `source_kind='training'`/`formative`, **retracts** the previous `summative` evidence (`retraction_reason='source_reclassified'`), and recomputes mastery. A student who was `proficient` on that exam can drop to `developing` — the correct, conservative outcome.
@@ -2075,12 +2095,14 @@ Rules:
 | Factor | Effect |
 |---|---|
 | Source kind | Exam 1.0, teacher activity 1.1, exercise 0.9, training 0.8, game/tournament/Kids 0.5 |
-| Assessment method | Auto 1.0, teacher rubric 1.2, teacher attestation 1.2; self-report 0 for mastery |
+| Assessment method | Auto 1.0, teacher rubric 1.2; **teacher attestation at most 1.0 — set to 1.0 pending the D5 decision**; self-report 0 for mastery |
 | Criterion weight | The share of the question attributed to the objective/Bloom pair |
 | Point factor | `min(max(1, max_points), 3)`; a single high-point item cannot dominate |
 | Recency | Half-life 60 days, floor 0.25 |
 | High-stakes | Exam or teacher rubric; required for proficient/advanced |
 | Metadata completeness | Unmapped evidence does not count toward mastery |
+
+**Teacher-attestation weight is capped at 1.0 pending D5.** An attestation has no session or per-question answer key to re-grade, so the only trust anchor is the attesting teacher's accountability; letting it outweigh auto-graded or rubric evidence would make an unverified claim the strongest signal in the system. The cap is a policy ceiling, not a calibrated value: raising it above 1.0 requires the owner's D5 disposition and pilot data, and may never exceed the teacher-rubric weight without a recorded rationale. See invariant 4 (`recorded ≠ proven ≠ formal`).
 
 ### E.10 Provenance and audit
 
@@ -3207,18 +3229,23 @@ Rules:
 
 Add to `src/shared/permissions.js` (never rename existing strings):
 
-| Permission | Scope | Granted to | Purpose |
-|---|---|---|---|
-| `school.learning.read` | school | admin, super_admin | Read school-wide taxonomy, coverage and profiles |
-| `school.learning.manage` | school | admin, super_admin | Manage objectives, competencies, prerequisites, resource maps, blueprints |
-| `school.learning.admin` | school | admin, super_admin | Backfill, policy changes, taxonomy archive, recompute all |
-| `class.learning.read` | class | teacher | Read profiles, evidence summaries, class gaps for assigned classes |
-| `class.learning.manage` | class | teacher | Create/edit pathways and interventions for assigned classes |
-| `class.learning.assign` | class | teacher | Assign pathways to students/groups/classes |
+| Permission | Scope | Granted to | Phase | Purpose |
+|---|---|---|---|---|
+| `school.learning.read` | school | admin, super_admin | 1 (as-built) | Read school-wide taxonomy, coverage and profiles |
+| `school.learning.manage` | school | admin, super_admin | 1 (as-built) | Manage objectives, competencies, prerequisites; approve/reject teacher proposals |
+| `school.learning.admin` | school | admin, super_admin | 3 (design only) | Backfill, policy changes, taxonomy archive, recompute all. **Not in the Phase 1 catalog.** |
+| `class.learning.read` | class | teacher | 1 (as-built) | Read the Bloom catalog, objectives and question pedagogy |
+| `class.learning.classify` | class | teacher | 1 (as-built) | Attach learning criteria to the teacher's **own** questions and propose objectives; the server refuses another teacher's question and refuses objective status changes |
+| `class.learning.manage` | class | teacher | 3 (design only) | Create/edit pathways and interventions. **Not in the Phase 1 catalog.** |
+| `class.learning.assign` | class | teacher | 3 (design only) | Assign pathways to students/groups/classes. **Not in the Phase 1 catalog.** |
 
-`ROLE_PERMISSIONS`: teacher gets the three `class.learning.*`; admin gets the three `school.learning.*`; super_admin gets platform + school; student remains `[]` (self endpoints do not need a permission).
+`ROLE_PERMISSIONS` (Phase 1 as-built): teacher gets `class.learning.read` + `class.learning.classify` (plus the pre-existing `class.content.author`, `class.students.read`, `class.realtime.manage`); admin gets `school.learning.read` + `school.learning.manage`; super_admin gets platform + school; student remains `[]` (self endpoints do not need a permission). The Phase 3 rows are design placeholders: creating a permission string that no route enforces would be a false grant, so they are added with the endpoints that use them.
+
+**Master switch.** Every `/learning` route except `GET /learning/flags` is gated server-side on `learning.adaptive.enabled` (default `false`) and returns `403 FEATURE_DISABLED` when it is off. `/learning/flags` stays readable under the caller's read permission so the UI can render the disabled state and an administrator can turn the capability on. `FEATURE_DISABLED` is deliberately distinct from `FORBIDDEN`: the caller may be fully authorized; the feature is simply off. The `/flags` response is a display input, never the authority.
 
 ### J.3 Endpoint catalog
+
+The tables below describe the **whole** design. Entries using `class.learning.manage`, `class.learning.assign` or `school.learning.admin` belong to Phase 3/4 and are not registered by the Phase 1 router; the Phase 1 as-built endpoints are the ones listed under taxonomy, objectives, question pedagogy and `GET /learning/flags`.
 
 #### Taxonomy and objectives
 

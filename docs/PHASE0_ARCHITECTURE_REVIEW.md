@@ -1,5 +1,10 @@
 # Phase 0 — Architecture Review Report
 
+> **DOCUMENT-CONTROL NOTE (2026-11-21):** this is the **historical Phase 0 review report** (2026-11-19).
+> It records the review that led to the Phase 1 gate (D1, D2, D8) and the initial 14-decision register.
+> It is **superseded for current status** by `docs/ARCHITECTURE-BASELINE.md` and
+> `docs/PHASE0_DECISION_REGISTER.md` (which now carries D15). Retained unchanged as the review record.
+
 **Status:** Review complete. Architecture is **READY FOR OWNER APPROVAL**.
 **Date:** 2026-11-19
 **Scope:** Architecture only. No source code, Prisma schema, migration, API route or UI was changed.

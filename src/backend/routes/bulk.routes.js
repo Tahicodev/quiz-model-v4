@@ -1135,8 +1135,10 @@ const SANITIZERS = {
   // Restore path for a full backup. The exported rows already use the Prisma
   // column names, so these sanitizers mostly coerce types and drop the row when
   // a hard FK (id, subject, question, Bloom) is missing — a partial restore is
-  // preferable to a batch-wide failure. The global `bloom_dimensions` catalog
-  // is seeded at boot and intentionally not restored.
+  // preferable to a batch-wide failure, and every dropped row is reported in
+  // the response's `dropped` block rather than disappearing silently. The
+  // global `bloom_dimensions` catalog is seeded at boot and intentionally not
+  // restored.
 
   // model LearningObjective { id, school_id, subject_id, category_id?, parent_id?,
   //   primary_bloom_dimension_id?, code, statement, description?, order_index,
@@ -1365,10 +1367,48 @@ router.post('/:table', async (req, res, next) => {
       return res.status(400).json({ code: 'INVALID_SNAPSHOT', message: `Snapshot replacement is not supported for ${table}` });
     }
 
+    // Every row this request refuses to persist is counted and explained.
+    // A restore that loses rows must never look like a clean restore: the
+    // caller gets `dropped.total > 0` with a per-reason breakdown and a
+    // bounded sample, whether the batch succeeded or was rejected.
+    const MAX_DROP_SAMPLES = 20;
+    const dropStats = {
+      total: 0,
+      reasons: {
+        invalid: 0,          // not an object at all
+        sanitizerRejected: 0, // sanitizer chose to skip it
+        outOfScope: 0,       // belongs to another tenant/teacher/student
+        missingRequired: 0,  // sanitized row lacks a required column
+        policyFiltered: 0,   // role policy removed it before validation
+        notPersisted: 0,     // lookup/upsert declined to write it
+      },
+      samples: [],
+    };
+    const recordDrop = (reason, { index = null, id = null } = {}) => {
+      dropStats.total += 1;
+      dropStats.reasons[reason] = (dropStats.reasons[reason] || 0) + 1;
+      if (dropStats.samples.length < MAX_DROP_SAMPLES) {
+        dropStats.samples.push({ index, id: id == null ? null : String(id), reason });
+      }
+    };
+    /** Additive response fragment; empty when nothing was dropped. */
+    const dropReport = () =>
+      dropStats.total > 0
+        ? {
+            dropped: {
+              total: dropStats.total,
+              reasons: dropStats.reasons,
+              samples: dropStats.samples,
+            },
+          }
+        : {};
+
     if (req.user?.role === ROLES.STUDENT) {
       if (table === 'users' && Array.isArray(items)) {
         // Students can only update their own user record
+        const before = items.length;
         items = items.filter((u) => String(u.id) === String(req.user.id));
+        for (let i = items.length; i < before; i += 1) recordDrop('policyFiltered', { id: req.user.id });
       } else if (table === 'games') {
         // Students should not bulk-update games. Return a successful no-op
         // so the frontend's local cache synchronization is satisfied.
@@ -1419,9 +1459,11 @@ router.post('/:table', async (req, res, next) => {
         if (it && typeof it === 'object') delete it.visibility;
       }
       if (items.length !== before) {
+        const removed = before - items.length;
+        for (let i = 0; i < removed; i += 1) recordDrop('policyFiltered', { id: req.user?.id });
         logger.warn('bulk.routes: teacher write dropped admin-only setting keys', {
           actorId: req.user?.id,
-          dropped: before - items.length,
+          dropped: removed,
         });
       }
     }
@@ -1430,6 +1472,7 @@ router.post('/:table', async (req, res, next) => {
       return res.status(400).json({
         code: 'VALIDATION_ERROR',
         message: 'items must be a non-empty array',
+        ...dropReport(),
       });
     }
 
@@ -1515,8 +1558,12 @@ router.post('/:table', async (req, res, next) => {
       return ids;
     };
 
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue;
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      if (!item || typeof item !== 'object') {
+        recordDrop('invalid', { index });
+        continue;
+      }
 
       if (!sanitize) {
         // Unknown table — pass through with only school_id injected, but warn
@@ -1527,7 +1574,11 @@ router.post('/:table', async (req, res, next) => {
       }
 
       const cleaned = sanitize(item, req.schoolId, req.user?.id, legacyCtx);
-      if (!cleaned) continue; // sanitizer chose to skip this row (e.g. game_presets)
+      if (!cleaned) {
+        // Sanitizer chose to skip this row (e.g. legacy id it cannot map).
+        recordDrop('sanitizerRejected', { index, id: item?.id });
+        continue;
+      }
 
       // A student may send the legacy results array, which can contain rows
       // from other users because the browser cache is shared/preloaded. The
@@ -1539,6 +1590,7 @@ router.post('/:table', async (req, res, next) => {
         String(cleaned.user_id) !== String(req.user.id)
       ) {
         foreignStudentRows += 1;
+        recordDrop('outOfScope', { index, id: item?.id });
         continue;
       }
 
@@ -1553,6 +1605,7 @@ router.post('/:table', async (req, res, next) => {
         if (table === 'tournaments') {
           if (String(cleaned.creator_id || '') !== String(req.user.id)) {
             foreignTeacherRows += 1;
+            recordDrop('outOfScope', { index, id: item?.id });
             continue;
           }
         } else if (table === 'teacher_messages' || table === 'teacher_assignments') {
@@ -1563,6 +1616,7 @@ router.post('/:table', async (req, res, next) => {
           }
           if (!teacherStudentIds.has(String(cleaned.user_id || ''))) {
             foreignTeacherRows += 1;
+            recordDrop('outOfScope', { index, id: item?.id });
             continue;
           }
         }
@@ -1573,6 +1627,7 @@ router.post('/:table', async (req, res, next) => {
       const missing = required.filter((f) => cleaned[f] == null || cleaned[f] === '');
       if (missing.length > 0) {
         missingRequiredCount += 1;
+        recordDrop('missingRequired', { index, id: item?.id });
         logger.warn('bulk.routes: dropping row missing required fields', {
           table,
           missing,
@@ -1596,14 +1651,16 @@ router.post('/:table', async (req, res, next) => {
       return res.status(400).json({
         code: 'INVALID_SNAPSHOT',
         message: 'The snapshot contains rows that could not be saved; no rows were removed.',
+        ...dropReport(),
       });
     }
 
     if (scoped.length === 0 && !replaceSnapshot) {
       // Either the table is intentionally skipped (game_presets) or every row
       // was rejected by the sanitizer. Return success with count 0 — telling
-      // the truth (nothing was written) but not breaking the UI.
-      return res.status(201).json({ count: 0, skipped: items.length });
+      // the truth (nothing was written) but not breaking the UI — and name
+      // every row that did not survive.
+      return res.status(201).json({ count: 0, skipped: items.length, ...dropReport() });
     }
 
     if (droppedPerRow.some((d) => d.length > 0)) {
@@ -1635,7 +1692,7 @@ router.post('/:table', async (req, res, next) => {
     const now = Date.now();
     const lastSeen = bulkWriteDedupe.get(dedupeKey);
     if (!replaceSnapshot && lastSeen && now - lastSeen < dedupeWindowMs) {
-      return res.status(201).json({ count: 0, skipped: 0, deduped: true });
+      return res.status(201).json({ count: 0, skipped: 0, deduped: true, ...dropReport() });
     }
     bulkWriteDedupe.set(dedupeKey, now);
     // Bound the cache: the legacy tables are few, but a pathological client
@@ -1751,6 +1808,7 @@ router.post('/:table', async (req, res, next) => {
                 // Row isn't actually in the DB yet: skip, don't create a
                 // password-less user.
                 missingRequiredCount += 1;
+                recordDrop('notPersisted', { id });
               });
           } else {
             await model.upsert({
@@ -1781,6 +1839,7 @@ router.post('/:table', async (req, res, next) => {
             // creating a user with an un-loginable account.
             if (!row.password_hash && !row._plaintext_password) {
               missingRequiredCount += 1;
+              recordDrop('missingRequired', { id: row.id ?? row.username });
               logger.warn('bulk.routes: skipping user create without a credential', {
                 table, username: row.username,
               });
@@ -1913,6 +1972,7 @@ router.post('/:table', async (req, res, next) => {
       return res.status(201).json({
         count: upserted,
         ...(missingRequiredCount > 0 && { droppedInvalid: missingRequiredCount }),
+        ...dropReport(),
       });
     }
 
@@ -1923,6 +1983,7 @@ router.post('/:table', async (req, res, next) => {
     res.status(201).json({
       ...result,
       ...(missingRequiredCount > 0 && { droppedInvalid: missingRequiredCount }),
+      ...dropReport(),
     });
   } catch (err) {
     next(err);
